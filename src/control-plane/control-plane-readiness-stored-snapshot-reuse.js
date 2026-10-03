@@ -2,9 +2,12 @@ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from
   './control-plane-readiness-service-shared.js';
 
 const {
+  COLUMN,
+  TABLES,
   compareNodeHeartbeatWatermarks,
   normalizeIsoTimestamp,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+const stringConstructor = String;
 
 const controlPlaneReadinessStoredSnapshotReuseMethods = {
   /**
@@ -133,6 +136,60 @@ const controlPlaneReadinessStoredSnapshotReuseMethods = {
       independentInvalidatedAtMs >= candidate.capturedAtMs;
     return !invalidationApplies ||
       !this.isReadinessSnapshotInvalidated(nodeId, candidate.capturedAtMs);
+  },
+
+  /**
+   * Invalidate the stored readiness snapshots and publication memos one
+   * delivered cache change refutes (the deferred channel's duty).
+   * @param {string} tableName
+   * @param {Object|null} record
+   * @private
+   */
+  invalidateReadinessSnapshotsForCacheChange(tableName, record) {
+    if (
+      tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ||
+      tableName === TABLES.NODES ||
+      tableName === TABLES.SERVICES ||
+      tableName === TABLES.PARTITIONS
+    ) {
+      this.membershipPublicationPlanningSourceRevision += 1;
+    }
+    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+      // CL-019: publication content feeds the memoized membership-publication
+      // diagnostics AND the publication-derived dimensions baked into every
+      // stored readiness snapshot. Publication rows carry publication_id, not
+      // node_id, so this invalidates cluster-wide.
+      this.membershipPublicationDiagnosticsMemo = null;
+      this.lastReadinessSnapshotClusterInvalidatedAtMs = this.now();
+      return;
+    }
+    if (tableName === TABLES.NODES || tableName === TABLES.SERVICES) {
+      this.invalidateNodeReadinessSnapshot(tableName, record);
+    }
+  },
+
+  /**
+   * Stamp the per-node invalidation one delivered nodes or services change
+   * carries; a services change is also an independent invalidation.
+   * @param {string} tableName
+   * @param {Object|null} record
+   * @private
+   */
+  invalidateNodeReadinessSnapshot(tableName, record) {
+    const nodeId = stringConstructor(
+      record?.[COLUMN.NODE_ID] ?? record?.node_id ?? '',
+    );
+    if (!nodeId) {
+      return;
+    }
+    const nowMs = this.now();
+    const previous =
+      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId);
+    this.lastReadinessSnapshotInvalidatedAtMsByNodeId.set(nodeId, {
+      atMs: nowMs,
+      independentAtMs: tableName === TABLES.SERVICES ?
+        nowMs : Number(previous?.independentAtMs) || 0,
+    });
   },
 
   getReusableNodeReadinessSnapshotSync(nodeId) {

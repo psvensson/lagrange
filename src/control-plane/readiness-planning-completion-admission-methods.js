@@ -238,11 +238,12 @@ const readinessPlanningCompletionAdmissionMethods = {
   //   lease) admit the fresher stored evidence, which is served rebased on
   //   the current publication diagnostics;
   // - a fresher row (a heartbeat) whose change is node-table-only — in the
-  //   token (the live-veto site) or still unclassified (the barrier site,
-  //   where the cache's deferred listener has not advanced the token) — and
-  //   whose own liveness projection still matches the completed snapshot's:
-  //   the row does not refute the decision, so the completed snapshot is
-  //   served until the queued build replaces it from current inputs.
+  //   token (classified, normally in the applying turn) or still
+  //   unclassified (no apply-time classification reached the owner, so the
+  //   token has not advanced) — and whose own liveness projection still
+  //   matches the completed snapshot's: the row does not refute the
+  //   decision, so the completed snapshot is served until the queued build
+  //   replaces it from current inputs.
   canBridgeRoutedRead(ownerKey, token, options) {
     return options?.participationKind ===
         CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ &&
@@ -261,19 +262,28 @@ const readinessPlanningCompletionAdmissionMethods = {
     return this.service.isLoadReady(this.service.getNodeRow(ownerKey)) === true;
   },
 
+  // Nothing beyond the nodes table may be outstanding on either frontier,
+  // checked BEFORE any evidence is consulted. The stored-reuse witnesses
+  // learn of a publications, services, or any other non-nodes change only
+  // from the cache's deferred listener, so while such a change is applied
+  // but its deferred delivery is unprocessed, neither the stored snapshot nor
+  // the completed record may bridge it (rounds 2-5). Classification runs in
+  // the applying turn and no longer covers that window; it still refuses a
+  // genuinely unclassified non-nodes change (no apply channel, observer
+  // failure, baseline not established).
+  isBridgeSourceChangeNodesOnly(observation) {
+    const unclassifiedIsNodesOnly =
+      !this.hasUnclassifiedSourceChange(observation) ||
+      this.hasNodeTableOnlyUnclassifiedChange(observation);
+    return unclassifiedIsNodesOnly &&
+      !this.hasNonNodeTableDeferredDeliveryPending(observation);
+  },
+
   bridgeRoutedReadSnapshot(
     ownerKey, completed, token, buildOptionsKey, observation, options,
   ) {
     if (!this.canBridgeRoutedRead(ownerKey, token, options)) return null;
-    // Nothing unclassified beyond the nodes table, BEFORE any evidence is
-    // consulted: the stored-reuse witnesses learn of a publications or
-    // services change only from the cache's deferred listener, so in the
-    // apply-before-listener window neither the stored snapshot nor the
-    // completed record may bridge a change on another table (rounds 2-5).
-    const unclassifiedIsNodesOnly =
-      !this.hasUnclassifiedSourceChange(observation) ||
-      this.hasNodeTableOnlyUnclassifiedChange(observation);
-    if (!unclassifiedIsNodesOnly) return null;
+    if (!this.isBridgeSourceChangeNodesOnly(observation)) return null;
     const stored = this.service.getReusableNodeReadinessSnapshotSync(ownerKey);
     if (stored) return stored;
     if (!completed || completed.buildOptionsKey !== buildOptionsKey) return null;

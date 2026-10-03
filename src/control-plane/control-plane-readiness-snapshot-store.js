@@ -28,7 +28,6 @@ function isPlanningOwnerProducedSnapshot(options = {}) {
 }
 
 const {
-  COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
   TABLES,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
@@ -621,40 +620,15 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     } else {
       this.readinessPlanningSourceObserverFailureStreak = 0;
     }
-    if (
-      tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ||
-      tableName === TABLES.NODES ||
-      tableName === TABLES.SERVICES ||
-      tableName === TABLES.PARTITIONS
-    ) {
-      this.membershipPublicationPlanningSourceRevision += 1;
-    }
-    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
-      // CL-019: publication content feeds the memoized membership-publication
-      // diagnostics AND the publication-derived dimensions baked into every
-      // stored readiness snapshot. Publication rows carry publication_id, not
-      // node_id, so this invalidates cluster-wide.
-      this.membershipPublicationDiagnosticsMemo = null;
-      this.lastReadinessSnapshotClusterInvalidatedAtMs = this.now();
-      return;
-    }
-    if (tableName !== TABLES.NODES && tableName !== TABLES.SERVICES) {
-      return;
-    }
-    const nodeId = stringConstructor(
-      record?.[COLUMN.NODE_ID] ?? record?.node_id ?? '',
+    this.invalidateReadinessSnapshotsForCacheChange(tableName, record);
+    // Only now is this delivery processed: the planning owner's
+    // deferred-delivery frontier gates the routed-read bridge, whose stored
+    // evidence is current only once the invalidation above has run. A throw
+    // before this line leaves the revision pending (fail closed).
+    this.readinessPlanningSnapshotOwner?.recordDeferredSourceDelivery?.(
+      tableName,
+      readOwnDataValue(metadata, 'tableMutationRevision'),
     );
-    if (!nodeId) {
-      return;
-    }
-    const nowMs = this.now();
-    const previous =
-      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId);
-    this.lastReadinessSnapshotInvalidatedAtMsByNodeId.set(nodeId, {
-      atMs: nowMs,
-      independentAtMs: tableName === TABLES.SERVICES ?
-        nowMs : Number(previous?.independentAtMs) || 0,
-    });
   },
 
   /**
