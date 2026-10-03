@@ -34,7 +34,7 @@ import {
 import {CDCEventBuffer} from './cdc-event-buffer.js';
 import {
   SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL as
-    SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
+  SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   cloneSplitEntry as cloneSplitRoutingEntry,
   extractSplitRoutingKey as extractPartitionSplitRoutingKey,
   replaySplitEntry as replayPartitionSplitEntry,
