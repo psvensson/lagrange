@@ -34,7 +34,7 @@
     },
     {
       "id": "route-call-row-bound",
-      "statement": "One routeSplitSnapshotBatch call accepts at most 64 canonical dense own-data rows before copy/grouping, matching the existing split snapshot producer cadence. Both the 64-row route-call cap and the 32,766 bind-variable cap have one canonical owner in partition-constants; snapshot routing enforces that owner and PartitionService derives its backfill cadence from the same row-cap value without restating literals."
+      "statement": "One routeSplitSnapshotBatch call accepts at most 64 canonical dense own-data rows before copy/grouping, matching the existing split snapshot producer cadence. PARTITION_SPLIT_SNAPSHOT_LIMIT in partition-constants.js is the single owner of the 64-row route cap and 32,766 bind-variable cap; routing and PartitionService consume that owner without restating literals."
     },
     {
       "id": "strict-own-data-length-owner",
@@ -42,7 +42,7 @@
     },
     {
       "id": "row-limit-fail-fast",
-      "statement": "resolveSplitSnapshotBatchRowLimit rejects empty or over-wide column sets, preserves the existing min(requestedRows, floor(32,766 / columns)) per-SQL batching behavior, and the upstream split backfill obtains its 64-row request cap from the same routing owner."
+      "statement": "resolveSplitSnapshotBatchRowLimit rejects empty or over-wide column sets, preserves the existing min(requestedRows, floor(bindLimit / columns)) per-SQL batching behavior, and consumes PARTITION_SPLIT_SNAPSHOT_LIMIT rather than restating route/bind caps."
     },
     {
       "id": "preserve-v10",
