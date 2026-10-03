@@ -88,10 +88,11 @@ A1-v10 subsequently closed v9's snapshot iterator/live collection
 dependencies and reached a sealed 3 → 0 attempt. Its category-complete
 post-attempt PR #96 review found two final snapshot-boundary cases: live
 `new Map()` remained mutable after module load and could silently suppress
-dispatch, while the snapshot rows/columns accepted dimensions beyond a bounded
-single SQLite bind budget. A1-v11 owns exactly those two findings by capturing
-the Map constructor and adding pre-copy row/column bounds through
-`strict-own-data`.
+dispatch, while snapshot rows/columns were not bounded before copy/grouping.
+A1-v11 owns exactly those two findings by capturing the Map constructor,
+enforcing the existing 64-row route-call cadence before copy/grouping, rejecting
+column sets above SQLite's 32,766 bind-variable ceiling, and preserving
+bind-derived per-statement batching through `strict-own-data`.
 
 **Current falsifier:** current main still has both a locale-sensitive string
 order in `compareRoutingKeys` and a raw
