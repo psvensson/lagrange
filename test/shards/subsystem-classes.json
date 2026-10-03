@@ -28,7 +28,7 @@
   "censusSize": 2285,
   "digest": "fnv1a32-72594200",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c8bf0857",
+  "observationDigest": "fnv1a32-9d37dce5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11284,12 +11284,21 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/test-resource-classification-constants.js",
+        "scripts/generate-test-subsystem-classes.js",
         "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
-        "test/distributed/run.js"
+        "test/distributed/run.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
       ],
       "env": [
         "APPDATA",

@@ -373,6 +373,55 @@ const DEPENDENCIES_MATCH_SCRIPT =
   '.packages||{};let bad=0;for(const k of Object.keys(l)){if(!k)continue;' +
   'const want=l[k];const have=h[k];if(!have){if(!want.optional)bad+=1;continue;}' +
   'if(have.version!==want.version)bad+=1;}console.log(bad===0?"yes":"no")';
+// The dependency graph a lockfile describes, as a sha256 digest, or null when
+// the text is not a lockfile. The graph is the lockfile less the package's own
+// release identity - the top-level `version` and `packages[""].version`, the
+// selector's lockfileDependencyGraph deletions, which a witness binds this to -
+// so a version-only release bump is the same graph. Everything else stays,
+// serialised with object keys sorted and arrays in order: whitespace, key
+// order and string escapes cannot make two graphs differ; anything npm reads
+// can. A number JSON.parse may round has no digest (unknown, never equal).
+// ONE definition: the controller calls it and a lab machine runs its source
+// text (LOCKFILE_GRAPH_SCRIPT), so it references nothing outside itself; the
+// hash is handed in (graphDigestOf), built on both sides from one constant.
+function lockfileGraphDigest(text, digestOf) {
+  const isRecord = (value) => value !== null && typeof value === 'object' &&
+    !Array.isArray(value);
+  const canonical = (value) => {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+    if (isRecord(value)) {
+      return `{${Object.keys(value).sort().map((key) =>
+        `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+    }
+    if (typeof value === 'number' && !(Number.isSafeInteger(value) && !Object.is(value, -0))) {
+      throw new RangeError('a number JSON.parse may round');
+    }
+    return JSON.stringify(value);
+  };
+  try {
+    const lock = JSON.parse(text);
+    if (!isRecord(lock) || !isRecord(lock.packages) || !Object.hasOwn(lock.packages, '') ||
+      !Object.values(lock.packages).every(isRecord)) {
+      return null;
+    }
+    delete lock.version;
+    delete lock.packages[''].version;
+    return digestOf(canonical(lock));
+  } catch {
+    return null;
+  }
+}
+// The lab machine's side: the same function on a lockfile path, printing
+// nothing when there is no digest (unknown). Folded onto one line, so the
+// function holds no line comment and relies on no line break.
+const GRAPH_DIGEST = Object.freeze({ALGORITHM: 'sha256', ENCODING: 'hex'});
+const graphDigestOf = (text) => createHash(GRAPH_DIGEST.ALGORITHM).update(text)
+  .digest(GRAPH_DIGEST.ENCODING);
+const LOCKFILE_GRAPH_SCRIPT = 'const f=require("fs"),c=require("crypto");' +
+  `const d=(${String(lockfileGraphDigest).replace(/\n\s*/gu, ' ')})` +
+  '(f.readFileSync(process.argv[1],"utf8"),(t)=>c.createHash(' +
+  `${JSON.stringify(GRAPH_DIGEST.ALGORITHM)}).update(t).digest(` +
+  `${JSON.stringify(GRAPH_DIGEST.ENCODING)}));if(d)console.log(d)`;
 // A fixed single-thread workload, so a sample is comparable across machines:
 // the corpus is dominated by single-threaded test processes.
 const CPU_SAMPLE_SCRIPT =
@@ -427,7 +476,10 @@ const CAPABILITY_SCRIPT = [
   'if [ -e "$repo/.git" ]; then',
   '  say repo_present yes',
   '  say repo_head "$(git -C "$repo" rev-parse HEAD 2>/dev/null)"',
-  `  say lock_sha256 "$(${sha256Of('$repo/package-lock.json')})"`,
+  // The dependency graph its lockfile describes, not the lockfile's bytes: a
+  // version-only release bump changes the bytes and no package.
+  `  say lock_graph_sha256 "$(node -e ${shellQuote(LOCKFILE_GRAPH_SCRIPT)} -- ` +
+    '"$repo/package-lock.json" 2>/dev/null)"',
   '  if [ -d "$repo/node_modules" ]; then say node_modules yes; ' +
     'else say node_modules no; fi',
   // Installed MATCHES the lockfile, by content: every package the lockfile
@@ -498,7 +550,7 @@ export function parseCapability(text, probedAt = Date.now()) {
     repo: {
       present: repoPresent,
       head: repoPresent ? capabilityText(values.repo_head) : null,
-      lockSha256: repoPresent ? capabilityText(values.lock_sha256) : null,
+      lockGraphSha256: repoPresent ? capabilityText(values.lock_graph_sha256) : null,
       nodeModules: repoPresent ? capabilityFlag(values.node_modules) : null,
       dependenciesCurrent: repoPresent ? capabilityFlag(values.dependencies_current) : null,
     },
@@ -540,7 +592,10 @@ const READINESS = Object.freeze({
   NOT_PROBED: 'not-probed',
   NODE_TOO_OLD: 'node-too-old',
   NO_REPOSITORY: 'no-repository',
-  LOCKFILE_DIFFERS: 'lockfile-differs',
+  // The checkout's lockfile describes another dependency graph than the one
+  // required (release-version fields aside), or one that cannot be read.
+  DEPENDENCY_GRAPH_DIFFERS: 'dependency-graph-differs',
+  DEPENDENCY_GRAPH_UNKNOWN: 'dependency-graph-unknown',
   NO_DEPENDENCIES: 'no-dependencies',
   DEPENDENCIES_DIFFER: 'dependencies-differ-from-lockfile',
   DEPENDENCIES_UNKNOWN: 'dependencies-unknown',
@@ -549,6 +604,8 @@ const READINESS = Object.freeze({
   NO_DATASET: 'movielens-dataset-missing',
   NO_DOCKER: 'docker-unreachable',
 });
+// What a requirement read from no commit describes (fleetRequirement).
+const REQUIREMENT_SOURCE = Object.freeze({WORKING_TREE: 'working-tree'});
 
 // Strict: `v23-garbage`, `v22.12x` and `v 22.12.0` are not versions.
 function parseVersion(text) {
@@ -569,21 +626,23 @@ function nodeAtLeast(version, minimum) {
 }
 
 /**
- * Whether a probed machine can run the whole corpus for a given lockfile, and
- * if not, every reason. A tool that only some files need (helm, wasm-tools,
- * psql, java, rg, jq) is reported as a gap rather than a disqualification, because
- * placement may still give the machine the files that do not need it.
+ * Whether a probed machine can run the whole corpus for a given dependency
+ * graph, and if not, every reason. Its packages are the required ones when
+ * they match its own lockfile AND that lockfile is the required graph. A tool
+ * that only some files need (helm, wasm-tools, psql, java, rg, jq) is reported
+ * as a gap rather than a disqualification, because placement may still give
+ * the machine the files that do not need it.
  * @param {Object|null} capability
- * @param {{lockSha256: string, nodeMinimum: string}} requirement
+ * @param {{lockGraphSha256: string, nodeMinimum: string}} requirement
  * @return {{ready: boolean, missing: string[], gaps: string[]}}
  */
-export function corpusReadiness(capability, {lockSha256, nodeMinimum}) {
+export function corpusReadiness(capability, {lockGraphSha256, nodeMinimum}) {
   if (!capability || typeof capability !== 'object') {
     return {ready: false, missing: [READINESS.NOT_PROBED], gaps: []};
   }
   const missing = [
-    ...requirementProblems(capability, {lockSha256, nodeMinimum}),
-    ...repositoryProblems(capability.repo, lockSha256),
+    ...requirementProblems(capability, {lockGraphSha256, nodeMinimum}),
+    ...repositoryProblems(capability.repo, lockGraphSha256),
   ];
   const gaps = [];
   if (capability.movielensSha256 !== MOVIELENS_SHA256) gaps.push(READINESS.NO_DATASET);
@@ -595,12 +654,14 @@ export function corpusReadiness(capability, {lockSha256, nodeMinimum}) {
 }
 
 // What the requirement itself lacks, then whether the machine's node meets it.
-// No requirement is no match: without a lockfile digest to compare, a machine
+// No requirement is no match: without a graph digest to compare, a machine
 // with no lockfile would otherwise read as matching; and an engines floor
 // that is not a version is named as such, not blamed on every machine's node.
-function requirementProblems(capability, {lockSha256, nodeMinimum}) {
+function requirementProblems(capability, {lockGraphSha256, nodeMinimum}) {
   const problems = [];
-  if (!HEX_SHA256.test(String(lockSha256 || EMPTY))) problems.push(READINESS.NO_REQUIREMENT);
+  if (!HEX_SHA256.test(String(lockGraphSha256 || EMPTY))) {
+    problems.push(READINESS.NO_REQUIREMENT);
+  }
   if (!parseVersion(nodeMinimum)) {
     problems.push(READINESS.NO_NODE_FLOOR);
   } else if (!nodeAtLeast(capability.nodeVersion, nodeMinimum)) {
@@ -609,10 +670,15 @@ function requirementProblems(capability, {lockSha256, nodeMinimum}) {
   return problems;
 }
 
-function repositoryProblems(repo, lockSha256) {
+function repositoryProblems(repo, lockGraphSha256) {
   if (repo?.present !== true) return [READINESS.NO_REPOSITORY];
   const problems = [];
-  if (repo.lockSha256 !== lockSha256) problems.push(READINESS.LOCKFILE_DIFFERS);
+  // Absent (a record stored before the graph was measured) is unknown too.
+  if ((repo.lockGraphSha256 ?? null) === null) {
+    problems.push(READINESS.DEPENDENCY_GRAPH_UNKNOWN);
+  } else if (repo.lockGraphSha256 !== lockGraphSha256) {
+    problems.push(READINESS.DEPENDENCY_GRAPH_DIFFERS);
+  }
   if (repo.nodeModules !== true) {
     problems.push(READINESS.NO_DEPENDENCIES);
   } else if (repo.dependenciesCurrent === null) {
@@ -623,7 +689,7 @@ function repositoryProblems(repo, lockSha256) {
   return problems;
 }
 
-export {CAPABILITY_SCRIPT, MOVIELENS_FILE, MOVIELENS_SHA256, READINESS};
+export {CAPABILITY_SCRIPT, MOVIELENS_FILE, MOVIELENS_SHA256, READINESS, REQUIREMENT_SOURCE};
 
 // ---------------------------------------------------------------------------
 // Worker provisioning: the one script a newly registered lab worker runs, by
@@ -934,12 +1000,12 @@ async function settleProbe(probe, input) {
  * @param {Object} input
  * @param {Array<Object>} input.nodes inventory nodes
  * @param {string} input.controllerRepoPath this checkout
- * @param {string} input.lockSha256 the lockfile a run would need
+ * @param {string} input.lockGraphSha256 the dependency graph a run would need
  * @param {string} input.nodeMinimum package.json engines floor
  * @param {Function} [input.probe]
  * @return {Promise<Array<Object>>}
  */
-export async function discoverFleet({nodes, controllerRepoPath, lockSha256,
+export async function discoverFleet({nodes, controllerRepoPath, lockGraphSha256,
   nodeMinimum, probe = probeTestCapability}) {
   // The node major a run activates, taken from the engines floor rather than
   // written down a second time.
@@ -967,7 +1033,7 @@ export async function discoverFleet({nodes, controllerRepoPath, lockSha256,
       capability,
       error,
       sameMachineAs,
-      readiness: corpusReadiness(capability, {lockSha256, nodeMinimum}),
+      readiness: corpusReadiness(capability, {lockGraphSha256, nodeMinimum}),
     };
   });
 }
@@ -976,6 +1042,7 @@ export {FLEET_CONTROLLER_NAME, FLEET_DEFAULT_REPO_PATH};
 
 const FLEET_NAME_COLUMN = 16;
 const FLEET_FACTOR_DIGITS = 2;
+const FLEET_GRAPH_DIGITS = 12;
 const FLEET_UNKNOWN = '?';
 const FLEET_TEXT = Object.freeze({
   UNREACHABLE: 'unreachable: ',
@@ -986,6 +1053,11 @@ const FLEET_TEXT = Object.freeze({
   GAPS_CLOSE: ')',
   LIST: ', ',
   LOCK: ' | ',
+  REQUIREMENT: 'requirement: ',
+  WORKING_TREE: 'the working tree (no commit named)',
+  COMMIT: 'commit ',
+  GRAPH: ', dependency graph ',
+  NODE: ', node >= ',
 });
 
 /**
@@ -1030,6 +1102,20 @@ export function formatFleet(fleet) {
     return `${entry.name.padEnd(FLEET_NAME_COLUMN)} cores=${cap?.cores ?? FLEET_UNKNOWN} ` +
       `speed x${factor} ${fleetVerdict(entry)}${fleetGaps(entry)}${fleetLock(cap)}`;
   });
+}
+
+/**
+ * One line naming what a fleet was measured against: a commit, or the
+ * working tree when no commit was named.
+ * @param {{source: string, lockGraphSha256: string|null, nodeMinimum: string}} requirement
+ * @return {string}
+ */
+export function formatFleetRequirement({source, lockGraphSha256, nodeMinimum}) {
+  const what = source === REQUIREMENT_SOURCE.WORKING_TREE ?
+    FLEET_TEXT.WORKING_TREE : `${FLEET_TEXT.COMMIT}${source}`;
+  return `${FLEET_TEXT.REQUIREMENT}${what}${FLEET_TEXT.GRAPH}` +
+    `${String(lockGraphSha256 || FLEET_UNKNOWN).slice(0, FLEET_GRAPH_DIGITS)}` +
+    `${FLEET_TEXT.NODE}${nodeMinimum || FLEET_UNKNOWN}`;
 }
 
 function fleetLock(capability) {
@@ -1167,7 +1253,30 @@ const PLACEMENT_SAFE_CHARACTER = '_';
 const PLACEMENT_RUN_SHA_CHARACTERS = 12;
 const PLACEMENT_RUN_RADIX = 36;
 const REQUIREMENT_FILE = Object.freeze({PACKAGE: 'package.json', LOCK: 'package-lock.json'});
-const REQUIREMENT_DIGEST = Object.freeze({ALGORITHM: 'sha256', ENCODING: 'hex'});
+const REQUIREMENT_TEXT = Object.freeze({
+  UNREADABLE: 'no requirement: cannot read ',
+  AT: ' at ',
+  TOO_LARGE: ' is larger than the requirement read bound of ',
+  BYTES: ' bytes',
+});
+// Git output this module reads whole (`git show <sha>:package-lock.json`,
+// status, rev-parse). spawnSync's default is 1 MiB, and a lockfile past it
+// would leave every placed run with no requirement; the bound is generous
+// (the lockfile is ~0.6 MiB) and exceeding it is a failure of its own.
+const GIT_OUTPUT_MAX_BYTES = 32 * 1024 * 1024;
+const GIT_OUTPUT_OVERFLOW = 'ENOBUFS';
+// Why discovery for a placed run failed, as a code a caller can name.
+const DISCOVERY_FAILURE = Object.freeze({
+  REQUIREMENT_UNREADABLE: 'lab-requirement-unreadable',
+  REQUIREMENT_TOO_LARGE: 'lab-requirement-too-large',
+  INVENTORY_UNREADABLE: 'lab-inventory-unreadable',
+});
+const REQUIREMENT_FAILURES = new Set([DISCOVERY_FAILURE.REQUIREMENT_UNREADABLE,
+  DISCOVERY_FAILURE.REQUIREMENT_TOO_LARGE]);
+
+function discoveryFailure(code, message, cause = undefined) {
+  return Object.assign(new Error(message, {cause}), {code});
+}
 const PLACEMENT_UPLOAD_SCRIPT = 'mkdir -p "${1%/*}" && cat > "$1"';
 const PLACEMENT_KILL_SCRIPT = 'kill -TERM "$1" 2>/dev/null';
 const PLACEMENT_TEXT = Object.freeze({
@@ -1179,6 +1288,8 @@ const PLACEMENT_TEXT = Object.freeze({
   NO_HISTORY: 'shares no history with this commit',
   UNREPORTED: ' file(s) with no result from there run on the controller: ',
   NO_INVENTORY: 'the lab inventory could not be read: ',
+  NO_REQUIREMENT: 'the placed commit\'s requirement could not be read: ',
+  NO_DISCOVERY: 'lab discovery failed: ',
   RED_THERE: ' file(s) red there are decided on the controller',
   OVER_CAP: 'remote reds exceed the rerun cap: breakage, reported red without a rerun',
   MISS: ' passed on the controller: routed away from ',
@@ -1482,7 +1593,8 @@ function relayShardLines(shard, outcome, write) {
  * @param {Function} deps.runLocal (files, {failFast}) -> exit status
  * @param {Function} deps.lastGreen file -> whether its controller result is green
  * @param {Function} deps.commitAt () -> the sha the tree exactly is, or null
- * @param {Function} deps.discover async () -> {machines, record(name, key, files)}
+ * @param {Function} deps.discover async (sha) -> {machines, record(name, key, files)},
+ *   measured against that commit's requirement
  * @param {Function} deps.runRemote (shard, {sha, deadlineMs, forward}) ->
  *   {done, stop, interrupt, abort}
  * @param {Function} [deps.runLocalChild] files -> {done, abort}: the controller's
@@ -1511,10 +1623,11 @@ export async function runPlacedTestFiles(files, deps) {
   if (!sha) return local(PLACEMENT_TEXT.NOT_A_COMMIT);
   let fleet;
   try {
-    fleet = await deps.discover();
+    fleet = await deps.discover(sha);
   } catch (error) {
-    // Placement can only shorten a run: an unreadable inventory is no fleet.
-    return local(`${PLACEMENT_TEXT.NO_INVENTORY}${error.message}`);
+    // Placement can only shorten a run: discovery that fails is no fleet,
+    // and the line names which part failed.
+    return local(`${discoveryFailureText(error)}${error.message}`);
   }
   if (fleet.machines.length === 0) return local(PLACEMENT_TEXT.NO_MACHINE);
   const shards = placeTestFiles(costs, [CONTROLLER_MACHINE, ...fleet.machines]);
@@ -1559,6 +1672,12 @@ export async function runPlacedTestFiles(files, deps) {
   } finally {
     release();
   }
+}
+
+function discoveryFailureText(error) {
+  if (REQUIREMENT_FAILURES.has(error?.code)) return PLACEMENT_TEXT.NO_REQUIREMENT;
+  if (error?.code === DISCOVERY_FAILURE.INVENTORY_UNREADABLE) return PLACEMENT_TEXT.NO_INVENTORY;
+  return PLACEMENT_TEXT.NO_DISCOVERY;
 }
 
 // The controller's own retry and timeout policy, handed to a lab machine.
@@ -1815,8 +1934,8 @@ function streamLines(readable, stream, onLine) {
 // Git here addresses the checkout it is given, never a repository pointer
 // inherited from a hook (the push gate runs this inside pre-push).
 function gitAt(root, args) {
-  return spawnSync(PLACEMENT_GIT, args,
-    {cwd: root, env: gitProcessEnvironment(), encoding: TEXT_UTF8});
+  return spawnSync(PLACEMENT_GIT, args, {cwd: root, env: gitProcessEnvironment(),
+    encoding: TEXT_UTF8, maxBuffer: GIT_OUTPUT_MAX_BYTES});
 }
 
 function gitSucceeds(root, args) {
@@ -2090,18 +2209,35 @@ function holdEnded(code, lines, errors) {
 }
 
 /**
- * The requirement a machine must meet to run a checkout's corpus: its
- * lockfile digest and its engines floor.
+ * The requirement a machine must meet to run a commit's corpus: the
+ * dependency graph its lockfile describes and its engines floor. With a sha
+ * both are read from that commit - the one a run places - and a commit that
+ * cannot be read throws rather than falling back; with none they are the
+ * working tree's, and `source` says which. A commit's file larger than
+ * GIT_OUTPUT_MAX_BYTES throws its own failure (REQUIREMENT_TOO_LARGE).
  * @param {string} root
- * @return {{lockSha256: string, nodeMinimum: string}}
+ * @param {string|null} [sha]
+ * @return {{source: string, lockGraphSha256: string|null, nodeMinimum: string}}
  */
-export function fleetRequirement(root) {
-  const manifest = JSON.parse(fs.readFileSync(path.join(root, REQUIREMENT_FILE.PACKAGE),
-    TEXT_UTF8));
+export function fleetRequirement(root, sha = null) {
+  const read = (file) => {
+    if (!sha) return fs.readFileSync(path.join(root, file), TEXT_UTF8);
+    const shown = gitAt(root, ['show', `${sha}:${file}`]);
+    if (shown.error?.code === GIT_OUTPUT_OVERFLOW) {
+      throw discoveryFailure(DISCOVERY_FAILURE.REQUIREMENT_TOO_LARGE,
+        `${file}${REQUIREMENT_TEXT.AT}${sha}${REQUIREMENT_TEXT.TOO_LARGE}` +
+        `${GIT_OUTPUT_MAX_BYTES}${REQUIREMENT_TEXT.BYTES}`, shown.error);
+    }
+    if (shown.status !== 0) {
+      throw discoveryFailure(DISCOVERY_FAILURE.REQUIREMENT_UNREADABLE,
+        `${REQUIREMENT_TEXT.UNREADABLE}${file}${REQUIREMENT_TEXT.AT}${sha}`, shown.error);
+    }
+    return shown.stdout;
+  };
+  const manifest = JSON.parse(read(REQUIREMENT_FILE.PACKAGE));
   return {
-    lockSha256: createHash(REQUIREMENT_DIGEST.ALGORITHM)
-      .update(fs.readFileSync(path.join(root, REQUIREMENT_FILE.LOCK)))
-      .digest(REQUIREMENT_DIGEST.ENCODING),
+    source: sha || REQUIREMENT_SOURCE.WORKING_TREE,
+    lockGraphSha256: lockfileGraphDigest(read(REQUIREMENT_FILE.LOCK), graphDigestOf),
     nodeMinimum: String(manifest.engines?.node || EMPTY).replace(/^>=\s*/u, EMPTY),
   };
 }
@@ -2115,12 +2251,20 @@ function commitAt(root) {
   return head.status === 0 ? head.stdout.trim() : null;
 }
 
-async function discoverPlacement(root, env) {
-  const state = await loadState();
+// Discovery for a run that places `sha`: every machine is measured against
+// that commit's requirement, whatever the controller's working tree holds.
+async function discoverPlacement(root, env, sha) {
+  const requirement = fleetRequirement(root, sha);
+  let state;
+  try {
+    state = await loadState();
+  } catch (error) {
+    throw discoveryFailure(DISCOVERY_FAILURE.INVENTORY_UNREADABLE, error.message, error);
+  }
   const fleet = await discoverFleet({
     nodes: Object.values(state.nodes || {}),
     controllerRepoPath: root,
-    ...fleetRequirement(root),
+    ...requirement,
   });
   await saveState(recordFleet(state, fleet));
   const controllerFactor = Number(env[PLACEMENT_MACHINE_FACTOR_ENV]);
@@ -2194,7 +2338,7 @@ export function placementDeps({root, failFast = false, env = process.env,
     failFast, env, planCosts, runLocal, lastGreen,
     runLocalChild: (files) => runClassifiedChild(root, files, env),
     commitAt: () => commitAt(root),
-    discover: () => discoverPlacement(root, env),
+    discover: (sha) => discoverPlacement(root, env, sha),
     runRemote: (shard, options) => startRemoteShard(shard, {...options, root}),
   };
 }
@@ -2458,7 +2602,7 @@ export async function runLabTest({plan, costs = [], commit, on = null, split = f
   write = (line) => process.stdout.write(`${line}${PLACEMENT_NEWLINE}`)}, deps) {
   let shares = [];
   try {
-    const {fleet = [], machines} = await deps.discover();
+    const {fleet = [], machines} = await deps.discover(commit.sha);
     const assignments = placeLabLanes(plan, machines,
       {on, split, controller: controllerMachine(fleet), fleet});
     if (assignments.some(({machine}) => machine.controller) && deps.commitAt() !== commit.sha) {
@@ -2487,12 +2631,12 @@ export async function runLabTest({plan, costs = [], commit, on = null, split = f
  */
 export function labTestDeps({root, env = gitProcessEnvironment()}) {
   return {
-    discover: () => discoverPlacement(root, env),
+    discover: (sha) => discoverPlacement(root, env, sha),
     runRemote: (shard, options) => startRemoteShard(shard, {...options, root, env}),
     runLocalChild: (files, options) => runClassifiedChild(root, files, env, options),
     commitAt: () => commitAt(root),
   };
 }
 
-export {LAB_TEST_RESULTS_FILE, PLACEMENT_ENV, PLACEMENT_EXIT, PLACEMENT_LOCAL,
-  PLACEMENT_MIN_PLAN_MS};
+export {DISCOVERY_FAILURE, GIT_OUTPUT_MAX_BYTES, LAB_TEST_RESULTS_FILE, PLACEMENT_ENV,
+  PLACEMENT_EXIT, PLACEMENT_LOCAL, PLACEMENT_MIN_PLAN_MS};

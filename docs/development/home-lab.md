@@ -147,8 +147,13 @@ ssh -t USER@HOST bash lagrange-lab-worker-setup.sh
 
 Or write it to a file and copy it yourself:
 `node scripts/lab.js provision --output lagrange-lab-worker-setup.sh`. It is
-safe to run again: rerun it when `lab fleet` reports that a worker's lockfile or
-dependencies differ. Then check what every machine can run:
+safe to run again: rerun it when `lab fleet` reports that a worker's dependency
+graph or installed dependencies differ (`dependency-graph-differs`,
+`dependencies-differ-from-lockfile`). The dependency graph is the lockfile less
+its two release-version fields, so a version-only release bump never needs a
+rerun. `lab fleet` measures against the working tree's lockfile and says so; a
+placed run (`lab test`, the change proof) measures against the commit it
+places. Then check what every machine can run:
 
 ```bash
 node scripts/lab.js fleet

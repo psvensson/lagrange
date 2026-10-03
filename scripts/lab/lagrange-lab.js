@@ -15,6 +15,7 @@ import {initK3sServer, joinK3sNode, k3sKubectl, syncK3sLabels} from './k3s.js';
 import {configureRunner, runnerLabels} from './runner.js';
 import {
   WORKER_SETUP_FILE, copyWorkerSetup, discoverFleet, fleetRequirement, formatFleet,
+  formatFleetRequirement,
   labTestCommit, labTestDeps, labTestSelectorArgs, probeRemoteNode, recordFleet, runLabTest,
   workerCloneUrl, workerSetupScript,
 } from './probe.js';
@@ -81,8 +82,9 @@ const COMMAND = Object.freeze({
   FLEET: 'fleet',
   PROVISION: 'provision',
 });
-// The repository this command runs from: its lockfile and engines floor are
-// what a fleet machine must match to run this checkout's corpus.
+// The repository this command runs from. `lab fleet` names no commit, so its
+// working tree's dependency graph and engines floor are what it measures
+// against; a hand run (`lab test`) measures against the commit it places.
 const FLEET_REPO_ROOT = joinPath(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FLEET_PACKAGE = 'package.json';
 const FLEET_TEXT = 'utf8';
@@ -304,14 +306,18 @@ async function doctorProblems() {
 // decides from these records at run time.
 async function commandFleet(args) {
   const state = await loadState();
+  // No commit is named here, so the requirement is the working tree's, and
+  // the report says so; a placed run measures against its own commit.
+  const requirement = fleetRequirement(FLEET_REPO_ROOT);
   const fleet = await discoverFleet({
     nodes: Object.values(state.nodes || {}),
     controllerRepoPath: FLEET_REPO_ROOT,
-    ...fleetRequirement(FLEET_REPO_ROOT),
+    ...requirement,
   });
   await saveState(recordFleet(state, fleet));
   const lines = args.flags[FLEET_JSON_FLAG] ?
-    [JSON.stringify(fleet, null, JSON_INDENT)] : formatFleet(fleet);
+    [JSON.stringify(fleet, null, JSON_INDENT)] :
+    [formatFleetRequirement(requirement), ...formatFleet(fleet)];
   process.stdout.write(`${lines.join(FLEET_LINE_BREAK)}${FLEET_LINE_BREAK}`);
 }
 
@@ -358,7 +364,8 @@ async function commandProvision(args) {
     gitEnv);
   const script = workerSetupScript({
     workflow: parseYaml(readFileSync(joinPath(FLEET_REPO_ROOT, PROVISION_WORKFLOW), FLEET_TEXT)),
-    nodeMinimum: String(manifest.engines?.node || '').replace(/^>=\s*/u, ''),
+    // The engines floor has one reader: the fleet requirement's.
+    nodeMinimum: fleetRequirement(FLEET_REPO_ROOT).nodeMinimum,
     repoUrl: workerCloneUrl(
       await capture('git', ['-C', FLEET_REPO_ROOT, 'remote', 'get-url', 'origin'], gitEnv)),
     authorizedKeys: await controllerPublicKeys(node?.ssh),
