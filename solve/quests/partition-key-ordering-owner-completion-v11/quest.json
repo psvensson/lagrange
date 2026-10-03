@@ -68,5 +68,6 @@
       "id": "rs-raft-isolation",
       "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
     }
-  ]
+  ],
+  "sealedAt": "c5af3b958c09fa590b622c3a0e8fd82004a82df2"
 }
