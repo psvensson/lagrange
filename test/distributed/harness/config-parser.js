@@ -196,7 +196,6 @@ function mergeWithDefaults(partial = {}) {
       enabled: BENCHMARK_GATE_DEFAULTS.enabled,
       maxThroughputRegressionRatio:
         BENCHMARK_GATE_DEFAULTS.maxThroughputRegressionRatio,
-      baselineProvider: BENCHMARK_GATE_DEFAULTS.baselineProvider,
       failIfBaselineMissing: BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing,
       approvedMitigationId: BENCHMARK_GATE_DEFAULTS.approvedMitigationId,
       ...(partial.benchmarkGate || {}),
