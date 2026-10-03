@@ -1,5 +1,5 @@
 name: a1-v10-seal-and-attempt
-# retry after measuring hostile-iterator probe
+# retry after isolated iterator witness
 # retry after snapshot column type-owner fix
 
 on:
@@ -68,7 +68,7 @@ jobs:
           cat /tmp/v10-probe-red.log
           test "$test_status" -ne 0
           test "$probe_status" -ne 0
-          grep -E "not ok.*split snapshot batching ignores hostile iterator and mutable collection methods" /tmp/v10-v9-red.log >/dev/null
+          grep -E "not ok.*split snapshot batching ignores hostile row iterator" /tmp/v10-v9-red.log >/dev/null
 
       - name: Install exact v10 candidate
         shell: bash
