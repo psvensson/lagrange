@@ -1,0 +1,72 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v11",
+  "statement": "Partition split snapshot batching closes the final v10 collection-boundary gaps: grouping constructs its Map through a module-captured constructor, snapshot columns are a nonempty bounded dense own-data string array, snapshot rows are a bounded dense own-data record array whose whole call fits the SQLite bind-variable budget, and over-wide dimensions fail closed before copying/grouping/dispatch; all v10/v9 routing, batching, intrinsic, ordering and ownership semantics remain unchanged.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v11.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-reviewed-v10",
+      "statement": "Supersedes sealed partition-key-ordering-owner-completion-v10 after category-complete Copilot PR #96 review rejected exact v10 candidate tree for two production-semantic gaps: routeSplitSnapshotBatch used live new Map() after module load, allowing Map replacement to silently suppress dispatch; and snapshot row/column dimensions lacked a policy cap, allowing over-wide/unbounded copying and dispatch beyond the SQLite 32,766 bind-variable budget. Preserve v10 predicate/evidence unchanged."
+    },
+    {
+      "id": "captured-map-constructor",
+      "statement": "Snapshot grouping constructs the internal map through a Map constructor captured at module initialization. Replacing globalThis.Map after module load cannot change grouping, seed hidden rows, suppress partition order, or alter dispatch."
+    },
+    {
+      "id": "bind-budget-columns",
+      "statement": "Snapshot columns are a nonempty canonical dense own-data array of primitive strings with length at most 32,766. Zero-column and over-wide column sets fail closed before row copying or dispatch."
+    },
+    {
+      "id": "bind-budget-rows",
+      "statement": "For C admitted columns, one routeSplitSnapshotBatch call admits at most floor(32,766 / C) canonical dense own-data rows. Oversized row batches fail closed before row copying/grouping/dispatch, matching the upstream backfill owner's existing bounded-batch contract."
+    },
+    {
+      "id": "strict-own-data-length-owner",
+      "statement": "Bounded dense-array copying is implemented by the existing strict-own-data owner via an optional max-length parameter; snapshot routing does not duplicate proxy/prototype/descriptor length semantics locally."
+    },
+    {
+      "id": "row-limit-fail-fast",
+      "statement": "resolveSplitSnapshotBatchRowLimit rejects empty or over-wide column sets rather than returning a misleading one-row batch size that lets the upstream iterator accumulate an impossible batch."
+    },
+    {
+      "id": "preserve-v10",
+      "statement": "Preserve v10 dense-own Proxy/sparse/accessor rejection, captured push/join/slice/get/set semantics, exact deterministic grouping/SQL/params, no silent row loss, preserved v9 closure, and all earlier routing/table-ID/evaluation-context/intrinsic semantics."
+    },
+    {
+      "id": "controlled-negative",
+      "statement": "The exact rejected v10 candidate must be right-reason red for post-load global Map replacement and for over-wide column/row dimensions. The v11 candidate must make those controls plus v10/v11 closure and focused snapshot tests green."
+    },
+    {
+      "id": "key-range-manager-intrinsic-debt",
+      "statement": "Existing KeyRangeManager intrinsic hardening remains a separate owner follow-up, unchanged by v11."
+    },
+    {
+      "id": "a2-boundary",
+      "statement": "Persisted key type metadata, exact large-integer boundary representation, parser/bind precision, encoding migration and old-boundary revalidation remain A2."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any v11 source candidate requires category-complete independent verification newer than its last attempt, covering both sealed verificationTemplates and exact candidate fingerprints."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    }
+  ]
+}
