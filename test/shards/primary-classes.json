@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1917,
+    "unit": 1918,
     "integration": 78,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-1d2ab469",
+  "censusSize": 2196,
+  "digest": "fnv1a32-4efa137f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1750,6 +1750,7 @@
     "test/release/public-api-side-effect-boundary.test.js": "unit",
     "test/release/public-consumer-contract-ratchet.test.js": "unit",
     "test/release/release-pipeline-proof-reuse.test.js": "unit",
+    "test/release/runtime-entry-link.test.js": "unit",
     "test/release/version-single-source.test.js": "unit",
     "test/runtime/call-cell-reduce-coordinator.test.js": "unit",
     "test/runtime/call-cell-worker.test.js": "unit",

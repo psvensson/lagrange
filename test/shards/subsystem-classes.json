@@ -14,7 +14,7 @@
     "pgwire-compat": 17,
     "placement-rebalance": 256,
     "query-sql": 164,
-    "release-packaging": 14,
+    "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-b080770e",
+  "censusSize": 2196,
+  "digest": "fnv1a32-b5c32271",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d2d80f1d",
+  "observationDigest": "fnv1a32-3c56a41d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1769,6 +1769,7 @@
     "test/release/public-api-side-effect-boundary.test.js": "release-packaging",
     "test/release/public-consumer-contract-ratchet.test.js": "release-packaging",
     "test/release/release-pipeline-proof-reuse.test.js": "release-packaging",
+    "test/release/runtime-entry-link.test.js": "release-packaging",
     "test/release/version-single-source.test.js": "release-packaging",
     "test/runtime/call-cell-reduce-coordinator.test.js": "services-runtime",
     "test/runtime/call-cell-worker.test.js": "services-runtime",
@@ -9888,6 +9889,12 @@
         ".github/workflows/release.yml",
         "scripts/run-release-proof.js",
         "test/manifests/project-hardening-proof-release-tail-manifest.json"
+      ]
+    },
+    "test/release/runtime-entry-link.test.js": {
+      "files": [
+        "Dockerfile",
+        "package.json"
       ]
     },
     "test/release/version-single-source.test.js": {
