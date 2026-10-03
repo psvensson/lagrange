@@ -19,16 +19,16 @@
     "services-runtime": 144,
     "solver-tooling": 7,
     "storage-partition": 144,
-    "storage-raft": 99,
+    "storage-raft": 100,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-48ed845c",
+  "censusSize": 2196,
+  "digest": "fnv1a32-1ea3eaa1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-606504eb",
+  "observationDigest": "fnv1a32-435c28f7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1446,6 +1446,7 @@
     "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "storage-raft",
     "test/raft/raft-rs-backend/election-safety.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/election-seed.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-anchors.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js": "storage-raft",
@@ -8252,6 +8253,12 @@
     "test/raft/raft-rs-backend/election-safety.test.js": {
       "files": [
         "src/raft/raft-rs-host-contract.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/election-seed.test.js": {
+      "files": [
+        "src/raft/raft-rs-group-constants.js",
+        "test/raft/raft-rs-backend/election-seed-probe.js"
       ]
     },
     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": {

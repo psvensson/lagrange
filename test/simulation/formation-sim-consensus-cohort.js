@@ -2,8 +2,10 @@
 // seed founds it alone, and whose joiners are admitted at their scheduled
 // join time (join times are data). Every replica is a real raft-rs
 // operation port built through the production backend seam, on its own
-// replica database, with the node's network clock as its substrate; the
-// core decides every election, commit and configuration.
+// replica database, with the node's network clock and the node's own seeded
+// randomness as its substrate (the port draws its group's election seed from
+// that randomness, owner decision O2); the core decides every election,
+// commit and configuration.
 //
 // The seed founds the group from a GENESIS stamp and campaigns once, the
 // production lone-replica rule. A joiner joins the production partition way:
@@ -53,7 +55,8 @@ const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}
  * @returns {{admit: Function, ports: Map, leaderId: Function, isFormed: Function,
  *   handleMessage: Function, groupId: string, end: Function}}
  */
-function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, charges}) {
+function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, charges,
+  randomSources}) {
   const ports = new Map();
   const databases = new Map();
   const pendingJoins = [];
@@ -151,7 +154,8 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
       [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: bootstrapMembership,
       [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: database,
       [RAFT_OPERATION_PORT_REQUEST.TIMING]: timing,
-      [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: {timeSource: chargingTimeSource(nodeId)},
+      [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: {timeSource: chargingTimeSource(nodeId),
+        randomSource: randomSources.get(nodeId)},
       [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]: false,
       [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: (peerAddress, envelope) => {
         network.send({

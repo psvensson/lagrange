@@ -22,10 +22,10 @@
 // covers the synchronous prefix of each dispatch (up to its first await);
 // an ambient read in a later continuation is not caught here, and a read
 // caught inside an async handler surfaces as a rejected promise.
-// process.hrtime and the raft-rs core's election randomness (an unseeded
-// getrandom) are outside the guard; neither reached the report bytes while
-// no replica's election timeout elapses, and a scenario that starved one
-// past it would not be byte-reproducible.
+// process.hrtime is outside the guard and does not reach the report bytes.
+// The raft-rs core's election randomness is seeded: every port draws its
+// group's election seed from its node's seeded consensus stream (owner
+// decision O2), so the core never reads the platform entropy source here.
 
 import path from 'node:path';
 import process from 'node:process';
@@ -357,10 +357,15 @@ async function runSimulationGeneration(seed, options = {}) {
     });
   }
   const groupIds = [...PRIORITY_CONTROL_PLANE_TABLE_IDS].sort();
+  // Each node's consensus randomness, one stream per node shared by every
+  // group it hosts, as a production node's replicas share the node's
+  // randomness: each port draws its group's election seed from it.
+  const consensusRandomSources = new Map(ids.map((nodeId) => [nodeId,
+    new SeededRandomSource({seed: seed * SEED_STREAM_STRIDE + nodeIndex(nodeId)})]));
   for (const groupId of groupIds) {
     cohorts.set(groupId, createStagedCohort({
       network, groupId, seedId, linkDelayMs: SCENARIO.linkDelayMs, timing: RAFT_TIMING,
-      charges,
+      charges, randomSources: consensusRandomSources,
     }));
   }
   // Hosts are constructed outside any guarded dispatch (construction is

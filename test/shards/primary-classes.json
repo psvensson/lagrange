@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1917,
+    "unit": 1918,
     "integration": 78,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-311ae41f",
+  "censusSize": 2196,
+  "digest": "fnv1a32-7101b387",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1427,6 +1427,7 @@
     "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "unit",
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "unit",
     "test/raft/raft-rs-backend/election-safety.test.js": "unit",
+    "test/raft/raft-rs-backend/election-seed.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-anchors.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js": "unit",

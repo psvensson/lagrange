@@ -15,13 +15,15 @@
  * once their transaction committed. A test acts only by proposing a command
  * through the port.
  *
- * The seed: raft-rs draws its randomized election timeout from the platform
- * RNG, so no seed can choose that draw. The seed chooses each replica's
- * election window instead - the per-replica timing input production already
- * varies (replica-election-timeouts.js) - and the windows are disjoint, so the
- * seed alone decides which live replica times out first. A scenario that
- * elects its leader explicitly passes one `electionMinMs` window for every
- * replica instead and asks the chosen replica's port to campaign.
+ * The seed chooses two things. Each replica's randomness: a seeded random
+ * source the replica's port substrate carries, from which the port draws its
+ * group's election seed, so the core's randomized election timeouts replay
+ * exactly for one seed (owner decision O2). And each replica's election
+ * window - the per-replica timing input production already varies
+ * (replica-election-timeouts.js) - disjoint, so the seed alone decides which
+ * live replica times out first. A scenario that elects its leader explicitly
+ * passes one `electionMinMs` window for every replica instead and asks the
+ * chosen replica's port to campaign.
  *
  * A stopped replica's node is down on the network, so nothing reaches or
  * leaves its port; a restart closes that port and its database and reopens
@@ -43,6 +45,23 @@ const HEARTBEAT_MS = 30;
 const TICK_INTERVAL_MS = 10;
 const BASE_ELECTION_MIN_MS = 150;
 const WINDOW_GROWTH = 2;
+// A SeededRandomSource draw is a uint32 divided by 2^32.
+const SEED_SPAN = 2 ** 32;
+
+/**
+ * Each replica's own seeded randomness, drawn in replica order from the
+ * scenario seed. A replica keeps its source across a restart, as a node keeps
+ * its randomness.
+ * @param {Array<string>} ids - The replicas.
+ * @param {number} seed - The scenario seed.
+ * @return {Map<string, SeededRandomSource>} replica -> its random source.
+ */
+function seededReplicaRandomSources(ids, seed) {
+  const random = new SeededRandomSource({seed});
+  return new Map(ids.map((id) => [id, new SeededRandomSource({
+    seed: Math.floor(random.random() * SEED_SPAN),
+  })]));
+}
 
 /**
  * Seeded, disjoint election windows: the replica ranked r waits
@@ -100,6 +119,7 @@ class RaftRsNetworkHost {
     const timings = electionMinMs === undefined ?
       seededElectionTimings(this.ids, seed) :
       sharedElectionTimings(this.ids, electionMinMs);
+    const randomSources = seededReplicaRandomSources(this.ids, seed);
     for (const id of this.ids) {
       net.registerNode(id, (message) => this.receive(id, message));
     }
@@ -107,7 +127,8 @@ class RaftRsNetworkHost {
       partitionId,
       replicaIds: this.ids,
       timingFor: (id) => timings.get(id),
-      substrateFor: (id) => ({timeSource: net.networkTimeSource(id)}),
+      substrateFor: (id) => ({timeSource: net.networkTimeSource(id),
+        randomSource: randomSources.get(id)}),
       sendFor: (from, address, envelope) =>
         this.send(from, address, envelope),
       applyFor: (id, command, {index, term, effects}) =>
