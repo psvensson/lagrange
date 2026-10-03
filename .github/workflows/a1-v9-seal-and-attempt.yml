@@ -112,11 +112,29 @@ jobs:
           cat /tmp/a1-v9-routing-v8-red.log
           cat /tmp/a1-v9-probe-v8-red.log
 
-          test "$merge_status" -ne 0
-          test "$routing_status" -ne 0
-          test "$probe_status" -ne 0
-          grep -E "not ok.*coalesced evaluation context reserves priority"             /tmp/a1-v9-merge-v8-red.log >/dev/null
-          grep -E "not ok.*split routing rejects Proxy and accessor metadata before traps"             /tmp/a1-v9-routing-v8-red.log >/dev/null
+          if [ "$merge_status" -eq 0 ]; then
+            echo "::error::rejected v8 unexpectedly passed the capacity witness"
+            exit 1
+          fi
+          if [ "$routing_status" -eq 0 ]; then
+            echo "::error::rejected v8 unexpectedly passed the live routing witness"
+            exit 1
+          fi
+          if [ "$probe_status" -eq 0 ]; then
+            echo "::error::rejected v8 unexpectedly satisfied the v9 closure probe"
+            exit 1
+          fi
+          if ! grep -F "not ok" /tmp/a1-v9-merge-v8-red.log |
+              grep -F "coalesced evaluation context reserves priority without evicting admitted reasons" >/dev/null; then
+            echo "::error::capacity witness did not fail at the named assertion"
+            exit 1
+          fi
+          if ! grep -F "not ok" /tmp/a1-v9-routing-v8-red.log |
+              grep -F "split routing rejects Proxy and accessor metadata before traps" >/dev/null; then
+            echo "::error::live routing witness did not fail at the named assertion"
+            exit 1
+          fi
+          echo "Rejected-v8 right-reason controls confirmed."
 
       - name: Install v9 source candidate
         shell: bash
