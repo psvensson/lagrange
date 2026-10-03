@@ -138,6 +138,7 @@ jobs:
           set -euo pipefail
           files=(
             src/partition/partition-split-merge-manager.js
+            src/partition/partition-split-merge-evaluation-context.js
             src/partition/split-key-comparator.js
             src/partition/partition-split-merge-manager-core-methods.js
             src/partition/partition-split-merge-manager-evaluation-methods.js
@@ -157,7 +158,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          candidate_hashes="$(sha256sum             src/partition/partition-split-merge-manager.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js | tr '\n' ';')"
+          candidate_hashes="$(sha256sum             src/partition/partition-split-merge-manager.js             src/partition/partition-split-merge-evaluation-context.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js | tr '\n' ';')"
           node scripts/solve.js note             --id "$QUEST_ID"             --finding "A1-v8 GitHub Actions run ${GITHUB_RUN_ID}: exact rejected post-attempt v7 candidate is right-reason red for KeyRangeManager ID-only evaluation, bounded context overflow/write_activity retention, RegExp.exec capture and proxy-safe split metadata/targets; exact v8 candidate makes v6/v7/v8 closure plus focused behavior green. Candidate sha256: ${candidate_hashes}"             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
           node scripts/solve.js note             --id "$QUEST_ID"             --attempt "A1-v8 closes the four governing PR #92 findings while preserving all v7 routing/split-merge semantics; v6/v7/v8 probes, focused behavior and guardrails are green in GitHub Actions run ${GITHUB_RUN_ID}."
 
