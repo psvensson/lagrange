@@ -38,20 +38,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected=(
-            "9aba852cf52c65e3e63927a28fdd0438a27864c96188ab5b77f71842aa31b81e  src/partition/partition-split-merge-manager.js"
-            "4cac564fbb7504f73ef0c6be6c96b34fd2e57f24a53b9a32465ff8d1269f9fd5  src/partition/partition-split-merge-evaluation-context.js"
-            "4142ae6c02ad40aeef4c1d1b5a692f3fe9c975d9027a9d51899478612bb9e652  src/partition/split-key-comparator.js"
-            "395b9c3e6ba6b00a1c86a94943b0d03584e7975e025004538e1cc2385aa3590b  src/partition/partition-split-merge-manager-core-methods.js"
-            "28909b70aae1746eb2fd895d795397b3523e6fcb4f37ec59fd40a19c3e2bada8  src/partition/partition-split-merge-manager-evaluation-methods.js"
-            "36b32055b89b9c19efa211abd67193a65d61a730b5720c836e533caa6ceeb35c  src/partition/partition-split-merge-manager-transition-methods.js"
-            "65b3d3f70294c65d1b8ced3cd379795a8d732c61e79ca80df77bec228c419524  src/partition/partition-split-routing.js"
-            "75731d4832f734ff89f063f35a4577443920b40376cb012d8eb20e55a54bcbc4  test/partition/routing-key-comparator.test.js"
-            "7ca08f03cb299a59c2f48edbdda47c989d8d06958f69c3cf348cb8fce05fb200  test/partition/merge-auto-execution.test.js"
-            "8f68493406d9698ea717caf9a47b81391c144c32ef20cc46b6867199b8f337bf  test/partition/partition-split-routing.test.js"
-          )
-          printf '%s
-' "${expected[@]}" > "$RUNNER_TEMP/v9.sha256"
+          cat > "$RUNNER_TEMP/v9.sha256" <<'EOF'
+          9aba852cf52c65e3e63927a28fdd0438a27864c96188ab5b77f71842aa31b81e  src/partition/partition-split-merge-manager.js
+          4cac564fbb7504f73ef0c6be6c96b34fd2e57f24a53b9a32465ff8d1269f9fd5  src/partition/partition-split-merge-evaluation-context.js
+          4142ae6c02ad40aeef4c1d1b5a692f3fe9c975d9027a9d51899478612bb9e652  src/partition/split-key-comparator.js
+          395b9c3e6ba6b00a1c86a94943b0d03584e7975e025004538e1cc2385aa3590b  src/partition/partition-split-merge-manager-core-methods.js
+          28909b70aae1746eb2fd895d795397b3523e6fcb4f37ec59fd40a19c3e2bada8  src/partition/partition-split-merge-manager-evaluation-methods.js
+          36b32055b89b9c19efa211abd67193a65d61a730b5720c836e533caa6ceeb35c  src/partition/partition-split-merge-manager-transition-methods.js
+          65b3d3f70294c65d1b8ced3cd379795a8d732c61e79ca80df77bec228c419524  src/partition/partition-split-routing.js
+          75731d4832f734ff89f063f35a4577443920b40376cb012d8eb20e55a54bcbc4  test/partition/routing-key-comparator.test.js
+          7ca08f03cb299a59c2f48edbdda47c989d8d06958f69c3cf348cb8fce05fb200  test/partition/merge-auto-execution.test.js
+          8f68493406d9698ea717caf9a47b81391c144c32ef20cc46b6867199b8f337bf  test/partition/partition-split-routing.test.js
+          EOF
+          sed -i 's/^          //' "$RUNNER_TEMP/v9.sha256"
           sha256sum --check "$RUNNER_TEMP/v9.sha256"
 
       - name: V9 closure and focused behavior
