@@ -150,14 +150,24 @@ function removeSnapshotEntry(cache, tableName, entry, options, removed) {
   // The same watermark, and therefore the same clock authority: the cache's.
   cache.lastAppliedAtMsByTableName.set(tableName, cache.timeSource.now());
   const tableMutationRevision = cache.recordTableMutation(tableName, key);
+  const sweepDeletedRecord = cache.deepClone(currentSnapshot.record);
+  const sweepMetadata = Object.freeze({
+    causeId: normalizeCauseId(null),
+    tableMutationRevision,
+  });
+  if (typeof cache.notifyApplyListeners === 'function') {
+    cache.notifyApplyListeners(
+      tableName,
+      CACHE_CDC_OPERATIONS.DELETE,
+      sweepDeletedRecord,
+      sweepMetadata,
+    );
+  }
   cache.notifyListeners(
     tableName,
     CACHE_CDC_OPERATIONS.DELETE,
-    cache.deepClone(currentSnapshot.record),
-    Object.freeze({
-      causeId: normalizeCauseId(null),
-      tableMutationRevision,
-    }),
+    sweepDeletedRecord,
+    sweepMetadata,
   );
 }
 

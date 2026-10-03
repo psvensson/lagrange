@@ -7,7 +7,7 @@
     "bootstrap-membership": 280,
     "cdc-metadata": 58,
     "cli-tooling": 96,
-    "control-plane": 204,
+    "control-plane": 205,
     "convergence-topology": 83,
     "distributed-harness": 169,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2194,
-  "digest": "fnv1a32-7940dee5",
+  "censusSize": 2195,
+  "digest": "fnv1a32-b080770e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cabf0902",
+  "observationDigest": "fnv1a32-d2d80f1d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -627,6 +627,7 @@
     "test/control-plane/readiness-planning-deferral-bounded.test.js": "control-plane",
     "test/control-plane/readiness-planning-diagnostics-retention.test.js": "control-plane",
     "test/control-plane/readiness-planning-generation-granularity.test.js": "control-plane",
+    "test/control-plane/readiness-planning-identity-churn-currency.test.js": "control-plane",
     "test/control-plane/readiness-planning-liveness-veto.test.js": "control-plane",
     "test/control-plane/readiness-planning-publication-atomicity.test.js": "control-plane",
     "test/control-plane/readiness-planning-publication-version-key.test.js": "control-plane",
@@ -4030,6 +4031,14 @@
         "src/control-plane/readiness-planning-semantic-generation.js",
         "src/control-plane/readiness-planning-snapshot-owner.js",
         "src/rebalancer/storage-capacity-accounting-service.js"
+      ]
+    },
+    "test/control-plane/readiness-planning-identity-churn-currency.test.js": {
+      "files": [
+        "src/cache/system-table-cache.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-readiness-service.js",
+        "src/control-plane/membership-publication-coordinator.js"
       ]
     },
     "test/control-plane/readiness-planning-publication-version-key.test.js": {

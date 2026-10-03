@@ -372,6 +372,23 @@ const readinessPlanningSemanticCurrencyMethods = {
     );
   },
 
+  // Called by the readiness snapshot store once one deferred cache-change
+  // delivery has been fully processed (stored-snapshot invalidation
+  // included). Classification is not this signal: it runs on the apply
+  // channel, in the applying turn.
+  recordDeferredSourceDelivery(tableName, sourceRevision) {
+    if (this.stopped) return;
+    this.semanticGenerationTracker.recordDeferredSourceDelivery(
+      tableName,
+      sourceRevision,
+    );
+  },
+
+  hasNonNodeTableDeferredDeliveryPending(observation) {
+    return this.semanticGenerationTracker
+      .hasNonNodeTableDeferredDeliveryPending(observation);
+  },
+
   hasUnclassifiedSourceChange(
     observation = this.readCurrentSourceObservation(),
   ) {

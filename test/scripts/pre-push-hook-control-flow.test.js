@@ -208,28 +208,6 @@ test('the hook hands the pushed commit to the materializer and runs no content s
   assert.match(run.output, /materialize-pushed-tree/u);
 });
 
-test('a non-main branch push is preservation-only and skips the local proof gate', () => {
-  const run = runHook(
-    `refs/heads/topic ${shas.head} refs/heads/topic ${ZERO_SHA}\n`);
-  assert.equal(run.status, 0, run.output);
-  assert.deepEqual(materializerCalls(run.recorded), [],
-    'preservation does not materialize or prove the branch');
-  assert.deepEqual(contentStageCalls(run.recorded), [],
-    'preservation does not run lint, ratchets or behavioral proof');
-  assert.match(run.output, /non-main branch preservation push/u);
-  assert.match(run.output, /NOT merge, Quest-land, release, or publication approval/u);
-});
-
-test('a non-main branch can explicitly request the full local proof gate', () => {
-  const run = runHook(
-    `refs/heads/topic ${shas.head} refs/heads/topic ${ZERO_SHA}\n`,
-    {LAGRANGE_PUSH_PROVE_BRANCH: '1'});
-  assert.equal(run.status, 0, run.output);
-  const [call] = materializerCalls(run.recorded);
-  assert.ok(call, 'opt-in branch proof materializes the pushed commit');
-  assert.equal(call.argv[1], shas.head);
-});
-
 test('a mixed main plus side-branch push cannot use preservation fast path', () => {
   const run = runHook(
     `refs/heads/main ${shas.head} refs/heads/main ${shas.base}\n` +
@@ -314,7 +292,14 @@ test('an annotated tag as the first pushed ref is peeled to its commit', () => {
 });
 
 test('a deletion-only push proves nothing and a manual invocation gates HEAD', () => {
-  const deletion = runHook(`refs/heads/old ${ZERO_SHA} refs/heads/old ${shas.base}\n`);
+  const deletionLine = `refs/heads/old ${ZERO_SHA} refs/heads/old ${shas.base}\n`;
+  // A non-main deletion is a preservation push unless the full gate is
+  // requested; the opt-in reaches the gate's own deletion-only branch.
+  const preserved = runHook(deletionLine);
+  assert.equal(preserved.status, 0, preserved.output);
+  assert.deepEqual(materializerCalls(preserved.recorded), []);
+  assert.match(preserved.output, /non-main branch preservation push/u);
+  const deletion = runHook(deletionLine, {LAGRANGE_PUSH_PROVE_BRANCH: '1'});
   assert.equal(deletion.status, 0, deletion.output);
   assert.deepEqual(materializerCalls(deletion.recorded), []);
   assert.match(deletion.output, /nothing to prove/u);

@@ -139,6 +139,12 @@ class ReadinessPlanningSemanticGenerationTracker {
     this.semanticChangeSequence = 0;
     this.saturated = false;
     this.classifiedSourceRevisions = objectCreate(null);
+    // The deferred-delivery frontier: per source table, the newest cache
+    // revision whose deferred (macrotask) change notification has been fully
+    // processed, stored readiness-snapshot invalidation included. The apply
+    // channel classifies, so the classified frontier no longer says whether
+    // that deferred work is done.
+    this.deferredDeliveredSourceRevisions = objectCreate(null);
     this.sourceRevisionBaselineEstablished = false;
     this.sourceRevisionRebaselinePending = false;
     this.sourceRevisionRebaselineCompleted = false;
@@ -150,6 +156,9 @@ class ReadinessPlanningSemanticGenerationTracker {
     this.transactionNodeIds = [];
   }
 
+  // Both frontiers start at the cache's observed revisions: an apply at or
+  // below them predates this tracker's subscription (or the cache swap that
+  // cleared every stored snapshot), so no stored evidence can predate it.
   initializeSourceRevisionTracking(cache) {
     const observation = this.readSourceObservation(cache);
     if (!observation) return false;
@@ -157,6 +166,11 @@ class ReadinessPlanningSemanticGenerationTracker {
       const tableName = REVISIONED_SOURCE_TABLES[index];
       defineValue(
         this.classifiedSourceRevisions,
+        tableName,
+        observation[tableName],
+      );
+      defineValue(
+        this.deferredDeliveredSourceRevisions,
         tableName,
         observation[tableName],
       );
@@ -271,6 +285,7 @@ class ReadinessPlanningSemanticGenerationTracker {
 
   resetSourceRevisionBaseline() {
     this.classifiedSourceRevisions = objectCreate(null);
+    this.deferredDeliveredSourceRevisions = objectCreate(null);
     this.sourceRevisionBaselineEstablished = false;
     this.sourceRevisionRebaselinePending = false;
     this.sourceRevisionRebaselineCompleted = false;
@@ -307,6 +322,39 @@ class ReadinessPlanningSemanticGenerationTracker {
       nodesChanged = true;
     }
     return nodesChanged;
+  }
+
+  // Advance the deferred-delivery frontier once one deferred change
+  // notification has been processed. The cache schedules one FIFO next-turn
+  // notification per apply, in apply order, so a delivered revision covers
+  // every earlier revision of its table; an older or duplicate delivery is a
+  // no-op. A frontier that is not a valid revision never advances (pending).
+  recordDeferredSourceDelivery(tableName, sourceRevision) {
+    if (!this.sourceRevisionTrackingActive ||
+        !isValidSourceRevision(sourceRevision)) return;
+    const delivered = this.deferredDeliveredSourceRevisions[tableName];
+    if (isValidSourceRevision(delivered) && sourceRevision > delivered) {
+      this.deferredDeliveredSourceRevisions[tableName] = sourceRevision;
+    }
+  }
+
+  // True when a source table other than nodes has an applied revision whose
+  // deferred delivery has not been processed yet, or when the frontier cannot
+  // be determined (fail closed). The CL-012 stored-reuse witnesses learn of
+  // such a change only from that delivery; the nodes table alone is what they
+  // arbitrate synchronously (a heartbeat or lease advance). Unrevisioned
+  // sources keep the classification-only answer, as before.
+  hasNonNodeTableDeferredDeliveryPending(observation) {
+    if (!this.sourceRevisionTrackingActive) return false;
+    if (!observation) return true;
+    for (let index = 0; index < REVISIONED_SOURCE_TABLES.length; index += 1) {
+      const tableName = REVISIONED_SOURCE_TABLES[index];
+      const delivered = this.deferredDeliveredSourceRevisions[tableName];
+      if (tableName !== TABLES.NODES &&
+          (!isValidSourceRevision(delivered) ||
+            observation[tableName] !== delivered)) return true;
+    }
+    return false;
   }
 
   classifySourceRevision(tableName, sourceRevision, observation) {
