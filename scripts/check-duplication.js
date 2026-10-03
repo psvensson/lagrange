@@ -73,8 +73,11 @@ const RATCHET_TARGETS = [
     // onto its operation port and the legacy replica base was deleted.
     // 2026-10-01: tightened 52/1652 -> 51/1624 after the spike, provider
     // selection and migration tooling were deleted (checker hint).
-    baselineCloneGroupCount: 51,
-    baselineDuplicatedLineCount: 1624,
+    // 2026-10-03: tightened 51/1624 -> 49/1559 on the checker's hint after
+    // the origin/main ec63fbb00 merge and the native-append inference
+    // deletion.
+    baselineCloneGroupCount: 49,
+    baselineDuplicatedLineCount: 1559,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -191,8 +194,11 @@ const RATCHET_TARGETS = [
     // group tests were deleted.
     // 2026-10-01: tightened 728/27645 -> 726/27594 after the dt6 publication
     // network tests moved onto the raft-rs network host.
-    baselineCloneGroupCount: 726,
-    baselineDuplicatedLineCount: 27594,
+    // 2026-10-03: tightened 726/27594 -> 718/27311 on the checker's hint
+    // after the origin/main ec63fbb00 merge, the native-append test removal
+    // and the single VirtualNetwork async drive.
+    baselineCloneGroupCount: 718,
+    baselineDuplicatedLineCount: 27311,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

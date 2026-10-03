@@ -75,7 +75,9 @@ const TARGET_THRESHOLD = 12;
 // split into named node predicates).
 // 2026-09-30: tightened 1796 -> 1795 on the checker's hint (the boot
 // lifecycle components no longer branch on a missing incarnation).
-const BASELINE_COUNT = 1795;
+// 2026-10-03: tightened 1795 -> 1773 on the checker's hint after the
+// origin/main ec63fbb00 merge and the native-append inference deletion.
+const BASELINE_COUNT = 1773;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -166,14 +166,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `lint:fix` — `eslint src/ test/ --fix --ignore-pattern 'test/.gitkeep'`
 - `lint:scripts` — `eslint scripts/`
 
-## migration
-
-- `migration:raft:benchmarks` — `node scripts/run-raft-migration-benchmarks.js`
-- `migration:raft:rollback-drill` — `node scripts/run-raft-migration-rollback-drill.js`
-- `migration:raft:stage:canary` — `node scripts/run-raft-migration-stage-gate.js --stage canary`
-- `migration:raft:stage:dev` — `node scripts/run-raft-migration-stage-gate.js --stage dev`
-- `migration:raft:stage:limited` — `node scripts/run-raft-migration-stage-gate.js --stage limited-production`
-
 ## model
 
 - `model:active-gate` — `node scripts/model-active-gate.js`
@@ -213,10 +205,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `solve:note` — Record an attempt, finding, verification or blocked entry.
 - `solve:probe` — Measure the doneWhen probe.
 - `solve:start` — Seal a quest against a red probe.
-
-## spike
-
-- `spike:raft-logic` — `node scripts/run-raft-logic-investigation-spike.js`
 
 ## start
 
@@ -300,4 +288,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-198 scripts indexed; 36 have a curated description, 162 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+192 scripts indexed; 36 have a curated description, 156 fall back to their raw command. Improve coverage in the two sources named in the header comment.
