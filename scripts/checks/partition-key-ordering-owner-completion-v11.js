@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import {
+  SPLIT_SNAPSHOT_MAX_BIND_VARIABLES,
+  SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH,
   routeSplitSnapshotBatch,
   resolveSplitSnapshotBatchRowLimit,
 } from '../../src/partition/partition-split-routing.js';
 
-const MAX_BIND_VARIABLES = 32_766;
 const TABLE_NAME = 'users';
 const LEFT_ID = 'users-left';
 const RIGHT_ID = 'users-right';
@@ -59,11 +60,11 @@ async function dimensionProblemCount() {
   let problems = 0;
   const dispatch = async () => ({success: true});
   const tooManyColumns = Array.from(
-    {length: MAX_BIND_VARIABLES + 1},
+    {length: SPLIT_SNAPSHOT_MAX_BIND_VARIABLES + 1},
     (_value, index) => `column_${index}`,
   );
   const tooManyRows = Array.from(
-    {length: MAX_BIND_VARIABLES + 1},
+    {length: SPLIT_SNAPSHOT_MAX_BIND_VARIABLES + 1},
     (_value, index) => ({id: `a_${index}`}),
   );
 
@@ -98,8 +99,8 @@ async function dimensionProblemCount() {
     // Over-wide column set must fail closed.
   }
 
-  const maxRows = resolveSplitSnapshotBatchRowLimit(['id'], MAX_BIND_VARIABLES);
-  if (maxRows !== MAX_BIND_VARIABLES) problems += 1;
+  const maxRows = resolveSplitSnapshotBatchRowLimit(['id'], SPLIT_SNAPSHOT_MAX_BIND_VARIABLES);
+  if (maxRows !== SPLIT_SNAPSHOT_MAX_BIND_VARIABLES) problems += 1;
   return problems;
 }
 
