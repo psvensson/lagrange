@@ -143,7 +143,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -u -- .github/workflows/a1-v7-record-attempt.yml
+          # git rm above already staged the workflow deletion.
           git add -- solve/quests/partition-key-ordering-owner-completion-v7/log.ndjson
           git commit -m "0.3 A1: record exact accepted v7 attempt"
 
