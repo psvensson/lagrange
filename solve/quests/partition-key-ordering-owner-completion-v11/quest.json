@@ -1,7 +1,7 @@
 {
   "schema": "solve-quest/2",
   "id": "partition-key-ordering-owner-completion-v11",
-  "statement": "Partition split snapshot batching closes the final v10 collection-boundary gaps: grouping constructs its Map through a module-captured constructor, snapshot columns are a nonempty bounded dense own-data string array, snapshot rows are a bounded dense own-data record array whose whole call fits the SQLite bind-variable budget, and over-wide dimensions fail closed before copying/grouping/dispatch; all v10/v9 routing, batching, intrinsic, ordering and ownership semantics remain unchanged.",
+  "statement": "Partition split snapshot batching closes the final v10 collection-boundary gaps without regressing valid internal batching: grouping constructs its Map through a module-captured constructor, snapshot columns are a nonempty bounded dense own-data string array capped by SQLite's 32,766 bind-variable ceiling, each route-call accepts at most the existing 64-row split-backfill cadence before copy/grouping, and per-statement row batching remains floor(32,766 / columnCount); all v10/v9 routing, batching, intrinsic, ordering and ownership semantics remain unchanged.",
   "epic": "release-0-3-queryable-core",
   "links": {
     "roadmapRow": "RM-0.3-qs-typed-key-ordering",
@@ -33,8 +33,8 @@
       "statement": "Snapshot columns are a nonempty canonical dense own-data array of primitive strings with length at most 32,766. Zero-column and over-wide column sets fail closed before row copying or dispatch."
     },
     {
-      "id": "bind-budget-rows",
-      "statement": "For C admitted columns, one routeSplitSnapshotBatch call admits at most floor(32,766 / C) canonical dense own-data rows. Oversized row batches fail closed before row copying/grouping/dispatch, matching the upstream backfill owner's existing bounded-batch contract."
+      "id": "route-call-row-bound",
+      "statement": "One routeSplitSnapshotBatch call accepts at most 64 canonical dense own-data rows before copy/grouping, matching the existing split snapshot producer cadence. The 64-row value has one owner in partition-split-routing and PartitionService consumes that exported owner instead of restating a second literal."
     },
     {
       "id": "strict-own-data-length-owner",
@@ -42,7 +42,7 @@
     },
     {
       "id": "row-limit-fail-fast",
-      "statement": "resolveSplitSnapshotBatchRowLimit rejects empty or over-wide column sets rather than returning a misleading one-row batch size that lets the upstream iterator accumulate an impossible batch."
+      "statement": "resolveSplitSnapshotBatchRowLimit still owns per-SQL-statement batching as floor(32,766 / columnCount), rejects empty or over-wide columns, and therefore preserves the existing valid 64-row × 512-column route call by splitting it into 63+1 statements."
     },
     {
       "id": "preserve-v10",
@@ -50,7 +50,7 @@
     },
     {
       "id": "controlled-negative",
-      "statement": "The exact rejected v10 candidate must be right-reason red for post-load global Map replacement and for over-wide column/row dimensions. The v11 candidate must make those controls plus v10/v11 closure and focused snapshot tests green."
+      "statement": "The exact rejected v10 candidate must be right-reason red for post-load global Map replacement, for a 65-row route call, and for a 32,767-column route call. The v11 candidate must make those controls plus v10/v11 closure and focused snapshot tests green, including the existing 64-row × 512-column 63+1 batching witness."
     },
     {
       "id": "key-range-manager-intrinsic-debt",
