@@ -75,6 +75,12 @@ struct CreateOpts {
     check_quorum: bool,
     #[serde(default)]
     bootstrap: Option<JsBootstrapIn>,
+    // FORK (owner decision O2): the seed of this node's election-timeout
+    // stream, a decimal u64 like every other sixty-four-bit value. Absent,
+    // the core draws its election timeouts from the platform entropy source
+    // exactly as before; present, it never touches that source.
+    #[serde(default)]
+    election_seed: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -450,6 +456,12 @@ pub fn create_node(opts: JsValue) -> Result<u32, JsValue> {
         Some(ref a) => parse_u64(a).map_err(|e| jserr(&format!("applied parse: {e}")))?,
         None => 0,
     };
+    let election_timeout_seed = match opts.election_seed {
+        Some(ref seed) => Some(
+            parse_u64(seed).map_err(|e| jserr(&format!("electionSeed parse: {e}")))?,
+        ),
+        None => None,
+    };
     let mut cfg = Config {
         id,
         election_tick: opts.election_tick as usize,
@@ -457,6 +469,7 @@ pub fn create_node(opts: JsValue) -> Result<u32, JsValue> {
         pre_vote: opts.pre_vote,
         check_quorum: opts.check_quorum,
         applied,
+        election_timeout_seed,
         ..Default::default()
     };
     // Set sane defaults

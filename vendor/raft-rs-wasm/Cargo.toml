@@ -43,3 +43,11 @@ strip = "symbols"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
+
+# FORK (owner decision O2): raft 0.7.0 from its crates.io tarball with one
+# patch - Config::election_timeout_seed, a per-node seeded election-timeout
+# stream. The unseeded path is upstream's code unchanged. BUILD.md describes
+# the patch; artifact-digest.json (raftCratePatch) records every vendored
+# file's digest and the patched files' upstream digests.
+[patch.crates-io]
+raft = { path = "raft-0.7.0" }

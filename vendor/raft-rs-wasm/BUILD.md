@@ -54,6 +54,50 @@ of the exact sources the artifact was compiled from.
 | getrandom | 0.2.16 | `335ff9f135e4384c8150d6f27c6daed433577f86b4750418338c01a1a2528592` |
 | slog | 2.8.2 | `9b3b8565691b22d2bdfc066426ed48f837fc0c5f2c8cad8d9718f7f99d6995c1` |
 
+## The one patch to raft 0.7.0 (owner decision O2)
+
+The artifact is NOT compiled from the crates.io `raft 0.7.0` unchanged. It is
+compiled from that crate vendored under `raft-0.7.0/` (selected by
+`[patch.crates-io]` in `Cargo.toml`, so `Cargo.lock` records `raft` as a path
+dependency without a registry checksum) with one patch, marked
+`LAGRANGE PATCH (owner decision O2)` in `src/config.rs` and `src/raft.rs`:
+
+- `Config::election_timeout_seed: Option<u64>`, default `None`.
+- `None`: `Raft::reset_randomized_election_timeout` is upstream's code,
+  `rand::thread_rng().gen_range(min..max)`; `thread_rng` is seeded from
+  getrandom's `js` backend, i.e. `crypto.getRandomValues`. This is what every
+  production core does: production never supplies a seed.
+- `Some(seed)`: the node draws from its own SplitMix64 stream, started from
+  `splitmix64(seed ^ splitmix64(id))`; each draw is
+  `min + splitmix64(state += GAMMA) % (max - min)`. It never calls
+  `thread_rng`, so a seeded core makes no call into the platform entropy
+  source at all.
+
+The binding exposes it as the optional `electionSeed` (a decimal u64, like
+every sixty-four-bit value) in `create_node`'s options; no export was added,
+so the generated glue is unchanged. Host side, the rs-raft operation port
+takes one draw from the port request substrate's `randomSource` when it opens
+a group and passes it as the group's seed (`src/raft/raft-rs-election-seed.js`);
+a substrate without a `randomSource` - every production replica - passes none.
+
+Why a patch and not a seam outside the crate: the randomized timeout is drawn
+inside `Raft::reset`, which every role change calls, including the one inside
+`Raft::new`, from `rand::thread_rng()`. `thread_rng` is per thread (so per
+process here) and cannot be reseeded; a getrandom `custom` backend is
+process-global, is shadowed by the `js` feature this build needs, and would
+make every group's draws depend on the order all groups enter the core.
+Overriding the timeout from the binding after each call with the
+`#[doc(hidden)] set_randomized_election_timeout` cannot keep a seeded core off
+the entropy source (`Raft::new` has already drawn once) and has to infer
+resets from term and role changes. The patch is two fields and one branch.
+
+Safety: only the election timing depends on the seed, never a vote, commit or
+configuration rule. Nodes of one group given one seed get different streams
+because the node id is mixed in; a group whose every node restarts from the
+same seed state is a fresh draw of those distinct streams, which is the same
+liveness argument as a first boot. Both are witnessed in
+`test/raft/raft-rs-backend/election-seed.test.js`.
+
 ## The build command
 
 ```sh
@@ -75,18 +119,23 @@ cannot change their bytes, and the digests prove it.
 `src/raft/raft-rs-host-contract.js` cites, vendored so a citation resolves
 from the repository alone rather than from whatever a machine happens to have
 in its cargo registry. They are third-party sources under the Apache-2.0
-licence kept beside them in `raft-0.7.0/LICENSE`, unmodified.
+licence kept beside them in `raft-0.7.0/LICENSE`; all unmodified except the
+two files the O2 patch below names.
 
-The provenance chain is recorded in `artifact-digest.json` under
+Since owner decision O2 the directory holds the whole crate the artifact is
+compiled from (its `Cargo.toml`, `src/`, `examples/` and `benches/`), with the
+one patch above; every file's digest is recorded under
+`raftCratePatch.vendoredFiles`, and the cited files are among the unmodified
+ones. The provenance chain is recorded in `artifact-digest.json` under
 `citationSources` and is checked by a test:
 
 1. `raftCrateChecksum` is the sha256 crates.io records for the published
-   `raft 0.7.0` `.crate` tarball, and it is also what `Cargo.lock` records for
-   the dependency this artifact was compiled from.
+   `raft 0.7.0` `.crate` tarball (what `Cargo.lock` recorded until the O2
+   patch made `raft` a path dependency).
 2. Each vendored file was extracted from that tarball, and its own sha256 is
    recorded under `citationSources.files`.
 
-Vendored: `src/lib.rs` (the crate's documented Ready-loop contract and its
+Cited: `src/lib.rs` (the crate's documented Ready-loop contract and its
 safety note), `src/raw_node.rs` (what `advance_append` and `advance_apply`
 do), `src/raft_log.rs` (the refusal a restart makes when applied runs past
 commit) and `examples/five_mem_node/main.rs` (the reference loop). Where the

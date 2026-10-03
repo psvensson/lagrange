@@ -59,6 +59,37 @@ test('the vendored raft-rs sources are the ones the digest records',
     }
   });
 
+// Owner decision O2: the directory is the whole crate the artifact compiles,
+// with one recorded patch. Every file under it is recorded, nothing else is
+// there, the two patched files are the only ones that differ from upstream,
+// and no citation points into a patched file.
+test('the vendored raft crate is exactly the recorded tree and its one patch',
+  async () => {
+    const {raftCratePatch} = readArtifactDigest();
+    const {crateSource} = raftRsBindingPaths();
+    const walk = (directory) => fs.readdirSync(directory, {withFileTypes: true})
+      .flatMap((entry) => entry.isDirectory() ?
+        walk(path.join(directory, entry.name)) :
+        [path.join(directory, entry.name)]);
+    const present = walk(crateSource).map((file) =>
+      path.relative(crateSource, file).split(path.sep).join(POSIX_SEPARATOR))
+      .sort();
+    assert.deepEqual(present, Object.keys(raftCratePatch.vendoredFiles).sort());
+    for (const [relative, expected] of
+      Object.entries(raftCratePatch.vendoredFiles)) {
+      assert.equal(fileDigest(path.join(crateSource, relative)), expected,
+        `${relative} is not the recorded vendored file`);
+    }
+    for (const [relative, {upstreamSha256, patchedSha256}] of
+      Object.entries(raftCratePatch.patchedFiles)) {
+      assert.equal(raftCratePatch.vendoredFiles[relative], patchedSha256);
+      assert.notEqual(upstreamSha256, patchedSha256,
+        `${relative} is recorded as patched but is upstream's file`);
+      assert.ok(!(relative in readArtifactDigest().citationSources.files),
+        `${relative} is patched, so no citation may point into it`);
+    }
+  });
+
 // Generated wasm-pack output is not source. It lives outside the root the
 // package ships its code from, so that the repository's source checkers -
 // eslint, both complexity ratchets, the file-size ratchet, unused exports and

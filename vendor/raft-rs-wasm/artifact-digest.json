@@ -1,8 +1,8 @@
 {
   "note": "The artifact the raft-rs-wasm backend loads, how it was built, and the raft-rs 0.7 sources the host contract is cited against. Integrity is required; reproducibility is measured and reported as found.",
-  "wasmSha256": "b285c5eca45ddb6c44301abc0e35c561cd74b24f3e1670b8c49882820aa9e5ad",
+  "wasmSha256": "536bf8b74db76ea15eaaf56b7e3c27ba65cd0db361dae439fdbbe7499644105d",
   "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81",
-  "wasmBytes": 680702,
+  "wasmBytes": 680533,
   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
   "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
   "wasmPack": "wasm-pack 0.13.1",
@@ -42,7 +42,27 @@
     "wasmIdentical": false,
     "result": "differs",
     "observation": "the generated JavaScript glue is byte-identical across both builds; the .wasm is not. Reported as measured; byte-for-byte reproducibility is not a requirement of this quest.",
-    "note": "attempts 1-3 measured the reproducibility of ONE source; attempt 4 is a different source (the fork fixes) and is the checked-in artifact. The reproducibility verdict below refers to attempts 1 and 2."
+    "note": "attempts 1-3 measured the reproducibility of ONE source; attempt 4 is a different source (the fork fixes) and is the checked-in artifact. The reproducibility verdict below refers to attempts 1 and 2.",
+    "seededBuild": {
+      "method": "the recorded build command run twice with cargo clean between them on the patched source (attempts 5 and 6); attempt 6 is the checked-in artifact",
+      "builds": [
+        {
+          "attempt": 5,
+          "wasmSha256": "53d7c099780229412fd6456c5c2d19e17ccf29cbd4389313ed17b57668aeed99",
+          "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81"
+        },
+        {
+          "attempt": 6,
+          "wasmSha256": "536bf8b74db76ea15eaaf56b7e3c27ba65cd0db361dae439fdbbe7499644105d",
+          "glueSha256": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81"
+        }
+      ],
+      "checkedInArtifactIsAttempt": 6,
+      "glueIdentical": true,
+      "wasmIdentical": false,
+      "result": "differs",
+      "observation": "the glue is byte-identical to every earlier build (no export was added: the seed crosses inside the existing create_node options). The two .wasm builds have the same size and differ in 36 bytes, all inside the import section: wasm-bindgen emitted its __wbindgen_cast_* placeholder imports in a different order. Reported as measured, as before."
+    }
   },
   "forkFixes": [
     {
@@ -60,6 +80,10 @@
     {
       "fix": "every recoverable binding refusal crosses as a tagged object",
       "why": "the private invocation owner must distinguish CORE_REFUSED from a WASM trap by construction, without inspecting a generic JavaScript exception class or message"
+    },
+    {
+      "fix": "create_node takes an optional electionSeed (decimal u64) and passes it to the patched raft Config::election_timeout_seed",
+      "why": "owner decision O2: a host-supplied seed makes every randomized election timeout of a node a function of (seed, node id) and keeps a seeded core off the platform entropy source; an absent seed is the previous behaviour"
     }
   ],
   "vendoredAt": "vendor/raft-rs-wasm — generated and vendored infrastructure for the experimental raft-rs-wasm backend the provider seam selects. It lives outside src/ because wasm-pack output is nobody's source: keeping it out of the source tree is what lets every repository checker stay on its own default walk with no exclusion for it. Moved here from the exhausted raft-backend-evaluation test tree (tag raft-backend-evaluation/round-3-rejected-tree); the .wasm and the glue are byte-identical to the tagged tree, which the two digests above prove.",
@@ -73,5 +97,67 @@
       "examples/five_mem_node/main.rs": "c2c17c69c6e3ba12cd5120ac70746e1398305cf6e5348cd8aae46aab30342d6f",
       "LICENSE": "c52cf83bf02deb33ef952e2808e3d0b3916d532805d865880ba9bdf8f2c0c93c"
     }
-  }
+  },
+  "raftCratePatch": {
+    "note": "owner decision O2: the artifact is compiled from raft 0.7.0 as published (raftCrateChecksum) with ONE patch, applied through [patch.crates-io] in Cargo.toml to the crate vendored under raft-0.7.0/: Config::election_timeout_seed. None (the default) keeps upstream reset_randomized_election_timeout unchanged (rand::thread_rng, seeded from getrandom js -> crypto.getRandomValues); Some(seed) draws every randomized election timeout from a SplitMix64 stream owned by the node and started from splitmix64(seed ^ splitmix64(id)). Every other vendored file is byte-identical to the file of the same path in the crates.io tarball; vendoredFiles records the digest of every file under raft-0.7.0/ as checked in.",
+    "patchedFiles": {
+      "src/config.rs": {
+        "upstreamSha256": "4e2448d6b587b0d695011548a476ccf974c8e17c200213812ecb1c5fc0631db9",
+        "patchedSha256": "cb2b107c989f077ce3169253ccf6cc99a18569073c7626200b46663f30e87b92"
+      },
+      "src/raft.rs": {
+        "upstreamSha256": "a595cc7420eb83f49546253d004ebc9657e255581db467376a13cf02a383a8eb",
+        "patchedSha256": "6137bf23d3a94d2d395d8866e0f1256dd232679239466a1f3706b02006a460ca"
+      }
+    },
+    "vendoredFiles": {
+      "Cargo.toml": "4bc28fe7635dd753f7804f6398540280398e3709f815056efa0e1e48914e1a51",
+      "LICENSE": "c52cf83bf02deb33ef952e2808e3d0b3916d532805d865880ba9bdf8f2c0c93c",
+      "README.md": "e8b6e4346129a972267f767a00a4601f9d76abfb89c07629aa78a95d1078081d",
+      "benches/benches.rs": "c73869f2f1afc875139168fcd855df0163f3c14024e96fe6dbbf150d7337e32b",
+      "benches/suites/mod.rs": "67188923f8682b05b64689fa92e72f07bd16feb457dd01540213ad8ea0dcf860",
+      "benches/suites/progress.rs": "8bee193d05a63516cd97767583a73cc86dae005961add4fd7f1de34d5accfb9f",
+      "benches/suites/raft.rs": "e9a98682babf91651529093612b76cbe98d55d8189a232fe44f0cceec926ea26",
+      "benches/suites/raw_node.rs": "7f4a0aa924a20e631fbe917a088feada9569020c5103685df59abc173a5c2b3b",
+      "examples/five_mem_node/main.rs": "c2c17c69c6e3ba12cd5120ac70746e1398305cf6e5348cd8aae46aab30342d6f",
+      "examples/single_mem_node/main.rs": "f46704e55069eb3e8da1478399bf97a35a3a6bdb91de66cfd4f9e3f78eb7a042",
+      "src/confchange.rs": "fd8b26bdefe1d31f954e9d14896bdbebb63816f75dbe893a6fd43e978a1fe6ef",
+      "src/confchange/changer.rs": "43f232b7758c5346da7417837e46f56b901078eb16fcbbbbed30b16f4b3ef601",
+      "src/confchange/datadriven_test.rs": "2f10012581142b231f0ec185ee8c6d175fe3f6a4415d2e3d8169cef2eee5e18d",
+      "src/confchange/restore.rs": "7c9df4a55868de8edcd3451916a3e7b0712bac00179792cdceba5e53227ddfb8",
+      "src/confchange/testdata/joint_autoleave.txt": "0ab772d05cfecf693d1890ceb27664838eb224e40d9fc4df2251ab863880eb31",
+      "src/confchange/testdata/joint_idempotency.txt": "529b3719c87028d74e4fb549748b8569ef89466739911f800a95cc125ff42c11",
+      "src/confchange/testdata/joint_learners_next.txt": "930a433ac7c55ae1a811708b75b4a51e4941c245e8368a7470aea49c586447a5",
+      "src/confchange/testdata/joint_safety.txt": "dfabd98d6cd98913454e34063a27beddceb3ebbe2135d5dd9203e73df51c472a",
+      "src/confchange/testdata/simple_idempotency.txt": "3a6d69619a7923da3af662631804bb386bae5fb4a4b8c5100245b900492dee8c",
+      "src/confchange/testdata/simple_promote_demote.txt": "63f4b3f09a028e49d43962ce19ec9b2929ab6a23b41808074c5c971d3700de02",
+      "src/confchange/testdata/simple_safety.txt": "4b5934ad4fea1c5e3d5746413ded662a7ded9d45c316baf3a69b48e43c6428c1",
+      "src/confchange/testdata/zero.txt": "f3c618a0303a58c9abfd09c22b2229a1196199ba34b25021925155121f7d8a14",
+      "src/config.rs": "cb2b107c989f077ce3169253ccf6cc99a18569073c7626200b46663f30e87b92",
+      "src/errors.rs": "ea1206f002e726459a71fa830aa3753bf4aa5335fae9254aabfbfcef2b280c64",
+      "src/lib.rs": "2d46291e5c0e11a575610756abfba97827abadba9e11b985b907d44b75aeca7e",
+      "src/log_unstable.rs": "5e12f90a4a57a48686e45246872703df2d1fa16dd3d1b67f72094d0815037aa0",
+      "src/quorum.rs": "0e73a11ac7b909406ee568b186632af96da7869f38482a6a0c76fd9c379bb27c",
+      "src/quorum/datadriven_test.rs": "d7ebf0f1c750b09e36f36bc57ab20f53dfe541c6e63856f97f235fc693c0e3ae",
+      "src/quorum/joint.rs": "c37c2cbb844c15cf43b7550a2be1d409016039810d6b23224d9ee40639d3a6d3",
+      "src/quorum/majority.rs": "1e8a91320982eb6ce391a9e7aa81f2f57c7c907fe5bd3ac450cab8affd2bffea",
+      "src/quorum/testdata/joint_commit.txt": "879578becd6efc4c2c41e210ea44280172b49c8f2ddf14f52820984e4c40f131",
+      "src/quorum/testdata/joint_group_commit.txt": "2406d50acb4d958911e845790f8d52c5a62507b756cff3cb72c06af9d6ef1299",
+      "src/quorum/testdata/joint_vote.txt": "8de53a14d000a38fd051d147727ef651034662dcffd37d785d7ad45acd94a9de",
+      "src/quorum/testdata/majority_commit.txt": "45b32d1f6a70d71418a9a2e23f46b301eaab13519160e527d7042d2f71d773f6",
+      "src/quorum/testdata/majority_vote.txt": "4f3f3e5e4129e1eb79b08bcb01fdace3fb73bf0b1712ed1e5b33c1f3e337f7e3",
+      "src/raft.rs": "6137bf23d3a94d2d395d8866e0f1256dd232679239466a1f3706b02006a460ca",
+      "src/raft_log.rs": "2de371ef878538c215782e8f8ed987e3ed4b1bda966f0c5f5da91d1cea6c42a4",
+      "src/raw_node.rs": "92cbca1fa82288ad8ccecbc74066bb766ea38b5ffce4ed89a0d1e0f174ddb057",
+      "src/read_only.rs": "0af28746d1bdb6e8741784a23f5cfa791f27ef3d3978774a6d0a94727fa1ec49",
+      "src/status.rs": "5eef839a9cfd260c7864b68c3a7e8154160e0009a0abe01bee23ab6bc885d50f",
+      "src/storage.rs": "670ebb2944449eab9eee8c1318f0885baaca3ab103f9e82e6c88b451ed63588c",
+      "src/tracker.rs": "b2fbe4c719464eb4d5e1f8d3393171b1e34c3246d5bb4450953ed997a1004327",
+      "src/tracker/inflights.rs": "36cd94cc94639e8cd4de7ca86e7c7442f2cb809d3e1935dab4e6711185829468",
+      "src/tracker/progress.rs": "c8f8d0da3c799f8fdf7569aa08661766a445f3f40e4c9ea2a5fda0250ea4e80d",
+      "src/tracker/state.rs": "81b0bfc09d9e43db56ff12f2e7fb6654a086f2a75db1ffa8fd8aa41e8c7d314c",
+      "src/util.rs": "e9ff94012a3818bff76da2c5f60a0e1cc3636dc1d88553951139a845b0a5997c"
+    }
+  },
+  "raftCrateSource": "vendored raft-0.7.0/ with the raftCratePatch (Cargo.lock records it as a path dependency, so it carries no registry checksum)"
 }
