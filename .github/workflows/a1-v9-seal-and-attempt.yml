@@ -1,0 +1,205 @@
+name: a1-v9-seal-and-attempt
+
+on:
+  push:
+    branches:
+      - quest/0-3-queryable-core-foundation
+    paths:
+      - .github/workflows/a1-v9-seal-and-attempt.yml
+
+permissions:
+  contents: write
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TAP_TIMEOUT_FLOOR: '120'
+      LAGRANGE_TEST_MACHINE_FACTOR: '3'
+      BRANCH: quest/0-3-queryable-core-foundation
+      V8_REJECTED_SHA: dabcaa1df0f845fa65f63387801a017fa0482658
+    steps:
+      - name: Checkout exact event SHA
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify committed shard state before sealing
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run -s audit:shards
+          git diff --exit-code --             test/shards/primary-classes.json             test/shards/resource-classes.json             test/shards/subsystem-classes.json
+
+      - name: Record v8 rejection, supersede it, and seal v9
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v8             --verification "REJECT: category-complete Copilot post-attempt review PR #93 of exact generated-state-current v8 candidate dabcaa1df0f845fa65f63387801a017fa0482658 found that the full reasonCodes array evicted an already-pending diagnostic to force write_activity into the 1024 bound, while the witness omitted complete retained-reason assertions. The same review showed live replay/snapshot routing could read Proxy metadata before the resolver-level fence. The later clean PR head is tree-identical."             --verifier subagent:github-copilot-pr93             --verdict reject
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v8             --superseded "PR #93 exposed the bounded-context owner contradiction and live split-routing Proxy ingress outside v8's immutable predicate; preserve v8 and continue as v9."             --by partition-key-ordering-owner-completion-v9
+          node scripts/solve.js start --id partition-key-ordering-owner-completion-v9
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v9
+
+      - name: Baseline guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            src/partition/partition-split-merge-manager.js
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+            src/partition/partition-split-merge-manager-transition-methods.js
+            src/partition/partition-split-routing.js
+          )
+          npm run test:complexity
+          npm run test:complexity:scoped -- "${files[@]}"
+          npm run audit:file-size
+          node scripts/check-guideline-literals.js "${files[@]}"
+          node scripts/check-guideline-decision-boundaries.js "${files[@]}"
+          node scripts/check-guideline-ambient-intrinsics.js "${files[@]}"
+          node scripts/check-guideline-silent-catch.js "${files[@]}"
+
+      - name: Install v9 witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=solve/quests/partition-key-ordering-owner-completion-v9/evidence
+          cp "$evidence/candidate-test-routing-key-comparator.test.js"             test/partition/routing-key-comparator.test.js
+          cp "$evidence/candidate-test-merge-auto-execution.test.js"             test/partition/merge-auto-execution.test.js
+          cp "$evidence/candidate-test-partition-split-routing.test.js"             test/partition/partition-split-routing.test.js
+
+      - name: Prove exact rejected v8 candidate red at v9 mechanisms
+        shell: bash
+        run: |
+          set -euo pipefail
+          v8=solve/quests/partition-key-ordering-owner-completion-v8/evidence
+          cp "$v8/candidate-src-split-merge-manager.js"             src/partition/partition-split-merge-manager.js
+          cp "$v8/candidate-src-evaluation-context.js"             src/partition/partition-split-merge-evaluation-context.js
+          cp "$v8/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
+          cp "$v8/candidate-src-split-merge-core.js"             src/partition/partition-split-merge-manager-core-methods.js
+          cp "$v8/candidate-src-split-merge-evaluation.js"             src/partition/partition-split-merge-manager-evaluation-methods.js
+          cp "$v8/candidate-src-split-merge-transition.js"             src/partition/partition-split-merge-manager-transition-methods.js
+
+          node scripts/checks/partition-key-ordering-owner-completion-v8.js
+
+          set +e
+          node test/partition/merge-auto-execution.test.js             > /tmp/a1-v9-merge-v8-red.log 2>&1
+          merge_status=$?
+          node test/partition/partition-split-routing.test.js             > /tmp/a1-v9-routing-v8-red.log 2>&1
+          routing_status=$?
+          node scripts/checks/partition-key-ordering-owner-completion-v9.js             > /tmp/a1-v9-probe-v8-red.log 2>&1
+          probe_status=$?
+          set -e
+
+          cat /tmp/a1-v9-merge-v8-red.log
+          cat /tmp/a1-v9-routing-v8-red.log
+          cat /tmp/a1-v9-probe-v8-red.log
+
+          test "$merge_status" -ne 0
+          test "$routing_status" -ne 0
+          test "$probe_status" -ne 0
+          grep -E "not ok.*coalesced evaluation context reserves priority without evicting admitted reasons"             /tmp/a1-v9-merge-v8-red.log >/dev/null
+          grep -E "not ok.*split routing rejects Proxy and accessor metadata before traps"             /tmp/a1-v9-routing-v8-red.log >/dev/null
+
+      - name: Install v9 source candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=solve/quests/partition-key-ordering-owner-completion-v9/evidence
+          cp "$evidence/candidate-src-split-merge-manager.js"             src/partition/partition-split-merge-manager.js
+          cp "$evidence/candidate-src-evaluation-context.js"             src/partition/partition-split-merge-evaluation-context.js
+          cp "$evidence/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
+          cp "$evidence/candidate-src-split-merge-core.js"             src/partition/partition-split-merge-manager-core-methods.js
+          cp "$evidence/candidate-src-split-merge-evaluation.js"             src/partition/partition-split-merge-manager-evaluation-methods.js
+          cp "$evidence/candidate-src-split-merge-transition.js"             src/partition/partition-split-merge-manager-transition-methods.js
+          cp "$evidence/candidate-src-partition-split-routing.js"             src/partition/partition-split-routing.js
+
+      - name: Prove v9 candidate green
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/checks/partition-key-ordering-owner-completion-v8.js
+          node scripts/checks/partition-key-ordering-owner-completion-v9.js
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v9
+          node --test test/partition/routing-key-comparator.test.js
+          node test/partition/merge-auto-execution.test.js
+          node test/partition/partition-split-routing.test.js
+          npm run test:file -- test/partition/split-merge-capacity-preflight.test.js
+
+      - name: Candidate guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            src/partition/partition-split-merge-manager.js
+            src/partition/partition-split-merge-evaluation-context.js
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+            src/partition/partition-split-merge-manager-transition-methods.js
+            src/partition/partition-split-routing.js
+          )
+          npm run test:complexity
+          npm run test:complexity:scoped -- "${files[@]}"
+          npm run audit:file-size
+          node node_modules/eslint/bin/eslint.js --no-warn-ignored --no-error-on-unmatched-pattern             "${files[@]}"             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js
+          node scripts/check-guideline-literals.js "${files[@]}"
+          node scripts/check-guideline-decision-boundaries.js "${files[@]}"
+          node scripts/check-guideline-ambient-intrinsics.js "${files[@]}"
+          node scripts/check-guideline-silent-catch.js "${files[@]}"
+          git diff --check
+
+      - name: Record v9 content-bound attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_hashes="$(sha256sum             src/partition/partition-split-merge-manager.js             src/partition/partition-split-merge-evaluation-context.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             src/partition/partition-split-routing.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js | tr '\n' ';')"
+
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v9             --finding "A1-v9 GitHub Actions run ${GITHUB_RUN_ID}: exact rejected v8 candidate stays green for v8 closure but is right-reason red for complete retained-reason stability and live split-routing Proxy ingress; exact v9 candidate makes v8/v9 probes plus routing/merge/capacity behavior green. Candidate sha256: ${candidate_hashes}"             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v9             --attempt "A1-v9 establishes explicit 1023+1 reason capacity and trap-free own-data live split-routing metadata ingress while preserving v8 behavior; focused tests, v8/v9 closure and guardrails green in GitHub Actions run ${GITHUB_RUN_ID}."
+
+      - name: Restore product tree and preserve Solver records
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore --             src/partition/partition-split-merge-manager.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             src/partition/partition-split-routing.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js
+          rm -f src/partition/partition-split-merge-evaluation-context.js
+          git rm .github/workflows/a1-v9-seal-and-attempt.yml
+
+          changed="$(git status --porcelain | awk '{print $2}' | sort)"
+          expected="$(printf '%s\n'             .github/workflows/a1-v9-seal-and-attempt.yml             solve/quests/partition-key-ordering-owner-completion-v8/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v9/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v9/quest.json | sort)"
+          if [ "$changed" != "$expected" ]; then
+            echo "Unexpected post-attempt mutation set:"
+            printf '%s\n' "$changed"
+            exit 1
+          fi
+
+          git fetch origin "$BRANCH"
+          remote_sha="$(git rev-parse "origin/$BRANCH")"
+          if [ "$remote_sha" != "$GITHUB_SHA" ]; then
+            echo "Branch advanced from event SHA $GITHUB_SHA to $remote_sha; refusing stale push"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --             solve/quests/partition-key-ordering-owner-completion-v8/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v9/quest.json             solve/quests/partition-key-ordering-owner-completion-v9/log.ndjson
+          git commit -m "0.3 A1: supersede v8 and record exact v9 attempt"
+
+          git fetch origin workflow/non-main-push-preservation
+          git show FETCH_HEAD:.githooks/pre-push > .githooks/pre-push
+          chmod +x .githooks/pre-push
+          git push origin HEAD:refs/heads/"$BRANCH"
