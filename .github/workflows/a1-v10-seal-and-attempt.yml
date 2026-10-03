@@ -1,0 +1,143 @@
+name: a1-v10-seal-and-attempt
+
+on:
+  push:
+    branches:
+      - quest/0-3-queryable-core-foundation
+    paths:
+      - .github/workflows/a1-v10-seal-and-attempt.yml
+
+permissions:
+  contents: write
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      BRANCH: quest/0-3-queryable-core-foundation
+      QUEST_ID: partition-key-ordering-owner-completion-v10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+
+      - name: Record v9 rejection, supersede, and seal v10
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v9             --verification "REJECT: newer category-complete Copilot PR #95 review of exact v9 head 885d5834de0640f95faad1d7868dd2ae8615f377 found one A1 production defect: routeSplitSnapshotBatch still used live mutable Array collection methods/iteration, so post-load Array.prototype.push mutation or hostile row-array semantics could silently drop snapshot rows. This 10:59:47 rejection governs over the earlier 10:55:37 approval."             --verifier subagent:github-copilot-pr95-category-complete             --verdict reject
+          node scripts/solve.js note             --id partition-key-ordering-owner-completion-v9             --superseded "PR #95 found the snapshot-batching collection-ownership gap outside v9's immutable predicate; preserve v9 and continue as v10."             --by partition-key-ordering-owner-completion-v10
+          node scripts/solve.js start --id "$QUEST_ID"
+          node scripts/solve.js probe --id "$QUEST_ID"
+
+      - name: Install v10 witnesses and exact rejected v9 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          v9=solve/quests/partition-key-ordering-owner-completion-v9/evidence
+          v10=solve/quests/partition-key-ordering-owner-completion-v10/evidence
+          cp "$v10/candidate-test-routing-key-comparator.test.js" test/partition/routing-key-comparator.test.js
+          cp "$v10/candidate-test-merge-auto-execution.test.js" test/partition/merge-auto-execution.test.js
+          cp "$v10/candidate-test-partition-split-routing.test.js" test/partition/partition-split-routing.test.js
+          cp "$v9/candidate-src-split-merge-manager.js" src/partition/partition-split-merge-manager.js
+          cp "$v9/candidate-src-evaluation-context.js" src/partition/partition-split-merge-evaluation-context.js
+          cp "$v9/candidate-src-split-key-comparator.js" src/partition/split-key-comparator.js
+          cp "$v9/candidate-src-split-merge-core.js" src/partition/partition-split-merge-manager-core-methods.js
+          cp "$v9/candidate-src-split-merge-evaluation.js" src/partition/partition-split-merge-manager-evaluation-methods.js
+          cp "$v9/candidate-src-split-merge-transition.js" src/partition/partition-split-merge-manager-transition-methods.js
+          cp "$v9/candidate-src-partition-split-routing.js" src/partition/partition-split-routing.js
+
+          node scripts/checks/partition-key-ordering-owner-completion-v9.js
+          set +e
+          npm run test:file -- test/partition/partition-split-routing.test.js > /tmp/v10-v9-red.log 2>&1
+          test_status=$?
+          node scripts/checks/partition-key-ordering-owner-completion-v10.js > /tmp/v10-probe-red.log 2>&1
+          probe_status=$?
+          set -e
+          cat /tmp/v10-v9-red.log
+          cat /tmp/v10-probe-red.log
+          test "$test_status" -ne 0
+          test "$probe_status" -ne 0
+          grep -E "not ok.*split snapshot batching ignores hostile iterator and mutable collection methods" /tmp/v10-v9-red.log >/dev/null
+
+      - name: Install exact v10 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          v10=solve/quests/partition-key-ordering-owner-completion-v10/evidence
+          cp "$v10/candidate-src-split-merge-manager.js" src/partition/partition-split-merge-manager.js
+          cp "$v10/candidate-src-evaluation-context.js" src/partition/partition-split-merge-evaluation-context.js
+          cp "$v10/candidate-src-split-key-comparator.js" src/partition/split-key-comparator.js
+          cp "$v10/candidate-src-split-merge-core.js" src/partition/partition-split-merge-manager-core-methods.js
+          cp "$v10/candidate-src-split-merge-evaluation.js" src/partition/partition-split-merge-manager-evaluation-methods.js
+          cp "$v10/candidate-src-split-merge-transition.js" src/partition/partition-split-merge-manager-transition-methods.js
+          cp "$v10/candidate-src-partition-split-routing.js" src/partition/partition-split-routing.js
+
+      - name: Prove v10 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/checks/partition-key-ordering-owner-completion-v9.js
+          node scripts/checks/partition-key-ordering-owner-completion-v10.js
+          node scripts/solve.js probe --id "$QUEST_ID"
+          npm run test:file --             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js
+
+      - name: Guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths=(
+            src/partition/partition-split-merge-manager.js
+            src/partition/partition-split-merge-evaluation-context.js
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+            src/partition/partition-split-merge-manager-transition-methods.js
+            src/partition/partition-split-routing.js
+          )
+          npm run test:complexity
+          npm run test:complexity:scoped -- "${paths[@]}"
+          npm run audit:file-size
+          node node_modules/eslint/bin/eslint.js --no-warn-ignored --no-error-on-unmatched-pattern "${paths[@]}"             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js
+          node scripts/check-guideline-literals.js "${paths[@]}"
+          node scripts/check-guideline-decision-boundaries.js "${paths[@]}"
+          node scripts/check-guideline-ambient-intrinsics.js "${paths[@]}"
+          node scripts/check-guideline-silent-catch.js "${paths[@]}"
+          git diff --check
+
+      - name: Record content-bound v10 attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          hashes="$(sha256sum             src/partition/partition-split-merge-manager.js             src/partition/partition-split-merge-evaluation-context.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             src/partition/partition-split-routing.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js | tr '\n' ';')"
+          node scripts/solve.js note             --id "$QUEST_ID"             --finding "A1-v10 run ${GITHUB_RUN_ID}: exact rejected v9 candidate preserves v9 closure but is right-reason red at snapshot mutable-collection semantics; exact v10 candidate makes v9/v10 closure and all focused suites green. Candidate sha256: ${hashes}"             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
+          node scripts/solve.js note             --id "$QUEST_ID"             --attempt "A1-v10 closes snapshot-batch array authenticity and mutable collection-intrinsic dependence while preserving v9; v9/v10 closure, focused tests and guardrails green in run ${GITHUB_RUN_ID}."
+
+      - name: Restore authored tree and preserve Solver records
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore --             src/partition/partition-split-merge-manager.js             src/partition/partition-split-merge-evaluation-context.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             src/partition/partition-split-routing.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js
+
+          git rm .github/workflows/a1-v10-seal-and-attempt.yml
+          git fetch origin "$BRANCH"
+          remote_sha="$(git rev-parse "origin/$BRANCH")"
+          test "$remote_sha" = "$GITHUB_SHA"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --             solve/quests/partition-key-ordering-owner-completion-v9/log.ndjson             solve/quests/partition-key-ordering-owner-completion-v10/quest.json             solve/quests/partition-key-ordering-owner-completion-v10/log.ndjson
+          git commit -m "0.3 A1: supersede v9 and record exact v10 attempt"
+
+          git fetch origin workflow/non-main-push-preservation
+          git show FETCH_HEAD:.githooks/pre-push > .githooks/pre-push
+          chmod +x .githooks/pre-push
+          git push origin HEAD:refs/heads/"$BRANCH"
