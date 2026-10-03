@@ -589,6 +589,9 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   REQUIRE_PARTITION_ID: 'PartitionService requires partitionId',
   REQUIRE_TABLE_ID: 'PartitionService requires tableId',
   REQUIRE_REPLICA_ID: 'PartitionService requires replicaId',
+  EXACT_HANDLER_RETIREMENT_REQUIRED:
+    'PartitionService transport must support exact handler retirement ' +
+    '(unregisterExact)',
   INVALID_MESSAGE: 'Invalid message',
   INVALID_FORWARD_WRITE: 'Invalid FORWARD_WRITE message',
   INVALID_SPLIT_REPLICATION: 'Invalid START_SPLIT_REPLICATION message',

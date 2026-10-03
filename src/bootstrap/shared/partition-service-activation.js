@@ -23,6 +23,9 @@ const PARTITION_SERVICE_ACTIVATION_ERROR = Object.freeze({
   replicaHandlerRequired: (replicaId) =>
     'Partition service activation requires replica handler ' +
     `registration for ${replicaId}`,
+  retirementLaneMismatch: (replicaId) =>
+    'Partition service activation requires the replica handler to retire ' +
+    `through the activating lifecycle owner for ${replicaId}`,
 });
 const PARTITION_ACTIVE_ADMISSION_LOG_MSG =
   'Exact ACTIVE admission downstream evidence discriminator';
@@ -209,12 +212,25 @@ function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
 // The exact handler identity this replica registered (owner decision N2),
 // not mere presence at the address: a successor generation's handler under the
 // same address never satisfies this replica's activation.
+// Identity, never presence (owner decision N2): a router without the exact
+// lookup cannot prove this replica's handler, so it proves nothing.
 function isExactReplicaHandlerRegistered(messageRouter, address, service) {
   if (typeof messageRouter.getRegisteredHandler !== 'function') {
-    return messageRouter.isRegistered(address);
+    return false;
   }
   return Boolean(service?.transportHandler) &&
     messageRouter.getRegisteredHandler(address) === service.transportHandler;
+}
+
+// The handler's retirement and this activation must meet at one lifecycle
+// owner (owner decision N2): the effect section lives in that owner, so a
+// service retiring through another state machine (or none) is refused.
+function retiresThroughActivatingLane(service, replicaStateMachine) {
+  if (!replicaStateMachine ||
+      typeof service?.resolveReplicaHandlerRetirementLane !== 'function') {
+    return false;
+  }
+  return service.resolveReplicaHandlerRetirementLane() === replicaStateMachine;
 }
 
 function isTransientActivationError(error) {
@@ -232,7 +248,7 @@ async function activatePartitionServiceRows(options = {}) {
     typeof options.isReplicaHandlerRegistered === 'function' ?
       options.isReplicaHandlerRegistered :
       options.messageRouter &&
-        typeof options.messageRouter.isRegistered === 'function' ?
+        typeof options.messageRouter.getRegisteredHandler === 'function' ?
         (replicaId, service) => isExactReplicaHandlerRegistered(
           options.messageRouter,
           resolveReplicaUnifiedAddress(options.nodeId, replicaId, service),
@@ -286,6 +302,11 @@ async function activatePartitionServiceRows(options = {}) {
         PARTITION_SERVICE_ACTIVATION_ERROR.replicaHandlerRequired(
           replicaId,
         ),
+      );
+    }
+    if (!retiresThroughActivatingLane(service, options.replicaStateMachine)) {
+      throw new Error(
+        PARTITION_SERVICE_ACTIVATION_ERROR.retirementLaneMismatch(replicaId),
       );
     }
     activationEntries.push({

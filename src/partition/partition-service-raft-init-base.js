@@ -387,6 +387,13 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       }
     });
     if (this.transport) {
+      // Retirement is exact-only (owner decision N2): a transport that cannot
+      // remove exactly this handler is refused here, not downgraded later.
+      if (typeof this.transport.unregisterExact !==
+          PARTITION_SERVICE_TYPE.FUNCTION) {
+        throw new Error(
+          PARTITION_SERVICE_ERROR_MSG.EXACT_HANDLER_RETIREMENT_REQUIRED);
+      }
       // Kept as this replica's exact handler identity (owner decision N2).
       this.transportHandler = this.handleTransportMessage.bind(this);
       this.transport.register(this.unifiedAddress, this.transportHandler);

@@ -46,29 +46,35 @@ function clearPartitionLifecycleListeners(service) {
   }
 }
 
+// The lifecycle owner whose activation effect section guards this replica's
+// handler (owner decision N2). Activation refuses a service whose lane is not
+// the state machine it activates through, so retirement and activation always
+// meet at the same owner.
+function resolveReplicaHandlerRetirementLane(service) {
+  return service.resolveHandlerRetirementLane?.() ||
+    service.replicaStateMachine ||
+    null;
+}
+
 // Retire this replica's exact transport handler through its lifecycle owner
 // (owner decision N2): an activation that confirmed this handler in its lane
 // completes its ACTIVE CAS first; a later one finds it gone. A successor's
-// handler under the same address is never removed.
+// handler under the same address is never removed, and there is no by-address
+// fallback: registration already required the exact-retirement API.
 async function retirePartitionTransportHandler(service) {
   const transport = service.transport;
-  if (!transport) return;
+  const handler = service.transportHandler;
+  if (!transport || !handler) return;
   const retire = () => {
-    if (typeof transport.unregisterExact === PARTITION_SERVICE_TYPE.FUNCTION &&
-        service.transportHandler) {
-      transport.unregisterExact(service.unifiedAddress,
-        service.transportHandler);
-    } else {
-      transport.unregister(service.unifiedAddress);
-    }
+    transport.unregisterExact(service.unifiedAddress, handler);
   };
-  const lane = service.resolveHandlerRetirementLane?.() ||
-    service.replicaStateMachine;
-  if (typeof lane?.retireReplicaHandler === PARTITION_SERVICE_TYPE.FUNCTION &&
-      service.replicaId) {
+  const lane = resolveReplicaHandlerRetirementLane(service);
+  if (typeof lane?.retireReplicaHandler === PARTITION_SERVICE_TYPE.FUNCTION) {
     await lane.retireReplicaHandler(service.replicaId, retire);
     return;
   }
+  // No lifecycle lane: activation refused this service (its lane is not the
+  // activating state machine), so no effect section can guard this handler.
   retire();
 }
 
@@ -80,6 +86,13 @@ function closePartitionPersistenceResources(service) {
 }
 
 class PartitionServiceLifecycleMethods {
+  /**
+   * The lifecycle owner that retires this replica's transport handler.
+   * @return {Object|null}
+   */
+  resolveReplicaHandlerRetirementLane() {
+    return resolveReplicaHandlerRetirementLane(this);
+  }
   /**
    * Stop all rebalancing activity for this partition.
    * @return {Promise<void>}
