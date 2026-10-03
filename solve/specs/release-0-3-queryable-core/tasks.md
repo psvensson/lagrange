@@ -44,7 +44,7 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion-v8` — ACTIVE
+### A1 — `partition-key-ordering-owner-completion-v9` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
 
