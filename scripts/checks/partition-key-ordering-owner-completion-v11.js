@@ -22,6 +22,10 @@ const PARTITION_CONSTANTS_SOURCE = new URL(
   '../../src/partition/partition-constants.js',
   import.meta.url,
 );
+const PARTITION_CONSTANTS_SOURCE = new URL(
+  '../../src/partition/partition-constants.js',
+  import.meta.url,
+);
 
 function metadata() {
   return {
@@ -139,17 +143,29 @@ function ownerProblemCount() {
     problems += 1;
   }
 
-  if (!routing.includes('PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_BIND_VARIABLES') ||
-      !routing.includes('PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_ROWS_PER_CALL') ||
-      /export\s+const\s+SPLIT_SNAPSHOT_MAX_(?:BIND_VARIABLES|ROWS_PER_CALL)\s*=/u
-        .test(routing)) {
+  if (!routing.includes('PARTITION_SPLIT_SNAPSHOT_LIMIT') ||
+      !routing.includes(
+        'PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_BIND_VARIABLES',
+      ) ||
+      !routing.includes(
+        'PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_ROWS_PER_CALL',
+      )) {
     problems += 1;
   }
 
-  if (!shared.includes('PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_ROWS_PER_CALL') ||
+  if (!shared.includes('PARTITION_SPLIT_SNAPSHOT_LIMIT') ||
+      !shared.includes(
+        'PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_ROWS_PER_CALL',
+      )) {
+    problems += 1;
+  }
+
+  if (/SPLIT_SNAPSHOT_MAX_BIND_VARIABLES\s*=\s*32_766\s*;/u.test(routing) ||
+      /SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL\s*=\s*64\s*;/u.test(routing) ||
       /SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS\s*=\s*64\s*;/u.test(shared)) {
     problems += 1;
   }
+
   return problems;
 }
 
