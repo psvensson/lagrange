@@ -12,6 +12,8 @@ import {EventEmitter} from 'node:events';
 import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
+import {retireReplicaTransportHandler} from
+  '../node/replica-transport-handler-identity.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
 import {
@@ -125,6 +127,7 @@ class WasmServiceReplica extends EventEmitter {
     this.leaderId = null;
     this.isLeader = false;
     this.initialized = false;
+    this.transportHandler = null;
     this.systemTableCache = options.systemTableCache ||
       NodeService.getInstance().getSystemTableCache();
     this.cdcIntegrationService = options.cdcIntegrationService || null;
@@ -295,8 +298,10 @@ class WasmServiceReplica extends EventEmitter {
       onCandidate: () => this.onBecameFollower(),
     });
     if (this.transport) {
-      this.transport.register(this.unifiedAddress,
-        (message) => this.handleMessage(message));
+      // The exact handler identity is kept so retirement removes only it
+      // (owner decision N2).
+      this.transportHandler = (message) => this.handleMessage(message);
+      this.transport.register(this.unifiedAddress, this.transportHandler);
     }
     this.initialized = true;
   }
@@ -683,8 +688,8 @@ class WasmServiceReplica extends EventEmitter {
   }
 
   /**
-   * Shutdown the replica: stop timers and broadcasts, withdraw its
-   * transport address, then release its port and database.
+   * Shutdown the replica: stop timers and broadcasts, retire its exact
+   * transport handler, then release its port and database.
    * @return {Promise<void>}
    */
   async shutdown() {
@@ -692,9 +697,17 @@ class WasmServiceReplica extends EventEmitter {
     this._stopSafetyBroadcasts();
     this.roleMutationHelper.shutdown();
     this.leaderNodeMutationHelper.shutdown();
-    if (this.initialized && this.transport) {
-      this.transport.unregister(this.unifiedAddress);
-    }
+    // Exact-identity retirement (owner decision N2): a successor's handler
+    // at the same address is never removed. No replica-lifecycle activation
+    // binds a WASM service handler, so there is no effect section to wait on.
+    await retireReplicaTransportHandler({
+      transport: this.transport,
+      address: this.unifiedAddress,
+      handler: this.transportHandler,
+      replicaId: this.replicaId,
+      lane: null,
+    });
+    this.transportHandler = null;
     this.initialized = false;
     await this.releaseConsensus();
 

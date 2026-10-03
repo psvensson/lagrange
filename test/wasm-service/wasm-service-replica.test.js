@@ -1,5 +1,6 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -32,6 +33,9 @@ import {NodeService} from
 import {AddressManager} from
   '../../src/address/address-manager.js';
 import {LeaderActivationScheduler} from '../../src/raft/leader-activation-scheduler.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+import {TEST_BOOT_INCARNATION} from
+  '../test-helpers/boot-incarnation-fixture.js';
 
 /**
  * Initialize the singletons a WasmServiceReplica reads.
@@ -682,6 +686,52 @@ describe('WasmServiceReplica', () => {
       assert.equal(replica.kvStore, null);
       assert.equal(replica._safetyBroadcastTimer, null);
       assert.equal(replica.timerManager.activeTimers.size, 0);
+    });
+
+    // Owner decision N2: a replica retires only the exact handler it
+    // registered. A delayed shutdown of an old instance must not remove a
+    // successor's handler registered at the same address.
+    it('a delayed shutdown of an old instance leaves its successor\'s ' +
+      'handler registered and receiving messages', async () => {
+      const directory = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'wasm-replica-n2-'));
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'node-1',
+        wsPort: 0,
+      });
+      await router.initialize({startServer: false});
+      const open = async (generation) => {
+        const replica = new WasmServiceReplica(defaultOpts({
+          transport: router,
+          dbPath: path.join(directory, `${generation}.db`),
+        }));
+        await replica.initialize();
+        return replica;
+      };
+      try {
+        const old = await open('a');
+        const successor = await open('b');
+        const address = successor.unifiedAddress;
+        assert.equal(old.unifiedAddress, address);
+        const received = [];
+        successor.handleMessage = async (message) => {
+          received.push(message.payload);
+          return {handled: true};
+        };
+        await old.shutdown();
+        assert.equal(typeof router.getRegisteredHandler(address), 'function',
+          'the successor\'s handler is still registered');
+        await router.deliver(address, {op: 'probe'});
+        assert.deepEqual(received, [{op: 'probe'}],
+          'the successor receives messages at the shared address');
+        await successor.shutdown();
+        assert.equal(router.getRegisteredHandler(address), null,
+          'the successor retires its own handler');
+      } finally {
+        await router.shutdown?.();
+        fs.rmSync(directory, {recursive: true, force: true});
+      }
     });
   });
 });
