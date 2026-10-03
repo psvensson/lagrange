@@ -1,0 +1,28 @@
+name: request A1-v9 independent review
+
+on:
+  push:
+    branches:
+      - automation/a1-v9-review-request
+    paths:
+      - .github/workflows/request-a1-v9-review.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Request Copilot on frozen PR #95 head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(gh pr view 95 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          test "$actual_sha" = "885d5834de0640f95faad1d7868dd2ae8615f377"
+          gh pr edit 95 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 95 --repo psvensson/lagrange --json number,state,isDraft,headRefOid,url,reviewRequests
