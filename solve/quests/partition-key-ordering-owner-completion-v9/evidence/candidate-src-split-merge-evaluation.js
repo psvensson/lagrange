@@ -150,7 +150,9 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         reasonCodes: mergeBoundedStringArrays(
           reasonValues(canonicalExisting),
           reasonValues(canonicalNext),
-          reactivePressureBypassReasonWriteActivity,
+          {
+            priorityValue: reactivePressureBypassReasonWriteActivity,
+          },
         ),
         partitionIds: mergeBoundedStringArrays(
           partitionValues(canonicalExisting),
