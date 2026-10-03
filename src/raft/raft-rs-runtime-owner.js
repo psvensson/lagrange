@@ -433,6 +433,9 @@ function createNodeArguments(group, {restore, record}) {
     learners: restore ? [] : group.bootstrap.learners,
     applied: restore ? record.appliedIndex : RAFT_RS_INITIAL_APPLIED,
     ...tuningOf(group.timing),
+    // Owner decision O2: a seeded group's core draws its election timeouts
+    // from its own stream; an unseeded one's opts are exactly what they were.
+    ...(group.electionSeed === null ? {} : {electionSeed: group.electionSeed}),
   };
   if (!restore) {
     return base;
@@ -1433,6 +1436,7 @@ function createRuntimeDispatcher(request) {
     gateOpen: false,
     timing: request.timing,
     timers: request.timers,
+    electionSeed: request.electionSeed ?? null,
     store,
     sendToPeer: request.sendToPeer,
     resolvePeerAddress: request.resolvePeerAddress,

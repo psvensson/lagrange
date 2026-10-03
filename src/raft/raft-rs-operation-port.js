@@ -18,6 +18,7 @@ import {participationGateClosed} from './raft-rs-participation-gate.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   './raft-operation-port-request.js';
+import {electionSeedOf} from './raft-rs-election-seed.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
 import {
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
@@ -183,8 +184,8 @@ function createRaftRsOperationPort(request) {
       listener(...args.map((value) => deepFreeze(value)));
     }
   };
-  const timers = resolveTimeSource(
-    request[RAFT_OPERATION_PORT_REQUEST.SUBSTRATE] || {});
+  const substrate = request[RAFT_OPERATION_PORT_REQUEST.SUBSTRATE] || {};
+  const timers = resolveTimeSource(substrate);
   let tickIntervalMs = tickIntervalOf(timing);
   let timer = null;
   let closed = false;
@@ -196,6 +197,7 @@ function createRaftRsOperationPort(request) {
     bootstrap,
     timing,
     timers,
+    electionSeed: electionSeedOf(substrate),
     sendToPeer: required(
       request, RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER),
     // An address exists only for a reserved identity; the runtime records
