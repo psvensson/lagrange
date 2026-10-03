@@ -33,7 +33,8 @@ import {
 } from './partition-write-kernel.js';
 import {CDCEventBuffer} from './cdc-event-buffer.js';
 import {
-  SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH,
+  SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL as
+    SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   cloneSplitEntry as cloneSplitRoutingEntry,
   extractSplitRoutingKey as extractPartitionSplitRoutingKey,
   replaySplitEntry as replayPartitionSplitEntry,
@@ -224,8 +225,6 @@ const WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS = 'raftCommandDispatchMs';
 const WRITE_PHASE_FIELD_FORWARD_DELIVER_MS = 'forwardDeliverMs';
 const WRITE_PHASE_FIELD_APPLY_WRITE_MS = 'applyWriteMs';
 const WRITE_PHASE_FIELD_TOTAL_MS = 'totalMs';
-const SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS =
-  SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH;
 const DEFAULT_TRANSACTION_SESSION_ID = 'default';
 const QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION = 'migrationOperation';
 const QUERY_PAYLOAD_FIELD_MIGRATION_ID = 'migrationId';

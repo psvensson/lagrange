@@ -40,6 +40,7 @@ const SPLIT_MIRROR_IDENTITY_FIELD = Object.freeze({
   IDEMPOTENCY_KEY: 'idempotencyKey',
 });
 export const SPLIT_SNAPSHOT_MAX_BIND_VARIABLES = 32_766;
+export const SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL = 64;
 export const SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH = 64;
 const arrayIsArray = Array.isArray;
 const arrayJoin = Function.call.bind(Array.prototype.join);
@@ -264,8 +265,11 @@ export async function routeSplitMirroredWrite(
   }
 }
 
-function requireSnapshotRows(rows, maxRows) {
-  const copied = copyDenseOwnDataRecordArray(rows, maxRows);
+function requireSnapshotRows(rows) {
+  const copied = copyDenseOwnDataRecordArray(
+    rows,
+    SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+  );
   if (copied === null) {
     throw new TypeErrorCtor(
       PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED,

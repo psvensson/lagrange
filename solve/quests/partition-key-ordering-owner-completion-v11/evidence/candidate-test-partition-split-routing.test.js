@@ -5,6 +5,7 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
 } from '../../src/partition/partition-constants.js';
 import {
+  SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
   replaySplitEntry,
   resolveSplitSnapshotBatchRowLimit,
   routeSplitSnapshotBatch,
@@ -440,12 +441,19 @@ test('split snapshot batching rejects dimensions outside one bind budget',
       /route mirrored partition split write/iu,
     );
     t.equal(
-      resolveSplitSnapshotBatchRowLimit(['id'], 32_766),
-      32_766,
+      resolveSplitSnapshotBatchRowLimit(
+        ['id'],
+        SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+      ),
+      SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
     );
     t.equal(
-      resolveSplitSnapshotBatchRowLimit(['id', 'name'], 32_766),
-      16_383,
+      resolveSplitSnapshotBatchRowLimit(
+        Array.from({length: 512}, (_value, index) => `column_${index}`),
+        SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+      ),
+      63,
+      'wide tables retain per-SQL batching below the source-row cap',
     );
   });
 
