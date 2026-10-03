@@ -156,6 +156,14 @@ exact-HEAD worktree. Review findings not adopted here, carried as follow-ups:
 and `model:contracts` re-running in repository-health after the gate; and the
 release proof re-running a corpus CI already proved for the exact sha
 (release-tooling recommendation 4, now `test-file-content-receipts` v2).
+Narrowed 2026-10-03 (full-corpus-trigger-gate-definers): the `test/manifests/`
+and `.githooks/` triggers stay directory-wide except six files exempted by
+name - `ci-resource-plan.json`, `pre-push-stages.json`,
+`proof-authority-falsifiers.receipt.json`, the release-tail and
+developer-smoke manifests, and `.githooks/pre-commit` - each fenced by
+`test/scripts/push-gate-change-proof.test.js`, which fails if the gate names or
+opens one, its reason stops naming exactly the code that names it, or no other
+test observes it by name.
 
 **Finding (2026-09-13, releasing 0.2.4).** The GCP proof runner is about 2.4x
 slower single-threaded than the reference machine and lands on a different
