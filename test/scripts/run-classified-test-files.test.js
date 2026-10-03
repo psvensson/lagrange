@@ -119,6 +119,26 @@ test('every batch runs by default; fail-fast is the explicit opt-in', () => {
   /own-data options record/u);
 });
 
+// failed-gate-keeps-evidence: a reader of this stream calls a run complete
+// only when summaries cover every planned file, so the plan is written before
+// any batch, and a batch ended by a signal (an OOM kill) says so - its files
+// may have no verdict, and the run keeps going.
+test('the run states its plan and a batch ended by a signal', () => {
+  const lines = [];
+  const calls = [];
+  const status = runClassifiedTestFiles([INTEGRATION, ORDINARY], {...COOL, root,
+    write: (text) => lines.push(text),
+    spawn(command, args) {
+      calls.push(args.at(-1));
+      return args.at(-1) === ORDINARY ? {status: null, signal: 'SIGKILL'} : {status: 0};
+    }});
+  assert.equal(status, 1, 'a signalled batch is a failed batch');
+  assert.deepEqual(calls, [ORDINARY, INTEGRATION], 'and the run keeps going');
+  assert.equal(lines[0], '# test-files planned=2\n', 'the plan comes first');
+  assert.ok(lines.includes(
+    '# test-files batch ended by SIGKILL: 1 file(s) may have no verdict\n'), lines.join(''));
+});
+
 // The same policy through the real runner: two red files in two batches (the
 // ordinary and the exclusive lane) are both reported, by name, in one run.
 test('two red files in different batches are both reported', (t) => {

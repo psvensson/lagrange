@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "failed-gate-keeps-evidence",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "A failed push gate, by any path, keeps the evidence that names its failure. The acceptance runner buffers every command's output into a captured artifact inside the gate checkout (spawnSync, piped), so the change proof's per-file results never reach the terminal, and gateExactSha (scripts/checks/push-gate-corpus-worktree.js, added by d9819d43e) removes that checkout on every exit; the publisher already keeps a failed gate's receipt and first failing artifact (retainGateDiagnostics, fc6db88ee, after the 2026-08-19 incident) and the direct-push gate regressed that class. Now: gateExactSha keeps the same diagnostics, through the publisher's one retainGateDiagnostics, on every non-zero return (a failed run, a replaced injection link, a dirtied checkout) before the checkout is removed, and prints where; the run summary names the failing test files of the first failing command from its captured artifact, read line by line through the bounded reader (the runner's file-level verdict lines only, the last verdict deciding, a retried-once pass green, lab-relayed lines read), bounded with an explicit withheld count and saying 'summary line absent - list may be incomplete' instead of a count when no runner summary line was captured; the verdict stays the command's status; and the pre-push banner says what actually happens.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/failed-gate-keeps-evidence/evidence/receipt.json",
+      "requiredReceipts": [
+        "failed-gate-run-keeps-diagnostics",
+        "links-broken-gate-keeps-diagnostics",
+        "dirty-gate-keeps-diagnostics",
+        "summary-names-exactly-the-failing-files",
+        "retried-green-file-not-named",
+        "absent-summary-line-is-incomplete",
+        "bounded-list-counts-withheld"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-new-script-no-new-workflow",
+      "statement": "Existing files change; no file is added under scripts/ (the receipt is produced by the existing harness runtime from a declaration in this quest's evidence directory) and no workflow is added; ratchet baselines only tighten."
+    },
+    {
+      "id": "one-retention-owner",
+      "statement": "The publisher's retainGateDiagnostics is exported and reused by gateExactSha; there is no second implementation."
+    },
+    {
+      "id": "verdict-is-the-status",
+      "statement": "The failing-file list is diagnosis only: the gate's and the command's verdict remain their exit status, never the parsed lines."
+    },
+    {
+      "id": "bounded-and-counted",
+      "statement": "The captured artifact is never parsed whole or held in memory: it is read through the existing bounded reader; the printed list is bounded and counts what it withheld, and an absent summary line is reported as incomplete, not counted."
+    },
+    {
+      "id": "runner-stays-synchronous",
+      "statement": "The manifest runner is not made async or streaming; its per-manifest contract is unchanged except the captured artifact's line-per-element stream encoding."
+    }
+  ],
+  "sealedAt": "ec63fbb0016bf1ca6d81372e2a0721851363ea80"
+}

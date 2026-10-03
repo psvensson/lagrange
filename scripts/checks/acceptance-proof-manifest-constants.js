@@ -36,6 +36,8 @@ export const ACCEPTANCE_PROOF = Object.freeze({
   SUMMARY_INDENT: '  ',
   SUMMARY_LABEL_WIDTH: 8,
   FIRST_FAILURE_LABEL: 'first failure: ',
+  // A captured command's stdout as raw text, beside its artifact.
+  CAPTURED_STDOUT_SUFFIX: '.stdout.txt',
   FLAG_MANIFEST: '--manifest',
   FLAG_SCENARIO: '--scenario',
   FLAG_RECEIPT_DIR: '--receipt-dir',

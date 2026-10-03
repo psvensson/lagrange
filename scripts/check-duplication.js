@@ -69,8 +69,10 @@ const RATCHET_TARGETS = [
     // distributed UPDATE/DELETE mutation-result owner (checker hint).
     // 2026-09-29: tightened 55/1760 -> 54/1731 after the seed and joiner
     // runtime-service handler setup converged on one guarded initializer.
-    baselineCloneGroupCount: 54,
-    baselineDuplicatedLineCount: 1731,
+    // 2026-10-03: tightened 54/1731 -> 52/1666 on the
+    // failed-gate-keeps-evidence tree (checker hint).
+    baselineCloneGroupCount: 52,
+    baselineDuplicatedLineCount: 1666,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -182,8 +184,10 @@ const RATCHET_TARGETS = [
     // tree (Track A boot incarnation + Track B handler identity).
     // 2026-09-30: tightened duplicated lines 29402 -> 29388 after the
     // rejoin-hints recovered-peer decision match became one constant.
+    // 2026-10-03: tightened duplicated lines 29388 -> 29385 on the
+    // failed-gate-keeps-evidence tree (checker hint).
     baselineCloneGroupCount: 765,
-    baselineDuplicatedLineCount: 29388,
+    baselineDuplicatedLineCount: 29385,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

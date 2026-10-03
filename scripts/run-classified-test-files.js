@@ -43,6 +43,7 @@ import {
 } from './checks/wait-for-thermal-headroom.js';
 import {parseLaneArgs, planLane} from './plan-test-lane.js';
 import {placementDeps, runPlacedTestFiles} from './lab/probe.js';
+import {formatBatchSignalLine, formatPlannedLine} from './run-test-files.js';
 import {
   appendArrayValue,
   appendArrayValues,
@@ -488,8 +489,10 @@ function batchArgs(jobs, files) {
   return args;
 }
 
-// A batch the runner started: its status, named passed or failed.
-function batchResult(result) {
+// A batch the runner started: its status, named passed or failed. A batch
+// ended by a signal may have left files without a verdict, and says so.
+function batchResult(result, files, write) {
+  if (result.signal) write(`${formatBatchSignalLine(result.signal, files.length)}${NEWLINE}`);
   const status = result.status ?? 1;
   return {outcome: status === 0 ? BATCH_OUTCOME.PASSED : BATCH_OUTCOME.FAILED, status};
 }
@@ -509,6 +512,9 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
   const plan = planClassifiedTestFiles(run.root, inputFiles);
   const cap = laneJobsCap(run.env);
   const gate = createThermalGate(run);
+  // Every file planned, before any runs: the reader of this stream calls the
+  // run complete only when summaries cover it.
+  run.write(`${formatPlannedLine(inputFiles.length)}${NEWLINE}`);
   let firstFailure = 0;
   for (let laneIndex = 0; laneIndex < plan.length; laneIndex += 1) {
     const lane = plan[laneIndex];
@@ -523,7 +529,8 @@ export function runClassifiedTestFiles(inputFiles, options = {}) {
       batchIndex += 1) {
       const batch = gate() === GATE_DECISION.PROCEED ?
         batchResult(run.spawn(process.execPath, batchArgs(jobs, laneBatches[batchIndex]),
-          {cwd: run.root, env: batchEnv(run.env, lane.resourceClass), stdio: 'inherit'})) :
+          {cwd: run.root, env: batchEnv(run.env, lane.resourceClass), stdio: 'inherit'}),
+        laneBatches[batchIndex], run.write) :
         refuseBatch(run.write, plan, laneIndex, batchIndex);
       const settled = settleBatch(firstFailure, batch, run.failFast);
       if (settled.step === RUN_STEP.STOP) return settled.status;
