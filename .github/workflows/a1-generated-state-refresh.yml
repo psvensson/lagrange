@@ -1,0 +1,52 @@
+name: 0.3 A1 generated-state refresh
+
+on:
+  push:
+    branches:
+      - quest/0-3-queryable-core-foundation
+    paths:
+      - .github/workflows/a1-generated-state-refresh.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Refresh canonical generated test metadata
+        run: npm run test:metadata:refresh
+      - name: Verify refresh is limited to generated state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          changed="$(git diff --name-only)"
+          test -n "$changed"
+          while IFS= read -r path; do
+            case "$path" in
+              test/shards/primary-classes.json|test/shards/resource-classes.json|test/shards/subsystem-classes.json|test/shards/impact-graph-seal.json) ;;
+              *) echo "::error::unexpected generated-state change: $path"; exit 1 ;;
+            esac
+          done <<< "$changed"
+      - name: Commit refreshed state and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json
+          git rm .github/workflows/a1-generated-state-refresh.yml
+          git commit -m "test: refresh A1-v9 generated metadata"
+          git push origin HEAD:quest/0-3-queryable-core-foundation
