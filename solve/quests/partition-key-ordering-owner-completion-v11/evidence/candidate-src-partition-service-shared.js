@@ -33,8 +33,6 @@ import {
 } from './partition-write-kernel.js';
 import {CDCEventBuffer} from './cdc-event-buffer.js';
 import {
-  SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL as
-  SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   cloneSplitEntry as cloneSplitRoutingEntry,
   extractSplitRoutingKey as extractPartitionSplitRoutingKey,
   replaySplitEntry as replayPartitionSplitEntry,
@@ -111,6 +109,7 @@ import {
 import {
   PARTITION_RAFT_ROLE,
   PARTITION_SPLIT_MIRROR_ORIGIN,
+  PARTITION_SPLIT_SNAPSHOT_LIMIT,
   PARTITION_STATE,
   PARTITION_SUBSYSTEM,
   PARTITION_TRANSITION_METADATA_FIELD,
@@ -236,6 +235,8 @@ const QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY = 'idempotencyKey';
 const QUERY_PAYLOAD_FIELD_EXPECTED_PARTITION_VERSION =
   'expectedPartitionVersion';
 const PARTITION_REPLICA_COUNT_FIELD = 'replica_count';
+const SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS =
+  PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_ROWS_PER_CALL;
 
 export const PARTITION_SERVICE_SHARED = {
   DURABLE_COMMIT_WITNESS_ERROR,
