@@ -9,7 +9,7 @@ import {
 
 const MAX_EVALUATION_CONTEXT_VALUES = 1_024;
 const WRITE_ACTIVITY = 'write_activity';
-const SPLIT_PROXY_ERROR_PATTERN = /proxy/iu;
+const SPLIT_PROXY_ERROR_PATTERN = /proxi(?:es|y)/iu;
 const isProxy = nodeUtilTypes.isProxy.bind(nodeUtilTypes);
 const CONTEXT_OWNER_URL = new URL(
   '../../src/partition/partition-split-merge-evaluation-context.js',
