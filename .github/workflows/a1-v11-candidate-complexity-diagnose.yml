@@ -1,0 +1,48 @@
+name: a1-v11-candidate-complexity-diagnose
+
+on:
+  push:
+    branches:
+      - quest/0-3-queryable-core-foundation
+    paths:
+      - .github/workflows/a1-v11-candidate-complexity-diagnose.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Install exact v11 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=solve/quests/partition-key-ordering-owner-completion-v11/evidence
+          cp "$evidence/candidate-src-split-merge-manager.js" src/partition/partition-split-merge-manager.js
+          cp "$evidence/candidate-src-evaluation-context.js" src/partition/partition-split-merge-evaluation-context.js
+          cp "$evidence/candidate-src-split-key-comparator.js" src/partition/split-key-comparator.js
+          cp "$evidence/candidate-src-split-merge-core.js" src/partition/partition-split-merge-manager-core-methods.js
+          cp "$evidence/candidate-src-split-merge-evaluation.js" src/partition/partition-split-merge-manager-evaluation-methods.js
+          cp "$evidence/candidate-src-split-merge-transition.js" src/partition/partition-split-merge-manager-transition-methods.js
+          cp "$evidence/candidate-src-partition-split-routing.js" src/partition/partition-split-routing.js
+          cp "$evidence/candidate-src-partition-service-shared.js" src/partition/partition-service-shared.js
+          cp "$evidence/candidate-src-strict-own-data.js" src/utils/strict-own-data.js
+      - name: Candidate scoped complexity
+        shell: bash
+        run: |
+          set +e
+          npm run test:complexity:scoped --             src/partition/partition-split-merge-manager.js             src/partition/partition-split-merge-evaluation-context.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             src/partition/partition-split-routing.js             src/partition/partition-service-shared.js             src/utils/strict-own-data.js
+          status=$?
+          echo "scoped_status=$status"
+          exit 0
