@@ -42,6 +42,19 @@ const WRITABLE_TABLES = Object.values(SYSTEM_TABLE_NAME);
 const WRITE_OPERATIONS = ['insert', 'update', 'delete', 'upsert'];
 
 /**
+ * Whether production admits this write shape at all. SERVICES rows are
+ * INSERT-only or identity-fenced UPDATE (the gateway and CDC both refuse a
+ * SERVICES upsert, and no production caller issues one), so the generator
+ * never asks for that combination.
+ * @param {string} tableName - System table name.
+ * @param {string} operation - One of WRITE_OPERATIONS.
+ * @return {boolean}
+ */
+function isAdmittedWriteShape(tableName, operation) {
+  return !(tableName === SYSTEM_TABLE_NAME.SERVICES && operation === 'upsert');
+}
+
+/**
  * Create a mock SQL query engine that tracks all queries routed
  * through it. Returns success for table existence checks and writes.
  * @return {Object} Mock SQL query engine with executedQueries array.
@@ -284,6 +297,7 @@ test('Property 6: Bootstrap mode routing enforcement',
             fc.constantFrom(...WRITE_OPERATIONS),
             fc.uuid(),
             async (tableName, operation, primaryKey) => {
+              fc.pre(isAdmittedWriteShape(tableName, operation));
               const sqlEngine = createTrackingSqlEngine();
               const {partitionMap: _partitionMap, partitionServices} =
                 buildPartitionServicesMap();
@@ -336,6 +350,7 @@ test('Property 6: Bootstrap mode routing enforcement',
               .filter((op) => op !== 'update' && op !== 'delete'),
             fc.uuid(),
             async (tableName, operation, primaryKey) => {
+              fc.pre(isAdmittedWriteShape(tableName, operation));
               const sqlEngine = createTrackingSqlEngine();
               const {partitionMap: pMap, partitionServices} =
                 buildPartitionServicesMap();
@@ -389,6 +404,7 @@ test('Property 6: Bootstrap mode routing enforcement',
             fc.constantFrom(...WRITE_OPERATIONS),
             fc.uuid(),
             async (tableName, operation, primaryKey) => {
+              fc.pre(isAdmittedWriteShape(tableName, operation));
               const sqlEngine = createTrackingSqlEngine();
               const {partitionMap, partitionServices} =
                 buildPartitionServicesMap();
