@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {fileURLToPath} from 'node:url';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import {
@@ -10,8 +11,10 @@ import {
   writeAcceptanceReport,
 } from './checks/acceptance-proof-manifest-runner.js';
 import {ACCEPTANCE_PROOF} from './checks/acceptance-proof-manifest-constants.js';
+import {readBoundedOutput, testFileVerdictReader} from './run-test-files.js';
 
 const NEWLINE = '\n';
+const FAILING_FILES_SHOWN = 20;
 const RECEIPT_DIR = 'test-output/acceptance';
 const SCENARIO_REPORT_DIR = 'test-output/reports';
 
@@ -52,12 +55,44 @@ function scenarioReport(run, scenario, receiptIdentity) {
   };
 }
 
+// Why a failing-file list cannot be called complete, or null when every file
+// a classified run planned is covered by a runner summary, nothing ended by a
+// signal, and every verdict line was read whole.
+function incompleteness(read, command) {
+  const signal = command.signal || read.signal;
+  const reason = read.summaries === 0 ? 'summary line absent' :
+    read.planned > read.summarised ? `${read.planned - read.summarised} of ` +
+      `${read.planned} planned file(s) not covered by a summary` :
+      signal ? `ended by ${signal}` :
+        read.unread > 0 ? `${read.unread} verdict line(s) too long to read` : null;
+  return reason && `${reason} - list may be incomplete`;
+}
+
+// A failed gate's terminal is often the only place anyone reads: name the
+// failing command's failing test files, read line by line from its captured
+// stdout through the bounded reader, bounded and counting what is withheld.
+// Nothing when no test runner spoke in it.
+function failingTestFileLines(root, command) {
+  const stdout = `${command.artifactIdentity?.path}${ACCEPTANCE_PROOF.CAPTURED_STDOUT_SUFFIX}`;
+  if (!command.artifactIdentity?.path || !fs.existsSync(path.join(root, stdout))) return [];
+  const reader = testFileVerdictReader();
+  readBoundedOutput(path.join(root, stdout), {onLinePrefix: reader.read});
+  const read = reader.result();
+  if (!read.runner) return [];
+  const indent = ACCEPTANCE_PROOF.SUMMARY_INDENT;
+  const withheld = read.failing.length - FAILING_FILES_SHOWN;
+  return [`${indent}failing test files: ${incompleteness(read, command) ?? read.failing.length}`,
+    ...read.failing.slice(0, FAILING_FILES_SHOWN).map((file) => `${indent}${indent}${file}`),
+    ...(withheld > 0 ? [`${indent}${indent}... ${withheld} more withheld (all in ${stdout})`] : [])];
+}
+
 // Per-state counts, never a fraction. The manifest fails fast, so every command
 // after the first failure is NOT_RUN rather than failed; `1/6 commands passed`
 // invited the reading "five broke" when one did. The first failing command is
 // named because it is the only one worth diagnosing - the NOT_RUN entries carry
-// no verdict at all.
-export function renderRunSummary(run) {
+// no verdict at all. Its failing test files follow, read from its capture
+// under `root`.
+export function renderRunSummary(run, root) {
   const label = (text) =>
     `${ACCEPTANCE_PROOF.SUMMARY_INDENT}` +
     `${text.padEnd(ACCEPTANCE_PROOF.SUMMARY_LABEL_WIDTH)}`;
@@ -74,7 +109,8 @@ export function renderRunSummary(run) {
   if (firstFailure) {
     lines.push(
       `${ACCEPTANCE_PROOF.SUMMARY_INDENT}` +
-      `${ACCEPTANCE_PROOF.FIRST_FAILURE_LABEL}${firstFailure.id}`);
+      `${ACCEPTANCE_PROOF.FIRST_FAILURE_LABEL}${firstFailure.id}`,
+      ...failingTestFileLines(root, firstFailure));
   }
   return `${lines.join(NEWLINE)}${NEWLINE}`;
 }
@@ -103,7 +139,7 @@ export function runProjectHardeningAcceptance(options = {}) {
     );
   }
   process.stdout.write(
-    renderRunSummary(run) + `receipt: ${receiptPath}\n` +
+    renderRunSummary(run, root) + `receipt: ${receiptPath}\n` +
     (scenarioPath ? `report: ${scenarioPath}\n` : ''),
   );
   return {run, receiptPath, scenarioPath};

@@ -418,7 +418,8 @@ export function readBoundedOutput(file, handlers = {}) {
   let lineOpen = false;
   const endLine = () => {
     if (onLinePrefix && lineOpen) {
-      onLinePrefix(prefix.subarray(0, prefixLength).toString(TEXT_ENCODING));
+      onLinePrefix(prefix.subarray(0, prefixLength).toString(TEXT_ENCODING),
+        lineBytes <= OUTPUT_LINE_PREFIX_BYTES);
     }
     prefixLength = 0;
     lineBytes = 0;
@@ -837,6 +838,60 @@ function formatTestFilesSummary(summary) {
     `fail=${summary.failed} assertions=${summary.assertions}`;
 }
 
+// The runner's own stdout lines, as a reader of a finished run matches them -
+// verdict (printTestResult), retried-once outcome (retryFailedOnce), summary
+// (formatTestFilesSummary) - and the classified runner's plan and signalled
+// batch lines and a placed run's relay prefix, formatted below.
+const TEST_FILE_LINE = Object.freeze({
+  VERDICT: /^(ok|not ok) (\S+) \((\d+) assertions, \d+ms\)$/u,
+  VERDICT_HEAD: /^(?:ok|not ok) [^\s\d]/u,
+  RETRIED_PASS: /^# retried-once pass (\S+)$/u,
+  SUMMARY: /^# test-files total=(\d+) pass=\d+ fail=\d+ assertions=\d+$/u,
+  PLANNED: /^# test-files planned=(\d+)$/u,
+  BATCH_SIGNAL: /^# test-files batch ended by (\S+):/u,
+  RELAYED_PREFIX: /^\[[^\]]+\] /u,
+});
+const RED_VERDICT = 'not ok';
+const READER_SHAPES = Object.freeze(['VERDICT', 'SUMMARY', 'PLANNED', 'BATCH_SIGNAL']);
+const formatPlannedLine = (files) => `# test-files planned=${files}`;
+const formatBatchSignalLine = (signal, files) =>
+  `# test-files batch ended by ${signal}: ${files} file(s) may have no verdict`;
+const relayedLine = (name, line) => `[${name}] ${line}`;
+
+/**
+ * What a run's stdout says about its files, fed one line at a time, relayed
+ * lines read as the controller's own. A file's last verdict line decides it
+ * (a placed run's controller decides a lab red again later in the stream; a
+ * retry prints its own verdict). Memory is one entry per file, never output.
+ * @return {{read: Function, result: Function}}
+ */
+function testFileVerdictReader() {
+  const red = new Map();
+  const seen = {summaries: 0, summarised: 0, planned: 0, unread: 0, signal: null};
+  return {
+    read(text, whole = true) {
+      const line = text.replace(TEST_FILE_LINE.RELAYED_PREFIX, '');
+      const [verdict, summary, planned, signal] =
+        READER_SHAPES.map((shape) => TEST_FILE_LINE[shape].exec(line));
+      if (!whole) {
+        seen.unread += TEST_FILE_LINE.VERDICT_HEAD.test(line) ? 1 : 0;
+      } else if (verdict) {
+        red.set(verdict[2], verdict[1] === RED_VERDICT);
+      } else if (summary) {
+        seen.summaries += 1;
+        seen.summarised += Number(summary[1]);
+      } else if (planned) {
+        seen.planned += Number(planned[1]);
+      } else if (signal) {
+        seen.signal ??= signal[1];
+      }
+    },
+    result: () => ({...seen,
+      runner: red.size + seen.summaries + seen.planned + seen.unread > 0 || Boolean(seen.signal),
+      failing: [...red].filter(([, isRed]) => isRed).map(([file]) => file)}),
+  };
+}
+
 // The policy above, as one exported unit so a witness can hold it: the
 // rerun happens only under the declared environment and the cap, every
 // rerun is written to `write`, and a standalone failure stays red.
@@ -885,15 +940,20 @@ if (IS_MAIN) process.exitCode = await main();
 export {
   RETRY_FAILED_ONCE_ENABLED,
   RETRY_FAILED_ONCE_ENV,
+  TEST_FILE_LINE,
   TEST_NODE_ARGS,
   TEST_RESULTS_LEDGER_ROTATE_BYTES,
   resolveTestMachineFactor,
   analyzeTapOutput,
   filterTestFiles,
+  formatBatchSignalLine,
+  formatPlannedLine,
   formatTestFilesSummary,
   parseOptions,
+  relayedLine,
   retryFailedOnce,
   runTestFile,
   runTestFileSync,
   runTestFiles,
+  testFileVerdictReader,
 };

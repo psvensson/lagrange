@@ -9,7 +9,7 @@ import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {LANE_JOBS_CAP_ENV, RESOURCE_CLASS_EXCLUSIVE}
   from '../checks/test-resource-classification-constants.js';
 import {THERMAL_REFUSAL_LINE} from '../checks/wait-for-thermal-headroom.js';
-import {formatTestFilesSummary} from '../run-test-files.js';
+import {TEST_FILE_LINE, formatTestFilesSummary, relayedLine} from '../run-test-files.js';
 import {capture, killGroup, run} from './process.js';
 import {loadState, saveState} from './state.js';
 
@@ -1090,11 +1090,10 @@ const PLACEMENT_SHELL_LINE = /^placement-shell=(\d+)$/mu;
 // A stopped shard's shell gets this long to clean up before its connection
 // is cut.
 const PLACEMENT_STOP_GRACE_MS = 10 * MS_PER_SECOND;
-// The runner's per-file verdict line: `ok|not ok FILE (N assertions, Tms)`.
-const PLACEMENT_VERDICT_LINE = /^(ok|not ok) (\S+) \((\d+) assertions, \d+ms\)$/u;
+// The runner's per-file verdict line (TEST_FILE_LINE.VERDICT, its owner's):
+// `ok|not ok FILE (N assertions, Tms)`.
 const PLACEMENT_VERDICT_GREEN = 'ok';
 const PLACEMENT_VERDICT_PART = Object.freeze({VERDICT: 1, FILE: 2, ASSERTIONS: 3});
-const PLACEMENT_RETRIED_PASS_LINE = /^# retried-once pass (\S+)$/u;
 // A bundle upload that has not finished by this is a stalled machine.
 const PLACEMENT_UPLOAD_DEADLINE_SECONDS = 300;
 // What the controller's own run policy hands a lab machine's runner.
@@ -1361,18 +1360,18 @@ function logVerdicts(files, log) {
   const assertions = new Map();
   const lines = String(log || EMPTY).split(PLACEMENT_LINE);
   for (const line of lines) {
-    const verdict = PLACEMENT_VERDICT_LINE.exec(line);
+    const verdict = TEST_FILE_LINE.VERDICT.exec(line);
     const file = verdict?.[PLACEMENT_VERDICT_PART.FILE];
     if (verdict && given.has(file)) {
       (verdict[PLACEMENT_VERDICT_PART.VERDICT] === PLACEMENT_VERDICT_GREEN ? green : red)
         .add(file);
       assertions.set(file, Number(verdict[PLACEMENT_VERDICT_PART.ASSERTIONS]));
     }
-    const retried = PLACEMENT_RETRIED_PASS_LINE.exec(line);
+    const retried = TEST_FILE_LINE.RETRIED_PASS.exec(line);
     if (retried && given.has(retried[1])) green.add(retried[1]);
   }
   for (const line of lines) {
-    const retried = PLACEMENT_RETRIED_PASS_LINE.exec(line);
+    const retried = TEST_FILE_LINE.RETRIED_PASS.exec(line);
     if (retried) red.delete(retried[1]);
   }
   return {
@@ -1468,7 +1467,7 @@ async function followShard(shard, run, context) {
 function relayShardLines(shard, outcome, write) {
   for (const stream of [outcome.log, outcome.errors]) {
     for (const line of String(stream || EMPTY).split(PLACEMENT_LINE)) {
-      if (line) write(`[${shard.machine.name}] ${line}`);
+      if (line) write(relayedLine(shard.machine.name, line));
     }
   }
 }
@@ -2386,7 +2385,7 @@ function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf
   const lines = [];
   const onLine = (line, stream) => {
     if (stream === PLACEMENT_STREAM.OUT) lines.push(line);
-    if (!line.startsWith(PLACEMENT_RESULTS_PREFIX)) write(`[${machine.name}] ${line}`);
+    if (!line.startsWith(PLACEMENT_RESULTS_PREFIX)) write(relayedLine(machine.name, line));
   };
   if (machine.controller) return {machine, files, lines, run: deps.runLocalChild(files, {onLine})};
   const loadMs = PLACEMENT_REMOTE_SETUP_MS +

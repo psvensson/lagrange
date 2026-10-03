@@ -1,0 +1,61 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "failed-gate-keeps-evidence",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/proof-authority-falsifiers.test.js": "e6530318e4946e6d9dbaa57d0d27fc4f3ca835ac8ded561f89cc579983382066",
+    "test/scripts/acceptance-proof-manifest-runner.test.js": "a028dc39ffdf1035931b1769b61a3bc5d17db6e003c88579727613d046868f16"
+  },
+  "generatedAt": "2026-10-03T15:45:56.629Z",
+  "receipts": [
+    {
+      "id": "failed-gate-run-keeps-diagnostics",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a failed gate run keeps its diagnostics after the checkout is removed$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "push-gate-corpus-worktree.js --gate <sha> --run <failing command>: the receipt and the first failing command's artifact are kept in test-output/push-gate/<sha>/, the checkout is gone, and the gate prints where it kept them",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "links-broken-gate-keeps-diagnostics",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a gate whose injection link was replaced keeps its diagnostics$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "the GATE_LINKS_BROKEN return (exit 1 after a passing command) retains like a failed run",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "dirty-gate-keeps-diagnostics",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a gate that dirtied its checkout keeps its diagnostics$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "the GATE_DIRTY return (exit 1 after a passing command) retains like a failed run",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "summary-names-exactly-the-failing-files",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^names exactly the failing test files of the failing command$\" test/scripts/acceptance-proof-manifest-runner.test.js",
+      "detail": "renderRunSummary reads the failing command's captured artifact: file-level verdict lines only (nested TAP not ok N lines and lookalikes ignored), lab-relayed [host] lines read, the last verdict decides",
+      "testFile": "test/scripts/acceptance-proof-manifest-runner.test.js"
+    },
+    {
+      "id": "retried-green-file-not-named",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^does not name a file that passed its retried-once rerun$\" test/scripts/acceptance-proof-manifest-runner.test.js",
+      "detail": "a # retried-once pass makes the file green; a retried-once fail stays named",
+      "testFile": "test/scripts/acceptance-proof-manifest-runner.test.js"
+    },
+    {
+      "id": "absent-summary-line-is-incomplete",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^reports an absent runner summary line as incomplete, never as a count$\" test/scripts/acceptance-proof-manifest-runner.test.js",
+      "detail": "no # test-files line: the summary prints 'summary line absent - list may be incomplete' and no count",
+      "testFile": "test/scripts/acceptance-proof-manifest-runner.test.js"
+    },
+    {
+      "id": "bounded-list-counts-withheld",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^bounds the failing-file list and counts what it withheld$\" test/scripts/acceptance-proof-manifest-runner.test.js",
+      "detail": "27 failing files: 20 named, 7 withheld and counted",
+      "testFile": "test/scripts/acceptance-proof-manifest-runner.test.js"
+    }
+  ]
+}

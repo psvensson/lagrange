@@ -37,7 +37,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // another previously unimported export).
 // 2026-09-27: tightened 1435 -> 1434 per checker hint after the REPLACE
 // witness made the shared transport-delivery deferral classifier live.
-const BASELINE_UNUSED_EXPORT_COUNT = 1434;
+// 2026-10-03: tightened 1434 -> 1433 per checker hint (failed-gate-keeps-
+// evidence: renderRunSummary gained its first importer, the witnesses).
+const BASELINE_UNUSED_EXPORT_COUNT = 1433;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
