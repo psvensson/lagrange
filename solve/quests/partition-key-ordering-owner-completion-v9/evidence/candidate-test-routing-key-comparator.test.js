@@ -24,6 +24,10 @@ import {
   compareSplitKey,
   resolveSplitTargetPartitionId,
 } from '../../src/partition/split-key-comparator.js';
+import {
+  replaySplitEntry,
+  routeSplitSnapshotBatch,
+} from '../../src/partition/partition-split-routing.js';
 
 const TABLE = 'items';
 const TEXT_BOUNDARY = '500';
@@ -404,6 +408,63 @@ test('split target metadata ignores inherited accessors and array iterators', ()
     /type mismatch/iu,
   );
 });
+
+test('live split replay and snapshot reject Proxy metadata before traps',
+  async () => {
+    for (const exercise of [
+      async (metadata, execution) => replaySplitEntry(
+        {
+          sql: 'INSERT INTO users (id) VALUES (?)',
+          params: ['a'],
+          data: {id: 'a'},
+        },
+        metadata,
+        {
+          tableName: 'users',
+          queryExecutor: {
+            async executeOnPartition() {
+              execution.count += 1;
+              return {success: true};
+            },
+          },
+        },
+      ),
+      async (metadata, execution) => routeSplitSnapshotBatch(
+        [{id: 'a'}],
+        ['id'],
+        metadata,
+        {
+          tableName: 'users',
+          queryExecutor: {
+            async executeOnPartition() {
+              execution.count += 1;
+              return {success: true};
+            },
+          },
+        },
+      ),
+    ]) {
+      let trapCalls = 0;
+      const execution = {count: 0};
+      const metadata = new Proxy({}, {
+        get() {
+          trapCalls += 1;
+          throw new Error('live split metadata get trap executed');
+        },
+        getOwnPropertyDescriptor() {
+          trapCalls += 1;
+          throw new Error('live split metadata descriptor trap executed');
+        },
+      });
+
+      await assert.rejects(
+        () => exercise(metadata, execution),
+        TypeError,
+      );
+      assert.equal(trapCalls, 0);
+      assert.equal(execution.count, 0);
+    }
+  });
 
 test('split target routing rejects Proxy metadata before traps', () => {
   let trapCalls = 0;
