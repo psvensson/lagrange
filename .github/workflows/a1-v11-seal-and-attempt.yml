@@ -101,6 +101,7 @@ jobs:
           set -euo pipefail
           evidence=solve/quests/$QUEST_ID/evidence
           cp "$evidence/candidate-src-strict-own-data.js"             src/utils/strict-own-data.js
+          cp "$evidence/candidate-src-partition-service-shared.js"             src/partition/partition-service-shared.js
           cp "$evidence/candidate-src-split-merge-manager.js"             src/partition/partition-split-merge-manager.js
           cp "$evidence/candidate-src-evaluation-context.js"             src/partition/partition-split-merge-evaluation-context.js
           cp "$evidence/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
@@ -124,6 +125,7 @@ jobs:
           set -euo pipefail
           paths=(
             src/utils/strict-own-data.js
+            src/partition/partition-service-shared.js
             src/partition/partition-split-merge-manager.js
             src/partition/partition-split-merge-evaluation-context.js
             src/partition/split-key-comparator.js
@@ -146,7 +148,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          candidate_hashes="$(sha256sum             src/utils/strict-own-data.js             src/partition/partition-split-merge-manager.js             src/partition/partition-split-merge-evaluation-context.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             src/partition/partition-split-routing.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js | tr '\n' ';')"
+          candidate_hashes="$(sha256sum             src/utils/strict-own-data.js             src/partition/partition-service-shared.js             src/partition/partition-split-merge-manager.js             src/partition/partition-split-merge-evaluation-context.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             src/partition/partition-split-routing.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js | tr '\n' ';')"
           node scripts/solve.js note             --id "$QUEST_ID"             --finding "A1-v11 run ${GITHUB_RUN_ID}: exact rejected v10 candidate is right-reason red for post-load Map replacement and over-wide snapshot dimensions; exact v11 candidate makes v10/v11 closure and focused suites green. Candidate sha256: ${candidate_hashes}"             --kind evidence             --evidence "github-actions:${GITHUB_RUN_ID}"
           node scripts/solve.js note             --id "$QUEST_ID"             --attempt "A1-v11 captures the snapshot grouping Map constructor and enforces pre-copy one-bind-budget row/column bounds through strict-own-data while preserving v10; v10/v11 closure, focused tests and guardrails green in GitHub Actions run ${GITHUB_RUN_ID}."
 
@@ -154,7 +156,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git restore --             src/utils/strict-own-data.js             src/partition/partition-split-merge-manager.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             src/partition/partition-split-routing.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js
+          git restore --             src/utils/strict-own-data.js             src/partition/partition-service-shared.js             src/partition/partition-split-merge-manager.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             src/partition/partition-split-routing.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js             test/partition/partition-split-routing.test.js
           rm -f src/partition/partition-split-merge-evaluation-context.js
 
           git rm .github/workflows/a1-v11-seal-and-attempt.yml
