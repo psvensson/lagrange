@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {
+  SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
   routeSplitSnapshotBatch,
   resolveSplitSnapshotBatchRowLimit,
 } from '../../src/partition/partition-split-routing.js';
@@ -99,8 +100,15 @@ async function dimensionProblemCount() {
     // Over-wide column set must fail closed.
   }
 
-  const maxRows = resolveSplitSnapshotBatchRowLimit(['id'], MAX_BIND_VARIABLES);
-  if (maxRows !== MAX_BIND_VARIABLES) problems += 1;
+  const maxRows = resolveSplitSnapshotBatchRowLimit(
+    ['id'],
+    SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+  );
+  if (maxRows !== SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL) problems += 1;
+  if (resolveSplitSnapshotBatchRowLimit(
+    Array.from({length: 512}, (_value, index) => `c_${index}`),
+    SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+  ) !== 63) problems += 1;
   return problems;
 }
 
