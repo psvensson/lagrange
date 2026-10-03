@@ -4,6 +4,7 @@ import {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
 } from '../control-plane/pressure-governor.js';
+import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {KeyRange} from './key-range-manager.js';
 import {
   PARTITION_TRANSITION_STATE,
@@ -22,11 +23,42 @@ const LOCAL_STR_EXECUTED = 'executed';
 const LOCAL_STR_DEFERRED = 'deferred';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_SPLIT_PLAN = 'split_plan';
+const LOCAL_STR_WORK_CLASS = 'workClass';
+const arrayIsArray = Array.isArray;
+const objectCreate = Object.create;
+const objectDefineProperty = Object.defineProperty;
 
 const OperationState = SPLIT_MERGE_STATE;
 const REACTIVE_WRITE_ACTIVITY_EXECUTION_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.CRITICAL,
 });
+
+function appendOwnArrayValue(array, value) {
+  objectDefineProperty(array, array.length, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value,
+  });
+}
+
+function copyExecutionOptions(options) {
+  if (!options?.executionOptions ||
+      typeof options.executionOptions !== 'object') {
+    return objectCreate(null);
+  }
+  return copyStrictOwnDataRecord(options.executionOptions) ||
+    objectCreate(null);
+}
+
+function applyReactiveExecutionOptions(executionOptions) {
+  objectDefineProperty(executionOptions, LOCAL_STR_WORK_CLASS, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: REACTIVE_WRITE_ACTIVITY_EXECUTION_OPTIONS.workClass,
+  });
+}
 
 class PartitionSplitMergeManagerTransitionMethods {
   /**
@@ -51,16 +83,9 @@ class PartitionSplitMergeManagerTransitionMethods {
     }
     this.allowManagedSplitDuringEvaluation = true;
     try {
-      const executionOptions =
-        options?.executionOptions &&
-        typeof options.executionOptions === 'object' ?
-          {...options.executionOptions} :
-          {};
+      const executionOptions = copyExecutionOptions(options);
       if (options?.bypassPressure === true) {
-        Object.assign(
-          executionOptions,
-          REACTIVE_WRITE_ACTIVITY_EXECUTION_OPTIONS,
-        );
+        applyReactiveExecutionOptions(executionOptions);
       }
       return await this.executeSplitCandidate(partitionId, executionOptions);
     } finally {
@@ -103,16 +128,9 @@ class PartitionSplitMergeManagerTransitionMethods {
    * @private
    */
   buildManagedCandidateExecutionOptions(options) {
-    const executionOptions =
-      options?.executionOptions &&
-      typeof options.executionOptions === 'object' ?
-        {...options.executionOptions} :
-        {};
+    const executionOptions = copyExecutionOptions(options);
     if (options?.bypassPressure === true) {
-      Object.assign(
-        executionOptions,
-        REACTIVE_WRITE_ACTIVITY_EXECUTION_OPTIONS,
-      );
+      applyReactiveExecutionOptions(executionOptions);
     }
     return executionOptions;
   }
@@ -132,7 +150,7 @@ class PartitionSplitMergeManagerTransitionMethods {
 
     const outcome = this.classifyManagedSplitExecution(execution);
     if (outcome === LOCAL_STR_EXECUTED) {
-      results.executedMerges.push(execution);
+      appendOwnArrayValue(results.executedMerges, execution);
       this.emit(SPLIT_MERGE_EVENT.MERGE_COMPLETED, execution);
       return;
     }
@@ -163,7 +181,7 @@ class PartitionSplitMergeManagerTransitionMethods {
         execution?.nextAttemptAt ||
         null,
     });
-    results.mergeDeferred.push({
+    appendOwnArrayValue(results.mergeDeferred, {
       leftId: candidate.leftId,
       rightId: candidate.rightId,
       reason: execution?.state || PARTITION_TRANSITION_STATE.DEFERRED,
@@ -190,7 +208,7 @@ class PartitionSplitMergeManagerTransitionMethods {
       state: execution.state || null,
       workflowId: execution.workflowId || null,
     });
-    results.mergeErrors.push({
+    appendOwnArrayValue(results.mergeErrors, {
       leftId: candidate.leftId,
       rightId: candidate.rightId,
       error,
@@ -339,7 +357,7 @@ class PartitionSplitMergeManagerTransitionMethods {
 
     const outcome = this.classifyManagedSplitExecution(execution);
     if (outcome === LOCAL_STR_EXECUTED) {
-      results.executedSplits.push(execution);
+      appendOwnArrayValue(results.executedSplits, execution);
       return;
     }
 
@@ -357,13 +375,13 @@ class PartitionSplitMergeManagerTransitionMethods {
           execution?.nextAttemptAt ||
           null,
         admissionDecisionType: execution?.admission?.decisionType || null,
-        admissionBlockingReasons: Array.isArray(
+        admissionBlockingReasons: arrayIsArray(
           execution?.admission?.blockingReasons,
         ) ?
           execution.admission.blockingReasons :
           [],
       });
-      results.splitDeferred.push({
+      appendOwnArrayValue(results.splitDeferred, {
         partitionId,
         reason: deferredReason,
         execution,
@@ -383,7 +401,7 @@ class PartitionSplitMergeManagerTransitionMethods {
       state: execution.state || null,
       workflowId: execution.workflowId || null,
     });
-    results.splitErrors.push({
+    appendOwnArrayValue(results.splitErrors, {
       partitionId,
       error,
       state: execution.state || null,
