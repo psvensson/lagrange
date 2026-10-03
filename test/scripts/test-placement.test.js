@@ -14,7 +14,7 @@ import {test} from 'node:test';
 
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {
-  PLACEMENT_EXIT, formatLabDecision, labTestCommit, labTestDeps, placeLabLanes,
+  DISCOVERY_FAILURE, PLACEMENT_EXIT, formatLabDecision, labTestCommit, labTestDeps, placeLabLanes,
   placeTestFiles, placementDeps, placementMachines, recordPlacementMisses, runLabTest,
   runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
@@ -254,12 +254,25 @@ test('a small plan, a tree that is not a commit or an empty fleet runs locally',
   assert.deepEqual(run.calls.local, [MANY]);
   assert.match(run.calls.lines[0], /no lab machine is ready/u);
 
-  run = fakeDeps({discover: async () => {
-    throw new Error('Unsupported lab inventory at /x/inventory.json');
-  }});
-  assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
-  assert.deepEqual(run.calls.local, [MANY], 'an unreadable inventory is no fleet, not a red run');
-  assert.match(run.calls.lines[0], /the lab inventory could not be read: Unsupported/u);
+  // Discovery that fails is no fleet, not a red run, and the line names which
+  // part failed (the real discovery's codes are witnessed against a real
+  // repository in lab-fleet-discovery.test.js).
+  for (const [code, message, line] of [
+    [DISCOVERY_FAILURE.INVENTORY_UNREADABLE, 'Unsupported lab inventory at /x/inventory.json',
+      /^placement: local - the lab inventory could not be read: Unsupported/u],
+    [DISCOVERY_FAILURE.REQUIREMENT_UNREADABLE, 'no requirement: cannot read package.json at f',
+      /^placement: local - the placed commit's requirement could not be read: no requirement/u],
+    [DISCOVERY_FAILURE.REQUIREMENT_TOO_LARGE, 'package-lock.json at f is larger than the bound',
+      /^placement: local - the placed commit's requirement could not be read: package-lock/u],
+    [undefined, 'something else', /^placement: local - lab discovery failed: something else$/u],
+  ]) {
+    run = fakeDeps({discover: async () => {
+      throw Object.assign(new Error(message), {code});
+    }});
+    assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
+    assert.deepEqual(run.calls.local, [MANY], `${code}: no fleet, not a red run`);
+    assert.match(run.calls.lines[0], line, `${code}: named`);
+  }
 
   // The real commit check: clean is a commit, modified or untracked is not.
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-commit-'));
