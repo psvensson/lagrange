@@ -280,7 +280,7 @@ function requireSnapshotColumns(columns) {
     );
   }
   for (let index = 0; index < copied.length; index += 1) {
-    if (typeof copied[index] !== PARTITION_SERVICE_TYPE.STRING) {
+    if (typeof copied[index] !== SPLIT_ROUTING_LITERAL.STRING) {
       throw new TypeErrorCtor(
         PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED,
       );
