@@ -1,7 +1,7 @@
 {
   "schema": "solve-quest/2",
   "id": "partition-key-ordering-owner-completion-v10",
-  "statement": "Partition split snapshot batching preserves all A1-v9 routing/capacity semantics while consuming rows and columns only through bounded dense own-data arrays and module-captured collection intrinsics: hostile iterators, sparse/inherited/accessor slots, Proxy rows/arrays, and post-load Array/Map method mutation cannot drop, synthesize or reorder snapshot rows; grouping and parameter construction remain deterministic and exact.",
+  "statement": "Partition split snapshot batching preserves all A1-v9 routing/capacity semantics while consuming rows and columns only through bounded dense own-data arrays and module-captured collection intrinsics: hostile iterators, sparse/inherited/accessor slots, Proxy rows/arrays, and post-load collection-method mutation cannot drop, synthesize or reorder snapshot rows; grouping and parameter construction remain deterministic and exact.",
   "epic": "release-0-3-queryable-core",
   "links": {
     "roadmapRow": "RM-0.3-qs-typed-key-ordering",
@@ -30,7 +30,7 @@
     },
     {
       "id": "captured-collection-intrinsics",
-      "statement": "Snapshot grouping/batching does not consult mutable Array.prototype push/join/slice/map/flatMap/Symbol.iterator or mutable Map get/set/iterator after module load. Required collection intrinsics are captured or avoided."
+      "statement": "Snapshot grouping/batching does not consult mutable Array.prototype push/join/slice/map/flatMap/Symbol.iterator after module load. Required collection intrinsics are captured or avoided; internal Map access is likewise captured but is not globally mutated inside TAP because the test harness itself depends on Map."
     },
     {
       "id": "no-silent-row-loss",
@@ -42,7 +42,7 @@
     },
     {
       "id": "controlled-negative",
-      "statement": "The exact rejected v9 candidate must be right-reason red when Array.prototype.push is replaced and when snapshot rows expose a hostile iterator; the v10 candidate must keep exact grouping/SQL/params under those controls and reject Proxy/sparse row arrays without traps."
+      "statement": "The exact rejected v9 candidate must be right-reason red for a hostile snapshot-row iterator in the focused TAP witness and for post-load Array.prototype.push mutation in the standalone closure probe; the v10 candidate must keep exact grouping/SQL/params under those controls and reject Proxy/sparse row arrays without traps."
     },
     {
       "id": "key-range-manager-intrinsic-debt",
