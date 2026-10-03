@@ -398,7 +398,7 @@ test('split snapshot batching captures Map constructor after module load',
     ]);
   });
 
-test('split snapshot batching rejects dimensions outside one bind budget',
+test('split snapshot batching rejects dimensions outside route and bind budgets',
   async (t) => {
     const dispatches = [];
     const queryExecutor = {
