@@ -1,9 +1,21 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import {
-  routeSplitSnapshotBatch,
-  resolveSplitSnapshotBatchRowLimit,
-} from '../../src/partition/partition-split-routing.js';
+const ROUTING_MODULE_URL = new URL(
+  '../../src/partition/partition-split-routing.js',
+  import.meta.url,
+);
+let routingModulePromise;
+
+async function loadRoutingModule() {
+  routingModulePromise ??= import(ROUTING_MODULE_URL.href).catch((error) => {
+    process.stderr.write(
+      'partition-key-ordering-owner-completion-v11: routing module load ' +
+      `failed: ${error?.message || error}\n`,
+    );
+    return null;
+  });
+  return routingModulePromise;
+}
 
 const MAX_BIND_VARIABLES = 32_766;
 const MAX_ROUTE_ROWS = 64;
@@ -32,6 +44,11 @@ function metadata() {
 }
 
 async function mapConstructorProblemCount() {
+  const routing = await loadRoutingModule();
+  if (typeof routing?.routeSplitSnapshotBatch !== 'function') {
+    return 1;
+  }
+  const {routeSplitSnapshotBatch} = routing;
   const OriginalMap = globalThis.Map;
   const dispatched = [];
   class PoisonMap extends OriginalMap {
@@ -70,6 +87,15 @@ async function mapConstructorProblemCount() {
 }
 
 async function dimensionProblemCount() {
+  const routing = await loadRoutingModule();
+  if (typeof routing?.routeSplitSnapshotBatch !== 'function' ||
+      typeof routing?.resolveSplitSnapshotBatchRowLimit !== 'function') {
+    return 2;
+  }
+  const {
+    routeSplitSnapshotBatch,
+    resolveSplitSnapshotBatchRowLimit,
+  } = routing;
   let problems = 0;
   const dispatch = async () => ({success: true});
   const tooManyColumns = Array.from(
@@ -165,10 +191,23 @@ function ownerProblemCount() {
   return problems;
 }
 
+async function guardedProblemCount(label, callback) {
+  try {
+    const count = await callback();
+    return Number.isInteger(count) && count >= 0 ? count : 1;
+  } catch (error) {
+    process.stderr.write(
+      'partition-key-ordering-owner-completion-v11: ' + label +
+      ' probe failed: ' + String(error?.message || error) + '\n',
+    );
+    return 1;
+  }
+}
+
 const metric =
-  await mapConstructorProblemCount() +
-  await dimensionProblemCount() +
-  ownerProblemCount();
+  await guardedProblemCount('map-constructor', mapConstructorProblemCount) +
+  await guardedProblemCount('dimensions', dimensionProblemCount) +
+  await guardedProblemCount('owner', ownerProblemCount);
 
 if (metric !== 0) {
   process.stderr.write(
