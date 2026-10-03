@@ -44,7 +44,7 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion-v10` — ACTIVE
+### A1 — `partition-key-ordering-owner-completion-v11` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
 
@@ -83,6 +83,15 @@ evaluation partition arrays, IDs, and start/end keys are own-data-only;
 iterator/Array/Reflect intrinsics used by this path are captured; missing,
 own-null, and own-undefined table-ID peers are distinguished in both
 directions; and no new complexity debt is admitted.
+
+A1-v10 subsequently closed v9's snapshot iterator/live collection
+dependencies and reached a sealed 3 → 0 attempt. Its category-complete
+post-attempt PR #96 review found two final snapshot-boundary cases: live
+`new Map()` remained mutable after module load and could silently suppress
+dispatch, while the snapshot rows/columns accepted dimensions beyond a bounded
+single SQLite bind budget. A1-v11 owns exactly those two findings by capturing
+the Map constructor and adding pre-copy row/column bounds through
+`strict-own-data`.
 
 **Current falsifier:** current main still has both a locale-sensitive string
 order in `compareRoutingKeys` and a raw
