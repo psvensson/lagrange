@@ -114,7 +114,7 @@ jobs:
           test "$merge_status" -ne 0
           test "$routing_status" -ne 0
           test "$probe_status" -ne 0
-          grep -E "not ok.*coalesced evaluation context reserves priority without evicting admitted reasons"             /tmp/a1-v9-merge-v8-red.log >/dev/null
+          grep -E "not ok.*coalesced evaluation context reserves priority capacity without eviction"             /tmp/a1-v9-merge-v8-red.log >/dev/null
           grep -E "not ok.*split routing rejects Proxy and accessor metadata before traps"             /tmp/a1-v9-routing-v8-red.log >/dev/null
 
       - name: Install v9 source candidate
