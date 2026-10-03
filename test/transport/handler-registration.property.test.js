@@ -1,12 +1,11 @@
 /**
- * Property test for Handler Registration on Worker Registration (Property 15).
+ * Property test for replica handler registration on the MessageRouter's
+ * registration API (register / isRegistered / unregister).
  *
- * Feature: worker-process-replica-isolation, Property 15: Handler Registration on Worker Registration
- *
- * For any worker process that registers with the main process, the MessageRouter
- * SHALL create a corresponding handler entry that routes messages to that worker.
- *
- * **Validates: Requirements 7.5**
+ * For any partition or message-group replica address, registering a handler
+ * SHALL create a handler entry that routes messages to it, and unregistering
+ * SHALL remove only that entry. (Formerly pinned through the worker-alias
+ * methods of the deleted worker consensus path; re-expressed on the real API.)
  *
  * @module test/transport/handler-registration.property.test.js
  */
@@ -18,7 +17,7 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {ENTITY_TYPE} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
-describe('Property 15: Handler Registration on Worker Registration', () => {
+describe('Replica handler registration on the MessageRouter API', () => {
   let router;
 
   beforeEach(() => {
@@ -52,10 +51,10 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
           const address = `${nodeId}/${entityType}/${replicaId}`;
           const deliverFn = mock.fn(async () => ({status: 'ok'}));
 
-          testRouter.registerWorkerHandler(address, deliverFn);
+          testRouter.register(address, deliverFn);
 
           assert.ok(
-            testRouter.hasWorkerHandler(address),
+            testRouter.isRegistered(address),
             'Handler should be registered for worker address',
           );
         },
@@ -87,7 +86,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
             return {status: 'ok'};
           });
 
-          testRouter.registerWorkerHandler(address, deliverFn);
+          testRouter.register(address, deliverFn);
 
           // Get handler and invoke it
           const handler = testRouter.handlers.get(address);
@@ -116,11 +115,11 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
           const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
           const deliverFn = mock.fn(async () => ({status: 'ok'}));
 
-          testRouter.registerWorkerHandler(address, deliverFn);
-          assert.ok(testRouter.hasWorkerHandler(address));
+          testRouter.register(address, deliverFn);
+          assert.ok(testRouter.isRegistered(address));
 
-          testRouter.unregisterWorkerHandler(address);
-          assert.strictEqual(testRouter.hasWorkerHandler(address), false);
+          testRouter.unregister(address);
+          assert.strictEqual(testRouter.isRegistered(address), false);
         },
       ),
       {numRuns: 10},
@@ -146,13 +145,13 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
             const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
             const deliverFn = mock.fn(async () => ({replicaId}));
             handlers.set(replicaId, deliverFn);
-            testRouter.registerWorkerHandler(address, deliverFn);
+            testRouter.register(address, deliverFn);
           }
 
           // Verify all handlers are registered
           for (const replicaId of replicaIds) {
             const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
-            assert.ok(testRouter.hasWorkerHandler(address));
+            assert.ok(testRouter.isRegistered(address));
           }
 
           // Invoke each handler and verify correct one is called
@@ -190,12 +189,12 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
           const partitionDeliverFn = mock.fn(async () => ({type: 'partition'}));
           const msgGroupDeliverFn = mock.fn(async () => ({type: 'message-group'}));
 
-          testRouter.registerWorkerHandler(partitionAddress, partitionDeliverFn);
-          testRouter.registerWorkerHandler(msgGroupAddress, msgGroupDeliverFn);
+          testRouter.register(partitionAddress, partitionDeliverFn);
+          testRouter.register(msgGroupAddress, msgGroupDeliverFn);
 
           // Verify both are registered
-          assert.ok(testRouter.hasWorkerHandler(partitionAddress));
-          assert.ok(testRouter.hasWorkerHandler(msgGroupAddress));
+          assert.ok(testRouter.isRegistered(partitionAddress));
+          assert.ok(testRouter.isRegistered(msgGroupAddress));
 
           // Verify correct handlers are invoked
           const partitionHandler = testRouter.handlers.get(partitionAddress);
@@ -229,7 +228,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
           // Register handlers
           for (const replicaId of replicaIds) {
             const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
-            testRouter.registerWorkerHandler(address, async () => ({}));
+            testRouter.register(address, async () => ({}));
           }
 
           assert.strictEqual(
@@ -241,7 +240,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
           // Unregister handlers
           for (const replicaId of replicaIds) {
             const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
-            testRouter.unregisterWorkerHandler(address);
+            testRouter.unregister(address);
           }
 
           assert.strictEqual(

@@ -22,11 +22,11 @@
     "storage-raft": 99,
     "test-infrastructure": 139,
     "transactions": 15,
-    "transport-messaging": 86,
+    "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-48ed845c",
+  "censusSize": 2194,
+  "digest": "fnv1a32-0d7a2820",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-658b74df",
   "classes": {
@@ -2117,7 +2117,6 @@
     "test/transport/message-router-critical-source-reserve.test.js": "transport-messaging",
     "test/transport/message-router-deliver-metrics.test.js": "transport-messaging",
     "test/transport/message-router-endpoint-address-change-redial.test.js": "transport-messaging",
-    "test/transport/message-router-ipc.test.js": "transport-messaging",
     "test/transport/message-router-join-request.test.js": "transport-messaging",
     "test/transport/message-router-late-response-classification.test.js": "transport-messaging",
     "test/transport/message-router-quarantine-liveness-guard.test.js": "transport-messaging",

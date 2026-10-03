@@ -49,7 +49,7 @@ describe('Property 3: Uniform Message Routing', () => {
             status: 'ok',
           }));
 
-          router.registerWorkerHandler(address, deliverFn);
+          router.register(address, deliverFn);
 
           // Get handler - same interface regardless of entity type
           const handler = router.handlers.get(address);
@@ -85,12 +85,12 @@ describe('Property 3: Uniform Message Routing', () => {
           const partitionMessages = [];
           const msgGroupMessages = [];
 
-          router.registerWorkerHandler(partitionAddress, async (envelope) => {
+          router.register(partitionAddress, async (envelope) => {
             partitionMessages.push(envelope);
             return {status: 'ok'};
           });
 
-          router.registerWorkerHandler(msgGroupAddress, async (envelope) => {
+          router.register(msgGroupAddress, async (envelope) => {
             msgGroupMessages.push(envelope);
             return {status: 'ok'};
           });
@@ -168,12 +168,12 @@ describe('Property 3: Uniform Message Routing', () => {
           let partitionReceived = null;
           let msgGroupReceived = null;
 
-          router.registerWorkerHandler(partitionAddress, async (envelope) => {
+          router.register(partitionAddress, async (envelope) => {
             partitionReceived = envelope;
             return {status: 'ok'};
           });
 
-          router.registerWorkerHandler(msgGroupAddress, async (envelope) => {
+          router.register(msgGroupAddress, async (envelope) => {
             msgGroupReceived = envelope;
             return {status: 'ok'};
           });
@@ -209,8 +209,8 @@ describe('Property 3: Uniform Message Routing', () => {
           const msgGroupAddress =
             `node-1/${ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
 
-          router.registerWorkerHandler(partitionAddress, async () => response);
-          router.registerWorkerHandler(msgGroupAddress, async () => response);
+          router.register(partitionAddress, async () => response);
+          router.register(msgGroupAddress, async () => response);
 
           const partitionHandler = router.handlers.get(partitionAddress);
           const msgGroupHandler = router.handlers.get(msgGroupAddress);
@@ -235,7 +235,7 @@ describe('Property 3: Uniform Message Routing', () => {
         async (replicaId, delayMs) => {
           const address = `node-1/${ENTITY_TYPE.PARTITION}/${replicaId}`;
 
-          router.registerWorkerHandler(address, async () => {
+          router.register(address, async () => {
             // Simulate async work
             await Promise.resolve();
             return {status: 'ok', delayMs};
