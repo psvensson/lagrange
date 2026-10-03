@@ -34,7 +34,7 @@
     },
     {
       "id": "route-call-row-bound",
-      "statement": "One routeSplitSnapshotBatch call accepts at most 64 canonical dense own-data rows before copy/grouping, matching the existing split snapshot producer cadence. The 64-row value has one owner in partition-split-routing and PartitionService consumes that exported owner instead of restating a second literal."
+      "statement": "One routeSplitSnapshotBatch call accepts at most 64 canonical dense own-data rows before copy/grouping, matching the existing split snapshot producer cadence. Both the 64-row route-call cap and the 32,766 bind-variable cap have one canonical owner in partition-constants; snapshot routing enforces that owner and PartitionService derives its backfill cadence from the same row-cap value without restating literals."
     },
     {
       "id": "strict-own-data-length-owner",
