@@ -32,6 +32,7 @@ quests:
   - lane-parallelism-measurement
   - fleet-capability-discovery
   - test-placement
+  - lab-readiness-by-dependency-graph
 authorizes:
   - scripts
   - test

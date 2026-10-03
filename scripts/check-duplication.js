@@ -183,7 +183,9 @@ const RATCHET_TARGETS = [
     // 2026-09-30: tightened duplicated lines 29402 -> 29388 after the
     // rejoin-hints recovered-peer decision match became one constant.
     baselineCloneGroupCount: 765,
-    baselineDuplicatedLineCount: 29388,
+    // 2026-10-03: tightened duplicated lines 29388 -> 29385 on the checker's
+    // hint (quest lab-readiness-by-dependency-graph).
+    baselineDuplicatedLineCount: 29385,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

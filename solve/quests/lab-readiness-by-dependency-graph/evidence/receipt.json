@@ -1,0 +1,46 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "lab-readiness-by-dependency-graph",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/lab-fleet-discovery.test.js": "c6a59696f4ba98862533749d8f61168d683a59da4dc234ba460d68da1464ff3a"
+  },
+  "generatedAt": "2026-10-03T14:15:08.229Z",
+  "receipts": [
+    {
+      "id": "version-only-is-ready",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a lockfile that differs only in its release version is the same dependency graph$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "a host whose lockfile differs from the requirement only in the two release-version fields is ready, through the real capability script",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    },
+    {
+      "id": "dependency-change-not-ready",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a real dependency change is a different dependency graph, one change at a time$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "package version, integrity, an added package, lockfileVersion, a root range and root engines each disqualify with dependency-graph-differs; an unreadable lockfile is dependency-graph-unknown",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    },
+    {
+      "id": "one-digest-authority",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the controller and a lab machine compute one dependency-graph digest$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "controller and host digests agree on every variant; equal/different/unknown as declared; equality matches the selector graph",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    },
+    {
+      "id": "requirement-is-the-placed-commit",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a placed commit is measured against its own lockfile and engines floor$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "with a sha the requirement is that commit's graph and engines floor; without one the working tree, labelled; both placement paths pass their sha to discovery",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    },
+    {
+      "id": "release-bump-incident",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a version-only release bump of this repository leaves the fleet ready$\" test/scripts/lab-fleet-discovery.test.js",
+      "detail": "the 0.2.5 -> 0.2.6 incident: this repository's lockfile with only its two release-version lines changed leaves an installed host ready",
+      "testFile": "test/scripts/lab-fleet-discovery.test.js"
+    }
+  ]
+}
