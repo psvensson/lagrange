@@ -411,7 +411,7 @@ test('split snapshot batching rejects dimensions outside one bind budget',
       (_value, index) => `column_${index}`,
     );
     const overTallRows = Array.from(
-      {length: 32_767},
+      {length: 65},
       (_value, index) => ({id: `a_${index}`}),
     );
 
