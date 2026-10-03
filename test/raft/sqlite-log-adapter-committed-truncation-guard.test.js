@@ -1,16 +1,16 @@
 /**
  * Raft-safety invariant (CL-040/041/042 class): committed entries are permanent
- * and MUST NEVER be truncated. Base liferaft's conflict truncation calls
- * removeEntriesAfter UNGUARDED; a truncation whose floor falls below
- * committedIndex therefore deleted committed entries and produced the
+ * and MUST NEVER be truncated. Canonical inclusive truncation must clamp any
+ * requested floor that reaches into committed history; failing to do so
+ * deletes committed entries and produces the
  * replica_operations-p1 log HOLE observed live (durable committedIndex advanced
  * to 228 on a quorum while entries 192-228 were deleted), which froze the
  * durable watermark at the first gap (commit() short-circuits on the missing
  * row) and wedged the ledger leader forever.
  *
  * This DT reproduces the exact live genesis shape (committed 1-228, then an
- * unguarded removeEntriesAfter(191)) and asserts the committed prefix survives.
- * Red-on-revert: without the guard in removeEntriesAfter, entries 192-228 are
+ * inclusive truncation from 192) and asserts the committed prefix survives.
+ * Red-on-revert: without the guard in removeFrom, entries 192-228 are
  * deleted -> getLastInfo().index regresses to 191 while getCommittedIndex()
  * stays 228 -> the poisoned, non-contiguous log the freeze is built on.
  */
@@ -21,7 +21,7 @@ import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 
 function createAdapter() {
   const db = new Database(':memory:');
-  return new SQLiteLogAdapter(db, {address: 'node-1'});
+  return {adapter: new SQLiteLogAdapter(db, {address: 'node-1'}), db};
 }
 
 async function seed(adapter, fromIndex, toIndex, term = 2) {
@@ -30,20 +30,20 @@ async function seed(adapter, fromIndex, toIndex, term = 2) {
   }
 }
 
-test('removeEntriesAfter committed-prefix truncation guard', async (t) => {
+test('removeFrom committed-prefix truncation guard', async (t) => {
   await t.test(
     'refuses to delete committed entries (the live genesis shape)',
     async (t) => {
-      const adapter = createAdapter();
+      const {adapter, db} = createAdapter();
       try {
         await seed(adapter, 1, 228);
         adapter.setCommittedIndex(228);
         t.equal(adapter.getCommittedIndex(), 228, 'committed watermark at 228');
         t.equal(adapter.getLastInfo().index, 228, 'log head at 228 before');
 
-        // The exact live call: base liferaft asked to truncate after 191,
-        // 37 entries below the committed watermark.
-        adapter.removeEntriesAfter(191);
+        // Equivalent canonical request: truncate from 192, 37 entries inside
+        // the committed prefix.
+        adapter.removeFrom(192);
 
         t.equal(
           adapter.getLastInfo().index,
@@ -63,11 +63,11 @@ test('removeEntriesAfter committed-prefix truncation guard', async (t) => {
         );
         t.equal(
           adapter.lastCommittedTruncationBlocked.requestedIndex,
-          191,
+          192,
           'the blocked request is surfaced for pinning the genesis',
         );
       } finally {
-        adapter.end();
+        db.close();
       }
     },
   );
@@ -75,13 +75,13 @@ test('removeEntriesAfter committed-prefix truncation guard', async (t) => {
   await t.test(
     'still truncates the UNCOMMITTED conflicting suffix (no-op on the safe path)',
     async (t) => {
-      const adapter = createAdapter();
+      const {adapter, db} = createAdapter();
       try {
         await seed(adapter, 1, 10);
         adapter.setCommittedIndex(5);
         // A legitimate conflict truncation is always above the committed
-        // prefix: remove the uncommitted suffix after 7.
-        adapter.removeEntriesAfter(7);
+        // prefix: remove the uncommitted suffix from 8.
+        adapter.removeFrom(8);
         t.equal(adapter.getLastInfo().index, 7, 'uncommitted suffix removed');
         t.equal(adapter.getCommittedIndex(), 5, 'committed prefix intact');
         t.equal(
@@ -92,7 +92,7 @@ test('removeEntriesAfter committed-prefix truncation guard', async (t) => {
         t.notOk(adapter.get(8), 'entry 8 (uncommitted) is gone');
         t.ok(adapter.get(5), 'entry 5 (committed) remains');
       } finally {
-        adapter.end();
+        db.close();
       }
     },
   );

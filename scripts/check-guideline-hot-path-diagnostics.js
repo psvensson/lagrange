@@ -29,8 +29,6 @@ const HOT_PATH_MODULE = Object.freeze([
   'src/cache/system-table-cache.js',
   // CL-018: readEntryRow full-log parse per heartbeat
   'src/raft/sqlite-log-adapter.js',
-  // CL-015/CL-018: catch-up and heartbeat protocol layer
-  'src/raft/liferaft.js',
   // CL-009: outbound-queue saturation warn storm (67-69% of seed log)
   'src/transport/message-router-shared-vocabulary.js',
   // CL-014: per-event CDC fan-out resolution

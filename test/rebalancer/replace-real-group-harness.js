@@ -81,8 +81,8 @@ import {
 import {
   COMMITTED_MEMBERSHIP_STAMP_KIND,
 } from '../../src/raft/raft-committed-membership-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {createMockCache, createTestCoordinator} from './test-helpers.js';
 import {createRemovalSourceHandler} from
@@ -409,7 +409,7 @@ class RealGroup {
     const stamp = this.oracleStamp();
     const hints = [...Object.values(stamp.identities), this.targetReplicaId];
     this.cluster.addReplica(this.targetReplicaId, hints,
-      {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
+      {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
     if (capBeforeAdmission) {
       this.cap.value = durableLog(this.cluster.replica(this.leader()).dbFile,
         this.partitionId).at(-1).index;

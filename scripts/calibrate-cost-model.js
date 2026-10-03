@@ -21,8 +21,6 @@
 //   2. systemTableCache.deepClone      -> SystemTableCache.deepClone -> fastJsonClone
 //      (src/cache/system-table-cache.js:931; src/utils/fast-json-clone.js) — cost
 //      scales with row size (node-count / fields per row).
-//   3. raft.uncommittedSuffixScan      -> SQLiteLogAdapter.getUncommittedEntriesUpToIndex
-//      (src/raft/sqlite-log-adapter.js:355) — cost scales with uncommitted suffix length.
 //
 // Usage:
 //   node scripts/calibrate-cost-model.js            # human table + emitted spec
@@ -30,12 +28,9 @@
 //   node scripts/calibrate-cost-model.js --quick    # smaller iteration budget (fast, noisier)
 
 import {performance} from 'node:perf_hooks';
-import Database from 'better-sqlite3';
-
 import {median} from '../test/distributed/harness/convergence-budget-calibration.js';
 import {fastJsonClone} from '../src/utils/fast-json-clone.js';
 import {buildPriorityRecoveryReplicaOperationContexts} from '../src/control-plane/priority-recovery-snapshot-rebalancer.js';
-import {SQLiteLogAdapter} from '../src/raft/sqlite-log-adapter.js';
 
 // ---------------------------------------------------------------------------
 // Deterministic seeded source — mulberry32. No Math.random anywhere in fixtures.
@@ -168,22 +163,6 @@ function makeControlPlaneRow(rng, nodeCount) {
   };
 }
 
-// A realistic raft log command payload (committed-entry shape).
-function makeRaftCommand(rng, i) {
-  return {
-    op: 'upsert',
-    table: i % 2 ? 'control_plane_publications' : 'replica_operations',
-    epoch: i,
-    nodeIds: NODE_POOL.slice(0, 5),
-    payload: {
-      revision: i,
-      status: i % 3 === 0 ? 'PUBLISHED' : 'OPEN',
-      acked: rng() < 0.8,
-      detail: {a: i, b: i * 2, c: `payload-${i}`},
-    },
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Sink invocations — each calls the REAL op the sim charges for.
 // ---------------------------------------------------------------------------
@@ -212,31 +191,6 @@ function makeDeepCloneSink(nodeCount) {
   return function run() {
     const clone = fastJsonClone(row);
     return clone.members.length;
-  };
-}
-
-// 3. raft.uncommittedSuffixScan — REAL adapter against a real in-memory sqlite DB.
-//    Faithful: builds an actual _raft_log, sets the committed watermark so exactly
-//    `suffixLen` rows are uncommitted, then calls the production scan method.
-function makeRaftSuffixScanSink(suffixLen) {
-  const COMMITTED_PREFIX = 200; // realistic already-committed body below the watermark
-  const rng = mulberry32(FIXTURE_SEED ^ 0xc2b2ae35);
-  const db = new Database(':memory:');
-  const adapter = new SQLiteLogAdapter(db);
-  const total = COMMITTED_PREFIX + suffixLen;
-  for (let i = 1; i <= total; i += 1) {
-    adapter.put({index: i, term: (i % 7) + 1, command: makeRaftCommand(rng, i)});
-  }
-  adapter.setCommittedIndex(COMMITTED_PREFIX); // suffix (COMMITTED_PREFIX, total] uncommitted
-  const upTo = total;
-  return {
-    run() {
-      const entries = adapter.getUncommittedEntriesUpToIndex(upTo, 0);
-      return entries.length;
-    },
-    dispose() {
-      db.close();
-    },
   };
 }
 
@@ -316,10 +270,6 @@ function buildSinkDefs(quick) {
   const budget = quick ?
     {msPerBatch: 25, minIters: 30, warmupBatches: 2, trials: 5} :
     {msPerBatch: 80, minIters: 100, warmupBatches: 3, trials: 9};
-  // raft scan touches a fresh DB per size; same budget shape.
-  const raftBudget = quick ?
-    {msPerBatch: 25, minIters: 10, warmupBatches: 2, trials: 5} :
-    {msPerBatch: 80, minIters: 30, warmupBatches: 2, trials: 7};
   return [
     {
       opKey: 'priorityRecovery.snapshotBuild',
@@ -343,15 +293,6 @@ function buildSinkDefs(quick) {
       sizes: [3, 5, 10, 25, 50, 100],
       budget,
       make: (size) => ({run: makeDeepCloneSink(size)}),
-    },
-    {
-      opKey: 'raft.uncommittedSuffixScan',
-      unit: 'uncommitted suffix length (rows)',
-      faithful: 'real op (SQLiteLogAdapter.getUncommittedEntriesUpToIndex) against a ' +
-        'real in-memory better-sqlite3 _raft_log with the committed watermark set',
-      sizes: [1, 5, 10, 25, 50, 100],
-      budget: raftBudget,
-      make: (size) => makeRaftSuffixScanSink(size),
     },
   ];
 }

@@ -18,11 +18,6 @@ import {readSeedStartupStorageAdmission} from './bootstrap/seed-startup-storage-
 import {NodeJoiningService} from './bootstrap/node-joining-service.js';
 import {NodeService} from './node/node-service.js';
 import {
-  ensureLiferaftProviderForRuntime,
-  getProcessRaftProvider,
-} from './raft/raft-provider-control.js';
-import {RAFT_PROVIDER_LOG_MSG} from './raft/raft-provider-control-constants.js';
-import {
   ENTRYPOINT_ERROR_MSG,
   ENTRYPOINT_LOG_MSG,
   ENTRYPOINT_RUNTIME_VALUE,
@@ -714,11 +709,6 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
     config,
     environment,
   );
-  const selectedRaftProvider = getProcessRaftProvider(environment);
-  mainLogger.info(RAFT_PROVIDER_LOG_MSG.SELECTED, {
-    provider: selectedRaftProvider,
-  });
-  ensureLiferaftProviderForRuntime(environment);
   await startFormationAttributionWindow({environment, logger: mainLogger});
 
   configLogger.debug(ENTRYPOINT_RUNTIME_VALUE.CONFIGURATION_LOADED, {
@@ -746,7 +736,7 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
     dataDirectoryProcessOwner.release();
     return reportDryRunCompletion({logger: mainLogger,
       nodeId: config.get(CONFIG_KEY.NODE_ID),
-      dataDir: dataDirectoryManager.getDataDir(), provider: selectedRaftProvider});
+      dataDir: dataDirectoryManager.getDataDir()});
   }
 
   const startupJoinDecision = await awaitStartupAcquisition(resolveStartupJoinDecision({

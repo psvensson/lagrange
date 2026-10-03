@@ -13,7 +13,6 @@
 // the phase calls, a field the bootstrap service sets - and nothing
 // production does depends on whether anyone is watching.
 import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
-import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {reserveSimulatedBootIncarnation} from
   './formation-sim-boot-incarnation.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
@@ -776,18 +775,13 @@ function chargingScheduler(network, chargeDelta) {
 }
 
 // The consensus population production composed, read at the mark from the
-// services themselves: which replica services run a liferaft runtime and how
-// many sibling peers each joins, and how many partition replicas the single
-// rs-raft path serves. A census compares what it observed against this rather
-// than against a topology written down once.
+// services themselves: every message-group and every partition replica runs
+// one raft-rs operation port. A census compares what it observed against this
+// rather than against a topology written down once.
 function consensusComposition(bootstrap) {
-  const liferaftServices = [...bootstrap.messageGroupServices.values()]
-    .filter((service) => service.raftProvider instanceof LiferaftProvider);
   return {
-    liferaftRuntimes: liferaftServices.length,
-    liferaftPeers: liferaftServices.reduce(
-      (total, service) => total + service.replicaIds.length - 1, 0),
-    rsRaftReplicas: bootstrap.partitionServices.size,
+    messageGroupReplicas: bootstrap.messageGroupServices.size,
+    partitionReplicas: bootstrap.partitionServices.size,
   };
 }
 

@@ -3,10 +3,9 @@
 // It lives in the replica's OWN SQLite database - the same file and the same
 // connection the replica already uses - so that the configuration state and
 // its applied progress can be one transaction with the rest of the replica's
-// durable state. It does NOT reuse liferaft's `_raft_log` and `_raft_state`:
-// those tables carry liferaft's own entry shape, and this quest never
-// migrates a liferaft log nor changes liferaft's behaviour. Two backends,
-// two records, one database.
+// durable state. It does NOT reuse the retired `_raft_log` and `_raft_state`
+// tables: those carry a different entry shape and are never migrated; a
+// database that still holds them fails closed at partition initialization.
 //
 // Every sixty-four-bit Raft value crosses this boundary as a decimal string
 // and is bound as a BigInt. Nothing passes through a JavaScript Number.

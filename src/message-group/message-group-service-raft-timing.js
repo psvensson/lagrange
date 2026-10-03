@@ -1,20 +1,88 @@
 /**
- * Message Group Service - runtime raft timing reconfiguration and committed
- * log-entry application to the local state machine.
+ * Message Group Service - runtime raft timing reconfiguration through the
+ * operation port, and committed-entry application to the local state
+ * machine (the system-table cache).
  * Requirements: 6.1, 6.2, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4
  */
-import {
-  RAFT_ELECTION_TIMING,
-} from '../raft/constants.js';
-import {
-  applyRuntimeRaftTiming,
-  computeReplicaElectionTimeouts,
-} from '../raft/raft-timing-utils.js';
+import {RAFT_ELECTION_TIMING} from '../raft/constants.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {computeReplicaElectionTimeouts} from
+  '../raft/replica-election-timeouts.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {
-  CDC_BATCH_COMMAND_TYPE,
-  MESSAGE_GROUP_SERVICE_LITERAL,
-} from './message-group-service-runtime-support.js';
+  MESSAGE_GROUP_COMMAND_TYPE,
+  MESSAGE_GROUP_SERVICE_ERROR_MSG,
+  MESSAGE_GROUP_SERVICE_LOG_MSG,
+} from './constants.js';
+import {isMessageGroupCommandType} from
+  './message-group-committed-command-admission.js';
+import {MESSAGE_GROUP_SERVICE_LITERAL} from
+  './message-group-service-runtime-support.js';
+
+function isValidTimingConfig(timingConfig, hasTickInterval) {
+  const tickIntervalMs = timingConfig.tickIntervalMs;
+  return Number.isFinite(timingConfig.heartbeatIntervalMs) &&
+    Number.isFinite(timingConfig.electionTimeoutMinMs) &&
+    Number.isFinite(timingConfig.electionTimeoutMaxMs) &&
+    (!hasTickInterval ||
+      (Number.isFinite(tickIntervalMs) && tickIntervalMs > 0)) &&
+    timingConfig.electionTimeoutMinMs <= timingConfig.electionTimeoutMaxMs;
+}
+
+// One committed CDC change applied to the system-table cache. Its applied
+// announcement runs once the entry's transaction has committed, and reports
+// its own failure: an announcement cannot reverse what committed.
+function applyCommittedCdcChange(service, change, {index, effects},
+  announcement) {
+  service.cdcHandler.applyImmediate(change, {skipSubscriptionCheck: true});
+  effects.afterCommit.push(() => {
+    try {
+      service.emit(MESSAGE_GROUP_SERVICE_LITERAL.CDCAPPLIED, announcement);
+    } catch (error) {
+      service.logger.error(
+        MESSAGE_GROUP_SERVICE_LOG_MSG.COMMITTED_ENTRY_EFFECT_FAILED,
+        {groupId: service.groupId, logIndex: index, error: error.message},
+      );
+    }
+  });
+}
+
+const COMMITTED_COMMAND_APPLICATION = Object.freeze({
+  // A message is tracked by its pending delivery; its entry is the record.
+  [MESSAGE_GROUP_COMMAND_TYPE.MESSAGE]: () => {},
+  [MESSAGE_GROUP_COMMAND_TYPE.CDC]: (service, committed) => {
+    const command = committed.command;
+    applyCommittedCdcChange(service, {
+      tableName: command.tableName,
+      operation: command.operation,
+      data: command.data,
+      timestamp: command.timestamp || service.hlcClock.now().toString(),
+      causeId: normalizeCauseId(command.causeId),
+    }, committed, command);
+  },
+  [MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH]: (service, committed) => {
+    const events = service.normalizeCDCBatchEvents(committed.command.events);
+    for (const event of events) {
+      const causeId = normalizeCauseId(event.causeId);
+      applyCommittedCdcChange(service, {
+        tableName: event.tableName,
+        operation: event.operation,
+        data: event.data,
+        timestamp: event.timestamp,
+        causeId,
+      }, committed, {
+        tableName: event.tableName,
+        operation: event.operation,
+        data: event.data,
+        logIndex: committed.index,
+        causeId,
+      });
+    }
+  },
+  [MESSAGE_GROUP_COMMAND_TYPE.ACK]: (service, {command}) => {
+    service.acknowledgedMessages.add(command.messageId);
+  },
+});
 
 /**
  * Attach runtime raft-timing reconfiguration and committed-entry application
@@ -34,39 +102,30 @@ function assignRaftTiming(serviceClass) {
      * @return {boolean} True when applied to an initialized raft instance.
      */
     applyRaftTimingConfig(timingConfig = {}) {
-      const heartbeatMs = timingConfig.heartbeatIntervalMs;
-      const baseElectionMinMs = timingConfig.electionTimeoutMinMs;
-      const baseElectionMaxMs = timingConfig.electionTimeoutMaxMs;
       const previousTickIntervalMs =
         this.raftTimingConfig?.tickIntervalMs || null;
       const hasTickInterval = Object.prototype.hasOwnProperty.call(
         timingConfig,
         'tickIntervalMs',
       );
-      const tickIntervalMs = timingConfig.tickIntervalMs;
-      if (
-        !Number.isFinite(heartbeatMs) ||
-        !Number.isFinite(baseElectionMinMs) ||
-        !Number.isFinite(baseElectionMaxMs) ||
-        (hasTickInterval &&
-          (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0)) ||
-        baseElectionMinMs > baseElectionMaxMs
-      ) {
+      if (!isValidTimingConfig(timingConfig, hasTickInterval)) {
         return false;
       }
+      const heartbeatMs = timingConfig.heartbeatIntervalMs;
+      const tickIntervalMs = timingConfig.tickIntervalMs;
       const {electionMinMs, electionMaxMs, jitterMs} =
         computeReplicaElectionTimeouts({
           replicaId: this.replicaId,
           replicaIds: this.replicaIds,
-          baseElectionMinMs,
-          baseElectionMaxMs,
+          baseElectionMinMs: timingConfig.electionTimeoutMinMs,
+          baseElectionMaxMs: timingConfig.electionTimeoutMaxMs,
           electionJitterPerReplicaMs:
             RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
         });
       this.raftTimingConfig = {
         heartbeatMs,
-        baseElectionMinMs,
-        baseElectionMaxMs,
+        baseElectionMinMs: timingConfig.electionTimeoutMinMs,
+        baseElectionMaxMs: timingConfig.electionTimeoutMaxMs,
         electionMinMs,
         electionMaxMs,
         tickIntervalMs: hasTickInterval ?
@@ -76,8 +135,7 @@ function assignRaftTiming(serviceClass) {
       const shouldRearmTimer =
         this.replicaIds.length > 1 &&
         (!this.deferElection || this.electionStarted);
-      const applied = applyRuntimeRaftTiming({
-        raft: this.raft,
+      const applied = this.raft?.configureTick?.({
         heartbeatMs,
         electionMinMs,
         electionMaxMs,
@@ -107,9 +165,9 @@ function assignRaftTiming(serviceClass) {
       return tickRuntimeApplied;
     },
     /**
-     * Apply raft provider tick interval when supported by the active provider.
+     * Apply a tick interval to the live port.
      * @param {number} tickIntervalMs
-     * @return {boolean} True when applied to a live raft instance.
+     * @return {boolean} True when the port took it.
      */
     applyRuntimeTickInterval(tickIntervalMs) {
       if (
@@ -119,78 +177,29 @@ function assignRaftTiming(serviceClass) {
       ) {
         return false;
       }
-      if (typeof this.raft.setTickInterval === 'function') {
-        this.raft.setTickInterval(tickIntervalMs);
-        return true;
-      }
-      if (typeof this.raft.configureTickInterval === 'function') {
-        this.raft.configureTickInterval(tickIntervalMs);
-        return true;
-      }
-      if (
-        Object.prototype.hasOwnProperty.call(
-          this.raft,
-          MESSAGE_GROUP_SERVICE_LITERAL.TICKINTERVALMS,
-        )
-      ) {
-        this.raft.tickIntervalMs = tickIntervalMs;
-        return true;
-      }
-      return false;
+      const result = this.raft.configureTick({tickIntervalMs});
+      return result === true ||
+        result?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
     },
     /**
-     * Apply a committed entry to the state machine.
-     * This is called by liferaft when an entry is committed.
+     * Apply one committed entry to the state machine, inside the
+     * transaction that advances the replica's applied state. Synchronous:
+     * every announcement is an effect that runs after that transaction
+     * commits. A committed type the committed-command owner never admits
+     * fails the application (the group's host failure) rather than being
+     * skipped.
      * Requirements: 6.1, 6.2, 6.4, 6.5
-     * @param {Object} command - The committed command
+     * @param {Object} committed - {command, index, term, effects}.
+     * @return {void}
      */
-    applyCommittedEntry(command) {
-      if (!command || !command.type) {
-        return;
+    applyCommittedEntry(committed) {
+      const type = committed.command?.type;
+      if (!isMessageGroupCommandType(type)) {
+        throw new Error(
+          `${MESSAGE_GROUP_SERVICE_ERROR_MSG.UNKNOWN_COMMITTED_COMMAND}: ` +
+          `${JSON.stringify(type ?? null)} at index ${committed.index}`);
       }
-      switch (command.type) {
-      case MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE:
-        // Handle message persistence - already tracked in pendingMessages
-        break;
-      case MESSAGE_GROUP_SERVICE_LITERAL.CDC:
-        this.cdcHandler.applyImmediate(
-          {
-            tableName: command.tableName,
-            operation: command.operation,
-            data: command.data,
-            timestamp: command.timestamp || this.hlcClock.now().toString(),
-            causeId: normalizeCauseId(command.causeId),
-          },
-          {skipSubscriptionCheck: true},
-        );
-        this.emit(MESSAGE_GROUP_SERVICE_LITERAL.CDCAPPLIED, command);
-        break;
-      case CDC_BATCH_COMMAND_TYPE:
-        for (const event of this.normalizeCDCBatchEvents(command.events)) {
-          this.cdcHandler.applyImmediate(
-            {
-              tableName: event.tableName,
-              operation: event.operation,
-              data: event.data,
-              timestamp: event.timestamp,
-              causeId: normalizeCauseId(event.causeId),
-            },
-            {skipSubscriptionCheck: true},
-          );
-          this.emit(MESSAGE_GROUP_SERVICE_LITERAL.CDCAPPLIED, {
-            tableName: event.tableName,
-            operation: event.operation,
-            data: event.data,
-            logIndex: command.index || null,
-            causeId: normalizeCauseId(event.causeId),
-          });
-        }
-        break;
-      case MESSAGE_GROUP_SERVICE_LITERAL.ACK:
-        // Handle acknowledgment
-        this.acknowledgedMessages.add(command.messageId);
-        break;
-      }
+      COMMITTED_COMMAND_APPLICATION[type](this, committed);
     },
   });
 }

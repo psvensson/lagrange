@@ -1,10 +1,6 @@
 import t from 'tap';
-import LifeRaft from '../../src/raft/liferaft.js';
-import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
-import {connectRaftCluster, driveNetwork} from
-  '../distributed/harness/raft-network-host.js';
-import {SeededRandomSource} from '../../src/random/random-source.js';
+import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
 import {buildMembershipPublicationRow} from
   '../../src/control-plane/membership-publication-planning-evidence.js';
 import {acknowledgeMembershipPublication} from
@@ -36,7 +32,7 @@ import {
 // through real ack-state-machine outputs folded into the real gate evaluator.
 //
 // Each node hosts: (a) the real owner-membership driver gated on live raft leadership (step 5-7),
-// which publishes a real row and commits it via raft.command() on a real InMemoryLogAdapter; and
+// which publishes a real row and proposes it through its real raft-rs operation port; and
 // (b) a real per-node ack/gate driver that, once the node has the committed row, runs the real
 // acknowledgeMembershipPublication for its own nodeId, records that ack, folds every collected ack
 // back into the row through the SAME real ack function, and evaluates the real recovery gate over
@@ -63,23 +59,8 @@ const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const EXPECTED = Object.freeze([...IDS]);
 const PUBLICATION_COMMAND_MARKER = '__membershipPublication';
 
-function clusterOptions(seed) {
-  return (id) => ({
-    'election min': '100 ms',
-    'election max': '200 ms',
-    'heartbeat': '30 ms',
-    'write': (_packet, callback) => {
-      if (typeof callback === 'function') {
-        callback(null);
-      }
-    },
-    'Log': InMemoryLogAdapter, // a REAL raft log: commits require real majority replication
-    'randomSource': new SeededRandomSource({seed: seed * IDS.length + IDS.indexOf(id)}),
-  });
-}
-
-function leaderOf(rafts) {
-  return IDS.find((id) => rafts.get(id).state === LifeRaft.LEADER) || null;
+function leaderOf(host) {
+  return IDS.find((id) => host.isLeader(id)) || null;
 }
 
 // Fold every collected ack for a committed row back into it through the REAL ack state machine, in
@@ -116,7 +97,7 @@ function gateOf(row) {
 // publication}. everPending is cluster-level on purpose: the consumer-lag tail is a property of the
 // publication's ack cycle (the owner always sees it first), not something every node must witness —
 // a node that acks late can find the ledger already complete on its first look.
-function hostAckPublisher(net, raft, nodeId, required, ledger) {
+function hostAckPublisher(net, host, nodeId, required, ledger) {
   const state = {
     committedVersion: 0,
     committedRow: null,
@@ -130,7 +111,7 @@ function hostAckPublisher(net, raft, nodeId, required, ledger) {
 
   // The node's committed published version + committed row advance ONLY when the raft log actually
   // commits the publication entry (real majority) — on the leader AND on each follower replicating.
-  raft.on('commit', (command) => {
+  host.onCommitted(nodeId, ({command}) => {
     if (command && command[PUBLICATION_COMMAND_MARKER]) {
       state.committedVersion = command.requiredVersion;
       state.committedRow = command.row;
@@ -142,7 +123,7 @@ function hostAckPublisher(net, raft, nodeId, required, ledger) {
     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
     cdcIntegrationService: {
       canWriteSystemTableLocally: (table) =>
-        table === TABLES.CONTROL_PLANE_PUBLICATIONS && raft.state === LifeRaft.LEADER,
+        table === TABLES.CONTROL_PLANE_PUBLICATIONS && host.isLeader(nodeId),
     },
     ownerMembershipReconcileInFlight: false,
     assertSingleMembershipPartition: () => {},
@@ -168,7 +149,7 @@ function hostAckPublisher(net, raft, nodeId, required, ledger) {
     // The publish: commit a REAL published row through the REAL raft log, but UNACKNOWLEDGED
     // (acknowledgedNodeIds: []) — the ack tail is real (Phase ack driver below), not pre-filled.
     reconcileActiveGateMembershipPublication: async () => {
-      const key = `${raft.term}:${required.version}`;
+      const key = `${host.term(nodeId)}:${required.version}`;
       if (state.lastCommandKey === key) {
         return;
       }
@@ -177,7 +158,7 @@ function hostAckPublisher(net, raft, nodeId, required, ledger) {
         candidate: {
           publicationEpoch: required.version,
           publishedActiveNodeIds: EXPECTED,
-          publisherNodeId: raft.address,
+          publisherNodeId: nodeId,
           requiredAckNodeIds: EXPECTED,
           acknowledgedNodeIds: [], // committed UNACKNOWLEDGED — the real ack cycle follows
         },
@@ -185,16 +166,13 @@ function hostAckPublisher(net, raft, nodeId, required, ledger) {
         nowMs: net.now(),
       });
       state.commands += 1;
-      try {
-        await raft.command({
-          [PUBLICATION_COMMAND_MARKER]: true,
-          requiredVersion: required.version,
-          row,
-        });
-      } catch {
-        // raft.command throws NOTLEADER if leadership was lost between the gate and the write;
-        // the next tick re-evaluates. Not fatal to the scenario.
-      }
+      // A refused proposal (leadership lost between the gate and the write) is not fatal: the
+      // next tick re-evaluates.
+      host.propose(nodeId, {
+        [PUBLICATION_COMMAND_MARKER]: true,
+        requiredVersion: required.version,
+        row,
+      });
     },
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
@@ -278,15 +256,16 @@ async function runAckFailback(seed) {
   const required = {version: 1};
   const ledger = new Map(); // per-run: committed publication_id -> Set of acking nodeIds
   const net = createVirtualNetwork();
-  const rafts = connectRaftCluster(net, IDS, clusterOptions(seed));
+  const host = connectRaftRsNetwork(net, IDS, {partitionId: 'dt6-ack-recovery', seed});
   const pubs = new Map(
-    IDS.map((id) => [id, hostAckPublisher(net, rafts.get(id), id, required, ledger)]),
+    IDS.map((id) => [id, hostAckPublisher(net, host, id, required, ledger)]),
   );
+  host.start();
 
   // Phase A — elect + publish + commit membership v1 UNACKNOWLEDGED; every node then acks and the
   // recovery gate converges ACK_PENDING -> READY cluster-wide.
-  await driveNetwork(net, {untilMs: 600, stepMs: 5});
-  const leaderA = leaderOf(rafts);
+  await host.runUntil(600);
+  const leaderA = leaderOf(host);
   const afterAckV1 = Object.fromEntries(
     IDS.map((id) => [id, gateForEpoch(pubs.get(id), 1)]),
   );
@@ -299,8 +278,8 @@ async function runAckFailback(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await driveNetwork(net, {untilMs: 1600, stepMs: 5});
-  const leaderB = followers.find((id) => rafts.get(id).state === LifeRaft.LEADER) || null;
+  await host.runUntil(1600);
+  const leaderB = followers.find((id) => host.isLeader(id)) || null;
   const afterFailback = {
     leaderBGateV2: leaderB ? gateForEpoch(pubs.get(leaderB), 2) : null,
     oldLeaderGateV2: gateForEpoch(pubs.get(leaderA), 2),
@@ -312,7 +291,7 @@ async function runAckFailback(seed) {
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await driveNetwork(net, {untilMs: 2600, stepMs: 5});
+  await host.runUntil(2600);
   const afterHeal = Object.fromEntries(
     IDS.map((id) => [id, gateForEpoch(pubs.get(id), 2)]),
   );
@@ -321,7 +300,7 @@ async function runAckFailback(seed) {
     [...pubs.values()].map(({coordinator}) => coordinator),
   );
   IDS.forEach((id) => pubs.get(id).stop());
-  IDS.forEach((id) => rafts.get(id).end());
+  host.dispose();
   return {leaderA, leaderB, afterAckV1, afterFailback, afterHeal};
 }
 

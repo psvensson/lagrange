@@ -160,8 +160,7 @@ class JoinMessageGroupRuntimeOwner {
       role: messageGroup.role,
       isLeader: messageGroup.isLeader,
       leaderId: messageGroup.leaderId,
-      raftState: messageGroup.raft?.state,
-      raftTerm: messageGroup.raft?.term,
+      raftTerm: messageGroup.getCurrentTerm(),
     });
 
     // MOVE_REPLICA uses the assignment-token handoff owner to transfer the

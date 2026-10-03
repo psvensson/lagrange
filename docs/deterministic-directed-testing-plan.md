@@ -22,7 +22,7 @@ by [the convergence done-when metric](convergence-donewhen-metric.md).
 | Randomness | [`src/random/random-source.js`](../src/random/random-source.js) | `RealRandomSource` preserves `Math.random`; `SeededRandomSource` provides reproducible streams. |
 | Schedule exploration | [`src/time/pct-scheduler.js`](../src/time/pct-scheduler.js) | `PctScheduler` reorders only work due at the same logical instant and exposes depth-bounded witnesses. |
 | Multi-node event transport | [`test/distributed/harness/virtual-network.js`](../test/distributed/harness/virtual-network.js) | One virtual timeline hosts per-node timers and cross-node messages with partition, heal, stop, and start controls. |
-| Real Raft on the virtual network | [`test/distributed/harness/raft-network-host.js`](../test/distributed/harness/raft-network-host.js) | Real liferaft vote, append, leadership migration, and quorum behavior use the deterministic transport. |
+| Real Raft on the virtual network | [`test/test-helpers/raft-rs-network-host.js`](../test/test-helpers/raft-rs-network-host.js) | Real raft-rs ports use the deterministic transport for delivery and virtual time. Core election timeout randomness is currently platform-owned rather than seedable, so deterministic tests assert semantic outcomes rather than exact event-count replay. |
 
 The seams are opt-in. Production code uses real time and randomness unless a
 test injects the deterministic implementations. Any subsystem exercised under

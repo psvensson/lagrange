@@ -53,8 +53,8 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {durableRecordBootstrap} from
   '../../../src/raft/raft-committed-membership-stamp.js';
 import {
@@ -184,7 +184,7 @@ function applyRestartClass(cluster, restartClass, stamp) {
   const bootstrap = restartClass === RESTART_CLASS.PROCESS_RESTART ?
     durableRecordBootstrap() : stamp;
   return restartWith(cluster, TARGET,
-    {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: bootstrap});
+    {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: bootstrap});
 }
 
 function logShape(cluster, replicaId) {
@@ -210,7 +210,7 @@ for (const {point, restartClass} of CELLS) {
         if (restartClass === RESTART_CLASS.PROCESS_RESTART) {
           assert.throws(() => cluster.addReplica(TARGET,
             [...Object.values(stamp.identities), TARGET],
-            {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+            {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
               durableRecordBootstrap()}), (error) => {
             assert.equal(error.consensus?.outcome,
               RAFT_OPERATION_OUTCOME.CORE_REFUSED);
@@ -314,9 +314,9 @@ test('M4 (pre-gate record): a record whose schema predates the gate is ' +
       'auto_leave FROM gated');
     db.exec('DROP TABLE gated');
     db.close();
-    const hints = replica.request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS];
+    const hints = replica.request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS];
     assert.throws(() => cluster.buildReplica(TARGET, hints,
-      {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+      {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
         durableRecordBootstrap()}), (error) => {
       assert.equal(error.consensus?.reason,
         RUNTIME_REASON.DURABLE_RECORD_INCOMPATIBLE, 'typed INCOMPATIBLE');

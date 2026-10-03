@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
 import {createRuntimeDispatcher} from
@@ -161,14 +161,14 @@ test('durable retirement refuses every active operation before core entry after 
         replicaIdentity: replica.replicaId,
         peerId: registry.raftPeerIdOf(replica.replicaId),
         voters: [registry.raftPeerIdOf(replica.replicaId)],
-        timing: request[RAFT_PARTITION_NODE_REQUEST.TIMING],
-        sendToPeer: request[RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER],
+        timing: request[RAFT_OPERATION_PORT_REQUEST.TIMING],
+        sendToPeer: request[RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER],
         resolvePeerAddress: () => cluster.addressOf(replica.replicaId),
         resolvePeerIdentity: () => replica.replicaId,
         applyCommittedEntry:
-          request[RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY],
+          request[RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY],
         applyTransactionRolledBack: request[
-          RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
+          RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
         emit: () => undefined,
       });
       const mutantBefore = cluster.coreEntryCount();

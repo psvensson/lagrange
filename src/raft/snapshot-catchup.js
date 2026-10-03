@@ -2,7 +2,7 @@
 // raft-snapshot-compacted-follower-catchup, spec
 // solve/specs/raft-snapshot-transfer-install/compacted-follower-catchup-
 // design.md, S4). Leader side: turn one typed install_snapshot decision
-// (emitted by liferaft.js) into a served snapshot transfer — resolve the
+// (emitted by the consensus catch-up decision owner) into a served snapshot transfer — resolve the
 // follower nodeId from the unified address, select the NEWEST eligible
 // sealed generation (index >= the leader boundary; anything older is an
 // unbounded install-dispatch loop, not benign), create one via S1 creation
@@ -228,7 +228,7 @@ async function resolveServableGeneration(options) {
  * catchup_range_empty decision is refused outright — it marks log
  * corruption and must never mint or serve a checkpoint.
  * @param {Object} options dispatch request
- * @param {Object} options.decision typed decision from liferaft emission
+ * @param {Object} options.decision typed decision from consensus catch-up
  * @param {string} options.checkpointsRoot leader durable checkpoint root
  * @param {Object} options.identity leader checkpoint identity
  * @param {Object} options.db live better-sqlite3 handle (creation fallback)

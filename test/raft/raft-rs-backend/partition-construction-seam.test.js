@@ -8,17 +8,12 @@ import Database from 'better-sqlite3';
 
 import {PartitionService} from
   '../../../src/partition/partition-service.js';
-import {LiferaftProvider} from '../../../src/raft/liferaft-provider.js';
-import {RaftRsWasmProvider} from '../../../src/raft/raft-rs-provider.js';
+import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
-import {RAFT_OPERATION_OUTCOME} from
-  '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_METHODS} from
   '../../../src/raft/raft-operation-port.js';
-import {
-  RAFT_PARTITION_NODE_REQUEST,
-  RAFT_PROVIDER_CONTRACT_METHOD,
-} from '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {genesisStamp} from
   '../../../src/raft/raft-committed-membership-stamp.js';
 
@@ -31,9 +26,9 @@ const OPERATION_PORT_FACTORY_DEFINITION =
 // The request fields only the retired backend read: the durable log it wrote
 // and the term it booted from. The rs-raft store owns both.
 const RETIRED_REQUEST_FIELDS = Object.freeze([
-  RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG,
-  RAFT_PARTITION_NODE_REQUEST.INITIAL_TERM,
-  RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK,
+  'durableLog',
+  'initialTerm',
+  RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK,
 ]);
 const PARTITION_ID = 'seam-partition';
 const REPLICA_ID = 'replica-seam-1';
@@ -45,27 +40,22 @@ const TIMING = Object.freeze({
 
 function minimalPartitionRequest(overrides = {}) {
   return {
-    [RAFT_PARTITION_NODE_REQUEST.GROUP_ID]: PARTITION_ID,
-    [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: REPLICA_ID,
-    [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: REPLICA_ID,
-    [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: [REPLICA_ID],
-    [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+    [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: PARTITION_ID,
+    [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: REPLICA_ID,
+    [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: REPLICA_ID,
+    [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: [REPLICA_ID],
+    [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
       genesisStamp([REPLICA_ID]),
-    [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: {
-      end: () => undefined,
-      getLastInfo: async () => ({index: 0, term: 0, committedIndex: 0}),
-    },
-    [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: new Database(':memory:'),
-    [RAFT_PARTITION_NODE_REQUEST.TIMING]: TIMING,
-    [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: {},
-    [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: true,
-    [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: () => Promise.resolve(),
-    [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (value) => value,
-    [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
-    [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
-    [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
+    [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: new Database(':memory:'),
+    [RAFT_OPERATION_PORT_REQUEST.TIMING]: TIMING,
+    [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: {},
+    [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]: true,
+    [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: () => Promise.resolve(),
+    [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (value) => value,
+    [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
+    [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
+    [RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
       undefined,
-    [RAFT_PARTITION_NODE_REQUEST.INITIAL_TERM]: 0,
     ...overrides,
   };
 }
@@ -144,7 +134,7 @@ test('the request carries the partition requirements and no retired field',
     try {
       await service.initialize();
       const [request] = service.requests;
-      const contractFields = Object.values(RAFT_PARTITION_NODE_REQUEST);
+      const contractFields = Object.values(RAFT_OPERATION_PORT_REQUEST);
       assert.deepEqual(
         Object.keys(request).filter((key) => !contractFields.includes(key)),
         [], 'every request field is a declared contract field');
@@ -164,39 +154,16 @@ test('the request carries the partition requirements and no retired field',
     }
   });
 
-test('the default backend returns the same frozen semantic port contract',
-  () => {
-    const request = minimalPartitionRequest();
-    const port = new LiferaftProvider().createPartitionPort(request);
-    try {
-      assert.equal(Object.getPrototypeOf(port), null);
-      assert.equal(Object.isFrozen(port), true);
-      assert.deepEqual(Reflect.ownKeys(port).sort(),
-        [...RAFT_OPERATION_PORT_METHODS].sort());
-      assert.equal(typeof port.readStatus().term, 'number');
-    } finally {
-      port.close();
-      request.durableStorage.close();
-    }
-  });
-
-test('the default liferaft port reports leadership as a semantic role', () => {
+test('the rs-raft backend returns the frozen semantic port contract', () => {
   const request = minimalPartitionRequest();
-  const port = new LiferaftProvider().createPartitionPort(request);
-  const observedRoles = [];
-  const unsubscribe = port.subscribe(RAFT_ROLE.LEADER, () => {
-    observedRoles.push(port.readStatus().role);
-  });
+  const port = createRaftRsOperationPort(request);
   try {
-    assert.equal(port.readStatus().role, RAFT_ROLE.FOLLOWER);
-    const result = port.campaign();
-    assert.equal(result.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
-    assert.equal(port.readStatus().role, RAFT_ROLE.LEADER);
-    assert.equal(port.readStatus().leaderAddress, REPLICA_ID,
-      'the semantic status carries the live leader address separately');
-    assert.deepEqual(observedRoles, [RAFT_ROLE.LEADER]);
+    assert.equal(Object.getPrototypeOf(port), null);
+    assert.equal(Object.isFrozen(port), true);
+    assert.deepEqual(Reflect.ownKeys(port).sort(),
+      [...RAFT_OPERATION_PORT_METHODS].sort());
+    assert.equal(typeof port.readStatus().term, 'number');
   } finally {
-    unsubscribe();
     port.close();
     request.durableStorage.close();
   }
@@ -215,51 +182,14 @@ test('a single-replica partition observes rs-raft leadership through the port',
     }
   });
 
-test('liferaft step routes inbound vote packets through the Raft data event',
-  async () => {
-    const request = minimalPartitionRequest({
-      [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]:
-        'node-1/partition/replica-seam-1',
-      [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (value) => value,
-    });
-    const port = new LiferaftProvider().createPartitionPort(request);
-    const replies = [];
-    try {
-      assert.equal(port.readStatus().term, 0);
-      port.step({
-        payload: {
-          type: 'vote',
-          term: 7,
-          address: 'node-2/partition/replica-seam-2',
-          state: 2,
-          leader: '',
-          last: {term: 0, index: 0},
-        },
-        reply: (packet) => replies.push(packet),
-      });
-      await new Promise((resolve) => setImmediate(resolve));
-      assert.equal(port.readStatus().term, 7,
-        'the higher-term vote reaches LifeRaft through port.step');
-      assert.equal(replies.length, 1,
-        'the semantic step preserves LifeRaft\'s vote-reply callback');
-      assert.equal(replies[0]?.type, 'voted');
-      assert.equal(replies[0]?.data?.granted, true);
-    } finally {
-      port.close();
-      request.durableStorage.close();
-    }
-  });
-
-test('the experimental backend refuses missing named requirements', () => {
-  const provider = new RaftRsWasmProvider();
-  assert.equal(typeof provider[
-    RAFT_PROVIDER_CONTRACT_METHOD.CREATE_PARTITION_PORT], 'function');
+test('the rs-raft operation port refuses missing named requirements', () => {
+  assert.equal(typeof createRaftRsOperationPort, 'function');
   for (const field of [
     'groupId', 'peerId', 'durableStorage', 'timing', 'sendToPeer',
     'resolvePeerAddress', 'applyCommittedEntry', 'bootstrapPeerIds',
   ]) {
     const request = minimalPartitionRequest({[field]: undefined});
-    assert.throws(() => provider.createPartitionPort(request),
+    assert.throws(() => createRaftRsOperationPort(request),
       (error) => error.message.includes(field));
     request.durableStorage?.close();
   }

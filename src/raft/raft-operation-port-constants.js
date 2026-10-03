@@ -104,8 +104,7 @@ const RAFT_LEADERSHIP_TRANSFER_SUCCESSOR = Object.freeze({
 // reserved raft id, no other voter to succeed, a most-caught-up transfer
 // asked of a replica that does not lead, or a request that misses the
 // canonical shape. TRANSFER_IN_PROGRESS is the retryable answer of a
-// proposal the leader drops while a transfer it accepted is running; the
-// backend that cannot transfer refuses with UNSUPPORTED_BACKEND.
+// proposal the leader drops while a transfer it accepted is running.
 const RAFT_LEADERSHIP_TRANSFER_REASON = Object.freeze({
   TRANSFER_REQUESTED: 'transfer-requested',
   TRANSFER_FORWARDED: 'transfer-forwarded',
@@ -118,7 +117,6 @@ const RAFT_LEADERSHIP_TRANSFER_REASON = Object.freeze({
   UNKNOWN_SUCCESSOR: 'transfer-unknown-successor',
   WITHOUT_REPLICA_IDENTITY: 'transfer-without-replica-identity',
   TRANSFER_IN_PROGRESS: 'leadership-transfer-in-progress',
-  UNSUPPORTED_BACKEND: 'leadership-transfer-unsupported-backend',
 });
 
 // A partition's admission of one peer: only the leader proposes it; any

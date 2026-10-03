@@ -408,9 +408,8 @@ Convenience npm commands are `distributed:all`, `distributed:lab`,
 `distributed:gcp:topology`.
 
 Every matrix report records the execution target and profile. Lab reports also
-record the selected physical host names. The matrix runner deliberately has no
-Raft-provider selector: consensus implementation choice is not an execution
-substrate dimension.
+record the selected physical host names. The matrix runner deliberately has no consensus-backend selector: consensus
+implementation choice is not an execution substrate dimension.
 
 For GCP, the default provisioning template is
 `test/distributed/config/gcp-default.json`. The runner overlays its `gcp`

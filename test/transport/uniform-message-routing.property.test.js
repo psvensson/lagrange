@@ -16,7 +16,7 @@ import {describe, it, beforeEach, afterEach, mock} from 'node:test';
 import assert from 'node:assert';
 import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {WORKER_ENTITY_TYPE} from '../../src/worker/worker-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 describe('Property 3: Uniform Message Routing', () => {
@@ -41,7 +41,7 @@ describe('Property 3: Uniform Message Routing', () => {
     await fc.assert(
       fc.asyncProperty(
         fc.uuid(),
-        fc.constantFrom(WORKER_ENTITY_TYPE.PARTITION, WORKER_ENTITY_TYPE.MESSAGE_GROUP),
+        fc.constantFrom(ENTITY_TYPE.PARTITION, ENTITY_TYPE.MESSAGE_GROUP),
         async (replicaId, entityType) => {
           const address = `node-1/${entityType}/${replicaId}`;
           const deliverFn = mock.fn(async (envelope) => ({
@@ -78,9 +78,9 @@ describe('Property 3: Uniform Message Routing', () => {
         }),
         async (partitionReplicaId, msgGroupReplicaId, payload) => {
           const partitionAddress =
-            `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
+            `node-1/${ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
           const msgGroupAddress =
-            `node-1/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
+            `node-1/${ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
 
           const partitionMessages = [];
           const msgGroupMessages = [];
@@ -119,7 +119,7 @@ describe('Property 3: Uniform Message Routing', () => {
       fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
-        fc.constantFrom(WORKER_ENTITY_TYPE.PARTITION, WORKER_ENTITY_TYPE.MESSAGE_GROUP),
+        fc.constantFrom(ENTITY_TYPE.PARTITION, ENTITY_TYPE.MESSAGE_GROUP),
         async (nodeId, replicaId, entityType) => {
           const testRouter = new MessageRouter({
             bootIncarnation: TEST_BOOT_INCARNATION,
@@ -161,9 +161,9 @@ describe('Property 3: Uniform Message Routing', () => {
         }),
         async (partitionReplicaId, msgGroupReplicaId, message) => {
           const partitionAddress =
-            `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
+            `node-1/${ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
           const msgGroupAddress =
-            `node-1/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
+            `node-1/${ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
 
           let partitionReceived = null;
           let msgGroupReceived = null;
@@ -205,9 +205,9 @@ describe('Property 3: Uniform Message Routing', () => {
         }),
         async (partitionReplicaId, msgGroupReplicaId, response) => {
           const partitionAddress =
-            `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
+            `node-1/${ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
           const msgGroupAddress =
-            `node-1/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
+            `node-1/${ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
 
           router.registerWorkerHandler(partitionAddress, async () => response);
           router.registerWorkerHandler(msgGroupAddress, async () => response);
@@ -233,7 +233,7 @@ describe('Property 3: Uniform Message Routing', () => {
         fc.uuid(),
         fc.integer({min: 0, max: 10}),
         async (replicaId, delayMs) => {
-          const address = `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+          const address = `node-1/${ENTITY_TYPE.PARTITION}/${replicaId}`;
 
           router.registerWorkerHandler(address, async () => {
             // Simulate async work

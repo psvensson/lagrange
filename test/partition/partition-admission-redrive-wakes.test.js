@@ -44,7 +44,7 @@ import {RUNTIME_REASON} from '../../src/raft/raft-rs-runtime-owner-constants.js'
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 
@@ -98,7 +98,7 @@ async function openLeader(t, answer, members = [LOCAL]) {
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATIONS.INSERT,
       serviceRow(member, 1));
   }
-  const provider = new ControllablePartitionRaftProvider();
+  const provider = new ControllableConsensusPort();
   provider.confChangeHandler = () => answer;
   const partition = createControllablePartitionService({
     partitionId: PARTITION_ID,

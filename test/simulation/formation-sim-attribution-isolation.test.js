@@ -20,6 +20,16 @@
 // Production work of the ACTIVE generation that genuinely needs a node and
 // has none must still fail loudly: that is witness E, and it is what keeps
 // this repair from being "ignore whatever is hard to attribute".
+//
+// What is compared. The raft-rs core draws each election timeout from the
+// binding's own getrandom (owner decision O2, solve/epics/raft-rs-full-
+// cutover/design-r3-r4-message-groups-worker-wasm-2026-09-23.md), and the
+// scenario's starved seed loses every group to a joiner whose timeout
+// elapses, so neither the charging transcript nor the charged totals repeat
+// exactly from run to run. Runs are compared on what ambient ancestry could
+// corrupt and the core does not decide: no attributed segment opens without
+// an execution node, the same owners run on the same nodes, and every node
+// charges the same owners.
 import {AsyncResource} from 'node:async_hooks';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -38,11 +48,10 @@ import {simulate} from './formation-sim-runner.js';
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SEED = 7;
+const OWNER_NODE_SEPARATOR = '@';
 
 // The raw charging transcript: every segment the seam opened, named by the
-// owner it charged and the execution node it charged on, in order. This is
-// the quantity the report is derived from, so comparing it is strictly
-// stronger than comparing report hashes.
+// owner it charged and the execution node it charged on, in order.
 function withTranscript(body) {
   const entries = [];
   const original = FormationTurnAttribution.prototype.enterSegment;
@@ -51,8 +60,7 @@ function withTranscript(body) {
   ) {
     const result = original.call(
       this, owner, countDispatch, countHandoff, executionNodeId);
-    entries.push(`${this.activeOwner}@${this.activeExecutionNodeId}` +
-      `${countDispatch ? 'D' : ''}${countHandoff ? 'H' : ''}`);
+    entries.push(`${this.activeOwner}${OWNER_NODE_SEPARATOR}${this.activeExecutionNodeId}`);
     return result;
   };
   return Promise.resolve(body(entries)).finally(() => {
@@ -60,62 +68,67 @@ function withTranscript(body) {
   });
 }
 
-function chargingDigest(report) {
+// Attributed segments opened with no node, and which owner ran on which node.
+function attributionShape(entries) {
+  const attributed = entries.filter((entry) =>
+    !entry.startsWith(`${FORMATION_OWNER.UNATTRIBUTED}${OWNER_NODE_SEPARATOR}`));
+  return {
+    unbound: attributed.filter((entry) =>
+      entry.endsWith(`${OWNER_NODE_SEPARATOR}null`)).length,
+    ownersOnNodes: [...new Set(attributed)].sort(),
+  };
+}
+
+// Which owners each node was charged for, read from the report.
+function chargingShape(report) {
   return JSON.stringify(report.formationMetrics.nodes.map((node) => ({
-    nodeId: node.nodeId, busyMs: node.busyMs,
-    ownerChargedMs: node.ownerChargedMs,
+    nodeId: node.nodeId,
+    owners: Object.keys(node.ownerSegments)
+      .filter((owner) => node.ownerSegments[owner] > 0).sort(),
   })));
 }
 
-function firstDivergence(left, right) {
-  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
-    if (left[index] !== right[index]) {
-      return {index, left: left.slice(index - 2, index + 2),
-        right: right.slice(index - 2, index + 2)};
-    }
-  }
-  return null;
+async function sampleShapes(entries, invoke) {
+  entries.length = 0;
+  const charging = chargingShape(await invoke());
+  return {charging, attribution: attributionShape([...entries])};
 }
 
-test('A. three same-seed runs in one process share one charging transcript',
+function assertSameShapes(observed, reference, name) {
+  assert.equal(observed.attribution.unbound, 0,
+    `${name}: attributed work opened with no execution node`);
+  assert.deepEqual(observed.attribution.ownersOnNodes,
+    reference.attribution.ownersOnNodes, `${name}: owners ran on other nodes`);
+  assert.equal(observed.charging, reference.charging,
+    `${name}: nodes were charged for other owners`);
+}
+
+test('A. three same-seed runs in one process share one attribution shape',
   async () => {
     // No warm-up run: the FIRST simulation is one of the three compared.
     await withTranscript(async (entries) => {
-      const transcripts = [];
-      const digests = [];
+      const samples = [];
       for (let run = 0; run < 3; run += 1) {
-        entries.length = 0;
-        digests.push(chargingDigest(await simulate(SEED)));
-        transcripts.push([...entries]);
+        samples.push(await sampleShapes(entries, () => simulate(SEED)));
       }
-      for (let run = 1; run < transcripts.length; run += 1) {
-        const divergence = firstDivergence(transcripts[0], transcripts[run]);
-        assert.equal(divergence, null,
-          `run ${run + 1} diverged from run 1: ` +
-          `${JSON.stringify(divergence)}`);
-        assert.equal(digests[run], digests[0],
-          `run ${run + 1} charged different totals`);
+      for (let run = 0; run < samples.length; run += 1) {
+        assertSameShapes(samples[run], samples[0], `run ${run + 1}`);
       }
-      assert.ok(transcripts[0].length > 0, 'the transcript is not empty');
+      assert.ok(samples[0].attribution.ownersOnNodes.length > 0,
+        'the transcript is not empty');
     });
   });
 
 test('C. the caller\'s async ancestry cannot decide the simulation', async () => {
-  // The deterministic reproduction of the whole class: the same seed invoked
-  // through unrelated ambient host ancestry must charge identically, and must
-  // open the same segments on the same nodes in the same order.
+  // The same seed invoked through unrelated ambient host ancestry must open
+  // attributed segments only on nodes, and the same owners on the same nodes.
   await withTranscript(async (entries) => {
     const runInside = (resource) => new Promise((resolve, reject) => {
       resource.runInAsyncScope(() => {
         simulate(SEED).then(resolve, reject);
       });
     });
-    const sample = async (invoke) => {
-      entries.length = 0;
-      const digest = chargingDigest(await invoke());
-      return {digest, transcript: [...entries]};
-    };
-    const plain = await sample(() => simulate(SEED));
+    const plain = await sampleShapes(entries, () => simulate(SEED));
     const cases = {
       'an ambient AsyncResource ancestor':
         () => runInside(new AsyncResource('ambient-host-work')),
@@ -128,13 +141,9 @@ test('C. the caller\'s async ancestry cannot decide the simulation', async () =>
         return simulate(SEED);
       },
     };
+    assertSameShapes(plain, plain, 'plain');
     for (const [name, invoke] of Object.entries(cases)) {
-      const observed = await sample(invoke);
-      const divergence = firstDivergence(plain.transcript, observed.transcript);
-      assert.equal(divergence, null,
-        `${name} changed the charging transcript: ${JSON.stringify(divergence)}`);
-      assert.equal(observed.digest, plain.digest,
-        `${name} changed the charged totals`);
+      assertSameShapes(await sampleShapes(entries, invoke), plain, name);
     }
   });
 });
@@ -143,19 +152,11 @@ test('D. one generation never supplies identity to the next', async () => {
   // Generation A runs first and leaves its continuations behind; B must begin
   // neutral rather than inheriting whatever node A was last executing.
   await withTranscript(async (entries) => {
-    entries.length = 0;
-    const a = chargingDigest(await simulate(SEED));
-    const generationA = [...entries];
-    entries.length = 0;
-    const b = chargingDigest(await simulate(SEED));
-    const generationB = [...entries];
-    assert.equal(b, a, 'generation B charged differently from generation A');
-    const divergence = firstDivergence(generationA, generationB);
-    assert.equal(divergence, null,
-      `generation B diverged from A: ${JSON.stringify(divergence)}`);
-    // The root of each generation is node-neutral: harness plumbing belongs
-    // to no simulated process, and must not be handed a node by ancestry.
-    assert.ok(generationB.length > 0);
+    const a = await sampleShapes(entries, () => simulate(SEED));
+    const b = await sampleShapes(entries, () => simulate(SEED));
+    assertSameShapes(a, a, 'generation A');
+    assertSameShapes(b, a, 'generation B');
+    assert.ok(b.attribution.ownersOnNodes.length > 0);
   });
 });
 
@@ -190,20 +191,20 @@ test('E. active-generation production work that needs a node still fails closed'
     }
   });
 
-test('B. the same seed charges the same under plain node and under node --test',
+test('B. the same seed charges the same owners under plain node and under node --test',
   async () => {
-    const inProcess = chargingDigest(await simulate(SEED));
+    const inProcess = chargingShape(await simulate(SEED));
     const script =
       'const {simulate} = await import(\'./test/simulation/formation-sim-runner.js\');' +
       'const report = await simulate(7);' +
       'process.stdout.write(JSON.stringify(report.formationMetrics.nodes.map(' +
-      '(node) => ({nodeId: node.nodeId, busyMs: node.busyMs, ' +
-      'ownerChargedMs: node.ownerChargedMs}))));';
+      '(node) => ({nodeId: node.nodeId, owners: Object.keys(node.ownerSegments)' +
+      '.filter((owner) => node.ownerSegments[owner] > 0).sort()}))));';
     const plainNode = execFileSync(
       process.execPath, ['--input-type=module', '-e', script],
       {cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 1 << 24});
     assert.equal(plainNode, inProcess,
-      'the test runner\'s own async activity changed what the simulator charged');
+      'the test runner\'s own async activity changed which owners were charged');
   });
 
 test('F. no production work of a run advances after simulate() returns', async () => {

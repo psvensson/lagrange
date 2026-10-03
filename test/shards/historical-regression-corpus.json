@@ -101,7 +101,6 @@
         "src/partition/partition-service-core-base.js",
         "src/partition/partition-service-raft-init-base.js",
         "src/partition/partition-service-table-bootstrap.js",
-        "src/raft/liferaft.js",
         "src/raft/snapshot-catchup-constants.js",
         "src/raft/snapshot-catchup.js",
         "src/raft/snapshot-install.js",
@@ -128,7 +127,6 @@
         "src/transport/message-router.js"
       ],
       "knownDetectors": [
-        "test/convergence/dt6-bulk-transfer-budget.test.js",
         "test/raft/snapshot-transfer-protocol.test.js",
         "test/transport/bulk-transfer-lane-isolation.test.js"
       ],
@@ -270,8 +268,9 @@
         "src/raft/snapshot-checkpoint-store.js",
         "src/raft/snapshot-compaction.js",
         "src/raft/snapshot-retention.js",
-        "src/raft/sqlite-log-adapter-callback-api.js",
-        "src/raft/sqlite-log-adapter.js"
+        "src/raft/sqlite-log-adapter-query-api.js",
+        "src/raft/sqlite-log-adapter.js",
+        "src/raft/sqlite-raft-state-constants.js"
       ],
       "knownDetectors": [
         "test/raft/snapshot-compaction-catchup-integration.test.js",

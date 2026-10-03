@@ -11,6 +11,7 @@ import {
 import {
   readNodeRuntimeSuppliedTimeSource,
 } from '../node/node-runtime-local-authorities.js';
+import {getMessageGroupDbPath} from '../storage/data-directory-manager.js';
 
 function createBootstrapServiceSeedDelegateMethods() {
   return {
@@ -335,6 +336,14 @@ function buildPhaseExecutionDelegates(service) {
       }
       return BOOTSTRAP_DEFAULT.partitionDbPath;
     },
+    // No in-memory default: a message-group replica's consensus record is
+    // durable, so an absent data directory is its MISSING_DB_PATH refusal.
+    // The layout is the one a joining node's replica is placed by.
+    resolveMessageGroupDbPath: (groupId, replicaId) =>
+      self.dataDirectoryManager?.isInitialized() ?
+        getMessageGroupDbPath(
+          self.dataDirectoryManager.getDataDir(), groupId, replicaId) :
+        null,
   };
 }
 

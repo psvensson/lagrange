@@ -1,12 +1,11 @@
 /**
  * Report metadata owner for the distributed runner (test/distributed/run.js):
- * the raft provider a run resolves, the source-fingerprint stamp, and the
- * execution target/profile/hosts a distributed matrix run records.
+ * the source-fingerprint stamp and the execution target/profile/hosts a
+ * distributed matrix run records.
  */
 
 import {
   CLI,
-  RAFT_PROVIDER_DEFAULTS,
   DISTRIBUTED_EXECUTION_TARGET,
   DISTRIBUTED_MATRIX_PROFILE,
   DISTRIBUTED_EXECUTION_ENV,
@@ -21,21 +20,6 @@ const DISTRIBUTED_EXECUTION_EMPTY_LENGTH = 0;
 // exact source bytes the run booted; empty when no fingerprinted launch
 // config reached the report (the oracle reads that as fingerprint_missing).
 const REPORT_SOURCE_FINGERPRINT_ABSENT = '';
-
-function resolveRunRaftProvider(config, env = process.env) {
-  const configuredProvider = config?.raftProvider;
-  if (typeof configuredProvider === 'string' &&
-    configuredProvider.trim().length > 0) {
-    return configuredProvider.trim().toLowerCase();
-  }
-
-  const envValue = env?.[RAFT_PROVIDER_DEFAULTS.envKey];
-  if (typeof envValue === 'string' && envValue.trim().length > 0) {
-    return envValue.trim().toLowerCase();
-  }
-
-  return RAFT_PROVIDER_DEFAULTS.provider;
-}
 
 // The source-fingerprint stamp: the fingerprint the run computed for its
 // docker config (the value the nodes boot with as SRC_FINGERPRINT), or the
@@ -94,7 +78,6 @@ function buildReportMetadata(
   env = process.env,
 ) {
   const metadata = {
-    raftProvider: resolveRunRaftProvider(runConfig),
     configPath: String(args?.config || CLI.DEFAULT_CONFIG),
     scenarioFilter: String(args?.scenario || SCENARIO_FILTER_ALL),
     ...buildReportSourceFingerprintMetadata(runConfig),
@@ -117,5 +100,4 @@ export {
   SCENARIO_FILTER_ALL,
   buildDistributedExecutionMetadata,
   buildReportMetadata,
-  resolveRunRaftProvider,
 };

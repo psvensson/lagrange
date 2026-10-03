@@ -5,14 +5,25 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  createControllableMessageGroupService,
   createTestTransport,
   registerMessageGroupServiceLifecycleHooks,
   setTestPortBase,
 } from './message-group-service-test-support.js';
 import {
+  ControllableConsensusPort,
+} from '../test-helpers/controllable-consensus-port.js';
+import {
   MessageGroupOperationLedger,
   MessageGroupService,
+  RaftRole,
 } from '../../src/message-group/message-group-service.js';
+import {
+  MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME,
+} from '../../src/message-group/constants.js';
+import {
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
 import {
 } from '../../src/message-group/message-group-forwarding-owner.js';
 import {
@@ -24,10 +35,6 @@ import {
   COLUMN,
   TABLES,
 } from '../../src/constants/index.js';
-import LifeRaft from '@markwylde/liferaft';
-import {
-  RAFT_EVENT,
-} from '../../src/raft/constants.js';
 import {
 } from '../../src/control-plane/control-plane-constants.js';
 import {
@@ -36,6 +43,7 @@ import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 setTestPortBase(25000);
 registerMessageGroupServiceLifecycleHooks();
@@ -43,12 +51,12 @@ registerMessageGroupServiceLifecycleHooks();
 test('MessageGroupService - querySystemCache returns data', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
     await service.subscribeToCDC('nodes');
@@ -87,12 +95,12 @@ test('MessageGroupService - querySystemCache returns data', async (t) => {
 test('MessageGroupService - getReadOnlyCache returns wrapper', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     const cache = service.getReadOnlyCache();
     t.ok(cache, 'Should return cache');
@@ -111,14 +119,14 @@ test('MessageGroupService - getReadOnlyCache returns wrapper', async (t) => {
 test('MessageGroupService - single replica becomes leader', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       replicaIds: ['mg-1-r1'],
       peerAddresses: [`${nodeId}/message-group/mg-1-r1`],
       transport: router,
-    });
+    }));
 
     let leaderEvent = null;
     service.on('leaderElected', (event) => {
@@ -131,9 +139,9 @@ test('MessageGroupService - single replica becomes leader', async (t) => {
     t.equal(service.isLeaderReplica(), true, 'Should become leader');
     t.equal(service.getLeaderId(), 'mg-1-r1', 'Should be own leader');
     t.equal(
-      service.raft?.state,
-      LifeRaft.LEADER,
-      'single-replica initialization should promote the live raft owner to leader immediately',
+      service.raft.readStatus().role,
+      RaftRole.LEADER,
+      'single-replica initialization should make its consensus core the leader immediately',
     );
     t.equal(
       service.isCurrentRaftLeader(),
@@ -149,33 +157,31 @@ test('MessageGroupService - single replica becomes leader', async (t) => {
 });
 
 test('MessageGroupService - single-replica initialization fails closed ' +
-  'without raft change()', async (t) => {
+  'when its port refuses the campaign', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
-      groupId: 'mg-missing-change',
-      replicaId: 'mg-missing-change-r1',
+    const port = new ControllableConsensusPort();
+    port.setCampaignHandler(() => ({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      reason: 'test-campaign-refused',
+    }));
+    const service = createControllableMessageGroupService({
+      groupId: 'mg-campaign-refused',
+      replicaId: 'mg-campaign-refused-r1',
       nodeId,
-      replicaIds: ['mg-missing-change-r1'],
-      peerAddresses: [`${nodeId}/message-group/mg-missing-change-r1`],
+      replicaIds: ['mg-campaign-refused-r1'],
+      peerAddresses: [`${nodeId}/message-group/mg-campaign-refused-r1`],
       transport: router,
-    });
-    const originalReconcileRaftPeersFromCache =
-      service.reconcileRaftPeersFromCache.bind(service);
-    service.reconcileRaftPeersFromCache = function(...args) {
-      const result = originalReconcileRaftPeersFromCache(...args);
-      if (this.raft) {
-        this.raft.change = undefined;
-        this.raft.end = () => {};
-      }
-      return result;
-    };
+    }, port);
 
     await t.rejects(
       service.initialize(),
-      /single-replica leadership requires raft\.change/,
-      'single-replica initialization should fail instead of mutating leader state without the live raft owner',
+      {code: MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED},
+      'single-replica initialization should fail instead of publishing leader state its core never took',
     );
+    t.equal(service.isLeaderReplica(), false,
+      'a refused campaign publishes no leadership');
+    t.equal(service.raft, null, 'the refused port is released');
 
     await service.shutdown().catch(() => {});
   } finally {
@@ -186,7 +192,8 @@ test('MessageGroupService - single-replica initialization fails closed ' +
 test('MessageGroupService - leader activation dedupes same-term flaps', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const port = new ControllableConsensusPort();
+    const service = createControllableMessageGroupService({
       groupId: 'mg-leader-gate',
       replicaId: 'mg-leader-gate-r1',
       replicaIds: ['mg-leader-gate-r1', 'mg-leader-gate-r2'],
@@ -198,7 +205,7 @@ test('MessageGroupService - leader activation dedupes same-term flaps', async (t
       transport: router,
       deferElection: true,
       leaderActivationStabilizationMs: 20,
-    });
+    }, port);
 
     await service.initialize();
     await service.subscribeToCDC('nodes');
@@ -219,10 +226,10 @@ test('MessageGroupService - leader activation dedupes same-term flaps', async (t
       leaderEvents += 1;
     });
 
-    service.raft.term = 11;
-    service.raft.emit(RAFT_EVENT.LEADER);
-    service.raft.emit(RAFT_EVENT.LEADER);
-    service.raft.emit(RAFT_EVENT.LEADER);
+    port.setTerm(11);
+    port.setRole(RaftRole.LEADER);
+    port.setRole(RaftRole.LEADER);
+    port.setRole(RaftRole.LEADER);
 
     await new Promise((resolve) => setTimeout(resolve, 80));
 
@@ -247,12 +254,12 @@ test('MessageGroupService - leader activation dedupes same-term flaps', async (t
 test('MessageGroupService - getStatus returns complete status', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
 
@@ -276,12 +283,12 @@ test('MessageGroupService - rebalancer coordinator refresh uses owner sync path'
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-sync-owner',
         replicaId: 'mg-sync-owner-r1',
         nodeId,
         transport: router,
-      });
+      }));
       const coordinator = {
         id: 'coordinator-b',
       };
@@ -342,7 +349,7 @@ test('MessageGroupService routes forward-topology cache repair through the ' +
     nodeService.setSystemCacheProxy(cache);
 
     const repairCalls = [];
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId: 'node-a',
@@ -358,7 +365,7 @@ test('MessageGroupService routes forward-topology cache repair through the ' +
         setSystemTableCache() {},
         setMessageRouter() {},
       },
-    });
+    }));
 
     const repairedRowCount = await service.applyAuthoritativeForwardTopologyRows(
       TABLES.MESSAGE_GROUPS,
@@ -383,12 +390,12 @@ test('MessageGroupService routes forward-topology cache repair through the ' +
 test('MessageGroupService - shutdown cleans up', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
 

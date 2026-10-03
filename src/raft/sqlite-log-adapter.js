@@ -1,7 +1,7 @@
 /**
- * SQLiteLogAdapter - SQLite-backed log storage for liferaft.
+ * SQLiteLogAdapter - SQLite-backed consensus log storage.
  * Used by PartitionService for durable data storage.
- * Implements the liferaft Log interface for persistence.
+ * Implements the persistent log operations used by Lagrange consensus and snapshot owners.
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 12.1, 12.2, 12.3, 12.4, 12.5
  */
 
@@ -22,20 +22,19 @@ import {
   VIRGIN_BOUNDARY,
 } from './snapshot-boundary.js';
 import {
-  installSQLiteLogAdapterCallbackApi,
+  installSQLiteLogAdapterQueryApi,
+} from './sqlite-log-adapter-query-api.js';
+import {
   SQLITE_RAFT_STATE_KEY,
   SQLITE_RAFT_STATE_UPSERT_SQL,
-} from './sqlite-log-adapter-callback-api.js';
-import {
-  installSQLiteLogAdapterBatchApi,
-} from './sqlite-log-adapter-batch-api.js';
+} from './sqlite-raft-state-constants.js';
+
 
 const LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED = 'Database instance is required';
 const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log schema detected; manual migration required';
 const LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_LOG_LOG_INDE = 'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
 const LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX = 'DELETE FROM _raft_log WHERE log_index >= ?';
 const LOCAL_STR_UPDATE_RAFT_LOG_SET_COMMAND_WHERE_LOG_IN = 'UPDATE _raft_log SET command = ? WHERE log_index = ?';
-const LOCAL_STR_1JYKG = 'DELETE FROM _raft_log WHERE log_index > ?';
 const LOCAL_STR_DELETE_COMMITTED_PREFIX =
   'DELETE FROM _raft_log WHERE log_index <= ?';
 const LOCAL_STR_COMMITTED_TRUNCATION_REFUSED =
@@ -44,9 +43,9 @@ const LOCAL_STR_COMMITTED_TRUNCATION_REFUSED =
 import {resolveTimeSource} from '../time/time-source.js';
 
 /**
- * SQLite log adapter for liferaft.
+ * SQLite log adapter for consensus persistence.
  * Used by PartitionService for durable data storage.
- * Implements the liferaft Log interface with both sync and async methods.
+ * Implements the consensus log interface with both sync and async methods.
  */
 class SQLiteLogAdapter {
   /**
@@ -210,13 +209,13 @@ class SQLiteLogAdapter {
   }
 
   // ============================================================
-  // Liferaft Log Interface Methods (sync versions)
+  // Consensus Log Interface Methods (sync versions)
   // Requirements: 12.2, 12.3, 12.4, 12.5
   // ============================================================
 
   /**
    * Get the last log entry info.
-   * Required by liferaft for log consistency checks.
+   * Required by consensus owners for log consistency checks.
    * Requirements: 12.2
    * @return {Object} {index, term, committedIndex}
    */
@@ -336,7 +335,7 @@ class SQLiteLogAdapter {
 
   /**
    * Check if a log entry exists at the given index.
-   * Required by liferaft for log consistency checks.
+   * Required by consensus owners for log consistency checks.
    * Requirements: 12.2
    * @param {number} index - Log index to check
    * @return {boolean} True if entry exists
@@ -360,7 +359,7 @@ class SQLiteLogAdapter {
 
   /**
    * Save a command to the log.
-   * Required by liferaft for command replication.
+   * Required by consensus owners for command replication.
    * Requirements: 12.2
    * @param {Object} command - Command to save
    * @param {number} term - Term to save with
@@ -377,10 +376,6 @@ class SQLiteLogAdapter {
       term,
       index,
       committed: false,
-      responses: [{
-        address: this.node ? this.node.address : 'unknown',
-        ack: true,
-      }],
       command,
     };
 
@@ -411,90 +406,8 @@ class SQLiteLogAdapter {
   }
 
   /**
-   * Acknowledge a command from a follower.
-   * Required by liferaft for quorum tracking.
-   * Requirements: 12.2
-   * @param {number} index - Index of entry
-   * @param {string} address - Address of follower
-   * @return {Object} Updated entry
-   */
-  commandAck(index, address) {
-    // Follower-ack recency actuals for the durability-fitness successor
-    // probe (CL-039: never shed leadership without a viable successor).
-    // Self-acks are stamped at saveCommand, not here, so every commandAck
-    // address is a genuine peer.
-    const ackAddress = String(address || '').trim();
-    if (ackAddress.length > 0 && ackAddress !== this.node?.address) {
-      if (!this.lastFollowerAckAtByAddress) {
-        this.lastFollowerAckAtByAddress = new Map();
-      }
-      this.lastFollowerAckAtByAddress.set(ackAddress, this.timeSource.now());
-    }
-    if (!this.isOpen()) {
-      return {responses: []};
-    }
-    const row = this.db.prepare(
-      'SELECT command FROM _raft_log WHERE log_index = ?',
-    ).get(index);
-
-    if (!row) {
-      return {responses: []};
-    }
-
-    const entry = this.readEntryRow(row);
-
-    // Add acknowledgment if not already present
-    if (!entry.responses) {
-      entry.responses = [];
-    }
-    const existingIndex = entry.responses.findIndex((r) => r.address === address);
-    if (existingIndex === -1) {
-      entry.responses.push({address, ack: true});
-    }
-
-    // Update in SQLite
-    this.db.prepare(
-      LOCAL_STR_UPDATE_RAFT_LOG_SET_COMMAND_WHERE_LOG_IN,
-    ).run(JSON.stringify(entry), index);
-    // CL-018: do NOT advance the watermark here. An ack is not a commit —
-    // the premature set made getUncommittedEntriesUpToIndex(index) return
-    // an empty suffix in the same quorum check that was about to commit
-    // this very entry (fatal once the scan was watermark-bounded), and it
-    // was the source of the old watermark-regression wart. The watermark
-    // advances in commit().
-
-    return entry;
-  }
-
-  /**
-   * Get uncommitted entries up to index.
-   * Required by liferaft for commit processing.
-   * Requirements: 12.2
-   * @param {number} index - Max index
-   * @param {number} _term - Term (unused)
-   * @return {Array} Uncommitted entries
-   */
-  getUncommittedEntriesUpToIndex(index, _term) {
-    if (!this.isOpen()) {
-      return [];
-    }
-    const committedIndex = this.getCommittedIndex();
-    // CL-018: rows at or below the committed watermark are committed by
-    // raft's prefix-commit semantics — scanning and JSON-parsing them on
-    // every heartbeat was the top self-time frame in the seed freeze
-    // windows. Bound the scan to the genuinely-uncommitted suffix.
-    const rows = this.db.prepare(
-      'SELECT log_index, term, command FROM _raft_log WHERE log_index <= ? AND log_index > ? ORDER BY log_index',
-    ).all(index, committedIndex);
-
-    return rows
-      .map((row) => this.readEntryRow(row, committedIndex))
-      .filter((entry) => !entry.committed);
-  }
-
-  /**
    * Commit an entry.
-   * Required by liferaft for commit processing.
+   * Required by consensus owners for commit processing.
    * Requirements: 12.2
    * @param {number} index - Index to commit
    * @return {Object} Committed entry
@@ -540,7 +453,7 @@ class SQLiteLogAdapter {
 
   /**
    * Get the last entry.
-   * Required by liferaft for log consistency.
+   * Required by consensus owners for log consistency.
    * Requirements: 12.2
    * @return {Object} Last entry or default
    */
@@ -569,42 +482,7 @@ class SQLiteLogAdapter {
   }
 
   // getEntryInfoBefore / getEntryBefore / getEntriesAfter live in the
-  // callback-api mixin (boundary-aware since raft-snapshot-atomic-install).
-
-  /**
-   * Remove all entries after index.
-   * Required by liferaft for log truncation.
-   * Requirements: 12.2
-   * @param {number} index - Index to remove after
-   */
-  removeEntriesAfter(index) {
-    if (!this.isOpen()) {
-      return;
-    }
-    // Raft-safety invariant (CL-040/041/042 class): committed entries are
-    // permanent and MUST NEVER be truncated — deleting a committed entry
-    // destroys agreed history and, cluster-wide across a quorum, is the
-    // cardinal Raft safety violation. Base liferaft's conflict truncation
-    // (index.js) calls this UNGUARDED; a truncation whose floor falls below
-    // committedIndex therefore silently deleted committed entries and produced
-    // the replica_operations-p1 log HOLE (committedIndex advanced to 228 while
-    // entries 192-228 were deleted on a quorum), which froze the durable
-    // watermark at the first gap and wedged the ledger leader forever.
-    //
-    // Clamp the deletion floor to committedIndex so only the UNCOMMITTED
-    // conflicting suffix is ever removed. This is a NO-OP on the normal path
-    // (a legitimate conflict is always above the committed prefix, so
-    // index >= committedIndex and the clamp does nothing); it only bites the
-    // anomalous case, where refusing to delete committed history is the correct
-    // Raft response, not obeying it. truncateConflictingSameIndexTail already
-    // guards its own call (liferaft.js), but the invariant belongs at the
-    // adapter so EVERY caller — including base liferaft — is covered.
-    if (!isValidRaftLogIndex(index)) {
-      return;
-    }
-    const safeIndex = this.safeExclusiveTruncationIndex(index);
-    this.db.prepare(LOCAL_STR_1JYKG).run(safeIndex);
-  }
+  // query-api mixin (boundary-aware since raft-snapshot-atomic-install).
 
   // compactCommittedEntries (the S5 proof-gated decision table — the
   // proofless call keeps the frozen refusal), refreshSnapshotBoundaryFromStore
@@ -645,20 +523,6 @@ class SQLiteLogAdapter {
     }
   }
 
-  safeExclusiveTruncationIndex(index) {
-    const committedIndex = this.refreshCommittedIndexCacheFromStore();
-    // A truncation aimed at or below the snapshot boundary is a legitimate,
-    // expected consequence of has() answering compacted lineage — clamp it
-    // silently instead of tripping the committed-truncation raft-safety
-    // witness, which stays reserved for genuinely anomalous requests in
-    // (boundary, committedIndex).
-    const boundary = this.getSnapshotBoundary().lastIncludedIndex;
-    if (index < committedIndex && index > boundary) {
-      this.recordCommittedTruncationBlock(index, committedIndex);
-    }
-    return Math.max(index, committedIndex);
-  }
-
   safeInclusiveTruncationIndex(index) {
     const committedIndex = this.refreshCommittedIndexCacheFromStore();
     const boundary = this.getSnapshotBoundary().lastIncludedIndex;
@@ -676,7 +540,7 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return 0;
     }
-    // CL-018: liferaft reads committedIndex on every packet build; a
+    // CL-018: consensus callers read committedIndex frequently; a
     // sqlite SELECT per read is measurable on a saturated seed. The
     // SQLiteLogAdapter is the only writer class, but more than one facade can
     // hold an adapter over the same database. Mutation paths refresh this
@@ -693,7 +557,7 @@ class SQLiteLogAdapter {
   }
 
   /**
-   * Liferaft reads committedIndex as a property on the log adapter.
+   * Consensus compatibility callers read committedIndex as a log-adapter property.
    * Keep it synchronized with persisted raft state.
    * @return {number} Committed index.
    */
@@ -713,10 +577,8 @@ class SQLiteLogAdapter {
       return;
     }
     // CL-018: the raft committedIndex is monotonic by definition. The
-    // leader's commandAck calls this for EVERY ack — including catch-up
-    // acks at OLD indexes, which used to REGRESS the persisted watermark
-    // until the next head ack (CL-015 adjacent finding #2). Clamp here so
-    // every caller is monotonic.
+    // Stale callers can still present an older observed index after a newer
+    // durable commit. Clamp here so every caller is monotonic.
     const current = this.refreshCommittedIndexCacheFromStore();
     if (index <= current) {
       return;
@@ -726,72 +588,9 @@ class SQLiteLogAdapter {
     ).run(SQLITE_RAFT_STATE_KEY.COMMITTED_INDEX, String(index));
     this._committedIndexCache = index;
   }
-
-  /**
-   * Append entries to the log.
-   * Requirements: 4.3
-   * @param {Array} entries - Log entries to append
-   * @param {Function} callback - Completion callback
-   */
-  append(entries, callback) {
-    if (!this.isOpen()) {
-      callback(null);
-      return;
-    }
-    try {
-      // Use INSERT OR REPLACE to handle duplicate indices gracefully
-      // This can happen during Raft log replication when entries are re-sent
-      const insertMany = this.db.transaction((entries) => {
-        for (const entry of entries) {
-          this.persistEntry(entry);
-        }
-      });
-
-      insertMany(entries);
-      callback(null);
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  /**
-   * Truncate log from a specific index.
-   * Requirements: 4.4
-   * @param {number} fromIndex - Index to truncate from
-   * @param {Function} callback - Completion callback
-   */
-  truncateFrom(fromIndex, callback) {
-    if (!this.isOpen()) {
-      callback(null);
-      return;
-    }
-    try {
-      if (!isValidRaftLogIndex(fromIndex)) {
-        callback(null);
-        return;
-      }
-      const safeIndex = this.safeInclusiveTruncationIndex(fromIndex);
-      this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX)
-        .run(safeIndex);
-      callback(null);
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  /**
-   * End/cleanup the log adapter.
-   * Called by liferaft when the node is ended.
-   * For SQLite, we don't close the database here as it's managed externally.
-   */
-  end() {
-    // No-op for SQLite - database is managed by PartitionService
-    // The database will be closed when PartitionService.shutdown() is called
-  }
 }
 
-installSQLiteLogAdapterCallbackApi(SQLiteLogAdapter);
-installSQLiteLogAdapterBatchApi(SQLiteLogAdapter);
+installSQLiteLogAdapterQueryApi(SQLiteLogAdapter);
 installSnapshotCompactionApi(SQLiteLogAdapter);
 
 export {SQLiteLogAdapter};

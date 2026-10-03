@@ -144,6 +144,7 @@ function runHook(refLines, extraEnv = {}, at = null) {
   delete env.LAGRANGE_GATE_PUSHED_SHA;
   delete env.LAGRANGE_GATE_RED_MAIN_CHECKED;
   delete env.LAGRANGE_PUSH_SKIP_TESTS;
+  delete env.LAGRANGE_PUSH_PROVE_BRANCH;
   Object.assign(env, extraEnv);
   const result = spawnSync('bash', [HOOK],
     {cwd: repo, encoding: UTF8, input: refLines, env});
@@ -167,6 +168,29 @@ function trendCalls(recorded) {
   return recorded.filter((entry) => entry.name === 'trend');
 }
 
+test('ordinary non-main branch pushes are preservation fast paths', () => {
+  const refLine =
+    `refs/heads/feature ${shas.head} refs/heads/feature ${ZERO_SHA}\n`;
+  const run = runHook(refLine);
+  assert.equal(run.status, 0, run.output);
+  assert.deepEqual(materializerCalls(run.recorded), [],
+    'preservation does not materialize or prove the tree');
+  assert.deepEqual(contentStageCalls(run.recorded), [],
+    'preservation does not run static or behavioral gates');
+  assert.match(run.output, /non-main branch preservation push/u);
+  assert.match(run.output, /NOT merge, Quest-land, release, or publication approval/u);
+});
+
+test('a non-main branch can explicitly request the full local proof', () => {
+  const refLine =
+    `refs/heads/feature ${shas.head} refs/heads/feature ${ZERO_SHA}\n`;
+  const run = runHook(refLine, {LAGRANGE_PUSH_PROVE_BRANCH: '1'});
+  assert.equal(run.status, 0, run.output);
+  const [call] = materializerCalls(run.recorded);
+  assert.ok(call, 'the explicit proof request materializes the pushed commit');
+  assert.equal(call.argv[1], shas.head);
+});
+
 test('the hook hands the pushed commit to the materializer and runs no content stage itself', () => {
   const refLine = `refs/heads/main ${shas.head} refs/heads/main ${shas.base}\n`;
   const run = runHook(refLine);
@@ -182,6 +206,38 @@ test('the hook hands the pushed commit to the materializer and runs no content s
     'no unused-files, lint, ratchet, cycle or export stage ran in the ' +
     'working tree');
   assert.match(run.output, /materialize-pushed-tree/u);
+});
+
+test('a non-main branch push is preservation-only and skips the local proof gate', () => {
+  const run = runHook(
+    `refs/heads/topic ${shas.head} refs/heads/topic ${ZERO_SHA}\n`);
+  assert.equal(run.status, 0, run.output);
+  assert.deepEqual(materializerCalls(run.recorded), [],
+    'preservation does not materialize or prove the branch');
+  assert.deepEqual(contentStageCalls(run.recorded), [],
+    'preservation does not run lint, ratchets or behavioral proof');
+  assert.match(run.output, /non-main branch preservation push/u);
+  assert.match(run.output, /NOT merge, Quest-land, release, or publication approval/u);
+});
+
+test('a non-main branch can explicitly request the full local proof gate', () => {
+  const run = runHook(
+    `refs/heads/topic ${shas.head} refs/heads/topic ${ZERO_SHA}\n`,
+    {LAGRANGE_PUSH_PROVE_BRANCH: '1'});
+  assert.equal(run.status, 0, run.output);
+  const [call] = materializerCalls(run.recorded);
+  assert.ok(call, 'opt-in branch proof materializes the pushed commit');
+  assert.equal(call.argv[1], shas.head);
+});
+
+test('a mixed main plus side-branch push cannot use preservation fast path', () => {
+  const run = runHook(
+    `refs/heads/main ${shas.head} refs/heads/main ${shas.base}\n` +
+    `refs/heads/topic ${shas.head} refs/heads/topic ${ZERO_SHA}\n`);
+  assert.equal(run.status, 0, run.output);
+  assert.equal(materializerCalls(run.recorded).length, 1,
+    'main in the push keeps the full proof boundary');
+  assert.doesNotMatch(run.output, /non-main branch preservation push/u);
 });
 
 // The three things the lint stage decides: what reaches eslint, what the

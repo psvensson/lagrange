@@ -62,8 +62,8 @@ function createMetaServiceReplica(lifecycle, definition, replicaConfig) {
  * @param {string} serviceId - The meta-service ID to start.
  * @param {Object} [startOptions] - Start options passed
  *   through to lifecycle.startReplica.
- * @return {{port: number, endpoint: Object}|null} Startup
- *   result from the lifecycle, or null if replica not found.
+ * @return {Promise<{started: boolean, port?: number, endpoint?: Object}|null>}
+ *   Startup result from the lifecycle, or null if replica not found.
  * @throws {Error} If lifecycle is missing or serviceId is
  *   not a meta-service.
  */

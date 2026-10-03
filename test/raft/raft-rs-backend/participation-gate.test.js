@@ -45,8 +45,8 @@ import {
   COMMITTED_MEMBERSHIP_STAMP_KIND,
   PARTICIPATION_GATE,
 } from '../../../src/raft/raft-committed-membership-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RealTimeSource} from '../../../src/time/time-source.js';
 import {
   REPLACE_COMPLETION_VERDICT,
@@ -200,7 +200,7 @@ function oracleStamp(cluster, leader, genesis) {
 function addTarget(cluster, stamp) {
   const hints = [...Object.values(stamp.identities), TARGET];
   return cluster.addReplica(TARGET, hints,
-    {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
+    {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
 }
 
 function targetDurable(cluster) {

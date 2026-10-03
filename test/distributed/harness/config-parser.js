@@ -15,7 +15,6 @@ import {
   LOAD_DEFAULTS,
   DEBUG_TRACE_DEFAULTS,
   BENCHMARK_GATE_DEFAULTS,
-  RAFT_PROVIDER_DEFAULTS,
   DETERMINISTIC_DEBUG_DEFAULTS,
 } from './constants.js';
 import {
@@ -213,8 +212,6 @@ function mergeWithDefaults(partial = {}) {
     },
     ...(partition ? {partition} : {}),
     ...(scenarioOverrides ? {scenarios: scenarioOverrides} : {}),
-    raftProvider:
-      partial.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),
     ...(partial.gcp ? {gcp: partial.gcp} : {}),
   };

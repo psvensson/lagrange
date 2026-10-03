@@ -1,18 +1,24 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
-import {EventEmitter} from 'node:events';
+import os from 'node:os';
+import path from 'node:path';
+import Database from 'better-sqlite3';
 import {
   WasmServiceReplica,
   ENTRY_TYPE,
   MESSAGE_OP,
 } from '../../src/wasm-service/wasm-service-replica.js';
+import {SessionKVStore} from '../../src/wasm-service/session-kv-store.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {WASM_SERVICE_COMMAND_REFUSAL} from
+  '../../src/wasm-service/wasm-service-committed-command-admission.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {COLUMN, SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  WASM_SERVICE_SUBSYSTEM,
   WASM_SERVICE_ERROR_MSG,
   WASM_SERVICE_DEFAULT,
   READ_CONSISTENCY_MODE,
@@ -28,7 +34,7 @@ import {AddressManager} from
 import {LeaderActivationScheduler} from '../../src/raft/leader-activation-scheduler.js';
 
 /**
- * Initialize singletons required by RaftReplicaBase.
+ * Initialize the singletons a WasmServiceReplica reads.
  */
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -68,8 +74,37 @@ function defaultOpts(overrides = {}) {
     replicaIds: ['wsr-1'],
     transport: null,
     serviceDefinitionId: 'svc-def-1',
-    dbPath: ':memory:',
+    dbPath: path.join(os.tmpdir(), 'wasm-service-replica-unit', 'unopened.db'),
     ...overrides,
+  };
+}
+
+/**
+ * A replica whose session KV store runs over a scratch connection: these
+ * unit tests drive its message, apply and publication logic without opening
+ * its consensus port (the raft-rs WASM group witness covers the port).
+ * @param {Object} options - Replica options.
+ * @return {WasmServiceReplica} The replica.
+ */
+function createReplica(options) {
+  const replica = new WasmServiceReplica(options);
+  replica.kvStore = new SessionKVStore(new Database(':memory:'));
+  return replica;
+}
+
+const BASE64 = 'base64';
+
+function committedRecord(command, index = 1) {
+  return {command, index, term: 1, effects: []};
+}
+
+function kvSet(sessionId, key, text) {
+  return {
+    type: ENTRY_TYPE.KV_SET,
+    sessionId,
+    key,
+    value: Buffer.from(text).toString(BASE64),
+    valueEncoding: BASE64,
   };
 }
 
@@ -142,63 +177,55 @@ describe('WasmServiceReplica', () => {
 
   describe('constructor', () => {
     it('should set entityType to WASM_SERVICE', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       assert.equal(
         replica.entityType, SERVICE_TYPE.WASM_SERVICE,
       );
       replica.kvStore.close();
     });
 
-    it('should set subsystemName to REPLICA', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
-      assert.equal(
-        replica.subsystemName,
-        WASM_SERVICE_SUBSYSTEM.REPLICA,
-      );
-      replica.kvStore.close();
-    });
-
     it('should store serviceDefinitionId', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       assert.equal(
         replica.serviceDefinitionId, 'svc-def-1',
       );
       replica.kvStore.close();
     });
 
-    it('should initialize kvStore', () => {
+    it('opens its kvStore only with its consensus port', () => {
       const replica = new WasmServiceReplica(defaultOpts());
-      assert.notEqual(replica.kvStore, null);
-      replica.kvStore.close();
+      assert.equal(replica.kvStore, null);
+      assert.equal(replica.raft, null);
+      assert.equal(replica.db, null);
     });
 
     it('should initialize timerManager', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       assert.notEqual(replica.timerManager, null);
       assert.strictEqual(replica.timerManager.replica, replica);
       replica.kvStore.close();
     });
 
     it('should initialize safetyInterval', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       assert.notEqual(replica.safetyInterval, null);
       replica.kvStore.close();
     });
 
     it('should default wasmExecutor to null', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       assert.equal(replica.wasmExecutor, null);
       replica.kvStore.close();
     });
 
     it('should default portAllocation to null', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       assert.equal(replica.portAllocation, null);
       replica.kvStore.close();
     });
 
     it('should use default read consistency', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       assert.equal(
         replica.readConsistency,
         WASM_SERVICE_DEFAULT.READ_CONSISTENCY,
@@ -207,7 +234,7 @@ describe('WasmServiceReplica', () => {
     });
 
     it('should accept custom read consistency', () => {
-      const replica = new WasmServiceReplica(defaultOpts({
+      const replica = createReplica(defaultOpts({
         readConsistency: READ_CONSISTENCY_MODE.EVENTUAL,
       }));
       assert.equal(
@@ -218,7 +245,7 @@ describe('WasmServiceReplica', () => {
     });
 
     it('should use default write consistency', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       assert.equal(
         replica.writeConsistency,
         WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY,
@@ -229,143 +256,122 @@ describe('WasmServiceReplica', () => {
 
   describe('proposeEntry', () => {
     it('should reject when raft is null', async () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       await assert.rejects(
-        () => replica.proposeEntry({type: 'test'}),
+        () => replica.proposeEntry({type: ENTRY_TYPE.KV_SET, key: 'k'}),
         {message: WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY},
       );
       replica.kvStore.close();
     });
 
-    it('should call raft.command with the entry', async () => {
-      const replica = new WasmServiceReplica(defaultOpts());
-      let receivedEntry = null;
-      replica.raft = {};
-      replica.raftProvider = {
-        propose(_raft, entry, cb) {
-          receivedEntry = entry;
-          cb(null);
-        },
+    it('proposes the entry through its port with a base64 value',
+      async () => {
+        const replica = createReplica(defaultOpts());
+        let received = null;
+        replica.raft = {
+          propose: async (command) => {
+            received = command;
+            return {outcome: RAFT_OPERATION_OUTCOME.CORE_OK};
+          },
+        };
+        await replica.proposeEntry({
+          type: ENTRY_TYPE.KV_SET, sessionId: 's', key: 'k',
+          value: Buffer.from('v'),
+        });
+        assert.deepStrictEqual(received, kvSet('s', 'k', 'v'));
+        replica.kvStore.close();
+      });
+
+    it('rejects a proposal its port refused', async () => {
+      const replica = createReplica(defaultOpts());
+      replica.raft = {
+        propose: async () => ({
+          outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+          reason: 'not-leader',
+        }),
       };
-      const entry = {type: ENTRY_TYPE.KV_SET, key: 'k'};
-      await replica.proposeEntry(entry);
-      assert.deepStrictEqual(receivedEntry, entry);
+      await assert.rejects(
+        () => replica.proposeEntry({type: ENTRY_TYPE.KV_SET, key: 'k'}),
+        {message: WASM_SERVICE_ERROR_MSG.PROPOSAL_REFUSED, reason: 'not-leader'},
+      );
       replica.kvStore.close();
     });
 
-    it('should reject when raft.command returns error',
-      async () => {
-        const replica = new WasmServiceReplica(defaultOpts());
-        replica.raft = {};
-        replica.raftProvider = {
-          propose(_raft, _entry, cb) {
-            cb(new Error('raft error'));
-          },
-        };
-        await assert.rejects(
-          () => replica.proposeEntry({type: 'test'}),
-          {message: 'raft error'},
-        );
-        replica.kvStore.close();
-      });
+    it('refuses an unknown command type before proposing', async () => {
+      const replica = createReplica(defaultOpts());
+      replica.raft = {};
+      await assert.rejects(
+        () => replica.proposeEntry({type: 'not_a_command'}),
+        {reason: WASM_SERVICE_COMMAND_REFUSAL.UNKNOWN_TYPE, retryable: false},
+      );
+      await assert.rejects(
+        () => replica.proposeEntry({key: 'untyped'}),
+        {reason: WASM_SERVICE_COMMAND_REFUSAL.UNKNOWN_TYPE},
+      );
+      replica.kvStore.close();
+    });
   });
 
   describe('applyCommittedEntry', () => {
-    it('should apply KV_SET entries to kvStore', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
-      const result = replica.applyCommittedEntry({
-        type: ENTRY_TYPE.KV_SET,
-        sessionId: 'sess-1',
-        key: 'mykey',
-        value: Buffer.from('hello'),
-      });
+    it('should apply KV_SET records to kvStore', () => {
+      const replica = createReplica(defaultOpts());
+      const result = replica.applyCommittedEntry(
+        committedRecord(kvSet('sess-1', 'mykey', 'hello')));
       assert.equal(result.accepted, true);
       const val = replica.kvStore.get('sess-1', 'mykey');
       assert.deepStrictEqual(val, Buffer.from('hello'));
       replica.kvStore.close();
     });
 
-    it('should apply KV_DELETE entries to kvStore', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+    it('should apply KV_DELETE records to kvStore', () => {
+      const replica = createReplica(defaultOpts());
       replica.kvStore.applySet(
         'sess-1', 'mykey', Buffer.from('data'),
       );
-      const result = replica.applyCommittedEntry({
+      replica.applyCommittedEntry(committedRecord({
         type: ENTRY_TYPE.KV_DELETE,
         sessionId: 'sess-1',
         key: 'mykey',
-      });
-      assert.equal(result.accepted, true);
+      }));
       const val = replica.kvStore.get('sess-1', 'mykey');
       assert.equal(val, null);
       replica.kvStore.close();
     });
 
-    it('should apply KV_DELETE_SESSION entries', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+    it('should apply KV_DELETE_SESSION records', () => {
+      const replica = createReplica(defaultOpts());
       replica.kvStore.applySet(
         'sess-1', 'k1', Buffer.from('v1'),
       );
       replica.kvStore.applySet(
         'sess-1', 'k2', Buffer.from('v2'),
       );
-      const result = replica.applyCommittedEntry({
+      replica.applyCommittedEntry(committedRecord({
         type: ENTRY_TYPE.KV_DELETE_SESSION,
         sessionId: 'sess-1',
-      });
-      assert.equal(result.accepted, true);
+      }));
       const all = replica.kvStore.getAll('sess-1');
       assert.equal(all.size, 0);
       replica.kvStore.close();
     });
 
-    it('should handle null entry gracefully', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
-      const result = replica.applyCommittedEntry(null);
-      assert.equal(result.accepted, true);
+    it('fails a committed record whose type it never admits', () => {
+      const replica = createReplica(defaultOpts());
+      for (const command of [null, {foo: 'bar'}, {type: 'unknown_type'}]) {
+        assert.throws(
+          () => replica.applyCommittedEntry(committedRecord(command)),
+          {message: new RegExp(
+            WASM_SERVICE_ERROR_MSG.UNKNOWN_COMMITTED_COMMAND)},
+        );
+      }
       replica.kvStore.close();
     });
 
-    it('should handle entry without type gracefully', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
-      const result = replica.applyCommittedEntry({foo: 'bar'});
-      assert.equal(result.accepted, true);
-      replica.kvStore.close();
-    });
-
-    it('should handle unknown entry type gracefully', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
-      const result = replica.applyCommittedEntry({
-        type: 'unknown_type',
-      });
-      assert.equal(result.accepted, true);
-      replica.kvStore.close();
-    });
-  });
-
-  describe('onCommit', () => {
-    it('should delegate to applyCommittedEntry', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
-      replica.onCommit({
-        type: ENTRY_TYPE.KV_SET,
-        sessionId: 's1',
-        key: 'k1',
-        value: Buffer.from('v1'),
-      });
-      const val = replica.kvStore.get('s1', 'k1');
-      assert.deepStrictEqual(val, Buffer.from('v1'));
-      replica.kvStore.close();
-    });
-
-    it('should update safety interval applied index', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
-      replica.onCommit({
-        type: ENTRY_TYPE.KV_SET,
-        sessionId: 's1',
-        key: 'k1',
-        value: Buffer.from('v1'),
-        index: 42,
-      });
+    it('advances the safety interval applied index from the record', () => {
+      const replica = createReplica(defaultOpts());
+      replica.applyCommittedEntry(committedRecord(kvSet('s1', 'k1', 'v1'), 42));
+      assert.deepStrictEqual(
+        replica.kvStore.get('s1', 'k1'), Buffer.from('v1'));
       assert.equal(
         replica.safetyInterval.localAppliedIndex, 42,
       );
@@ -376,7 +382,7 @@ describe('WasmServiceReplica', () => {
   describe('onBecameLeader', () => {
     it('should reconstruct timers via timerManager',
       async () => {
-        const replica = new WasmServiceReplica(defaultOpts());
+        const replica = createReplica(defaultOpts());
         let reconstructCalled = false;
         replica.timerManager.reconstructTimers = async () => {
           reconstructCalled = true;
@@ -391,7 +397,7 @@ describe('WasmServiceReplica', () => {
       });
 
     it('should start safety interval broadcasts', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       replica.timerManager.reconstructTimers = async () => 0;
       replica.onBecameLeader();
       assert.notEqual(replica._safetyBroadcastTimer, null);
@@ -402,7 +408,7 @@ describe('WasmServiceReplica', () => {
 
   describe('onBecameFollower', () => {
     it('should stop all timers', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       let stopAllCalled = false;
       replica.timerManager.stopAll = () => {
         stopAllCalled = true;
@@ -413,7 +419,7 @@ describe('WasmServiceReplica', () => {
     });
 
     it('should stop safety broadcasts', () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       replica.timerManager.reconstructTimers = async () => 0;
       replica.onBecameLeader();
       assert.notEqual(replica._safetyBroadcastTimer, null);
@@ -426,7 +432,7 @@ describe('WasmServiceReplica', () => {
   describe('handleMessage', () => {
     it('should route read operations via read router',
       async () => {
-        const replica = new WasmServiceReplica(defaultOpts({
+        const replica = createReplica(defaultOpts({
           readConsistency: READ_CONSISTENCY_MODE.EVENTUAL,
         }));
         replica.kvStore.applySet(
@@ -449,7 +455,7 @@ describe('WasmServiceReplica', () => {
 
     it('should forward reads to leader in leader_only mode',
       async () => {
-        const replica = new WasmServiceReplica(defaultOpts({
+        const replica = createReplica(defaultOpts({
           readConsistency: READ_CONSISTENCY_MODE.LEADER_ONLY,
         }));
         replica.leaderId = 'wsr-leader';
@@ -466,7 +472,7 @@ describe('WasmServiceReplica', () => {
       });
 
     it('should forward writes when not leader', async () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       replica.leaderId = 'wsr-leader';
       const result = await replica.handleMessage({
         payload: {
@@ -483,7 +489,7 @@ describe('WasmServiceReplica', () => {
 
     it('should return error for unknown operations',
       async () => {
-        const replica = new WasmServiceReplica(defaultOpts());
+        const replica = createReplica(defaultOpts());
         const result = await replica.handleMessage({
           payload: {operation: 'unknown'},
         });
@@ -498,7 +504,7 @@ describe('WasmServiceReplica', () => {
   describe('flushRoleUpdate', () => {
     it('writes role updates through owner callback', async () => {
       let writePayload = null;
-      const replica = new WasmServiceReplica(defaultOpts({
+      const replica = createReplica(defaultOpts({
         systemTableCache: createWriteReadySystemTableCache(),
         roleUpdateWriter: async (payload) => {
           writePayload = payload;
@@ -520,7 +526,7 @@ describe('WasmServiceReplica', () => {
     it('writes role updates through CDC owner when no callback',
       async () => {
         let updateArgs = null;
-        const replica = new WasmServiceReplica(defaultOpts({
+        const replica = createReplica(defaultOpts({
           systemTableCache: createWriteReadySystemTableCache(),
           cdcIntegrationService: {
             updateSystemTableRow: async (...args) => {
@@ -553,7 +559,7 @@ describe('WasmServiceReplica', () => {
   describe('flushLeaderNodeUpdate', () => {
     it('writes leader updates through owner callback', async () => {
       let writePayload = null;
-      const replica = new WasmServiceReplica(defaultOpts({
+      const replica = createReplica(defaultOpts({
         systemTableCache: createWriteReadySystemTableCache(),
         leaderNodeUpdateWriter: async (payload) => {
           writePayload = payload;
@@ -577,7 +583,7 @@ describe('WasmServiceReplica', () => {
     it('writes leader updates through CDC owner when no callback',
       async () => {
         let updateArgs = null;
-        const replica = new WasmServiceReplica(defaultOpts({
+        const replica = createReplica(defaultOpts({
           systemTableCache: createWriteReadySystemTableCache(),
           cdcIntegrationService: {
             updateSystemTableRow: async (...args) => {
@@ -614,7 +620,7 @@ describe('WasmServiceReplica', () => {
 
     it('clears pending update when replica is not leader',
       async () => {
-        const replica = new WasmServiceReplica(defaultOpts({
+        const replica = createReplica(defaultOpts({
           systemTableCache: createWriteReadySystemTableCache(),
         }));
         replica.isLeader = false;
@@ -631,7 +637,7 @@ describe('WasmServiceReplica', () => {
   describe('retry timers', () => {
     it('schedules role retry when services table is not write-ready',
       async () => {
-        const replica = new WasmServiceReplica(defaultOpts({
+        const replica = createReplica(defaultOpts({
           systemTableCache: {
             filter: () => [],
           },
@@ -649,7 +655,7 @@ describe('WasmServiceReplica', () => {
 
     it('schedules leader retry when services table is not write-ready',
       async () => {
-        const replica = new WasmServiceReplica(defaultOpts({
+        const replica = createReplica(defaultOpts({
           systemTableCache: {
             filter: () => [],
           },
@@ -669,40 +675,13 @@ describe('WasmServiceReplica', () => {
 
   describe('shutdown', () => {
     it('should stop timers and close kvStore', async () => {
-      const replica = new WasmServiceReplica(defaultOpts());
+      const replica = createReplica(defaultOpts());
       replica.timerManager.reconstructTimers = async () => 0;
       replica.onBecameLeader();
       await replica.shutdown();
       assert.equal(replica.kvStore, null);
       assert.equal(replica._safetyBroadcastTimer, null);
       assert.equal(replica.timerManager.activeTimers.size, 0);
-    });
-  });
-
-  describe('leader activation stabilization', () => {
-    it('cancels delayed leader activation on candidate demotion', async () => {
-      const replica = new WasmServiceReplica(defaultOpts({
-        cdcIntegrationService: {},
-        replicaIds: ['wsr-1', 'wsr-2'],
-        leaderActivationStabilizationMs: 10,
-        leaderActivationNodeSpacingMs: 0,
-      }));
-      replica.timerManager.reconstructTimers = async () => 0;
-      let leaderEvents = 0;
-      replica.on('leaderElected', () => {
-        leaderEvents += 1;
-      });
-      replica.raft = new EventEmitter();
-      replica.wireRaftEvents();
-
-      replica.raft.emit('leader');
-      replica.raft.emit('candidate');
-
-      await new Promise((resolve) => setTimeout(resolve, 40));
-
-      assert.equal(leaderEvents, 0);
-      assert.equal(replica._safetyBroadcastTimer, null);
-      await replica.shutdown();
     });
   });
 });

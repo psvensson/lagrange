@@ -12,10 +12,10 @@ land on is [rebalancing](process-rebalancing.md).
 Every partition is a Raft consensus group. Current placement policy uses odd
 replica counts (three by default, with its minimum floor from
 `POLICY_DEFAULT.MIN_REPLICA_COUNT`) so an added voter improves failure tolerance
-instead of only raising the write quorum. Consensus runs on a local wrapper
-around a fork of liferaft (`@markwylde/liferaft`, wrapped by
-`src/raft/liferaft.js`) which adds catch-up batching and a committed-entry write
-guard.
+instead of only raising the write quorum. Consensus runs through the semantic Raft operation port backed by the vendored
+raft-rs/WASM runtime. Each consensus-owning replica keeps its durable Raft state
+in its owned SQLite database; committed membership comes from raft-rs
+`ConfState`, not service/cache projections.
 
 The active entity kinds share replica-operation accounting, but they do not all
 replicate state through Raft:
@@ -23,13 +23,15 @@ replicate state through Raft:
 | Group type | State | Raft log | Consensus today |
 | --- | --- | --- | --- |
 | Partition | SQLite rows | SQLite, persistent | Yes |
-| Message group | transport only | in-memory | Yes, but log state is ephemeral across a full-group restart |
+| Message group | replicated transport/application commands | SQLite, persistent | Yes, through the raft-rs operation port |
 | Runtime-service Cell (`runtime_service`) | disposable process-local execution state; durable application state remains in tables | — | No; Cells are placed and repaired through `replica_operations`, not a service-state Raft group |
-| Legacy WASM scaffold (`wasm_service`) | `WasmServiceReplica` exposes session/KV, safety-interval, and timer classes | — | Not active; production startup constructs neither a `wasm_service` rebalancer nor its Raft instance |
+| WASM service consensus path (`wasm_service`) | session/KV, safety-interval, timer and service-state commands | SQLite, persistent | raft-rs when placement supplies an explicit canonical replica set; otherwise startup fails closed |
 
-Current WASI component execution uses Binding-derived `runtime_service` Cells.
-The `wasm_service` enum and replica classes remain compatibility/scaffold code;
-they are not evidence of an active replicated service-state path.
+Current WASI component execution continues to use Binding-derived
+`runtime_service` Cells for placed service execution. The `wasm_service`
+consensus lifecycle is a separate state-replication path and does not invent
+membership locally: it requires placement/topology to supply the founding
+replica set.
 
 ### SQLite partition logs are bounded by production snapshotting
 

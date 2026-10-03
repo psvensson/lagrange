@@ -53,11 +53,15 @@ function filesMatching(pattern, {outsideRaft = false} = {}) {
     pattern.test(code)).map(({relative}) => relative).sort();
 }
 
-test('T7: the committed-membership read has exactly two callers outside ' +
-  'src/raft - the bootstrap read and the REPLACE completion witness', () => {
+test('T7: the committed-membership read has exactly three callers outside ' +
+  'src/raft - the bootstrap read, the REPLACE completion witness and a ' +
+  'message group\'s witness read of its own configuration', () => {
   assert.deepEqual(filesMatching(
     /RAFT_OPERATION\.READ_COMMITTED_MEMBERSHIP|\.readCommittedMembership\(/u,
     {outsideRaft: true}), [
+    // R3: a message-group replica reads its applied ConfState only through
+    // its own port's witness read.
+    'src/message-group/message-group-consensus-port.js',
     'src/node/replica-handler-committed-membership-methods.js',
     'src/partition/partition-service-raft-membership-administration.js',
   ]);
@@ -87,6 +91,9 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
   [
     // V1a: the seed founds its system partitions from an explicit stamp.
     'src/bootstrap/phases/seed-partitions-phase.js',
+    // R3: a message-group replica without a durable record founds its
+    // group from the replica set it was created with.
+    'src/message-group/message-group-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
   ]);
   assert.deepEqual(filesMatching(/\bdurableRecordBootstrap\(/u)
@@ -105,6 +112,7 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
   assert.deepEqual(filesMatching(
     /BOOTSTRAP_MEMBERSHIP\b|\bbootstrapMembership\b|bootstrap_membership/u), [
     // Producers.
+    'src/message-group/message-group-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
     'src/rebalancer/committed-membership-bootstrap-read.js',
     'src/rebalancer/rebalance-coordinator-operation-creation.js',
@@ -127,7 +135,7 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/raft/raft-rs-operation-port.js',
     // The field names' owners.
     'src/constants/fields.js',
-    'src/raft/raft-provider-contract-constants.js',
+    'src/raft/raft-operation-port-request.js',
     'src/rebalancer/replica-operation-constants.js',
     'src/rebalancer/replica-operation-progress.js',
   ].sort());

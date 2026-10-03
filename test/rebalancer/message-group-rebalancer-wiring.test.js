@@ -12,6 +12,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 function createMockCache({
   nodes = [],
@@ -211,13 +212,13 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
   });
 
   await t.test('leader message-group service wires UnifiedRebalancer runtime', async (t) => {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId: 'node-1',
       replicaIds: ['mg-1-r1'],
       transport: createMockTransport(),
-    });
+    }));
 
     const nodeService = NodeService.getInstance();
     nodeService.setSystemCacheProxy(createMockCache({
