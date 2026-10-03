@@ -906,63 +906,92 @@ test('KeyRangeManager ID-only evaluation remains a valid split path',
     manager.shutdown();
   });
 
-test('coalesced evaluation context reserves priority capacity without eviction',
+test('coalesced evaluation context reserves priority without evicting admitted reasons',
   (t) => {
     const {manager} = buildManager({executeMergeCandidate: null});
     const limit = 1024;
-    const ordinaryLimit = limit - 1;
-    const initialPartitionIds = Array.from(
+    const ordinaryReasonLimit = limit - 1;
+    const existingPartitionIds = Array.from(
       {length: limit},
       (_unused, index) => 'existing-' + String(index),
     );
-    const initialReasons = Array.from(
+    const nextPartitionIds = Array.from(
+      {length: limit},
+      (_unused, index) => 'next-' + String(index),
+    );
+    const existingReasons = Array.from(
       {length: limit},
       (_unused, index) => 'reason-' + String(index),
     );
+    const expectedReasons = existingReasons.slice(0, ordinaryReasonLimit);
 
     const admitted = manager.mergeRequestedEvaluationContext(
       null,
       {
-        partitionIds: initialPartitionIds,
-        reasonCodes: initialReasons,
+        partitionIds: existingPartitionIds,
+        reasonCodes: existingReasons,
       },
     );
-
-    t.equal(admitted.partitionIds.length, limit);
-    for (let index = 0; index < limit; index += 1) {
-      t.equal(admitted.partitionIds[index], initialPartitionIds[index]);
-    }
-    t.equal(admitted.reasonCodes.length, ordinaryLimit);
-    for (let index = 0; index < ordinaryLimit; index += 1) {
-      t.equal(admitted.reasonCodes[index], initialReasons[index]);
-    }
+    t.same(
+      admitted.reasonCodes,
+      expectedReasons,
+      'initial admission reserves one priority slot and keeps first reasons',
+    );
+    t.same(
+      admitted.partitionIds,
+      existingPartitionIds,
+      'partition IDs retain the full first-wins capacity',
+    );
 
     const prioritized = manager.mergeRequestedEvaluationContext(
       admitted,
       {
-        partitionIds: ['later-partition'],
+        partitionIds: nextPartitionIds,
         reasonCodes: ['write_activity', 'later-reason'],
       },
     );
-    t.equal(prioritized.partitionIds.length, limit);
-    for (let index = 0; index < limit; index += 1) {
-      t.equal(prioritized.partitionIds[index], initialPartitionIds[index]);
-    }
+    t.same(
+      prioritized.reasonCodes.slice(0, ordinaryReasonLimit),
+      expectedReasons,
+      'adding priority never evicts an already-admitted diagnostic',
+    );
+    t.equal(
+      prioritized.reasonCodes[ordinaryReasonLimit],
+      'write_activity',
+      'write_activity owns the reserved final slot',
+    );
     t.equal(prioritized.reasonCodes.length, limit);
-    for (let index = 0; index < ordinaryLimit; index += 1) {
-      t.equal(prioritized.reasonCodes[index], initialReasons[index]);
-    }
-    t.equal(prioritized.reasonCodes[ordinaryLimit], 'write_activity');
+    t.same(
+      prioritized.partitionIds,
+      existingPartitionIds,
+      'later partition IDs do not evict accumulated IDs',
+    );
+    t.equal(
+      manager.shouldBypassSplitPressure({
+        triggerReason: 'reactive_request',
+        reasonCodes: prioritized.reasonCodes,
+      }),
+      true,
+      'reserved priority survives to the reactive pressure-bypass owner',
+    );
 
     const repeated = manager.mergeRequestedEvaluationContext(
       prioritized,
       {
-        partitionIds: ['later-again'],
+        partitionIds: ['later'],
         reasonCodes: ['later-again', 'write_activity'],
       },
     );
-    t.same(repeated.partitionIds, prioritized.partitionIds);
-    t.same(repeated.reasonCodes, prioritized.reasonCodes);
+    t.same(
+      repeated.reasonCodes,
+      prioritized.reasonCodes,
+      'repeated overflow leaves every admitted reason stable',
+    );
+    t.same(
+      repeated.partitionIds,
+      prioritized.partitionIds,
+      'repeated partition overflow leaves accumulated IDs stable',
+    );
 
     manager.shutdown();
     t.end();
