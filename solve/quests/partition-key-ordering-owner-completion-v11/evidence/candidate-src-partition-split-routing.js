@@ -2,6 +2,7 @@ import {SQL} from '../constants/index.js';
 import {
   PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG,
   PARTITION_SPLIT_MIRROR_ORIGIN,
+  PARTITION_SPLIT_SNAPSHOT_LIMIT,
 } from './partition-constants.js';
 import {
   buildPartitionDescriptorEpochDecision,
@@ -39,8 +40,10 @@ const SPLIT_MIRROR_IDENTITY_FIELD = Object.freeze({
   OPERATION_ID: 'operationId',
   IDEMPOTENCY_KEY: 'idempotencyKey',
 });
-export const SPLIT_SNAPSHOT_MAX_BIND_VARIABLES = 32_766;
-export const SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL = 64;
+const SPLIT_SNAPSHOT_MAX_BIND_VARIABLES =
+  PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_BIND_VARIABLES;
+const SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL =
+  PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_ROWS_PER_CALL;
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySlice = Function.call.bind(Array.prototype.slice);
