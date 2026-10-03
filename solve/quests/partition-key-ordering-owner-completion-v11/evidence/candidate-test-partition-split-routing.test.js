@@ -5,7 +5,6 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
 } from '../../src/partition/partition-constants.js';
 import {
-  SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
   replaySplitEntry,
   resolveSplitSnapshotBatchRowLimit,
   routeSplitSnapshotBatch,
@@ -20,6 +19,7 @@ const STALE_VERSION = 2;
 const LEFT_PARTITION_ID = 'users-left';
 const RIGHT_PARTITION_ID = 'users-right';
 const INSERT_SQL = 'INSERT INTO users (id, name) VALUES (?, ?)';
+const SNAPSHOT_MAX_ROWS_PER_CALL = 64;
 
 function createMetadata(targetVersion) {
   return {
@@ -443,14 +443,14 @@ test('split snapshot batching rejects dimensions outside one bind budget',
     t.equal(
       resolveSplitSnapshotBatchRowLimit(
         ['id'],
-        SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+        SNAPSHOT_MAX_ROWS_PER_CALL,
       ),
-      SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+      SNAPSHOT_MAX_ROWS_PER_CALL,
     );
     t.equal(
       resolveSplitSnapshotBatchRowLimit(
         Array.from({length: 512}, (_value, index) => `column_${index}`),
-        SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+        SNAPSHOT_MAX_ROWS_PER_CALL,
       ),
       63,
       'wide tables retain per-SQL batching below the source-row cap',
