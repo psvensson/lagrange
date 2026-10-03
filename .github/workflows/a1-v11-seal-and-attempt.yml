@@ -1,5 +1,6 @@
 name: a1-v11-seal-and-attempt
 # retry after measurable pre-seal owner probe
+# retry after v10 red-label alignment
 
 on:
   push:
@@ -94,7 +95,7 @@ jobs:
           test "$routing_status" -ne 0
           test "$probe_status" -ne 0
           grep -E "not ok.*captures Map constructor after module load"             /tmp/a1-v11-v10-red.log >/dev/null
-          grep -E "not ok.*rejects dimensions outside one bind budget"             /tmp/a1-v11-v10-red.log >/dev/null
+          grep -E "not ok.*rejects dimensions outside route and bind budgets"             /tmp/a1-v11-v10-red.log >/dev/null
 
       - name: Install exact v11 candidate
         shell: bash
