@@ -21,8 +21,8 @@ const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const OPERATION_PORT_FACTORY_OWNER =
   'src/partition/partition-service-core-base.js';
-// The one other consensus runtime with its own factory method: the zero-
-// Liferaft cutover moved message groups onto the raft-rs port, built through
+// The one other consensus runtime with its own factory method: the raft-rs-only
+// cutover moved message groups onto the raft-rs port, built through
 // MessageGroupService.createOperationPort (not a PartitionService subclass,
 // so it replaces nothing of the partition's; its test seam overrides it the
 // same way). Any further definer is a new production override.

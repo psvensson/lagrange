@@ -65,7 +65,7 @@ function initializeTestEnvironment() {
 }
 
 // Each run boots a virgin seed over its own data directory: message-group
-// consensus is durable since the zero-Liferaft cutover, so every iteration
+// consensus is durable since the raft-rs-only cutover, so every iteration
 // opens real replica databases before the phase under test fails. Nine
 // properties x ten runs need more than tap's default file budget.
 const PHASE_FAILURE_PROPERTY_TIMEOUT_MS = 600000;

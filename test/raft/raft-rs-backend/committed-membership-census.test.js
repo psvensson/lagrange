@@ -95,7 +95,7 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
     // group from the replica set it was created with.
     'src/message-group/message-group-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
-    // R4 (zero-Liferaft): a WASM service replica runs on its own raft-rs
+    // R4 (raft-rs-only cutover): a WASM service replica runs on its own raft-rs
     // port and, like a message group, founds a group without a durable
     // record from the replica set it was created with.
     'src/wasm-service/wasm-service-consensus-port.js',
