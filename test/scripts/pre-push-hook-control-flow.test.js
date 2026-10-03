@@ -282,7 +282,14 @@ test('an annotated tag as the first pushed ref is peeled to its commit', () => {
 });
 
 test('a deletion-only push proves nothing and a manual invocation gates HEAD', () => {
-  const deletion = runHook(`refs/heads/old ${ZERO_SHA} refs/heads/old ${shas.base}\n`);
+  const deletionLine = `refs/heads/old ${ZERO_SHA} refs/heads/old ${shas.base}\n`;
+  // A non-main deletion is a preservation push unless the full gate is
+  // requested; the opt-in reaches the gate's own deletion-only branch.
+  const preserved = runHook(deletionLine);
+  assert.equal(preserved.status, 0, preserved.output);
+  assert.deepEqual(materializerCalls(preserved.recorded), []);
+  assert.match(preserved.output, /non-main branch preservation push/u);
+  const deletion = runHook(deletionLine, {LAGRANGE_PUSH_PROVE_BRANCH: '1'});
   assert.equal(deletion.status, 0, deletion.output);
   assert.deepEqual(materializerCalls(deletion.recorded), []);
   assert.match(deletion.output, /nothing to prove/u);
