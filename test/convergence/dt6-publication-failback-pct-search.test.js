@@ -45,13 +45,10 @@ import {
 // committed published version of 2, and committed raft log entries agree at every index (no
 // same-index/different-term divergence — the CL-040 check).
 //
-// DETERMINISM IS NARROWED TO THE SEMANTIC OUTCOME (owner decision, the consensus cutover quest
-// Phase J): raft-rs draws its randomized election timeout from the platform RNG, which no seed can
-// choose (open decision O2; R17 release-blocking finding under the R5 hardening owner). The seed fixes
-// every owned timing input (each replica's election window, the PCT priorities), so a replayed seed
-// must reach the same terminal leaders, versions and verdicts with zero divergence - but this test
-// does NOT claim exact schedule replay: event counts such as the reorder count may differ by the few
-// co-due ticks the platform draw shifts. It is not equivalent to byte-identical replay.
+// DETERMINISM: the seed fixes every timing input - each replica's election window, the PCT
+// priorities, and each replica's randomness, from which its port seeds the raft-rs core's
+// randomized election timeouts (owner decision O2) - so a replayed seed replays the searched
+// schedule exactly, reorder count included.
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const EXPECTED = Object.freeze([...IDS]);
@@ -273,17 +270,17 @@ t.test('PCT search over the control-plane fail-back: convergence holds across se
       `(totalReorders=${totalReorders})`);
   });
 
-// NARROWED (see DETERMINISM above): semantic outcome determinism, not exact schedule replay.
-t.test('a PCT-searched fail-back seed replays to the same semantic outcome ' +
-  '(outcome determinism; exact schedule replay not claimed)', async (t) => {
+t.test('a PCT-searched fail-back seed replays identically (determinism)', async (t) => {
   const a = await runFailbackUnderPct(5);
   const b = await runFailbackUnderPct(5);
-  const outcome = (m) => ({leaderA: m.leaderA, leaderB: m.leaderB, versions: m.versions,
-    converged: m.converged, divergent: m.divergentCommittedIndexes, reason: m.reason});
-  t.same(outcome(b), outcome(a),
-    'same seed -> same terminal leaders, versions and convergence/agreement verdicts');
+  t.same(
+    {leaderA: a.leaderA, leaderB: a.leaderB, versions: a.versions,
+      divergent: a.divergentCommittedIndexes, reorders: a.reorders},
+    {leaderA: b.leaderA, leaderB: b.leaderB, versions: b.versions,
+      divergent: b.divergentCommittedIndexes, reorders: b.reorders},
+    'same seed -> identical searched schedule (incl. reorder count) and converged outcome',
+  );
   t.same(a.divergentCommittedIndexes, [], 'the replayed seed has zero committed-log divergence');
   t.equal(a.converged, true, 'the replayed seed converged to committed v2 cluster-wide');
-  t.ok(a.reorders > 0 && b.reorders > 0,
-    `both replays genuinely permuted co-due delivery (reorders ${a.reorders}, ${b.reorders})`);
+  t.ok(a.reorders > 0, `the replay genuinely permuted co-due delivery (reorders ${a.reorders})`);
 });

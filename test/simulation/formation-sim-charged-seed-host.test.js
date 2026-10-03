@@ -9,16 +9,11 @@
 //   the charged scenario reaches the "Cluster formed" counterpart and then
 //     REST with no ambient seam reached - the seams that only a charged
 //     timeline is long enough to reach are repaired, not tolerated;
-//   the charged run is a function of the scenario, like the uncharged one,
-//     in exactly what production offers: the same process produces the same
-//     strict report and provenance snapshot, the host transcript's
-//     boundaries in the same causal order, the same network transcript
-//     modulo consensus timing, the same charged owners, and a formation
-//     inside the calibrated bound, twice over. The rs-raft core randomizes
-//     its own election timeouts (owner decision O2; see
-//     networkTranscriptStructure), so the instants, the network schedule and
-//     the charge ledger's amounts are not repeatable today; when O2 is funded
-//     the exact transcript, ledger and instant assertions come back;
+//   the charged run is a pure function of the scenario, like the uncharged
+//     one: the same process produces the same four artifacts and the same
+//     charge ledger twice over - the rs-raft core's election timeouts
+//     included, which the port seeds from the node's randomness (owner
+//     decision O2);
 //   charging changes WHEN production runs and never WHO owns it - the
 //     provenance snapshot is identical charged and uncharged;
 //   charging is off unless a calibration is supplied, and the uncharged run
@@ -45,14 +40,13 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {FORMATION_OWNER} from '../../src/diagnostics/formation-diagnostics-contract.js';
 import {loadCalibration} from './formation-sim-coefficients.js';
-import {transcriptCausalOrder} from './formation-sim-host-transcript.js';
-import {
-  networkTranscriptStructure, runSeedHandoffScenario,
-} from './formation-sim-production-seed-host.js';
+import {runSeedHandoffScenario} from './formation-sim-production-seed-host.js';
 
 const NODE_ID = 'node-0';
 const REPO_ROOT = new URL('../../', import.meta.url).pathname;
-const EXACT_ARTIFACTS = Object.freeze(['strictReport', 'provenanceSnapshot']);
+const ARTIFACTS = Object.freeze([
+  'hostTranscript', 'networkTranscript', 'strictReport', 'provenanceSnapshot',
+]);
 const CLEAN_STRICT = /violations=0 substitutions=0 eligible=true/;
 const ZERO = 0;
 
@@ -70,11 +64,12 @@ after(() => {
   LoggingService.resetInstance();
 });
 
-// Which owners the charge ledger priced: its structure, without the amounts
-// consensus timing moves.
-function chargedOwners(run) {
-  return Object.keys(run.charged.segments)
-    .filter((owner) => run.charged.segments[owner] > ZERO).sort();
+// The charge ledger, without the attribution snapshot's process-local ids.
+function chargeLedger(run) {
+  const {segments, chargedMs, stretches, gapMs, formationCompleteAtMs} =
+    run.charged;
+  return JSON.stringify({segments, chargedMs, stretches, gapMs,
+    formationCompleteAtMs});
 }
 
 test('the charged seed host reaches formation and then rest, strictly',
@@ -108,28 +103,22 @@ test('the charged seed host reaches formation and then rest, strictly',
     }
   });
 
-test('the charged run is a function of the scenario', async () => {
+test('the charged run is a pure function of the scenario', async () => {
   const charging = loadCalibration(REPO_ROOT);
   const first = await runSeedHandoffScenario({charging});
   const again = await runSeedHandoffScenario({charging});
-  for (const artifact of EXACT_ARTIFACTS) {
+  for (const artifact of ARTIFACTS) {
     assert.equal(again[artifact], first[artifact],
       `${artifact} is exact across two charged runs`);
   }
-  assert.equal(transcriptCausalOrder(again.hostTranscript),
-    transcriptCausalOrder(first.hostTranscript),
-    'hostTranscript has the same boundaries in the same causal order');
-  assert.equal(networkTranscriptStructure(again.networkTranscript),
-    networkTranscriptStructure(first.networkTranscript),
-    'networkTranscript is structurally equal modulo consensus timing');
-  assert.deepEqual(chargedOwners(again), chargedOwners(first),
-    'the same owners are charged across two charged runs');
-  for (const run of [first, again]) {
-    assert.ok(run.formationCompleteAtMs > ZERO &&
-      run.formationCompleteAtMs <= charging.formationWindowMs,
-    `formation is reached within the calibrated ${charging.formationWindowMs}` +
-      ` ms (at ${run.formationCompleteAtMs} ms)`);
-  }
+  assert.equal(chargeLedger(again), chargeLedger(first),
+    'the charge ledger is exact across two charged runs');
+  assert.equal(again.formationCompleteAtMs, first.formationCompleteAtMs,
+    'formation is marked at the same virtual instant');
+  assert.ok(first.formationCompleteAtMs > ZERO &&
+    first.formationCompleteAtMs <= charging.formationWindowMs,
+  `formation is reached within the calibrated ${charging.formationWindowMs}` +
+    ` ms (at ${first.formationCompleteAtMs} ms)`);
 });
 
 test('charging moves the schedule, never the ownership', async () => {

@@ -24,12 +24,10 @@ import {
   createProductionSimNodeEnvironment, createProductionSimScenario,
 } from './formation-sim-production-node-environment.js';
 import {loadCalibration} from './formation-sim-coefficients.js';
-import {transcriptCausalOrder} from './formation-sim-host-transcript.js';
 import {reserveSimulatedBootIncarnation} from
   './formation-sim-boot-incarnation.js';
 import {
-  createProductionSeedSimHost, networkTranscriptStructure,
-  runSeedHandoffScenario,
+  createProductionSeedSimHost, runSeedHandoffScenario,
 } from './formation-sim-production-seed-host.js';
 
 const NODE_ID = 'node-0';
@@ -39,11 +37,9 @@ const GENERATION = 'd-handoff';
 const PHASE_HORIZON_MS = 120000;
 const BOOTSTRAP_WRITER = 'BootstrapSystemTableWriter';
 const RUNTIME_WRITER = 'RoutedSqlSystemTableWriter';
-// Exact across runs: what production offers. The host transcript is compared
-// in causal order without its instants (transcriptCausalOrder) and the
-// network transcript modulo consensus timing (networkTranscriptStructure);
-// both state the normalisation and why it exists: owner decision O2.
-const EXACT_ARTIFACTS = Object.freeze(['strictReport', 'provenanceSnapshot']);
+const ARTIFACTS = Object.freeze([
+  'hostTranscript', 'networkTranscript', 'strictReport', 'provenanceSnapshot',
+]);
 const REPO_ROOT = new URL('../../', import.meta.url).pathname;
 
 before(() => {
@@ -176,67 +172,23 @@ test('D-3. strict stays clean across the whole chain', async () => {
 test('D-4. the complete artifacts repeat, in and under load', async () => {
   // A SEPARATE gate from D-3 on purpose. C proved strict cleanliness does not
   // imply repeatability: every clock was honest and the formation still ended
-  // at two different instants, because randomness is its own substrate.
-  //
-  // On rs-raft that substrate is not reachable (owner decision O2): the core
-  // randomizes election timeouts itself. So the gate asserts exactly what
-  // production offers - the strict report and the provenance snapshot exact,
-  // the host transcript's boundaries in the same causal order, the network
-  // transcript structurally equal modulo consensus timing, formation reached
-  // within the calibrated bound - and no longer asserts at which virtual
-  // instant anything happens. When O2 is funded, restore the exact
-  // hostTranscript, networkTranscript and nowMs assertions.
+  // at two different instants, because randomness is its own substrate. On
+  // rs-raft that substrate reaches the core through the port's election seed
+  // (owner decision O2), so the whole chain repeats to the virtual instant.
   const formationBoundMs = loadCalibration(REPO_ROOT).formationWindowMs;
-  const assertFormationBound = (run, label) => {
-    assert.ok(run.formationCompleteAtMs > 0 &&
-      run.formationCompleteAtMs <= formationBoundMs,
-    `formation is reached within the calibrated ${formationBoundMs} ms ` +
-      `${label} (at ${run.formationCompleteAtMs} ms)`);
-  };
-  const assertRepeats = (run, first, label) => {
-    for (const artifact of EXACT_ARTIFACTS) {
-      assert.equal(run[artifact], first[artifact],
-        `${artifact} is exact ${label}`);
-    }
-    assert.equal(transcriptCausalOrder(run.hostTranscript),
-      transcriptCausalOrder(first.hostTranscript),
-      `hostTranscript has the same boundaries in the same causal order ${label}`);
-    assert.equal(networkTranscriptStructure(run.networkTranscript),
-      networkTranscriptStructure(first.networkTranscript),
-      `networkTranscript is structurally equal modulo consensus timing ${label}`);
-    assertFormationBound(run, label);
-  };
   const first = await runSeedHandoffScenario();
-  assertFormationBound(first, 'on run 1');
-  // The normalisation keeps its teeth: moving a non-timer event is a
-  // difference, moving or dropping a timer fire is not.
-  const lines = first.networkTranscript.split('\n');
-  const nonTimer = lines.findIndex((line) =>
-    !line.includes(' fired:adapter-timer:'));
-  const timer = lines.findIndex((line) =>
-    line.includes(' fired:adapter-timer:'));
-  assert.ok(nonTimer >= 0 && timer >= 0,
-    'the transcript carries both timer fires and other events');
-  const mutated = (index, replacement) => lines
-    .map((line, at) => at === index ? replacement : line).join('\n');
-  assert.notEqual(
-    networkTranscriptStructure(mutated(nonTimer,
-      `${lines[nonTimer].split(' ')[0]} delivered:mutant_event:node-0->node-0`)),
-    networkTranscriptStructure(first.networkTranscript),
-    'a changed non-timer event is a structural difference');
-  assert.equal(
-    networkTranscriptStructure(mutated(timer, '')
-      .split('\n').filter(Boolean).join('\n')),
-    networkTranscriptStructure(first.networkTranscript),
-    'a dropped timer fire is consensus timing, not structure');
-  const hostLines = first.hostTranscript.split('\n');
-  assert.notEqual(
-    transcriptCausalOrder([hostLines[1], hostLines[0], ...hostLines.slice(2)]
-      .join('\n')),
-    transcriptCausalOrder(first.hostTranscript),
-    'two boundaries in another order are a causal difference');
+  assert.ok(first.formationCompleteAtMs > 0 &&
+    first.formationCompleteAtMs <= formationBoundMs,
+  `formation is reached within the calibrated ${formationBoundMs} ms ` +
+    `(at ${first.formationCompleteAtMs} ms)`);
   for (let attempt = 2; attempt <= 3; attempt += 1) {
-    assertRepeats(await runSeedHandoffScenario(), first, `on run ${attempt}`);
+    const again = await runSeedHandoffScenario();
+    for (const artifact of ARTIFACTS) {
+      assert.equal(again[artifact], first[artifact],
+        `${artifact} is exact on run ${attempt}`);
+    }
+    assert.equal(again.nowMs, first.nowMs,
+      'and the chain ends at the same virtual instant');
   }
 
   const loaded = await runSeedHandoffScenario({
@@ -246,7 +198,10 @@ test('D-4. the complete artifacts repeat, in and under load', async () => {
       return total;
     },
   });
-  assertRepeats(loaded, first, 'under host load');
+  for (const artifact of ARTIFACTS) {
+    assert.equal(loaded[artifact], first[artifact],
+      `${artifact} is exact under host load`);
+  }
 });
 
 test('D-5. production teardown leaves nothing armed', async () => {

@@ -910,36 +910,6 @@ async function runSeedScenarioInRoot({
   };
 }
 
-// The network transcript MODULO CONSENSUS TIMING, one normalisation for every
-// witness that compares runs. Every adapter-timer fire is dropped - both the
-// instant it fired at and how many fired - and the instant of every remaining
-// event is dropped; what is kept is the ordered sequence of every non-timer
-// event (kind, type, from, to) and whether timers fired at all.
-//
-// Why a normalisation exists (owner decision O2, recorded in
-// solve/epics/raft-rs-full-cutover/design-r3-r4-message-groups-worker-wasm-
-// 2026-09-23.md): the rs-raft core draws each election timeout from
-// crypto.getRandomValues inside the binding and the port does not thread the
-// substrate's randomSource, so election expiries - and every tick they shift -
-// land at different virtual instants run to run. Production offers no
-// repeatable consensus schedule to assert. When O2 is funded (a seeded core),
-// the witnesses compare networkTranscript exactly again and this goes.
-const NETWORK_TIMER_EVENT_PREFIX = 'fired:adapter-timer:';
-
-function networkTranscriptStructure(networkTranscript) {
-  const events = [];
-  let timerFires = 0;
-  for (const line of networkTranscript.split('\n')) {
-    const event = line.slice(line.indexOf(' ') + 1);
-    if (event.startsWith(NETWORK_TIMER_EVENT_PREFIX)) {
-      timerFires += 1;
-      continue;
-    }
-    events.push(event);
-  }
-  return JSON.stringify({events, timersFired: timerFires > 0});
-}
-
 // Phase one only: the composition proof and its determinism gates.
 const runSeedPhaseOneScenario = (options = {}) =>
   runSeedScenario({...options, throughMessageGroups: false});
@@ -961,7 +931,6 @@ const runSeedHandoffScenario = (options = {}) =>
 
 export {
   createProductionSeedSimHost,
-  networkTranscriptStructure,
   runSeedHandoffScenario,
   runSeedMessageGroupsScenario,
   runSeedPartitionsScenario,
