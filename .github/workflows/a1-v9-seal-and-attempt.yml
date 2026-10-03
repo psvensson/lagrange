@@ -154,7 +154,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/checks/partition-key-ordering-owner-completion-v8.js
+          # V9 intentionally supersedes v8's contradictory full-capacity
+          # reason policy, so the complete immutable v8 doneWhen is not a
+          # valid post-change predicate. The rejected-v8 phase above proves
+          # v8 against its own seal; the focused suites below preserve every
+          # unaffected v8 contract while v9 owns the replacement capacity
+          # and live-ingress semantics.
           node scripts/checks/partition-key-ordering-owner-completion-v9.js
           node scripts/solve.js probe --id partition-key-ordering-owner-completion-v9
           node --test test/partition/routing-key-comparator.test.js
