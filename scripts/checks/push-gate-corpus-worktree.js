@@ -35,7 +35,8 @@
 //
 // Exit 0 when every corpus gate passes on the snapshot; exit 1 on the first
 // failing gate; exit 2 on usage error. The throwaway worktree is always
-// removed, including on gate failure.
+// removed, including on gate failure; a failed --gate run first keeps its
+// diagnostics under test-output/push-gate/<sha>/.
 
 import process from 'node:process';
 import {execFileSync, spawnSync} from 'node:child_process';
@@ -51,6 +52,7 @@ import {
   GATE_WORKSPACE_DIRECTORIES,
   assertWorkspaceDependencyLinks,
   linkWorkspaceDependencies,
+  retainGateDiagnostics,
 } from '../publish-head.js';
 import {
   WORKSPACE_INJECTION_ENV,
@@ -102,6 +104,9 @@ const LOCAL_TEXT = Object.freeze({
   GATE_IN: ' in ',
   GATE_DIRTY: '[push-gate] the gate mutated the exact checkout of the pushed sha:\n',
   GATE_LINKS_BROKEN: '[push-gate] a workspace injection link was replaced during the gate\n',
+  GATE_RETAINED: '[push-gate] gate diagnostics retained in ',
+  GATE_NOTHING_RETAINED: '[push-gate] no acceptance receipt to retain from the gate checkout; ' +
+    'the output above is all the gate left\n',
 });
 const stringTrim = Function.call.bind(String.prototype.trim);
 
@@ -225,14 +230,28 @@ function checkoutExactCommit(root, commit) {
   return worktreePath;
 }
 
-// An interrupted gate must not strand its checkout: the signal removes the
-// worktree, then re-raises through the conventional exit code.
-function removeWorktreeOnSignal(root, worktreePath) {
+// The checkout is the only copy of what a failed gate wrote, so every
+// non-zero end keeps the publisher's diagnostics (the acceptance receipt and
+// the first failing command's artifact) under test-output/push-gate/<sha>/
+// before the checkout goes, and says where.
+function releaseCheckout(root, worktreePath, sha, status) {
+  if (status !== 0) {
+    const retained = retainGateDiagnostics(root, worktreePath, sha);
+    process.stderr.write(retained ?
+      `${LOCAL_TEXT.GATE_RETAINED}${retained}\n` : LOCAL_TEXT.GATE_NOTHING_RETAINED);
+  }
+  removeWorktree(root, worktreePath);
+}
+
+// An interrupted gate must not strand its checkout: the signal releases it
+// as a failed gate, then re-raises through the conventional exit code.
+function removeWorktreeOnSignal(root, worktreePath, sha) {
   const handlers = [];
   for (const signal of CLEANUP_SIGNALS) {
     const handler = () => {
-      removeWorktree(root, worktreePath);
-      process.exit(SIGNAL_EXIT_BASE + (os.constants.signals[signal] || 0));
+      const status = SIGNAL_EXIT_BASE + (os.constants.signals[signal] || 0);
+      releaseCheckout(root, worktreePath, sha, status);
+      process.exit(status);
     };
     process.on(signal, handler);
     handlers.push([signal, handler]);
@@ -245,54 +264,61 @@ function removeWorktreeOnSignal(root, worktreePath) {
 function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
   const sha = peelToCommit(root, requestedSha);
   const worktreePath = checkoutExactCommit(root, sha);
-  const releaseSignals = removeWorktreeOnSignal(root, worktreePath);
+  const releaseSignals = removeWorktreeOnSignal(root, worktreePath, sha);
+  // A throw leaves this at failure, so it retains too.
+  let status = EXIT_GATE_FAILURE;
   try {
-    const links = linkWorkspaceDependencies(root, worktreePath);
-    // A push from a linked worktree exports that worktree's GIT_DIR into the
-    // hook; inherited, it would make the gate's own git reads - HEAD, status,
-    // the lint range - answer for the pusher's checkout, not this one.
-    const env = {
-      ...gitProcessEnvironment(),
-      [WORKSPACE_INJECTION_ENV]:
-        GATE_WORKSPACE_DIRECTORIES.join(INJECTION_SEPARATOR),
-      [GATE_PUSHED_SHA_ENV]: sha,
-      [GATE_RED_MAIN_CHECKED_ENV]: ENABLED_ENV_VALUE,
-    };
-    const input = refLinesFile ?
-      fs.readFileSync(refLinesFile, TEXT_ENCODING) : EMPTY_INPUT;
-    process.stdout.write(
-      `${LOCAL_TEXT.GATE_MATERIALIZED}${sha}${LOCAL_TEXT.GATE_IN}` +
-      `${worktreePath}: ${command.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)}\n`);
-    const result = spawnSync(command[0], command.slice(1), {
-      cwd: worktreePath,
-      env,
-      input,
-      stdio: ['pipe', 'inherit', 'inherit'],
-    });
-    if (result.error) {
-      process.stderr.write(`[push-gate] could not run ${command[0]}: ` +
-        `${result.error.message}\n`);
-      return EXIT_GATE_FAILURE;
-    }
-    try {
-      assertWorkspaceDependencyLinks(links);
-    } catch {
-      process.stderr.write(LOCAL_TEXT.GATE_LINKS_BROKEN);
-      return EXIT_GATE_FAILURE;
-    }
-    for (const link of links) fs.unlinkSync(link.link);
-    const status = stringTrim(execFileSync(GIT_BINARY,
-      [GIT_WORKING_TREE_FLAG, worktreePath, ...GIT_STATUS_ARGUMENTS],
-      {encoding: TEXT_ENCODING}));
-    if (status.length > 0) {
-      process.stderr.write(`${LOCAL_TEXT.GATE_DIRTY}${status}\n`);
-      return EXIT_GATE_FAILURE;
-    }
-    return result.status ?? EXIT_GATE_FAILURE;
+    status = runInExactCheckout(root, worktreePath, sha, {refLinesFile, command});
+    return status;
   } finally {
     releaseSignals();
-    removeWorktree(root, worktreePath);
+    releaseCheckout(root, worktreePath, sha, status);
   }
+}
+
+function runInExactCheckout(root, worktreePath, sha, {refLinesFile, command}) {
+  const links = linkWorkspaceDependencies(root, worktreePath);
+  // A push from a linked worktree exports that worktree's GIT_DIR into the
+  // hook; inherited, it would make the gate's own git reads - HEAD, status,
+  // the lint range - answer for the pusher's checkout, not this one.
+  const env = {
+    ...gitProcessEnvironment(),
+    [WORKSPACE_INJECTION_ENV]:
+      GATE_WORKSPACE_DIRECTORIES.join(INJECTION_SEPARATOR),
+    [GATE_PUSHED_SHA_ENV]: sha,
+    [GATE_RED_MAIN_CHECKED_ENV]: ENABLED_ENV_VALUE,
+  };
+  const input = refLinesFile ?
+    fs.readFileSync(refLinesFile, TEXT_ENCODING) : EMPTY_INPUT;
+  process.stdout.write(
+    `${LOCAL_TEXT.GATE_MATERIALIZED}${sha}${LOCAL_TEXT.GATE_IN}` +
+    `${worktreePath}: ${command.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)}\n`);
+  const result = spawnSync(command[0], command.slice(1), {
+    cwd: worktreePath,
+    env,
+    input,
+    stdio: ['pipe', 'inherit', 'inherit'],
+  });
+  if (result.error) {
+    process.stderr.write(`[push-gate] could not run ${command[0]}: ` +
+      `${result.error.message}\n`);
+    return EXIT_GATE_FAILURE;
+  }
+  try {
+    assertWorkspaceDependencyLinks(links);
+  } catch {
+    process.stderr.write(LOCAL_TEXT.GATE_LINKS_BROKEN);
+    return EXIT_GATE_FAILURE;
+  }
+  for (const link of links) fs.unlinkSync(link.link);
+  const status = stringTrim(execFileSync(GIT_BINARY,
+    [GIT_WORKING_TREE_FLAG, worktreePath, ...GIT_STATUS_ARGUMENTS],
+    {encoding: TEXT_ENCODING}));
+  if (status.length > 0) {
+    process.stderr.write(`${LOCAL_TEXT.GATE_DIRTY}${status}\n`);
+    return EXIT_GATE_FAILURE;
+  }
+  return result.status ?? EXIT_GATE_FAILURE;
 }
 
 function gateMaterializedTree(root, ref) {

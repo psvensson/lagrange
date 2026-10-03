@@ -28,7 +28,7 @@
   "censusSize": 2285,
   "digest": "fnv1a32-72594200",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c8bf0857",
+  "observationDigest": "fnv1a32-52218b5f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -10252,8 +10252,12 @@
     },
     "test/scripts/acceptance-proof-manifest-runner.test.js": {
       "files": [
+        "package-lock.json",
         "package.json",
+        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
         "test/admin/admin-websocket-external-bind-policy.test.js",
         "test/closure/CL-040.repro.test.js",
         "test/closure/CL-041.repro.test.js",
@@ -10273,6 +10277,11 @@
         "test/runtime/pgwire-protocol-ordering.test.js",
         "test/scripts/run-test-files.test.js",
         "test/solve/commands.test.js"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/scripts/action-authority.test.js": {

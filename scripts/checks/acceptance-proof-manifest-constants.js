@@ -36,6 +36,17 @@ export const ACCEPTANCE_PROOF = Object.freeze({
   SUMMARY_INDENT: '  ',
   SUMMARY_LABEL_WIDTH: 8,
   FIRST_FAILURE_LABEL: 'first failure: ',
+  // The first failing command's failing test files, read from its captured
+  // output: diagnosis only, the verdict stays the command's status.
+  FAILING_FILES_LABEL: 'failing test files: ',
+  FAILING_FILES_SHOWN: 20,
+  FAILING_FILES_WITHHELD_PREFIX: '... ',
+  FAILING_FILES_WITHHELD_MIDDLE: ' more withheld (all in ',
+  FAILING_FILES_WITHHELD_SUFFIX: ')',
+  INCOMPLETE_SUFFIX: ' - list may be incomplete',
+  SUMMARY_LINE_ABSENT: 'summary line absent',
+  ENDED_BY_SIGNAL_PREFIX: 'the command ended by ',
+  UNREAD_VERDICTS_SUFFIX: ' verdict line(s) too long to read',
   FLAG_MANIFEST: '--manifest',
   FLAG_SCENARIO: '--scenario',
   FLAG_RECEIPT_DIR: '--receipt-dir',

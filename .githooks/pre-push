@@ -404,6 +404,10 @@ else
   # single intermittent must not block a push; a failed file reruns
   # standalone once, reported never hidden, and a standalone failure stays
   # red (run-test-files.js owns the mechanics and the 5-file breakage cap).
-  stage "test-stage" "contracts, audits, then the change proof or the whole corpus (per-file results stream below)"
+  # Each command's output is captured, not streamed: the summary after the
+  # run names the first failing command and its failing test files, and a
+  # failed gate keeps its receipt and that command's capture under
+  # test-output/push-gate/<sha>/ before the gate checkout is removed.
+  stage "test-stage" "contracts, audits, then the change proof or the whole corpus (output captured per command; a failure names its failing test files)"
   LAGRANGE_RETRY_FAILED_ONCE=1 npm run -s test:gate:postpush
 fi

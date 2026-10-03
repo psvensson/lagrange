@@ -1290,4 +1290,5 @@ export {
   GATE_WORKSPACE_DIRECTORIES,
   assertWorkspaceDependencyLinks,
   linkWorkspaceDependencies,
+  retainGateDiagnostics,
 };

@@ -837,6 +837,45 @@ function formatTestFilesSummary(summary) {
     `fail=${summary.failed} assertions=${summary.assertions}`;
 }
 
+// The runner's own stdout lines, as a reader of a finished run matches them:
+// the per-file verdict printTestResult writes, the retried-once outcome
+// retryFailedOnce writes, and the summary line formatTestFilesSummary writes.
+const TEST_FILE_LINE = Object.freeze({
+  VERDICT: /^(ok|not ok) (\S+) \((\d+) assertions, \d+ms\)$/u,
+  RETRIED_PASS: /^# retried-once pass (\S+)$/u,
+  SUMMARY: /^# test-files total=\d+ pass=\d+ fail=\d+ assertions=\d+$/u,
+});
+const RED_VERDICT = 'not ok';
+
+/**
+ * Which files a run's stdout leaves red, fed one line at a time. The last
+ * verdict line of a file decides it (a placed run's controller decides a lab
+ * machine's red again, later in the stream), a retried-once pass is green, and
+ * `summaries` counts the summary lines - none means no runner in the stream
+ * got as far as summarising, so the list cannot be called complete. Memory is
+ * one entry per file named, never the output.
+ * @return {{read: Function, failing: Function, summaries: Function}}
+ */
+function testFileVerdictReader() {
+  const red = new Map();
+  let summaries = 0;
+  return {
+    read(line) {
+      const verdict = TEST_FILE_LINE.VERDICT.exec(line);
+      const retried = TEST_FILE_LINE.RETRIED_PASS.exec(line);
+      if (verdict) {
+        red.set(verdict[2], verdict[1] === RED_VERDICT);
+      } else if (retried) {
+        red.set(retried[1], false);
+      } else if (TEST_FILE_LINE.SUMMARY.test(line)) {
+        summaries += 1;
+      }
+    },
+    failing: () => [...red].filter(([, isRed]) => isRed).map(([file]) => file),
+    summaries: () => summaries,
+  };
+}
+
 // The policy above, as one exported unit so a witness can hold it: the
 // rerun happens only under the declared environment and the cap, every
 // rerun is written to `write`, and a standalone failure stays red.
@@ -885,6 +924,7 @@ if (IS_MAIN) process.exitCode = await main();
 export {
   RETRY_FAILED_ONCE_ENABLED,
   RETRY_FAILED_ONCE_ENV,
+  TEST_FILE_LINE,
   TEST_NODE_ARGS,
   TEST_RESULTS_LEDGER_ROTATE_BYTES,
   resolveTestMachineFactor,
@@ -896,4 +936,5 @@ export {
   runTestFile,
   runTestFileSync,
   runTestFiles,
+  testFileVerdictReader,
 };

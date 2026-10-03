@@ -8,6 +8,7 @@ import {
   ACCEPTANCE_PROOF,
   DEFAULT_ACCEPTANCE_MANIFEST,
 } from './acceptance-proof-manifest-constants.js';
+import {readBoundedOutput} from '../run-test-files.js';
 
 export {
   ACCEPTANCE_MANIFEST_SCHEMA_VERSION,
@@ -34,6 +35,18 @@ const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const NO_COMMAND_FAILURE_REASONS = Object.freeze([]);
 const ARTIFACT_NOT_PRODUCED_PREFIX =
   'required artifact is stale or was not produced or updated: ';
+// A captured artifact keeps each output stream as a list of its lines, one
+// JSON string per artifact line, so a reader takes a capture of up to
+// MAX_BUFFER_BYTES line by line through the bounded reader instead of parsing
+// or holding the whole document.
+const CAPTURED_ARTIFACT_SCHEMA_VERSION = 2;
+const OUTPUT_LINE_SEPARATOR = '\n';
+const CAPTURED_STDOUT_OPEN = '  "stdoutLines": [';
+const CAPTURED_LINE_START = '    "';
+const CAPTURED_LINE = /^ {4}("(?:[^"\\]|\\.)*"),?$/u;
+const CAPTURE_READ = Object.freeze({BEFORE: 'before', STDOUT: 'stdout', AFTER: 'after'});
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 function sha256(value) {
   return createHash(ACCEPTANCE_PROOF.HASH_ALGORITHM)
@@ -198,7 +211,7 @@ function captureCommandOutput(root, command, execution, startedAt) {
   if (!resolved) return;
   fs.mkdirSync(path.dirname(resolved.absolute), {recursive: true});
   fs.writeFileSync(resolved.absolute, JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: CAPTURED_ARTIFACT_SCHEMA_VERSION,
     commandId: command.id,
     startedAt,
     finishedAt: new Date().toISOString(),
@@ -210,9 +223,37 @@ function captureCommandOutput(root, command, execution, startedAt) {
       code: execution.error.code || null,
       message: execution.error.message || String(execution.error),
     } : null,
-    stdout: execution.stdout || '',
-    stderr: execution.stderr || '',
+    stdoutLines: stringSplit(String(execution.stdout || ''), OUTPUT_LINE_SEPARATOR),
+    stderrLines: stringSplit(String(execution.stderr || ''), OUTPUT_LINE_SEPARATOR),
   }, null, 2));
+}
+
+/**
+ * Hand each stdout line of a captured artifact to `onLine(text, whole)`,
+ * through the bounded reader: the capture is never parsed or held whole. A
+ * line longer than the reader's line prefix arrives with `whole` false and
+ * its undecoded head as `text`.
+ * @param {string} root
+ * @param {string} artifactPath root-relative
+ * @param {Function} onLine
+ * @return {boolean} whether the file is a captured artifact with stdout
+ */
+export function readCapturedStdout(root, artifactPath, onLine) {
+  const resolved = rootRelativePath(root, artifactPath);
+  if (!resolved || !fs.existsSync(resolved.absolute)) return false;
+  let state = CAPTURE_READ.BEFORE;
+  readBoundedOutput(resolved.absolute, {onLinePrefix: (prefix) => {
+    if (state === CAPTURE_READ.BEFORE && prefix === CAPTURED_STDOUT_OPEN) {
+      state = CAPTURE_READ.STDOUT;
+    } else if (state === CAPTURE_READ.STDOUT && !stringStartsWith(prefix, CAPTURED_LINE_START)) {
+      state = CAPTURE_READ.AFTER;
+    } else if (state === CAPTURE_READ.STDOUT) {
+      const whole = CAPTURED_LINE.exec(prefix);
+      onLine(whole ? JSON.parse(whole[1]) : prefix.slice(CAPTURED_LINE_START.length),
+        Boolean(whole));
+    }
+  }});
+  return state !== CAPTURE_READ.BEFORE;
 }
 
 function manifestSnapshot(root, manifestPath) {
