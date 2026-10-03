@@ -26,6 +26,11 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
+import {
+  RAFT_RS_MESSAGE_TYPE,
+  RAFT_RS_TRANSPORT_PROTOCOL,
+} from '../../src/raft/raft-rs-ingress-constants.js';
+import {OUTBOUND_DELIVERY_PRIORITY} from '../../src/constants/transport.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../src/raft/raft-operation-port-request.js';
 import {RAFT_MEMBERSHIP_OPERATION} from
@@ -837,13 +842,14 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
       await consensusPort.sendToPeer(
         'node-2/partition/sql_transaction_participants-p1-r4',
         {
-          type: 'append',
-          term: 1,
-          address: 'node-1/partition/sql_transaction_participants-p1-r1',
-          leader: 'node-1/partition/sql_transaction_participants-p1-r1',
-          state: 1,
-          last: {term: 1, index: 1},
-          data: [{index: 2, term: 1, command: 'noop'}],
+          protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+          groupId: 'sql_transaction_participants-p1',
+          from: 'sql_transaction_participants-p1-r1',
+          to: 'sql_transaction_participants-p1-r4',
+          message: {
+            msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
+            entries: [{index: 2, term: 1}],
+          },
         },
       );
 
@@ -887,23 +893,41 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
   await partition.initialize();
 
   try {
+    // A rejected append response whose sender is a priority control-plane
+    // replica: the lane is decided by the target partition alone.
+    const rejectFrom = (from) => ({
+      protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+      groupId: 'tbl-bench-p1',
+      from,
+      to: 'tbl-bench-p1-r2',
+      address: from,
+      message: {
+        msgType: RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE,
+        reject: true,
+        entries: [],
+      },
+    });
     await consensusPort.sendToPeer(
       'node-2/partition/tbl-bench-p1-r2',
-      {
-        type: 'append fail',
-        term: 1,
-        address: 'node-1/partition/control_plane_publications-p1-r1',
-        leader: 'node-1/partition/control_plane_publications-p1-r1',
-        state: 1,
-        last: {term: 1, index: 1},
-        data: {index: 2, term: 1},
-      },
+      rejectFrom('node-1/partition/control_plane_publications-p1-r1'),
+    );
+    await consensusPort.sendToPeer(
+      'node-2/partition/tbl-bench-p1-r2',
+      rejectFrom('node-1/partition/tbl-bench-p1-r1'),
     );
 
+    t.equal(deliveries.length, 2, 'both rejections were sent');
     t.same(
-      deliveries,
-      [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
-      'append-fail replication should follow the target partition lane',
+      deliveries[0],
+      deliveries[1],
+      'a rejected append response follows the target partition lane, not ' +
+        'the sender partition lane',
+    );
+    t.not(
+      deliveries[0].deliveryPriority,
+      OUTBOUND_DELIVERY_PRIORITY.READINESS,
+      'a control-plane sender does not lift user-partition traffic onto ' +
+        'the readiness lane',
     );
   } finally {
     await partition.shutdown();
