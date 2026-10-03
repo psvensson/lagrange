@@ -1,0 +1,60 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v12",
+  "statement": "Partition split snapshot routing constructs every internal grouping/SQL/parameter array through an own-data append primitive backed by Object.defineProperty captured at module load, so inherited numeric Array.prototype setters cannot intercept, drop, rewrite or redirect partition order, per-partition rows, placeholder/value rows or dispatch params; all sealed A1-v11 snapshot limits, captured Map behavior, strict-own-data bounds, batching, routing, ordering and ownership semantics remain unchanged.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v12.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-reviewed-v11",
+      "statement": "Supersedes sealed partition-key-ordering-owner-completion-v11 after category-complete Copilot PR #97 review rejected exact v11 candidate tree 30899add10e8926bf600a4e6fd947e06ff5e4cdf (review heads df4f466133eb91d7a3340270ef07bff3acf24443 and 5f650749cd33f357f6207b769e73cd41b9f45945 are tree-identical). The remaining production gap is inherited numeric Array.prototype setters intercepting captured push-based internal snapshot arrays. Preserve v11 predicate/evidence unchanged."
+    },
+    {
+      "id": "own-data-internal-array-appends",
+      "statement": "Every internal array append in routeSplitSnapshotBatch — partitionOrder, partitionRows, placeholderParts, valueRows and params — defines an own numeric data property directly. No Array.prototype.push or equivalent [[Set]]-based append remains on this route."
+    },
+    {
+      "id": "captured-define-property",
+      "statement": "The snapshot-route append primitive uses Object.defineProperty captured at module initialization. Post-load replacement of Object.defineProperty cannot change, suppress or observe internal array construction."
+    },
+    {
+      "id": "numeric-prototype-setter-isolation",
+      "statement": "A configurable inherited Array.prototype[0] setter installed after module load is never invoked by snapshot grouping/SQL/params construction; dispatch remains byte-for-byte equivalent and the setter is restored by the witness."
+    },
+    {
+      "id": "preserve-v11",
+      "statement": "Preserve the complete v11 candidate: captured Map construction, PARTITION_SPLIT_SNAPSHOT_LIMIT single ownership, 64-row route bound, 32,766-bind column bound, strict-own-data dense collection checks, Proxy/sparse/accessor refusal, 64x512 => 63+1 batching, v10/v9 routing/table-ID/evaluation-context semantics and all previous intrinsic captures."
+    },
+    {
+      "id": "controlled-negative",
+      "statement": "The exact rejected v11 candidate must be right-reason red because the inherited numeric setter observes one or more internal append operations. The v12 candidate must make that witness, the captured-Object.defineProperty witness, v11/v12 closure and focused snapshot tests green."
+    },
+    {
+      "id": "a2-boundary",
+      "statement": "Persisted key type metadata, exact large-integer boundary representation, parser/bind precision, encoding migration and old-boundary revalidation remain A2."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any v12 src/ candidate requires category-complete independent verification newer than its last attempt, covering both sealed verificationTemplates and exact candidate fingerprints."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    }
+  ]
+}
