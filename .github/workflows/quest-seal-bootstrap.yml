@@ -178,7 +178,6 @@ jobs:
           set -euo pipefail
           files=(
             src/partition/partition-split-merge-manager.js
-            src/partition/partition-split-merge-evaluation-context.js
             src/partition/split-key-comparator.js
             src/partition/partition-split-merge-manager-core-methods.js
             src/partition/partition-split-merge-manager-evaluation-methods.js
