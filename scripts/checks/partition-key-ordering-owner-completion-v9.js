@@ -1,23 +1,38 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import {types as nodeUtilTypes} from 'node:util';
 
-import {
-  MAX_EVALUATION_CONTEXT_VALUES,
-} from '../../src/partition/partition-split-merge-manager-core-methods.js';
-import {
-  mergeEvaluationContextStringArrays,
-} from '../../src/partition/partition-split-merge-evaluation-context.js';
 import {
   replaySplitEntry,
   routeSplitSnapshotBatch,
 } from '../../src/partition/partition-split-routing.js';
 
+const MAX_EVALUATION_CONTEXT_VALUES = 1_024;
 const WRITE_ACTIVITY = 'write_activity';
-const PRIMARY_KEY_COLUMN = 'id';
 const SPLIT_PROXY_ERROR_PATTERN = /proxy/iu;
 const isProxy = nodeUtilTypes.isProxy.bind(nodeUtilTypes);
+const CONTEXT_OWNER_URL = new URL(
+  '../../src/partition/partition-split-merge-evaluation-context.js',
+  import.meta.url,
+);
 
-function reasonPolicyProblemCount() {
+async function reasonPolicyProblemCount() {
+  if (!fs.existsSync(fileURLToPath(CONTEXT_OWNER_URL))) {
+    return 1;
+  }
+  let owner;
+  try {
+    owner = await import(CONTEXT_OWNER_URL.href);
+  } catch (_error) {
+    return 1;
+  }
+  const mergeEvaluationContextStringArrays =
+    owner.mergeEvaluationContextStringArrays;
+  if (typeof mergeEvaluationContextStringArrays !== 'function') {
+    return 1;
+  }
+
   let problems = 0;
   const ordinaryLimit = MAX_EVALUATION_CONTEXT_VALUES - 1;
   const initial = Array.from(
@@ -75,38 +90,38 @@ async function liveIngressProblemCount() {
   for (const exercise of [
     async (metadata) => replaySplitEntry(
       {
-        sql:'INSERT INTO users (id) VALUES (?)',
-        params:['a'],
-        data:{id:'a'},
+        sql: 'INSERT INTO users (id) VALUES (?)',
+        params: ['a'],
+        data: {id: 'a'},
       },
       metadata,
       {
-        tableName:'users',
-        queryExecutor:{
+        tableName: 'users',
+        queryExecutor: {
           async executeOnPartition() {
             problems += 1;
-            return {success:true};
+            return {success: true};
           },
         },
       },
     ),
     async (metadata) => routeSplitSnapshotBatch(
-      [{id:'a'}],
+      [{id: 'a'}],
       ['id'],
       metadata,
       {
-        tableName:'users',
-        queryExecutor:{
+        tableName: 'users',
+        queryExecutor: {
           async executeOnPartition() {
             problems += 1;
-            return {success:true};
+            return {success: true};
           },
         },
       },
     ),
   ]) {
-    const counter={count:0};
-    const metadata=proxyWithTrapCounter(counter);
+    const counter = {count: 0};
+    const metadata = proxyWithTrapCounter(counter);
     if (!isProxy(metadata)) problems += 1;
     try {
       await exercise(metadata);
@@ -121,7 +136,10 @@ async function liveIngressProblemCount() {
   return problems;
 }
 
-const metric = reasonPolicyProblemCount() + await liveIngressProblemCount();
+const metric =
+  await reasonPolicyProblemCount() +
+  await liveIngressProblemCount();
+
 if (metric !== 0) {
   process.stderr.write(
     'partition-key-ordering-owner-completion-v9: outstanding problems=' +
