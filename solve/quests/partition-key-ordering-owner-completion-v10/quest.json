@@ -1,0 +1,64 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v10",
+  "statement": "Partition split snapshot batching preserves all A1-v9 routing/capacity semantics while consuming rows and columns only through bounded dense own-data arrays and module-captured collection intrinsics: hostile iterators, sparse/inherited/accessor slots, Proxy rows/arrays, and post-load Array/Map method mutation cannot drop, synthesize or reorder snapshot rows; grouping and parameter construction remain deterministic and exact.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v10.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-reviewed-v9",
+      "statement": "Supersedes sealed partition-key-ordering-owner-completion-v9 after the newer category-complete Copilot PR #95 review rejected exact v9 head 885d5834de0640f95faad1d7868dd2ae8615f377: routeSplitSnapshotBatch used live Array.prototype.push plus iterator/map/flatMap/join/slice collection semantics, so post-load intrinsic mutation or hostile row arrays could silently drop snapshot rows. Preserve v9 predicate/evidence unchanged."
+    },
+    {
+      "id": "dense-own-snapshot-input",
+      "statement": "routeSplitSnapshotBatch accepts only canonical dense own-data arrays for rows and columns. Proxy arrays, sparse/inherited/accessor numeric slots and Proxy row records fail closed before traps or dispatch."
+    },
+    {
+      "id": "captured-collection-intrinsics",
+      "statement": "Snapshot grouping/batching does not consult mutable Array.prototype push/join/slice/map/flatMap/Symbol.iterator or mutable Map get/set/iterator after module load. Required collection intrinsics are captured or avoided."
+    },
+    {
+      "id": "no-silent-row-loss",
+      "statement": "Every admitted snapshot row appears exactly once in one routed child batch unless descriptor-epoch refusal stops dispatch. Mutating collection intrinsics cannot turn a nonempty input into successful empty dispatch."
+    },
+    {
+      "id": "preserve-v9",
+      "statement": "Preserve v9 1023+1 reason capacity, 1024 partition-ID retention, proxy-safe live split metadata ingress, captured RegExp.exec, KeyRangeManager primitive-ID evaluation, and all v8/v7 ordering/table-ID/row-field/intrinsic semantics."
+    },
+    {
+      "id": "controlled-negative",
+      "statement": "The exact rejected v9 candidate must be right-reason red when Array.prototype.push is replaced and when snapshot rows expose a hostile iterator; the v10 candidate must keep exact grouping/SQL/params under those controls and reject Proxy/sparse row arrays without traps."
+    },
+    {
+      "id": "key-range-manager-intrinsic-debt",
+      "statement": "Existing KeyRangeManager Array.from/map/sort intrinsic hardening remains a separate owner follow-up; v10 changes only snapshot split-routing collection ownership."
+    },
+    {
+      "id": "a2-boundary",
+      "statement": "Persisted key type metadata, exact large-integer boundary representation, parser/bind precision, encoding migration and old-boundary revalidation remain A2."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any v10 source candidate requires category-complete independent verification newer than its last attempt, covering both sealed verificationTemplates and exact candidate fingerprints."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    }
+  ]
+}
