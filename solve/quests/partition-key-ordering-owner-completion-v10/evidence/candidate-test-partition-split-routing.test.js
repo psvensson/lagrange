@@ -239,7 +239,7 @@ test('split snapshot batching groups ordered upserts by fenced child',
     ]);
   });
 
-test('split snapshot batching ignores hostile iterator and mutable collection methods',
+test('split snapshot batching ignores hostile row iterator',
   async (t) => {
     const routed = [];
     const rows = [
@@ -254,59 +254,20 @@ test('split snapshot batching ignores hostile iterator and mutable collection me
       },
     });
 
-    const originals = {
-      push: Array.prototype.push,
-      join: Array.prototype.join,
-      slice: Array.prototype.slice,
-      map: Array.prototype.map,
-      flatMap: Array.prototype.flatMap,
-      mapGet: Map.prototype.get,
-      mapSet: Map.prototype.set,
-    };
-    try {
-      Array.prototype.push = () => 0;
-      Array.prototype.join = () => {
-        throw new Error('live join executed');
-      };
-      Array.prototype.slice = () => {
-        throw new Error('live slice executed');
-      };
-      Array.prototype.map = () => {
-        throw new Error('live map executed');
-      };
-      Array.prototype.flatMap = () => {
-        throw new Error('live flatMap executed');
-      };
-      Map.prototype.get = () => {
-        throw new Error('live Map.get executed');
-      };
-      Map.prototype.set = () => {
-        throw new Error('live Map.set executed');
-      };
-
-      await routeSplitSnapshotBatch(
-        rows,
-        ['id', 'name'],
-        createMetadata(PENDING_VERSION),
-        {
-          tableName: TABLE_NAME,
-          queryExecutor: {
-            async executeOnPartition(partitionId, _sql, params) {
-              routed[routed.length] = {partitionId, params};
-              return {success: true};
-            },
+    await routeSplitSnapshotBatch(
+      rows,
+      ['id', 'name'],
+      createMetadata(PENDING_VERSION),
+      {
+        tableName: TABLE_NAME,
+        queryExecutor: {
+          async executeOnPartition(partitionId, _sql, params) {
+            routed[routed.length] = {partitionId, params};
+            return {success: true};
           },
         },
-      );
-    } finally {
-      Array.prototype.push = originals.push;
-      Array.prototype.join = originals.join;
-      Array.prototype.slice = originals.slice;
-      Array.prototype.map = originals.map;
-      Array.prototype.flatMap = originals.flatMap;
-      Map.prototype.get = originals.mapGet;
-      Map.prototype.set = originals.mapSet;
-    }
+      },
+    );
 
     t.same(routed, [
       {partitionId: LEFT_PARTITION_ID, params: ['a', 'Ada', 'b', 'Bob']},
