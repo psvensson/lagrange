@@ -47,6 +47,7 @@ import {
 import {
   PartitionNodeCluster,
 } from '../raft/raft-rs-backend/partition-node-cluster.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -393,6 +394,77 @@ test('a raft-rs group charges its protocol turns and committed applies to ' +
     'the consensus buckets and the enclosing turn partition its time');
   t.ok(snapshot.busyDurationUs <= snapshot.windowDurationUs,
     'and never exceed it');
+  t.equal(snapshot.overlapDurationUs, ZERO, 'no simultaneous owners');
+  t.equal(snapshot.partitionDeltaUs, ZERO, 'no missing time');
+  t.end();
+});
+
+// The apply slice is the entry's whole SQLite commit+apply transaction
+// (RAFT_FOLLOWER_COMMIT_APPLY_SLICE), not only the application callback: the
+// application here is trivial and the cost is in the transaction around it.
+// The store's transaction advances the clock by a fixed amount at commit for
+// each applied entry (a transaction that writes the applied state), so the
+// commit must land in raft_apply and never in the enclosing protocol turn.
+test('a committed entry\'s whole SQLite transaction, its commit included, ' +
+  'is charged to raft_apply, not to the protocol turn', (t) => {
+  const COMMIT_STEP_US = 5000;
+  const TICKS = 12;
+  const COMMANDS = 3;
+  let nowUs = ZERO;
+  const attribution = new FormationTurnAttribution({clock: () => nowUs++});
+  const applied = [];
+  const transaction = RaftRsDurableStore.prototype.transaction;
+  const putAppliedState = RaftRsDurableStore.prototype.putAppliedState;
+  let appliesInTransaction = ZERO;
+  RaftRsDurableStore.prototype.putAppliedState = function(...args) {
+    appliesInTransaction += ONE;
+    return putAppliedState.apply(this, args);
+  };
+  RaftRsDurableStore.prototype.transaction = function(work) {
+    const before = appliesInTransaction;
+    const result = transaction.call(this, work);
+    if (appliesInTransaction > before) nowUs += COMMIT_STEP_US;
+    return result;
+  };
+  const cluster = new PartitionNodeCluster({
+    partitionId: 'apply-transaction-group',
+    replicaIds: ['r1'],
+    applyFor: (_replicaId, command) => {
+      applied.push(command);
+    },
+  });
+  let snapshot = null;
+  let appliedEntries = ZERO;
+  try {
+    attribution.start();
+    runBootstrapActivity(() => {
+      for (let tick = 0; tick < TICKS; tick += 1) cluster.tick('r1');
+      t.ok(cluster.settle(() => cluster.leaderReplicaId() === 'r1'),
+        'the single voter leads');
+      for (let index = 0; index < COMMANDS; index += 1) {
+        cluster.propose('r1', {op: 'apply-transaction', index});
+      }
+      t.ok(cluster.settle(() => applied.length === COMMANDS),
+        'every proposed command was applied');
+    });
+    snapshot = attribution.stop();
+    appliedEntries = appliesInTransaction;
+  } finally {
+    RaftRsDurableStore.prototype.transaction = transaction;
+    RaftRsDurableStore.prototype.putAppliedState = putAppliedState;
+    cluster.dispose();
+  }
+  const protocol = ownerRow(snapshot, FORMATION_OWNER.RAFT_PROTOCOL);
+  const apply = ownerRow(snapshot, FORMATION_OWNER.RAFT_APPLY);
+  t.ok(appliedEntries >= COMMANDS, `${appliedEntries} applied entries ` +
+    'each committed their own transaction');
+  t.ok(apply.durationUs >= appliedEntries * COMMIT_STEP_US,
+    'every apply transaction\'s commit is charged to raft_apply ' +
+    `(${apply.durationUs}us)`);
+  t.ok(protocol.durationUs < COMMIT_STEP_US,
+    `no commit is charged to raft_protocol (${protocol.durationUs}us)`);
+  t.equal(apply.handoffCount, appliedEntries,
+    'one apply slice per committed entry transaction');
   t.equal(snapshot.overlapDurationUs, ZERO, 'no simultaneous owners');
   t.equal(snapshot.partitionDeltaUs, ZERO, 'no missing time');
   t.end();

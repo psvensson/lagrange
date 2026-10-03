@@ -81,17 +81,14 @@ function coreOk(reason, fields = {}) {
 
 // The partition's application receives one frozen committed record: the
 // command the port encoded, decoded by the same codec, and the entry's
-// position and deferred-effect bag the runtime hands the application. The
-// application is the committed-entry apply slice for formation attribution;
-// the deferred effects run after it, with the turn that applied the entry.
+// position and deferred-effect bag the runtime hands the application.
 function committedEntryApplication(applyCommittedEntry) {
-  return (bytes, {index, term, effects}) => runRaftApplySlice(() =>
-    applyCommittedEntry(Object.freeze({
-      command: decodeCommittedProposal(bytes),
-      index: Number(index),
-      term: Number(term),
-      effects,
-    })));
+  return (bytes, {index, term, effects}) => applyCommittedEntry(Object.freeze({
+    command: decodeCommittedProposal(bytes),
+    index: Number(index),
+    term: Number(term),
+    effects,
+  }));
 }
 
 function tickIntervalOf(timing) {
@@ -220,6 +217,10 @@ function createRaftRsOperationPort(request) {
       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
     applyTransactionRolledBack:
       request[RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
+    // Each committed entry's whole SQLite commit+apply transaction is the
+    // formation-attribution apply slice; injected, so the runtime owner's
+    // import closure stays free of diagnostics (restore-path fence).
+    runApplySlice: runRaftApplySlice,
     // A core entry the runtime schedules itself (the drain of delivered
     // inbound) is admitted by this replica's lifecycle owner like every
     // operation the port is asked for, inside the same containment.

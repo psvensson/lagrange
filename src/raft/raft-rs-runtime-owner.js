@@ -813,6 +813,7 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
       confState: resolvedConfState.value,
       applyCommittedEntry: group.applyCommittedEntry,
       admitted,
+      runApplySlice: group.runApplySlice,
     });
   } catch (error) {
     group.applyTransactionRolledBack?.();
@@ -1439,6 +1440,7 @@ function createRuntimeDispatcher(request) {
     resolvePeerIdentity: request.resolvePeerIdentity,
     applyCommittedEntry: request.applyCommittedEntry,
     applyTransactionRolledBack: request.applyTransactionRolledBack,
+    runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,
     emit: request.emit,
     handle: null,
