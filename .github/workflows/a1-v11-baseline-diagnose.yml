@@ -1,0 +1,78 @@
+name: a1-v11-baseline-diagnose
+
+on:
+  push:
+    branches:
+      - quest/0-3-queryable-core-foundation
+    paths:
+      - .github/workflows/a1-v11-baseline-diagnose.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - run: npm ci
+
+      - name: Scoped metrics
+        continue-on-error: true
+        run: |
+          files=(
+            src/partition/partition-split-merge-manager.js
+            src/partition/partition-split-merge-evaluation-context.js
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+            src/partition/partition-split-merge-manager-transition-methods.js
+            src/partition/partition-split-routing.js
+            src/partition/partition-service-shared.js
+            src/utils/strict-own-data.js
+          )
+          npm run -s test:metrics:scoped -- "${files[@]}"
+
+      - name: Literal guideline
+        continue-on-error: true
+        run: |
+          files=(
+            src/partition/partition-split-merge-manager.js
+            src/partition/partition-split-merge-evaluation-context.js
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+            src/partition/partition-split-merge-manager-transition-methods.js
+            src/partition/partition-split-routing.js
+            src/partition/partition-service-shared.js
+            src/utils/strict-own-data.js
+          )
+          node scripts/check-guideline-literals.js "${files[@]}"
+
+      - name: Runtime grammar
+        continue-on-error: true
+        run: |
+          files=(
+            src/partition/partition-split-merge-manager.js
+            src/partition/partition-split-merge-evaluation-context.js
+            src/partition/split-key-comparator.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+            src/partition/partition-split-merge-manager-transition-methods.js
+            src/partition/partition-split-routing.js
+            src/partition/partition-service-shared.js
+            src/utils/strict-own-data.js
+          )
+          node scripts/check-runtime-grammar-contracts.js "${files[@]}"
+
+      - name: File-size ratchet
+        continue-on-error: true
+        run: node scripts/check-file-size-thresholds.js
