@@ -1,0 +1,65 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v3",
+  "statement": "Partition-key ordering has one complete hostile-input-safe owner: compareRoutingKeys supplies deterministic SQLite-BINARY-compatible UTF-8 text order while preserving numeric/TEXT numeric routing, rejects unsupported values before coercion with the exact typed mismatch, remains stable if mutable JavaScript intrinsics are replaced after module load, and is the actual expression used by KeyRange, PartitionResolver, QueryGroup, split/merge sorting and merge adjacency.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v3.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-reviewed-v2",
+      "statement": "Supersedes partition-key-ordering-owner-completion-v2 after category-complete Copilot reviews found four remaining verifier/candidate defects: token-only structural ownership checks, broad mismatch acceptance, unsupported same-type coercion, and mutable intrinsic lookup. Preserve v2's sealed predicate and evidence unchanged."
+    },
+    {
+      "id": "sqlite-binary-text-order",
+      "statement": "Primitive string keys use deterministic SQLite BINARY-compatible UTF-8 byte order, including BMP/non-BMP cases that differ from JavaScript UTF-16 relational order."
+    },
+    {
+      "id": "typed-refusal-before-coercion",
+      "statement": "Only number, primitive string, Buffer, absent bounds, and the explicit numeric-vs-text-encoded-number compatibility case are comparable. Unsupported or boxed same-type values fail closed with the exact typed split-key mismatch before any user-controlled coercion."
+    },
+    {
+      "id": "intrinsics-independent",
+      "statement": "Partition-key comparison captures every mutable intrinsic it needs at module load. Replacing Buffer comparison/conversion/type checks, Number conversion/finite checks, String, or RegExp.test after import must not change valid routing outcomes."
+    },
+    {
+      "id": "actual-owner-expression",
+      "statement": "The doneWhen predicate and behavioral witnesses prove the actual split/merge sort and adjacency expressions call compareRoutingKeys; an unrelated or dead owner token cannot satisfy closure."
+    },
+    {
+      "id": "preexisting-numeric-contract",
+      "statement": "Preserve numeric-key-routing: number/number remains numeric and a number against a text-encoded numeric persisted boundary compares numerically."
+    },
+    {
+      "id": "no-boundary-format-migration",
+      "statement": "Numeric precision, persisted type metadata, encoding migration and old-boundary revalidation remain A2. Do not expand A1-v3 into the persisted representation migration."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    },
+    {
+      "id": "controlled-negatives",
+      "statement": "SQLite-BINARY ordering, adjacency delegation, exact mismatch refusal, unsupported-object non-coercion and mutable-intrinsic stability each need a right-reason witness; combined-treatment reds are insufficient where an isolated control is available."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any src/ candidate needs a category-complete independent verification newer than the last attempt, covering both sealed verificationTemplates with concrete evidence paths."
+    }
+  ],
+  "sealedAt": "ed3d7e379329f9835f1397bf4763c8636efde5ce"
+}

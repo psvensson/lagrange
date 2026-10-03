@@ -1,0 +1,69 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v9",
+  "statement": "Partition-key ordering preserves all A1-v8 routing and split/merge hardening while making the coalesced evaluation-context capacity policy explicit and trap-free at live split-routing ingress: reasonCodes reserve one canonical slot for write_activity, admit at most the first 1023 distinct non-priority diagnostics, never evict an already-admitted diagnostic, and preserve write_activity if observed; partitionIds remain first-wins bounded at 1024; replay and snapshot routing reject metadata Proxies before any field access and consume primaryKeyColumn from own data; all v8/v7 routing, ID-only evaluation, RegExp.exec capture, proxy-safe resolver, table-ID, row-field and intrinsic semantics remain unchanged.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v9.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-reviewed-v8",
+      "statement": "Supersedes sealed partition-key-ordering-owner-completion-v8 after the category-complete Copilot post-attempt review on PR #93 rejected the exact v8 candidate for evicting an already-pending reason to force write_activity into a full bounded array and for missing a complete retained-reason assertion. The same review also identified live split-routing Proxy ingress as broader than the resolver boundary promised by v8. Preserve v8 predicate/evidence unchanged."
+    },
+    {
+      "id": "reason-capacity-owner",
+      "statement": "MAX_EVALUATION_CONTEXT_VALUES remains the total reasonCodes bound. One slot is permanently reserved for the priority reason write_activity; at most MAX-1 distinct non-priority reasons are admitted first-wins. Once admitted, non-priority reasons are never evicted by later coalescing. If write_activity appears in any valid request it occupies the reserved slot. This explicit policy resolves the impossible triad of 1024 preexisting diagnostics + new priority + unchanged 1024 bound."
+    },
+    {
+      "id": "partition-id-capacity",
+      "statement": "partitionIds retain the full MAX_EVALUATION_CONTEXT_VALUES first-wins bound. Later IDs are truncated; accumulated admitted IDs are never erased or evicted."
+    },
+    {
+      "id": "live-split-routing-proxy-fence",
+      "statement": "replaySplitEntry and routeSplitSnapshotBatch reject Proxy metadata before descriptor-epoch logic, primaryKeyColumn lookup or split-target resolution can execute Proxy get/getOwnPropertyDescriptor/iterator traps. primaryKeyColumn is consumed from own data, not inherited/accessor state."
+    },
+    {
+      "id": "complete-retention-witness",
+      "statement": "The coalescing witness asserts the exact retained non-priority reason sequence, the reserved write_activity slot, repeated-overflow stability, and the exact retained partition-ID sequence; count-only assertions are insufficient."
+    },
+    {
+      "id": "preserve-v8",
+      "statement": "Preserve v8 KeyRangeManager primitive-ID split evaluation, row-only fallback adjacency, captured RegExp.exec numeric-TEXT recognition, proxy-safe resolver/target arrays, all v7/v6 ordering/table-ID/row-field/prototype/intrinsic semantics, and the evaluation-context helper as the single bounded-union owner."
+    },
+    {
+      "id": "controlled-negatives",
+      "statement": "The exact rejected v8 candidate must be right-reason red for complete reason preservation and live split-routing Proxy ingress while remaining green for v8's prior four closures. The v9 candidate must make v8/v9 probes and focused routing/merge/capacity tests green."
+    },
+    {
+      "id": "key-range-manager-intrinsic-debt",
+      "statement": "PR #93 also noted inherited live Array.from/map/sort usage inside KeyRangeManager. That is an existing KeyRangeManager-owner intrinsic-hardening concern, not introduced by v8 and not silently absorbed into v9; record it for separate owner follow-up unless a v9 controlled witness proves it is required for this Quest's stated closure."
+    },
+    {
+      "id": "a2-boundary",
+      "statement": "Persisted key type metadata, exact large-integer boundary representation, parser/bind precision, encoding migration and old-boundary revalidation remain A2."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any v9 source candidate requires category-complete independent verification newer than its last attempt, covering both sealed verificationTemplates and exact candidate fingerprints."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    }
+  ],
+  "sealedAt": "7daefc4c5119d7ef4b6a178b2c71a443b0b1dc2f"
+}

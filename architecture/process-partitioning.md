@@ -94,9 +94,13 @@ Three limitations to know before you rely on narrowing:
   primary key is named anything else scatter-gathers on every statement. The
   composite-key resolution path exists in the code but is unreachable for the
   same reason.
-- **Range comparison is string-based.** Keys are compared with
-  `String#localeCompare`, so numeric keys stored as strings order
-  lexicographically (`"10" < "9"`).
+- **Range comparison is type-aware.** Text keys use SQLite
+  BINARY-compatible UTF-8 byte ordering. Numbers compare numerically, and a
+  numeric runtime key compared with a text-encoded numeric partition boundary
+  also compares numerically because the system table persists boundaries as
+  TEXT. Other mixed key spaces fail closed with the typed split-key mismatch.
+  Two actual text keys still sort lexicographically by their UTF-8 bytes (so
+  `"10" < "9"`).
 - **Conflicting `AND` conditions are last-writer-wins** on condition type, so
   `pk > 10 AND pk = 5` can resolve differently from its reverse.
 

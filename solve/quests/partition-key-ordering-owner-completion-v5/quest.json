@@ -1,0 +1,65 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v5",
+  "statement": "Partition-key ordering has one complete hostile-input-safe owner with a canonical comparator contract: every supported comparison returns exactly LEFT, EQUAL or RIGHT as a finite value; SQLite-BINARY UTF-8 and numeric/TEXT ordering are preserved; unsupported/non-finite/boxed/exotic values fail closed before coercion; split metadata and merge table IDs are consumed from own data properties without accessor, inheritance, iterator or prototype-pollution semantics; falsey non-string table IDs still reach typed validation; mutable intrinsics are captured and independently witnessed; and KeyRange, PartitionResolver, QueryGroup plus split/merge sort and adjacency use the actual owned comparator expressions.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v5.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-reviewed-v4",
+      "statement": "Supersedes sealed partition-key-ordering-owner-completion-v4 after category-complete Copilot PR #86 review of exact v4 candidate head 0b8689a7fc25a51c175670d6e2c8e479d8cffa1a found four residual gaps: raw numeric subtraction could return noncanonical/non-finite results for finite inputs; falsey non-string table IDs were normalized to absence before validation; no explicit enumerable Object/Array prototype-pollution fixture existed; and Object.getOwnPropertyDescriptor/Object.hasOwn mutation controls were not isolated. Preserve v4's predicate and evidence unchanged."
+    },
+    {
+      "id": "canonical-finite-comparator-result",
+      "statement": "For every supported pair, compareRoutingKeys and compareSplitKey return exactly COMPARISON_RESULT.LEFT (-1), EQUAL (0) or RIGHT (1). Finite numeric extremes never produce Infinity, -Infinity, NaN or an arbitrary magnitude."
+    },
+    {
+      "id": "table-id-own-data",
+      "statement": "Merge evaluation reads table_id/tableId from own data properties only. Inherited/accessor values are not table identity; falsey present non-string values such as 0 and false are preserved to the primitive-string validator and rejected rather than normalized to absence."
+    },
+    {
+      "id": "prototype-pollution",
+      "statement": "Enumerable pollution on Object.prototype or Array.prototype cannot supply split metadata, target IDs or merge table IDs. Tests install and restore hostile prototype properties and prove the actual production consumers ignore them."
+    },
+    {
+      "id": "object-intrinsics-isolated",
+      "statement": "Captured Object.getOwnPropertyDescriptor and Object.hasOwn are each witnessed in separate engaged controls on split-target routing; any equivalent table-ID metadata captures are likewise exercised at their real consumer."
+    },
+    {
+      "id": "preserve-v4-ordering",
+      "statement": "Preserve all v4-proven behavior: validation before equality, exact typed refusal before coercion, SQLite BINARY-compatible UTF-8 text order including non-BMP keys, numeric/TEXT compatibility, own-data iterator-free split metadata, coercion-free primitive table-ID comparison, mutable Buffer/Number/String/RegExp/Error/Array intrinsic stability, and actual owner expressions."
+    },
+    {
+      "id": "a2-boundary",
+      "statement": "Persisted key type metadata, exact large-integer boundary representation, encoding migration and old-boundary revalidation remain A2. Canonicalizing the in-memory comparator result is A1 and must not be conflated with durable numeric representation."
+    },
+    {
+      "id": "controlled-negatives",
+      "statement": "The v5 proof runs the new witnesses against the exact rejected v4 candidate. Finite-extreme canonicalization and falsey/non-own table-ID handling must be right-reason red there. The prototype-pollution and isolated Object-intrinsic findings were harness gaps in already-safe production behavior, so their closure is non-vacuous execution at the real consumers, not an invented red requirement."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any v5 src/ candidate requires category-complete independent verification newer than its last attempt, covering both sealed verificationTemplates with evidence paths and exact candidate fingerprints."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    }
+  ],
+  "sealedAt": "1baa4a6cbdf627d5d223bc50b97b20861c8fa632"
+}

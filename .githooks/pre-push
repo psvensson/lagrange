@@ -29,9 +29,14 @@
 # stage below then reads the pushed bytes, never the working tree. A manual
 # invocation gates HEAD. The stages and the tree each one reads are declared
 # in test/manifests/pre-push-stages.json.
-# Bypass with git push --no-verify (emergencies only; skips EVERYTHING).
-# Skip only the test stage with LAGRANGE_PUSH_SKIP_TESTS=1 git push - for
-# when the exact working tree was already gated green this session.
+# Ordinary non-main branch pushes are preservation actions: committed work
+# must always be able to reach the remote even when a Quest is deliberately
+# red-first or incomplete. They skip the local proof gate by default; remote
+# presence is NOT merge/release approval. Set LAGRANGE_PUSH_PROVE_BRANCH=1 to
+# request the full gate for a non-main branch.
+# Main pushes still take the full gate. Bypass with git push --no-verify only
+# for emergencies (it skips EVERYTHING). LAGRANGE_PUSH_SKIP_TESTS=1 skips only
+# the repeated test stage after an exact tree has already been gated green.
 # Unused-file findings on untracked paths do not block: untracked files are
 # never part of a push (a concurrent session's in-flight work must not gate
 # this one). See scripts/checks/push-gate-unused-files.js.
@@ -76,6 +81,7 @@ PUSHED_SHA=""
 PUSHED_REF=""
 MAIN_REMOTE_SHA=""
 ALL_PROVEN_TAG_REFS=1
+ALL_NON_MAIN_BRANCH_REFS=1
 ZERO_SHA="0000000000000000000000000000000000000000"
 # The ref lines are kept so the exact-checkout re-run below sees the same push.
 REF_LINES_FILE="$(mktemp)"
@@ -91,6 +97,16 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
     PUSHING_MAIN=1
     MAIN_REMOTE_SHA="${remote_sha}"
   fi
+  case "${remote_ref}" in
+    refs/heads/*)
+      if [ "${remote_ref}" = "refs/heads/main" ]; then
+        ALL_NON_MAIN_BRANCH_REFS=0
+      fi
+      ;;
+    *)
+      ALL_NON_MAIN_BRANCH_REFS=0
+      ;;
+  esac
   case "${remote_ref}" in
     # A proof receipt (refs/lagrange-proofs/<contract>/<sha>) is an annotated
     # tag over a commit that is ALREADY proven and pushed; it adds no tree and
@@ -118,6 +134,7 @@ done
 if [ "${SAW_REF}" = "0" ]; then
   PUSHING_MAIN=1
   ALL_PROVEN_TAG_REFS=0
+  ALL_NON_MAIN_BRANCH_REFS=0
 fi
 
 # A data-only push of the nightly formation-health trend record. The workflow
@@ -166,6 +183,19 @@ stage "tag-only-fast-path" "tag-only fast path check"
 # 2026-08-23; skip the gauntlet entirely for that case.
 if [ "${ALL_PROVEN_TAG_REFS}" = "1" ]; then
   echo "pre-push: tag-or-receipt-only push of commits already on origin/main - skipping gate"
+  exit 0
+fi
+
+# Ordinary feature/WIP branches are preservation surfaces, not publication
+# boundaries. A committed SHA must always be remotely preservable even while
+# its Quest witnesses are intentionally red. Main, tags/proof refs and mixed
+# pushes do not take this path. Operators can opt a branch into the full local
+# proof with LAGRANGE_PUSH_PROVE_BRANCH=1.
+stage "branch-preservation-fast-path" "non-main branch preservation check"
+if [ "${ALL_NON_MAIN_BRANCH_REFS}" = "1" ] && [ -z "${LAGRANGE_PUSH_PROVE_BRANCH:-}" ]; then
+  echo "pre-push: non-main branch preservation push - skipping local proof gate"
+  echo "pre-push: remote preservation is NOT merge, Quest-land, release, or publication approval"
+  echo "pre-push: set LAGRANGE_PUSH_PROVE_BRANCH=1 to prove a feature branch locally before push"
   exit 0
 fi
 

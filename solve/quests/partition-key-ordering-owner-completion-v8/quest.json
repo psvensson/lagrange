@@ -1,0 +1,65 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v8",
+  "statement": "Partition-key ordering preserves all A1-v7 routing and split/merge hardening while closing the post-attempt consumer gaps: KeyRangeManager ID-only partition lists remain valid for split evaluation without entering row-based fallback adjacency; coalesced evaluation context is a bounded stable union that never erases existing diagnostics and always preserves reactive write_activity; numeric-TEXT detection uses a RegExp exec intrinsic captured at module load; split routing rejects Proxy metadata and Proxy target-ID arrays before descriptor traps can run; and all v7/v6 SQLite-BINARY, numeric/TEXT, typed refusal, own-data, prototype-pollution, captured-intrinsic, table-ID and row-field semantics remain unchanged.",
+  "epic": "release-0-3-queryable-core",
+  "links": {
+    "roadmapRow": "RM-0.3-qs-typed-key-ordering",
+    "specRef": "solve/specs/release-0-3-queryable-core/tasks.md#A1",
+    "planDoc": "solve/epics/release-0-3-queryable-core.md"
+  },
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v8.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-post-attempt-v7-review",
+      "statement": "Supersedes sealed partition-key-ordering-owner-completion-v7 after the newer structured Copilot review on PR #92 (2026-10-03T07:01:21Z) rejected exact post-attempt head f45fdd68072ff6575647ad67123fc0ff5e7cbcbb for four defects. The earlier 06:55 ACCEPT is older and non-governing. Preserve v7 predicate/evidence unchanged."
+    },
+    {
+      "id": "key-range-manager-id-path",
+      "statement": "When loadEvaluationPartitions falls back to KeyRangeManager.getAllPartitions(), primitive string partition IDs remain valid split-evaluation inputs. They are never fed into row canonicalization or row-based fallback adjacency; merge adjacency continues to use KeyRangeManager.getSortedPartitions()."
+    },
+    {
+      "id": "bounded-context-union",
+      "statement": "Coalesced reasonCodes and partitionIds remain bounded by the canonical evaluation-context limit. Overflow truncates later diagnostic values rather than erasing the accumulated context; existing pending values remain stable. If write_activity appears in either valid input it survives the bounded merge so reactive pressure bypass cannot be silently disabled."
+    },
+    {
+      "id": "captured-regexp-exec",
+      "statement": "Numeric-TEXT recognition invokes a RegExp.prototype.exec intrinsic captured at module initialization. Replacing either RegExp.prototype.exec or test after load cannot change compareRoutingKeys semantics."
+    },
+    {
+      "id": "proxy-safe-split-metadata",
+      "statement": "Proxy metadata objects and Proxy targetPartitionIds arrays are rejected before any getOwnPropertyDescriptor/get/iterator trap is invoked. Normal own-data metadata and ordinary dense target arrays retain existing routing semantics."
+    },
+    {
+      "id": "preserve-v7",
+      "statement": "Preserve all independently proven v7 behavior: invalid table-ID validation before absence, bounded iterator-free evaluation rows, own-data partition row fields, captured array/sort/Reflect/Object intrinsics, safe nested context canonicalization, execution-options protection, canonical routing -1/0/1 results, invalid-versus-absent refusal, SQLite BINARY UTF-8 including non-BMP, numeric/TEXT compatibility, and KeyRange/PartitionResolver/QueryGroup ownership."
+    },
+    {
+      "id": "controlled-negatives",
+      "statement": "Each new v8 witness is run against exact rejected post-attempt v7 candidate f45fdd68072ff6575647ad67123fc0ff5e7cbcbb and must fail for the named production mechanism. Harness-only failures do not satisfy the control."
+    },
+    {
+      "id": "a2-boundary",
+      "statement": "Persisted key type metadata, exact large-integer boundary representation, parser/bind precision, encoding migration and old-boundary revalidation remain A2."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Any v8 source candidate requires a category-complete independent verification newer than its last attempt, covering both sealed verificationTemplates and exact candidate fingerprints."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    }
+  ],
+  "sealedAt": "a4c52157aacf0ab8233bb4ba47c6ad9aa03e7e09"
+}

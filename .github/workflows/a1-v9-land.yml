@@ -1,0 +1,121 @@
+name: a1-v9-solver-land
+
+on:
+  push:
+    branches:
+      - quest/0-3-queryable-core-foundation
+    paths:
+      - .github/workflows/a1-v9-land.yml
+
+permissions:
+  contents: write
+
+jobs:
+  land:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      TAP_TIMEOUT_FLOOR: '120'
+      LAGRANGE_TEST_MACHINE_FACTOR: '3'
+      BRANCH: quest/0-3-queryable-core-foundation
+      QUEST_ID: partition-key-ordering-owner-completion-v9
+      REVIEW_SHA: 885d5834de0640f95faad1d7868dd2ae8615f377
+    steps:
+      - name: Checkout exact authoritative head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install exact independently accepted A1-v9 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=solve/quests/partition-key-ordering-owner-completion-v9/evidence
+          cp "$evidence/candidate-src-split-merge-manager.js" src/partition/partition-split-merge-manager.js
+          cp "$evidence/candidate-src-evaluation-context.js" src/partition/partition-split-merge-evaluation-context.js
+          cp "$evidence/candidate-src-split-key-comparator.js" src/partition/split-key-comparator.js
+          cp "$evidence/candidate-src-split-merge-core.js" src/partition/partition-split-merge-manager-core-methods.js
+          cp "$evidence/candidate-src-split-merge-evaluation.js" src/partition/partition-split-merge-manager-evaluation-methods.js
+          cp "$evidence/candidate-src-split-merge-transition.js" src/partition/partition-split-merge-manager-transition-methods.js
+          cp "$evidence/candidate-src-partition-split-routing.js" src/partition/partition-split-routing.js
+          cp "$evidence/candidate-test-routing-key-comparator.test.js" test/partition/routing-key-comparator.test.js
+          cp "$evidence/candidate-test-merge-auto-execution.test.js" test/partition/merge-auto-execution.test.js
+          cp "$evidence/candidate-test-partition-split-routing.test.js" test/partition/partition-split-routing.test.js
+
+      - name: Verify exact review/attempt fingerprints and closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/v9.sha256" <<'EOF'
+          9aba852cf52c65e3e63927a28fdd0438a27864c96188ab5b77f71842aa31b81e  src/partition/partition-split-merge-manager.js
+          4cac564fbb7504f73ef0c6be6c96b34fd2e57f24a53b9a32465ff8d1269f9fd5  src/partition/partition-split-merge-evaluation-context.js
+          4142ae6c02ad40aeef4c1d1b5a692f3fe9c975d9027a9d51899478612bb9e652  src/partition/split-key-comparator.js
+          395b9c3e6ba6b00a1c86a94943b0d03584e7975e025004538e1cc2385aa3590b  src/partition/partition-split-merge-manager-core-methods.js
+          28909b70aae1746eb2fd895d795397b3523e6fcb4f37ec59fd40a19c3e2bada8  src/partition/partition-split-merge-manager-evaluation-methods.js
+          36b32055b89b9c19efa211abd67193a65d61a730b5720c836e533caa6ceeb35c  src/partition/partition-split-merge-manager-transition-methods.js
+          65b3d3f70294c65d1b8ced3cd379795a8d732c61e79ca80df77bec228c419524  src/partition/partition-split-routing.js
+          75731d4832f734ff89f063f35a4577443920b40376cb012d8eb20e55a54bcbc4  test/partition/routing-key-comparator.test.js
+          7ca08f03cb299a59c2f48edbdda47c989d8d06958f69c3cf348cb8fce05fb200  test/partition/merge-auto-execution.test.js
+          8f68493406d9698ea717caf9a47b81391c144c32ef20cc46b6867199b8f337bf  test/partition/partition-split-routing.test.js
+          EOF
+          sed -i 's/^          //' "$RUNNER_TEMP/v9.sha256"
+          sha256sum --check "$RUNNER_TEMP/v9.sha256"
+          node scripts/checks/partition-key-ordering-owner-completion-v9.js
+          node scripts/solve.js probe --id "$QUEST_ID"
+
+      - name: Record fresh post-attempt independent approval
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/solve.js note             --id "$QUEST_ID"             --verification "APPROVE: category-complete Copilot review PR #95 accepted exact generated-state-current head ${REVIEW_SHA} after canonical A1-v9 attempt run 37109680542. It independently matched all ten candidate SHA-256 fingerprints, found no unresolved defects under harness-fidelity or adversarial-js-intrinsics, confirmed the explicit 1023+1 reason-capacity policy, 1024 first-wins partition IDs, trap-free own-data split-routing ingress, captured RegExp.exec, preserved KeyRangeManager ID-only evaluation and v8/v7 routing/merge hardening, and used exact-head reproof/generated-state run 37117409499. KeyRangeManager intrinsic hardening and A2 durable integer/type representation remain explicitly out of scope."             --verifier subagent:github-copilot-pr95             --verdict approve
+
+      - name: Solver land A1-v9
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/solve.js land --id "$QUEST_ID"
+
+      - name: Verify solved landing
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum --check "$RUNNER_TEMP/v9.sha256"
+          node scripts/solve.js probe --id "$QUEST_ID"
+          grep -q '"status":"solved"' "solve/quests/$QUEST_ID/log.ndjson"
+          echo "LANDING_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git status --short
+
+      - name: Remove temporary landing workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/a1-v9-land.yml
+          git commit -m "ci: remove completed A1-v9 landing workflow"
+
+      - name: Preserve Solver landing on feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$BRANCH"
+          remote_sha="$(git rev-parse "origin/$BRANCH")"
+          if [ "$remote_sha" != "$GITHUB_SHA" ]; then
+            echo "Branch advanced from event SHA $GITHUB_SHA to $remote_sha; refusing stale push"
+            exit 1
+          fi
+
+          git push origin HEAD:refs/heads/"$BRANCH"
+          echo "Solver landing commit: $LANDING_SHA"
+          echo "Published feature-branch head: $(git rev-parse HEAD)"

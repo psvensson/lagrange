@@ -140,11 +140,16 @@ The default runner is GitHub-hosted. Self-hosted routing requires
 `--runner self-hosted`; publish validates the marker and never amends; when
 origin/main advanced only by inert data commits (the nightly formation trend)
 it rebases the local commits over them, refusing on a dirty tracked tree or a
-conflict. Direct
-`git push` remains an advanced escape hatch. If the exact tree already passed
-`test:gate:postpush`,
-`LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the repeated test stage; static
-checks still run. `--no-verify` skips every gate and is emergencies-only.
+conflict. Direct branch pushes are preservation actions. A normal `git push` to one or
+more non-`main` branch refs skips the local proof gate so a committed WIP can
+always be preserved remotely; that remote branch is not Quest-land, merge,
+release or publication approval. Set `LAGRANGE_PUSH_PROVE_BRANCH=1` when you
+deliberately want the full local push gate on a feature branch.
+
+Pushes that update `main` still take the full gate. If that exact tree already
+passed `test:gate:postpush`, `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only
+the repeated test stage; static checks still run. `--no-verify` skips every
+gate and is emergencies-only.
 
 Whichever path runs the hook, it proves the pushed sha and nothing else: outside
 an exact checkout it materialises the first pushed local sha once into a
