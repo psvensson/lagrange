@@ -20,9 +20,11 @@ import {
 } from '../rebalancer/storage-capacity-constants.js';
 import {
   cloneStringArray as cloneEvaluationContextStringArray,
-  mergeBoundedStringArrays as mergeEvaluationContextStringArrays,
   createPartitionSplitMergeManagerCoreMethods,
 } from './partition-split-merge-manager-core-methods.js';
+import {
+  mergeBoundedStringArrays as mergeEvaluationContextStringArrays,
+} from './partition-split-merge-evaluation-context.js';
 import {
   createPartitionSplitMergeManagerTransitionMethods,
 } from './partition-split-merge-manager-transition-methods.js';
