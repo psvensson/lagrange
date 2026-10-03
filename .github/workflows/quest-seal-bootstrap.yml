@@ -68,6 +68,7 @@ jobs:
           set -euo pipefail
           files=(
             src/partition/partition-split-merge-manager.js
+            src/partition/partition-constants.js
             src/partition/split-key-comparator.js
             src/partition/partition-split-merge-manager-core-methods.js
             src/partition/partition-split-merge-manager-evaluation-methods.js
@@ -154,6 +155,8 @@ jobs:
             src/partition/partition-split-merge-manager-evaluation-methods.js
           cp "$evidence/candidate-src-split-merge-transition.js" \
             src/partition/partition-split-merge-manager-transition-methods.js
+          cp "$evidence/candidate-src-partition-constants.js" \
+            src/partition/partition-constants.js
           cp "$evidence/candidate-src-partition-split-routing.js" \
             src/partition/partition-split-routing.js
           cp "$evidence/candidate-src-partition-service-shared.js" \
@@ -180,6 +183,8 @@ jobs:
           set -euo pipefail
           files=(
             src/partition/partition-split-merge-manager.js
+            src/partition/partition-split-merge-evaluation-context.js
+            src/partition/partition-constants.js
             src/partition/split-key-comparator.js
             src/partition/partition-split-merge-manager-core-methods.js
             src/partition/partition-split-merge-manager-evaluation-methods.js
@@ -213,6 +218,7 @@ jobs:
             src/partition/partition-split-merge-manager-core-methods.js \
             src/partition/partition-split-merge-manager-evaluation-methods.js \
             src/partition/partition-split-merge-manager-transition-methods.js \
+            src/partition/partition-constants.js \
             src/partition/partition-split-routing.js \
             src/partition/partition-service-shared.js \
             src/utils/strict-own-data.js \
@@ -240,6 +246,7 @@ jobs:
             src/partition/partition-split-merge-manager-core-methods.js \
             src/partition/partition-split-merge-manager-evaluation-methods.js \
             src/partition/partition-split-merge-manager-transition-methods.js \
+            src/partition/partition-constants.js \
             src/partition/partition-split-routing.js \
             src/partition/partition-service-shared.js \
             src/utils/strict-own-data.js \
