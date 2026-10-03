@@ -95,6 +95,10 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
     // group from the replica set it was created with.
     'src/message-group/message-group-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
+    // R4 (zero-Liferaft): a WASM service replica runs on its own raft-rs
+    // port and, like a message group, founds a group without a durable
+    // record from the replica set it was created with.
+    'src/wasm-service/wasm-service-consensus-port.js',
   ]);
   assert.deepEqual(filesMatching(/\bdurableRecordBootstrap\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
@@ -113,6 +117,8 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     /BOOTSTRAP_MEMBERSHIP\b|\bbootstrapMembership\b|bootstrap_membership/u), [
     // Producers.
     'src/message-group/message-group-consensus-port.js',
+    // R4: the WASM service replica's genesis founding set (see above).
+    'src/wasm-service/wasm-service-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
     'src/rebalancer/committed-membership-bootstrap-read.js',
     'src/rebalancer/rebalance-coordinator-operation-creation.js',

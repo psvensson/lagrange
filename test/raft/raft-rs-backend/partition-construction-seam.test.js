@@ -21,6 +21,13 @@ const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const OPERATION_PORT_FACTORY_OWNER =
   'src/partition/partition-service-core-base.js';
+// The one other consensus runtime with its own factory method: the zero-
+// Liferaft cutover moved message groups onto the raft-rs port, built through
+// MessageGroupService.createOperationPort (not a PartitionService subclass,
+// so it replaces nothing of the partition's; its test seam overrides it the
+// same way). Any further definer is a new production override.
+const MESSAGE_GROUP_OPERATION_PORT_FACTORY_OWNER =
+  'src/message-group/message-group-service-state.js';
 const OPERATION_PORT_FACTORY_DEFINITION =
   /^\s*(?:async\s+)?createOperationPort\s*\([^)]*\)\s*\{/mu;
 // The request fields only the retired backend read: the durable log it wrote
@@ -123,9 +130,13 @@ test('no production module replaces the partition operation-port factory',
       .filter((file) => OPERATION_PORT_FACTORY_DEFINITION.test(
         fs.readFileSync(file, 'utf8')))
       .map((file) => path.relative(ROOT, file).split(path.sep).join('/'));
-    assert.deepEqual(definers, [OPERATION_PORT_FACTORY_OWNER],
-      'only the partition core defines createOperationPort; a subclass that ' +
-      'overrides it is a test seam, never a production path');
+    assert.deepEqual(definers.sort(), [
+      MESSAGE_GROUP_OPERATION_PORT_FACTORY_OWNER,
+      OPERATION_PORT_FACTORY_OWNER,
+    ].sort(),
+    'only the partition core (and the message group, for its own ' +
+      'runtime) defines createOperationPort; a subclass that overrides it ' +
+      'is a test seam, never a production path');
   });
 
 test('the request carries the partition requirements and no retired field',

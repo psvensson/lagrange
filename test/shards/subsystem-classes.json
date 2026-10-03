@@ -28,7 +28,7 @@
   "censusSize": 2196,
   "digest": "fnv1a32-b5c32271",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3c56a41d",
+  "observationDigest": "fnv1a32-caf0f481",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8155,7 +8155,8 @@
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
-        "src/rebalancer/replica-operation-repository-row-methods.js"
+        "src/rebalancer/replica-operation-repository-row-methods.js",
+        "src/wasm-service/wasm-service-consensus-port.js"
       ],
       "directories": [
         "src",
@@ -8469,6 +8470,7 @@
     },
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": {
       "files": [
+        "src/message-group/message-group-service-state.js",
         "src/partition/partition-service-core-base.js",
         "src/partition/partition-service.js",
         "src/raft/raft-committed-membership-stamp.js",
