@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import {
-  SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
   routeSplitSnapshotBatch,
   resolveSplitSnapshotBatchRowLimit,
 } from '../../src/partition/partition-split-routing.js';
 
 const MAX_BIND_VARIABLES = 32_766;
+const SNAPSHOT_MAX_ROWS_PER_CALL = 64;
 const MAX_ROUTE_ROWS = 64;
 const TABLE_NAME = 'users';
 const LEFT_ID = 'users-left';
@@ -111,12 +111,12 @@ async function dimensionProblemCount() {
 
   const maxRows = resolveSplitSnapshotBatchRowLimit(
     ['id'],
-    SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+    SNAPSHOT_MAX_ROWS_PER_CALL,
   );
-  if (maxRows !== SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL) problems += 1;
+  if (maxRows !== SNAPSHOT_MAX_ROWS_PER_CALL) problems += 1;
   if (resolveSplitSnapshotBatchRowLimit(
     Array.from({length: 512}, (_value, index) => `c_${index}`),
-    SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
+    SNAPSHOT_MAX_ROWS_PER_CALL,
   ) !== 63) problems += 1;
   return problems;
 }
