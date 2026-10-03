@@ -75,6 +75,7 @@ jobs:
             src/partition/partition-split-merge-manager-transition-methods.js
             src/partition/partition-split-routing.js
             src/partition/partition-service-shared.js
+            src/partition/partition-constants.js
             src/utils/strict-own-data.js
           )
           npm run -s test:metrics:scoped -- "${files[@]}"
@@ -161,6 +162,8 @@ jobs:
             src/partition/partition-split-routing.js
           cp "$evidence/candidate-src-partition-service-shared.js" \
             src/partition/partition-service-shared.js
+          cp "$evidence/candidate-src-partition-constants.js" \
+            src/partition/partition-constants.js
           cp "$evidence/candidate-src-strict-own-data.js" \
             src/utils/strict-own-data.js
 
@@ -191,6 +194,7 @@ jobs:
             src/partition/partition-split-merge-manager-transition-methods.js
             src/partition/partition-split-routing.js
             src/partition/partition-service-shared.js
+            src/partition/partition-constants.js
             src/utils/strict-own-data.js
           )
           npm run test:complexity
@@ -221,6 +225,7 @@ jobs:
             src/partition/partition-constants.js \
             src/partition/partition-split-routing.js \
             src/partition/partition-service-shared.js \
+            src/partition/partition-constants.js \
             src/utils/strict-own-data.js \
             test/partition/routing-key-comparator.test.js \
             test/partition/merge-auto-execution.test.js \
@@ -249,6 +254,7 @@ jobs:
             src/partition/partition-constants.js \
             src/partition/partition-split-routing.js \
             src/partition/partition-service-shared.js \
+            src/partition/partition-constants.js \
             src/utils/strict-own-data.js \
             test/partition/routing-key-comparator.test.js \
             test/partition/merge-auto-execution.test.js \
