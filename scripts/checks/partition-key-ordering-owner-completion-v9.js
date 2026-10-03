@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import {fileURLToPath} from 'node:url';
 import {types as nodeUtilTypes} from 'node:util';
 
 import {
@@ -17,18 +16,21 @@ const CONTEXT_OWNER_URL = new URL(
   import.meta.url,
 );
 
-async function reasonPolicyProblemCount() {
-  if (!fs.existsSync(fileURLToPath(CONTEXT_OWNER_URL))) {
-    return 1;
+async function loadContextOwner() {
+  if (!fs.existsSync(CONTEXT_OWNER_URL)) {
+    return null;
   }
-  let owner;
   try {
-    owner = await import(CONTEXT_OWNER_URL.href);
+    return await import(CONTEXT_OWNER_URL.href);
   } catch (_error) {
-    return 1;
+    return null;
   }
+}
+
+async function reasonPolicyProblemCount() {
+  const owner = await loadContextOwner();
   const mergeEvaluationContextStringArrays =
-    owner.mergeEvaluationContextStringArrays;
+    owner?.mergeEvaluationContextStringArrays;
   if (typeof mergeEvaluationContextStringArrays !== 'function') {
     return 1;
   }
@@ -139,7 +141,6 @@ async function liveIngressProblemCount() {
 const metric =
   await reasonPolicyProblemCount() +
   await liveIngressProblemCount();
-
 if (metric !== 0) {
   process.stderr.write(
     'partition-key-ordering-owner-completion-v9: outstanding problems=' +
