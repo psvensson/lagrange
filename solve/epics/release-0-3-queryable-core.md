@@ -231,8 +231,10 @@ copy/group work.
 
 The active A1 Quest is now
 `partition-key-ordering-owner-completion-v11`. It preserves the complete v10
-candidate while capturing the Map constructor and enforcing one-bind-budget
-row/column bounds through the existing strict-own-data array owner.
+candidate while capturing the Map constructor, enforcing the existing 64-row
+route-call cadence before copy/grouping, rejecting over-wide column sets, and
+preserving bind-derived 63+1-style per-statement batching through the existing
+strict-own-data array owner.
 
 After that, the safe-before-cutover access foundation proceeds through persisted
 boundary representation, declared PK consumption, compound-PK narrowing, local
