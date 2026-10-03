@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install exact accepted v7 candidate and generated proof state
+      - name: Install exact accepted v7 candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -52,17 +52,6 @@ jobs:
             test/partition/merge-auto-execution.test.js
           )
           for file in "${candidate_paths[@]}"; do
-            git show "${ACCEPTED_SHA}:${file}" > "${file}"
-          done
-
-          generated_paths=(
-            test/shards/primary-classes.json
-            test/shards/resource-classes.json
-            test/shards/subsystem-classes.json
-            test/shards/impact-graph-seal.json
-            solve/changes/global-owner-debt-inventory/inventory.json
-          )
-          for file in "${generated_paths[@]}"; do
             git show "${ACCEPTED_SHA}:${file}" > "${file}"
           done
 
