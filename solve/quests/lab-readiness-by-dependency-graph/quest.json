@@ -1,0 +1,39 @@
+{
+  "schema": "solve-quest/2",
+  "id": "lab-readiness-by-dependency-graph",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "A version-only lockfile change is not a dependency change; the selector (lockfileDependencyGraph) and the release-proof identity already know it, and lab readiness is the third owner to meet the class. On 2026-09-30 main's package-lock.json changed only its two release-version strings (0.2.5 -> 0.2.6) and `lab fleet` reported every host `not ready: lockfile-differs` although every host's installed packages were content-identical, so no placed run could use the lab until checkouts were moved by hand. Cause: scripts/lab/probe.js compared the sha256 of package-lock.json BYTES between a host checkout and the requirement, while a placed run materialises the exact commit from a bundle and borrows only the host's node_modules - what matters is whether those packages are the commit's dependency graph. Readiness now compares a dependency-graph digest: the lockfile less the top-level `version` and `packages[\"\"].version` (exactly the selector's two deletions), serialised canonically (object keys sorted, arrays in order) and hashed; a lockfile that is not a lockfile, or carries a number JSON.parse may round, has no digest. One function defines the digest: the controller calls it and a lab machine runs its source text inside the capability script, and a witness binds digest equality to the selector's graph equality over a corpus of variants. Readiness keeps its composition - the host's install matches the host's lockfile AND the host's graph is the required graph - and names the states `dependency-graph-differs` and `dependency-graph-unknown`. The requirement (graph digest and engines floor) is read from the commit being placed (`git show <sha>:package-lock.json`, `<sha>:package.json`) whenever placement or `lab test --sha` names one, never from the controller's working tree; `lab fleet`, which names no commit, describes the working tree and says so. `lab test` does not refresh host checkouts.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/lab-readiness-by-dependency-graph/evidence/receipt.json",
+      "requiredReceipts": [
+        "version-only-is-ready",
+        "dependency-change-not-ready",
+        "one-digest-authority",
+        "requirement-is-the-placed-commit",
+        "release-bump-incident"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-digest-authority",
+      "statement": "The stripping, canonical serialisation and hash are defined once; the lab machine runs the same definition's source text, and the selector's graph stays bound to it by a witness rather than becoming a third copy."
+    },
+    {
+      "id": "err-toward-differs",
+      "statement": "Only the two release-version fields and the JSON spelling (whitespace, key order, string escapes) may make two lockfiles equal; every other difference, including array order and the package name, differs, and an unreadable lockfile is unknown, never equal."
+    },
+    {
+      "id": "requirement-from-the-placed-commit",
+      "statement": "Whenever a commit is named the requirement is that commit's; a commit that cannot be read fails, it never falls back to the working tree."
+    },
+    {
+      "id": "hosts-are-only-observed",
+      "statement": "The probe still only observes: no host checkout is refreshed, installed or moved by readiness, discovery or lab test."
+    }
+  ],
+  "sealedAt": "ec63fbb0016bf1ca6d81372e2a0721851363ea80"
+}

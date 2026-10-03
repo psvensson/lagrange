@@ -7,21 +7,25 @@
 
 import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
-import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {isDeepStrictEqual} from 'node:util';
 import {parse} from 'yaml';
 
 import {runHarness} from '../../scripts/lab/harness.js';
 import {capture} from '../../scripts/lab/process.js';
 import * as labProbe from '../../scripts/lab/probe.js';
 import {
-  MOVIELENS_FILE, MOVIELENS_SHA256, READINESS, corpusReadiness,
-  discoverFleet, formatFleet, parseCapability, probeTestCapability, recordFleet,
+  CAPABILITY_SCRIPT, MOVIELENS_FILE, MOVIELENS_SHA256, READINESS, corpusReadiness,
+  discoverFleet, fleetRequirement, formatFleet, parseCapability, probeTestCapability,
+  recordFleet, runLabTest, runPlacedTestFiles,
 } from '../../scripts/lab/probe.js';
+import * as selector from '../../scripts/select-change-tests.js';
 
+// What this process was started with; every scratch lab home restores it.
+const ORIGINAL_LAB_HOME = process.env.LAGRANGE_LAB_HOME;
 const LOCK = 'a'.repeat(64);
 const FULL = [
   'repo_path=/srv/repo',
@@ -35,13 +39,13 @@ const FULL = [
   'docker_reachable=yes',
   'repo_present=yes',
   'repo_head=' + 'c'.repeat(40),
-  `lock_sha256=${LOCK}`,
+  `lock_graph_sha256=${LOCK}`,
   'node_modules=yes',
   'dependencies_current=yes',
   `movielens_sha256=${MOVIELENS_SHA256}`,
   'cpu_sample_ms=208',
 ].join('\n');
-const REQUIREMENT = Object.freeze({lockSha256: LOCK, nodeMinimum: '22.12.0'});
+const REQUIREMENT = Object.freeze({lockGraphSha256: LOCK, nodeMinimum: '22.12.0'});
 // A path with a single quote in it, and how the remote shell must receive it.
 const QUOTED_PATH = '/srv/o\'brien/repo';
 const QUOTED_PATH_REMOTE = 'sh -s -- \'/srv/o\'\\\'\'brien/repo\' \'22\'';
@@ -62,7 +66,7 @@ test('a probe transcript becomes a capability record', () => {
   assert.deepEqual(capability.tools, {'git': true, 'docker': true, 'helm': false,
     'wasm-tools': false, 'psql': false, 'g++': true, 'java': true, 'rg': false, 'jq': true});
   assert.equal(capability.repo.present, true);
-  assert.equal(capability.repo.lockSha256, LOCK);
+  assert.equal(capability.repo.lockGraphSha256, LOCK);
   assert.equal(capability.repo.dependenciesCurrent, true);
   assert.equal(capability.cpuSampleMs, 208);
   assert.deepEqual(parseCapability(FULL.replace(/\n/gu, '\r\n'), 7), capability,
@@ -81,11 +85,11 @@ test('an unreported fact is unknown, never a capability the machine was not show
   assert.equal(capability.repo.dependenciesCurrent, null,
     'a dependency check that could not run is unknown, not "differs"');
   assert.equal(parseCapability('').repo.present, null);
-  const noRepo = parseCapability('repo_present=no\nlock_sha256=' + LOCK +
+  const noRepo = parseCapability('repo_present=no\nlock_graph_sha256=' + LOCK +
     '\ndependencies_current=yes');
   assert.equal(noRepo.repo.present, false);
-  assert.equal(noRepo.repo.lockSha256, null,
-    'a lockfile hash is not believed when the repository is absent');
+  assert.equal(noRepo.repo.lockGraphSha256, null,
+    'a dependency-graph digest is not believed when the repository is absent');
   assert.equal(noRepo.repo.dependenciesCurrent, null);
 });
 
@@ -107,8 +111,10 @@ test('readiness names every reason a machine cannot run the corpus', () => {
   }
   // Each disqualifier alone, and each one alone makes the machine not ready.
   const disqualifiers = [
-    [FULL.replace(`lock_sha256=${LOCK}`, `lock_sha256=${'b'.repeat(64)}`),
-      [READINESS.LOCKFILE_DIFFERS], 'another lockfile means other dependencies'],
+    [FULL.replace(`lock_graph_sha256=${LOCK}`, `lock_graph_sha256=${'b'.repeat(64)}`),
+      [READINESS.DEPENDENCY_GRAPH_DIFFERS], 'another dependency graph means other packages'],
+    [FULL.replace(`lock_graph_sha256=${LOCK}\n`, ''),
+      [READINESS.DEPENDENCY_GRAPH_UNKNOWN], 'an unreported graph is unknown, not a match'],
     [FULL.replace('node_modules=yes', 'node_modules=no'),
       [READINESS.NO_DEPENDENCIES], 'no dependencies installed'],
     [FULL.replace('dependencies_current=yes', 'dependencies_current=no'),
@@ -123,10 +129,18 @@ test('readiness names every reason a machine cannot run the corpus', () => {
     assert.deepEqual(verdict.missing, missing, why);
     assert.equal(verdict.ready, false, why);
   }
-  for (const lockSha256 of [null, '', 'not-a-digest']) {
-    const verdict = readiness(FULL, {...REQUIREMENT, lockSha256});
+  // A record stored before the graph was measured has a byte digest and no
+  // graph field at all: its graph is unknown, not a different one.
+  const stored = parseCapability(FULL);
+  const {lockGraphSha256: _measured, ...oldRepo} = stored.repo;
+  const oldShape = corpusReadiness({...stored, repo: {...oldRepo, lockSha256: LOCK}},
+    REQUIREMENT);
+  assert.deepEqual(oldShape.missing, [READINESS.DEPENDENCY_GRAPH_UNKNOWN],
+    'an absent graph field is unknown');
+  for (const lockGraphSha256 of [null, '', 'not-a-digest']) {
+    const verdict = readiness(FULL, {...REQUIREMENT, lockGraphSha256});
     assert.ok(verdict.missing.includes(READINESS.NO_REQUIREMENT),
-      `a requirement of ${JSON.stringify(lockSha256)} is no requirement`);
+      `a requirement of ${JSON.stringify(lockGraphSha256)} is no requirement`);
     assert.equal(verdict.ready, false, 'nothing to compare is never a match');
   }
   for (const nodeMinimum of ['22', '>=22.12.0', '', null]) {
@@ -135,8 +149,8 @@ test('readiness names every reason a machine cannot run the corpus', () => {
       `an engines floor of ${JSON.stringify(nodeMinimum)} is named, not blamed on the node`);
     assert.equal(verdict.ready, false);
   }
-  const noLockAnywhere = readiness(FULL.replace(`lock_sha256=${LOCK}\n`, ''),
-    {...REQUIREMENT, lockSha256: null});
+  const noLockAnywhere = readiness(FULL.replace(`lock_graph_sha256=${LOCK}\n`, ''),
+    {...REQUIREMENT, lockGraphSha256: null});
   assert.equal(noLockAnywhere.ready, false,
     'a machine without a lockfile does not match a controller without one');
   const noData = readiness(FULL.replace(`movielens_sha256=${MOVIELENS_SHA256}`,
@@ -144,6 +158,450 @@ test('readiness names every reason a machine cannot run the corpus', () => {
   assert.ok(noData.gaps.includes(READINESS.NO_DATASET),
     'a dataset with the wrong digest is not the pinned dataset');
   assert.equal(noData.ready, true, 'a dataset gap does not disqualify');
+});
+
+// --- readiness by dependency graph (lab-readiness-by-dependency-graph) -------
+// A lab machine is ready for a commit when its installed packages match its
+// own lockfile AND that lockfile describes the dependency graph the commit
+// requires. The graph is the lockfile less the package's own release
+// identity - the top-level `version` and `packages[""].version`, exactly what
+// the selector strips - so a version-only release bump (0.2.5 -> 0.2.6 on
+// 2026-09-30) leaves every installed machine ready.
+
+const GRAPH_LOCK = Object.freeze({
+  name: 'fixture',
+  version: '0.2.5',
+  lockfileVersion: 3,
+  requires: true,
+  packages: {
+    '': {name: 'fixture', version: '0.2.5', license: 'MIT',
+      dependencies: {a: '^1.0.0'}, engines: {node: '>=22.12.0'}},
+    'node_modules/a': {version: '1.0.0',
+      resolved: 'https://registry.npmjs.org/a/-/a-1.0.0.tgz',
+      integrity: 'sha512-AAAA', license: 'MIT', os: ['darwin', 'linux']},
+  },
+});
+const GRAPH_MANIFEST = '{"name":"fixture","engines":{"node":">=22.12.0"}}\n';
+
+function lockVariant(mutate = () => {}, space = 2) {
+  const lock = JSON.parse(JSON.stringify(GRAPH_LOCK));
+  mutate(lock);
+  return `${JSON.stringify(lock, null, space)}\n`;
+}
+
+function reversedKeys(value) {
+  if (Array.isArray(value)) return value.map(reversedKeys);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.keys(value).reverse()
+    .map((key) => [key, reversedKeys(value[key])]));
+}
+
+// The one line of the capability script that a lab machine runs to digest
+// its lockfile, run exactly as the probe sends it.
+function hostGraphDigest(dir, text) {
+  const line = CAPABILITY_SCRIPT.split('\n')
+    .find((entry) => entry.includes('say lock_graph_sha256'));
+  assert.ok(line, 'the capability script digests the lockfile graph');
+  fs.writeFileSync(path.join(dir, 'package-lock.json'), text);
+  const result = spawnSync('sh', ['-c',
+    `say() { printf "%s=%s\\n" "$1" "$2"; }\nrepo="$1"\n${line}`, 'sh', dir],
+  {encoding: 'utf8', env: {...process.env, PATH: [path.dirname(process.execPath),
+    process.env.PATH].join(path.delimiter)}});
+  assert.equal(result.status, 0, result.stderr);
+  const value = /^lock_graph_sha256=(.*)$/mu.exec(result.stdout)?.[1] ?? '';
+  return value.length > 0 ? value : null;
+}
+
+// The controller's digest: the requirement read from a checkout.
+function controllerGraphDigest(dir, text) {
+  fs.writeFileSync(path.join(dir, 'package-lock.json'), text);
+  fs.writeFileSync(path.join(dir, 'package.json'), GRAPH_MANIFEST);
+  return fleetRequirement(dir).lockGraphSha256;
+}
+
+// A checkout as a lab machine holds it: a lockfile and an install that
+// matches that lockfile, so only the graph comparison can disqualify it.
+function installedCheckout(dir, text) {
+  fs.mkdirSync(path.join(dir, '.git'), {recursive: true});
+  fs.mkdirSync(path.join(dir, 'node_modules'), {recursive: true});
+  fs.writeFileSync(path.join(dir, 'package-lock.json'), text);
+  const packages = {...JSON.parse(text).packages};
+  delete packages[''];
+  fs.writeFileSync(path.join(dir, 'node_modules', '.package-lock.json'),
+    JSON.stringify({packages}));
+  return dir;
+}
+
+// The whole capability script against a local checkout, with docker's bound
+// stubbed out so nothing waits on a daemon.
+async function probeCheckout(root, repo) {
+  const stubBin = path.join(root, 'bin');
+  fs.mkdirSync(stubBin, {recursive: true});
+  fs.writeFileSync(path.join(stubBin, 'timeout'), '#!/bin/sh\nexit 124\n', {mode: 0o755});
+  const env = {...process.env, NVM_DIR: path.join(root, 'no-nvm'), PATH: [stubBin,
+    path.dirname(process.execPath), process.env.PATH].join(path.delimiter)};
+  return probeTestCapability({repoPath: repo, nodeMajor: '',
+    captureCommand: (command, args, options) =>
+      capture(command, args, {...options, env, cwd: root})});
+}
+
+function tempDir(t, prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+  return dir;
+}
+
+test('a lockfile that differs only in its release version is the same dependency graph',
+  async (t) => {
+    const root = tempDir(t, 'fleet-graph-');
+    const controller = path.join(root, 'controller');
+    fs.mkdirSync(controller);
+    controllerGraphDigest(controller, lockVariant());
+    const host = installedCheckout(path.join(root, 'host'), lockVariant((lock) => {
+      lock.version = '0.2.6';
+      lock.packages[''].version = '0.2.6';
+    }));
+    const capability = await probeCheckout(root, host);
+    assert.equal(capability.repo.dependenciesCurrent, true, 'the host install is current');
+    assert.deepEqual(corpusReadiness(capability, fleetRequirement(controller)).missing, [],
+      'the release identity is not a dependency');
+    assert.equal(corpusReadiness(capability, fleetRequirement(controller)).ready, true);
+  });
+
+test('a real dependency change is a different dependency graph, one change at a time',
+  (t) => {
+    const root = tempDir(t, 'fleet-graph-');
+    const requirement = {lockGraphSha256: controllerGraphDigest(root, lockVariant()),
+      nodeMinimum: '22.12.0'};
+    const transcript = (digest) => FULL.replace(`lock_graph_sha256=${LOCK}`,
+      `lock_graph_sha256=${digest ?? ''}`);
+    const changes = [
+      ['a package version', (lock) => {
+        lock.packages['node_modules/a'].version = '1.0.1';
+      }],
+      ['a package integrity', (lock) => {
+        lock.packages['node_modules/a'].integrity = 'sha512-BBBB';
+      }],
+      ['an added package', (lock) => {
+        lock.packages['node_modules/b'] = {version: '2.0.0', integrity: 'sha512-CCCC'};
+      }],
+      ['the lockfileVersion', (lock) => {
+        lock.lockfileVersion = 2;
+      }],
+      ['a root dependency range', (lock) => {
+        lock.packages[''].dependencies.a = '^1.1.0';
+      }],
+      ['the root engines', (lock) => {
+        lock.packages[''].engines = {node: '>=24.0.0'};
+      }],
+    ];
+    for (const [what, mutate] of changes) {
+      const verdict = corpusReadiness(parseCapability(
+        transcript(hostGraphDigest(root, lockVariant(mutate)))), requirement);
+      assert.deepEqual(verdict.missing, [READINESS.DEPENDENCY_GRAPH_DIFFERS], what);
+      assert.equal(verdict.ready, false, `${what} disqualifies`);
+    }
+    const unreadable = corpusReadiness(parseCapability(
+      transcript(hostGraphDigest(root, '{"packages":'))), requirement);
+    assert.deepEqual(unreadable.missing, [READINESS.DEPENDENCY_GRAPH_UNKNOWN],
+      'a lockfile the machine cannot read is unknown, a named state of its own');
+  });
+
+test('the controller and a lab machine compute one dependency-graph digest', (t) => {
+  const root = tempDir(t, 'fleet-graph-');
+  const base = lockVariant();
+  // Equal to the base: the release identity, and how the JSON is written.
+  const same = [
+    ['the release version', lockVariant((lock) => {
+      lock.version = '9.9.9';
+      lock.packages[''].version = '9.9.9';
+    })],
+    ['only the top-level version', lockVariant((lock) => {
+      lock.version = '9.9.9';
+    })],
+    ['only the root package version', lockVariant((lock) => {
+      lock.packages[''].version = '9.9.9';
+    })],
+    ['no release version at all', lockVariant((lock) => {
+      delete lock.version;
+      delete lock.packages[''].version;
+    })],
+    ['minified', lockVariant(() => {}, 0).trim()],
+    ['tab-indented with CRLF', lockVariant(() => {}, '\t').replace(/\n/gu, '\r\n')],
+    ['every key in reverse order', `${JSON.stringify(reversedKeys(GRAPH_LOCK), null, 2)}\n`],
+    ['an escaped spelling of the same string', base.replace('"license": "MIT"',
+      '"license": "\\u004dIT"')],
+    // JSON.parse reads both as the integer 3, as npm does.
+    ['another spelling of the same integer', base.replace('"lockfileVersion": 3',
+      '"lockfileVersion": 3.0')],
+  ];
+  // Different from the base: anything npm could install differently, and
+  // anything else it reads (erring toward "differs").
+  const different = [
+    ['a package version', lockVariant((lock) => {
+      lock.packages['node_modules/a'].version = '1.0.1';
+    })],
+    ['a package integrity', lockVariant((lock) => {
+      lock.packages['node_modules/a'].integrity = 'sha512-BBBB';
+    })],
+    ['a package resolved URL', lockVariant((lock) => {
+      lock.packages['node_modules/a'].resolved = 'https://mirror.example/a-1.0.0.tgz';
+    })],
+    ['an added package', lockVariant((lock) => {
+      lock.packages['node_modules/b'] = {version: '2.0.0'};
+    })],
+    ['a removed package', lockVariant((lock) => {
+      delete lock.packages['node_modules/a'];
+    })],
+    ['the lockfileVersion', lockVariant((lock) => {
+      lock.lockfileVersion = 2;
+    })],
+    ['a root dependency range', lockVariant((lock) => {
+      lock.packages[''].dependencies.a = '^1.1.0';
+    })],
+    ['the root engines', lockVariant((lock) => {
+      lock.packages[''].engines = {node: '>=24.0.0'};
+    })],
+    ['root workspaces', lockVariant((lock) => {
+      lock.packages[''].workspaces = ['packages/x'];
+    })],
+    ['a dev flag', lockVariant((lock) => {
+      lock.packages['node_modules/a'].dev = true;
+    })],
+    ['the package name', lockVariant((lock) => {
+      lock.name = 'renamed';
+    })],
+    ['the order of an array', lockVariant((lock) => {
+      lock.packages['node_modules/a'].os = ['linux', 'darwin'];
+    })],
+  ];
+  // No digest at all: not a lockfile, or a number that is not a safe integer
+  // (JSON.parse may round it, so two different spellings could read equal).
+  const unknown = [
+    ['malformed JSON', '{"packages":'],
+    ['no packages', lockVariant((lock) => {
+      delete lock.packages;
+    })],
+    ['no root package', lockVariant((lock) => {
+      delete lock.packages[''];
+    })],
+    ['a package record that is not an object', lockVariant((lock) => {
+      lock.packages['node_modules/a'] = [];
+    })],
+    ['a fractional number', base.replace('"lockfileVersion": 3', '"lockfileVersion": 3.5')],
+    ['an integer beyond the safe range',
+      base.replace('"lockfileVersion": 3', '"lockfileVersion": 9007199254740993')],
+  ];
+  const digests = new Map();
+  for (const [what, text] of [['the base', base], ...same, ...different, ...unknown]) {
+    const host = hostGraphDigest(root, text);
+    assert.equal(controllerGraphDigest(root, text), host,
+      `${what}: the controller and a lab machine agree`);
+    digests.set(what, host);
+  }
+  const baseDigest = digests.get('the base');
+  assert.match(String(baseDigest), /^[0-9a-f]{64}$/u);
+  for (const [what] of same) assert.equal(digests.get(what), baseDigest, `${what} is equal`);
+  for (const [what] of different) {
+    assert.match(String(digests.get(what)), /^[0-9a-f]{64}$/u, `${what} has a digest`);
+    assert.notEqual(digests.get(what), baseDigest, `${what} differs`);
+  }
+  for (const [what] of unknown) assert.equal(digests.get(what), null, `${what} has none`);
+  // The selector's lockfileDependencyGraph is the authority on what the
+  // release identity is: equal digests exactly when its graphs are equal.
+  const selectorGraph = (text) => selector.lockfileDependencyGraph(JSON.parse(text));
+  for (const [what, text] of [...same, ...different]) {
+    assert.equal(isDeepStrictEqual(selectorGraph(base), selectorGraph(text)),
+      digests.get(what) === baseDigest, `${what}: the selector agrees`);
+  }
+  for (const [what, text] of unknown.slice(1, 4)) {
+    assert.equal(selectorGraph(text), null, `${what}: the selector has no graph either`);
+  }
+});
+
+// A git repository holding one commit of `files`, and that commit's sha.
+function committedRepo(t, files) {
+  const repo = tempDir(t, 'fleet-requirement-');
+  const git = (...args) => {
+    const result = spawnSync('git', ['-C', repo, ...args], {encoding: 'utf8'});
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  git('init', '-q');
+  for (const [file, text] of Object.entries(files)) fs.writeFileSync(path.join(repo, file), text);
+  git('add', '.');
+  git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'placed');
+  return {repo, sha: git('rev-parse', 'HEAD')};
+}
+
+// The lab inventory, for one test, in a scratch home of its own (each one
+// removed after the test). The value the test found is captured on its first
+// call only and restored (or unset) by one hook: per-call hooks run in
+// registration order, so a later one would restore a deleted earlier home.
+const labHomeRestored = new WeakSet();
+function scratchLabHome(t, inventory = null) {
+  if (!labHomeRestored.has(t)) {
+    labHomeRestored.add(t);
+    const original = process.env.LAGRANGE_LAB_HOME;
+    t.after(() => {
+      if (original === undefined) delete process.env.LAGRANGE_LAB_HOME;
+      else process.env.LAGRANGE_LAB_HOME = original;
+    });
+  }
+  const home = tempDir(t, 'fleet-lab-home-');
+  if (inventory !== null) fs.writeFileSync(path.join(home, 'inventory.json'), inventory);
+  process.env.LAGRANGE_LAB_HOME = home;
+  return home;
+}
+
+const UNREADABLE_SHA = 'f'.repeat(40);
+const HOUR_COSTS = (files) => files.map((file) => ({file, ms: 60 * 60 * 1000, jobs: 1}));
+
+test('a placed commit is measured against its own lockfile and engines floor', async (t) => {
+  const {repo, sha: placed} = committedRepo(t,
+    {'package.json': GRAPH_MANIFEST, 'package-lock.json': lockVariant()});
+  const placedDigest = fleetRequirement(repo).lockGraphSha256;
+  // The working tree moves on: another dependency, and a floor no node meets.
+  fs.writeFileSync(path.join(repo, 'package.json'),
+    '{"name":"fixture","engines":{"node":">=99.0.0"}}\n');
+  const moved = lockVariant((lock) => {
+    lock.packages['node_modules/a'].version = '1.0.1';
+  });
+  installedCheckout(repo, moved);
+  const commit = fleetRequirement(repo, placed);
+  assert.equal(commit.nodeMinimum, '22.12.0', 'the placed commit\'s engines floor');
+  assert.equal(commit.lockGraphSha256, placedDigest, 'the placed commit\'s graph');
+  assert.equal(commit.source, placed, 'and it says which commit it describes');
+  const tree = fleetRequirement(repo);
+  assert.equal(tree.nodeMinimum, '99.0.0', 'with no commit: the working tree');
+  assert.notEqual(tree.lockGraphSha256, placedDigest);
+  assert.equal(tree.source, labProbe.REQUIREMENT_SOURCE.WORKING_TREE, 'and it says so');
+  assert.throws(() => fleetRequirement(repo, UNREADABLE_SHA),
+    {code: labProbe.DISCOVERY_FAILURE.REQUIREMENT_UNREADABLE},
+    'a commit that cannot be read has no requirement, never the working tree\'s');
+
+  // The real discovery of both placement paths, on an empty lab inventory:
+  // the controller (this checkout, whose working tree holds the moved graph
+  // and floor) is measured against the placed commit's requirement.
+  const home = scratchLabHome(t);
+  const paths = [
+    ['lab test', labProbe.labTestDeps({root: repo})],
+    ['placement', labProbe.placementDeps({root: repo, planCosts: HOUR_COSTS,
+      runLocal: () => 0, lastGreen: () => false})],
+  ];
+  for (const [what, deps] of paths) {
+    const {fleet} = await deps.discover(placed);
+    const controller = fleet.find((machine) => machine.controller);
+    assert.ok(controller, `${what}: the controller is measured`);
+    assert.ok(!controller.readiness.missing.includes(READINESS.NODE_TOO_OLD),
+      `${what}: the floor is the placed commit's 22.12.0, not the tree's 99.0.0 ` +
+      `(${controller.readiness.missing})`);
+    assert.ok(controller.readiness.missing.includes(READINESS.DEPENDENCY_GRAPH_DIFFERS),
+      `${what}: the graph is the placed commit's, not the tree's ` +
+      `(${controller.readiness.missing})`);
+    await assert.rejects(deps.discover(UNREADABLE_SHA),
+      {code: labProbe.DISCOVERY_FAILURE.REQUIREMENT_UNREADABLE},
+      `${what}: a commit that cannot be read fails discovery`);
+  }
+
+  // Both callers hand discovery the commit they place.
+  const discovered = [];
+  const stop = async (sha) => {
+    discovered.push(sha);
+    throw new Error('stop after discovery');
+  };
+  await assert.rejects(runLabTest({plan: [], commit: {sha: placed, release: () => {}},
+    root: repo, write: () => {}}, {discover: stop, commitAt: () => null}),
+  /stop after discovery/u);
+  await runPlacedTestFiles(['a.test.js'], {env: {}, write: () => {},
+    planCosts: HOUR_COSTS, runLocal: () => 0, commitAt: () => placed, discover: stop});
+  assert.deepEqual(discovered, [placed, placed]);
+
+  // A placed run whose requirement cannot be read says so, and still runs
+  // here; an unreadable inventory is named as that, not as the requirement.
+  const placedRun = async (sha) => {
+    const lines = [];
+    const status = await runPlacedTestFiles(['a.test.js'], {...labProbe.placementDeps({
+      root: repo, planCosts: HOUR_COSTS, runLocal: () => 7, lastGreen: () => false}),
+    env: {}, write: (line) => lines.push(line), commitAt: () => sha});
+    return {status, lines};
+  };
+  const noRequirement = await placedRun(UNREADABLE_SHA);
+  assert.equal(noRequirement.status, 7, 'the files run on the controller');
+  assert.match(noRequirement.lines[0], new RegExp('^placement: local - the placed commit\'s ' +
+    `requirement could not be read: no requirement: cannot read package\\.json at ${
+      UNREADABLE_SHA}$`, 'u'));
+  fs.writeFileSync(path.join(home, 'inventory.json'), '{"version":');
+  const noInventory = await placedRun(placed);
+  assert.equal(noInventory.status, 7);
+  assert.match(noInventory.lines[0],
+    /^placement: local - the lab inventory could not be read: /u);
+});
+
+test('the placed-commit witness leaves the lab home as it found it', () => {
+  assert.equal(process.env.LAGRANGE_LAB_HOME, ORIGINAL_LAB_HOME,
+    'LAGRANGE_LAB_HOME is the value this process started with (or unset)');
+});
+
+test('a scratch lab home restores the original once, however often a test asks', async (t) => {
+  const homes = [];
+  await t.test('three scratch homes in one test', (inner) => {
+    homes.push(scratchLabHome(inner), scratchLabHome(inner, '{}'), scratchLabHome(inner));
+    assert.equal(process.env.LAGRANGE_LAB_HOME, homes[2], 'the newest home is current');
+  });
+  assert.equal(process.env.LAGRANGE_LAB_HOME, ORIGINAL_LAB_HOME,
+    'the original value, never an earlier scratch home');
+  for (const home of homes) assert.ok(!fs.existsSync(home), `${home} is removed`);
+});
+
+test('a placed commit\'s lockfile is read whole up to a named bound', (t) => {
+  const bound = labProbe.GIT_OUTPUT_MAX_BYTES;
+  // Past spawnSync's 1 MiB default, the size the lockfile is growing toward.
+  const large = lockVariant((lock) => {
+    lock.packages['node_modules/a'].description = 'x'.repeat(2 * 1024 * 1024);
+  });
+  const within = committedRepo(t, {'package.json': GRAPH_MANIFEST, 'package-lock.json': large});
+  const requirement = fleetRequirement(within.repo, within.sha);
+  assert.ok(Buffer.byteLength(large) > 1024 * 1024 && Buffer.byteLength(large) < bound);
+  assert.match(String(requirement.lockGraphSha256), /^[0-9a-f]{64}$/u,
+    'a lockfile past 1 MiB still yields the placed commit\'s requirement');
+  assert.equal(requirement.lockGraphSha256, fleetRequirement(within.repo).lockGraphSha256);
+  const beyond = committedRepo(t, {'package.json': GRAPH_MANIFEST,
+    'package-lock.json': 'x'.repeat(bound + 1)});
+  assert.throws(() => fleetRequirement(beyond.repo, beyond.sha), (error) => {
+    assert.equal(error.code, labProbe.DISCOVERY_FAILURE.REQUIREMENT_TOO_LARGE);
+    assert.equal(error.message, `package-lock.json at ${beyond.sha} is larger than the ` +
+      `requirement read bound of ${bound} bytes`);
+    return true;
+  }, 'beyond the bound: a failure of its own, never a silent null or an unreadable commit');
+});
+
+test('a version-only release bump of this repository leaves the fleet ready', async (t) => {
+  // The incident: main's lockfile changed only its two release-version
+  // strings and every lab machine read `lockfile-differs`.
+  const root = tempDir(t, 'fleet-incident-');
+  const lockText = fs.readFileSync(path.join(process.cwd(), 'package-lock.json'), 'utf8');
+  const {version} = JSON.parse(lockText);
+  const [major, minor, patch] = version.split('.').map(Number);
+  const previous = `${major}.${minor}.${patch > 0 ? patch - 1 : patch + 1}`;
+  let replaced = 0;
+  const before = lockText.replace(new RegExp(`"version": "${version.replace(/\./gu, '\\.')}"`,
+    'gu'), (match) => (replaced += 1) <= 2 ? `"version": "${previous}"` : match);
+  const changedLines = lockText.split('\n')
+    .filter((line, index) => line !== before.split('\n')[index]);
+  assert.equal(changedLines.length, 2, 'exactly the two release-version lines differ');
+  const controller = path.join(root, 'controller');
+  fs.mkdirSync(controller);
+  fs.writeFileSync(path.join(controller, 'package-lock.json'), lockText);
+  fs.copyFileSync(path.join(process.cwd(), 'package.json'),
+    path.join(controller, 'package.json'));
+  const host = installedCheckout(path.join(root, 'host'), before);
+  const capability = await probeCheckout(root, host);
+  const verdict = corpusReadiness(capability, fleetRequirement(controller));
+  assert.equal(capability.repo.dependenciesCurrent, true);
+  assert.equal(verdict.missing.length, 0,
+    `a machine installed from the previous release is ready: ${verdict.missing}`);
+  assert.equal(verdict.ready, true);
 });
 
 test('the pinned dataset is the one the canary checks before its corpus', () => {
@@ -312,8 +770,8 @@ test('the probe observes a checkout and never acts on it', async (t) => {
     '10 docker info', 'docker is asked under a bound');
   assert.equal(matching.dockerReachable, false, 'and a timed-out docker is not reachable');
   assert.equal(matching.repoPath, repo, 'a backslash survives the transcript');
-  assert.equal(matching.repo.lockSha256,
-    createHash('sha256').update(lockText).digest('hex'), 'and the lockfile is hashed');
+  assert.match(String(matching.repo.lockGraphSha256), /^[0-9a-f]{64}$/u,
+    'and the lockfile\'s dependency graph is digested');
   assert.equal(matching.repo.dependenciesCurrent, true,
     'every required package at its locked version; an optional one may be absent');
   assert.equal((await probeWith({'node_modules/a': {version: '1.0.1'},
