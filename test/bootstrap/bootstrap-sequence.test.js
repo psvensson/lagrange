@@ -661,7 +661,7 @@ test('Bootstrap sequence - without wsPort fails (no server)', async (t) => {
 
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     bootIncarnation: 1,
     nodeId,
     nodeAddress: 'ws://localhost:8080',

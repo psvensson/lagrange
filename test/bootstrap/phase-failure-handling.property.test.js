@@ -15,9 +15,10 @@
  * - Cleanup verification checks both service Maps and worker handle Maps
  */
 
-import {test} from '../../src/test-helpers/tap.js';
+import t, {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {createVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
 import {BOOTSTRAP_EVENT, BOOTSTRAP_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -63,6 +64,13 @@ function initializeTestEnvironment() {
   }
 }
 
+// Each run boots a virgin seed over its own data directory: message-group
+// consensus is durable since the zero-Liferaft cutover, so every iteration
+// opens real replica databases before the phase under test fails. Nine
+// properties x ten runs need more than tap's default file budget.
+const PHASE_FAILURE_PROPERTY_TIMEOUT_MS = 600000;
+t.setTimeout(PHASE_FAILURE_PROPERTY_TIMEOUT_MS);
+
 /**
  * Arbitrary for valid node IDs (alphanumeric with hyphens, no special chars).
  */
@@ -81,7 +89,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createVirginSeedBootstrapService({
             bootIncarnation: 1,
             nodeId,
             // No wsPort - will fail during leadership wait
@@ -132,7 +140,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createVirginSeedBootstrapService({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -182,7 +190,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createVirginSeedBootstrapService({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -229,7 +237,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createVirginSeedBootstrapService({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -281,7 +289,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createVirginSeedBootstrapService({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -333,7 +341,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createVirginSeedBootstrapService({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -391,7 +399,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createVirginSeedBootstrapService({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -443,7 +451,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createVirginSeedBootstrapService({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -490,7 +498,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createVirginSeedBootstrapService({
             bootIncarnation: 1,
             nodeId,
             config: {

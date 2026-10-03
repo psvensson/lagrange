@@ -28,7 +28,7 @@
   "censusSize": 2195,
   "digest": "fnv1a32-48ed845c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-31229bb5",
+  "observationDigest": "fnv1a32-606504eb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2876,6 +2876,12 @@
     "test/bootstrap/phase-event-ordering-characterization.test.js": {
       "files": [
         "src/bootstrap/pipeline/join-startup-plan.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "test/integration/helpers/cluster-test-helpers.js"
+      ]
+    },
+    "test/bootstrap/phase-failure-handling.property.test.js": {
+      "files": [
         "src/bootstrap/seed-startup-storage-admission.js",
         "test/integration/helpers/cluster-test-helpers.js"
       ]
