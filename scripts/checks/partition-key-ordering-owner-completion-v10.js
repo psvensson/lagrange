@@ -28,15 +28,19 @@ async function proveStableBatching() {
     },
   });
   const routed=[];
-  await routeSplitSnapshotBatch(rows,['id','name'],METADATA,{
-    tableName:'users',
-    queryExecutor:{
-      async executeOnPartition(partitionId,_sql,params){
-        routed.push({partitionId,params});
-        return {success:true};
+  try {
+    await routeSplitSnapshotBatch(rows,['id','name'],METADATA,{
+      tableName:'users',
+      queryExecutor:{
+        async executeOnPartition(partitionId,_sql,params){
+          routed.push({partitionId,params});
+          return {success:true};
+        },
       },
-    },
-  });
+    });
+  } catch {
+    return 1;
+  }
   return JSON.stringify(routed) === EXPECTED ? 0 : 1;
 }
 
