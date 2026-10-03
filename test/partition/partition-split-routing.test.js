@@ -46,6 +46,80 @@ function createDescriptorEvidence(tableDescriptor, partitionVersion) {
   };
 }
 
+test('split routing rejects Proxy and accessor metadata before traps', async (t) => {
+  let proxyTrapCalls = 0;
+  const proxyMetadata = new Proxy(createMetadata(PENDING_VERSION), {
+    get() {
+      proxyTrapCalls += 1;
+      throw new Error('proxy get trap executed');
+    },
+    getOwnPropertyDescriptor() {
+      proxyTrapCalls += 1;
+      throw new Error('proxy descriptor trap executed');
+    },
+  });
+  const queryExecutor = {
+    async executeOnPartition() {
+      t.fail('unsafe metadata must reject before route dispatch');
+      return {success: true};
+    },
+  };
+
+  await t.rejects(
+    replaySplitEntry(
+      {
+        sql: INSERT_SQL,
+        params: ['a', 'Ada'],
+        data: {[PRIMARY_KEY_COLUMN]: 'a'},
+      },
+      proxyMetadata,
+      {tableName: TABLE_NAME, queryExecutor},
+    ),
+    /proxi(?:es|y)/iu,
+  );
+  t.equal(proxyTrapCalls, 0, 'replay rejects Proxy metadata before traps');
+
+  await t.rejects(
+    routeSplitSnapshotBatch(
+      [{id: 'a', name: 'Ada'}],
+      ['id', 'name'],
+      proxyMetadata,
+      {tableName: TABLE_NAME, queryExecutor},
+    ),
+    /proxi(?:es|y)/iu,
+  );
+  t.equal(proxyTrapCalls, 0, 'snapshot routing rejects Proxy metadata before traps');
+
+  let primaryKeyGetterCalls = 0;
+  const accessorMetadata = createMetadata(PENDING_VERSION);
+  Object.defineProperty(accessorMetadata, 'primaryKeyColumn', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      primaryKeyGetterCalls += 1;
+      return PRIMARY_KEY_COLUMN;
+    },
+  });
+
+  await t.rejects(
+    replaySplitEntry(
+      {
+        sql: INSERT_SQL,
+        params: ['a', 'Ada'],
+        data: {[PRIMARY_KEY_COLUMN]: 'a'},
+      },
+      accessorMetadata,
+      {tableName: TABLE_NAME, queryExecutor},
+    ),
+    /primaryKeyColumn/iu,
+  );
+  t.equal(
+    primaryKeyGetterCalls,
+    0,
+    'primaryKeyColumn accessors are not live routing authority',
+  );
+});
+
 test('split routing rejects stale mirrored writes by descriptor epoch',
   async (t) => {
     const queryExecutor = {
@@ -163,6 +237,119 @@ test('split snapshot batching groups ordered upserts by fenced child',
         deliveryOptions: {splitMirrorOrigin: 'snapshot'},
       },
     ]);
+  });
+
+test('split snapshot batching ignores hostile row iterator',
+  async (t) => {
+    const routed = [];
+    const rows = [
+      {id: 'a', name: 'Ada'},
+      {id: 'z', name: 'Zoe'},
+      {id: 'b', name: 'Bob'},
+    ];
+    Object.defineProperty(rows, Symbol.iterator, {
+      configurable: true,
+      value() {
+        throw new Error('snapshot rows iterator executed');
+      },
+    });
+
+    await routeSplitSnapshotBatch(
+      rows,
+      ['id', 'name'],
+      createMetadata(PENDING_VERSION),
+      {
+        tableName: TABLE_NAME,
+        queryExecutor: {
+          async executeOnPartition(partitionId, _sql, params) {
+            routed[routed.length] = {partitionId, params};
+            return {success: true};
+          },
+        },
+      },
+    );
+
+    t.same(routed, [
+      {partitionId: LEFT_PARTITION_ID, params: ['a', 'Ada', 'b', 'Bob']},
+      {partitionId: RIGHT_PARTITION_ID, params: ['z', 'Zoe']},
+    ]);
+  });
+
+test('split snapshot batching rejects Proxy and sparse row arrays before traps',
+  async (t) => {
+    let arrayTrapCalls = 0;
+    const proxyRows = new Proxy([{id: 'a', name: 'Ada'}], {
+      get() {
+        arrayTrapCalls += 1;
+        throw new Error('row-array get trap executed');
+      },
+      getOwnPropertyDescriptor() {
+        arrayTrapCalls += 1;
+        throw new Error('row-array descriptor trap executed');
+      },
+    });
+    const queryExecutor = {
+      async executeOnPartition() {
+        t.fail('invalid snapshot rows must reject before dispatch');
+        return {success: true};
+      },
+    };
+
+    await t.rejects(
+      routeSplitSnapshotBatch(
+        proxyRows,
+        ['id', 'name'],
+        createMetadata(PENDING_VERSION),
+        {tableName: TABLE_NAME, queryExecutor},
+      ),
+      /route mirrored partition split write/iu,
+    );
+    t.equal(arrayTrapCalls, 0, 'Proxy row array rejects before traps');
+
+    const sparseRows = new Array(2);
+    sparseRows[0] = {id: 'a', name: 'Ada'};
+    await t.rejects(
+      routeSplitSnapshotBatch(
+        sparseRows,
+        ['id', 'name'],
+        createMetadata(PENDING_VERSION),
+        {tableName: TABLE_NAME, queryExecutor},
+      ),
+      /route mirrored partition split write/iu,
+    );
+  });
+
+test('split snapshot batching rejects Proxy row records before traps',
+  async (t) => {
+    let rowTrapCalls = 0;
+    const proxyRow = new Proxy({id: 'a', name: 'Ada'}, {
+      ownKeys() {
+        rowTrapCalls += 1;
+        throw new Error('row ownKeys trap executed');
+      },
+      getOwnPropertyDescriptor() {
+        rowTrapCalls += 1;
+        throw new Error('row descriptor trap executed');
+      },
+    });
+    await t.rejects(
+      routeSplitSnapshotBatch(
+        [proxyRow],
+        ['id', 'name'],
+        createMetadata(PENDING_VERSION),
+        {
+          tableName: TABLE_NAME,
+          queryExecutor: {
+            async executeOnPartition() {
+              t.fail('Proxy row must reject before dispatch');
+              return {success: true};
+            },
+          },
+        },
+      ),
+      /route mirrored partition split write/iu,
+    );
+    t.equal(rowTrapCalls, 0, 'Proxy row rejects before record traps');
   });
 
 test('split snapshot batching refreshes epoch evidence before each child',
