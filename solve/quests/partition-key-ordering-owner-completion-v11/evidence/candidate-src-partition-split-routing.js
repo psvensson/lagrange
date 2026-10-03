@@ -41,7 +41,6 @@ const SPLIT_MIRROR_IDENTITY_FIELD = Object.freeze({
 });
 export const SPLIT_SNAPSHOT_MAX_BIND_VARIABLES = 32_766;
 export const SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL = 64;
-const arrayIsArray = Array.isArray;
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySlice = Function.call.bind(Array.prototype.slice);
