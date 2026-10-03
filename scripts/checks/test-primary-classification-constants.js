@@ -23,9 +23,6 @@ export const PRIMARY_CLASS_MANIFEST_PATH = 'test/shards/primary-classes.json';
 export const PRIMARY_CLASS_SCENARIO = 'test-primary-classification-manifest';
 
 export const CONVERGENCE_PROBES_SHARD_PATH = 'test/shards/convergence-probes.txt';
-export const DEVELOPER_SMOKE_MANIFEST_PATH =
-  'test/manifests/developer-smoke-proof-manifest.json';
-export const SMOKE_FOCUSED_COMMAND_ID = 'focused-contracts';
 
 export const TEST_FILE_SUFFIX = '.test.js';
 export const INTEGRATION_FILE_SUFFIX = '.integration.test.js';

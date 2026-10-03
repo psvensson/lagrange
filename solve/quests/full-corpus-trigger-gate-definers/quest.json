@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "full-corpus-trigger-gate-definers",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "A change to a file under a full-corpus trigger directory that does not define the push gate is proved by its own cone, not by the whole corpus; the trigger directories stay fail-closed. The two directory rules of FULL_CORPUS_TRIGGER_RULES (selection-state: test/manifests/; push-gate: .githooks/) stay, so any file under them - a new one included - still runs the whole corpus, and each rule exempts by name exactly the files proven not to define the gate, each exemption carrying a one-line reason naming its only consumers. A file is proven not to define the gate only when nothing the gate runs names it (the files that trip a trigger, the package scripts they run through npm, transitively, and the import closure of every script they name) and a test observes it by name in the observation census; an exemption is witnessed to fail when either stops holding. Witnessed on the real selection through buildExecutionPlan and decidePushProof: a change to test/manifests/pre-push-stages.json (the incident: a ~40-minute full corpus for a file read only by the apparatus budget, whose 179-test cone already held both its observers) and to every other exempted file runs the change proof with its named observers in the cone; a change to the post-push manifest, proof-obligations.json, the safety spine, the impact contracts, .githooks/pre-push, any unexempted file under a trigger directory, or a new unlisted file under test/manifests/ or .githooks/ runs the whole corpus. .githooks/pre-push itself stays a trigger (dropping it is an owner decision not made here). No script, workflow or gate is added or weakened.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/full-corpus-trigger-gate-definers/evidence/receipt.json",
+      "requiredReceipts": [
+        "exempt-file-runs-its-cone",
+        "gate-definer-runs-the-corpus",
+        "exemption-unread-by-the-gate",
+        "exemption-observed-by-name"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "deny-list-not-allow-list",
+      "statement": "The directory rules stay and exemptions are named files; a file not named, including a new one, keeps triggering the whole corpus."
+    },
+    {
+      "id": "exemption-bound-to-its-claim",
+      "statement": "An exemption is valid only while nothing the gate runs names the file and a test observes it by name; both are derived in the witness from the trigger rules, package.json, the import graph and the observation census, never from a retyped list of modules."
+    },
+    {
+      "id": "pre-push-stays-a-trigger",
+      "statement": ".githooks/pre-push, the post-push manifest, proof-obligations.json, the safety spine and the impact contracts remain full-corpus triggers."
+    },
+    {
+      "id": "no-new-apparatus",
+      "statement": "No script or workflow is added; the witnesses live in the existing gate test file; ratchets move one way only."
+    }
+  ],
+  "sealedAt": "ec63fbb0016bf1ca6d81372e2a0721851363ea80"
+}
