@@ -223,7 +223,8 @@ function resolveVirginSeedDataDirectory(options, suppliedManagerDir) {
   };
 }
 
-function createVirginSeedDataDirectoryManager(suppliedManager, dataDir) {
+export function createVirginSeedDataDirectoryManager(
+  suppliedManager, dataDir) {
   return suppliedManager || {
     isInitialized: () => true,
     getDataDir: () => dataDir,

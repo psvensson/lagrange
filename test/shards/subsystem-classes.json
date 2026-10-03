@@ -28,7 +28,7 @@
   "censusSize": 2196,
   "digest": "fnv1a32-b5c32271",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-caf0f481",
+  "observationDigest": "fnv1a32-31229bb5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -12360,10 +12360,12 @@
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/pipeline/startup-pipeline-runner.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/message-group/message-group-service.js",
         "src/partition/partition-service-core-base.js",
+        "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js",
         "test/simulation/formation-sim-production-seed-host.js",
@@ -12389,8 +12391,10 @@
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/pipeline/startup-pipeline-runner.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js",
         "test/simulation/formation-sim-production-seed-host.js"
@@ -12400,7 +12404,9 @@
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
       ]
@@ -12419,7 +12425,9 @@
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
       ]
@@ -12428,7 +12436,9 @@
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
       ]
@@ -12437,7 +12447,9 @@
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
       ]
@@ -12446,7 +12458,9 @@
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
       ]
@@ -12455,7 +12469,9 @@
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
       ]
@@ -12464,7 +12480,9 @@
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
       ],
