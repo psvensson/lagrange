@@ -3,8 +3,10 @@ import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
-import {retireReplicaTransportHandler} from
-  '../node/replica-transport-handler-identity.js';
+import {
+  reportReplicaHandlerRetirement,
+  retireReplicaTransportHandler,
+} from '../node/replica-transport-handler-identity.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -49,9 +51,9 @@ function clearPartitionLifecycleListeners(service) {
 }
 
 // Retire this replica's exact transport handler through its lifecycle owner
-// (owner decision N2).
+// (owner decision N2); a refused retirement is surfaced, never discarded.
 async function retirePartitionTransportHandler(service) {
-  await retireReplicaTransportHandler({
+  const outcome = await retireReplicaTransportHandler({
     transport: service.transport,
     address: service.unifiedAddress,
     handler: service.transportHandler,
@@ -59,6 +61,10 @@ async function retirePartitionTransportHandler(service) {
     lane: service.resolveHandlerRetirementLane?.() ||
       service.replicaStateMachine,
   });
+  reportReplicaHandlerRetirement(service.logger, {
+    address: service.unifiedAddress,
+    replicaId: service.replicaId,
+  }, outcome);
 }
 
 function closePartitionPersistenceResources(service) {

@@ -21,6 +21,11 @@ import {AddressManager} from
   '../../src/address/address-manager.js';
 import {DataDirectoryManager} from
   '../../src/storage/data-directory-manager.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+import {WASM_SERVICE_LIFECYCLE_REFUSAL} from
+  '../../src/wasm-service/wasm-service-constants.js';
+import {TEST_BOOT_INCARNATION} from
+  '../test-helpers/boot-incarnation-fixture.js';
 
 // Each test's data directory owns its replicas' durable database paths.
 let scratchDirectory = null;
@@ -536,6 +541,103 @@ describe('WasmServiceLifecycle', () => {
       };
       await lifecycle.stopReplica('svc-1');
       assert.equal(shutdownCalled, true);
+    });
+
+    // The delayed-retirement hazard one level up (owner decision N2): the
+    // map entry and the address belong to the replica that holds them, so a
+    // late stop of an old replica never removes its successor.
+    describe('stop and start overlapping for one serviceId', () => {
+      let router = null;
+      beforeEach(async () => {
+        router = new MessageRouter({
+          bootIncarnation: TEST_BOOT_INCARNATION,
+          nodeId: 'test-node',
+          wsPort: 0,
+        });
+        await router.initialize({startServer: false});
+      });
+      afterEach(async () => {
+        await router.shutdown?.();
+        router = null;
+      });
+
+      const startedReplica = async (lifecycle) => {
+        lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+        assert.equal((await lifecycle.startReplica('svc-1')).started, true);
+        return lifecycle.getReplica('svc-1');
+      };
+
+      it('a stop in flight leaves the successor created and started for ' +
+        'the same serviceId owned, registered and stoppable', async () => {
+        const lifecycle = makeLifecycle({messageRouter: router});
+        const old = await startedReplica(lifecycle);
+        const stopping = lifecycle.stopReplica('svc-1');
+        const successor = lifecycle.createReplica(makeServiceDef(),
+          makeReplicaConfig());
+        const started = await lifecycle.startReplica('svc-1');
+        assert.equal(started.started, true, 'the successor starts');
+        assert.deepEqual(await stopping, {stopped: true});
+        assert.notEqual(successor, old);
+        assert.equal(lifecycle.getReplica('svc-1'), successor,
+          'the old stop leaves the successor in the map');
+        assert.equal(router.getRegisteredHandler(successor.unifiedAddress),
+          successor.transportHandler);
+        assert.equal(typeof successor.transportHandler, 'function');
+        assert.equal(successor.initialized, true);
+        assert.equal(old.db, null, 'the old replica released its database');
+        assert.deepEqual(await lifecycle.stopReplica('svc-1'),
+          {stopped: true}, 'the successor is stoppable through its owner');
+        assert.equal(lifecycle.getReplica('svc-1'), null);
+        assert.equal(router.getRegisteredHandler(successor.unifiedAddress),
+          null, 'nothing leaks at the address');
+        assert.equal(successor.db, null);
+      });
+
+      it('a start of a replica whose stop is in flight is refused typed',
+        async () => {
+          const lifecycle = makeLifecycle({messageRouter: router});
+          const replica = await startedReplica(lifecycle);
+          const stopping = lifecycle.stopReplica('svc-1');
+          const started = await lifecycle.startReplica('svc-1');
+          assert.equal(started.started, false);
+          assert.equal(started.diagnostic.code,
+            WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_RETIRED);
+          assert.deepEqual(await stopping, {stopped: true});
+          assert.equal(lifecycle.getReplica('svc-1'), null);
+          assert.equal(router.getRegisteredHandler(replica.unifiedAddress),
+            null);
+          assert.equal(replica.initialized, false);
+          assert.equal(replica.db, null);
+        });
+
+      it('a stop that begins while a start awaits refuses that start typed',
+        async () => {
+          const lifecycle = makeLifecycle({messageRouter: router});
+          lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+          const replica = lifecycle.getReplica('svc-1');
+          const starting = lifecycle.startReplica('svc-1');
+          const stopping = lifecycle.stopReplica('svc-1');
+          const started = await starting;
+          assert.equal(started.started, false);
+          assert.equal(started.diagnostic.code,
+            WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START);
+          assert.deepEqual(await stopping, {stopped: true});
+          assert.equal(router.getRegisteredHandler(replica.unifiedAddress),
+            null);
+          assert.equal(replica.db, null);
+        });
+
+      it('a replica is never created over a live one for its serviceId',
+        async () => {
+          const lifecycle = makeLifecycle({messageRouter: router});
+          const live = await startedReplica(lifecycle);
+          assert.throws(() => lifecycle.createReplica(makeServiceDef(),
+            makeReplicaConfig()),
+          {code: WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_LIVE});
+          assert.equal(lifecycle.getReplica('svc-1'), live);
+          assert.equal(router.getRegisteredHandler(live.unifiedAddress),
+            live.transportHandler);
+        });
     });
   });
 

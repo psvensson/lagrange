@@ -17,6 +17,14 @@ const REPLICA_HANDLER_RETIREMENT_OUTCOME = Object.freeze({
   REFUSED_NO_IDENTITY: 'refused_transport_without_handler_identity',
 });
 
+// A retirement that leaves the replica's handler registered is a leak its
+// owner must surface, never discard.
+const REPLICA_HANDLER_RETIREMENT_LOG_MSG = Object.freeze({
+  LEFT_REGISTERED:
+    'Replica transport handler left registered: the transport cannot ' +
+    'prove handler identity, so retirement was refused',
+});
+
 function hasHandlerIdentityApi(transport) {
   return typeof transport?.getRegisteredHandler === TYPEOF_FUNCTION &&
     typeof transport?.unregisterExact === TYPEOF_FUNCTION;
@@ -87,9 +95,32 @@ async function retireReplicaTransportHandler(retirement) {
   return outcome;
 }
 
+/**
+ * Surface one retirement outcome through the retiring owner's logger: a
+ * refused retirement left the replica's handler registered (a leak), and is
+ * reported as an error with the address and replica; the other outcomes
+ * leave nothing behind.
+ * @param {Object} logger - The retiring owner's subsystem logger.
+ * @param {Object} retirement - {address, replicaId}.
+ * @param {string} outcome - A REPLICA_HANDLER_RETIREMENT_OUTCOME.
+ * @return {string} The outcome.
+ */
+function reportReplicaHandlerRetirement(logger, retirement, outcome) {
+  if (outcome === REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY) {
+    logger.error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED, {
+      address: retirement.address,
+      replicaId: retirement.replicaId,
+      outcome,
+    });
+  }
+  return outcome;
+}
+
 export {
+  REPLICA_HANDLER_RETIREMENT_LOG_MSG,
   REPLICA_HANDLER_RETIREMENT_OUTCOME,
   isExactReplicaHandlerRegistered,
   isReplicaServiceHandlerBound,
+  reportReplicaHandlerRetirement,
   retireReplicaTransportHandler,
 };

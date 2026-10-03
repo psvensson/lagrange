@@ -80,6 +80,35 @@ const WASM_SERVICE_ERROR_MSG = Object.freeze({
     ' contract (2-3 params)',
   PORT_EXHAUSTED: 'No ports available for allocation',
   COMMAND_TYPE_REFUSED: 'WASM service command type refused',
+  REPLICA_RETIRED:
+    'WASM service replica instance is shut down or shutting down; ' +
+    'a successor is a new replica',
+  REPLICA_LIVE:
+    'WASM service replica is live for this service; stop it before ' +
+    'creating its successor',
+  STOPPED_DURING_START:
+    'WASM service replica was stopped while it was starting',
+});
+
+// The lifecycle of one WasmServiceReplica instance (R07). An instance is
+// single-use: shutdown is its end, and a successor is a new instance, as for
+// partition and message-group replicas.
+const WASM_SERVICE_REPLICA_STATE = Object.freeze({
+  CREATED: 'created',
+  STARTING: 'starting',
+  READY: 'ready',
+  STOPPING: 'stopping',
+  STOPPED: 'stopped',
+});
+
+// Typed refusals of the replica lifecycle.
+const WASM_SERVICE_LIFECYCLE_REFUSAL = Object.freeze({
+  // initialize/start of an instance whose shutdown has begun.
+  REPLICA_RETIRED: 'wasm_service_replica_retired',
+  // A replica is created over a starting or ready one for the same service.
+  REPLICA_LIVE: 'wasm_service_replica_live',
+  // The replica's stop began while its start awaited its initialization.
+  STOPPED_DURING_START: 'wasm_service_replica_stopped_during_start',
 });
 
 // The committed command vocabulary of a WASM service group's consensus log
@@ -194,7 +223,9 @@ export {
   WASM_SERVICE_COMMAND_TYPE,
   WASM_SERVICE_COMMAND_REFUSAL,
   WASM_SERVICE_FOUNDING_REFUSAL,
+  WASM_SERVICE_LIFECYCLE_REFUSAL,
   WASM_SERVICE_LOG_MSG,
+  WASM_SERVICE_REPLICA_STATE,
   WASM_SERVICE_VALUE_ENCODING,
   WASM_SERVICE_EXECUTOR_TYPE,
   SQL_ENGINE_PROFILE,

@@ -12,15 +12,10 @@ import {EventEmitter} from 'node:events';
 import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
-import {retireReplicaTransportHandler} from
-  '../node/replica-transport-handler-identity.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
-import {
-  RAFT_EVENT,
-  RAFT_OPERATION_OUTCOME,
-} from '../raft/raft-operation-port-constants.js';
-import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../raft/raft-operation-port-constants.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {COLUMN, TABLES} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
@@ -30,16 +25,12 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
-import {SessionKVStore} from './session-kv-store.js';
 import {SafetyInterval} from './safety-interval.js';
 import {TimerManager} from './timer-manager.js';
 import {routeRead} from './read-router.js';
 import {
   assertDurableDbPath,
   assertFoundingReplicaSet,
-  closeWasmServiceConsensus,
-  openWasmServiceConsensusPort,
-  openWasmServiceDatabase,
 } from './wasm-service-consensus-port.js';
 import {
   WASM_SERVICE_SUBSYSTEM,
@@ -48,7 +39,13 @@ import {
   WASM_SERVICE_DEFAULT,
   WRITE_CONSISTENCY_MODE,
   WASM_SERVICE_COMMAND_TYPE,
+  WASM_SERVICE_REPLICA_STATE,
 } from './wasm-service-constants.js';
+import {
+  initializeWasmServiceReplica,
+  isLiveWasmServiceReplica,
+  shutdownWasmServiceReplica,
+} from './wasm-service-replica-lifecycle.js';
 import {
   admitWasmServiceCommand,
   wasmServiceCommandRefusalError,
@@ -126,7 +123,10 @@ class WasmServiceReplica extends EventEmitter {
     this.role = RAFT_ROLE.FOLLOWER;
     this.leaderId = null;
     this.isLeader = false;
-    this.initialized = false;
+    // The instance's lifecycle (WASM_SERVICE_REPLICA_STATE); the settlement
+    // of its in-flight start or shutdown is what a concurrent caller joins.
+    this.lifecycleState = WASM_SERVICE_REPLICA_STATE.CREATED;
+    this.lifecycleSettlement = null;
     this.transportHandler = null;
     this.systemTableCache = options.systemTableCache ||
       NodeService.getInstance().getSystemTableCache();
@@ -270,40 +270,30 @@ class WasmServiceReplica extends EventEmitter {
     }
   }
 
+  /** @return {boolean} Whether the replica is open and serving (READY). */
+  get initialized() {
+    return this.lifecycleState === WASM_SERVICE_REPLICA_STATE.READY;
+  }
+
+  /**
+   * @return {boolean} Whether the replica holds live resources: its open is
+   *   in flight or done, and its shutdown has not begun.
+   */
+  get live() {
+    return isLiveWasmServiceReplica(this);
+  }
+
   /**
    * Open the replica on its operation port: its durable database, the
    * session KV store over that connection (a committed write and its
    * applied index are one transaction), the port, its lifecycle events,
-   * and its transport address.
+   * and its transport address. The instance is single-use: once its
+   * shutdown has begun, initialize is refused typed (REPLICA_RETIRED) and a
+   * successor is a new instance (wasm-service-replica-lifecycle.js).
    * @return {Promise<void>}
    */
-  async initialize() {
-    if (this.initialized) {
-      return;
-    }
-    try {
-      openWasmServiceDatabase(this);
-      this.kvStore = new SessionKVStore(this.db);
-      openWasmServiceConsensusPort(this);
-    } catch (error) {
-      await this.releaseConsensus();
-      throw error;
-    }
-    wireReplicaLifecycleEvents(this, {
-      events: RAFT_EVENT,
-      roles: RAFT_ROLE,
-      getCurrentTerm: () => this.resolveCurrentTermSafe(),
-      onLeader: () => this.onBecameLeader(),
-      onFollower: () => this.onBecameFollower(),
-      onCandidate: () => this.onBecameFollower(),
-    });
-    if (this.transport) {
-      // The exact handler identity is kept so retirement removes only it
-      // (owner decision N2).
-      this.transportHandler = (message) => this.handleMessage(message);
-      this.transport.register(this.unifiedAddress, this.transportHandler);
-    }
-    this.initialized = true;
+  initialize() {
+    return initializeWasmServiceReplica(this);
   }
 
   /**
@@ -689,45 +679,20 @@ class WasmServiceReplica extends EventEmitter {
 
   /**
    * Shutdown the replica: stop timers and broadcasts, retire its exact
-   * transport handler, then release its port and database.
+   * transport handler, then release its port and database. The transition
+   * to STOPPING and the snapshot of the handler it retires happen at call,
+   * before any await (wasm-service-replica-lifecycle.js), so nothing a later
+   * call opens is retired or released here; a repeated shutdown joins the
+   * one in flight.
    * @return {Promise<void>}
    */
-  async shutdown() {
-    this.timerManager.stopAll();
-    this._stopSafetyBroadcasts();
-    this.roleMutationHelper.shutdown();
-    this.leaderNodeMutationHelper.shutdown();
-    // Exact-identity retirement (owner decision N2): a successor's handler
-    // at the same address is never removed. No replica-lifecycle activation
-    // binds a WASM service handler, so there is no effect section to wait on.
-    await retireReplicaTransportHandler({
-      transport: this.transport,
-      address: this.unifiedAddress,
-      handler: this.transportHandler,
-      replicaId: this.replicaId,
-      lane: null,
+  shutdown() {
+    return shutdownWasmServiceReplica(this, () => {
+      this.timerManager.stopAll();
+      this._stopSafetyBroadcasts();
+      this.roleMutationHelper.shutdown();
+      this.leaderNodeMutationHelper.shutdown();
     });
-    this.transportHandler = null;
-    this.initialized = false;
-    await this.releaseConsensus();
-
-    this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_STOPPED, {
-      replicaId: this.replicaId,
-      serviceDefinitionId: this.serviceDefinitionId,
-    });
-  }
-
-  /**
-   * Release the port, then the KV store's borrowed connection and the
-   * database itself.
-   * @return {Promise<void>}
-   */
-  async releaseConsensus() {
-    await closeWasmServiceConsensus(this);
-    if (this.kvStore) {
-      this.kvStore.close();
-      this.kvStore = null;
-    }
   }
 }
 

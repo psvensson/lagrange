@@ -23,6 +23,8 @@ import {
   WASM_SERVICE_ERROR_MSG,
   WASM_SERVICE_DEFAULT,
   READ_CONSISTENCY_MODE,
+  WASM_SERVICE_LIFECYCLE_REFUSAL,
+  WASM_SERVICE_REPLICA_STATE,
 } from '../../src/wasm-service/wasm-service-constants.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
@@ -732,6 +734,223 @@ describe('WasmServiceReplica', () => {
         await router.shutdown?.();
         fs.rmSync(directory, {recursive: true, force: true});
       }
+    });
+  });
+
+  // The replica lifecycle as a state machine (R07): every interleaving of
+  // up to three lifecycle calls on two instances A and B at one address
+  // (over a real MessageRouter), each call awaited or left pending, against
+  // the model: an instance is single-use (CREATED -> live -> retired); an
+  // initialize after its shutdown began is refused typed; a failed open
+  // leaves nothing registered; the address holds the last live
+  // registration. After quiescence exactly that handler is registered and
+  // receives, every live instance holds its db/port/kv, every retired one
+  // holds nothing, and nothing leaks once all are shut down.
+  describe('lifecycle interleavings', () => {
+    const MODEL = Object.freeze({
+      CREATED: 'created', LIVE: 'live', RETIRED: 'retired',
+    });
+    const OPS = Object.freeze(['init', 'failInit', 'shutdown']);
+    const NAMES = Object.freeze(['A', 'B']);
+    const MAX_LENGTH = 3;
+
+    function* sequences(length) {
+      if (length === 0) {
+        yield [];
+        return;
+      }
+      for (const prefix of sequences(length - 1)) {
+        for (const op of OPS) {
+          for (const name of NAMES) {
+            for (const pending of [false, true]) {
+              yield [...prefix, {op, name, pending}];
+            }
+          }
+        }
+      }
+    }
+
+    function label(sequence) {
+      return sequence.map(({op, name, pending}) =>
+        `${op}${name}${pending ? '~' : ''}`).join(',');
+    }
+
+    // The model's expected settlement of one call, and its state change. An
+    // open still in flight (only a failing one is: a successful open is
+    // synchronous up to READY) is joined by a concurrent initialize.
+    function applyModel(model, {op, name}, openInFlight) {
+      const state = model.states[name];
+      if (state === MODEL.RETIRED) {
+        return op === 'shutdown' ? 'resolve' : 'retired';
+      }
+      if (op === 'shutdown') {
+        model.states[name] = MODEL.RETIRED;
+        if (model.slot === name) model.slot = null;
+        return 'resolve';
+      }
+      if (state === MODEL.LIVE) return 'resolve';
+      if (op === 'failInit' || openInFlight) return 'fail';
+      model.states[name] = MODEL.LIVE;
+      model.slot = name;
+      return 'resolve';
+    }
+
+    function call(replica, op, blockedPath) {
+      if (op === 'shutdown') return replica.shutdown();
+      if (op === 'init') return replica.initialize();
+      const dbPath = replica.dbPath;
+      replica.dbPath = blockedPath;
+      try {
+        return replica.initialize();
+      } finally {
+        replica.dbPath = dbPath;
+      }
+    }
+
+    function settledAs(expected, settlement) {
+      if (expected === 'resolve') return settlement.status === 'fulfilled';
+      if (settlement.status !== 'rejected') return false;
+      const retired = settlement.reason?.code ===
+        WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_RETIRED;
+      return expected === 'retired' ? retired : !retired;
+    }
+
+    // One run's world: a real router, instances A and B at one address
+    // whose messages are recorded, and the model.
+    async function createRun(directory) {
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'node-1',
+        wsPort: 0,
+      });
+      await router.initialize({startServer: false});
+      const blocker = path.join(directory, 'blocker');
+      fs.writeFileSync(blocker, 'x');
+      const run = {router, blocker, received: [], replicas: {}, calls: [],
+        failures: [], model: {slot: null,
+          states: {A: MODEL.CREATED, B: MODEL.CREATED}}};
+      for (const name of NAMES) {
+        const replica = new WasmServiceReplica(defaultOpts({
+          transport: router,
+          dbPath: path.join(directory, `${name}.db`),
+        }));
+        replica.handleMessage = async () => {
+          run.received.push(name);
+          return {handled: name};
+        };
+        run.replicas[name] = replica;
+      }
+      run.address = run.replicas.A.unifiedAddress;
+      return run;
+    }
+
+    function modelHandler(run) {
+      const slot = run.model.slot;
+      return slot ? run.replicas[slot].transportHandler : null;
+    }
+
+    function checkRegistration(run, when) {
+      const registered = run.router.getRegisteredHandler(run.address);
+      if (registered !== modelHandler(run) ||
+          (run.model.slot && registered === null)) {
+        run.failures.push(`${when}: registered handler is not the ` +
+          `model's (${run.model.slot})`);
+      }
+      return registered;
+    }
+
+    // Issue one call synchronously: a pending call must not yield, or the
+    // continuations of earlier pending calls would run before the next one.
+    function issueStep(run, step) {
+      const replica = run.replicas[step.name];
+      const expected = applyModel(run.model, step,
+        replica.lifecycleState === WASM_SERVICE_REPLICA_STATE.STARTING);
+      const settlement = call(replica, step.op,
+        path.join(run.blocker, `${step.name}.db`)).then(
+        (value) => ({status: 'fulfilled', value}),
+        (reason) => ({status: 'rejected', reason}));
+      run.calls.push({step, expected, settlement});
+      return settlement;
+    }
+
+    async function checkQuiescence(run) {
+      for (const {step, expected, settlement} of run.calls) {
+        if (!settledAs(expected, await settlement)) {
+          run.failures.push(`${step.op}${step.name} did not ${expected}`);
+        }
+      }
+      const registered = checkRegistration(run, 'quiescent');
+      if (run.model.slot && registered) {
+        await run.router.deliver(run.address, {op: 'probe'});
+        if (run.received.join() !== run.model.slot) {
+          run.failures.push(`delivery reached [${run.received}], ` +
+            `not ${run.model.slot}`);
+        }
+      }
+    }
+
+    function checkResources(run, name) {
+      const replica = run.replicas[name];
+      const state = run.model.states[name];
+      const holdsAll = Boolean(replica.db?.open && replica.raft &&
+        replica.kvStore);
+      const holdsAny = Boolean(replica.db || replica.raft || replica.kvStore);
+      if (state === MODEL.LIVE && !(holdsAll && replica.initialized)) {
+        run.failures.push(`live ${name} lost its db/port/kv`);
+      }
+      if (state !== MODEL.LIVE && (holdsAny || replica.initialized)) {
+        run.failures.push(`${state} ${name} still holds resources`);
+      }
+    }
+
+    async function closeRun(run) {
+      for (const name of NAMES) await run.replicas[name].shutdown();
+      if (run.router.getRegisteredHandler(run.address) !== null) {
+        run.failures.push('a handler leaked after every instance shut down');
+      }
+      await run.router.shutdown?.();
+    }
+
+    async function runSequence(sequence, directory) {
+      const run = await createRun(directory);
+      try {
+        for (const step of sequence) {
+          const settlement = issueStep(run, step);
+          if (!step.pending) await settlement;
+          checkRegistration(run, `after ${step.op}${step.name}`);
+        }
+        await checkQuiescence(run);
+        for (const name of NAMES) checkResources(run, name);
+      } finally {
+        await closeRun(run);
+      }
+      return run.failures;
+    }
+
+    it('every interleaving of up to three calls on A and B keeps the ' +
+      'address, the resources and delivery on the model', async () => {
+      const root = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'wasm-replica-lifecycle-'));
+      const failing = [];
+      let runs = 0;
+      try {
+        for (let length = 1; length <= MAX_LENGTH; length += 1) {
+          for (const sequence of sequences(length)) {
+            const directory = path.join(root, String(runs));
+            fs.mkdirSync(directory);
+            const failures = await runSequence(sequence, directory);
+            runs += 1;
+            if (failures.length > 0) {
+              failing.push(`${label(sequence)}: ${failures.join('; ')}`);
+            }
+          }
+        }
+      } finally {
+        fs.rmSync(root, {recursive: true, force: true});
+      }
+      assert.equal(runs, 12 + 144 + 1728, 'the bounded space is exhaustive');
+      assert.deepEqual(failing, [],
+        `${failing.length}/${runs} interleavings off the model`);
     });
   });
 });

@@ -6,6 +6,9 @@
  * refusal with no destructive effect. The presence fallback of the activation
  * check fails closed the same way.
  */
+import {mkdtempSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -13,10 +16,15 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {
+  REPLICA_HANDLER_RETIREMENT_LOG_MSG,
   REPLICA_HANDLER_RETIREMENT_OUTCOME,
   isExactReplicaHandlerRegistered,
   retireReplicaTransportHandler,
 } from '../../src/node/replica-transport-handler-identity.js';
+import {retireMessageGroupTransportHandler} from
+  '../../src/bootstrap/shared/message-group-transport-handler.js';
+import {WasmServiceReplica} from
+  '../../src/wasm-service/wasm-service-replica.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'node-a';
@@ -109,4 +117,81 @@ test('Removal-8: a transport without the identity API is refused and ' +
   'typed refusal');
   t.same(transport.unregistered, [], 'no removal by address');
   t.equal(transport.handlers.get(ADDRESS), handler, 'the handler is untouched');
+});
+
+// A logger that records what its owner reports.
+function createRecordingLogger() {
+  const errors = [];
+  const ignore = () => {};
+  return {
+    errors,
+    error: (message, fields) => errors.push({message, fields}),
+    warn: ignore,
+    info: ignore,
+    debug: ignore,
+    forSubsystem() {
+      return this;
+    },
+  };
+}
+
+function assertLeftRegisteredReported(t, logger, address, replicaId) {
+  t.same(logger.errors, [{
+    message: REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED,
+    fields: {address, replicaId,
+      outcome: REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY},
+  }], 'the refused retirement is reported with its address and replica');
+}
+
+test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
+  'handler is left registered) instead of discarding it', async (t) => {
+  initializeEnvironment();
+  const handler = () => ({acknowledged: true});
+
+  t.test('partition replica shutdown', async (t) => {
+    const transport = createPresenceOnlyTransport();
+    const service = new PartitionService({partitionId: 'p1', tableId: 't1',
+      replicaId: REPLICA_ID, nodeId: NODE_ID, transport});
+    const logger = createRecordingLogger();
+    service.logger = logger;
+    service.transportHandler = handler;
+    transport.register(ADDRESS, handler);
+    await service.shutdown();
+    t.equal(transport.handlers.get(ADDRESS), handler,
+      'nothing is removed by address');
+    assertLeftRegisteredReported(t, logger, ADDRESS, REPLICA_ID);
+  });
+
+  t.test('message-group replica retirement', async (t) => {
+    const transport = createPresenceOnlyTransport();
+    const address = `${NODE_ID}/message-group/mg-r1`;
+    const logger = createRecordingLogger();
+    transport.register(address, handler);
+    t.equal(await retireMessageGroupTransportHandler({
+      messageGroup: {transportHandler: handler, logger},
+      messageRouter: transport, address, replicaId: 'mg-r1'}),
+    REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY);
+    assertLeftRegisteredReported(t, logger, address, 'mg-r1');
+  });
+
+  t.test('WASM service replica shutdown', async (t) => {
+    const transport = createPresenceOnlyTransport();
+    const directory = mkdtempSync(join(tmpdir(), 'wasm-refused-retirement-'));
+    const replica = new WasmServiceReplica({replicaId: 'wsr-1',
+      nodeId: NODE_ID, replicaIds: ['wsr-1'], transport,
+      serviceDefinitionId: 'svc', dbPath: join(directory, 'wsr-1.db')});
+    const logger = createRecordingLogger();
+    replica.logger = logger;
+    try {
+      await replica.initialize();
+      const registered = replica.transportHandler;
+      await replica.shutdown();
+      t.equal(transport.handlers.get(replica.unifiedAddress), registered,
+        'nothing is removed by address');
+      assertLeftRegisteredReported(t, logger, replica.unifiedAddress,
+        'wsr-1');
+    } finally {
+      rmSync(directory, {recursive: true, force: true});
+    }
+  });
 });

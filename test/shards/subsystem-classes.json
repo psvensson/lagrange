@@ -28,7 +28,7 @@
   "censusSize": 2195,
   "digest": "fnv1a32-48ed845c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-74a7187b",
+  "observationDigest": "fnv1a32-658b74df",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7314,6 +7314,12 @@
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
+    "test/node/replica-transport-handler-identity.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/wasm-service/wasm-service-replica.js"
+      ]
+    },
     "test/node/runtime-service-call-cell-handler.test.js": {
       "files": [
         "src/node/runtime-service-call-cell-handler.js",
@@ -12839,7 +12845,9 @@
         "src/node/node-service.js",
         "src/storage/data-directory-manager.js",
         "src/wasm-service/module-mirror.js",
-        "src/wasm-service/port-allocator.js"
+        "src/wasm-service/port-allocator.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
     "test/wasm-service/wasm-service-replica.test.js": {

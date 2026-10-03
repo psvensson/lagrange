@@ -19,6 +19,8 @@ import {
   WASM_SERVICE_SUBSYSTEM,
   WASM_SERVICE_LOG_MSG,
   WASM_SERVICE_ERROR_MSG,
+  WASM_SERVICE_LIFECYCLE_REFUSAL,
+  WASM_SERVICE_REPLICA_STATE,
 } from './wasm-service-constants.js';
 
 const START_RESULT_FIELD = Object.freeze({
@@ -46,16 +48,24 @@ const START_DIAGNOSTIC_CODE = Object.freeze({
 });
 
 /**
- * Lifecycle states for a managed replica.
+ * Lifecycle states for a managed replica: the replica's own states.
  * @enum {string}
  */
-const REPLICA_LIFECYCLE_STATE = Object.freeze({
-  CREATED: 'created',
-  STARTING: 'starting',
-  READY: 'ready',
-  STOPPING: 'stopping',
-  STOPPED: 'stopped',
-});
+const REPLICA_LIFECYCLE_STATE = WASM_SERVICE_REPLICA_STATE;
+
+/**
+ * A typed lifecycle refusal.
+ * @param {string} code - A WASM_SERVICE_LIFECYCLE_REFUSAL.
+ * @param {string} message
+ * @param {string} serviceId
+ * @return {Error}
+ */
+function lifecycleRefusal(code, message, serviceId) {
+  const error = new Error(message);
+  error.code = code;
+  error.serviceId = serviceId;
+  return error;
+}
 
 /**
  * Manages the full lifecycle of WasmServiceReplica instances.
@@ -149,10 +159,18 @@ class WasmServiceLifecycle {
    * @param {Object} replicaConfig - The replica's founding identity:
    *   replicaId and replicaIds. Its durable database path is the data
    *   directory's, never the caller's.
+   * A replica still starting or ready for the serviceId is never replaced
+   * (that would orphan it): creation is refused typed (REPLICA_LIVE) until
+   * its stop has begun; a successor created while the old replica stops
+   * takes the entry, and the old stop then leaves it in place.
    * @return {WasmServiceReplica} The created replica.
    */
   createReplica(serviceDefinition, replicaConfig) {
     const serviceId = serviceDefinition.serviceId;
+    if (this.activeReplicas.get(serviceId)?.live) {
+      throw lifecycleRefusal(WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_LIVE,
+        WASM_SERVICE_ERROR_MSG.REPLICA_LIVE, serviceId);
+    }
     assertFoundingReplicaSet(replicaConfig.replicaId,
       replicaConfig.replicaIds);
     const dbPath = this.dataDirectoryManager.getWasmServiceDbPath(
@@ -230,6 +248,8 @@ class WasmServiceLifecycle {
       port,
     });
 
+    // A replica whose stop began is refused typed by its own initialize
+    // (REPLICA_RETIRED); a successor is a new replica.
     try {
       await replica.initialize();
     } catch (cause) {
@@ -237,6 +257,14 @@ class WasmServiceLifecycle {
       return this.refuseStart(serviceId, startOptions, {
         code: cause.code || START_DIAGNOSTIC_CODE.CONSENSUS_START_REFUSED,
         error: cause.message,
+      });
+    }
+    if (!replica.initialized) {
+      // Its stop began while this start awaited: the stop released the
+      // port and owns the replica's retirement.
+      return this.refuseStart(serviceId, startOptions, {
+        code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
+        error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
       });
     }
 
@@ -346,7 +374,9 @@ class WasmServiceLifecycle {
 
   /**
    * Stop a replica by releasing its port, shutting it down,
-   * and removing it from the active replicas map.
+   * and removing it from the active replicas map. Removal is by exact
+   * identity: a successor created for the serviceId while this replica
+   * stopped keeps its entry (and its start diagnostic).
    *
    * @param {string} serviceId - The service ID of the
    *   replica to stop.
@@ -367,8 +397,10 @@ class WasmServiceLifecycle {
 
     await replica.shutdown();
 
-    this.activeReplicas.delete(serviceId);
-    this.clearStartDiagnostic(serviceId);
+    if (this.activeReplicas.get(serviceId) === replica) {
+      this.activeReplicas.delete(serviceId);
+      this.clearStartDiagnostic(serviceId);
+    }
 
     this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_STOPPED, {
       serviceId,
