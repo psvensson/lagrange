@@ -57,6 +57,7 @@ jobs:
           set -euo pipefail
           files=(
             src/partition/partition-split-merge-manager.js
+            src/partition/partition-split-merge-evaluation-context.js
             src/partition/split-key-comparator.js
             src/partition/partition-split-merge-manager-core-methods.js
             src/partition/partition-split-merge-manager-evaluation-methods.js
@@ -78,7 +79,7 @@ jobs:
           cp "$evidence/candidate-test-routing-key-comparator.test.js"             test/partition/routing-key-comparator.test.js
           cp "$evidence/candidate-test-merge-auto-execution.test.js"             test/partition/merge-auto-execution.test.js
 
-          for file in             src/partition/partition-split-merge-manager.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js; do
+          for file in             src/partition/partition-split-merge-manager.js             src/partition/partition-split-merge-evaluation-context.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js; do
             git show "$REJECTED_V7_SHA:$file" > "$file"
           done
 
@@ -115,6 +116,7 @@ jobs:
           set -euo pipefail
           evidence=solve/quests/partition-key-ordering-owner-completion-v8/evidence
           cp "$evidence/candidate-src-split-merge-manager.js"             src/partition/partition-split-merge-manager.js
+          cp "$evidence/candidate-src-evaluation-context.js"             src/partition/partition-split-merge-evaluation-context.js
           cp "$evidence/candidate-src-split-key-comparator.js"             src/partition/split-key-comparator.js
           cp "$evidence/candidate-src-split-merge-core.js"             src/partition/partition-split-merge-manager-core-methods.js
           cp "$evidence/candidate-src-split-merge-evaluation.js"             src/partition/partition-split-merge-manager-evaluation-methods.js
@@ -164,6 +166,7 @@ jobs:
         run: |
           set -euo pipefail
           git restore --             src/partition/partition-split-merge-manager.js             src/partition/split-key-comparator.js             src/partition/partition-split-merge-manager-core-methods.js             src/partition/partition-split-merge-manager-evaluation-methods.js             src/partition/partition-split-merge-manager-transition-methods.js             test/partition/routing-key-comparator.test.js             test/partition/merge-auto-execution.test.js
+          rm -f src/partition/partition-split-merge-evaluation-context.js
 
           git rm .github/workflows/a1-v8-seal-and-attempt.yml
 
