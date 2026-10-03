@@ -6,12 +6,12 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 423715,
-        "sha256": "d1097acfe01ecf3f00c33a0104ca7bf820352878d6660551c8617d9cf5fbb8eb"
+        "sha256": "1feeeaa4236df037e246dd40981477a3e7a9d4765f9cff6a774239321869293b"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 35768,
-        "sha256": "0fb9ba02f74b80d83fa7b243764ff386c6295f805695e756cb7c27e82793b869"
+        "bytes": 36005,
+        "sha256": "8fb3592edcaeb109273566c8b6da1d10bd2575cbf9aba9937ed77fe3121e005b"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2689003,
-        "sha256": "0f755f94aa0363f1777f595e443da5b95250396f741096b33231d9279a58ee40"
+        "bytes": 2691461,
+        "sha256": "6e98c881e4155a9ba7ad96b9ff0144c8884a7286fa5cca86a4c357772554ad33"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "18a2eacbd7c00bbb5adf011e67468eebb8b710430f3fea0cbccf1f62f4580643"
+        "sha256": "267284830368ed9e126f4d4a212c9aa8ed5ecbb4ac17382844b0748f292ad451"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "de44ea8bec32508a7909968ecb61b6527b54ad6df96d01a581f75abf2120e302"
+    "inputDigest": "96775694c922e9e83456fd1a232a90df60b855a4fc3fb1cddf60ac107b8e99fb"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 423715,
-        "sha256": "d1097acfe01ecf3f00c33a0104ca7bf820352878d6660551c8617d9cf5fbb8eb"
+        "sha256": "1feeeaa4236df037e246dd40981477a3e7a9d4765f9cff6a774239321869293b"
       },
       "declaredCount": 1795,
       "observedCount": 1795,
@@ -78,12 +78,12 @@
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 35768,
-        "sha256": "0fb9ba02f74b80d83fa7b243764ff386c6295f805695e756cb7c27e82793b869"
+        "bytes": 36005,
+        "sha256": "8fb3592edcaeb109273566c8b6da1d10bd2575cbf9aba9937ed77fe3121e005b"
       },
-      "declaredCount": 155,
-      "observedCount": 155,
-      "assignedCount": 155
+      "declaredCount": 156,
+      "observedCount": 156,
+      "assignedCount": 156
     },
     "fileSize": {
       "authority": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "18a2eacbd7c00bbb5adf011e67468eebb8b710430f3fea0cbccf1f62f4580643"
+          "sha256": "267284830368ed9e126f4d4a212c9aa8ed5ecbb4ac17382844b0748f292ad451"
         },
         "cloneGroups": 53,
         "duplicatedLines": 1695,
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2689003,
-        "sha256": "0f755f94aa0363f1777f595e443da5b95250396f741096b33231d9279a58ee40"
+        "bytes": 2691461,
+        "sha256": "6e98c881e4155a9ba7ad96b9ff0144c8884a7286fa5cca86a4c357772554ad33"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "71a22412699a14018903b12eab5843d71d46f5354ea8d8cdc86f6b3e744227cc",
-      "moduleCount": 5152,
-      "edgeCount": 25053,
+      "sourceDigest": "c94b93c07d06e071a704199cff509d37d07eb12afbc482354af009359995024b",
+      "moduleCount": 5158,
+      "edgeCount": 25072,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2595,
-    "assignedSignalCount": 2595,
-    "uniqueAssignmentCount": 2595,
-    "digest": "ec8c9a7a6a0493690f754efc2e5633046a2d2d4c8dd9d78d7f1f8602c62afd43"
+    "sourceSignalCount": 2596,
+    "assignedSignalCount": 2596,
+    "uniqueAssignmentCount": 2596,
+    "digest": "0d1e2441514c7316a29753a320440f49810aac0ef50cb5222a9172bb68349a28"
   },
   "signalCounts": {
-    "cognitive": 155,
+    "cognitive": 156,
     "complexity": 1795,
     "duplication": 559,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1346,
+    "filesWithDebt": 1347,
     "rankedBoundaryCount": 119,
     "semanticBoundaryCount": 21,
     "fallbackBoundaryCount": 98,
@@ -863,7 +863,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 53,
+      "importIn": 55,
       "importOut": 97,
       "score": 133,
       "topPaths": [
@@ -1282,7 +1282,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 631,
+      "importIn": 633,
       "importOut": 43,
       "score": 56,
       "topPaths": [
@@ -1655,6 +1655,34 @@
       ]
     },
     {
+      "key": "area:scripts/checks",
+      "owner": null,
+      "boundary": "scripts/checks",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/checks"
+      ],
+      "fileCount": 8,
+      "signalCount": 8,
+      "complexity": 0,
+      "cognitive": 4,
+      "oversizedFiles": 0,
+      "duplicatedLines": 106,
+      "cloneTouches": 4,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 19,
+      "importOut": 30,
+      "score": 42.6,
+      "topPaths": [
+        "scripts/checks/impact-proof-cone-inputs.js",
+        "scripts/checks/partition-key-ordering-owner-completion-v7.js",
+        "scripts/checks/raft-rs-operation-boundary-audit.js",
+        "scripts/checks/test-primary-classification.js",
+        "scripts/checks/partition-key-ordering-owner-completion-v2.js"
+      ]
+    },
+    {
       "key": "area:src/wasm-service",
       "owner": null,
       "boundary": "src/wasm-service",
@@ -1680,34 +1708,6 @@
         "src/wasm-service/wasm-service-models.js",
         "src/wasm-service/wasm-service-replica.js",
         "src/wasm-service/manifest-runtime-validator.js"
-      ]
-    },
-    {
-      "key": "area:scripts/checks",
-      "owner": null,
-      "boundary": "scripts/checks",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/checks"
-      ],
-      "fileCount": 7,
-      "signalCount": 7,
-      "complexity": 0,
-      "cognitive": 3,
-      "oversizedFiles": 0,
-      "duplicatedLines": 106,
-      "cloneTouches": 4,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 19,
-      "importOut": 27,
-      "score": 34.6,
-      "topPaths": [
-        "scripts/checks/impact-proof-cone-inputs.js",
-        "scripts/checks/raft-rs-operation-boundary-audit.js",
-        "scripts/checks/test-primary-classification.js",
-        "scripts/checks/partition-key-ordering-owner-completion-v2.js",
-        "scripts/checks/partition-key-ordering-owner-completion.js"
       ]
     },
     {
