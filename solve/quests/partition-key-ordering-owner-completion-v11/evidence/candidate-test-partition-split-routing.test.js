@@ -6,6 +6,7 @@ import {
 } from '../../src/partition/partition-constants.js';
 import {
   replaySplitEntry,
+  resolveSplitSnapshotBatchRowLimit,
   routeSplitSnapshotBatch,
 } from '../../src/partition/partition-split-routing.js';
 
