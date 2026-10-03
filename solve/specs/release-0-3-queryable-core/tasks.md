@@ -44,9 +44,18 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion-v7` — ACTIVE
+### A1 — `partition-key-ordering-owner-completion-v8` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
+
+A1-v7 was later replayed as the canonical seven-file attempt on PR #74. The
+newer post-attempt structured Copilot review on PR #92 rejected that exact
+candidate for four residual gaps: real KeyRangeManager ID-only lists were
+rejected before split evaluation; bounded request coalescing could overflow and
+erase pending diagnostics/write_activity; RegExp.test capture still dispatched
+through live RegExp.exec; and Proxy split metadata/target arrays could execute
+descriptor traps. V8 closes exactly those four findings while preserving the
+A2 durable-representation boundary.
 
 This supersedes the earlier A1 seals; every sealed predicate remains immutable
 historical evidence. V2 established the non-BMP UTF-8/BINARY discriminator and
