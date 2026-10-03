@@ -7,6 +7,7 @@ const canonicalArrayPrototype = Array.prototype;
 const canonicalObjectPrototype = Object.prototype;
 const isProxy = types.isProxy.bind(types);
 const numberIsSafeInteger = Number.isSafeInteger;
+const DEFAULT_MAX_ARRAY_LENGTH = Number.MAX_SAFE_INTEGER;
 const objectCreate = Object.create;
 const objectDefineProperty = Object.defineProperty;
 const objectGetPrototypeOf = Object.getPrototypeOf;
@@ -23,21 +24,41 @@ function appendOwnArrayValue(array, value) {
   });
 }
 
-function copyDenseOwnDataArray(value) {
-  if (isProxy(value) ||
-      !arrayIsArray(value) ||
-      objectGetPrototypeOf(value) !== canonicalArrayPrototype) {
+function isCanonicalOwnDataArray(value) {
+  if (isProxy(value) || !arrayIsArray(value)) {
+    return false;
+  }
+  return objectGetPrototypeOf(value) === canonicalArrayPrototype;
+}
+
+function resolveBoundedOwnArrayLength(value, maxLength) {
+  if (!numberIsSafeInteger(maxLength) || maxLength < 0) {
+    return null;
+  }
+  if (!isCanonicalOwnDataArray(value)) {
     return null;
   }
   const lengthDescriptor = objectGetOwnPropertyDescriptor(
     value,
     ARRAY_LENGTH_FIELD,
   );
-  const length = lengthDescriptor &&
-    objectHasOwn(lengthDescriptor, DESCRIPTOR_VALUE_FIELD) ?
-    lengthDescriptor.value :
-    null;
-  if (!numberIsSafeInteger(length) || length < 0) {
+  if (!lengthDescriptor ||
+      !objectHasOwn(lengthDescriptor, DESCRIPTOR_VALUE_FIELD)) {
+    return null;
+  }
+  const length = lengthDescriptor.value;
+  if (!numberIsSafeInteger(length) || length < 0 || length > maxLength) {
+    return null;
+  }
+  return length;
+}
+
+function copyDenseOwnDataArray(
+  value,
+  maxLength = DEFAULT_MAX_ARRAY_LENGTH,
+) {
+  const length = resolveBoundedOwnArrayLength(value, maxLength);
+  if (length === null) {
     return null;
   }
   const copy = [];
@@ -87,8 +108,11 @@ function copyStrictOwnDataRecord(value) {
   return copy;
 }
 
-function copyDenseOwnDataRecordArray(value) {
-  const rows = copyDenseOwnDataArray(value);
+function copyDenseOwnDataRecordArray(
+  value,
+  maxLength = DEFAULT_MAX_ARRAY_LENGTH,
+) {
+  const rows = copyDenseOwnDataArray(value, maxLength);
   if (rows === null) {
     return null;
   }
