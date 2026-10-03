@@ -66,7 +66,6 @@ jobs:
           set -euo pipefail
           files=(
             src/partition/partition-split-merge-manager.js
-            src/partition/partition-split-merge-evaluation-context.js
             src/partition/split-key-comparator.js
             src/partition/partition-split-merge-manager-core-methods.js
             src/partition/partition-split-merge-manager-evaluation-methods.js
@@ -236,7 +235,6 @@ jobs:
           set -euo pipefail
           git restore -- \
             src/partition/partition-split-merge-manager.js \
-            src/partition/partition-split-merge-evaluation-context.js \
             src/partition/split-key-comparator.js \
             src/partition/partition-split-merge-manager-core-methods.js \
             src/partition/partition-split-merge-manager-evaluation-methods.js \
@@ -247,6 +245,7 @@ jobs:
             test/partition/routing-key-comparator.test.js \
             test/partition/merge-auto-execution.test.js \
             test/partition/partition-split-routing.test.js
+          rm -f src/partition/partition-split-merge-evaluation-context.js
 
           git rm .github/workflows/quest-seal-bootstrap.yml
 
