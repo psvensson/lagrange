@@ -8,7 +8,7 @@ doneWhen:
   args:
     file: solve/oracle/release-0-3-queryable-core.json
 quests:
-  - partition-key-ordering-owner-completion-v10
+  - partition-key-ordering-owner-completion-v11
 authorizes:
   - architecture
   - docs/development/agpl-feature-map.md
@@ -220,9 +220,19 @@ review found one remaining production hole outside the immutable predicate:
 absent-bound ordering ran before validation of the non-absent peer, so invalid
 or non-finite values paired with null/undefined could bypass typed refusal.
 
+A1-v10 closed the snapshot iterator/mutable collection defects found in v9 and
+reached a sealed 3 → 0 candidate with green focused tests and guardrails.
+Category-complete post-attempt review PR #96 then found two remaining snapshot
+boundary defects inside that sealed adversarial bar: grouping still constructed
+a live global `Map`, so post-load `globalThis.Map` replacement could silently
+suppress dispatch; and the snapshot entry point had no policy bound on row or
+column dimensions, allowing over-wide SQL/bind dispatch and unbounded
+copy/group work.
+
 The active A1 Quest is now
-`partition-key-ordering-owner-completion-v6`. It preserves the whole v5
-candidate and closes only that invalid-versus-absent ordering gap.
+`partition-key-ordering-owner-completion-v11`. It preserves the complete v10
+candidate while capturing the Map constructor and enforcing one-bind-budget
+row/column bounds through the existing strict-own-data array owner.
 
 After that, the safe-before-cutover access foundation proceeds through persisted
 boundary representation, declared PK consumption, compound-PK narrowing, local
