@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 419476,
-        "sha256": "b0043edade7e32b7105df2f6299536f3cb8fb7f950e98e53ac2b6e9795ae4be2"
+        "bytes": 419018,
+        "sha256": "ad97c6a98686e5b4a85aefa240a5fad26b6a5b21a966b5c6e6db995d122845cf"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 35283,
-        "sha256": "d1b0ca8db4c3b62a48b9d0d53fb15a7bf25861a563fd49c249d39ba4e3767771"
+        "sha256": "fa010444908fe021bf14e1ec6087640ed20b20515d078f1fccefbfcc93101ffb"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2625218,
-        "sha256": "5276c09f156bb96dadf7fe34d61cf938f04709eb15068d2c2275bd3db02de07c"
+        "bytes": 2625404,
+        "sha256": "1c801bcdc4e5c3db6d8f24f7a0720fe3ae5f27194788922d73168e40e3a209b1"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "fe410f3c8ba2c71c27b909c8e81bc073d11395c8394d3c0f295e0e93959334ff"
+        "sha256": "1ae81ee3a300f49ac549c3c062c4bd53f0847d8eb01c832c19868ff40f0d1932"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -62,24 +62,24 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "ba7d30f7255e52c2c1789295ac169c8f5cf71609798cd43aa2cc6436714c7410"
+    "inputDigest": "737930e73ba6a80af28332ebf5324c0a68a63ecfa9ed4c69fa5d770ba035386c"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 419476,
-        "sha256": "b0043edade7e32b7105df2f6299536f3cb8fb7f950e98e53ac2b6e9795ae4be2"
+        "bytes": 419018,
+        "sha256": "ad97c6a98686e5b4a85aefa240a5fad26b6a5b21a966b5c6e6db995d122845cf"
       },
-      "declaredCount": 1775,
-      "observedCount": 1775,
-      "assignedCount": 1775
+      "declaredCount": 1773,
+      "observedCount": 1773,
+      "assignedCount": 1773
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 35283,
-        "sha256": "d1b0ca8db4c3b62a48b9d0d53fb15a7bf25861a563fd49c249d39ba4e3767771"
+        "sha256": "fa010444908fe021bf14e1ec6087640ed20b20515d078f1fccefbfcc93101ffb"
       },
       "declaredCount": 153,
       "observedCount": 153,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "fe410f3c8ba2c71c27b909c8e81bc073d11395c8394d3c0f295e0e93959334ff"
+          "sha256": "1ae81ee3a300f49ac549c3c062c4bd53f0847d8eb01c832c19868ff40f0d1932"
         },
         "cloneGroups": 49,
         "duplicatedLines": 1559,
@@ -167,37 +167,37 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2625218,
-        "sha256": "5276c09f156bb96dadf7fe34d61cf938f04709eb15068d2c2275bd3db02de07c"
+        "bytes": 2625404,
+        "sha256": "1c801bcdc4e5c3db6d8f24f7a0720fe3ae5f27194788922d73168e40e3a209b1"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "bfa86dd7b3445931b5fefd30c19b49c3e314bad36df519a4ca52382dbbca7ae0",
+      "sourceDigest": "a62b1c8275a37eed272195065abfa585294ab166d38a1983e235e20f4b7329d2",
       "moduleCount": 5015,
-      "edgeCount": 24561,
+      "edgeCount": 24564,
       "unresolvedCount": 44
     }
   },
   "assignment": {
-    "sourceSignalCount": 2531,
-    "assignedSignalCount": 2531,
-    "uniqueAssignmentCount": 2531,
-    "digest": "7849e76ce87825161c21858934af0516c58c93741bded59c707f5fb79852875c"
+    "sourceSignalCount": 2529,
+    "assignedSignalCount": 2529,
+    "uniqueAssignmentCount": 2529,
+    "digest": "04ac03569d7f72e5213b82678763568c407fb4bb1ea457fde2e7a509531f6078"
   },
   "signalCounts": {
     "cognitive": 153,
-    "complexity": 1775,
+    "complexity": 1773,
     "duplication": 517,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1294,
-    "rankedBoundaryCount": 115,
-    "semanticBoundaryCount": 21,
+    "filesWithDebt": 1293,
+    "rankedBoundaryCount": 114,
+    "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 94,
     "childQuestCount": 16
   },
@@ -556,7 +556,7 @@
       "cycleGroups": 0,
       "lintExclusions": 3,
       "importIn": 5,
-      "importOut": 148,
+      "importOut": 150,
       "score": 275.2,
       "topPaths": [
         "test/transport/websocket-provider-backward-compatibility.property.test.js",
@@ -743,8 +743,8 @@
         "src/transport"
       ],
       "fileCount": 12,
-      "signalCount": 34,
-      "complexity": 26,
+      "signalCount": 33,
+      "complexity": 25,
       "cognitive": 5,
       "oversizedFiles": 0,
       "duplicatedLines": 122,
@@ -753,7 +753,7 @@
       "lintExclusions": 0,
       "importIn": 92,
       "importOut": 47,
-      "score": 156.2,
+      "score": 152.2,
       "topPaths": [
         "src/transport/message-router-outbound-queue-admission.js",
         "src/transport/message-router-inbound-dispatch.js",
@@ -1832,7 +1832,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 154,
+      "importIn": 155,
       "importOut": 31,
       "score": 24,
       "topPaths": [
@@ -3089,30 +3089,6 @@
       "score": 4,
       "topPaths": [
         "test/workflow/monotonic-workflow-regression.test.js"
-      ]
-    },
-    {
-      "key": "semantic:message_router_owner/message_router_shared_transport",
-      "owner": "message_router_owner",
-      "boundary": "message_router_shared_transport",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/transport"
-      ],
-      "fileCount": 1,
-      "signalCount": 1,
-      "complexity": 1,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 10,
-      "importOut": 5,
-      "score": 4,
-      "topPaths": [
-        "src/transport/message-router-shared-vocabulary.js"
       ]
     },
     {
