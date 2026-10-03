@@ -1,4 +1,5 @@
 name: a1-v10-seal-and-attempt
+# retry after measuring hostile-iterator probe
 # retry after snapshot column type-owner fix
 
 on:
