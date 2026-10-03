@@ -1,7 +1,7 @@
 {
   "schema": "solve-quest/2",
   "id": "partition-key-ordering-owner-completion-v11",
-  "statement": "Partition split snapshot batching closes the final v10 collection-boundary gaps without regressing valid internal batching: grouping constructs its Map through a module-captured constructor, snapshot columns are a nonempty bounded dense own-data string array capped by SQLite's 32,766 bind-variable ceiling, each route-call accepts at most the existing 64-row split-backfill cadence before copy/grouping, and per-statement row batching remains floor(32,766 / columnCount); all v10/v9 routing, batching, intrinsic, ordering and ownership semantics remain unchanged.",
+  "statement": "Partition split snapshot batching closes the final v10 collection-boundary gaps: grouping constructs its Map through a module-captured constructor, snapshot columns are a nonempty bounded dense own-data string array, snapshot rows are a bounded dense own-data record array under the canonical 64-row source-batch owner, and over-wide dimensions fail closed before copying/grouping/dispatch while per-child SQL batching still respects the SQLite bind-variable budget; all v10/v9 routing, batching, intrinsic, ordering and ownership semantics remain unchanged.",
   "epic": "release-0-3-queryable-core",
   "links": {
     "roadmapRow": "RM-0.3-qs-typed-key-ordering",
@@ -42,7 +42,7 @@
     },
     {
       "id": "row-limit-fail-fast",
-      "statement": "resolveSplitSnapshotBatchRowLimit still owns per-SQL-statement batching as floor(32,766 / columnCount), rejects empty or over-wide columns, and therefore preserves the existing valid 64-row × 512-column route call by splitting it into 63+1 statements."
+      "statement": "resolveSplitSnapshotBatchRowLimit rejects empty or over-wide column sets, preserves the existing min(requestedRows, floor(32,766 / columns)) per-SQL batching behavior, and the upstream split backfill obtains its 64-row request cap from the same routing owner."
     },
     {
       "id": "preserve-v10",
