@@ -22,10 +22,6 @@ const PARTITION_CONSTANTS_SOURCE = new URL(
   '../../src/partition/partition-constants.js',
   import.meta.url,
 );
-const PARTITION_CONSTANTS_SOURCE = new URL(
-  '../../src/partition/partition-constants.js',
-  import.meta.url,
-);
 
 function metadata() {
   return {
