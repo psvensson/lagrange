@@ -18,6 +18,10 @@ const SERVICE_SHARED_SOURCE = new URL(
   '../../src/partition/partition-service-shared.js',
   import.meta.url,
 );
+const PARTITION_CONSTANTS_SOURCE = new URL(
+  '../../src/partition/partition-constants.js',
+  import.meta.url,
+);
 
 function metadata() {
   return {
@@ -123,16 +127,27 @@ async function dimensionProblemCount() {
 function ownerProblemCount() {
   const routing = fs.readFileSync(ROUTING_SOURCE, 'utf8');
   const shared = fs.readFileSync(SERVICE_SHARED_SOURCE, 'utf8');
+  const constants = fs.readFileSync(PARTITION_CONSTANTS_SOURCE, 'utf8');
   let problems = 0;
-  if (!routing.includes(
-    'export const SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL = 64;',
-  )) {
+
+  if (!constants.includes(
+    'const PARTITION_SPLIT_SNAPSHOT_LIMIT = Object.freeze({',
+  ) ||
+      !constants.includes('MAX_BIND_VARIABLES: 32_766,') ||
+      !constants.includes('MAX_ROWS_PER_CALL: 64,') ||
+      !constants.includes('PARTITION_SPLIT_SNAPSHOT_LIMIT,')) {
     problems += 1;
   }
-  if (!shared.includes('SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL')) {
+
+  if (!routing.includes('PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_BIND_VARIABLES') ||
+      !routing.includes('PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_ROWS_PER_CALL') ||
+      /export\s+const\s+SPLIT_SNAPSHOT_MAX_(?:BIND_VARIABLES|ROWS_PER_CALL)\s*=/u
+        .test(routing)) {
     problems += 1;
   }
-  if (/SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS\s*=\s*64\s*;/u.test(shared)) {
+
+  if (!shared.includes('PARTITION_SPLIT_SNAPSHOT_LIMIT.MAX_ROWS_PER_CALL') ||
+      /SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS\s*=\s*64\s*;/u.test(shared)) {
     problems += 1;
   }
   return problems;
