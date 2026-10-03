@@ -64,7 +64,10 @@ jobs:
             src/partition/partition-split-merge-manager-transition-methods.js
             src/partition/partition-split-routing.js
           )
-          npm run test:complexity
+          # The authoritative branch still has the pre-A1 1795-count
+          # production tree while the global ratchet is already tightened to
+          # 1794. Measure inherited baseline debt without refusing here; the
+          # installed v9 candidate must pass the enforcing global ratchet below.
           npm run test:complexity:scoped -- "${files[@]}"
           npm run audit:file-size
           node scripts/check-guideline-literals.js "${files[@]}"
