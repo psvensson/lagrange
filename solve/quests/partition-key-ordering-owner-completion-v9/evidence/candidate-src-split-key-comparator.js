@@ -41,6 +41,8 @@ const INVALID_SPLIT_ROUTING_PRIMARY_KEY_COLUMN =
   'Split routing metadata primaryKeyColumn must be an own primitive string';
 const ErrorCtor = Error;
 const TypeErrorCtor = TypeError;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_FUNCTION = 'function';
 const arrayIsArray = Array.isArray;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
@@ -123,7 +125,8 @@ export function compareSplitKey(value, splitKey) {
 function assertSplitRoutingMetadataSafe(record) {
   const recordType = typeof record;
   if (record !== null &&
-      (recordType === 'object' || recordType === 'function') &&
+      (recordType === LOCAL_STR_OBJECT ||
+       recordType === LOCAL_STR_FUNCTION) &&
       isProxy(record)) {
     throw new TypeErrorCtor(INVALID_SPLIT_ROUTING_PROXY);
   }
