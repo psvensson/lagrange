@@ -1,4 +1,5 @@
 name: a1-v11-seal-and-attempt
+# retry after measurable pre-seal probe repair
 # retry after canonical snapshot-limit owner alignment
 # retry after checker duplicate-source repair
 # retry after v11 owner-clean lint repair
