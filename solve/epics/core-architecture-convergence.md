@@ -711,6 +711,12 @@ Census for:
 The desired result is not "fewer readiness checks". It is one interpretation of
 readiness with many legitimate evidence inputs.
 
+Planned (unsealed) work in this family: the verified readiness
+observation-currency plan (census, contract and slices S0-S8, verified
+2026-10-03 on `ec63fbb00`) is recorded in
+[`core-architecture-convergence/readiness-observation-currency.md`](core-architecture-convergence/readiness-observation-currency.md).
+It declares no quest and starts under this epic's existing gate.
+
 ### Q7 — canonical owner observation for operators
 
 Planned family root: `core-convergence-owner-observation`.
