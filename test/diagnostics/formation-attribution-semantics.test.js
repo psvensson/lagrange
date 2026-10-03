@@ -44,6 +44,9 @@ import {
 import {
   createHostTranscript,
 } from '../../test/simulation/formation-sim-host-transcript.js';
+import {
+  PartitionNodeCluster,
+} from '../raft/raft-rs-backend/partition-node-cluster.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -329,3 +332,68 @@ test('committed apply is attributed to the apply owner and restores its caller',
     t.equal(snapshot.partitionDeltaUs, ZERO, 'no missing time');
     t.end();
   });
+
+// The production engagement of the consensus mapping: a real raft-rs group
+// (the one runtime every partition, message-group and WASM service port runs
+// on) charges its own protocol turns to raft_protocol and its committed-entry
+// application to raft_apply, nested exclusively inside the turn that drives
+// it. The application callback advances the clock by a fixed amount, so apply
+// time counted twice would show up in the protocol bucket.
+test('a raft-rs group charges its protocol turns and committed applies to ' +
+  'the consensus owners, exclusively, inside the enclosing turn', (t) => {
+  const APPLY_STEP_US = 1000;
+  const TICKS = 12;
+  const COMMANDS = 3;
+  let nowUs = ZERO;
+  const attribution = new FormationTurnAttribution({clock: () => nowUs++});
+  const applied = [];
+  const cluster = new PartitionNodeCluster({
+    partitionId: 'attribution-group',
+    replicaIds: ['r1'],
+    applyFor: (_replicaId, command) => {
+      nowUs += APPLY_STEP_US;
+      applied.push(command);
+    },
+  });
+  let snapshot = null;
+  try {
+    attribution.start();
+    runBootstrapActivity(() => {
+      for (let tick = 0; tick < TICKS; tick += 1) {
+        t.equal(typeof cluster.tick('r1')?.then, 'undefined',
+          'a single-voter tick turn completes synchronously');
+      }
+      t.ok(cluster.settle(() => cluster.leaderReplicaId() === 'r1'),
+        'the single voter leads');
+      for (let index = 0; index < COMMANDS; index += 1) {
+        cluster.propose('r1', {op: 'attribution', index});
+      }
+      t.ok(cluster.settle(() => applied.length === COMMANDS),
+        'every proposed command was applied');
+    });
+    snapshot = attribution.stop();
+  } finally {
+    cluster.dispose();
+  }
+  const protocol = ownerRow(snapshot, FORMATION_OWNER.RAFT_PROTOCOL);
+  const apply = ownerRow(snapshot, FORMATION_OWNER.RAFT_APPLY);
+  const enclosing = ownerRow(snapshot, FORMATION_OWNER.BOOTSTRAP);
+  t.ok(protocol.handoffCount >= TICKS,
+    `every tick turn entered raft_protocol (${protocol.handoffCount})`);
+  t.ok(protocol.durationUs > ZERO, 'and was charged protocol time');
+  t.ok(apply.handoffCount >= COMMANDS,
+    `every committed entry entered raft_apply (${apply.handoffCount})`);
+  t.ok(apply.durationUs >= COMMANDS * APPLY_STEP_US,
+    'the application work is charged to raft_apply');
+  t.ok(protocol.durationUs < APPLY_STEP_US,
+    'apply nested in a protocol turn is not also charged to raft_protocol');
+  t.ok(enclosing.durationUs > ZERO, 'the driving turn keeps its own work');
+  t.equal(protocol.durationUs + apply.durationUs + enclosing.durationUs,
+    snapshot.busyDurationUs,
+    'the consensus buckets and the enclosing turn partition its time');
+  t.ok(snapshot.busyDurationUs <= snapshot.windowDurationUs,
+    'and never exceed it');
+  t.equal(snapshot.overlapDurationUs, ZERO, 'no simultaneous owners');
+  t.equal(snapshot.partitionDeltaUs, ZERO, 'no missing time');
+  t.end();
+});

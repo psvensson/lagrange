@@ -1,4 +1,8 @@
 import {resolveTimeSource} from '../time/time-source.js';
+import {
+  runRaftApplySlice,
+  runRaftProtocolActivity,
+} from '../diagnostics/raft-formation-attribution.js';
 import {createRaftOperationPort, deepFreeze} from './raft-operation-port.js';
 import {
   RAFT_EVENT,
@@ -77,14 +81,17 @@ function coreOk(reason, fields = {}) {
 
 // The partition's application receives one frozen committed record: the
 // command the port encoded, decoded by the same codec, and the entry's
-// position and deferred-effect bag the runtime hands the application.
+// position and deferred-effect bag the runtime hands the application. The
+// application is the committed-entry apply slice for formation attribution;
+// the deferred effects run after it, with the turn that applied the entry.
 function committedEntryApplication(applyCommittedEntry) {
-  return (bytes, {index, term, effects}) => applyCommittedEntry(Object.freeze({
-    command: decodeCommittedProposal(bytes),
-    index: Number(index),
-    term: Number(term),
-    effects,
-  }));
+  return (bytes, {index, term, effects}) => runRaftApplySlice(() =>
+    applyCommittedEntry(Object.freeze({
+      command: decodeCommittedProposal(bytes),
+      index: Number(index),
+      term: Number(term),
+      effects,
+    })));
 }
 
 function tickIntervalOf(timing) {
@@ -216,7 +223,7 @@ function createRaftRsOperationPort(request) {
     // A core entry the runtime schedules itself (the drain of delivered
     // inbound) is admitted by this replica's lifecycle owner like every
     // operation the port is asked for, inside the same containment.
-    admitScheduledEntry: (work) => dispatch(work),
+    admitScheduledEntry: (work) => protocolTurn(work),
     emit,
   }) : null;
 
@@ -231,9 +238,17 @@ function createRaftRsOperationPort(request) {
       return containRuntimeThrow(dispatcher, work);
     });
   }
+  // A protocol turn (tick, delivered envelope, inbound drain, proposal,
+  // campaign, transfer, probe) is consensus protocol work for formation
+  // attribution; status and membership reads stay with their caller.
+  function protocolTurn(work) {
+    return runRaftProtocolActivity(() => dispatch(work));
+  }
   const execute = (command) => dispatch(() => dispatcher.execute(command));
+  const executeTurn = (command) =>
+    protocolTurn(() => dispatcher.execute(command));
   const enqueueStep = (envelope) =>
-    dispatch(() => dispatcher.enqueueStep(envelope));
+    protocolTurn(() => dispatcher.enqueueStep(envelope));
   const stopScheduling = () => {
     schedulingRequested = false;
     if (timer !== null) {
@@ -246,7 +261,8 @@ function createRaftRsOperationPort(request) {
   // never throws into its timer.
   const scheduleTicks = () => {
     stopScheduling();
-    timer = timers.setInterval(() => execute({type: 'tick'}), tickIntervalMs);
+    timer = timers.setInterval(() => executeTurn({type: 'tick'}),
+      tickIntervalMs);
     timer.unref?.();
   };
   // Scheduling starts only while the participation gate is open (O1 gate):
@@ -284,10 +300,10 @@ function createRaftRsOperationPort(request) {
   const port = createRaftOperationPort({
     subscribe,
     step: enqueueStep,
-    propose: (value) => execute({
+    propose: (value) => executeTurn({
       type: 'propose', bytes: encodeProposal(value),
     }),
-    proposeConfChange: (change) => dispatch(() => {
+    proposeConfChange: (change) => protocolTurn(() => {
       const normalized = normalizedConfChange(change, registry);
       return normalized.refusal === undefined ? dispatcher.execute({
         type: 'propose-conf-change', change: normalized.change,
@@ -302,18 +318,18 @@ function createRaftRsOperationPort(request) {
     // One named request shape ({successor, replicaIdentity?}); the target
     // is resolved through this replica's own registry, and a request that
     // misses the shape or names an unreserved identity is refused typed.
-    transferLeadership: (transferRequest) => dispatch(() => {
+    transferLeadership: (transferRequest) => protocolTurn(() => {
       const normalized = normalizedTransferRequest(transferRequest, registry);
       return normalized.refusal === undefined ? dispatcher.execute({
         type: RUNTIME_COMMAND.TRANSFER_LEADERSHIP,
         transfer: normalized.command,
       }) : normalized.refusal;
     }),
-    probePeerProgress: (peerAddress) => execute({
+    probePeerProgress: (peerAddress) => executeTurn({
       type: RUNTIME_COMMAND.PROBE_PEER_PROGRESS, peerAddress,
     }),
-    tick: () => execute({type: 'tick'}),
-    campaign: () => execute({type: 'campaign'}),
+    tick: () => executeTurn({type: 'tick'}),
+    campaign: () => executeTurn({type: 'campaign'}),
     readStatus: () => execute({type: 'read-status'}),
     // The committed configuration as frozen data ({purpose} is a
     // COMMITTED_MEMBERSHIP_READ_PURPOSE; a bootstrap read by default).
