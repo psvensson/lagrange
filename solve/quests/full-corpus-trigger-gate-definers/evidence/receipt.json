@@ -1,0 +1,39 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "full-corpus-trigger-gate-definers",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/push-gate-change-proof.test.js": "c535237de8928e2ab42555ec078f4510f0ea109080c16ca9ebe796df1383687b"
+  },
+  "generatedAt": "2026-10-03T14:16:03.188Z",
+  "receipts": [
+    {
+      "id": "exempt-file-runs-its-cone",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a change to a file the gate never reads runs the change proof, its observers in the cone$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "pre-push-stages.json and every exempted file prove by their cone, named observers inside",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    },
+    {
+      "id": "gate-definer-runs-the-corpus",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a change to a gate definer or an unexempted file under a trigger directory runs the whole corpus$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "postpush manifest, proof-obligations, spine, impact contracts, the pre-push hook, unexempted and new unlisted files run the corpus",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    },
+    {
+      "id": "exemption-unread-by-the-gate",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an exemption holds only while nothing the gate runs names the file$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "no trigger file, gate-run package script or their import closure names an exempted file",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    },
+    {
+      "id": "exemption-observed-by-name",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an exemption holds only while a test observes the file by name$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "every exempted file has a named observer in the observation census",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    }
+  ]
+}

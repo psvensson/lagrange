@@ -26,7 +26,12 @@ import {
   recordCorpusProof,
   runDecision,
 } from '../../scripts/checks/push-gate-change-proof.js';
+import {
+  OBSERVATION_KIND_FILE,
+  SUBSYSTEM_MANIFEST_PATH,
+} from '../../scripts/checks/test-subsystem-classification-constants.js';
 import {CORPUS_FULL_PROOF} from '../../scripts/proof-authority.js';
+import {buildExecutionPlan} from '../../scripts/select-change-tests.js';
 
 const UTF8 = 'utf8';
 const CORPUS_SIZE = 2000;
@@ -218,9 +223,9 @@ const GATE_ENTRY_POINTS = Object.freeze([
 const IMPORT_SPECIFIER_PATTERN =
   /(?:from\s*|import\s*\(\s*|import\s*)['"](\.{1,2}\/[^'"]+)['"]/gu;
 
-function gateImportClosure() {
+function gateImportClosure(entryPoints = GATE_ENTRY_POINTS) {
   const closure = new Set();
-  const frontier = [...GATE_ENTRY_POINTS];
+  const frontier = [...entryPoints];
   while (frontier.length > 0) {
     const current = frontier.pop();
     if (closure.has(current)) continue;
@@ -243,6 +248,188 @@ test('every module in the gate\'s own import closure trips a full-corpus trigger
     fullCorpusTriggers([file]).length === 0);
   assert.deepEqual(untriggered, [],
     'a change here would select, schedule or execute its own proof');
+});
+
+// A trigger directory also holds files the gate never reads. The directory
+// rules stay fail-closed - any file under them, a new one included, runs the
+// whole corpus - except a file its rule exempts BY NAME. An exemption holds
+// only while nothing the gate runs names the file and a test observes it by
+// name, so the file's own cone carries its proof. The incident: a commit to
+// pre-push-stages.json ran the corpus (~40 minutes) although its 179-test cone
+// already held both tests that observe it.
+const INCIDENT_FILE = 'test/manifests/pre-push-stages.json';
+// The module that declares the exemptions names each exempted file once.
+const EXEMPTION_DECLARATION = 'scripts/checks/change-selection-constants.js';
+const GATE_DEFINERS = Object.freeze([
+  POSTPUSH_MANIFEST,
+  'test/manifests/proof-obligations.json',
+  'test/shards/safety-spine.json',
+  'test/shards/impact-contracts.json',
+  PRE_PUSH_HOOK,
+]);
+const UNLISTED_FILES = Object.freeze([
+  'test/manifests/unlisted-gate-manifest.json',
+  '.githooks/post-merge',
+]);
+const SCRIPT_MENTION_PATTERN = /scripts\/[\w./-]+?\.[cm]?js\b/gu;
+const NPM_RUN_PATTERN = /npm run(?: -s)? ([\w:.-]+)/gu;
+const JS_FILE_PATTERN = /\.[cm]?js$/u;
+const JSON_FILE_PATTERN = /\.json$/u;
+const JS_COMMENT_LINE = /^\s*(?:\/\/|\/?\*)/u;
+const SHELL_COMMENT_LINE = /^\s*#/u;
+const NPM_EXECUTABLE = 'npm';
+const EXEMPTIONS = Object.freeze(FULL_CORPUS_TRIGGER_RULES.flatMap((rule) =>
+  Object.entries(rule.exempt ?? {}).map(([file, reason]) =>
+    ({rule, file, reason}))));
+const EXEMPT_FILES = Object.freeze(EXEMPTIONS.map(({file}) => file));
+
+function trackedFiles() {
+  const result = spawnSync('git', ['ls-files', '-z'], {encoding: UTF8});
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.split('\0').filter(Boolean);
+}
+
+// Code only: a comment that names a file reads nothing.
+function codeOf(file, text) {
+  if (JSON_FILE_PATTERN.test(file)) return text;
+  const comment = JS_FILE_PATTERN.test(file) ? JS_COMMENT_LINE :
+    SHELL_COMMENT_LINE;
+  return text.split('\n').filter((line) => !comment.test(line)).join('\n');
+}
+
+// The package scripts an acceptance manifest runs through npm.
+function manifestNpmRuns(file, text, packageScripts) {
+  if (!JSON_FILE_PATTERN.test(file)) return [];
+  const commands = JSON.parse(text).commands;
+  if (!Array.isArray(commands)) return [];
+  return commands.filter((command) => command.executable === NPM_EXECUTABLE)
+    .flatMap((command) => command.argv.filter((argument) =>
+      Object.hasOwn(packageScripts, argument)));
+}
+
+// Everything the push gate reads as code, keyed by reader: every tracked file
+// that trips a trigger (the rules' own account of what selects, schedules or
+// executes the proof), the package scripts the hook and the manifests run
+// (through `npm run`, transitively), and every module the scripts they name
+// import. JavaScript runs npm through an argv array, so an `npm run` inside it
+// is an operator hint (`run: npm run check:release`), not an execution.
+function gateReadCode() {
+  const packageScripts = JSON.parse(fs.readFileSync('package.json', UTF8))
+    .scripts;
+  const code = new Map();
+  const entries = [];
+  const runs = [];
+  const follow = (text, runsNpm = true) => {
+    for (const match of text.matchAll(SCRIPT_MENTION_PATTERN)) {
+      entries.push(match[0]);
+    }
+    if (!runsNpm) return;
+    for (const match of text.matchAll(NPM_RUN_PATTERN)) runs.push(match[1]);
+  };
+  for (const file of trackedFiles()) {
+    if (fullCorpusTriggers([file]).length === 0) continue;
+    const text = codeOf(file, fs.readFileSync(file, UTF8));
+    code.set(file, text);
+    follow(text, !JS_FILE_PATTERN.test(file));
+    runs.push(...manifestNpmRuns(file, text, packageScripts));
+    if (JS_FILE_PATTERN.test(file)) entries.push(file);
+  }
+  const ran = new Set();
+  while (runs.length > 0) {
+    const name = runs.pop();
+    if (ran.has(name) || !Object.hasOwn(packageScripts, name)) continue;
+    ran.add(name);
+    code.set(`package.json scripts["${name}"]`, packageScripts[name]);
+    follow(packageScripts[name]);
+  }
+  for (const file of gateImportClosure(entries.filter((entry) =>
+    fs.existsSync(entry)))) {
+    code.set(file, codeOf(file, fs.readFileSync(file, UTF8)));
+  }
+  return code;
+}
+
+function subsystemManifest() {
+  return JSON.parse(fs.readFileSync(SUBSYSTEM_MANIFEST_PATH, UTF8));
+}
+
+// The tests that observe a file by name; a directory observation is not one.
+function namedObservers(file) {
+  const {observations} = subsystemManifest();
+  return Object.keys(observations).filter((testFile) =>
+    (observations[testFile][OBSERVATION_KIND_FILE] ?? []).includes(file))
+    .sort();
+}
+
+// The gate's decision for a change to these files, on the real selection.
+function realDecision(...files) {
+  const plan = buildExecutionPlan({
+    changedPaths: files, packageFields: [], lockfileGraphChanged: false,
+  });
+  const corpusSize = Object.keys(subsystemManifest().classes).length;
+  return {
+    plan,
+    decision: decidePushProof({
+      plan, corpusSize, rangeSource: RANGE_SOURCE.ENVIRONMENT, env: ENV_UNSET,
+    }),
+  };
+}
+
+test('a change to a file the gate never reads runs the change proof, its observers in the cone', () => {
+  for (const file of [INCIDENT_FILE, ...EXEMPT_FILES]) {
+    const {plan, decision} = realDecision(file);
+    assert.deepEqual(decision, {mode: PROOF_MODE.CHANGE_PROOF, reasons: []},
+      `${file} is proved by its cone`);
+    const cone = new Set(plan.tests.map((entry) => entry.path));
+    for (const observer of namedObservers(file)) {
+      assert.ok(cone.has(observer), `${file}: ${observer} is in its cone`);
+    }
+  }
+});
+
+test('a change to a gate definer or an unexempted file under a trigger directory runs the whole corpus', () => {
+  const exemptingRules = FULL_CORPUS_TRIGGER_RULES.filter((rule) =>
+    rule.exempt !== undefined);
+  const underExemptingRules = trackedFiles().filter((file) =>
+    exemptingRules.some((rule) => rule.pattern.test(file)) &&
+    !EXEMPT_FILES.includes(file));
+  const files = [...new Set([...GATE_DEFINERS, ...UNLISTED_FILES,
+    ...underExemptingRules])];
+  // One real selection over all of them: each must be named as a trigger.
+  const {decision} = realDecision(...files);
+  assert.equal(decision.mode, PROOF_MODE.FULL_CORPUS);
+  for (const file of files) {
+    assert.ok(!EXEMPT_FILES.includes(file), `${file} is never exempted`);
+    assert.ok(decision.reasons.includes(`changed ${FULL_CORPUS_TRIGGER_RULES
+      .find((rule) => rule.pattern.test(file)).id}: ${file}`),
+    `${file} is named as the trigger`);
+  }
+});
+
+test('an exemption holds only while nothing the gate runs names the file', () => {
+  assert.ok(EXEMPT_FILES.includes(INCIDENT_FILE), 'the incident file is exempted');
+  const code = gateReadCode();
+  assert.ok(code.has(PRE_PUSH_HOOK) && code.has(CHANGE_PROOF_SCRIPT) &&
+    code.has('scripts/checks/run-static-audits.js'),
+  'the census reaches the hook, the change proof and what the gate runs');
+  for (const {rule, file, reason} of EXEMPTIONS) {
+    assert.ok(fs.existsSync(file), `${file} is a real file`);
+    assert.ok(rule.pattern.test(file), `${file} is under its own rule`);
+    assert.ok(reason.length > 0, `${file} says who reads it`);
+    const name = path.posix.basename(file);
+    const readers = [...code].filter(([reader, text]) => reader !== file &&
+      text.split(name).length - 1 > (reader === EXEMPTION_DECLARATION ? 1 : 0))
+      .map(([reader]) => reader);
+    assert.deepEqual(readers, [], `${file} is read by the gate`);
+  }
+});
+
+test('an exemption holds only while a test observes the file by name', () => {
+  assert.ok(EXEMPT_FILES.includes(INCIDENT_FILE), 'the incident file is exempted');
+  for (const file of EXEMPT_FILES) {
+    assert.ok(namedObservers(file).length > 0,
+      `${file} has a test that observes it by name`);
+  }
 });
 
 // A green whole-corpus run is a durable fact about that commit: the gate

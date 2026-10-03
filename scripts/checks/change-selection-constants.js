@@ -233,8 +233,27 @@ export const FULL_CORPUS_SHARE = 0.5;
 // lockfile are NOT here: the selector is the one authority on what they mean
 // (a dependency change refuses, which is the corpus; dev tooling widens; a
 // version bump is packaging metadata) and the hook must not carry a second.
+// A directory rule stays fail-closed - any file under it, a new one included,
+// runs the corpus - but `exempt` names the files there that do not define the
+// gate, each with its only readers: nothing the gate runs names them and a test
+// observes each by name, so its own cone proves it. A pre-push-stages.json
+// edit ran the corpus for ~40 minutes with a 179-test cone holding both of its
+// observers (2026-10-03); test/scripts/push-gate-change-proof.test.js fails if
+// a gate module starts reading an exempted file or its observers are lost.
 export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
-  {id: 'selection-state', pattern: /^test\/(shards\/(safety-spine|impact-contracts)\.json|manifests\/)/u},
+  {id: 'selection-state', pattern: /^test\/(shards\/(safety-spine|impact-contracts)\.json|manifests\/)/u,
+    exempt: Object.freeze({
+      'test/manifests/ci-resource-plan.json':
+        'read only by the epic budget, checks/apparatus-release-consolidation-budget.js',
+      'test/manifests/pre-push-stages.json':
+        'read only by the epic budget, checks/apparatus-release-consolidation-budget.js',
+      'test/manifests/proof-authority-falsifiers.receipt.json':
+        'read only by the epic budget and quest-evidence/proof-authority-integrity.js',
+      'test/manifests/project-hardening-proof-release-tail-manifest.json':
+        'read only by the release proof, run-release-proof.js (check:release)',
+      'test/manifests/developer-smoke-proof-manifest.json':
+        'read only by the test:smoke package script',
+    })},
   // The runner's thermal gate decides whether and when each batch starts.
   {id: 'test-runner', pattern: /^scripts\/(run-test-files|run-classified-test-files|plan-test-lane|select-change-tests|check-subsystem|checks\/wait-for-thermal-headroom)\.js$/u},
   {id: 'selection-machinery', pattern: /^scripts\/checks\/(change-selection[a-z-]*|changed-paths|git-process-environment|change-proof-string-collections|helper-import-closure|push-gate-change-proof|impact-proof-cone-constants|test-timeout-declarations|test-(?:primary|resource|subsystem)-classification[a-z-]*)\.js$/u},
@@ -244,7 +263,11 @@ export const FULL_CORPUS_TRIGGER_RULES = Object.freeze([
   {id: 'test-placement', pattern: /^scripts\/lab\/(probe|process|state)\.js$/u},
   // The scheduler that launches the proof and hands it its environment.
   {id: 'gate-scheduler', pattern: /^scripts\/(run-project-hardening-acceptance|checks\/acceptance-proof-manifest-(?:runner|constants))\.js$/u},
-  {id: 'push-gate', pattern: /^\.githooks\//u},
+  {id: 'push-gate', pattern: /^\.githooks\//u,
+    exempt: Object.freeze({
+      '.githooks/pre-commit':
+        'run by git at commit and by solve land (solve/commands.js), never at push',
+    })},
   {id: 'test-config', pattern: /^\.taprc$/u},
 ]);
 
