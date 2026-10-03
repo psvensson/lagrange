@@ -41,7 +41,6 @@ const SPLIT_MIRROR_IDENTITY_FIELD = Object.freeze({
 });
 export const SPLIT_SNAPSHOT_MAX_BIND_VARIABLES = 32_766;
 export const SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL = 64;
-export const SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH = 64;
 const arrayIsArray = Array.isArray;
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayPush = Function.call.bind(Array.prototype.push);
@@ -307,10 +306,7 @@ export async function routeSplitSnapshotBatch(
   assertSplitRoutingMetadataSafe(metadata);
   const primaryKeyColumn = resolveSplitRoutingPrimaryKeyColumn(metadata);
   const snapshotColumns = requireSnapshotColumns(columns);
-  const snapshotRows = requireSnapshotRows(
-    rows,
-    SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH,
-  );
+  const snapshotRows = requireSnapshotRows(rows);
   const rowsByPartition = new MapCtor();
   const partitionOrder = [];
 
