@@ -6,7 +6,6 @@ import {
 } from '../../src/partition/partition-split-routing.js';
 
 const MAX_BIND_VARIABLES = 32_766;
-const SNAPSHOT_MAX_ROWS_PER_CALL = 64;
 const MAX_ROUTE_ROWS = 64;
 const TABLE_NAME = 'users';
 const LEFT_ID = 'users-left';
@@ -111,12 +110,12 @@ async function dimensionProblemCount() {
 
   const maxRows = resolveSplitSnapshotBatchRowLimit(
     ['id'],
-    SNAPSHOT_MAX_ROWS_PER_CALL,
+    MAX_ROUTE_ROWS,
   );
-  if (maxRows !== SNAPSHOT_MAX_ROWS_PER_CALL) problems += 1;
+  if (maxRows !== MAX_ROUTE_ROWS) problems += 1;
   if (resolveSplitSnapshotBatchRowLimit(
     Array.from({length: 512}, (_value, index) => `c_${index}`),
-    SNAPSHOT_MAX_ROWS_PER_CALL,
+    MAX_ROUTE_ROWS,
   ) !== 63) problems += 1;
   return problems;
 }
@@ -126,11 +125,11 @@ function ownerProblemCount() {
   const shared = fs.readFileSync(SERVICE_SHARED_SOURCE, 'utf8');
   let problems = 0;
   if (!routing.includes(
-    'export const SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH = 64;',
+    'export const SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL = 64;',
   )) {
     problems += 1;
   }
-  if (!shared.includes('SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH')) {
+  if (!shared.includes('SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL')) {
     problems += 1;
   }
   if (/SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS\s*=\s*64\s*;/u.test(shared)) {
