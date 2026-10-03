@@ -11,7 +11,6 @@ import {compareRoutingKeys} from './split-key-comparator.js';
 
 const LOCAL_STR_WORKFLOW_EXECUTION = 'workflow_execution';
 const LOCAL_STR_OBJECT = 'object';
-const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayIsArray = Array.isArray;
 const objectCreate = Object.create;
 const objectDefineProperty = Object.defineProperty;
