@@ -1,7 +1,9 @@
 import t from 'tap';
-import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
+import {
+  createVirtualNetwork,
+  driveNetwork,
+} from '../distributed/harness/virtual-network.js';
 import {createCostTable} from '../distributed/harness/cost-table.js';
-import {driveNetwork} from '../distributed/harness/raft-network-host.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {OperationWorkflowOwner} from '../../src/rebalancer/operation-workflow-owner.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from

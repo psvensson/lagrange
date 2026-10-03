@@ -31,7 +31,7 @@ import {
 } from '../../src/raft/raft-committed-membership-stamp.js';
 import {RAFT_EVENT, RAFT_OPERATION} from '../../src/raft/raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../../src/raft/raft-operation-port-request.js';
-import {RaftRsWasmProvider} from '../../src/raft/raft-rs-provider.js';
+import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {
   reserveAndAdmitGroupPeer, takeGroupAdmissionsInFlight,
 } from '../../src/raft/raft-rs-group-membership-admission.js';
@@ -40,7 +40,6 @@ import {guardedDispatch} from './formation-sim-guard.js';
 const ENVELOPE_MESSAGE = 'raftRsEnvelope';
 const IN_MEMORY_DATABASE = ':memory:';
 const QUIET_LOGGER = Object.freeze({warn() {}, info() {}, debug() {}, error() {}});
-const BACKEND = new RaftRsWasmProvider();
 
 /**
  * One cohort (one raft group) with staged membership.
@@ -144,7 +143,7 @@ function createStagedCohort({network, groupId, seedId, linkDelayMs, timing, char
   function open(nodeId, {bootstrapMembership, bootstrapPeerIds}) {
     const database = new Database(IN_MEMORY_DATABASE);
     databases.set(nodeId, database);
-    const port = runOnExecutionNode(nodeId, () => BACKEND.createPartitionPort({
+    const port = runOnExecutionNode(nodeId, () => createRaftRsOperationPort({
       [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: groupId,
       [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: nodeId,
       [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: nodeId,

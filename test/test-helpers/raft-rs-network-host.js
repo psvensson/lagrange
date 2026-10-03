@@ -31,6 +31,7 @@
 import {PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
+import {driveNetwork} from '../distributed/harness/virtual-network.js';
 
 const ENVELOPE_MESSAGE = 'raftRsEnvelope';
 const LEADER_ROLE = 'leader';
@@ -38,8 +39,6 @@ const LEADER_ROLE = 'leader';
 // sender, decides whether it arrives.
 const SEND_QUEUED = Object.freeze({queued: true});
 const DEFAULT_LINK_DELAY_MS = 1;
-const DEFAULT_STEP_MS = 5;
-const MICROTASK_TURNS = 8;
 const HEARTBEAT_MS = 30;
 const TICK_INTERVAL_MS = 10;
 const BASE_ELECTION_MIN_MS = 150;
@@ -172,14 +171,8 @@ class RaftRsNetworkHost {
    * @param {Object} [options] - {stepMs}.
    * @return {Promise<void>}
    */
-  async runUntil(untilMs, {stepMs = DEFAULT_STEP_MS} = {}) {
-    for (let stepEnd = this.net.now() + stepMs; stepEnd <= untilMs;
-      stepEnd += stepMs) {
-      this.net.run({untilMs: stepEnd});
-      for (let turn = 0; turn < MICROTASK_TURNS; turn += 1) {
-        await Promise.resolve();
-      }
-    }
+  async runUntil(untilMs, {stepMs} = {}) {
+    await driveNetwork(this.net, {untilMs, stepMs});
   }
 
   /**

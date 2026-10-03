@@ -51,6 +51,11 @@ const VIRTUAL_NETWORK_NUM_ZERO = 0;
 const VIRTUAL_NETWORK_NUM_ONE = 1;
 const VIRTUAL_NETWORK_DEFAULT_MAX_STEPS = 100000;
 const VIRTUAL_NETWORK_LINK_SEPARATOR = '::';
+// An asynchronous drive advances in bounded steps of this many virtual ms and
+// yields this many microtask turns between steps, so the async continuations a
+// delivered event started settle before the next batch is delivered.
+const VIRTUAL_NETWORK_DEFAULT_DRIVE_STEP_MS = 5;
+const VIRTUAL_NETWORK_DEFAULT_SETTLE_TURNS = 8;
 const VIRTUAL_NETWORK_STR_FUNCTION = 'function';
 // A repeating adapter timer with a 0ms (or negative) interval would reschedule onto the
 // same instant and spin forever inside one drain; clamp the reschedule step to this
@@ -793,8 +798,39 @@ function createVirtualNetwork(options = {}) {
   return api;
 }
 
+/**
+ * Drive a network whose handlers start asynchronous work: run it to `untilMs`
+ * in bounded steps from its current instant, yielding microtask turns between
+ * steps. A step boundary at or before `now()` delivers nothing, so successive
+ * drives continue where the previous one stopped. This is the one async drive
+ * over a VirtualNetwork; hosts and scenarios call it rather than re-deriving
+ * the step/settle loop.
+ * @param {Object} net - A VirtualNetwork (createVirtualNetwork).
+ * @param {Object} driveOptions - {untilMs, stepMs, settleTurns}.
+ * @return {Promise<void>}
+ */
+async function driveNetwork(net, driveOptions = {}) {
+  const untilMs = Number(driveOptions.untilMs);
+  const rawStepMs = Number(driveOptions.stepMs);
+  const stepMs = Number.isFinite(rawStepMs) && rawStepMs > VIRTUAL_NETWORK_NUM_ZERO ?
+    rawStepMs :
+    VIRTUAL_NETWORK_DEFAULT_DRIVE_STEP_MS;
+  const rawSettleTurns = Number(driveOptions.settleTurns);
+  const settleTurns = Number.isFinite(rawSettleTurns) ?
+    rawSettleTurns :
+    VIRTUAL_NETWORK_DEFAULT_SETTLE_TURNS;
+  for (let stepEnd = net.now() + stepMs; stepEnd <= untilMs; stepEnd += stepMs) {
+    net.run({untilMs: stepEnd});
+    for (let turn = VIRTUAL_NETWORK_NUM_ZERO; turn < settleTurns;
+      turn += VIRTUAL_NETWORK_NUM_ONE) {
+      await Promise.resolve();
+    }
+  }
+}
+
 export {
   createVirtualNetwork,
+  driveNetwork,
   virtualNetworkLinkKey,
   VIRTUAL_NETWORK_EVENT_KIND,
   VIRTUAL_NETWORK_NODE_STATE,

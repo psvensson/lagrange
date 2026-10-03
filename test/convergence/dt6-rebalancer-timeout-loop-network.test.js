@@ -1,6 +1,8 @@
 import t from 'tap';
-import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
-import {driveNetwork} from '../distributed/harness/raft-network-host.js';
+import {
+  createVirtualNetwork,
+  driveNetwork,
+} from '../distributed/harness/virtual-network.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 
 // DT6 step 9 — host a SECOND real control-plane loop on the VirtualNetwork: the rebalancer's
