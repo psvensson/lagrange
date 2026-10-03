@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
 import {
   SPLIT_SNAPSHOT_MAX_ROWS_PER_CALL,
   routeSplitSnapshotBatch,
@@ -10,6 +11,14 @@ const MAX_ROUTE_ROWS = 64;
 const TABLE_NAME = 'users';
 const LEFT_ID = 'users-left';
 const RIGHT_ID = 'users-right';
+const ROUTING_SOURCE = new URL(
+  '../../src/partition/partition-split-routing.js',
+  import.meta.url,
+);
+const SERVICE_SHARED_SOURCE = new URL(
+  '../../src/partition/partition-service-shared.js',
+  import.meta.url,
+);
 
 function metadata() {
   return {
@@ -112,9 +121,28 @@ async function dimensionProblemCount() {
   return problems;
 }
 
+function ownerProblemCount() {
+  const routing = fs.readFileSync(ROUTING_SOURCE, 'utf8');
+  const shared = fs.readFileSync(SERVICE_SHARED_SOURCE, 'utf8');
+  let problems = 0;
+  if (!routing.includes(
+    'export const SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH = 64;',
+  )) {
+    problems += 1;
+  }
+  if (!shared.includes('SPLIT_SNAPSHOT_MAX_ROWS_PER_BATCH')) {
+    problems += 1;
+  }
+  if (/SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS\s*=\s*64\s*;/u.test(shared)) {
+    problems += 1;
+  }
+  return problems;
+}
+
 const metric =
   await mapConstructorProblemCount() +
-  await dimensionProblemCount();
+  await dimensionProblemCount() +
+  ownerProblemCount();
 
 if (metric !== 0) {
   process.stderr.write(
