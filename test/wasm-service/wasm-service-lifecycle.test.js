@@ -1,5 +1,8 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   WasmServiceLifecycle,
   REPLICA_LIFECYCLE_STATE,
@@ -16,6 +19,13 @@ import {NodeService} from
   '../../src/node/node-service.js';
 import {AddressManager} from
   '../../src/address/address-manager.js';
+import {DataDirectoryManager} from
+  '../../src/storage/data-directory-manager.js';
+
+// Each test's data directory owns its replicas' durable database paths.
+let scratchDirectory = null;
+/** Lifecycles a test built; each is shut down before its scratch is removed. */
+const lifecycles = [];
 
 /**
  * Initialize singletons required by WasmServiceReplica.
@@ -25,25 +35,33 @@ function initEnv() {
   LoggingService.resetInstance();
   NodeService.resetInstance();
   AddressManager.resetInstance();
+  DataDirectoryManager.resetInstance();
+  scratchDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wasm-service-lifecycle-'));
 
   const config = ConfigurationManager.getInstance();
   config.initialize({
     node: {id: 'test-node'},
     logging: {level: 'error'},
+    storage: {dataDir: scratchDirectory},
   });
 
   const logging = LoggingService.getInstance();
   logging.initialize({level: 'error'});
+  DataDirectoryManager.getInstance().initialize();
 }
 
 /**
- * Tear down singletons.
+ * Tear down singletons and the test's replica database directory.
  */
 function cleanEnv() {
   NodeService.resetInstance();
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   AddressManager.resetInstance();
+  DataDirectoryManager.resetInstance();
+  fs.rmSync(scratchDirectory, {recursive: true, force: true});
+  scratchDirectory = null;
 }
 
 /**
@@ -70,11 +88,10 @@ function makeServiceDef(overrides = {}) {
  * @return {Object} Replica config.
  */
 function makeReplicaConfig(overrides = {}) {
+  const replicaId = overrides.replicaId ?? 'svc-1-r1';
   return {
-    replicaId: 'svc-1-r1',
-    replicaIds: ['svc-1-r1'],
-    dbPath: ':memory:',
-    transport: null,
+    replicaId,
+    replicaIds: [replicaId],
     ...overrides,
   };
 }
@@ -85,13 +102,15 @@ function makeReplicaConfig(overrides = {}) {
  * @return {WasmServiceLifecycle}
  */
 function makeLifecycle(overrides = {}) {
-  return new WasmServiceLifecycle({
+  const lifecycle = new WasmServiceLifecycle({
     portAllocator: new PortAllocator(),
     moduleMirror: new ModuleMirror(),
     messageRouter: null,
     nodeId: 'test-node',
     ...overrides,
   });
+  lifecycles.push(lifecycle);
+  return lifecycle;
 }
 
 describe('WasmServiceLifecycle', () => {
@@ -99,7 +118,10 @@ describe('WasmServiceLifecycle', () => {
     initEnv();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    for (const lifecycle of lifecycles.splice(0)) {
+      await lifecycle.shutdownAll();
+    }
     cleanEnv();
   });
 
@@ -171,7 +193,6 @@ describe('WasmServiceLifecycle', () => {
       assert.strictEqual(
         lifecycle.activeReplicas.get('svc-1'), replica,
       );
-      replica.kvStore.close();
     });
 
     it('should return the created replica', () => {
@@ -183,7 +204,21 @@ describe('WasmServiceLifecycle', () => {
       assert.equal(
         replica.serviceDefinitionId, 'svc-1',
       );
-      replica.kvStore.close();
+    });
+
+    it('derives the durable path from the data directory owner', () => {
+      const lifecycle = makeLifecycle();
+      const replica = lifecycle.createReplica(
+        makeServiceDef(),
+        makeReplicaConfig({dbPath: path.join(os.tmpdir(), 'caller.db')}),
+      );
+      const ownedPath = DataDirectoryManager.getInstance()
+        .getWasmServiceDbPath('svc-1', 'svc-1-r1');
+      assert.equal(replica.dbPath, ownedPath);
+      assert.equal(ownedPath, path.join(
+        scratchDirectory, 'wasm-services', 'svc-1', 'svc-1-r1.db',
+      ));
+      assert.equal(fs.existsSync(path.dirname(ownedPath)), true);
     });
 
     it('should pass serviceDefinitionId to replica', () => {
@@ -197,7 +232,6 @@ describe('WasmServiceLifecycle', () => {
       assert.strictEqual(
         lifecycle.activeReplicas.get('svc-abc'), replica,
       );
-      replica.kvStore.close();
     });
 
     it('should pass replicaId from config', () => {
@@ -206,7 +240,6 @@ describe('WasmServiceLifecycle', () => {
       const cfg = makeReplicaConfig({replicaId: 'r-99'});
       const replica = lifecycle.createReplica(def, cfg);
       assert.equal(replica.replicaId, 'r-99');
-      replica.kvStore.close();
     });
 
     it('should pass readConsistency from definition', () => {
@@ -217,7 +250,6 @@ describe('WasmServiceLifecycle', () => {
       const cfg = makeReplicaConfig();
       const replica = lifecycle.createReplica(def, cfg);
       assert.equal(replica.readConsistency, 'eventual');
-      replica.kvStore.close();
     });
 
     it('should create multiple replicas for different ' +
@@ -238,41 +270,68 @@ describe('WasmServiceLifecycle', () => {
       assert.strictEqual(
         lifecycle.activeReplicas.get('svc-b'), r2,
       );
-      r1.kvStore.close();
-      r2.kvStore.close();
+    });
+  });
+
+  describe('founding replica set', () => {
+    it('refuses a replica without its explicit replica set', () => {
+      const lifecycle = makeLifecycle();
+      const dbPath = DataDirectoryManager.getInstance()
+        .getWasmServiceDbPath('svc-1', 'svc-1-r1');
+      assert.throws(
+        () => lifecycle.createReplica(makeServiceDef(),
+          {replicaId: 'svc-1-r1'}),
+        {code: 'wasm_service_replica_set_required'});
+      assert.throws(
+        () => lifecycle.createReplica(makeServiceDef(),
+          {replicaId: 'svc-1-r1', replicaIds: []}),
+        {code: 'wasm_service_replica_set_required'});
+      assert.equal(lifecycle.getReplica('svc-1'), null);
+      assert.equal(fs.existsSync(path.dirname(dbPath)), false);
+    });
+
+    it('refuses a replica outside or a set without distinct ids', () => {
+      const lifecycle = makeLifecycle();
+      assert.throws(
+        () => lifecycle.createReplica(makeServiceDef(),
+          {replicaId: 'svc-1-r1', replicaIds: ['svc-1-r2', 'svc-1-r3']}),
+        {code: 'wasm_service_replica_not_in_set'});
+      assert.throws(
+        () => lifecycle.createReplica(makeServiceDef(),
+          {replicaId: 'svc-1-r1', replicaIds: ['svc-1-r1', 'svc-1-r1']}),
+        {code: 'wasm_service_replica_set_invalid'});
+      assert.equal(lifecycle.getReplica('svc-1'), null);
     });
   });
 
   describe('startReplica', () => {
-    it('should allocate port and return result', () => {
+    it('should allocate port and return result', async () => {
       const lifecycle = makeLifecycle();
       const def = makeServiceDef();
       lifecycle.createReplica(def, makeReplicaConfig());
-      const result = lifecycle.startReplica('svc-1');
+      const result = await lifecycle.startReplica('svc-1');
       assert.equal(result.started, true);
       assert.equal(typeof result.port, 'number');
       assert.ok(result.port >= 30000);
-      lifecycle.activeReplicas.get('svc-1').kvStore.close();
     });
 
-    it('should set portAllocation on the replica', () => {
+    it('should set portAllocation on the replica', async () => {
       const lifecycle = makeLifecycle();
       const def = makeServiceDef();
       lifecycle.createReplica(def, makeReplicaConfig());
-      const result = lifecycle.startReplica('svc-1');
+      const result = await lifecycle.startReplica('svc-1');
       const replica = lifecycle.getReplica('svc-1');
       assert.equal(replica.portAllocation, result.port);
-      replica.kvStore.close();
     });
 
-    it('should return null for unknown serviceId', () => {
+    it('should return null for unknown serviceId', async () => {
       const lifecycle = makeLifecycle();
-      const result = lifecycle.startReplica('nonexistent');
+      const result = await lifecycle.startReplica('nonexistent');
       assert.equal(result, null);
     });
 
     it('should check module mirror when handler provided',
-      () => {
+      async () => {
         const mm = new ModuleMirror();
         let checkedId = null;
         let checkedVersion = null;
@@ -284,16 +343,15 @@ describe('WasmServiceLifecycle', () => {
         const lifecycle = makeLifecycle({moduleMirror: mm});
         const def = makeServiceDef();
         lifecycle.createReplica(def, makeReplicaConfig());
-        lifecycle.startReplica('svc-1', {
+        await lifecycle.startReplica('svc-1', {
           handlerFunctionId: 'fn-42',
           moduleVersion: 'v2',
         });
         assert.equal(checkedId, 'fn-42');
         assert.equal(checkedVersion, 'v2');
-        lifecycle.getReplica('svc-1').kvStore.close();
       });
 
-    it('fails closed when module is unavailable', () => {
+    it('fails closed when module is unavailable', async () => {
       const mm = new ModuleMirror();
       mm.hasModule = () => false;
 
@@ -301,7 +359,7 @@ describe('WasmServiceLifecycle', () => {
       const def = makeServiceDef();
       lifecycle.createReplica(def, makeReplicaConfig());
 
-      const result = lifecycle.startReplica('svc-1', {
+      const result = await lifecycle.startReplica('svc-1', {
         handlerFunctionId: 'fn-missing',
         moduleVersion: 'v1',
       });
@@ -311,50 +369,47 @@ describe('WasmServiceLifecycle', () => {
       assert.equal(result.diagnostic.serviceId, 'svc-1');
       assert.equal(result.diagnostic.handlerFunctionId, 'fn-missing');
       assert.equal(result.diagnostic.code, 'module_unavailable');
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
-    it('fails closed when module mirror is missing', () => {
+    it('fails closed when module mirror is missing', async () => {
       const lifecycle = makeLifecycle({moduleMirror: null});
       lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
 
-      const result = lifecycle.startReplica('svc-1', {
+      const result = await lifecycle.startReplica('svc-1', {
         handlerFunctionId: 'fn-1',
         moduleVersion: 'v1',
       });
 
       assert.equal(result.started, false);
       assert.equal(result.diagnostic.code, 'module_mirror_missing');
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
-    it('records and clears startup diagnostics', () => {
+    it('records and clears startup diagnostics', async () => {
       const mm = new ModuleMirror();
       mm.hasModule = () => false;
       const lifecycle = makeLifecycle({moduleMirror: mm});
       lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
 
-      lifecycle.startReplica('svc-1', {
+      await lifecycle.startReplica('svc-1', {
         handlerFunctionId: 'fn-1',
         moduleVersion: 'v1',
       });
       assert.notEqual(lifecycle.getStartDiagnostic('svc-1'), null);
 
       mm.hasModule = () => true;
-      lifecycle.startReplica('svc-1', {
+      await lifecycle.startReplica('svc-1', {
         handlerFunctionId: 'fn-1',
         moduleVersion: 'v1',
       });
       assert.equal(lifecycle.getStartDiagnostic('svc-1'), null);
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
     it('should build endpoint when serviceDefinition ' +
-      'provided', () => {
+      'provided', async () => {
       const lifecycle = makeLifecycle();
       const def = makeServiceDef();
       lifecycle.createReplica(def, makeReplicaConfig());
-      const result = lifecycle.startReplica('svc-1', {
+      const result = await lifecycle.startReplica('svc-1', {
         serviceDefinition: def,
         address: '127.0.0.1',
       });
@@ -366,22 +421,20 @@ describe('WasmServiceLifecycle', () => {
         result.endpoint.node_id, 'test-node',
       );
       assert.equal(result.endpoint.port, result.port);
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
     it('should return null endpoint when no ' +
-      'serviceDefinition', () => {
+      'serviceDefinition', async () => {
       const lifecycle = makeLifecycle();
       lifecycle.createReplica(
         makeServiceDef(), makeReplicaConfig(),
       );
-      const result = lifecycle.startReplica('svc-1');
+      const result = await lifecycle.startReplica('svc-1');
       assert.equal(result.endpoint, null);
-      lifecycle.getReplica('svc-1').kvStore.close();
     });
 
     it('should allocate different ports for different ' +
-      'services', () => {
+      'services', async () => {
       const lifecycle = makeLifecycle();
       lifecycle.createReplica(
         makeServiceDef({serviceId: 'svc-a'}),
@@ -391,12 +444,48 @@ describe('WasmServiceLifecycle', () => {
         makeServiceDef({serviceId: 'svc-b'}),
         makeReplicaConfig({replicaId: 'svc-b-r1'}),
       );
-      const r1 = lifecycle.startReplica('svc-a');
-      const r2 = lifecycle.startReplica('svc-b');
+      const r1 = await lifecycle.startReplica('svc-a');
+      const r2 = await lifecycle.startReplica('svc-b');
       assert.notEqual(r1.port, r2.port);
-      lifecycle.getReplica('svc-a').kvStore.close();
-      lifecycle.getReplica('svc-b').kvStore.close();
     });
+    it('opens the replica consensus on the raft-rs operation port',
+      async () => {
+        const lifecycle = makeLifecycle();
+        lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+        const result = await lifecycle.startReplica('svc-1');
+        const replica = lifecycle.getReplica('svc-1');
+        assert.equal(result.started, true);
+        assert.equal(replica.initialized, true);
+        assert.notEqual(replica.raft, null);
+      });
+
+    it('refuses start typed when the node owns no port allocator',
+      async () => {
+        const lifecycle = makeLifecycle({portAllocator: null});
+        lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+        const result = await lifecycle.startReplica('svc-1');
+        assert.equal(result.started, false);
+        assert.equal(result.diagnostic.code, 'port_allocator_unavailable');
+        assert.equal(lifecycle.getReplica('svc-1').initialized, false);
+      });
+
+    it('releases the port when its consensus refuses to start',
+      async () => {
+        const pa = new PortAllocator();
+        const lifecycle = makeLifecycle({portAllocator: pa});
+        lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+        let port = null;
+        const allocate = pa.allocate.bind(pa);
+        pa.allocate = (serviceId) => (port = allocate(serviceId));
+        lifecycle.getReplica('svc-1').initialize = async () => {
+          throw new Error('consensus refused');
+        };
+        const result = await lifecycle.startReplica('svc-1');
+        assert.equal(result.started, false);
+        assert.equal(result.error, 'consensus refused');
+        assert.equal(result.diagnostic.code, 'consensus_start_refused');
+        assert.equal(pa.isAvailable(port), true);
+      });
   });
 
   describe('stopReplica', () => {
@@ -406,7 +495,7 @@ describe('WasmServiceLifecycle', () => {
         lifecycle.createReplica(
           makeServiceDef(), makeReplicaConfig(),
         );
-        lifecycle.startReplica('svc-1');
+        await lifecycle.startReplica('svc-1');
         const result = await lifecycle.stopReplica('svc-1');
         assert.equal(result.stopped, true);
         assert.equal(lifecycle.activeReplicas.size, 0);
@@ -426,7 +515,7 @@ describe('WasmServiceLifecycle', () => {
         lifecycle.createReplica(
           makeServiceDef(), makeReplicaConfig(),
         );
-        const startResult = lifecycle.startReplica('svc-1');
+        const startResult = await lifecycle.startReplica('svc-1');
         const allocatedPort = startResult.port;
         assert.equal(pa.isAvailable(allocatedPort), false);
         await lifecycle.stopReplica('svc-1');
@@ -459,7 +548,6 @@ describe('WasmServiceLifecycle', () => {
       );
       const found = lifecycle.getReplica('svc-1');
       assert.strictEqual(found, created);
-      created.kvStore.close();
     });
 
     it('should return null for unknown serviceId', () => {
@@ -490,8 +578,6 @@ describe('WasmServiceLifecycle', () => {
       assert.equal(replicas.size, 2);
       assert.ok(replicas.has('svc-a'));
       assert.ok(replicas.has('svc-b'));
-      replicas.get('svc-a').kvStore.close();
-      replicas.get('svc-b').kvStore.close();
     });
   });
 
@@ -506,8 +592,8 @@ describe('WasmServiceLifecycle', () => {
         makeServiceDef({serviceId: 'svc-b'}),
         makeReplicaConfig({replicaId: 'svc-b-r1'}),
       );
-      lifecycle.startReplica('svc-a');
-      lifecycle.startReplica('svc-b');
+      await lifecycle.startReplica('svc-a');
+      await lifecycle.startReplica('svc-b');
       assert.equal(lifecycle.activeReplicas.size, 2);
       await lifecycle.shutdownAll();
       assert.equal(lifecycle.activeReplicas.size, 0);
@@ -524,8 +610,8 @@ describe('WasmServiceLifecycle', () => {
         makeServiceDef({serviceId: 'svc-b'}),
         makeReplicaConfig({replicaId: 'svc-b-r1'}),
       );
-      const r1 = lifecycle.startReplica('svc-a');
-      const r2 = lifecycle.startReplica('svc-b');
+      const r1 = await lifecycle.startReplica('svc-a');
+      const r2 = await lifecycle.startReplica('svc-b');
       await lifecycle.shutdownAll();
       assert.equal(pa.isAvailable(r1.port), true);
       assert.equal(pa.isAvailable(r2.port), true);

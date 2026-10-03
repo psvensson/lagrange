@@ -9,7 +9,7 @@
  *
  * The clock here is the one the node runtime was given, never the one it
  * resolved for itself: a replica handed a resolved real clock would run
- * LifeRaft on VirtualTick and take its hops as zero-delay timers, which is a
+ * the retired timer-driven consensus harness and take its hops as zero-delay timers, which is a
  * different event-loop phase from the setImmediate production runs - and a
  * different one from the replicas the same node hosts as joiner. The node
  * runtime owns that question and answers it here.

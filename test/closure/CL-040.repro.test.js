@@ -1,114 +1,96 @@
 import t from 'tap';
-import LifeRaft from '../../src/raft/liferaft.js';
-import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
-import {connectRaftCluster, driveNetwork} from
-  '../distributed/harness/raft-network-host.js';
-import {SeededRandomSource} from '../../src/random/random-source.js';
+import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
 
-// CL-040 — deterministic repro of the @markwylde/liferaft + InMemoryLogAdapter same-index
-// stale-commit log-safety gap (surfaced by DT6 step 7 verification, see
-// solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-040.md).
+// CL-040 — committed-entry agreement after a partition + heal, on real raft-rs operation ports
+// (solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-040.md).
 //
-// First violated invariant (Raft §5.3 Log Matching / State Machine Safety): if a log entry is
-// committed at a given index, every node must hold the SAME committed entry at that index. Here a
-// partitioned old leader appends an entry at index i its minority cannot commit; a new leader
-// commits a DIFFERENT entry at index i via quorum; on heal the old leader is supposed to truncate
-// its stale entry and adopt the committed one — but liferaft's append catch-up commits the
-// follower's OWN same-index entry without a term/command match check, so two nodes end up with two
-// DIFFERENT committed commands at the same index.
+// Invariant (Raft §5.3 Log Matching / State Machine Safety): if a log entry is committed at a
+// given index, every node holds the SAME committed entry at that index. The scenario that exposed
+// the retired runtime's same-index stale commit: a partitioned old leader appends an entry its
+// minority cannot commit; a new leader commits a DIFFERENT entry via quorum; on heal the old leader
+// must discard its stale entry and adopt the committed one.
 //
-// This guard asserts the CORRECT invariant (committed-entry agreement across nodes). It is GREEN
-// since the CL-040 fix (src/raft/liferaft.js truncateConflictingSameIndexTail — Raft §5.3
-// same-index/different-term truncation before the base commit catch-up). Red-on-revert: removing
-// that truncation re-exposes the divergence (old leader stale-commits its own term-T entry at the
-// index the cluster committed at term T+1).
+// Every peer is the raft-rs operation port PartitionNodeCluster builds over its own SQLite file,
+// joined by the DT6 VirtualNetwork (test/test-helpers/raft-rs-network-host.js). The test reads only
+// the committed entries each replica's application received.
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
-const REPRO_SEED = 0; // fixed: the divergence is deterministic (leaderA=N1, leaderB=N2 at idx 2)
+const PARTITION_ID = 'cl-040-log-matching';
+const REPRO_SEED = 0;
 
-function clusterOptions(seed) {
-  return (id) => ({
-    'election min': '100 ms',
-    'election max': '200 ms',
-    'heartbeat': '30 ms',
-    'write': (_packet, callback) => {
-      if (typeof callback === 'function') {
-        callback(null);
-      }
-    },
-    'Log': InMemoryLogAdapter,
-    'randomSource': new SeededRandomSource({seed: seed * IDS.length + IDS.indexOf(id)}),
-  });
+function leaderOf(host) {
+  return IDS.find((id) => host.isLeader(id)) || null;
 }
 
-function leaderOf(rafts) {
-  return IDS.find((id) => rafts.get(id).state === LifeRaft.LEADER) || null;
+// A proposal's outcome is the port's to name; the stale one is expected to go nowhere.
+function proposeWithoutWaiting(host, id, command) {
+  Promise.resolve(host.propose(id, command)).catch(() => undefined);
 }
 
-// Map index -> set of distinct committed-command fingerprints across all nodes. Agreement holds
-// iff every index maps to at most one distinct committed command.
-function committedDivergenceByIndex(rafts) {
+function committedTags(host, id) {
+  return host.committedEntries(id)
+    .map(({command}) => command && command.tag)
+    .filter(Boolean);
+}
+
+// Agreement holds iff every index maps to at most one distinct committed {term, command}.
+function committedDivergence(host) {
   const byIndex = new Map();
   for (const id of IDS) {
-    const log = rafts.get(id).log;
-    for (const [index, entry] of log.entries) {
-      if (!entry || entry.committed !== true) {
-        continue;
-      }
-      const fingerprint = JSON.stringify({term: entry.term, command: entry.command});
+    for (const {index, term, command} of host.committedEntries(id)) {
       if (!byIndex.has(index)) {
-        byIndex.set(index, new Map());
+        byIndex.set(index, new Set());
       }
-      byIndex.get(index).set(fingerprint, (byIndex.get(index).get(fingerprint) || 0) + 1);
+      byIndex.get(index).add(JSON.stringify({term, command}));
     }
   }
-  return byIndex;
+  return [...byIndex.entries()]
+    .filter(([, fingerprints]) => fingerprints.size > 1)
+    .map(([index, fingerprints]) => ({index, distinctCommitted: [...fingerprints]}));
 }
 
 t.test('committed raft log entries agree across nodes after a partition + heal',
   async (t) => {
     const net = createVirtualNetwork();
-    const rafts = connectRaftCluster(net, IDS, clusterOptions(REPRO_SEED));
-    t.teardown(() => rafts.forEach((raft) => raft.end()));
+    const host = connectRaftRsNetwork(net, IDS, {partitionId: PARTITION_ID, seed: REPRO_SEED});
+    t.teardown(() => host.dispose());
+    host.start();
 
-    // Elect a leader and commit entry A at index 1 (cluster-wide via real quorum).
-    await driveNetwork(net, {untilMs: 500, stepMs: 5});
-    const leaderA = leaderOf(rafts);
-    await rafts.get(leaderA).command({tag: 'A', by: leaderA});
-    await driveNetwork(net, {untilMs: 800, stepMs: 5});
+    // Elect a leader and commit entry A cluster-wide via real quorum.
+    await host.runUntil(500);
+    const leaderA = leaderOf(host);
+    t.ok(leaderA, 'a leader is elected');
+    proposeWithoutWaiting(host, leaderA, {tag: 'A', by: leaderA});
+    await host.runUntil(800);
+    const termA = host.term(leaderA);
 
-    // Partition the leader. A new leader wins a higher term.
+    // Partition the leader; it appends a stale entry its minority cannot commit.
     const followers = IDS.filter((id) => id !== leaderA);
     for (const other of followers) {
       net.partition(leaderA, other);
     }
-    await driveNetwork(net, {untilMs: 1300, stepMs: 5});
-    const leaderB = followers.find((id) => rafts.get(id).state === LifeRaft.LEADER);
+    proposeWithoutWaiting(host, leaderA, {tag: 'OLD', by: leaderA});
+    await host.runUntil(1600);
+    const leaderB = followers.find((id) => host.isLeader(id)) || null;
+    t.ok(leaderB, 'the majority elects a new leader');
+    t.ok(host.term(leaderB) > termA, 'the new leader holds a higher term');
 
-    // The partitioned old leader appends a stale entry at index 2 it cannot commit (minority); the
-    // new leader commits a DIFFERENT entry at index 2 via quorum.
-    try {
-      await rafts.get(leaderA).command({tag: 'OLD', by: leaderA});
-    } catch {
-      // NOTLEADER is possible if it already stepped down; not required for the repro.
-    }
-    await rafts.get(leaderB).command({tag: 'NEW', by: leaderB});
-    await driveNetwork(net, {untilMs: 2000, stepMs: 5});
-
-    // Heal: the old leader is supposed to truncate its stale index-2 entry and adopt the committed
-    // one. Drive long enough for catch-up.
+    // The new leader commits a DIFFERENT entry via quorum, then the partition heals.
+    proposeWithoutWaiting(host, leaderB, {tag: 'NEW', by: leaderB});
+    await host.runUntil(2200);
     for (const other of followers) {
       net.heal(leaderA, other);
     }
-    await driveNetwork(net, {untilMs: 2800, stepMs: 5});
+    await host.runUntil(3000);
 
-    // INVARIANT: no index may carry two distinct COMMITTED commands across the cluster.
-    const byIndex = committedDivergenceByIndex(rafts);
-    const divergentIndexes = [...byIndex.entries()]
-      .filter(([, fingerprints]) => fingerprints.size > 1)
-      .map(([index, fingerprints]) => ({index, distinctCommitted: [...fingerprints.keys()]}));
-
-    t.same(divergentIndexes, [],
+    for (const id of IDS) {
+      t.ok(committedTags(host, id).includes('NEW'),
+        `${id} committed the entry the quorum committed`);
+      t.notOk(committedTags(host, id).includes('OLD'),
+        `${id} never committed the partitioned leader's stale entry`);
+    }
+    // INVARIANT: no index may carry two distinct COMMITTED entries across the cluster.
+    t.same(committedDivergence(host), [],
       'every committed log index holds a single agreed entry cluster-wide (Raft state-machine safety)');
   });

@@ -2,9 +2,9 @@
 // raft-snapshot-compacted-follower-catchup, spec
 // solve/specs/raft-snapshot-transfer-install/compacted-follower-catchup-
 // design.md, S4). Owns the leader-side typed catch-up decision (emitted by
-// liferaft.js at the three append-fail decision sites), the dispatch and
+// the append-fail decision owner), the dispatch and
 // follower-side install-orchestration outcomes, and the deployment-default
-// cluster identity. This is a LEAF module: liferaft.js may import it without
+// cluster identity. This is a LEAF module so consensus/runtime owners may import it without
 // ever importing transfer/install code.
 
 // The typed decision one leader append-fail evaluation can emit.

@@ -69,8 +69,15 @@ const RATCHET_TARGETS = [
     // distributed UPDATE/DELETE mutation-result owner (checker hint).
     // 2026-09-29: tightened 55/1760 -> 54/1731 after the seed and joiner
     // runtime-service handler setup converged on one guarded initializer.
-    baselineCloneGroupCount: 54,
-    baselineDuplicatedLineCount: 1731,
+    // 2026-10-01: tightened 54/1731 -> 52/1652 after the WASM replica moved
+    // onto its operation port and the legacy replica base was deleted.
+    // 2026-10-01: tightened 52/1652 -> 51/1624 after the spike, provider
+    // selection and migration tooling were deleted (checker hint).
+    // 2026-10-03: tightened 51/1624 -> 49/1559 on the checker's hint after
+    // the origin/main ec63fbb00 merge and the native-append inference
+    // deletion.
+    baselineCloneGroupCount: 49,
+    baselineDuplicatedLineCount: 1559,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -182,8 +189,18 @@ const RATCHET_TARGETS = [
     // tree (Track A boot incarnation + Track B handler identity).
     // 2026-09-30: tightened duplicated lines 29402 -> 29388 after the
     // rejoin-hints recovered-peer decision match became one constant.
-    baselineCloneGroupCount: 765,
-    baselineDuplicatedLineCount: 29388,
+    // 2026-10-01: tightened 765/29388 -> 728/27645 after the legacy replica
+    // base, its packet-routing and backpressure tests, and the census-delete
+    // group tests were deleted.
+    // 2026-10-01: tightened 728/27645 -> 726/27594 after the dt6 publication
+    // network tests moved onto the raft-rs network host.
+    // 2026-10-03: tightened 726/27594 -> 718/27311 on the checker's hint
+    // after the origin/main ec63fbb00 merge, the native-append test removal
+    // and the single VirtualNetwork async drive.
+    // 2026-10-03: tightened 718/27311 -> 717/27288 on the checker's hint
+    // after the SQLite callback-facade round-trip property was retired.
+    baselineCloneGroupCount: 717,
+    baselineDuplicatedLineCount: 27288,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

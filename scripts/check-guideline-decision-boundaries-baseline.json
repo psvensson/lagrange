@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-08-05T17:56:03.717Z",
-  "rawViolationCount": 828,
+  "rawViolationCount": 826,
   "violations": [
     {
       "filePath": "examples/call-binding-account-summary/run-call-binding-account-summary.js",
@@ -5660,24 +5660,6 @@
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/raft/liferaft-provider.js",
-      "line": 182,
-      "column": 5,
-      "functionName": "proposeWithLeaderRouting",
-      "kind": "local_retry_loop",
-      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
-      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
-    },
-    {
-      "filePath": "src/raft/liferaft-provider.js",
-      "line": 232,
-      "column": 40,
-      "functionName": "proposeWithLeaderRouting",
-      "kind": "local_retry_loop",
-      "reason": "local retry loops using setTimeout or setInterval are forbidden; use canonical retry registries or owners instead",
-      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
     },
     {
       "filePath": "src/raft/replica-leadership-state.js",

@@ -1,4 +1,3 @@
-import LifeRaft from '@markwylde/liferaft';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -6,13 +5,20 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
-import {MessageGroupService} from '../../src/message-group/message-group-service.js';
+import {
+  MessageGroupService,
+  RaftRole,
+} from '../../src/message-group/message-group-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {TABLES} from '../../src/constants/index.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {
+  reportingConsensusPort,
+} from '../message-group/message-group-service-test-support.js';
 
 function initializeIntegrationEnvironment(nodeId) {
   ConfigurationManager.resetInstance();
@@ -141,19 +147,16 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
         setServiceNodeResolver() {},
       };
 
-      const messageGroup = new MessageGroupService({
+      const messageGroup = new MessageGroupService(withTestDbPath({
         groupId: 'mg-pressure',
         replicaId: 'mg-pressure-r2',
         nodeId: 'integration-seed-node',
         transport,
-      });
+      }));
       messageGroup.logger = messageGroupLogger;
-      messageGroup.raft = {state: LifeRaft.FOLLOWER};
-      messageGroup.raftProvider = {
-        async proposeWithLeaderRouting(_raft, command, options) {
-          await options.forwardToLeader(command);
-        },
-      };
+      // A follower's port: the production proposal routing forwards to the
+      // leader target the forward selection names.
+      messageGroup.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       messageGroup.resolveCDCForwardSelection = () => ({
         strictForwarding: true,
         strictForwardRetryAfterMs: 250,

@@ -65,26 +65,23 @@ test('the formation census closes on its own terms, and its reasons are real',
     t.ok(packet.formationWindowEndVirtualTimeMs > ZERO,
       'and it ends at a definite virtual instant');
 
-    // E is unchanged by measuring it. The populations are production's
+    // E is unchanged by measuring it. The population is production's
     // composition, read from the services at the mark, never a topology
-    // written down here: message-group services still run liferaft runtimes,
-    // each with one peer representation per sibling replica; partition
-    // replicas run one rs-raft port each and have no peer objects at all.
-    // When message groups leave liferaft the liferaft expectation is 0/0.
+    // written down here: every message-group and partition replica runs one
+    // raft-rs operation port, built through its own service. A port's peers
+    // are raft ids in its registry, never objects, so no peer can hold a
+    // runtime or exercise a replica's local authority.
     const composition = packet.consensusComposition;
-    t.ok(composition.rsRaftReplicas > ZERO,
-      'the seed composed partition replicas on the rs-raft path');
-    t.equal(packet.ownerAddressCount, composition.liferaftRuntimes,
-      'the production construction authority owns one liferaft runtime per ' +
-        `liferaft message-group service (${composition.liferaftRuntimes})`);
-    t.equal(packet.peerObjectCount, composition.liferaftPeers,
-      'peer representations are the liferaft runtimes\' sibling peers ' +
-        `(${composition.liferaftPeers}); rs-raft partitions add none`);
-    t.equal(packet.rsRaftPortCount, composition.rsRaftReplicas,
-      'every partition replica runs through one rs-raft port ' +
-        `(${composition.rsRaftReplicas})`);
-    t.same(packet.runtimesInPeerSlots, [], 'no runtime sits in a peer slot');
-    t.same(packet.authorityBreaches, [], 'no peer exercised local authority');
+    t.ok(composition.messageGroupReplicas > ZERO,
+      'the seed composed message-group replicas');
+    t.ok(composition.partitionReplicas > ZERO,
+      'the seed composed partition replicas');
+    t.same(packet.consensusPorts, {
+      messageGroup: composition.messageGroupReplicas,
+      partition: composition.partitionReplicas,
+    }, 'every replica runs through exactly one raft-rs port ' +
+      `(${composition.messageGroupReplicas} message-group, ` +
+      `${composition.partitionReplicas} partition)`);
     // The strict substrate is gated by the probe, which runs this census as a
     // script. Running the seed chain UNDER the tap runner reaches ambient
     // seams the guard counts - measured here at 1,306 violations where the

@@ -63,8 +63,8 @@ import {
   COMMITTED_MEMBERSHIP_REFUSAL,
   COMMITTED_MEMBERSHIP_STAMP_DEFECT,
 } from '../../../src/raft/raft-committed-membership-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {genesisStamp} from
   '../../../src/raft/raft-committed-membership-stamp.js';
 import {
@@ -121,7 +121,7 @@ test('anchor: a GENESIS stamp reaching a founder that holds a durable ' +
     const [peerId] = genesis;
     const logBefore = durableLog(model.replica(founder).dbFile, PARTITION_ID);
     const restarted = restartWith(model, founder,
-      {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+      {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
         genesisStamp([founder])});
     assert.equal(restarted.refused, undefined,
       `the founder restores (${restarted.refused?.message})`);
@@ -294,7 +294,7 @@ test('anchor (port stamp validation): the port refuses every stamp defect ' +
       const stamp = breakStamp(valid);
       assert.throws(() => model.addReplica(target,
         [...Object.values(valid.identities), target],
-        {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp}),
+        {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp}),
       (error) => {
         assert.equal(error.consensus?.outcome,
           RAFT_OPERATION_OUTCOME.CORE_REFUSED, `${defect}: CORE_REFUSED`);

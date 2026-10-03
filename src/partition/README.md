@@ -11,7 +11,7 @@ transactions, and partition-local write kernels.
 - `PartitionService` owns partition-local service behavior and consumes the
   frozen partition Raft operation port. rs-raft is the only partition
   consensus path: there is no backend selector and no default fallback.
-- The port comes from `createPartitionPort(...)` on the rs-raft provider. The
+- The port comes directly from `createRaftRsOperationPort(...)`. The
   rs-raft path keeps binding/core entry private to
   `src/raft/raft-rs-runtime-owner.js`; local rs-raft active/retired
   eligibility belongs to `RaftRsReplicaLifecycleOwner`.

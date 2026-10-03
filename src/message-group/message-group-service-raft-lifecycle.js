@@ -1,7 +1,8 @@
 /**
- * Message Group Service - raft runtime lifecycle: initialization, event wiring,
- * peer reconciliation against the authoritative cache, and join-phase election
- * suppression / convergence release.
+ * Message Group Service - consensus lifecycle on the raft-rs operation port:
+ * initialization, role/leader/term publication from the port's
+ * announcements, peer admission from the authoritative services cache, and
+ * join-phase scheduling suppression / convergence release.
  * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 7.3, 7.4
  */
 import {
@@ -10,32 +11,129 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../constants/index.js';
-import {ConfigurationManager} from '../config/configuration-manager.js';
-import {CONFIG_KEY} from '../config/config-constants.js';
+import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 import {
-  RAFT_ELECTION_TIMING,
-  RAFT_EVENT,
-} from '../raft/constants.js';
-import {computeReplicaElectionTimeouts} from '../raft/raft-timing-utils.js';
-import {RaftGroup} from '../raft/raft-group.js';
+  reserveAndAdmitGroupPeer,
+  takeGroupAdmissionsInFlight,
+} from '../raft/raft-rs-group-membership-admission.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
+import {resolveReplicaRaftTiming} from '../raft/replica-raft-timing.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
-import {RAFT_ROLE as RaftRole} from './constants.js';
-import {MESSAGE_GROUP_SERVICE_LITERAL} from './message-group-service-runtime-support.js';
+import {
+  MESSAGE_GROUP_SERVICE_LOG_MSG,
+  RAFT_ROLE as RaftRole,
+} from './constants.js';
+import {
+  closeMessageGroupConsensus,
+  leadLoneMessageGroup,
+  openMessageGroupConsensusPort,
+  readMessageGroupCommittedMembership,
+} from './message-group-consensus-port.js';
+import {MESSAGE_GROUP_SERVICE_LITERAL} from
+  './message-group-service-runtime-support.js';
+
+const RETIRED_REPLICA_STATUSES = Object.freeze(new Set([
+  ReplicaStatus.FAILED,
+  ReplicaStatus.REMOVING,
+  ReplicaStatus.REMOVED,
+]));
+
+function isThisGroupsServiceRow(service, row) {
+  return (row?.[COLUMN.GROUP_ID] || row?.group_id) === service.groupId &&
+    (row?.[COLUMN.SERVICE_TYPE] || row?.service_type) ===
+      SERVICE_TYPE.MESSAGE_GROUP;
+}
+
+function replicaIdOfServiceRow(row) {
+  return row?.[COLUMN.SERVICE_ID] || row?.service_id ||
+    row?.[COLUMN.REPLICA_ID] || row?.replica_id || null;
+}
+
+// The address a services row places its replica at: the row's own address,
+// or the unified address of the replica on the row's node.
+function peerAddressOfServiceRow(service, row, replicaId) {
+  const serviceAddress = row?.[COLUMN.ADDRESS] || row?.address;
+  if (typeof serviceAddress === 'string' && serviceAddress.length > 0) {
+    return serviceAddress;
+  }
+  const serviceNodeId = row?.[COLUMN.NODE_ID] || row?.node_id;
+  if (typeof serviceNodeId !== 'string' || serviceNodeId.length === 0) {
+    return null;
+  }
+  return service.addressManager.format(
+    serviceNodeId, ENTITY_TYPE.MESSAGE_GROUP, replicaId);
+}
 
 /**
- * Attach raft runtime lifecycle methods to the MessageGroupService prototype.
+ * The peers the authoritative services cache names for this group (all of
+ * them, or only those named), by replica identity: live rows only, never
+ * this replica itself - neither its own identity, wherever a row places it
+ * (a move convergence names it on another node), nor its own address.
+ * @param {Object} service - The message-group replica.
+ * @param {Set<string>|null} onlyReplicaIds - The identities to consider.
+ * @return {Map<string, string>} Replica identity to peer address.
+ */
+function expectedPeersFromServicesCache(service, onlyReplicaIds) {
+  const expected = new Map();
+  const rows = service.systemTableCache.filter(
+    TABLES.SERVICES, (row) => isThisGroupsServiceRow(service, row));
+  for (const row of rows) {
+    const replicaId = replicaIdOfServiceRow(row);
+    const status = row?.[COLUMN.STATUS] || row?.status ||
+      ReplicaStatus.ACTIVE;
+    if (!replicaId || replicaId === service.replicaId ||
+        RETIRED_REPLICA_STATUSES.has(status) ||
+        (onlyReplicaIds !== null && !onlyReplicaIds.has(replicaId))) {
+      continue;
+    }
+    const peerAddress = peerAddressOfServiceRow(service, row, replicaId);
+    if (peerAddress && !service.isLocalForwardTarget(replicaId, peerAddress)) {
+      expected.set(replicaId, peerAddress);
+    }
+  }
+  return expected;
+}
+
+/**
+ * Re-drive the admissions this replica proposed or deferred whenever a
+ * configuration change settles and whenever it gains leadership: each is
+ * re-evaluated once from its services row (the partition's re-drive,
+ * verification V2).
+ * @param {Object} service - The message-group replica (current port).
+ * @return {void}
+ */
+function redriveMessageGroupAdmissions(service) {
+  const redrive = () => {
+    const taken = takeGroupAdmissionsInFlight(service.raft);
+    if (taken.size > 0) {
+      queueMicrotask(() =>
+        service.reconcileRaftPeersFromCache({onlyReplicaIds: taken}));
+    }
+  };
+  service.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, redrive);
+  service.raft.subscribe(RAFT_EVENT.LEADER, redrive);
+}
+
+/**
+ * Attach consensus lifecycle methods to the MessageGroupService prototype.
  * @param {Function} serviceClass - The MessageGroupService class.
  * @return {void}
  */
 function assignRaftLifecycle(serviceClass) {
   Object.assign(serviceClass.prototype, {
     /**
-     * Join newly visible peers and replace moved peer addresses using the
-     * authoritative services cache. Missing rows are ignored conservatively.
-     * @private
+     * Admit the peers the authoritative services cache names into the
+     * group's configuration, through the group-neutral admission owner:
+     * only the leader proposes; a follower records NOT_LEADER and is
+     * re-driven if it gains leadership. Each replica the rows name is kept
+     * in the group's hint list (replicaIds), as the partition keeps its
+     * own: the lone-replica shortcuts and the forward targets read it, but
+     * it is never the membership.
+     * @param {Object} [options]
+     * @param {Set<string>} [options.onlyReplicaIds] - Re-evaluate only these.
+     * @return {void}
      */
-    reconcileRaftPeersFromCache() {
+    reconcileRaftPeersFromCache(options = {}) {
       if (
         !this.raft ||
         !this.systemTableCache ||
@@ -43,111 +141,32 @@ function assignRaftLifecycle(serviceClass) {
       ) {
         return;
       }
-      const services = this.systemTableCache.filter(
-        TABLES.SERVICES,
-        (service) => {
-          return (
-            (service?.[COLUMN.GROUP_ID] || service?.group_id) ===
-              this.groupId &&
-            (service?.[COLUMN.SERVICE_TYPE] || service?.service_type) ===
-              SERVICE_TYPE.MESSAGE_GROUP
-          );
-        },
-      );
-      if (services.length === 0) {
-        return;
-      }
-      const expectedAddressesByReplicaId = new Map();
-      for (const service of services) {
-        const replicaId =
-          service?.[COLUMN.SERVICE_ID] ||
-          service?.service_id ||
-          service?.[COLUMN.REPLICA_ID] ||
-          service?.replica_id;
-        if (!replicaId) {
-          continue;
+      const expected = expectedPeersFromServicesCache(
+        this, options.onlyReplicaIds ?? null);
+      for (const [replicaIdentity, peerAddress] of expected) {
+        if (!this.replicaIds.includes(replicaIdentity)) {
+          this.replicaIds.push(replicaIdentity);
         }
-        const status =
-          service?.[COLUMN.STATUS] || service?.status || ReplicaStatus.ACTIVE;
-        if (
-          status === ReplicaStatus.FAILED ||
-          status === ReplicaStatus.REMOVING ||
-          status === ReplicaStatus.REMOVED
-        ) {
-          continue;
-        }
-        const serviceAddress = service?.[COLUMN.ADDRESS] || service?.address;
-        const serviceNodeId = service?.[COLUMN.NODE_ID] || service?.node_id;
-        const peerAddress =
-          typeof serviceAddress === 'string' &&
-          serviceAddress.length > 0 ?
-            serviceAddress :
-            typeof serviceNodeId === 'string' &&
-                serviceNodeId.length > 0 ?
-              this.addressManager.format(
-                serviceNodeId,
-                ENTITY_TYPE.MESSAGE_GROUP,
-                replicaId,
-              ) :
-              null;
-        if (!peerAddress || this.isLocalForwardTarget(replicaId, peerAddress)) {
-          continue;
-        }
-        expectedAddressesByReplicaId.set(replicaId, peerAddress);
-        if (!this.replicaIds.includes(replicaId)) {
-          this.replicaIds.push(replicaId);
-        }
-      }
-      const currentNodes = Array.isArray(this.raft.nodes) ?
-        [...this.raft.nodes] :
-        [];
-      const currentAddresses = new Set(
-        currentNodes
-          .map((node) => node?.address)
-          .filter(
-            (address) =>
-              typeof address === 'string' && address.length > 0,
-          ),
-      );
-      for (const [
-        replicaId,
-        expectedAddress,
-      ] of expectedAddressesByReplicaId.entries()) {
-        const staleAddresses = currentNodes
-          .map((node) => node?.address)
-          .filter((address) => {
-            if (
-              typeof address !== 'string' ||
-              address.length === 0 ||
-              address === expectedAddress
-            ) {
-              return false;
-            }
-            try {
-              const parsed = this.addressManager.parse(address);
-              return (
-                parsed.serviceType === ENTITY_TYPE.MESSAGE_GROUP &&
-                parsed.serviceId === replicaId
-              );
-            } catch (_error) {
-              return false;
-            }
-          });
-        if (typeof this.raft.leave === 'function') {
-          for (const staleAddress of staleAddresses) {
-            this.raft.leave(staleAddress);
-            currentAddresses.delete(staleAddress);
-          }
-        }
-        if (!currentAddresses.has(expectedAddress)) {
-          this.raftProvider.joinPeer(this.raft, expectedAddress);
-          currentAddresses.add(expectedAddress);
-        }
+        reserveAndAdmitGroupPeer(this.raft, {
+          groupId: this.groupId,
+          localReplicaIdentity: this.replicaId,
+          logger: this.logger,
+        }, {replicaIdentity, peerAddress});
       }
     },
     /**
-     * Initialize the message group service.
-     * Creates liferaft instance and wires up events.
+     * This replica's own committed configuration (a witness read through
+     * its port): the voters and learners its applied ConfState names.
+     * @return {Object} The port's frozen COMMITTED or REFUSED answer.
+     */
+    readCommittedMembership() {
+      return readMessageGroupCommittedMembership(this);
+    },
+    /**
+     * Initialize the message group service: open the replica's durable
+     * consensus database and its raft-rs operation port, publish role,
+     * leader and term from the port's announcements, admit the peers the
+     * services cache names, and lead a lone replica's group.
      * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 7.3, 7.4
      * @return {Promise<void>}
      */
@@ -164,69 +183,9 @@ function assignRaftLifecycle(serviceClass) {
           replicaCount: this.replicaIds.length,
         },
       );
-      // Get Raft configuration from ConfigurationManager
-      // Requirements: 7.1, 7.2, 7.3, 7.4
-      const config = ConfigurationManager.getInstance();
-      const heartbeatMs =
-        config.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS) ||
-        RAFT_ELECTION_TIMING.HEARTBEAT_DEFAULT_MS;
-      const baseElectionMinMs =
-        config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS) ||
-        RAFT_ELECTION_TIMING.ELECTION_MIN_DEFAULT_MS;
-      const baseElectionMaxMs =
-        config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
-        RAFT_ELECTION_TIMING.ELECTION_MAX_DEFAULT_MS;
-      const tickIntervalMs = config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS);
-      const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
-        replicaId: this.replicaId,
-        replicaIds: this.replicaIds,
-        baseElectionMinMs,
-        baseElectionMaxMs,
-        electionJitterPerReplicaMs: RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
-      });
-      this.raftTimingConfig = {
-        heartbeatMs,
-        baseElectionMinMs,
-        baseElectionMaxMs,
-        electionMinMs,
-        electionMaxMs,
-        tickIntervalMs: Number.isFinite(tickIntervalMs) ? tickIntervalMs : null,
-      };
-      this.raftRuntime = new RaftGroup({
-        replicaId: this.replicaId,
-        replicaIds: this.replicaIds,
-        transport: this.transport,
-        entityType: ENTITY_TYPE.MESSAGE_GROUP,
-        peerAddressResolver: this.createRaftPeerAddressResolver(),
-        unifiedAddress: this.unifiedAddress,
-        peerAddresses: this.peerAddresses,
-        logAdapter: this.logAdapter,
-        deferElection: this.deferElection,
-        heartbeatMs,
-        electionMinMs: baseElectionMinMs,
-        electionMaxMs: baseElectionMaxMs,
-        electionJitterPerReplicaMs: RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
-        raftProvider: this.raftProvider,
-        logger: this.logger,
-        timeSource: this.providedTimeSource,
-        randomSource: this.providedRandomSource,
-        shouldJoinPeer: (peerId, peerAddress) =>
-          this.shouldJoinRaftPeer(peerId, peerAddress),
-      });
+      this.raftTimingConfig = resolveReplicaRaftTiming(this);
       try {
-        this.raftRuntime.initialize();
-        this.raft = this.raftRuntime.getRaftInstance();
-        this.armJoinExistingGroupElectionSuppression();
-        this.wireRaftEvents();
-        this.raftRuntime.joinPeers();
-        this.reconcileRaftPeersFromCache();
-        if (Number.isFinite(this.raftTimingConfig.tickIntervalMs)) {
-          this.applyRuntimeTickInterval(this.raftTimingConfig.tickIntervalMs);
-        }
-        if (this.replicaIds.length === 1) {
-          this.raftRuntime.startElection();
-          this.electionStarted = true;
-        }
+        await this.openConsensus();
       } catch (error) {
         this.logger.error(
           MESSAGE_GROUP_SERVICE_LITERAL.FAILED_DURING_INITIALIZE_CLEANING_UP_RAFT,
@@ -236,11 +195,7 @@ function assignRaftLifecycle(serviceClass) {
             error: error.message,
           },
         );
-        if (this.raftRuntime) {
-          await this.raftRuntime.shutdown();
-          this.raftRuntime = null;
-        }
-        this.raft = null;
+        await closeMessageGroupConsensus(this);
         throw error;
       }
       this.cdcHandler.initialize();
@@ -260,42 +215,56 @@ function assignRaftLifecycle(serviceClass) {
       });
     },
     /**
-     * Wire up liferaft event handlers for role changes, commits, etc.
-     * Extracted from initialize() for clarity and safe cleanup on failure.
+     * Open the port and wire everything that follows it.
+     * @return {Promise<void>}
+     * @private
+     */
+    async openConsensus() {
+      openMessageGroupConsensusPort(this);
+      if (this.deferElection || this.shouldSuppressJoinPhaseRaftParticipation()) {
+        this.logger.debug(
+          MESSAGE_GROUP_SERVICE_LITERAL.DEFERRING_ELECTION_START,
+          {groupId: this.groupId, replicaId: this.replicaId},
+        );
+      }
+      this.wireRaftEvents();
+      redriveMessageGroupAdmissions(this);
+      this.raft.subscribe(
+        RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE,
+        (observation) => {
+          this.logger.error(
+            MESSAGE_GROUP_SERVICE_LOG_MSG.COMMITTED_PREFIX_DIVERGENCE,
+            {groupId: this.groupId, replicaId: this.replicaId, ...observation},
+          );
+        },
+      );
+      this.reconcileRaftPeersFromCache();
+      if (this.replicaIds.length === 1) {
+        await leadLoneMessageGroup(this);
+        this.electionStarted = true;
+      }
+    },
+    /**
+     * Publish role, leader and term from the port's announcements. The term
+     * is the core's own (readStatus().term); committed entries reach the
+     * state machine only through the port's committed-entry application,
+     * which is why no commit event is wired.
      * Requirements: 5.1, 5.2, 5.3, 5.4
      * @private
      */
     wireRaftEvents() {
-      const shouldIgnoreLeaderEvent = () => {
-        if (!this.shouldSuppressJoinPhaseRaftParticipation()) {
-          return false;
-        }
-        this.clearJoinExistingGroupTimers();
-        return true;
-      };
-      const shouldIgnoreDemotionEvent = (eventName) => {
-        if (!this.shouldSuppressJoinPhaseRaftParticipation()) {
-          return false;
-        }
-        if (
-          eventName !== RAFT_EVENT.FOLLOWER &&
-          eventName !== RAFT_EVENT.CANDIDATE
-        ) {
-          return false;
-        }
-        if (this.raft) {
-          this.raftProvider.clearTimers(this.raft, 'heartbeat, election');
-        }
-        return true;
-      };
       wireReplicaLifecycleEvents(this, {
         events: RAFT_EVENT,
         roles: RaftRole,
-        getCurrentTerm: () => this.raftProvider.getCurrentTerm(this.raft),
+        getCurrentTerm: () => this.getCurrentTerm(),
         normalizeLeaderId: (candidate) =>
           this.normalizeLeaderReplicaId(candidate),
-        shouldIgnoreLeaderEvent,
-        shouldIgnoreDemotionEvent,
+        // A joining replica takes no part until its join converged: it
+        // never leads, its published role stays a follower, and its port
+        // stops scheduling (as the partition's joining learner keeps its
+        // role).
+        shouldIgnoreLeaderEvent: () => this.ignoreJoinPhaseRoleEvent(),
+        shouldIgnoreDemotionEvent: () => this.ignoreJoinPhaseRoleEvent(),
         onLeader: ({term}) => {
           this.operationLedger.currentTerm = term;
           this.scheduleLeaderOwnedActivation(term);
@@ -312,9 +281,6 @@ function assignRaftLifecycle(serviceClass) {
           this.operationLedger.currentTerm = term;
           this.lastLeaderCdcResubscribeTerm = undefined;
         },
-        onCommit: (command) => {
-          this.applyCommittedEntry(command);
-        },
         onLeaderChange: ({leaderId}) => {
           this.logger.debug(MESSAGE_GROUP_SERVICE_LITERAL.LEADER_CHANGED, {
             newLeader: leaderId,
@@ -327,65 +293,47 @@ function assignRaftLifecycle(serviceClass) {
       });
     },
     /**
-     * Join peer nodes in the Raft group.
-     * Resolves peer addresses and joins them via liferaft.
-     * @private
-     * Delegate peer joins to the shared raft runtime owner.
+     * Start this replica's scheduling (its election timer).
+     * Call this after all replicas in the group have been created and
+     * registered: it prevents election storms when multiple replicas are
+     * created on the same node. A joining replica starts only once its join
+     * converged (completeJoinConvergence); a lone replica already leads.
      * @return {void}
-     * @private
-     */
-    joinPeerNodes() {
-      if (this.raftRuntime) {
-        this.raftRuntime.joinPeers();
-        return;
-      }
-      if (!this.raft) {
-        return;
-      }
-      for (const peerId of this.replicaIds) {
-        const joinTarget = this.resolveRaftJoinTarget(peerId);
-        if (
-          joinTarget.shouldJoin !== true ||
-          typeof joinTarget.address !== 'string' ||
-          joinTarget.address.length === 0
-        ) {
-          continue;
-        }
-        this.raftProvider.joinPeer(this.raft, joinTarget.address);
-      }
-    },
-    /**
-     * Delegate single-replica promotion to the shared raft runtime owner.
-     * @return {void}
-     * @private
-     */
-    promoteIfSingleReplica() {
-      if (this.replicaIds.length !== 1) {
-        return;
-      }
-      this.startElection();
-    },
-    /**
-     * Start the Raft election timer.
-     * Call this after all replicas in the group have been created and registered.
-     * This prevents election storms when multiple replicas are created on the same node.
-     * If deferElection was false, this is a no-op (election already started).
      */
     startElection() {
-      if (!this.raftRuntime) {
+      if (this.shouldSuppressJoinPhaseRaftParticipation() ||
+          this.electionStarted) {
         return;
       }
-      this.raftRuntime.startElection();
       this.electionStarted = true;
+      if (!this.raft || this.replicaIds.length === 1) {
+        return;
+      }
+      this.logger.debug(
+        MESSAGE_GROUP_SERVICE_LITERAL.STARTING_RAFT_ELECTION_TIMER,
+        {
+          groupId: this.groupId,
+          replicaId: this.replicaId,
+          peerCount: this.replicaIds.length - 1,
+        },
+      );
+      this.raft.startScheduling();
     },
     clearJoinExistingGroupTimers() {
-      if (!this.raft) {
-        return;
+      this.raft?.stopScheduling();
+    },
+    /**
+     * Whether a role announcement of the port is ignored because the
+     * replica is still joining; an ignored one stops the port's scheduling.
+     * @return {boolean} True while join-phase participation is suppressed.
+     * @private
+     */
+    ignoreJoinPhaseRoleEvent() {
+      if (!this.shouldSuppressJoinPhaseRaftParticipation()) {
+        return false;
       }
-      this.raftProvider.clearTimers(
-        this.raft,
-        MESSAGE_GROUP_SERVICE_LITERAL.HEARTBEAT_ELECTION,
-      );
+      this.clearJoinExistingGroupTimers();
+      return true;
     },
     shouldSuppressJoinPhaseRaftParticipation() {
       return (
@@ -393,39 +341,10 @@ function assignRaftLifecycle(serviceClass) {
         this.deferElectionUntilJoinConvergence === true
       );
     },
-    armJoinExistingGroupElectionSuppression() {
-      if (
-        !this.raft ||
-        !this.shouldSuppressJoinPhaseRaftParticipation() ||
-        this.joinSuppressedHeartbeat
-      ) {
-        return;
-      }
-      const originalHeartbeat = this.raft.heartbeat;
-      if (typeof originalHeartbeat !== 'function') {
-        return;
-      }
-      const boundHeartbeat = originalHeartbeat.bind(this.raft);
-      this.joinSuppressedHeartbeat = boundHeartbeat;
-      this.raft.heartbeat = (duration) => {
-        if (this.shouldSuppressJoinPhaseRaftParticipation()) {
-          this.clearJoinExistingGroupTimers();
-          return this.raft;
-        }
-        return boundHeartbeat(duration);
-      };
-      this.clearJoinExistingGroupTimers();
-    },
-    releaseJoinExistingGroupElectionSuppression() {
-      if (!this.raft || !this.joinSuppressedHeartbeat) {
-        return;
-      }
-      this.raft.heartbeat = this.joinSuppressedHeartbeat;
-      this.joinSuppressedHeartbeat = null;
-    },
     /**
-     * Release join-time election suppression once the local node has completed
-     * convergence and may participate normally in control-plane leadership.
+     * Release join-time participation suppression once the local node has
+     * completed convergence and may participate normally in control-plane
+     * leadership.
      * @return {void}
      */
     completeJoinConvergence() {
@@ -436,7 +355,6 @@ function assignRaftLifecycle(serviceClass) {
         return;
       }
       this.deferElection = false;
-      this.releaseJoinExistingGroupElectionSuppression();
       if (wasJoiningExistingGroup) {
         this.isJoiningExistingGroup = false;
         if (this.role !== RaftRole.LEADER) {

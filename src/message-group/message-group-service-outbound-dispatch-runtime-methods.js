@@ -1,3 +1,6 @@
+import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
+import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
+
 const MESSAGE_GROUP_SERVICE_OUTBOUND_DISPATCH_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
@@ -353,41 +356,31 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
       }
     }
     /**
-     * Persist message to Raft log.
-     * Uses liferaft's command method for log replication.
+     * Persist message to the group's consensus log through this replica's
+     * port while it leads.
      * Note: Does not wait for commit - fire and forget for performance.
      * @param {Object} messageEnvelope - Message envelope.
      * @return {Promise<Object>} Persistence result.
      * @private
      */
     async persistToRaftLog(messageEnvelope) {
-      const entry = this.operationLedger.appendEntry({
-        type: 'MESSAGE',
+      const command = {
+        type: MESSAGE_GROUP_COMMAND_TYPE.MESSAGE,
         message: messageEnvelope,
-      });
-      // Only use the live raft owner for command ingress.
-      const isOperationalRaftLeader = this.isCurrentRaftLeader();
-      if (isOperationalRaftLeader) {
-        // Fire and forget - don't wait for commit
-        // The command will be replicated via heartbeats
-        this.raftProvider.propose(
-          this.raft,
-          {
-            type: MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE,
-            message: messageEnvelope,
-          },
-          (err) => {
-            if (err) {
-              this.logger.debug(
-                MESSAGE_GROUP_SERVICE_LITERAL.RAFT_COMMAND_FAILED,
-                {
-                  messageId: messageEnvelope.id,
-                  error: err.message,
-                },
-              );
-            }
-          },
-        );
+      };
+      const entry = this.operationLedger.appendEntry({...command});
+      if (this.isCurrentRaftLeader()) {
+        // Fire and forget - don't wait for commit; the committed entry
+        // reaches every replica through its committed-entry application.
+        proposeMessageGroupCommand(this, command).catch((error) => {
+          this.logger.debug(
+            MESSAGE_GROUP_SERVICE_LITERAL.RAFT_COMMAND_FAILED,
+            {
+              messageId: messageEnvelope.id,
+              error: error.message,
+            },
+          );
+        });
       }
       return {
         success: true,

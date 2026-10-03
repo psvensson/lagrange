@@ -33,13 +33,13 @@ const SRC_ROOT = 'src';
 const TEST_ROOT = 'test';
 
 // Node/lib builtin event names and transport-level events that are consumed
-// by external machinery (ws, liferaft internals, process) — not census targets.
+// by external machinery (ws, consensus runtime internals, process) — not census targets.
 const BUILTIN_EVENT_NAMES = new Set([
   'close', 'open', 'error', 'message', 'data', 'end', 'exit', 'listening',
   'connection', 'upgrade', 'drain', 'finish', 'timeout', 'abort', 'pong',
   'ping', 'unhandledRejection', 'uncaughtException', 'SIGTERM', 'SIGINT',
   'beforeExit', 'disconnect', 'spawn', 'readable', 'change',
-  // liferaft wire/internal events consumed inside the raft provider seam:
+  // consensus wire/internal events consumed inside the semantic Raft runtime seam:
   'heartbeat', 'leader', 'follower', 'candidate', 'commit', 'term change',
   'leader change', 'state change', 'vote', 'join', 'leave', 'rpc',
 ]);

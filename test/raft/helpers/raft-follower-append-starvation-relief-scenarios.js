@@ -13,7 +13,7 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 const SCENARIO = 'raft-follower-append-sqlite-starvation-relief';
-const GUARD_FILE = 'test/raft/liferaft-catchup-batching.test.js';
+const GUARD_FILE = 'test/raft/raft-rs-backend/durable-store-committed-entries.test.js';
 const REPORT_DIRECTORY = 'test-output/reports';
 const GUARD_TIMEOUT_MS = 300000;
 const LIVE_PROFILE_PENDING = 'live_profile_pending';
@@ -44,7 +44,7 @@ const JSON_OBJECT_PREFIX = '{';
 const LIVE_OWNER_PROFILE_LABEL = 'live owner profile';
 const LIVE_PROFILE_PENDING_LABEL = 'live profile pending';
 const OWNER_FRAME_PATTERN =
-  /handleFollowerAppendBatch|commitEntries|liferaft-commit-scheduler|liferaft-follower-batch|sqlite-log-adapter-batch-api|@markwylde\/liferaft/i;
+  /runRaftApplySlice|trackRaftFollowerCommitApplySlice|commitAndApplySlice|raft-rs-operation-port|sqlite-log-adapter-batch-api/i;
 const SQLITE_OWNER_FUNCTION_PATTERN =
   /^(commit|commitBatch|saveCommand|saveCommands)$/;
 const SQLITE_LOG_ADAPTER_URL_PATTERN = /src\/raft\/sqlite-log-adapter\.js$/;

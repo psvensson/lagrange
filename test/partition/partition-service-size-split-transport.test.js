@@ -26,12 +26,17 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../src/raft/raft-provider-contract-constants.js';
+import {
+  RAFT_RS_MESSAGE_TYPE,
+  RAFT_RS_TRANSPORT_PROTOCOL,
+} from '../../src/raft/raft-rs-ingress-constants.js';
+import {OUTBOUND_DELIVERY_PRIORITY} from '../../src/constants/transport.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
 import {RAFT_MEMBERSHIP_OPERATION} from
   '../../src/raft/raft-operation-port-constants.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 import {
@@ -75,19 +80,19 @@ afterEach(() => {
 });
 
 
-class RecordingOutboundPartitionRaftProvider
-  extends ControllablePartitionRaftProvider {
+class RecordingOutboundConsensusPort
+  extends ControllableConsensusPort {
   sendToPeer(peerAddress, packet) {
     return this.request[
-      RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER
+      RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER
     ](peerAddress, packet);
   }
 }
 
-class MissingCampaignPartitionRaftProvider
-  extends ControllablePartitionRaftProvider {
-  createPartitionPort(request) {
-    const port = super.createPartitionPort(request);
+class MissingCampaignConsensusPort
+  extends ControllableConsensusPort {
+  createOperationPort(request) {
+    const port = super.createOperationPort(request);
     const incomplete = Object.create(null);
     for (const key of Reflect.ownKeys(port)) {
       if (key === 'campaign') {
@@ -803,48 +808,7 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
   await partition.shutdown();
 });
 
-// Tests for liferaft-based architecture (Requirements 14.1, 14.2, 14.3, 14.4)
-
-test('PartitionService - handleTransportMessage routes Raft packets to the semantic port',
-  async (t) => {
-    const mockTransport = {
-      register: () => {},
-      unregister: () => {},
-      deliver: () => Promise.resolve({acknowledged: true}),
-    };
-
-    const partition = createControllablePartitionService({
-      partitionId: 'test-partition-15',
-      tableId: 'raft_test',
-      replicaId: 'replica-1',
-      replicaIds: ['replica-1'],
-      transport: mockTransport,
-      dbPath: ':memory:',
-    }, new ControllablePartitionRaftProvider());
-
-    await partition.initialize();
-
-    // Send a Raft packet (vote request)
-    const raftPacket = {
-      type: 'vote',
-      term: 1,
-      address: 'node2/partition/replica-2',
-      state: 1,
-      leader: '',
-      last: {term: 0, index: 0},
-    };
-
-    const result = await partition.handleTransportMessage({payload: raftPacket});
-
-    t.equal(result.acknowledged, true, 'Raft packet should be acknowledged');
-    t.equal(partition.controllableProvider.steps.length, 1,
-      'one semantic step should cross the port');
-    const [stepEnvelope] = partition.controllableProvider.steps;
-    t.equal(stepEnvelope.payload.type, 'vote', 'Packet type should be preserved');
-    t.equal(stepEnvelope.payload.term, 1, 'Packet term should be preserved');
-
-    await partition.shutdown();
-  });
+// Tests for the consensus-port architecture (Requirements 14.1, 14.2, 14.3, 14.4)
 
 test('PartitionService - non-critical Raft peer writes use background delivery',
   async (t) => {
@@ -858,7 +822,7 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
       },
     };
 
-    const raftProvider = new RecordingOutboundPartitionRaftProvider();
+    const consensusPort = new RecordingOutboundConsensusPort();
     const partition = createControllablePartitionService({
       partitionId: 'sql_transaction_participants-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
@@ -870,21 +834,22 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
       peerAddresses: ['node-2/partition/sql_transaction_participants-p1-r4'],
       transport: mockTransport,
       dbPath: ':memory:',
-    }, raftProvider);
+    }, consensusPort);
 
     await partition.initialize();
 
     try {
-      await raftProvider.sendToPeer(
+      await consensusPort.sendToPeer(
         'node-2/partition/sql_transaction_participants-p1-r4',
         {
-          type: 'append',
-          term: 1,
-          address: 'node-1/partition/sql_transaction_participants-p1-r1',
-          leader: 'node-1/partition/sql_transaction_participants-p1-r1',
-          state: 1,
-          last: {term: 1, index: 1},
-          data: [{index: 2, term: 1, command: 'noop'}],
+          protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+          groupId: 'sql_transaction_participants-p1',
+          from: 'sql_transaction_participants-p1-r1',
+          to: 'sql_transaction_participants-p1-r4',
+          message: {
+            msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
+            entries: [{index: 2, term: 1}],
+          },
         },
       );
 
@@ -914,7 +879,7 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
     },
   };
 
-  const raftProvider = new RecordingOutboundPartitionRaftProvider();
+  const consensusPort = new RecordingOutboundConsensusPort();
   const partition = createControllablePartitionService({
     partitionId: 'tbl-bench-p1',
     tableId: 'tbl-bench',
@@ -923,97 +888,51 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
     peerAddresses: ['node-2/partition/tbl-bench-p1-r2'],
     transport: mockTransport,
     dbPath: ':memory:',
-  }, raftProvider);
+  }, consensusPort);
 
   await partition.initialize();
 
   try {
-    await raftProvider.sendToPeer(
-      'node-2/partition/tbl-bench-p1-r2',
-      {
-        type: 'append fail',
-        term: 1,
-        address: 'node-1/partition/control_plane_publications-p1-r1',
-        leader: 'node-1/partition/control_plane_publications-p1-r1',
-        state: 1,
-        last: {term: 1, index: 1},
-        data: {index: 2, term: 1},
+    // A rejected append response whose sender is a priority control-plane
+    // replica: the lane is decided by the target partition alone.
+    const rejectFrom = (from) => ({
+      protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+      groupId: 'tbl-bench-p1',
+      from,
+      to: 'tbl-bench-p1-r2',
+      address: from,
+      message: {
+        msgType: RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE,
+        reject: true,
+        entries: [],
       },
+    });
+    await consensusPort.sendToPeer(
+      'node-2/partition/tbl-bench-p1-r2',
+      rejectFrom('node-1/partition/control_plane_publications-p1-r1'),
+    );
+    await consensusPort.sendToPeer(
+      'node-2/partition/tbl-bench-p1-r2',
+      rejectFrom('node-1/partition/tbl-bench-p1-r1'),
     );
 
+    t.equal(deliveries.length, 2, 'both rejections were sent');
     t.same(
-      deliveries,
-      [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
-      'append-fail replication should follow the target partition lane',
+      deliveries[0],
+      deliveries[1],
+      'a rejected append response follows the target partition lane, not ' +
+        'the sender partition lane',
+    );
+    t.not(
+      deliveries[0].deliveryPriority,
+      OUTBOUND_DELIVERY_PRIORITY.READINESS,
+      'a control-plane sender does not lift user-partition traffic onto ' +
+        'the readiness lane',
     );
   } finally {
     await partition.shutdown();
   }
 });
-
-test('PartitionService - non-critical Raft responses use background delivery',
-  async (t) => {
-    const deliveries = [];
-    const mockTransport = {
-      register: () => {},
-      unregister: () => {},
-      deliver: async (_address, _payload, options) => {
-        deliveries.push(options);
-        return {acknowledged: true};
-      },
-    };
-
-    const raftProvider = new ControllablePartitionRaftProvider();
-    const partition = createControllablePartitionService({
-      partitionId: 'sql_transaction_participants-p1',
-      tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
-      replicaId: 'sql_transaction_participants-p1-r1',
-      replicaIds: ['sql_transaction_participants-p1-r1'],
-      transport: mockTransport,
-      dbPath: ':memory:',
-    }, raftProvider);
-
-    await partition.initialize();
-
-    try {
-      raftProvider.setStepHandler((envelope) => {
-        if (typeof envelope.reply === 'function') {
-          envelope.reply({
-            type: 'append',
-            term: 1,
-            address: 'node-1/partition/sql_transaction_participants-p1-r1',
-            leader: 'node-1/partition/sql_transaction_participants-p1-r1',
-            state: 1,
-            last: {term: 1, index: 1},
-            data: [{index: 2, term: 1, command: 'noop'}],
-          });
-        }
-      });
-
-      await partition.handleTransportMessage({
-        payload: {
-          type: 'vote',
-          term: 1,
-          address: 'node-2/partition/sql_transaction_participants-p1-r4',
-          state: 1,
-          leader: '',
-          last: {term: 0, index: 0},
-        },
-      });
-
-      t.same(
-        deliveries,
-        [{
-          ...RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
-          deliverySource:
-            'raft:append:entries:node-2/partition/sql_transaction_participants-p1-r4',
-        }],
-        'non-critical transaction-state responses should also avoid the critical lane',
-      );
-    } finally {
-      await partition.shutdown();
-    }
-  });
 
 test('PartitionService - handleTransportMessage handles application messages', async (t) => {
   const schema = {
@@ -1131,10 +1050,10 @@ test('PartitionService - handleTransportMessage rejects unknown message types', 
   await partition.shutdown();
 });
 
-test('PartitionService - liferaft instance is created with correct configuration', async (t) => {
+test('PartitionService - the consensus port is created with its configuration', async (t) => {
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-18',
-    tableId: 'liferaft_config_test',
+    tableId: 'consensus_port_config_test',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
@@ -1143,8 +1062,9 @@ test('PartitionService - liferaft instance is created with correct configuration
 
   await partition.initialize();
 
-  // Verify liferaft instance exists
-  t.ok(partition.raft, 'Liferaft instance should exist');
+  t.ok(Object.isFrozen(partition.raft), 'the frozen operation port should exist');
+  t.equal(typeof partition.raft.readStatus, 'function',
+    'the port answers its semantic status read');
 
   // Verify unified address format is used
   t.equal(partition.getUnifiedAddress(), 'node-1/partition/replica-1');
@@ -1209,7 +1129,7 @@ test('PartitionService - cache reconciliation refreshes moved peers and joins ne
       raft_role: RaftRole.FOLLOWER,
     });
 
-    const raftProvider = new ControllablePartitionRaftProvider({
+    const consensusPort = new ControllableConsensusPort({
       peers: [{
         address: 'node-old/partition/replica-2',
         replicaIdentity: 'replica-2',
@@ -1224,21 +1144,21 @@ test('PartitionService - cache reconciliation refreshes moved peers and joins ne
       peerAddresses: ['node-old/partition/replica-2'],
       dbPath: ':memory:',
       deferElection: true,
-    }, raftProvider);
+    }, consensusPort);
 
     await partition.initialize();
     try {
-      raftProvider.confChanges.length = 0;
+      consensusPort.confChanges.length = 0;
       partition.systemTableCache = systemTableCache;
 
       const refreshedAddress = partition.buildPeerAddress('replica-2');
       await new Promise((resolve) => setImmediate(resolve));
 
-      const removedAddresses = raftProvider.confChanges
+      const removedAddresses = consensusPort.confChanges
         .filter((change) =>
           change.type === RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER)
         .map((change) => change.peerAddress);
-      const joinedAddresses = raftProvider.confChanges
+      const joinedAddresses = consensusPort.confChanges
         .filter((change) =>
           change.type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER)
         .map((change) => change.peerAddress);
@@ -1304,7 +1224,7 @@ test('PartitionService - single-replica initialization fails closed without raft
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  }, new MissingCampaignPartitionRaftProvider());
+  }, new MissingCampaignConsensusPort());
 
   try {
     await t.rejects(

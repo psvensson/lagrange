@@ -14,6 +14,7 @@
 import {
   TIMER_STATUS,
   RESERVED_KV_PREFIX,
+  WASM_SERVICE_COMMAND_TYPE,
 } from './wasm-service-constants.js';
 import {
   serializeTimerEntry,
@@ -21,6 +22,21 @@ import {
   TE_FIELD,
 } from './wasm-service-models.js';
 
+/**
+ * The committed timer_state command persisting one timer's entry under the
+ * reserved timers session, where the KV read path finds it.
+ * @param {string} timerId - Timer identifier.
+ * @param {string} serialized - Serialized timer entry.
+ * @return {Object} The typed timer_state command.
+ */
+function timerStateCommand(timerId, serialized) {
+  return {
+    type: WASM_SERVICE_COMMAND_TYPE.TIMER_STATE,
+    sessionId: RESERVED_KV_PREFIX.TIMERS,
+    key: timerId,
+    value: serialized,
+  };
+}
 
 /**
  * Manages persistent timers for a single WASM service replica.
@@ -67,9 +83,8 @@ class TimerManager {
       [TE_FIELD.STATUS]: TIMER_STATUS.ACTIVE,
       [TE_FIELD.CREATED_AT]: Date.now(),
     };
-    const key = RESERVED_KV_PREFIX.TIMERS + timerId;
     const serialized = serializeTimerEntry(entry);
-    await this.replica.proposeEntry({key, value: serialized});
+    await this.replica.proposeEntry(timerStateCommand(timerId, serialized));
     this._scheduleTimer(timerId, delayMs);
   }
 
@@ -82,7 +97,6 @@ class TimerManager {
    * @return {Promise<void>}
    */
   async cancelTimer(timerId) {
-    const key = RESERVED_KV_PREFIX.TIMERS + timerId;
     const existing = this.replica.kvStore.get(
       RESERVED_KV_PREFIX.TIMERS, timerId,
     );
@@ -90,7 +104,7 @@ class TimerManager {
       const entry = deserializeTimerEntry(existing.toString());
       entry[TE_FIELD.STATUS] = TIMER_STATUS.CANCELLED;
       const serialized = serializeTimerEntry(entry);
-      await this.replica.proposeEntry({key, value: serialized});
+      await this.replica.proposeEntry(timerStateCommand(timerId, serialized));
     }
     this._clearTimer(timerId);
   }
@@ -139,7 +153,6 @@ class TimerManager {
    */
   async onTimerFired(timerId) {
     this.activeTimers.delete(timerId);
-    const key = RESERVED_KV_PREFIX.TIMERS + timerId;
     const existing = this.replica.kvStore.get(
       RESERVED_KV_PREFIX.TIMERS, timerId,
     );
@@ -152,7 +165,7 @@ class TimerManager {
     }
     entry[TE_FIELD.STATUS] = TIMER_STATUS.FIRED;
     const serialized = serializeTimerEntry(entry);
-    await this.replica.proposeEntry({key, value: serialized});
+    await this.replica.proposeEntry(timerStateCommand(timerId, serialized));
     if (this.replica.onTimerCallback) {
       await this.replica.onTimerCallback(
         timerId, entry[TE_FIELD.PAYLOAD],

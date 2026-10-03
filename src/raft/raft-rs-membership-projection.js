@@ -11,7 +11,7 @@
 // membership column and a lifecycle column per member. It has no core, no
 // handle and no Raft call: a row edit is a row edit, and there is no path
 // from one to an active configuration. Editing a row is allowed and useless,
-// which is exactly the property the liferaft part A case failed.
+// which is exactly the property the earlier divergent-cache case failed.
 
 import {
   LAGRANGE_LIFECYCLE_UNKNOWN,

@@ -13,6 +13,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {resolveRaftTransportDeliveryOptions} from
   '../../src/raft/constants.js';
+import {
+  RAFT_RS_MESSAGE_TYPE,
+  RAFT_RS_TRANSPORT_PROTOCOL,
+} from '../../src/raft/raft-rs-ingress-constants.js';
 import {registerMessageRouterTailTests} from './message-router-tail-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
@@ -595,9 +599,21 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
       const HEARTBEAT_TARGET_ADDRESS =
         'remote-node/partition/sql_transactions-p1-r4';
       const HEARTBEAT_TRANSPORT_OPTIONS = resolveRaftTransportDeliveryOptions({
-        type: 'append',
-        data: [],
+        protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+        groupId: 'router-heartbeat-test',
+        from: '101',
+        to: '202',
         targetAddress: HEARTBEAT_TARGET_ADDRESS,
+        message: {
+          msgType: RAFT_RS_MESSAGE_TYPE.HEARTBEAT,
+          from: '101',
+          to: '202',
+          term: '1',
+          logTerm: '0',
+          index: '0',
+          commit: '0',
+          entries: [],
+        },
       });
       const router = new MessageRouter({
         bootIncarnation: TEST_BOOT_INCARNATION,
@@ -665,7 +681,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
       );
       t.equal(
         queue.pending[0]?.deliverySource,
-        'raft:append:heartbeat',
+        'raft:heartbeat',
         'queued heartbeat should keep the canonical heartbeat delivery source',
       );
 
@@ -699,5 +715,6 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
     LoggingService,
     initializeTestEnvironment,
     cleanupTestEnvironment,
+    resolveRaftTransportDeliveryOptions,
   });
 });

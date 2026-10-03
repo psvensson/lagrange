@@ -325,7 +325,6 @@ describe('acceptance proof manifest runner', () => {
       'test/closure/CL-042.repro.test.js',
       'test/convergence/dt6-publication-quorum-failback-network.test.js',
       'test/convergence/dt6-publication-failback-pct-search.test.js',
-      'test/convergence/dt6-fine-drive-midchurn-safety.test.js',
       'test/control-plane/owner-outcome-contract.test.js',
       'test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js',
       'test/query/transaction-owned-commit-mode-guard.test.js',

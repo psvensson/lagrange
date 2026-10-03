@@ -16,8 +16,8 @@ import {committedMembershipRefusal} from
   './raft-rs-committed-membership-read.js';
 import {participationGateClosed} from './raft-rs-participation-gate.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  './raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  './raft-operation-port-request.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
 import {
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
@@ -50,7 +50,6 @@ const EVENTS = new Set([
   RAFT_EVENT.LEADER,
   RAFT_EVENT.FOLLOWER,
   RAFT_EVENT.CANDIDATE,
-  RAFT_EVENT.COMMIT,
   RAFT_EVENT.LEADER_CHANGE,
   RAFT_EVENT.TERM_CHANGE,
   RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE,
@@ -144,26 +143,26 @@ function normalizedConfChange(change, registry) {
 }
 
 function createRaftRsOperationPort(request) {
-  const groupId = required(request, RAFT_PARTITION_NODE_REQUEST.GROUP_ID);
+  const groupId = required(request, RAFT_OPERATION_PORT_REQUEST.GROUP_ID);
   const replicaIdentity = required(
-    request, RAFT_PARTITION_NODE_REQUEST.PEER_ID);
+    request, RAFT_OPERATION_PORT_REQUEST.PEER_ID);
   const database = required(
-    request, RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE);
-  const timing = required(request, RAFT_PARTITION_NODE_REQUEST.TIMING);
+    request, RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE);
+  const timing = required(request, RAFT_OPERATION_PORT_REQUEST.TIMING);
   const resolvePeerAddress = required(
-    request, RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS);
+    request, RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS);
   const registry = new RaftRsPeerIdentityRegistry(database);
   const peerId = registry.registerReplica(replicaIdentity);
   // The bootstrap peer ids are address hints: each is reserved so the
   // replica can name and reach it. The configuration the group opens from is
   // the bootstrap membership's alone (an absent one is refused typed).
   const bootstrapPeerIds = required(
-    request, RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS);
+    request, RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS);
   for (const identity of bootstrapPeerIds) {
     registry.registerReplica(identity);
   }
   const bootstrap = bootstrapOfRequest({
-    membership: request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP],
+    membership: request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP],
     registry,
     peerId,
   });
@@ -185,7 +184,7 @@ function createRaftRsOperationPort(request) {
     }
   };
   const timers = resolveTimeSource(
-    request[RAFT_PARTITION_NODE_REQUEST.SUBSTRATE] || {});
+    request[RAFT_OPERATION_PORT_REQUEST.SUBSTRATE] || {});
   let tickIntervalMs = tickIntervalOf(timing);
   let timer = null;
   let closed = false;
@@ -198,7 +197,7 @@ function createRaftRsOperationPort(request) {
     timing,
     timers,
     sendToPeer: required(
-      request, RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER),
+      request, RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER),
     // An address exists only for a reserved identity; the runtime records
     // an unreserved peer's delivery as that peer's own outcome.
     resolvePeerAddress: (raftPeerId) => {
@@ -211,9 +210,9 @@ function createRaftRsOperationPort(request) {
     resolvePeerIdentity: (raftPeerId) =>
       registry.resolveReplicaIdentity(raftPeerId),
     applyCommittedEntry: committedEntryApplication(required(
-      request, RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY)),
+      request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
     applyTransactionRolledBack:
-      request[RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
+      request[RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
     // A core entry the runtime schedules itself (the drain of delivered
     // inbound) is admitted by this replica's lifecycle owner like every
     // operation the port is asked for, inside the same containment.
@@ -362,7 +361,7 @@ function createRaftRsOperationPort(request) {
     },
   });
   registerRuntimeLifecycle(port, lifecycle);
-  if (request[RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION] !== true &&
+  if (request[RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION] !== true &&
       lifecycle.active) {
     startScheduling();
   }

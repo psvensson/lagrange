@@ -13,6 +13,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 30000;
@@ -446,13 +447,13 @@ test('Property 8: Message Group Replica Distribution - service instantiation', a
           const replicaId = `${config.groupId}-r0`;
 
           // Create message group service
-          const service = new MessageGroupService({
+          const service = new MessageGroupService(withTestDbPath({
             groupId: config.groupId,
             replicaId,
             nodeId,
             replicaIds: [replicaId],
             transport: router,
-          });
+          }));
 
           // Property: Service should be creatable with valid config
           t.ok(service, 'Service should be created');

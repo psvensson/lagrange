@@ -19,6 +19,7 @@ import {
   getInitialReplicaIds,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 // ---------------------------------------------------------------------------
 // The metamorphic fixture for CLAUSE 4.
@@ -61,7 +62,7 @@ function buildIdentityFixture() {
     replicaIds: INITIAL_REPLICA_IDS[table],
     nodeId: 'seed',
   }));
-  const messageGroupService = new MessageGroupService({
+  const messageGroupService = new MessageGroupService(withTestDbPath({
     transport: {
       deliver: () => {},
       initialize: () => {},
@@ -71,7 +72,7 @@ function buildIdentityFixture() {
     replicaId: INITIAL_MESSAGE_GROUP_REPLICA_IDS[0],
     replicaIds: INITIAL_MESSAGE_GROUP_REPLICA_IDS,
     nodeId: 'seed',
-  });
+  }));
   return {table, partitionService, messageGroupService};
 }
 

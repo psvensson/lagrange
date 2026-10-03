@@ -79,12 +79,6 @@ const BUNDLES = [
     external: MAIN_RUNTIME_EXTERNALS,
   },
   {
-    entryPoint: join(projectRoot, 'src/worker/replica-worker.js'),
-    outputFile: 'replica-worker.bundle.cjs',
-    name: 'Replica Worker',
-    external: MAIN_RUNTIME_EXTERNALS,
-  },
-  {
     entryPoint: join(
       projectRoot,
       'src/runtime/wasi-component-cell-worker.js',

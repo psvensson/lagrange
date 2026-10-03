@@ -25,8 +25,8 @@ import {fileURLToPath} from 'node:url';
 
 import * as portConstants from
   '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RAFT_RS_TRANSPORT_PROTOCOL} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 import {tuningOf} from '../../../src/raft/raft-rs-runtime-tuning.js';
@@ -50,7 +50,7 @@ function transferLeaderMessageType() {
 
 function electionTickOf(cluster) {
   return tuningOf(cluster.replica(LEADER)
-    .request[RAFT_PARTITION_NODE_REQUEST.TIMING]).electionTick;
+    .request[RAFT_OPERATION_PORT_REQUEST.TIMING]).electionTick;
 }
 
 function formedCluster(partitionId) {

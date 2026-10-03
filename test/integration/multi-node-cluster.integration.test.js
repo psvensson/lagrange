@@ -29,6 +29,7 @@ import {
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 function createAlwaysReadyControlPlaneReadinessService() {
   const dimensions = {
@@ -299,14 +300,14 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
         replicaIds.map((replicaId) => `${nodeId}/message-group/${replicaId}`);
 
       for (const replicaId of replicaIds) {
-        const messageGroup = new MessageGroupService({
+        const messageGroup = new MessageGroupService(withTestDbPath({
           groupId: 'mg-1',
           replicaId,
           nodeId,
           replicaIds,
           peerAddresses,
           transport: router,
-        });
+        }));
 
         // Register with router using unified address format
         const address = `${nodeId}/message-group/${replicaId}`;
@@ -370,14 +371,14 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
         replicaIds.map((replicaId) => `${nodeId}/message-group/${replicaId}`);
 
       for (const replicaId of replicaIds) {
-        const replica = new MessageGroupService({
+        const replica = new MessageGroupService(withTestDbPath({
           groupId: 'mg-cross',
           replicaId,
           nodeId,
           replicaIds,
           peerAddresses,
           transport: router,
-        });
+        }));
 
         // Register with router using unified address format
         const address = `${nodeId}/message-group/${replicaId}`;

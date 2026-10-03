@@ -37,8 +37,8 @@ import {
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from
   '../../../src/raft/raft-committed-membership-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
 
@@ -255,7 +255,7 @@ function oracleStamp(cluster, leader, genesisPeerIds) {
 function joinFromStamp(cluster, replicaId, stamp) {
   return cluster.addReplica(replicaId,
     [...Object.values(stamp.identities), replicaId],
-    {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
+    {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
 }
 
 /**
@@ -536,7 +536,7 @@ function trapSharedCore(cluster, replicaId) {
  */
 function restartWith(cluster, replicaId, extraRequest) {
   const replica = cluster.replica(replicaId);
-  const hints = replica.request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS];
+  const hints = replica.request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS];
   replica.node.close();
   replica.db.close();
   try {

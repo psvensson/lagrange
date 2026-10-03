@@ -21,6 +21,32 @@ import {META_SERVICE_RUNTIME_REF} from '../constants/wasm-meta.js';
 import {buildPgwireCredentialVerifier} from
   './pgwire-credential-verifier.js';
 import {loadPgwireTlsOptions} from './pgwire-tls-context.js';
+import {WasmServiceLifecycle} from
+  '../wasm-service/wasm-service-lifecycle.js';
+
+/**
+ * The node-owned dependencies a WASM service replica runs on, read when a
+ * replica is created or started (a node's router and CDC owner exist only
+ * after its startup wiring). No node owns a WASM service port allocator or
+ * module mirror yet, so neither is supplied: a placed replica's start is
+ * the lifecycle's typed unavailability, never a locally built substitute.
+ *
+ * @param {Object} node - The node service owning the dependencies.
+ * @return {Object} The dependency owner.
+ */
+function createWasmServiceNodeDependencies(node) {
+  return Object.freeze({
+    get nodeId() {
+      return node.nodeId;
+    },
+    get messageRouter() {
+      return node.messageRouter;
+    },
+    get cdcIntegrationService() {
+      return node.cdcIntegrationService;
+    },
+  });
+}
 
 /**
  * Build runtime wiring used by seed and joining startup flows.
@@ -33,6 +59,9 @@ import {loadPgwireTlsOptions} from './pgwire-tls-context.js';
  *   override for an embedding composition root.
  * @param {Object} [options.pgwireTlsEnv] - Environment-shaped TLS path source.
  * @param {Object} [options.pgwireTlsOptions] - Explicit server TLS material.
+ * @param {Object} [options.wasmServiceDependencies] - The node's WASM
+ *   service dependency owner (createWasmServiceNodeDependencies); the WASM
+ *   driver's consensus replicas run on the lifecycle composed from it.
  * @return {{
  *   runtimeDriverRegistry: RuntimeDriverRegistry,
  *   serviceRuntimeLifecycle: ServiceRuntimeLifecycle,
@@ -43,7 +72,11 @@ function createRuntimeStartupWiring(options = {}) {
   const runtimeDriverRegistry = new RuntimeDriverRegistry();
 
   const nativeJsDriver = new NativeJsDriver();
-  const wasmComponentDriver = new WasmComponentDriver();
+  const wasmComponentDriver = new WasmComponentDriver({
+    wasmServiceLifecycle: new WasmServiceLifecycle(
+      options.wasmServiceDependencies,
+    ),
+  });
   const ociContainerDriver = new OciContainerDriver();
   ociContainerDriver.setFeatureGate(
     Boolean(options.ociFeatureGateEnabled),
@@ -87,4 +120,4 @@ function createRuntimeStartupWiring(options = {}) {
   };
 }
 
-export {createRuntimeStartupWiring};
+export {createRuntimeStartupWiring, createWasmServiceNodeDependencies};

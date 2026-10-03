@@ -8,7 +8,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
@@ -80,7 +80,7 @@ function createPartition(id, replicaIds) {
       ],
     },
     dbPath: ':memory:',
-  }, new ControllablePartitionRaftProvider());
+  }, new ControllableConsensusPort());
 }
 
 test('PartitionService waits for committed-entry callback before acking multi-replica writes',
@@ -96,10 +96,10 @@ test('PartitionService waits for committed-entry callback before acking multi-re
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllablePort.setRole(RAFT_ROLE.LEADER);
 
     let proposedEntry = null;
-    partition.controllableProvider.setProposeHandler(async (entry) => {
+    partition.controllablePort.setProposeHandler(async (entry) => {
       proposedEntry = {...entry};
     });
 
@@ -131,7 +131,7 @@ test('PartitionService waits for committed-entry callback before acking multi-re
       'an uncommitted Raft proposal must not mutate the local state machine',
     );
 
-    partition.controllableProvider.commit(proposedEntry);
+    partition.controllablePort.commit(proposedEntry);
 
     const result = await writePromise;
     t.equal(result.success, true, 'write should succeed after commit');
@@ -225,10 +225,10 @@ test(
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllablePort.setRole(RAFT_ROLE.LEADER);
 
     let proposedEntry = null;
-    partition.controllableProvider.setProposeHandler(async (entry) => {
+    partition.controllablePort.setProposeHandler(async (entry) => {
       proposedEntry = {...entry};
     });
 
@@ -253,7 +253,7 @@ test(
       'the pending proposal must remain invisible before quorum commit',
     );
 
-    partition.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
+    partition.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
 
     const demotionOutcome = await Promise.race([
       writeOutcomePromise,
@@ -314,7 +314,7 @@ test(
       'commit-rollback-r3',
     ]);
     await partition.initialize();
-    const provider = partition.controllableProvider;
+    const provider = partition.controllablePort;
     const firstCommand = {
       type: 'INSERT',
       entryId: 'rollback-entry-1',
@@ -457,7 +457,7 @@ test(
       'commit-outcome-rollback-r3',
     ]);
     await partition.initialize();
-    const provider = partition.controllableProvider;
+    const provider = partition.controllablePort;
     const command = {
       type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
       entryId: 'transaction-outcome-entry',
@@ -520,7 +520,7 @@ test(
       'commit-unrecognised-r3',
     ]);
     await partition.initialize();
-    const provider = partition.controllableProvider;
+    const provider = partition.controllablePort;
     const committedEvents = [];
     partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, (event) => {
       committedEvents.push(event.command);
@@ -558,10 +558,10 @@ test(
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllablePort.setRole(RAFT_ROLE.LEADER);
 
     let proposalCount = 0;
-    partition.controllableProvider.setProposeHandler(async () => {
+    partition.controllablePort.setProposeHandler(async () => {
       proposalCount += 1;
     });
     const entryId = 'overlapping-redelivery-entry';
@@ -593,7 +593,7 @@ test(
       'overlapping redelivery must not append and propose a duplicate entry',
     );
 
-    partition.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
+    partition.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
     const outcomes = await Promise.race([
       Promise.all([firstResponsePromise, secondResponsePromise]),
       new Promise((resolve) => {
@@ -643,12 +643,12 @@ test(
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllablePort.setRole(RAFT_ROLE.LEADER);
 
     let proposalCount = 0;
-    partition.controllableProvider.setProposeHandler(async (entry) => {
+    partition.controllablePort.setProposeHandler(async (entry) => {
       proposalCount += 1;
-      partition.controllableProvider.commit(entry);
+      partition.controllablePort.commit(entry);
     });
     let releaseSideEffect = null;
     const sideEffectGate = new Promise((resolve) => {
@@ -745,11 +745,11 @@ test('PartitionService answers a queued write released on demotion ' +
     'queued-demotion-r3'];
   const partition = createPartition('queued-demotion', replicaIds);
   await partition.initialize();
-  partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
+  partition.controllablePort.setRole(RAFT_ROLE.LEADER);
   const proposals = [];
   // The port's own deferral answer while a user transaction holds the
   // connection: a retryable host failure that leaves the group usable.
-  partition.controllableProvider.setProposeHandler(async (entry) => {
+  partition.controllablePort.setProposeHandler(async (entry) => {
     proposals.push(entry.entryId);
     return {
       outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
@@ -766,7 +766,7 @@ test('PartitionService answers a queued write released on demotion ' +
   });
   await new Promise((resolve) => setTimeout(resolve, 30));
   t.ok(proposals.length >= 1, 'setup: the port deferred the proposal');
-  partition.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
+  partition.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
   const proposedBeforeRelease = proposals.length;
   const result = await Promise.race([answer, new Promise((resolve) =>
     setTimeout(() => resolve({kind: 'test-timeout'}), 500))]);
@@ -796,10 +796,10 @@ test('PartitionService rejects multi-replica leader writes when Raft is not lead
     partition.role = 'leader';
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
-    partition.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
+    partition.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
 
     let proposeCalled = false;
-    partition.controllableProvider.setProposeHandler(async () => {
+    partition.controllablePort.setProposeHandler(async () => {
       proposeCalled = true;
     });
 

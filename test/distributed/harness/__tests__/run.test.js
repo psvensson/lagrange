@@ -206,7 +206,7 @@ describe('deterministic debug mode helpers', () => {
 
       const metadata = buildReportMetadata(
         {config: 'local.json', scenario: null},
-        {raftProvider: 'liferaft'},
+        {},
         resolved,
       );
       assert.deepEqual(metadata.deterministicDebug, {
@@ -650,7 +650,6 @@ describe('benchmark regression gate helpers', () => {
     const resolved = resolveBenchmarkGateConfig({});
     assert.equal(resolved.enabled, false);
     assert.equal(resolved.maxThroughputRegressionRatio, 0.1);
-    assert.equal(resolved.baselineProvider, 'liferaft');
     assert.equal(resolved.failIfBaselineMissing, false);
     assert.equal(resolved.approvedMitigationId, null);
   });
@@ -713,7 +712,7 @@ describe('benchmark regression gate helpers', () => {
         },
         [
           {
-            metadata: {raftProvider: 'liferaft'},
+            metadata: {},
             standardSummary: {
               scenarios: [
                 {
@@ -725,16 +724,14 @@ describe('benchmark regression gate helpers', () => {
                 },
               ],
             },
-            path: '/tmp/liferaft-baseline.report.json',
+            path: '/tmp/historical-baseline.report.json',
             timestamp: '2026-02-17T12:00:00.000Z',
           },
         ],
         {
-          raftProvider: 'raft_logic',
           benchmarkGate: {
             enabled: true,
             maxThroughputRegressionRatio: 0.1,
-            baselineProvider: 'liferaft',
           },
         },
       );
@@ -767,10 +764,8 @@ describe('benchmark regression gate helpers', () => {
         },
         [],
         {
-          raftProvider: 'raft_logic',
           benchmarkGate: {
             enabled: true,
-            baselineProvider: 'liferaft',
             minimumThroughputRatioSutToBaseline: 0.1,
           },
         },
@@ -810,10 +805,8 @@ describe('benchmark regression gate helpers', () => {
         },
         [],
         {
-          raftProvider: 'raft_logic',
           benchmarkGate: {
             enabled: true,
-            baselineProvider: 'liferaft',
             minimumThroughputRatioSutToBaseline: 0.1,
           },
         },
@@ -849,7 +842,7 @@ describe('benchmark regression gate helpers', () => {
         },
         [
           {
-            metadata: {raftProvider: 'liferaft'},
+            metadata: {},
             standardSummary: {
               scenarios: [
                 {
@@ -861,16 +854,14 @@ describe('benchmark regression gate helpers', () => {
                 },
               ],
             },
-            path: '/tmp/liferaft-baseline.report.json',
+            path: '/tmp/historical-baseline.report.json',
             timestamp: '2026-02-17T12:00:00.000Z',
           },
         ],
         {
-          raftProvider: 'raft_logic',
           benchmarkGate: {
             enabled: true,
             maxThroughputRegressionRatio: 0.1,
-            baselineProvider: 'liferaft',
             parityMismatchPolicy: 'fail',
           },
         },
@@ -907,7 +898,7 @@ describe('benchmark regression gate helpers', () => {
         },
         [
           {
-            metadata: {raftProvider: 'liferaft'},
+            metadata: {},
             standardSummary: {
               scenarios: [
                 {
@@ -919,16 +910,14 @@ describe('benchmark regression gate helpers', () => {
                 },
               ],
             },
-            path: '/tmp/liferaft-baseline.report.json',
+            path: '/tmp/historical-baseline.report.json',
             timestamp: '2026-02-17T12:00:00.000Z',
           },
         ],
         {
-          raftProvider: 'raft_logic',
           benchmarkGate: {
             enabled: true,
             maxThroughputRegressionRatio: 0.1,
-            baselineProvider: 'liferaft',
             parityMismatchPolicy: 'warn',
           },
         },

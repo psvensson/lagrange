@@ -269,8 +269,7 @@ Use these values with `--scenario`:
 3. `network-partition-split-brain`
 4. `node-failure-rebalance`
 5. `public-path-multinode-baseline`
-6. `public-seam-durability` (status: PREPARED, blocked on the rs-raft cutover;
-   see below)
+6. `public-seam-durability` (zero-cutover validation scenario; see below)
 7. `rolling-restart`
 8. `three-node-seed-rebalance`
 9. `user-table-leader-placement-spread`
@@ -289,11 +288,10 @@ operator scale path; disable with
 `scenarios.publicSeamDurability.publicClient.provisionListener: false`). The
 binding step is off by default (`scenarios.publicSeamDurability.binding.enabled:
 true` deploys account-summary through the shared service pipeline and calls it
-before the stop and after the restart). The report ends with
-`certification: PREPARED_BLOCKED_ON_RS_RAFT_CUTOVER` while the runtime's
-default consensus provider (`src/raft/raft-provider-control.js`) is the
-legacy one, and `certification: CANDIDATE` once it is not; the owner decides
-whether a CANDIDATE run certifies. Known binding-result finding: the
+before the stop and after the restart). The scenario carries no consensus
+provider selector or fallback: on the cutover tree it exercises the single
+raft-rs runtime. Certification is an external exact-SHA proof decision, not a
+runtime-provider comparison. Known binding-result finding: the
 account-summary call result carries `contributingShards` (a placement count),
 which the leak check catches, so with the binding enabled both binding steps
 FAIL on it; that is a finding for the call owner's result shape
@@ -318,21 +316,7 @@ FAIL on it; that is a finding for the call owner's result shape
 5. `seven-node-table-partition-distribution` (`local-benchmark-7node.json`)
 6. `seven-node-postgres-baseline-partition-split` (`local-benchmark-7node-partition-split.json`)
 
-## Benchmark And Migration Pipelines
-
-Run standardized migration flows:
-
-```bash
-npm run migration:raft:benchmarks
-npm run migration:raft:rollback-drill
-npm run migration:raft:stage:dev
-npm run migration:raft:stage:canary
-npm run migration:raft:stage:limited
-```
-
-Reports are written under:
-
-`solve/specs/raft-logic-migration/reports/`
+## Benchmark Tuning
 
 Benchmark tuning notes (in `benchmark` config block):
 

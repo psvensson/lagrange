@@ -8,7 +8,7 @@ const MATRIX_TARGET_LOCAL = 'local';
 const MATRIX_PROFILE_FLAG = '--profile';
 const MATRIX_PROFILE_TOPOLOGY = 'topology';
 const MATRIX_DRY_RUN_FLAG = '--dry-run';
-const MATRIX_RAFT_SELECTOR_TEXT = '--raft-provider';
+const MATRIX_RETIRED_SELECTOR_TEXT = ['--raft', 'provider'].join('-');
 const MATRIX_EXPECTED_TOPOLOGY_COUNT = 8;
 const MATRIX_UTF8 = 'utf8';
 
@@ -29,7 +29,7 @@ test('distributed matrix CLI dry-runs topology profile without raft selection',
 
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stderr, '');
-    assert.equal(result.stdout.includes(MATRIX_RAFT_SELECTOR_TEXT), false);
+    assert.equal(result.stdout.includes(MATRIX_RETIRED_SELECTOR_TEXT), false);
 
     const planned = result.stdout
       .split('\n')

@@ -13,10 +13,14 @@
 // the phase calls, a field the bootstrap service sets - and nothing
 // production does depends on whether anyone is watching.
 import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
-import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {reserveSimulatedBootIncarnation} from
   './formation-sim-boot-incarnation.js';
+import {mkdtempSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {createVirginSeedDataDirectoryManager} from
+  '../integration/helpers/cluster-test-helpers.js';
 import {DURABLE_EVIDENCE_STATE} from
   '../../src/bootstrap/rejoin-hints-constants.js';
 import {
@@ -79,6 +83,9 @@ const SETTLE_HORIZON_MS = 50;
 // Past the replica stagger a phase may pace itself on, and far short of the
 // keepalive and reconcile cadences a composed node arms.
 const PHASE_HORIZON_MS = 1000;
+// Message-group consensus is durable (MessageGroupService requires a dbPath),
+// so the virgin seed runs over its own empty data directory, as production does.
+const SIM_SEED_DATA_DIR_PREFIX = 'formation-sim-seed-';
 const PARTITION_PHASE_HORIZON_MS = 120000;
 
 function refusePrecomposedInfrastructure(options) {
@@ -325,13 +332,16 @@ function createProductionSeedSimHost(environment, options = {}) {
     createInfrastructureCompositionRegistry();
   compositionRegistry.claim(nodeId, PRODUCTION_BOOTSTRAP_COMPOSER);
 
+  const dataDir = mkdtempSync(join(tmpdir(), SIM_SEED_DATA_DIR_PREFIX));
   const bootstrap = new BootstrapService({
     nodeId, nodeAddress, wsPort,
+    dataDir,
+    dataDirectoryManager: createVirginSeedDataDirectoryManager(null, dataDir),
     // Acquired by the caller through the boot incarnation owner
     // (reserveSimulatedBootIncarnation), exactly as production startup does.
     bootIncarnation: options.bootIncarnation,
     nodeService: environment.nodeService, routerFactory, randomSource,
-    // The simulated seed is virgin: no data directory, so no durable SERVICES
+    // The simulated seed is virgin: an empty data directory, so no durable SERVICES
     // identity. Production reads this at startup (readSeedStartupStorageAdmission).
     startupServicesAdmission: Object.freeze({
       state: DURABLE_EVIDENCE_STATE.MISSING, rows: [], conflicting: false,
@@ -518,6 +528,7 @@ function createProductionSeedSimHost(environment, options = {}) {
     if (bootstrap.messageRouter) await bootstrap.messageRouter.shutdown();
     await environment.stop();
     compositionRegistry.release(nodeId);
+    rmSync(dataDir, {recursive: true, force: true});
     transcript.record('TEARDOWN_COMPLETED', {nodeId});
   }
 
@@ -776,18 +787,13 @@ function chargingScheduler(network, chargeDelta) {
 }
 
 // The consensus population production composed, read at the mark from the
-// services themselves: which replica services run a liferaft runtime and how
-// many sibling peers each joins, and how many partition replicas the single
-// rs-raft path serves. A census compares what it observed against this rather
-// than against a topology written down once.
+// services themselves: every message-group and every partition replica runs
+// one raft-rs operation port. A census compares what it observed against this
+// rather than against a topology written down once.
 function consensusComposition(bootstrap) {
-  const liferaftServices = [...bootstrap.messageGroupServices.values()]
-    .filter((service) => service.raftProvider instanceof LiferaftProvider);
   return {
-    liferaftRuntimes: liferaftServices.length,
-    liferaftPeers: liferaftServices.reduce(
-      (total, service) => total + service.replicaIds.length - 1, 0),
-    rsRaftReplicas: bootstrap.partitionServices.size,
+    messageGroupReplicas: bootstrap.messageGroupServices.size,
+    partitionReplicas: bootstrap.partitionServices.size,
   };
 }
 

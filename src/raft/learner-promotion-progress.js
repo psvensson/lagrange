@@ -10,7 +10,7 @@
  *   is the live leader in a known term, both sides observe the same
  *   membership epoch, and the leader-observed match index for the learner
  *   (its acked replication progress this tenure — see
- *   `readFollowerMatchIndex` in liferaft.js) has reached the safe promotion
+ *   the consensus progress owner) has reached the safe promotion
  *   index, defined as the leader's committedIndex at proof-evaluation time.
  *   The committed prefix is exactly what a correct voter must hold so that
  *   counting its vote can never roll back a committed entry (Raft election

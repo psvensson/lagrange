@@ -1,6 +1,8 @@
 import t from 'tap';
-import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
-import {driveNetwork} from '../distributed/harness/raft-network-host.js';
+import {
+  createVirtualNetwork,
+  driveNetwork,
+} from '../distributed/harness/virtual-network.js';
 import {MembershipPublicationCoordinatorReconcile} from
   '../../src/control-plane/membership-publication-coordinator-reconcile.js';
 import {buildMembershipPublicationRow} from

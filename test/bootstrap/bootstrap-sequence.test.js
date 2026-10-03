@@ -661,14 +661,14 @@ test('Bootstrap sequence - without wsPort fails (no server)', async (t) => {
 
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     bootIncarnation: 1,
     nodeId,
     nodeAddress: 'ws://localhost:8080',
     // No wsPort - server won't start, leadership can't be established
     // System requires WebSocket-based communication for all messages (even local)
     // per system guidelines: "All nodes will have at least one replica of a message
-    // group (liferaft) which will always be used for any communication (even local)"
+    // group which will always be used for any communication (even local)"
     config: {
       leadershipWaitTimeoutMs: 100, // Short timeout since it will fail
       leadershipWaitInitialDelayMs: 10,

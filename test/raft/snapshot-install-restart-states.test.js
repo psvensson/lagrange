@@ -7,7 +7,7 @@ import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
-import {SQLITE_RAFT_STATE_KEY} from '../../src/raft/sqlite-log-adapter-callback-api.js';
+import {SQLITE_RAFT_STATE_KEY} from '../../src/raft/sqlite-raft-state-constants.js';
 import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
 import {
   createSqliteStateMachineCheckpoint,
