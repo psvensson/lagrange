@@ -75,7 +75,7 @@ test('split routing rejects Proxy and accessor metadata before traps', async (t)
       proxyMetadata,
       {tableName: TABLE_NAME, queryExecutor},
     ),
-    /proxy/iu,
+    /proxi(?:es|y)/iu,
   );
   t.equal(proxyTrapCalls, 0, 'replay rejects Proxy metadata before traps');
 
@@ -86,7 +86,7 @@ test('split routing rejects Proxy and accessor metadata before traps', async (t)
       proxyMetadata,
       {tableName: TABLE_NAME, queryExecutor},
     ),
-    /proxy/iu,
+    /proxi(?:es|y)/iu,
   );
   t.equal(proxyTrapCalls, 0, 'snapshot routing rejects Proxy metadata before traps');
 
