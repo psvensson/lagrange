@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2624892,
-        "sha256": "19dcb69c445a7b509617bc683fddf5ac664879e9d698e2f319e8e26487cb2675"
+        "bytes": 2624098,
+        "sha256": "ac96389f63912d3375d7fb440b28e24f97dad097eb0f3ea4c8edac7d53dc091a"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "1060637bb3032b5107f49e9248530476db7ebe5c0acfc011f519bd32e04b4072"
+        "sha256": "d4fffec54492051dccf4ad5ac5fc43f0dd5ffadd694132e13aa12577fc88eccb"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "b5febf5fcb1529870ce9690a62938b8c9fa06fad293c16979dbb4662a01897da"
+    "inputDigest": "ca1326c23e50898e5f579358fe31eaa6ad7e753c4220aea8e2f3923345411d43"
   },
   "reconciliation": {
     "complexity": {
@@ -130,13 +130,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "1060637bb3032b5107f49e9248530476db7ebe5c0acfc011f519bd32e04b4072"
+          "sha256": "d4fffec54492051dccf4ad5ac5fc43f0dd5ffadd694132e13aa12577fc88eccb"
         },
-        "cloneGroups": 718,
-        "duplicatedLines": 27311,
-        "sourceCloneTouches": 1436,
-        "sourceDuplicatedLineTouches": 54622,
-        "nonzeroSourceCount": 455,
+        "cloneGroups": 717,
+        "duplicatedLines": 27288,
+        "sourceCloneTouches": 1434,
+        "sourceDuplicatedLineTouches": 54576,
+        "nonzeroSourceCount": 453,
         "touchMultiplicity": 2
       }
     ],
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2624892,
-        "sha256": "19dcb69c445a7b509617bc683fddf5ac664879e9d698e2f319e8e26487cb2675"
+        "bytes": 2624098,
+        "sha256": "ac96389f63912d3375d7fb440b28e24f97dad097eb0f3ea4c8edac7d53dc091a"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "1f66ae5b3b6ca561100ecb710ca600d428691b66e40927729210618be93fcbb1",
-      "moduleCount": 5014,
-      "edgeCount": 24569,
+      "sourceDigest": "0b90435d32df9d662f6d8d69933aa6193014785bbeafd060335a7627343941cd",
+      "moduleCount": 5013,
+      "edgeCount": 24564,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2529,
-    "assignedSignalCount": 2529,
-    "uniqueAssignmentCount": 2529,
-    "digest": "39fedec42550d3ad2b237aa3e7c594ba2a360dfa7c48aa3ba10ea4dfe3f0ce0f"
+    "sourceSignalCount": 2527,
+    "assignedSignalCount": 2527,
+    "uniqueAssignmentCount": 2527,
+    "digest": "c857c0490510c7948383d821d270b63ace4ae73607d1cf8c867bca7e9d4cd324"
   },
   "signalCounts": {
     "cognitive": 153,
     "complexity": 1773,
-    "duplication": 517,
+    "duplication": 515,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1293,
+    "filesWithDebt": 1291,
     "rankedBoundaryCount": 114,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 94,
@@ -1651,34 +1651,6 @@
       ]
     },
     {
-      "key": "area:test/raft",
-      "owner": null,
-      "boundary": "test/raft",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/raft"
-      ],
-      "fileCount": 8,
-      "signalCount": 10,
-      "complexity": 3,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 200,
-      "cloneTouches": 8,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 0,
-      "importOut": 82,
-      "score": 32,
-      "topPaths": [
-        "test/raft/helpers/raft-follower-append-starvation-relief-scenarios.js",
-        "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
-        "test/raft/peer-address-resolver.property.test.js",
-        "test/raft/peer-address-resolver.test.js",
-        "test/raft/sqlite-log-adapter-round-trip.property.test.js"
-      ]
-    },
-    {
       "key": "area:test/config",
       "owner": null,
       "boundary": "test/config",
@@ -1813,6 +1785,34 @@
         "src/transport/node-address-resolution.js",
         "src/transport/websocket-transport.js",
         "src/transport/router-server-manager.js"
+      ]
+    },
+    {
+      "key": "area:test/raft",
+      "owner": null,
+      "boundary": "test/raft",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/raft"
+      ],
+      "fileCount": 6,
+      "signalCount": 8,
+      "complexity": 3,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 154,
+      "cloneTouches": 6,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 73,
+      "score": 27.4,
+      "topPaths": [
+        "test/raft/helpers/raft-follower-append-starvation-relief-scenarios.js",
+        "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+        "test/raft/peer-address-resolver.property.test.js",
+        "test/raft/peer-address-resolver.test.js",
+        "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js"
       ]
     },
     {
