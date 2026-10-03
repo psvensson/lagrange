@@ -46,6 +46,80 @@ function createDescriptorEvidence(tableDescriptor, partitionVersion) {
   };
 }
 
+test('split routing rejects Proxy and accessor metadata before traps', async (t) => {
+  let proxyTrapCalls = 0;
+  const proxyMetadata = new Proxy(createMetadata(PENDING_VERSION), {
+    get() {
+      proxyTrapCalls += 1;
+      throw new Error('proxy get trap executed');
+    },
+    getOwnPropertyDescriptor() {
+      proxyTrapCalls += 1;
+      throw new Error('proxy descriptor trap executed');
+    },
+  });
+  const queryExecutor = {
+    async executeOnPartition() {
+      t.fail('unsafe metadata must reject before route dispatch');
+      return {success: true};
+    },
+  };
+
+  await t.rejects(
+    replaySplitEntry(
+      {
+        sql: INSERT_SQL,
+        params: ['a', 'Ada'],
+        data: {[PRIMARY_KEY_COLUMN]: 'a'},
+      },
+      proxyMetadata,
+      {tableName: TABLE_NAME, queryExecutor},
+    ),
+    /proxi(?:es|y)/iu,
+  );
+  t.equal(proxyTrapCalls, 0, 'replay rejects Proxy metadata before traps');
+
+  await t.rejects(
+    routeSplitSnapshotBatch(
+      [{id: 'a', name: 'Ada'}],
+      ['id', 'name'],
+      proxyMetadata,
+      {tableName: TABLE_NAME, queryExecutor},
+    ),
+    /proxi(?:es|y)/iu,
+  );
+  t.equal(proxyTrapCalls, 0, 'snapshot routing rejects Proxy metadata before traps');
+
+  let primaryKeyGetterCalls = 0;
+  const accessorMetadata = createMetadata(PENDING_VERSION);
+  Object.defineProperty(accessorMetadata, 'primaryKeyColumn', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      primaryKeyGetterCalls += 1;
+      return PRIMARY_KEY_COLUMN;
+    },
+  });
+
+  await t.rejects(
+    replaySplitEntry(
+      {
+        sql: INSERT_SQL,
+        params: ['a', 'Ada'],
+        data: {[PRIMARY_KEY_COLUMN]: 'a'},
+      },
+      accessorMetadata,
+      {tableName: TABLE_NAME, queryExecutor},
+    ),
+    /primaryKeyColumn/iu,
+  );
+  t.equal(
+    primaryKeyGetterCalls,
+    0,
+    'primaryKeyColumn accessors are not live routing authority',
+  );
+});
+
 test('split routing rejects stale mirrored writes by descriptor epoch',
   async (t) => {
     const queryExecutor = {

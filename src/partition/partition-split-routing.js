@@ -14,6 +14,8 @@ import {
   PARTITION_SERVICE_TYPE,
 } from './partition-service-constants.js';
 import {
+  assertSplitRoutingMetadataSafe,
+  resolveSplitRoutingPrimaryKeyColumn,
   resolveSplitTargetPartitionId,
 } from './split-key-comparator.js';
 import {
@@ -147,10 +149,12 @@ export function cloneSplitEntry(entry) {
 }
 
 export async function replaySplitEntry(entry, metadata, options = {}) {
+  assertSplitRoutingMetadataSafe(metadata);
   assertSplitRoutingDescriptorEpoch(metadata, options);
+  const primaryKeyColumn = resolveSplitRoutingPrimaryKeyColumn(metadata);
   const routingKey = extractSplitRoutingKey(
     entry,
-    metadata.primaryKeyColumn,
+    primaryKeyColumn,
     options,
   );
   const targetPartitionId = resolveSplitTargetPartitionId(routingKey, metadata);
@@ -166,6 +170,7 @@ export async function replaySplitEntry(entry, metadata, options = {}) {
 }
 
 export function assertSplitRoutingDescriptorEpoch(metadata, options = {}) {
+  assertSplitRoutingMetadataSafe(metadata);
   const descriptorEpochEvidence = options.descriptorEpochEvidence || null;
   if (!descriptorEpochEvidence) {
     // Epoch evidence must never fail OPEN on an in-flight mirror: a
@@ -252,10 +257,12 @@ export async function routeSplitSnapshotBatch(
   metadata,
   options = {},
 ) {
+  assertSplitRoutingMetadataSafe(metadata);
+  const primaryKeyColumn = resolveSplitRoutingPrimaryKeyColumn(metadata);
   const rowsByPartition = new Map();
   for (const row of rows) {
     const partitionId = resolveSplitTargetPartitionId(
-      row?.[metadata.primaryKeyColumn],
+      row?.[primaryKeyColumn],
       metadata,
     );
     const partitionRows = rowsByPartition.get(partitionId) || [];
