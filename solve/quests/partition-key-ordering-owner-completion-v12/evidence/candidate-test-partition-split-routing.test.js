@@ -473,7 +473,7 @@ test('split snapshot batching owns internal numeric array appends',
     const routeOwnedValues = new Set([
       'v12-left-sentinel',
       rows[0],
-      PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK,
+      '?',
       '(?)',
       'v12-route-key',
     ]);
