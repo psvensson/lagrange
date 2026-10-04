@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2689104,
-        "sha256": "73a88d3c7d163539f89f578dc7cbfdd90acc43c0357ccffb32ac851388951ddf"
+        "bytes": 2689187,
+        "sha256": "6b619f80e42da525f782efddad61d0affddacaf125cbc3693d6cdd9254d27b40"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "d122c4e7c196296c4d23d1938091b2d6521e6e147a3f57b38cdf1fb81f70898a"
+        "sha256": "ac063d8c4f0ea2c2f62a5c2551447231ebb3a59a6ece7c41a3c157587c525b7d"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "23f110fecaa5fcde237e3c86072ed9d7f56230bc8f24ae4d42ef19f7bf462adb"
+        "sha256": "b31e3e46a9c55f58e6ebcc567fea6e742b382369b7ba4fcfd168037f81122100"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "9ad2f7a9eebdb270f249e69e90ab0d4eb47ca8cccbd4fcd974ba927e69532e63"
+    "inputDigest": "c4423ab0a8ea07be557f6faa705d5deb458e991df1ced4971426fed04688b194"
   },
   "reconciliation": {
     "complexity": {
@@ -99,8 +99,8 @@
         "source": 27,
         "test": 21
       },
-      "observedCount": 47,
-      "assignedCount": 47
+      "observedCount": 48,
+      "assignedCount": 48
     },
     "duplication": [
       {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "d122c4e7c196296c4d23d1938091b2d6521e6e147a3f57b38cdf1fb81f70898a"
+          "sha256": "ac063d8c4f0ea2c2f62a5c2551447231ebb3a59a6ece7c41a3c157587c525b7d"
         },
         "cloneGroups": 52,
         "duplicatedLines": 1666,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "23f110fecaa5fcde237e3c86072ed9d7f56230bc8f24ae4d42ef19f7bf462adb"
+          "sha256": "b31e3e46a9c55f58e6ebcc567fea6e742b382369b7ba4fcfd168037f81122100"
         },
         "cloneGroups": 765,
         "duplicatedLines": 29385,
@@ -167,38 +167,38 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2689104,
-        "sha256": "73a88d3c7d163539f89f578dc7cbfdd90acc43c0357ccffb32ac851388951ddf"
+        "bytes": 2689187,
+        "sha256": "6b619f80e42da525f782efddad61d0affddacaf125cbc3693d6cdd9254d27b40"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "2e392c5d86ac108f08e4655b6ab9569106d9693a7b79abce7ff018777bc261e8",
+      "sourceDigest": "67635d77df0065f8e2489ad76dfb843c830068e7c194a3cf24f1eeb1c434d34e",
       "moduleCount": 5150,
-      "edgeCount": 25062,
+      "edgeCount": 25065,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2593,
-    "assignedSignalCount": 2593,
-    "uniqueAssignmentCount": 2593,
-    "digest": "d94a97ece6c5a4e72ed0a145f148a317be56aa08fce0ae83442bd3b2b6bfc66a"
+    "sourceSignalCount": 2594,
+    "assignedSignalCount": 2594,
+    "uniqueAssignmentCount": 2594,
+    "digest": "59b28e9eacc964f5a2323b6134497c548932bcacd22cb040af7eafbadfba7407"
   },
   "signalCounts": {
     "cognitive": 155,
     "complexity": 1795,
     "duplication": 557,
-    "fileSize": 47,
+    "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1344,
-    "rankedBoundaryCount": 119,
+    "filesWithDebt": 1345,
+    "rankedBoundaryCount": 120,
     "semanticBoundaryCount": 21,
-    "fallbackBoundaryCount": 98,
+    "fallbackBoundaryCount": 99,
     "childQuestCount": 16
   },
   "rankedBoundaries": [
@@ -2271,6 +2271,30 @@
       "score": 12,
       "topPaths": [
         "test/logging/logs-table-service.test.js"
+      ]
+    },
+    {
+      "key": "area:test/scripts",
+      "owner": null,
+      "boundary": "test/scripts",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/scripts"
+      ],
+      "fileCount": 1,
+      "signalCount": 1,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 1,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 10,
+      "score": 12,
+      "topPaths": [
+        "test/scripts/test-placement.test.js"
       ]
     },
     {

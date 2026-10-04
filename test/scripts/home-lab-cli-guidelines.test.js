@@ -59,6 +59,7 @@ const USAGE = [
 // Commands a plain-object dispatch table would answer from its prototype.
 const PROTOTYPE_NAMED_COMMANDS = ['constructor', 'toString', 'hasOwnProperty', '__proto__'];
 const EXIT_FAILURE = 1;
+const EXIT_USAGE = 2;
 const UTF8 = 'utf8';
 const HARNESS_CONFIG = 'test/distributed/config/local-three-node.json';
 const HARNESS_SCENARIO = 'rolling-restart';
@@ -120,12 +121,29 @@ test('a hand lab run refuses what it cannot run before it looks at anything', ()
     [['test', 'all', '--lane', 'all', '--base-sha', 'main'],
       'lab: --base-sha measures the change cone: it takes the changed profile'],
     [['test', 'changed', '--base-sha', 'main'], 'lab: a lab test run names its lane with --lane'],
+    [['test', 'all', '--lane', 'all', '--split', '--on', 'tv-dator'], 'lab: --split spreads ' +
+      'over every ready machine and --on names one: take one or the other'],
   ]) {
     const refused = labWithoutInventory(...args);
     assert.equal(refused.status, EXIT_FAILURE, `${args.join(' ')} exits non-zero`);
     assert.equal(refused.stderr, `${refusal}\n`, args.join(' '));
     assert.equal(refused.stdout, '', 'and runs nothing');
   }
+});
+
+test('a lab test or the thermal gate given a flag it does not take runs nothing', () => {
+  for (const args of [['test', 'changed', '--lane', 'all', '--split', '--dry-run'],
+    ['test', 'changed', '--help-me']]) {
+    const refused = labWithoutInventory(...args);
+    assert.equal(refused.status, EXIT_USAGE, `${args.join(' ')}: ${refused.stderr}`);
+    assert.match(refused.stderr, /^lab: unknown flag --[\w-]+: lab test takes --lane, --on, --sha, --base-sha, --split\n$/u);
+    assert.equal(refused.stdout, '', 'and runs nothing');
+  }
+  const thermal = spawnSync(process.execPath, ['scripts/checks/wait-for-thermal-headroom.js',
+    '--help'], {encoding: UTF8, timeout: 10000});
+  assert.equal(thermal.status, EXIT_USAGE, thermal.stderr);
+  assert.equal(thermal.stdout, '', 'no reading, no wait');
+  assert.match(thermal.stderr, /^unknown argument --help\nusage: node scripts\/checks\/wait-for-thermal-headroom\.js /u);
 });
 
 test('physical lab harness makes no-fast-local non-overridable', () => {
