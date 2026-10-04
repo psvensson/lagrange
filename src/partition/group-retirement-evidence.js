@@ -288,9 +288,7 @@ async function verifyGroupRetirement(gateway, evidence, partitionId) {
 export {
   GROUP_RETIREMENT_KIND,
   GROUP_RETIREMENT_REASON,
-  GROUP_RETIREMENT_REFUSAL,
   buildGroupRetirementEvidence,
-  decideGroupRetirement,
   isRetiringSourceRecord,
   verifyGroupRetirement,
 };
