@@ -26,12 +26,10 @@
 //     founders, or a join's committed voters plus itself) and term 0, so its
 //     legitimate leader - a founder, or the leader that answered the join -
 //     satisfies both conditions;
-//   - an append carrying an entry at or below this replica's commit index
-//     while its own index is not below it (crate raft_log.rs maybe_append's
-//     committed-conflict fatal). A correct leader sends entries contiguous
-//     from index + 1, and the crate answers an index below commit without
-//     reading its entries: only a malformed or amnesic sender produces it, so
-//     the message is refused and this replica is not held;
+//   (an append carrying an entry at or below this replica's commit while
+//   its own index is not below it - the crate's committed-conflict fatal in
+//   raft_log.rs maybe_append - cannot reach this guard: entry contiguity
+//   from index + 1 is part of the ingress schema, raft-rs-ingress.js);
 //   - an empty proposal forwarded by a peer (crate raft.rs "stepped empty
 //     MsgProp"). A forwarded proposal with entries is legitimate (proposal
 //     forwarding is on) and is stepped;
@@ -91,19 +89,6 @@ function refusal(reason, holds = false) {
   return {reason, holds};
 }
 
-// An append whose own index is not below the local commit but whose first
-// entry is at or below it: the crate's committed-conflict precondition. The
-// first entry of a well-formed append is its lowest (entries run contiguous
-// from index + 1); entries out of order after it are the entry-contiguity
-// schema check left to admitRaftRsMessage (recorded follow-up), so one
-// compare keeps the decision O(1) per envelope.
-function appendBelowLocalCommit(message, committed) {
-  const entries = message.entries;
-  return Array.isArray(entries) && entries.length > 0 &&
-    positionOf(message.index) >= committed &&
-    positionOf(entries[0].index) <= committed;
-}
-
 // Whether the configuration the core holds names the sender (as voter,
 // outgoing voter, learner or next learner).
 function namesSender(confState, sender) {
@@ -135,12 +120,19 @@ function senderRefusal(message, local) {
 
 const POSITION_CHECKS = Object.freeze({
   [RAFT_RS_MESSAGE_TYPE.HEARTBEAT]: commitBeyondLocalLog,
-  [RAFT_RS_MESSAGE_TYPE.APPEND]: (message, local) =>
-    appendBelowLocalCommit(message, positionOf(local.commit)) ?
-      refusal(RAFT_RS_LOCAL_LOG_REFUSAL.APPEND_BELOW_LOCAL_COMMIT) : null,
   [RAFT_RS_MESSAGE_TYPE.PROPOSE]: (message) =>
     !Array.isArray(message.entries) || message.entries.length === 0 ?
       refusal(RAFT_RS_LOCAL_LOG_REFUSAL.EMPTY_FORWARDED_PROPOSAL) : null,
+  // A peer forwards a transfer request to its leader with its term set; a
+  // follower that knows a leader at that same term re-forwards it, and
+  // raft.rs send() is fatal on a set term. No correct peer reaches such a
+  // follower with it (a former leader that stepped down is at a higher term
+  // and ignores it); everywhere else raft-rs drops or ignores it.
+  [RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER]: (message, local) =>
+    !local.leading && local.leaderKnown &&
+      positionOf(message.term) === local.term ?
+      refusal(RAFT_RS_LOCAL_LOG_REFUSAL.TRANSFER_REQUEST_AT_NON_LEADER) :
+      null,
   [RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE]: (message, local) =>
     message.reject !== true && positionOf(message.index) > local.lastIndex ?
       refusal(RAFT_RS_LOCAL_LOG_REFUSAL.APPEND_RESPONSE_BEYOND_LOCAL_LOG) :
@@ -152,10 +144,10 @@ const POSITION_CHECKS = Object.freeze({
  * @param {Object} message - The raft message on an admitted envelope.
  * @param {Object} local - The receiving group's own state, read without
  *   entering the core: {gateOpen, lastIndex (bigint, the persisted
- *   last index: the last entry or the snapshot written), commit (the
- *   core's commit index as last observed, a decimal string), term (bigint,
+ *   last index: the last entry or the snapshot written), term (bigint,
  *   the core's term as last observed), leaderKnown (whether it leads or
- *   follows a leader as last observed), confState (the configuration the
+ *   follows a leader as last observed), leading (whether it leads as last
+ *   observed), confState (the configuration the
  *   core held as last observed)}. The runtime observes them after every
  *   stepped envelope's Ready, so they are the core's own as of this turn.
  * @return {Object|null} null to step it, or {reason, holds}: the typed

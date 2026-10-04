@@ -28,6 +28,28 @@ const RAFT_RS_INGRESS_REFUSAL = Object.freeze({
   MALFORMED_PEER_ID: 'malformed-peer-id',
   MALFORMED_POSITION: 'malformed-position',
   MALFORMED_ENTRY: 'malformed-entry',
+  // The shapes below are what raft-rs's own sender never produces and its
+  // receiver traps on (each one found by the ingress fuzz witness on the
+  // real core, raft-rs-ingress-fuzz.test.js): they are encodings no peer of
+  // this binding writes, not decisions about the sender.
+  //   - a term on a message raft-rs forwards as a local one (MsgPropose),
+  //     or no term on one raft-rs always sends with its term (raft.rs send()
+  //     is fatal on either when the receiver forwards or answers it);
+  TERM_PRESENCE_MISMATCH: 'term-presence-mismatch',
+  //   - append entries that do not run contiguous from index + 1 with
+  //     non-decreasing terms between logTerm and the message's term
+  //     (raft_log.rs maybe_append slices and commits on that assumption);
+  NON_CONTIGUOUS_ENTRIES: 'non-contiguous-entries',
+  //   - a message type this binding never sends: MsgSnapshot (it exports no
+  //     compaction, so a leader never answers a lagging peer with one) and
+  //     MsgReadIndex / MsgReadIndexResp (it exports no read_index).
+  MESSAGE_TYPE_WITHOUT_PRODUCER: 'message-type-without-producer',
+  //   - a forwarded proposal carrying anything but what a port proposes: a
+  //     NORMAL entry whose data is canonical base64 of a JSON proposal. A
+  //     configuration change is proposed only at the leader's own port and
+  //     never forwarded; bytes that are not a proposal would commit and then
+  //     fail every apply of that entry, on every replica, for good.
+  FORWARDED_ENTRY_NOT_A_PROPOSAL: 'forwarded-entry-not-a-proposal',
 });
 
 // The message types the binding's own `num_to_msg_type` maps. A number
@@ -72,11 +94,19 @@ const RAFT_RS_POSITION_FIELDS = Object.freeze([
 // The peer-identity fields on a message.
 const RAFT_RS_PEER_ID_FIELDS = Object.freeze(['from', 'to']);
 
+// The largest position (term, index, commit, hint) a host value carries
+// exactly: the runtime reads positions as JavaScript numbers in places, and
+// raft-rs increments a term without an overflow check (a term at u64::MAX
+// wraps to 0 on the next campaign and traps the core). Peer ids are not
+// positions and keep the full 64 bits.
+const RAFT_RS_POSITION_MAX = BigInt(Number.MAX_SAFE_INTEGER);
+
 // The 64-bit fields the binding parses on one ENTRY a message carries.
 const RAFT_RS_ENTRY_POSITION_FIELDS = Object.freeze(['term', 'index']);
 
 export {
   RAFT_RS_ENTRY_POSITION_FIELDS,
+  RAFT_RS_POSITION_MAX,
   RAFT_RS_INGRESS_OUTCOME,
   RAFT_RS_INGRESS_REFUSAL,
   RAFT_RS_MESSAGE_TYPE,

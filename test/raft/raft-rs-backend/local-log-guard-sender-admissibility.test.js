@@ -5,8 +5,9 @@
 // lifecycle row read on a connection of the test's own, a refusal record or
 // an actual-core-entry count. No wall time.
 //
-//   A1  a forged heartbeat - an unknown raft id, term 0, a commit beyond the
-//       leader's log - is refused and holds nothing: the leader keeps
+//   A1  a forged heartbeat - an unknown raft id, a commit beyond the
+//       leader's log, at term 0 (refused at admission) or at the leader's
+//       own term (refused by the guard) - holds nothing: the leader keeps
 //       leading, its lifecycle row stays active, also after a restart
 //       (before this change it held the leader for a reseed, for good);
 //   A2  a member's heartbeat at a term below the receiver's, with a commit
@@ -108,16 +109,24 @@ function secondTermCluster(prefix) {
   return cluster;
 }
 
-test('A1: a forged heartbeat (unknown raft id, term 0, commit beyond the ' +
-  'log) is refused and holds nothing, also after a restart', async () => {
+test('A1: a forged heartbeat (unknown raft id, commit beyond the log) is ' +
+  'refused and holds nothing, also after a restart', async () => {
   const cluster = formedCluster('a1', ['a1-a', 'a1-b', 'a1-c'],
     FORMED_ENTRIES);
   try {
     const ids = peerIdsOf(cluster);
     const leader = cluster.node('a1-a').readStatus();
+    const beyond = BigInt(leader.commitIndex) + BEYOND;
+    // The verifier's exact T3 envelope (term 0) no longer passes admission:
+    // raft-rs never sends a heartbeat without its term (ingress schema).
+    const termless = await cluster.node('a1-a').step(envelopeTo(
+      cluster.partitionId, ids['a1-a'],
+      heartbeat(ids, UNKNOWN_SENDER, 'a1-a', 0, beyond)));
+    assert.equal(termless.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+    // The same forgery at the leader's own term reaches the guard.
     const steps = await deliverAlone(cluster, 'a1-a', envelopeTo(
       cluster.partitionId, ids['a1-a'], heartbeat(ids, UNKNOWN_SENDER,
-        'a1-a', 0, BigInt(leader.commitIndex) + BEYOND)));
+        'a1-a', leader.term, beyond)));
     assertRefusedNotHeld(cluster, 'a1-a', UNKNOWN_SENDER,
       RAFT_RS_LOCAL_LOG_REFUSAL.UNADMITTED_COMMIT_BEYOND_LOCAL_LOG, steps);
     const after = cluster.node('a1-a').readStatus();

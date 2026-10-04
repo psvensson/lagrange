@@ -182,7 +182,10 @@ const RAFT_RS_LOCAL_LOG_REFUSAL = Object.freeze({
   // disruptive-server rule, restricted to non-members).
   VOTE_REQUEST_OUTSIDE_CONFIGURATION:
     'vote-request-from-outside-configuration',
-  APPEND_BELOW_LOCAL_COMMIT: 'append-entries-below-local-commit',
+  // A forwarded MsgTransferLeader reaching a follower that knows a leader at
+  // the message's term (raft.rs send() traps re-forwarding it with its term
+  // set).
+  TRANSFER_REQUEST_AT_NON_LEADER: 'transfer-request-at-follower-with-leader',
   EMPTY_FORWARDED_PROPOSAL: 'empty-forwarded-proposal',
   APPEND_RESPONSE_BEYOND_LOCAL_LOG: 'append-response-beyond-local-log',
 });

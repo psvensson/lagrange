@@ -8,7 +8,9 @@
 // change reached only the panic hook's raw stderr.
 //
 //   P2  an append carrying an entry at or below the recipient's commit
-//       while its own index is not below it;
+//       while its own index is not below it: since entry contiguity is part
+//       of the ingress schema (raft-rs-ingress.js), such an append is
+//       refused at admission, before the guard and the core;
 //   P3  an empty proposal forwarded by a peer;
 //   P4  an accepting append response whose index lies beyond the leader's
 //       persisted log;
@@ -40,8 +42,10 @@ import {
   RUNTIME_FAULT_REPORT,
   RUNTIME_PHASE,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
-import {RAFT_RS_MESSAGE_TYPE} from
-  '../../../src/raft/raft-rs-ingress-constants.js';
+import {
+  RAFT_RS_INGRESS_REFUSAL,
+  RAFT_RS_MESSAGE_TYPE,
+} from '../../../src/raft/raft-rs-ingress-constants.js';
 import {RAFT_RS_ENTRY_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {
@@ -94,7 +98,7 @@ function stillCommits(cluster, leader, followers) {
 }
 
 test('W5 P2: an append carrying an entry at or below the follower commit ' +
-  'is refused before step', async () => {
+  'is refused at admission, before step', async () => {
   const cluster = formedCluster('w5-p2', ['p2-a', 'p2-b', 'p2-c'],
     FORMED_ENTRIES);
   try {
@@ -103,7 +107,8 @@ test('W5 P2: an append carrying an entry at or below the follower commit ' +
     const commit = String(follower.commitIndex);
     const committedEntry = durableLog(cluster.dbFileOf('p2-b'),
       cluster.partitionId).find((entry) => entry.index === Number(commit));
-    const steps = await deliverAlone(cluster, 'p2-b', envelopeTo(
+    const before = cluster.coreEntries.length;
+    const admitted = await cluster.node('p2-b').step(envelopeTo(
       cluster.partitionId, ids['p2-b'], {
         msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
         from: ids['p2-a'],
@@ -114,8 +119,12 @@ test('W5 P2: an append carrying an entry at or below the follower commit ' +
         entries: [{index: commit, term: String(follower.term + 1),
           entryType: RAFT_RS_ENTRY_TYPE.NORMAL}],
       }));
-    assertRefused(cluster, 'p2-b', ids['p2-a'],
-      RAFT_RS_LOCAL_LOG_REFUSAL.APPEND_BELOW_LOCAL_COMMIT, steps);
+    await cluster.node('p2-b').tick();
+    assert.equal(admitted.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+    assert.equal(admitted.reason,
+      RAFT_RS_INGRESS_REFUSAL.NON_CONTIGUOUS_ENTRIES);
+    assert.equal(stepCount(cluster, before), 0,
+      'the core stepped the refused append');
     assert.ok(stillCommits(cluster, 'p2-a', ['p2-b', 'p2-c']));
   } finally {
     cluster.dispose();
@@ -189,7 +198,9 @@ test('W5 P6: a MsgTimeoutNow to a replica below its participation gate is ' +
       cluster.partitionId, ids['p6-t'], {
         msgType: RAFT_RS_MESSAGE_TYPE.TIMEOUT_NOW,
         from: ids['p6-a'],
-        term: String(gated.term),
+        // A leader sends it at its own term (raft.rs send()); the joiner
+        // below its gate may not have taken a term yet.
+        term: String(cluster.node('p6-a').readStatus().term),
       }));
     assertRefused(cluster, 'p6-t', ids['p6-a'],
       PARTICIPATION_GATE.GATE_CLOSED, steps);

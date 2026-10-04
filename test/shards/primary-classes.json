@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1922,
+    "unit": 1923,
     "integration": 77,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2199,
-  "digest": "fnv1a32-691ddc04",
+  "censusSize": 2200,
+  "digest": "fnv1a32-d2462f64",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1455,6 +1455,7 @@
     "test/raft/raft-rs-backend/partition-peer-admission.test.js": "unit",
     "test/raft/raft-rs-backend/peer-identity.test.js": "unit",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "unit",
+    "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "unit",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "unit",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "unit",
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "unit",

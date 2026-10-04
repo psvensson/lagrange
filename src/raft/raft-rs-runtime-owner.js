@@ -186,6 +186,13 @@ let runtimeGeneration = 0;
 let nextGroupKey = 1;
 let actualCoreEntries = 0;
 let actualCoreEntryObserver = null;
+// A test's fault at the core boundary: called inside the core call's
+// containment with the group, the operation and its arguments, it may throw
+// as the core itself would (a WebAssembly.RuntimeError is a trap). No peer
+// input can trap the core once the ingress refuses every shape raft-rs
+// traps on, so the trap witnesses inject theirs here. Never set in
+// production.
+let coreFaultInjector = null;
 const groups = new Map();
 // A recorded observation is shaped once, when a busy-queue read asks for it.
 const SHAPED_STATUS = new WeakMap();
@@ -391,6 +398,7 @@ function invokeCore(group, operation, ...args) {
   try {
     const parameters = CORE_CALL_WITHOUT_HANDLE.has(operation) ?
       args : [group.handle, ...args];
+    coreFaultInjector?.(group.groupId, operation, args);
     return {ok: true, value: core[operation](...parameters)};
   } catch (error) {
     if (isCoreRefusal(error)) {
@@ -1585,10 +1593,20 @@ function setActualCoreEntryObserver(observer) {
   actualCoreEntryObserver = typeof observer === 'function' ? observer : null;
 }
 
+/**
+ * Test seam: a fault injected at the core boundary (see coreFaultInjector).
+ * @param {Function|null} injector - (groupId, operation, args) => void, or
+ *   null to remove it.
+ */
+function setCoreFaultInjector(injector) {
+  coreFaultInjector = typeof injector === 'function' ? injector : null;
+}
+
 export {
   CORE_OK,
   CORE_REFUSED,
   createRuntimeDispatcher,
   setActualCoreEntryObserver,
+  setCoreFaultInjector,
   verifyRaftRsBinding,
 };

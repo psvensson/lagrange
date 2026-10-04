@@ -1,15 +1,18 @@
 // The delivered envelope the witnesses of a shared-core trap use to make
-// the real WASM core trap through one port.
+// the core trap through one port.
 //
-// It used to be a heartbeat whose commit lies beyond the recipient's log; the
-// local-log guard now refuses that one before step (and holds the group for
-// a reseed). What still reaches the core is an append whose own index is the
-// recipient's commit index - so the crate reads its entries - carrying one
-// entry that does not follow it: raft-rs's maybe_append slices its entries
-// from the first conflict and runs past their end (raft_log.rs). That is the
-// entry-contiguity precondition the design verification left to a schema
-// check in admitRaftRsMessage (a recorded follow-up); when it closes, these
-// witnesses need another trap source.
+// No peer input can trap the core any more: the ingress refuses every shape
+// raft-rs traps on (raft-rs-ingress.js; the fuzz witness
+// raft-rs-ingress-fuzz.test.js drives thousands of hostile envelopes through
+// a real port and observes no trap). It used to be a non-contiguous append,
+// and before that a heartbeat beyond the recipient's log. So the trap is
+// injected at the core boundary instead (the runtime owner's
+// setCoreFaultInjector test seam): the envelope is a well-formed,
+// admissible append carrying no entries, and the core's `step` of exactly
+// that message throws a WebAssembly.RuntimeError inside the runtime's core
+// containment, as a real trap does - the runtime is marked unhealthy and
+// replaced, every group restored from its durable record, exactly as before.
+// The injection is one-shot and matches only this message.
 
 import Database from 'better-sqlite3';
 
@@ -17,12 +20,12 @@ import {RAFT_RS_TABLE} from
   '../../../src/raft/raft-rs-durable-store-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../../src/raft/raft-rs-ingress-constants.js';
-import {RAFT_RS_ENTRY_TYPE} from
-  '../../../src/raft/raft-rs-ready-loop-constants.js';
+import {setCoreFaultInjector} from
+  '../../../src/raft/raft-rs-runtime-owner.js';
 
-// How far past the recipient's commit the lone carried entry claims to sit.
-const NON_CONTIGUOUS_GAP = 5;
 const NO_TERM = '0';
+const STEP = 'step';
+const TRAP_MESSAGE = 'unreachable';
 
 function termAt(dbFile, groupId, index) {
   const db = new Database(dbFile, {readonly: true});
@@ -36,8 +39,26 @@ function termAt(dbFile, groupId, index) {
   }
 }
 
+function sameMessage(stepped, message) {
+  return stepped?.msgType === message.msgType &&
+    stepped.from === message.from && stepped.to === message.to &&
+    stepped.term === message.term && stepped.index === message.index;
+}
+
+// Arm the one-shot trap: the core's step of exactly `message` in `groupId`
+// throws as a trapped WASM instance does.
+function armTrapOn(groupId, message) {
+  setCoreFaultInjector((stepGroupId, operation, args) => {
+    if (stepGroupId === groupId && operation === STEP &&
+        sameMessage(args[0], message)) {
+      setCoreFaultInjector(null);
+      throw new globalThis.WebAssembly.RuntimeError(TRAP_MESSAGE);
+    }
+  });
+}
+
 /**
- * The trapping envelope for one replica.
+ * The trapping envelope for one replica (the trap is armed by this call).
  * @param {Object} options - {dbFile, groupId, status (the recipient's port
  *   status: peerId, term, commitIndex), from (the sender's raft peer id),
  *   term (the message's term, decimal string)}.
@@ -45,24 +66,18 @@ function termAt(dbFile, groupId, index) {
  */
 function coreTrappingAppend({dbFile, groupId, status, from, term}) {
   const commit = BigInt(status.commitIndex);
-  return {
-    groupId,
+  const message = {
+    from,
     to: status.peerId,
-    message: {
-      from,
-      to: status.peerId,
-      msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
-      term,
-      index: String(commit),
-      logTerm: termAt(dbFile, groupId, commit),
-      commit: String(commit),
-      entries: [{
-        index: String(commit + BigInt(NON_CONTIGUOUS_GAP)),
-        term,
-        entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
-      }],
-    },
+    msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
+    term,
+    index: String(commit),
+    logTerm: termAt(dbFile, groupId, commit),
+    commit: String(commit),
+    entries: [],
   };
+  armTrapOn(groupId, message);
+  return {groupId, to: status.peerId, message};
 }
 
 export {coreTrappingAppend};

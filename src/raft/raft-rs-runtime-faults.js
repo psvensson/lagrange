@@ -13,6 +13,8 @@ import {recordInboundStepRefusal} from './raft-rs-peer-delivery.js';
 import {persistenceAdmitted} from './raft-rs-persistence-admission.js';
 import {
   NO_LEADER,
+  ROLE,
+  ROLE_LEADER,
   RUNTIME_FAULT_REPORT,
   RUNTIME_PHASE,
   RUNTIME_REASON,
@@ -96,9 +98,9 @@ function guardInputs(group) {
   return {
     gateOpen: group.gateOpen === true,
     lastIndex: group.persistedLastIndex,
-    commit: status.commit,
     term: BigInt(status.term ?? 0),
     leaderKnown: (status.lead ?? NO_LEADER) !== NO_LEADER,
+    leading: ROLE[status.raftState] === ROLE_LEADER,
     confState: group.statusObservation?.confState ?? null,
   };
 }
