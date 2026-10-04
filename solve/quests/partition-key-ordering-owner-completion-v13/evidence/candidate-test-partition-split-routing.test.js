@@ -874,6 +874,7 @@ test('split replay captures SQL string and own-property intrinsics in isolated r
         arrayFilter: Array.prototype.filter,
         regexpExec: RegExp.prototype.exec,
         NumberCtor: globalThis.Number,
+        numberIsNaN: Number.isNaN,
       };
       const hostileCalls = Object.create(null);
       const hostile = (name) => () => {
@@ -883,32 +884,54 @@ test('split replay captures SQL string and own-property intrinsics in isolated r
       const routed = [];
       try {
         Object.prototype.hasOwnProperty = hostile('hasOwnProperty');
+        Object.keys = hostile('objectKeys');
         String.prototype.trim = hostile('trim');
         String.prototype.toUpperCase = hostile('toUpperCase');
         String.prototype.startsWith = hostile('startsWith');
+        String.prototype.endsWith = hostile('endsWith');
+        String.prototype.slice = hostile('slice');
+        String.prototype.substring = hostile('substring');
+        String.prototype.match = hostile('match');
+        String.prototype.split = hostile('split');
         String.prototype.includes = hostile('includes');
         Array.isArray = hostile('arrayIsArray');
+        Array.prototype.push = hostile('arrayPush');
+        Array.prototype.map = hostile('arrayMap');
+        Array.prototype.filter = hostile('arrayFilter');
+        RegExp.prototype.exec = hostile('regExpExec');
+        originals.NumberCtor.isNaN = hostile('numberIsNaN');
+        globalThis.Number = hostile('NumberCtor');
+
+        const metadata = {
+          primaryKeyColumn: 'id',
+          splitKey: 'm',
+          targetPartitionIds: ['users-left', 'users-right'],
+          [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 4,
+        };
+        const queryExecutor = {
+          async executeOnPartition(partitionId, _sql, params) {
+            routed[routed.length] = {partitionId, params};
+            return {success: true};
+          },
+        };
+
         await replaySplitEntry(
           {
             type: PARTITION_SERVICE_OPERATION.QUERY,
-            sql: ' INSERT INTO users (id) VALUES (?)',
-            params: ['a'],
+            sql: " INSERT INTO users (id) VALUES ('a')",
+            params: [],
           },
+          metadata,
+          {tableName: 'users', queryExecutor},
+        );
+        await replaySplitEntry(
           {
-            primaryKeyColumn: 'id',
-            splitKey: 'm',
-            targetPartitionIds: ['users-left', 'users-right'],
-            [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 4,
+            type: PARTITION_SERVICE_OPERATION.QUERY,
+            sql: ' INSERT INTO users (id, name) VALUES (?, ?)',
+            params: ['a', 'a'],
           },
-          {
-            tableName: 'users',
-            queryExecutor: {
-              async executeOnPartition(partitionId, _sql, params) {
-                routed.push({partitionId, params});
-                return {success: true};
-              },
-            },
-          },
+          metadata,
+          {tableName: 'users', queryExecutor},
         );
       } finally {
         Object.prototype.hasOwnProperty = originals.hasOwnProperty;
@@ -928,6 +951,7 @@ test('split replay captures SQL string and own-property intrinsics in isolated r
         Array.prototype.filter = originals.arrayFilter;
         RegExp.prototype.exec = originals.regexpExec;
         globalThis.Number = originals.NumberCtor;
+        originals.NumberCtor.isNaN = originals.numberIsNaN;
       }
       process.stdout.write(JSON.stringify({hostileCalls, routed}));
     `;
