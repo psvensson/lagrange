@@ -10,9 +10,6 @@ import {
   resolveSplitSnapshotBatchRowLimit,
   routeSplitSnapshotBatch,
 } from '../../src/partition/partition-split-routing.js';
-import {
-  PARTITION_SERVICE_OPERATION,
-} from '../../src/partition/partition-service-constants.js';
 
 const TABLE_NAME = 'users';
 const PRIMARY_KEY_COLUMN = 'id';
