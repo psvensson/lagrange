@@ -57,6 +57,8 @@ const stringTrim = Function.call.bind(String.prototype.trim);
 const MapCtor = Map;
 const mapGet = Function.call.bind(Map.prototype.get);
 const mapSet = Function.call.bind(Map.prototype.set);
+const mathFloor = Math.floor;
+const mathMin = Math.min;
 const TypeErrorCtor = TypeError;
 
 function appendOwnArrayValue(array, value) {
@@ -422,14 +424,14 @@ function resolveSplitSnapshotBatchRowLimitFromColumnCount(
   columnCount,
   requestedRows,
 ) {
-  const bindLimitedRows = Math.floor(
+  const bindLimitedRows = mathFloor(
     SPLIT_SNAPSHOT_MAX_BIND_VARIABLES / columnCount,
   );
   const configuredRows =
     numberIsInteger(requestedRows) && requestedRows > 0 ?
       requestedRows :
       1;
-  return Math.min(configuredRows, bindLimitedRows);
+  return mathMin(configuredRows, bindLimitedRows);
 }
 
 export function resolveSplitSnapshotBatchRowLimit(columns, requestedRows) {
