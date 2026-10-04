@@ -858,11 +858,22 @@ test('split replay captures SQL string and own-property intrinsics in isolated r
 
       const originals = {
         hasOwnProperty: Object.prototype.hasOwnProperty,
+        objectKeys: Object.keys,
         trim: String.prototype.trim,
         toUpperCase: String.prototype.toUpperCase,
         startsWith: String.prototype.startsWith,
+        endsWith: String.prototype.endsWith,
+        slice: String.prototype.slice,
+        substring: String.prototype.substring,
+        match: String.prototype.match,
+        split: String.prototype.split,
         includes: String.prototype.includes,
         arrayIsArray: Array.isArray,
+        arrayPush: Array.prototype.push,
+        arrayMap: Array.prototype.map,
+        arrayFilter: Array.prototype.filter,
+        regexpExec: RegExp.prototype.exec,
+        NumberCtor: globalThis.Number,
       };
       const hostileCalls = Object.create(null);
       const hostile = (name) => () => {
@@ -901,11 +912,22 @@ test('split replay captures SQL string and own-property intrinsics in isolated r
         );
       } finally {
         Object.prototype.hasOwnProperty = originals.hasOwnProperty;
+        Object.keys = originals.objectKeys;
         String.prototype.trim = originals.trim;
         String.prototype.toUpperCase = originals.toUpperCase;
         String.prototype.startsWith = originals.startsWith;
+        String.prototype.endsWith = originals.endsWith;
+        String.prototype.slice = originals.slice;
+        String.prototype.substring = originals.substring;
+        String.prototype.match = originals.match;
+        String.prototype.split = originals.split;
         String.prototype.includes = originals.includes;
         Array.isArray = originals.arrayIsArray;
+        Array.prototype.push = originals.arrayPush;
+        Array.prototype.map = originals.arrayMap;
+        Array.prototype.filter = originals.arrayFilter;
+        RegExp.prototype.exec = originals.regexpExec;
+        globalThis.Number = originals.NumberCtor;
       }
       process.stdout.write(JSON.stringify({hostileCalls, routed}));
     `;
@@ -920,7 +942,8 @@ test('split replay captures SQL string and own-property intrinsics in isolated r
     t.same(result.hostileCalls, {},
       'post-load SQL intrinsic replacements are never called');
     t.same(result.routed, [
-      {partitionId: LEFT_PARTITION_ID, params: ['a']},
+      {partitionId: LEFT_PARTITION_ID, params: []},
+      {partitionId: LEFT_PARTITION_ID, params: ['a', 'a']},
     ]);
     t.end();
   });
