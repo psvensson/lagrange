@@ -224,7 +224,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       );
     });
 
-  test('deriveMembershipPublicationCandidate counts promotable learners toward priority spread quorum',
+  test('deriveMembershipPublicationCandidate does not count promotable learners toward priority spread quorum',
     async (t) => {
       const priorityTableIds = [
         'control_plane_publications',
@@ -324,15 +324,28 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         ['node-1', 'node-2'],
         'promotable learners should be included in the published active set while priority spread recovery is pending',
       );
+      // SUPERSEDED (owner decision 2026-10-04, voters-only census). Before:
+      // an ACTIVE learner on a promotable node counted as a spread holder and
+      // satisfied the quorum. A holder is now a voter-role row: the learner is
+      // excluded (raft_role_not_voter) and the gap stays visible until it is
+      // promoted, so an ACTIVE learner row can never re-mask a spread gap.
       t.match(
         candidate.priorityPartitionSummary,
         {
-          satisfied: true,
+          satisfied: false,
           requiredDistinctNodeCount: 2,
-          missingPartitionIds: [],
-          blockedPartitions: [],
         },
-        'active promotable learners should satisfy the derived priority spread quorum',
+        'active promotable learners do not satisfy the derived priority spread quorum',
+      );
+      t.same(
+        candidate.priorityPartitionSummary.blockedPartitions.map((entry) => [
+          entry.partitionId,
+          entry.readyDistinctNodeCount,
+          entry.spreadGap,
+          entry.exclusionReasonCounts?.raft_role_not_voter,
+        ]),
+        priorityTableIds.map((tableId) => [`${tableId}-p1`, 1, 1, 1]),
+        'each learner row is excluded as a non-voter and leaves a gap of one',
       );
     });
 
@@ -358,12 +371,14 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           raft_role: 'leader',
           address: `node-1/partition/${partitionId}-r1`,
         }, {
-          service_id: `${tableId}-learner-${index}`,
+          // Superseded fixture (voters-only census, 2026-10-04): the
+          // fresher holder is a follower; a learner row no longer counts.
+          service_id: `${tableId}-follower-${index}`,
           node_id: 'node-2',
           partition_id: partitionId,
           service_type: 'partition',
           status: 'active',
-          raft_role: 'learner',
+          raft_role: 'follower',
           address: `node-2/partition/${partitionId}-r2`,
         }];
       });
@@ -457,7 +472,134 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       );
     });
 
-  test('deriveClusterMembershipCandidateSync counts promotable learners toward priority spread quorum from cached readiness',
+  // Witnesses (h) and (i) for the one spread authority (owner decision
+  // 2026-10-04, D8): the fresh census wins whenever it is derivable, so an
+  // earlier satisfied summary - from the planning snapshot or the durable
+  // publication row - never latches over current rows that show a gap.
+  const latchPriorityTableIds = [
+    'control_plane_publications',
+    'replica_operations',
+    'schema_operations',
+    'sql_transaction_participants',
+    'sql_transactions',
+    'sql_write_operations',
+  ];
+  const latchNodeIds = ['node-1', 'node-2', 'node-3'];
+  const latchSatisfiedSummary = {
+    satisfied: true,
+    requiredDistinctNodeCount: 3,
+    readyEligibleNodeCount: 3,
+    totalPriorityPartitionCount: latchPriorityTableIds.length,
+    missingPartitionIds: [],
+    blockedPartitions: [],
+  };
+  const buildLatchServiceRows = (holdersFor) =>
+    latchPriorityTableIds.flatMap((tableId) =>
+      holdersFor(tableId).map(([nodeId, status], index) => ({
+        service_id: `${tableId}-r${index + 1}`,
+        node_id: nodeId,
+        partition_id: `${tableId}-p1`,
+        service_type: 'partition',
+        status,
+        raft_role: index === 0 ? 'leader' : 'follower',
+        address: `${nodeId}/partition/${tableId}-p1-r${index + 1}`,
+      })));
+  const buildLatchCandidate = (serviceRows, extra = {}) =>
+    deriveMembershipPublicationCandidate({
+      publisherNodeId: 'node-1',
+      latestPublicationRow: {
+        publication_epoch: 12,
+        status: 'PUBLISHED',
+        published_active_node_ids: latchNodeIds,
+        required_ack_node_ids: latchNodeIds,
+        acknowledged_node_ids: latchNodeIds,
+        priority_partition_summary: latchSatisfiedSummary,
+      },
+      nodeRows: latchNodeIds.map((nodeId) => ({
+        node_id: nodeId,
+        status: 'active',
+        connection_state: 'ready',
+        ready_lease_expires_at: 5000,
+      })),
+      readinessEntries: latchNodeIds.map((nodeId) => ({
+        nodeId,
+        dimensions: {
+          clusterMemberHealthy: true,
+          controlPlanePublished: true,
+          controlPlaneWritable: true,
+          controlPlaneRecoveryEligible: true,
+          repairEligible: true,
+          serveEligible: true,
+        },
+      })),
+      nodeEndpointRows: latchNodeIds.map((nodeId) => ({
+        endpoint_id: `${nodeId}-ws`,
+        node_id: nodeId,
+        transport_type: 'ws',
+        status: 'active',
+        address: `ws://${nodeId}:8082`,
+      })),
+      serviceRows,
+      nowMs: 1000,
+      ...extra,
+    });
+
+  test('(h) a satisfied planning-snapshot summary never latches over a census gap',
+    async (t) => {
+      const gapRows = buildLatchServiceRows((tableId) =>
+        tableId === 'sql_transactions' ?
+          [['node-1', 'active'], ['node-2', 'active']] :
+          latchNodeIds.map((nodeId) => [nodeId, 'active']));
+      const candidate = buildLatchCandidate(gapRows, {
+        priorityPartitionSummary: latchSatisfiedSummary,
+      });
+      t.equal(candidate.priorityPartitionSummary.satisfied, false,
+        'the fresh census gap beats the satisfied planning-snapshot summary');
+      t.same(
+        candidate.priorityPartitionSummary.blockedPartitions.map((entry) => [
+          entry.partitionId,
+          entry.spreadGap,
+        ]),
+        [['sql_transactions-p1', 1]],
+      );
+      t.equal(candidate.priorityPartitionSummaryChanged, true,
+        'the durable satisfied row is refreshed to the gap');
+    });
+
+  test('(i) steady state fully spread, a node\'s row goes non-ACTIVE: the gap is published within one reconcile',
+    async (t) => {
+      const spreadRows = buildLatchServiceRows(() =>
+        latchNodeIds.map((nodeId) => [nodeId, 'active']));
+      const steady = buildLatchCandidate(spreadRows);
+      t.equal(steady.priorityPartitionSummary.satisfied, true);
+      t.equal(steady.priorityPartitionSummaryChanged, false,
+        'nothing to refresh in steady state');
+      // node-3 stays an eligible (serving) node; its schema_operations
+      // replica drops out of ACTIVE. (A node whose every row is down leaves
+      // the eligible cohort, and the required spread falls to min(3, 2).)
+      const degradedRows = buildLatchServiceRows((tableId) =>
+        latchNodeIds.map((nodeId) => [
+          nodeId,
+          nodeId === 'node-3' && tableId === 'schema_operations' ?
+            'stopped' :
+            'active',
+        ]));
+      const degraded = buildLatchCandidate(degradedRows);
+      t.equal(degraded.priorityPartitionSummary.satisfied, false,
+        'Q1 (is it spread?) reads the gap on the very next derivation');
+      t.same(
+        degraded.priorityPartitionSummary.blockedPartitions.map((entry) => [
+          entry.partitionId,
+          entry.readyDistinctNodeCount,
+          entry.spreadGap,
+        ]),
+        [['schema_operations-p1', 2, 1]],
+      );
+      t.equal(degraded.priorityPartitionSummaryChanged, true,
+        'the reconcile writes the refreshed summary');
+    });
+
+  test('deriveClusterMembershipCandidateSync does not count promotable learners toward priority spread quorum from cached readiness',
     async (t) => {
       const priorityTableIds = [
         'control_plane_publications',
@@ -567,15 +709,22 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         ['node-1', 'node-2'],
         'sync planning should include promotable learners in the published active set',
       );
+      // SUPERSEDED (owner decision 2026-10-04, voters-only census). Before:
+      // sync planning counted cached promotable learners toward the spread
+      // quorum. Learners never count now; the node still joins the published
+      // set (asserted above), only the spread answer changed.
       t.match(
         candidate.priorityPartitionSummary,
         {
-          satisfied: true,
+          satisfied: false,
           requiredDistinctNodeCount: 2,
-          missingPartitionIds: [],
-          blockedPartitions: [],
         },
-        'sync planning should count cached promotable learners toward priority spread quorum',
+        'sync planning does not count cached learners toward priority spread quorum',
+      );
+      t.equal(
+        candidate.priorityPartitionSummary.blockedPartitions.length,
+        priorityTableIds.length,
+        'every priority partition held by a leader plus a learner is still blocked',
       );
     });
 

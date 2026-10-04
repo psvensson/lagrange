@@ -83,6 +83,7 @@ export function buildPriorityRecoveryPartitionAssessment(options = {}) {
   const spreadCompletion = buildPriorityRecoverySpreadCompletion({
     plannerReady: planner.ready === true,
     plannerSpreadGap: planner.spreadGap,
+    readyReplicaCountByNodeId: planner.readyReplicaCountByNodeId,
     activeOperationContexts: spreadRelevantOperationContexts,
     eligibleTargetNodeIds: admission.effectiveEligibleNodeIds,
   });
@@ -122,6 +123,8 @@ export function buildPriorityRecoveryPartitionAssessment(options = {}) {
       partitionId,
       serialLaneOperationContexts: options.serialLaneOperationContexts,
       eligibleTargetNodeIds: admission.effectiveEligibleNodeIds,
+      priorityPartitionSummary: options.priorityPartitionSummary,
+      plannerByPartitionId: options.plannerByPartitionId,
     });
   const priorityOperationSerialWait =
     eligibleButNoOperation &&

@@ -674,7 +674,18 @@ test('deriveMembershipPublicationCandidate ignores stale published membership wh
     );
   });
 
-test('deriveMembershipPublicationCandidate refreshes stale priority spread metadata from in-flight replace evidence',
+// SUPERSEDED - INVERTED (owner decision 2026-10-04, "delete the second
+// authority"). Before: a remove-dispatch REPLACE node-2 -> node-3 with NO
+// service row on node-3 certified spread; the closure synthesized a
+// satisfied summary, the candidate published satisfied, and the protocol
+// returned to steady_published. That was a lie by the census rule: the
+// REPLACE removes node-2's only counted replica, so completing it leaves
+// {node-1, node-3} - two holders - and it can never close the gap. Now the
+// census owns the answer: publication stays blocked (priority spread
+// pending) until the target's row is counted. Circular-wait check: the
+// target's ACTIVE row is a CRITICAL-class write and the REPLACE's own
+// progress never reads the published summary.
+test('deriveMembershipPublicationCandidate keeps priority spread blocked when an in-flight replace has no counted target',
   async (t) => {
     const priorityTableIds = [
       'control_plane_publications',
@@ -844,40 +855,40 @@ test('deriveMembershipPublicationCandidate refreshes stale priority spread metad
     t.equal(
       candidate.changed,
       false,
-      'the active membership can stay stable while metadata still needs refresh',
+      'the active membership stays stable',
     );
     t.match(candidate.priorityRecoveryClosureWitness, {
-      state: 'closure_satisfied_stale_publication',
-      closureRecordId:
-        MEMBERSHIP_PUBLICATION_CLOSURE_RECORD_ID_PRIORITY_SPREAD,
-      closureWitnessClass:
-        MEMBERSHIP_PUBLICATION_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
-    });
+      state: 'closure_pending',
+      prioritySpreadPending: true,
+    }, 'the uncovered REPLACE keeps the closure witness pending');
     t.match(candidate.priorityPartitionSummary, {
-      satisfied: true,
-      missingPartitionIds: [],
-      blockedPartitions: [],
-    });
+      satisfied: false,
+      missingPartitionIds: priorityTableIds.map((tableId) => `${tableId}-p1`),
+    }, 'the census still shows every gap: no service row exists on node-3');
+    t.same(
+      candidate.priorityPartitionSummary.blockedPartitions.map((entry) => [
+        entry.partitionId,
+        entry.readyDistinctNodeCount,
+        entry.spreadGap,
+      ]),
+      priorityTableIds.map((tableId) => [`${tableId}-p1`, 2, 1]),
+      'each partition is held on two nodes with a gap of one',
+    );
     t.equal(
       candidate.priorityRecoveryDecisionSnapshots?.snapshotCount,
       priorityTableIds.length,
       MEMBERSHIP_PUBLICATION_PRIORITY_DECISION_SNAPSHOT_ASSERTION,
     );
-    t.equal(
-      candidate.priorityPartitionSummaryChanged,
-      true,
-      'the coordinator should mark stale durable spread metadata for refresh',
-    );
-    t.equal(
+    t.not(
       candidate.recoveryProtocolState,
       MEMBERSHIP_PUBLICATION_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED,
-      'priority spread closure should return the protocol to steady published state',
+      'publication does not return to steady published on an uncovered REPLACE',
     );
-    t.notOk(
+    t.ok(
       candidate.priorityRecoveryReasonCodes.includes(
         CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
       ),
-      'stale durable spread reasons should clear once the closure witness satisfies publication refresh',
+      'the not-spread reason stays until the census counts the target',
     );
   });
 

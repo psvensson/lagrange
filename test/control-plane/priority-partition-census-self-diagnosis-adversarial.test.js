@@ -160,9 +160,23 @@ test('explicit malformed readiness evidence cannot promote a learner', (t) => {
     serviceRows: learnerRows,
     readinessByNodeId: {'node-3': nonPromotable},
   }), SUMMARY_HELPERS);
+  // SUPERSEDED (owner decision 2026-10-04, voters-only census). Before: a
+  // learner on a non-promotable node was excluded as learner_not_promotable
+  // (and a learner on a promotable node counted). A learner never counts
+  // now, whatever its node's readiness: it is excluded as a non-voter.
   t.equal(
-    partitionBlock(normal).exclusionReasonCounts.learner_not_promotable,
+    partitionBlock(normal).exclusionReasonCounts.raft_role_not_voter,
     1,
+  );
+  t.equal(partitionBlock(normal).readyDistinctNodeCount, 2);
+  const promotable = buildDerivedPriorityPartitionSummary(createDerivedOptions({
+    serviceRows: learnerRows,
+    readinessByNodeId: {},
+  }), SUMMARY_HELPERS);
+  t.equal(
+    partitionBlock(promotable).exclusionReasonCounts.raft_role_not_voter,
+    1,
+    'a learner on a promotable node is not a holder either',
   );
 
   let dimensionReads = 0;

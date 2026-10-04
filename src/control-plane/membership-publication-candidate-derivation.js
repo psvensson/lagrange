@@ -45,7 +45,6 @@ import {
   PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
   arePriorityPartitionSummariesEqual,
   buildDerivedPriorityPartitionSummary,
-  chooseMoreAdvancedPriorityPartitionSummary,
   isReadinessPromotable,
   normalizePriorityPartitionSummary,
 } from './membership-publication-priority-partition-summary.js';
@@ -606,11 +605,12 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     },
     helperFns,
   );
-  const priorityPartitionSummaryBase = chooseMoreAdvancedPriorityPartitionSummary(
-    normalizedPriorityPartitionSummary,
-    derivedPriorityPartitionSummary,
-    helperFns,
-  );
+  // The fresh census wins whenever it is derivable (owner decision
+  // 2026-10-04): an earlier satisfied planning-snapshot summary never
+  // outranks the current rows. The embedded summary stands in only when the
+  // census cannot be derived (no service/partition rows here).
+  const priorityPartitionSummaryBase =
+    derivedPriorityPartitionSummary ?? normalizedPriorityPartitionSummary;
   const reasonCode =
     typeof planningSnapshot.reasonCode === 'string' && planningSnapshot.reasonCode.length > 0 ?
       planningSnapshot.reasonCode :

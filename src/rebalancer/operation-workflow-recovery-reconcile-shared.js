@@ -276,6 +276,13 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_STATE = Object.freeze({
   // another operation (CONVERGED, or released), a partition REPLACE is its
   // owner's to complete from committed membership: the drain hands it back.
   SOURCE_RETIREMENT_OWNED: 'source_retirement_owned',
+  // An ADD whose owner is unavailable and whose OWN target replica is read
+  // ACTIVE from the authoritative status: done by its own operation fact,
+  // independent of the partition's spread (owner decision 2026-10-04 - an
+  // in-flight operation never answers "is it spread?", and orphan adoption
+  // skips priority partitions, so without this a dead-owner ADD would wait
+  // for its step timeout).
+  ADD_TARGET_ACTIVE_OWNER_UNAVAILABLE: 'add_target_active_owner_unavailable',
 });
 
 const PRIORITY_RECOVERY_OPERATION_DRAIN_OPERATION_TYPES = Object.freeze(
@@ -340,6 +347,11 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE = Object.freeze(
     ],
     [
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.OWNER_UNAVAILABLE_RELEASED,
+      OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN,
+    ],
+    [
+      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE
+        .ADD_TARGET_ACTIVE_OWNER_UNAVAILABLE,
       OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN,
     ],
     [

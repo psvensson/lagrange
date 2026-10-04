@@ -29,28 +29,25 @@ export function registerPriorityRecoverySnapshotObservationCurrencyActuationPres
     PRIORITY_RECOVERY_PRESSURE_STATE_WRITE_BACKLOG,
     PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
     PRIORITY_RECOVERY_PROGRESS_ACTION_NONE,
-    PRIORITY_RECOVERY_PROGRESS_BOUNDARY_NONE,
+    PRIORITY_RECOVERY_PROGRESS_ACTION_SCHEDULE_FOLLOWUP_REBALANCE,
     PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
     PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_BLOCKED,
     PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
     PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_READY,
-    PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_PROCEED,
     PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_RETRY,
     PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_STOP,
     PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
-    PRIORITY_RECOVERY_PROGRESS_OWNER_NONE,
     PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
     PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
-    PRIORITY_RECOVERY_PROGRESS_WAIT_NONE,
     PRIORITY_RECOVERY_PROGRESS_WAIT_RETRY_SCHEDULED,
     PRIORITY_RECOVERY_PROGRESS_WAIT_STALLED,
-    PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
     PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
     PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+    PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
+    PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED,
     PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
     PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
     PRIORITY_RECOVERY_SINGLE_EMERGENCY_BUDGET_LIMIT,
-    PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT,
     PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
     PRIORITY_RECOVERY_STALE_READY_DISTINCT_NODE_COUNT,
     PRIORITY_RECOVERY_STATUS_FAILED,
@@ -645,6 +642,17 @@ export function registerPriorityRecoverySnapshotObservationCurrencyActuationPres
         operationContexts: [failedReplaceActiveTargetOperation],
       });
 
+      // SUPERSEDED (owner decision 2026-10-04, "delete the second
+      // authority"). Before: a FAILED REPLACE whose target was active
+      // operational satisfied spread (operational_target_visible_on_eligible_
+      // node), read spread_satisfied_in_flight and scheduled nothing. Now an
+      // operation contributes nothing to "is it spread?": against a census
+      // that still shows the gap the partition stays unresolved
+      // (blocked_unclassified: the left placement still suppresses the
+      // missing-operation blocker) and the follow-up owner plans from the
+      // census. The protected property - no duplicate recovery operation
+      // once the target really holds the replica - is kept by the census
+      // itself: when it counts the active target the partition converges.
       t.same(
         snapshot?.blockerReasons,
         [],
@@ -653,39 +661,64 @@ export function registerPriorityRecoverySnapshotObservationCurrencyActuationPres
       t.match(
         snapshot?.spreadCompletion,
         {
-          satisfied: true,
-          reasonCode:
-          PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
-          satisfyingOperationIds: [
-            PRIORITY_RECOVERY_OPERATION_ID_FAILED_REPLACE_ACTIVE_TARGET,
-          ],
-          satisfyingOperationCount: PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT,
-          blockingOperationIds: [],
-          blockingOperationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
+          satisfied: false,
+          satisfyingOperationIds: [],
+          satisfyingOperationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
         },
         PRIORITY_RECOVERY_ACTIVE_TARGET_SPREAD_WITNESS_MESSAGE,
       );
       t.equal(
         snapshot?.semanticState,
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+        PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
         PRIORITY_RECOVERY_ACTIVE_TARGET_SEMANTIC_MESSAGE,
-      );
-      t.equal(
-        snapshot?.completion?.state,
-        PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-        PRIORITY_RECOVERY_ACTIVE_TARGET_COMPLETION_MESSAGE,
       );
       t.match(
         snapshot?.progress,
         {
-          contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_READY,
-          nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_PROCEED,
-          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_NONE,
-          nextRequiredAction: PRIORITY_RECOVERY_PROGRESS_ACTION_NONE,
-          blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_NONE,
-          waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_NONE,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_PROGRESS_ACTION_SCHEDULE_FOLLOWUP_REBALANCE,
+          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
         },
         PRIORITY_RECOVERY_ACTIVE_TARGET_PROGRESS_MESSAGE,
+      );
+      const censusCountsTarget = buildPriorityRecoveryDecisionSnapshot({
+        partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+        publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+        priorityPartitionSummary: {
+          satisfied: true,
+          requiredDistinctNodeCount:
+          PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+          blockedPartitions: [],
+          missingPartitionIds: [],
+        },
+        admission: {
+          effectiveEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+          effectiveEligibleNodeCount:
+          PRIORITY_RECOVERY_SINGLE_EMERGENCY_BUDGET_LIMIT,
+          ineligibleNodes: [],
+        },
+        operationContexts: [failedReplaceActiveTargetOperation],
+      });
+      t.equal(
+        censusCountsTarget?.semanticState,
+        PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED,
+        'once the census counts the active target the partition converges',
+      );
+      t.equal(
+        censusCountsTarget?.completion?.state,
+        PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
+        PRIORITY_RECOVERY_ACTIVE_TARGET_COMPLETION_MESSAGE,
+      );
+      t.match(
+        censusCountsTarget?.progress,
+        {
+          contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_READY,
+          nextRequiredAction: PRIORITY_RECOVERY_PROGRESS_ACTION_NONE,
+        },
+        'the converged partition schedules no duplicate recovery operation',
       );
     });
 

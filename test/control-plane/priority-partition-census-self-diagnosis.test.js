@@ -624,3 +624,129 @@ test('proxy census authority fails closed', (t) => {
   }, SUMMARY_HELPERS), null);
   t.end();
 });
+
+// Voters-only census (owner decision 2026-10-04, decision 2). The census
+// answers from the row alone: an ACTIVE-status learner row is never a holder,
+// whichever path wrote it. The verification named four paths that can write
+// an ACTIVE learner row without the voter-ready gate: a priority partition
+// outside the gated -p1 set, an ADD whose operation row is missing, a replica
+// created with skipLifecycleStatusPersistence, and restart/restore. Each is
+// modelled here by the row it leaves behind.
+test('an ACTIVE learner row never counts, whichever path wrote it', (t) => {
+  const bypassRows = [
+    {label: 'non -p1 priority partition', partitionId: `${PARTITION_ID.replace(/-p1$/, '')}-p2`},
+    {label: 'missing operation row', partitionId: PARTITION_ID},
+    {label: 'skipLifecycleStatusPersistence', partitionId: PARTITION_ID},
+    {label: 'restart/restore', partitionId: PARTITION_ID},
+  ];
+  for (const {label, partitionId} of bypassRows) {
+    const rows = [
+      {...createServiceRow('node-1', 1), partition_id: partitionId},
+      {...createServiceRow('node-2', 2), partition_id: partitionId},
+      {
+        ...createServiceRow('node-3', 3, {raftRole: 'learner'}),
+        partition_id: partitionId,
+      },
+    ];
+    const summary = buildDerivedPriorityPartitionSummary(
+      {
+        partitionRows: [{
+          partition_id: partitionId,
+          table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+          replica_count: 3,
+        }],
+        serviceRows: rows,
+        locallyEligibleNodeIds: ELIGIBLE_NODE_IDS,
+      },
+      SUMMARY_HELPERS,
+    );
+    const block = summary?.blockedPartitions?.find(
+      (entry) => entry.partitionId === partitionId,
+    );
+    t.equal(summary?.satisfied, false, `${label}: the gap stays visible`);
+    t.equal(block?.readyDistinctNodeCount, 2, `${label}: two voter holders`);
+    t.equal(block?.spreadGap, 1, `${label}: gap one`);
+    t.equal(block?.exclusionReasonCounts?.raft_role_not_voter, 1,
+      `${label}: the learner is excluded as a non-voter`);
+  }
+  t.end();
+});
+
+// A TRUE voter whose raft_role column still reads learner for a moment after
+// promotion (5 such rows in the run snapshots) is a gap only until its role
+// row lands. The role column is written by the promotion event itself
+// (becomeFollower -> queueRoleUpdate(FOLLOWER) -> the role mutation helper;
+// leadership changes -> applyReplicaLeadership/Demotion -> queueRoleUpdate),
+// a CRITICAL-class metadata mutation for priority partitions. The census is a
+// pure function of the rows, so spread is recognised by the derivation that
+// reads the landed role row - no timer is involved.
+test('a role-lagged true voter is recognised when its role row lands', (t) => {
+  const lagging = deriveSummary([
+    createServiceRow('node-1', 1, {raftRole: 'leader'}),
+    createServiceRow('node-2', 2),
+    createServiceRow('node-3', 3, {raftRole: 'learner'}),
+  ]);
+  t.equal(partitionBlock(lagging)?.spreadGap, 1,
+    'role column still learner: gap one');
+  const landed = deriveSummary([
+    createServiceRow('node-1', 1, {raftRole: 'leader'}),
+    createServiceRow('node-2', 2),
+    createServiceRow('node-3', 3, {raftRole: 'follower'}),
+  ]);
+  t.equal(partitionBlock(landed), null,
+    'the derivation that reads the follower row recognises the spread');
+  t.end();
+});
+
+test('the census publishes its holder identities and a holder-set change ' +
+  'at an unchanged count is a different summary', (t) => {
+  const onOneAndTwo = deriveSummary([
+    createServiceRow('node-1', 1),
+    createServiceRow('node-1', 2),
+    createServiceRow('node-2', 3),
+  ]);
+  t.same(partitionBlock(onOneAndTwo)?.readyReplicaCountByNodeId,
+    {'node-1': 2, 'node-2': 1});
+  const onOneAndThree = deriveSummary([
+    createServiceRow('node-1', 1),
+    createServiceRow('node-1', 2),
+    createServiceRow('node-3', 3),
+  ]);
+  t.equal(partitionBlock(onOneAndThree)?.readyDistinctNodeCount, 2);
+  t.equal(
+    arePriorityPartitionSummariesEqual(onOneAndTwo, onOneAndThree),
+    false,
+    'A,B -> A,C is a refresh, not a no-op',
+  );
+  t.same(
+    partitionBlock(normalizePriorityPartitionSummary(onOneAndTwo))
+      ?.readyReplicaCountByNodeId,
+    {'node-1': 2, 'node-2': 1},
+    'normalization keeps the holder identities',
+  );
+  const legacy = normalizePriorityPartitionSummary({
+    ...onOneAndTwo,
+    blockedPartitions: onOneAndTwo.blockedPartitions.map((entry) => {
+      const copy = {...entry};
+      delete copy.readyReplicaCountByNodeId;
+      return copy;
+    }),
+  });
+  t.equal(
+    partitionBlock(legacy)?.readyReplicaCountByNodeId,
+    undefined,
+    'a summary written before holder identities normalizes without them',
+  );
+  t.equal(
+    normalizePriorityPartitionSummary({
+      ...onOneAndTwo,
+      blockedPartitions: [{
+        ...partitionBlock(onOneAndTwo),
+        readyReplicaCountByNodeId: {'node-1': -1},
+      }],
+    }),
+    null,
+    'malformed holder identities fail closed',
+  );
+  t.end();
+});

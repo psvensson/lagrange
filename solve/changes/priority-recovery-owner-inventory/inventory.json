@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "6f99341bf4b5d4a8656663a2cf8fbce0fcec5a18cdd2c4fdaddcbec312f8e65f"
+    "sourceSha256": "8fb271e1eeb18ce94dbba4b29077759da8fc0f5d01d51941b5cce5fc9f563851"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,10 +18,10 @@
   },
   "metrics": {
     "moduleCount": 68,
-    "publicExportCount": 755,
-    "importEdgeCount": 311,
-    "crossLayerEdgeCount": 93,
-    "layerDirectionViolationCount": 45,
+    "publicExportCount": 754,
+    "importEdgeCount": 312,
+    "crossLayerEdgeCount": 94,
+    "layerDirectionViolationCount": 46,
     "largestStronglyConnectedComponent": 1,
     "duplicateAuthoritySignalCount": 4,
     "confirmedDuplicateAuthorityCount": 0,
@@ -990,8 +990,7 @@
         "readFirstStringField",
         "resolvePriorityRecoveryOperationContextFreshnessMs",
         "resolvePriorityRecoveryReasonCodesFromReadiness",
-        "resolvePriorityRecoverySemanticState",
-        "resolvePriorityRecoverySpreadSatisfyingReasonCode"
+        "resolvePriorityRecoverySemanticState"
       ],
       "localExports": [
         "buildPriorityRecoveryDecisionPartitionIdSet",
@@ -1008,8 +1007,7 @@
         "readFirstStringField",
         "resolvePriorityRecoveryOperationContextFreshnessMs",
         "resolvePriorityRecoveryReasonCodesFromReadiness",
-        "resolvePriorityRecoverySemanticState",
-        "resolvePriorityRecoverySpreadSatisfyingReasonCode"
+        "resolvePriorityRecoverySemanticState"
       ]
     },
     {
@@ -2995,6 +2993,16 @@
       "targetLayer": "raw_observation",
       "crossLayer": false,
       "conformsToLayerDirection": true
+    },
+    {
+      "from": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+      "specifier": "./priority-recovery-planning-intent.js",
+      "to": "src/control-plane/priority-recovery-planning-intent.js",
+      "targetModule": true,
+      "sourceLayer": "raw_observation",
+      "targetLayer": "owner_decision",
+      "crossLayer": true,
+      "conformsToLayerDirection": false
     },
     {
       "from": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",

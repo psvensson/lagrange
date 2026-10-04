@@ -787,7 +787,6 @@ async function buildPriorityRecoveryDispatchPendingDrainSnapshot(
       await owner.buildPriorityRecoveryOperationDrainSourceSnapshot(
         operation,
         completionState,
-        priorityRecoveryContext,
       );
   const releaseEvidence =
     owner.buildPriorityRecoveryOperationDrainReleaseEvidence(

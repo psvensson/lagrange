@@ -2619,3 +2619,146 @@ test(
     }
   },
 );
+
+// Witness (l) (owner decision 2026-10-04): the ADD drain no longer settles
+// on a spread credit (satisfyingOperationIds). An intermediate priority ADD
+// whose target is ACTIVE while the partition still has a census gap is
+// settled by its OWN operation fact: a remote non-owner completes it only
+// when the owner is unavailable and the authoritative status read shows the
+// target ACTIVE. An available owner completes its own ADD. Without the
+// operation-fact arm a dead-owner ADD (orphan adoption skips priority
+// partitions) would wait for its step timeout.
+async function runIntermediateAddDrain(t, {ownerUnavailable, locallyOwned}) {
+  const deliveries = [];
+  const deferredTimers = [];
+  const completedOperationIds = [];
+  const failedOperationIds = [];
+  const authoritativeReads = [];
+  const operation = buildEventDrivenOperation({
+    operationId: TEST_REPLICA_OPERATIONS_OPERATION_ID,
+    type: OperationType.ADD,
+    partitionId: TEST_REPLICA_OPERATIONS_PARTITION_ID,
+    entityId: TEST_REPLICA_OPERATIONS_PARTITION_ID,
+    replicaId: TEST_REPLICA_OPERATIONS_REPLICA_ID,
+    sourceNodeId: TEST_REPLICA_OPERATIONS_SOURCE_NODE_ID,
+    targetNodeId: TEST_REPLICA_OPERATIONS_TARGET_NODE_ID,
+    workflowStep: WORKFLOW_STEP.SYNCING,
+    status: ReplicaStatus.SYNCING,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    operation_id: TEST_REPLICA_OPERATIONS_OPERATION_ID,
+    type: OperationType.ADD,
+    partition_id: TEST_REPLICA_OPERATIONS_PARTITION_ID,
+    entity_id: TEST_REPLICA_OPERATIONS_PARTITION_ID,
+    replica_id: TEST_REPLICA_OPERATIONS_REPLICA_ID,
+    source_node_id: TEST_REPLICA_OPERATIONS_SOURCE_NODE_ID,
+    target_node_id: TEST_REPLICA_OPERATIONS_TARGET_NODE_ID,
+    workflow_step: WORKFLOW_STEP.SYNCING,
+    status: ReplicaStatus.SYNCING,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      operationId: TEST_REPLICA_OPERATIONS_OPERATION_ID,
+      partitionId: TEST_REPLICA_OPERATIONS_PARTITION_ID,
+      workflowStep: WORKFLOW_STEP.SYNCING,
+      latestOperationStatus: ReplicaStatus.SYNCING,
+      actuationState:
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      completionState: PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+      spreadGap: 1,
+    },
+  );
+  try {
+    coordinator.initialize();
+    const owner = coordinator.workflowOwner;
+    const completion = Object.freeze({
+      state: PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+    });
+    owner.completeOperation = async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+      return TEST_COMMITTED_TRANSITION_OUTCOME;
+    };
+    owner.failOperation = async (failedOperation) => {
+      failedOperationIds.push(failedOperation.operationId);
+      return TEST_COMMITTED_TRANSITION_OUTCOME;
+    };
+    owner.isPriorityRecoveryOperationDrainCandidate = () => true;
+    owner.buildPriorityRecoveryCompletionForOperation = () => completion;
+    owner.buildPriorityRecoveryAssessmentContextForOperation = () =>
+      Object.freeze({completion});
+    owner.repository.isOperationLocallyOwned = () => locallyOwned;
+    owner.repository.resolveOperationOwnerNodeId = () => 'node-owner';
+    owner.isPriorityRecoveryDrainOwnerUnavailable = () => ownerUnavailable;
+    owner.repository.getObservedReplicaStatusFromCache =
+      () => ReplicaStatus.ACTIVE;
+    owner.getReconciledReplicaStatus = async (...args) => {
+      authoritativeReads.push(args);
+      return ReplicaStatus.ACTIVE;
+    };
+    const drainSnapshot =
+      await owner.buildPriorityRecoveryOperationDrainSnapshot(operation);
+    const settled =
+      await owner.reconcilePriorityRecoveryOperationDrain(
+        operation,
+        drainSnapshot,
+      );
+    return {
+      drainSnapshot,
+      settled,
+      completedOperationIds,
+      failedOperationIds,
+      authoritativeReads,
+      deferredTimers,
+    };
+  } finally {
+    await coordinator.shutdown();
+  }
+}
+
+test('(l) dead-owner intermediate ADD with an ACTIVE target is settled by ' +
+  'its own operation fact, not a step timeout', async (t) => {
+  const outcome = await runIntermediateAddDrain(t, {
+    ownerUnavailable: true,
+    locallyOwned: false,
+  });
+  t.equal(outcome.drainSnapshot.state,
+    'add_target_active_owner_unavailable');
+  t.equal(outcome.drainSnapshot.ownerAction, 'allow_reconcile');
+  t.equal(outcome.settled, true, 'the remote non-owner settles it now');
+  t.same(outcome.completedOperationIds,
+    [TEST_REPLICA_OPERATIONS_OPERATION_ID]);
+  t.same(outcome.failedOperationIds, [], 'never failed or timed out');
+  t.equal(outcome.authoritativeReads.length, 1,
+    'one authoritative status read decides');
+  t.same(outcome.authoritativeReads[0], [
+    TEST_REPLICA_OPERATIONS_REPLICA_ID,
+    TEST_REPLICA_OPERATIONS_PARTITION_ID,
+    TEST_REPLICA_OPERATIONS_TARGET_NODE_ID,
+  ]);
+});
+
+test('(l) an available owner keeps its intermediate ADD: the drain does ' +
+  'not settle it remotely', async (t) => {
+  const remote = await runIntermediateAddDrain(t, {
+    ownerUnavailable: false,
+    locallyOwned: false,
+  });
+  t.equal(remote.settled, false);
+  t.same(remote.completedOperationIds, []);
+  t.same(remote.failedOperationIds, []);
+  t.same(remote.authoritativeReads, [], 'no read when the owner is alive');
+  const local = await runIntermediateAddDrain(t, {
+    ownerUnavailable: false,
+    locallyOwned: true,
+  });
+  t.equal(local.drainSnapshot.state, 'in_flight',
+    'the census gap keeps the drain from settling it');
+  t.equal(local.drainSnapshot.ownerAction, 'allow_reconcile',
+    'the owner enters its own lifecycle reconcile, which completes the ADD ' +
+      'from the observed ACTIVE target');
+  t.same(local.completedOperationIds, []);
+  t.same(local.failedOperationIds, []);
+});

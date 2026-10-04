@@ -4,13 +4,10 @@ import {buildCurrentPriorityPlacementObservation} from
   '../control-plane/current-priority-placement-observation.js';
 import {readMembershipPlanningDerivationVersionKey} from
   '../control-plane/membership-planning-version-key.js';
-import {isCatchupLearnerRaftRole} from
-  '../raft/replica-voter-readiness.js';
 
 const {
   TABLES,
   UNIFIED_REBALANCER_LITERAL,
-  classifySystemPartition,
   normalizeServiceRow,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -109,22 +106,6 @@ function storeMemoizedPlacementObservation(context, observation) {
   memo.observationByVariant.set(context.variantKey, observation);
 }
 
-function resolvePriorityLearnerNodeIds(serviceRows) {
-  const nodeIds = new Set();
-  for (const serviceRow of serviceRows) {
-    const service = normalizeServiceRow(serviceRow);
-    if (
-      service.nodeId &&
-      isCatchupLearnerRaftRole(service.raftRole) &&
-      classifySystemPartition({partitionId: service.partitionId})
-        .priorityControlPlane
-    ) {
-      nodeIds.add(service.nodeId);
-    }
-  }
-  return nodeIds;
-}
-
 function buildCurrentPriorityPlacementFromRebalancerCache({
   systemTableCache,
   readinessService,
@@ -179,27 +160,13 @@ function buildCurrentPriorityPlacementFromRebalancerCache({
         ...currentPartitionServiceRows,
       ] :
       cachedServiceRows;
-  const locallyEligibleNodeIdSet = new Set(locallyEligibleNodeIds);
-  const priorityLearnerNodeIds =
-    resolvePriorityLearnerNodeIds(serviceRows);
-  const readinessByNodeId =
-    typeof readinessService?.getNodeReadinessSync === 'function' ?
-      Object.fromEntries(
-        [...priorityLearnerNodeIds]
-          .filter((nodeId) => locallyEligibleNodeIdSet.has(nodeId))
-          .map((nodeId) => [
-            nodeId,
-            readinessService.getNodeReadinessSync(nodeId, {
-              allowStaleOnCacheChange: false,
-            }),
-          ]),
-      ) :
-      {};
+  // No per-learner readiness read: the census counts voter-role rows only
+  // (owner decision 2026-10-04), so a learner's promotability never changes
+  // the placement answer.
   const observation = buildCurrentPriorityPlacementObservation({
     capturedAt: observedAt,
     partitionRows,
     serviceRows,
-    readinessByNodeId,
     activeNodeViews: {
       locallyEligibleNodeIds,
       projectedServingNodeIds:

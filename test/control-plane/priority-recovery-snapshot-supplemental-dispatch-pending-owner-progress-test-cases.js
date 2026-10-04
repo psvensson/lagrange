@@ -640,86 +640,98 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
     'priority recovery partition witnesses prefer open dispatch over ' +
       'terminal failed siblings',
     async (t) => {
-      const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
-        capturedAt: PRIORITY_RECOVERY_TARGET_SERVICE_CAPTURED_AT_MS,
-        stepTimeoutMsByWorkflowStep: {
-          [PRIORITY_RECOVERY_WORKFLOW_STEP_SENDING]:
-            PRIORITY_RECOVERY_PENDING_TIMEOUT_MS,
-        },
-        publicationConvergence: {
-          publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
-          publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
-          publishedActiveNodeIds: [
-            PRIORITY_RECOVERY_NODE_ID_A,
-            PRIORITY_RECOVERY_NODE_ID_B,
-          ],
-          pendingAckNodeIds: [],
-          priorityPartitionSummary: {
-            satisfied: false,
-            blockedPartitions: [{
-              partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
-              requiredDistinctNodeCount:
+      // SUPERSEDED fixture (owner decision 2026-10-04). Before: the open
+      // SENDING REPLACE's target row was ACTIVE, so the operation credited
+      // spread and was never a blocking operation; that credit is what kept
+      // a dispatch older than its SENDING timeout out of the no-transition
+      // stall. An operation now credits nothing, so that same stale
+      // dispatch reads operation_stalled (asserted below). The protected
+      // property - the witness prefers the open dispatch over a NEWER
+      // terminal failed sibling - is asserted on a dispatch still within its
+      // step budget.
+      const buildOpenDispatchBesideFailedSibling = (sendingTimeoutMs) =>
+        buildPriorityRecoveryDecisionSnapshots({
+          capturedAt: PRIORITY_RECOVERY_TARGET_SERVICE_CAPTURED_AT_MS,
+          stepTimeoutMsByWorkflowStep: {
+            [PRIORITY_RECOVERY_WORKFLOW_STEP_SENDING]: sendingTimeoutMs,
+          },
+          publicationConvergence: {
+            publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+            publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+            publishedActiveNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+            ],
+            pendingAckNodeIds: [],
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitions: [{
+                partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+                requiredDistinctNodeCount:
                 PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
-              readyDistinctNodeCount: 1,
-              spreadGap: 2,
-            }],
-            missingPartitionIds: [
-              SQL_TRANSACTION_PRIORITY_PARTITION_ID,
-            ],
-            requiredDistinctNodeCount:
+                readyDistinctNodeCount: 1,
+                spreadGap: 2,
+              }],
+              missingPartitionIds: [
+                SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+              ],
+              requiredDistinctNodeCount:
               PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+            },
+            membershipLifecycleSummary: {
+              projectedServingNodeIds: [
+                PRIORITY_RECOVERY_NODE_ID_A,
+                PRIORITY_RECOVERY_NODE_ID_B,
+              ],
+              locallyEligibleNodeIds: [
+                PRIORITY_RECOVERY_NODE_ID_A,
+                PRIORITY_RECOVERY_NODE_ID_B,
+              ],
+            },
           },
-          membershipLifecycleSummary: {
-            projectedServingNodeIds: [
-              PRIORITY_RECOVERY_NODE_ID_A,
-              PRIORITY_RECOVERY_NODE_ID_B,
-            ],
-            locallyEligibleNodeIds: [
-              PRIORITY_RECOVERY_NODE_ID_A,
-              PRIORITY_RECOVERY_NODE_ID_B,
-            ],
-          },
-        },
-        readinessByNodeId: {},
-        workflowAdmissionsByWorkflowId: {},
-        replicaOperationRows: [
-          {
-            operation_id: PRIORITY_RECOVERY_OPERATION_ID_TERMINAL_REPLACE,
+          readinessByNodeId: {},
+          workflowAdmissionsByWorkflowId: {},
+          replicaOperationRows: [
+            {
+              operation_id: PRIORITY_RECOVERY_OPERATION_ID_TERMINAL_REPLACE,
+              partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+              entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+              operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+              status: PRIORITY_RECOVERY_STATUS_FAILED,
+              workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+              source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+              target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+              created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+              updated_at: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
+              completed_at: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
+            },
+            {
+              operation_id: PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
+              partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+              entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+              operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+              status: PRIORITY_RECOVERY_STATUS_PENDING,
+              workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_SENDING,
+              source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+              target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+              replica_id: PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
+              created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+              updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+            },
+          ],
+          serviceRows: [{
             partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
-            entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
-            operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
-            status: PRIORITY_RECOVERY_STATUS_FAILED,
-            workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
-            source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
-            target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
-            created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
-            updated_at: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
-            completed_at: PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_AT_MS,
-          },
-          {
-            operation_id: PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
-            partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
-            entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
-            operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
-            status: PRIORITY_RECOVERY_STATUS_PENDING,
-            workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_SENDING,
-            source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
-            target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+            node_id: PRIORITY_RECOVERY_NODE_ID_B,
             replica_id: PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
-            created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+            status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+            raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
             updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
-          },
-        ],
-        serviceRows: [{
-          partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
-          node_id: PRIORITY_RECOVERY_NODE_ID_B,
-          replica_id: PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
-          status: PRIORITY_RECOVERY_STATUS_ACTIVE,
-          raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
-          updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
-        }],
-      });
+          }],
+        });
 
+      const decisionSnapshots = buildOpenDispatchBesideFailedSibling(
+        PRIORITY_RECOVERY_PENDING_TIMEOUT_MS * 2,
+      );
       const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
         priorityRecoveryDecisionSnapshots: decisionSnapshots,
       });
@@ -758,13 +770,23 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
       );
       t.equal(
         witness?.nextRequiredAction,
-        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
-        'the selected witness should retain the owner advancement action',
+        PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+        'a dispatch within its step budget waits on its own progress',
       );
       t.equal(
         witness?.blockingBoundary,
         PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
         'the selected witness should keep the workflow-progress boundary',
+      );
+      const [staleWitness] = buildPriorityRecoveryObservationSnapshot({
+        priorityRecoveryDecisionSnapshots: buildOpenDispatchBesideFailedSibling(
+          PRIORITY_RECOVERY_PENDING_TIMEOUT_MS,
+        ),
+      }).priorityRecoveryPartitionWitnesses;
+      t.equal(
+        staleWitness?.semanticStateId,
+        PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED,
+        'a dispatch past its step budget is an honest no-transition stall once its target no longer credits spread',
       );
     },
   );

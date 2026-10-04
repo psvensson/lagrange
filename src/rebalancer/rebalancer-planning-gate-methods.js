@@ -422,7 +422,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
         topologySettlingBlocker,
         evaluationContext,
       );
-    if (gateSnapshot.shouldDefer !== true) {
+    if (!this.syncLocalMutationReadinessWake(gateSnapshot.shouldDefer)) {
       return null;
     }
     const scheduleDelayMs = this.increaseCurrentInterval(
@@ -573,7 +573,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       this.buildLocalMutationReadinessPlanningGateSnapshot(evaluationContext);
     const localMutationReadinessBlocker =
       gateSnapshot.localMutationReadinessBlocker;
-    if (gateSnapshot.shouldDefer !== true) {
+    if (!this.syncLocalMutationReadinessWake(gateSnapshot.shouldDefer)) {
       return null;
     }
     const scheduleDelayMs = this.increaseCurrentInterval(
