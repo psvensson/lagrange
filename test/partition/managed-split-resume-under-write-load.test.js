@@ -654,7 +654,13 @@ const HEALTHY_SEQUENCE = Object.freeze([
   {level: 'info', msg: 'Managed split cutover applied'},
   {ack: SPLIT_ACK_STATUS.CATCHUP_READY, cutover: true},
   {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
+  // The group's member set frozen on the record, then its addresses
+  // (group-retirement-members.js), before any REMOVE.
+  {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
+  {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
   {remove: SOURCE_PARTITION_ID},
+  // The member's positive answer recorded before the row delete.
+  {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
   {delete: SOURCE_PARTITION_ID},
   {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
   {level: 'info', msg: 'Managed split source dissolution dispatched'},

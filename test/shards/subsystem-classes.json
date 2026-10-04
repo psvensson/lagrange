@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 145,
+    "storage-partition": 147,
     "storage-raft": 99,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2198,
-  "digest": "fnv1a32-2d34a7b7",
+  "censusSize": 2200,
+  "digest": "fnv1a32-f9eb0ad1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2b61c6f0",
+  "observationDigest": "fnv1a32-157cd270",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1174,6 +1174,8 @@
     "test/partition/durable-replay-cursor.test.js": "storage-partition",
     "test/partition/durable-voter-visibility-role-write.test.js": "storage-partition",
     "test/partition/extracted-module-api-equivalence.property.test.js": "storage-partition",
+    "test/partition/group-retirement-epoch-decode.test.js": "storage-partition",
+    "test/partition/group-retirement-resume-claim.test.js": "storage-partition",
     "test/partition/key-range-manager.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "storage-partition",
@@ -7091,6 +7093,7 @@
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-split-workflow-dissolution-methods.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
@@ -7101,6 +7104,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
         "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -7114,6 +7118,7 @@
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-split-workflow-dissolution-methods.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
@@ -7124,6 +7129,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
         "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -7137,6 +7143,7 @@
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-split-workflow-dissolution-methods.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
         "src/partition/managed-workflow-ownership-core.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
@@ -7147,6 +7154,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
         "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
@@ -7496,6 +7504,18 @@
         "src/partition/partition-service-core-base.js",
         "src/partition/partition-service-metadata-delivery-methods.js",
         "src/rebalancer/operation-ledger-quorum-concentration.js"
+      ]
+    },
+    "test/partition/group-retirement-epoch-decode.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/group-retirement-resume-claim.test.js": {
+      "files": [
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/learner-promotion-count-check-inputs.test.js": {

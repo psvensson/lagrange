@@ -4,9 +4,11 @@
  * whose REMOVEs some members did not acknowledge (owner decision 2026-10-04:
  * the workflow owner owns completion of its own durable step; one owner, no
  * second mechanism). The step itself is the workflow's own (split/merge
- * dissolution, aborted child/target teardown); this owner only decides WHEN
- * it is run again, and keeps the unacknowledged members observable.
- * Triggers, events first:
+ * dissolution, aborted child/target teardown) and completes only when every
+ * member of its frozen set answered positively (group-retirement-members.js);
+ * this owner only decides WHEN it is run again, and keeps the unacknowledged
+ * members observable.
+ * Triggers, events first - each only RE-RUNS the step, none completes it:
  *   FAILED_ACK      the step's own failed outcome re-runs it once at once
  *                   (a REMOVE lost in transit is re-delivered);
  *   NODE_READY      a nodes-row change showing a ready heartbeat for a node
@@ -14,9 +16,14 @@
  *   NODE_DEPARTED   that node's row deleted (node removed) or rewritten
  *                   not-ready re-runs it (a re-check, never proof the member
  *                   is gone);
- *   MEMBER_ROW_DELETED an unacknowledged member's services row deleted
- *                   (its node's own cleanup) re-runs it: the member is no
- *                   longer part of the group's durable membership list;
+ *   MEMBER_ROW_CHANGED an unacknowledged member's services row written or
+ *                   deleted re-runs it: a written row may give the member an
+ *                   address; a deleted row is never proof the member is gone
+ *                   (owner ruling 2026-10-04) - the member stays required
+ *                   and listed;
+ *   GROUP_ROW_CHANGED for a step whose membership could not be read, any
+ *                   services or partitions row of its group (a hydrating
+ *                   view, a new leader) re-runs it;
  *   OWNERSHIP       the owner's resume of the durable record on ownership
  *                   acquisition (owner start, a `tables` record change,
  *                   group-retirement-resume.js);
@@ -36,22 +43,23 @@
  * completed): NOT_FOUND is not one - a node can answer it before its
  * replicas are registered at startup.
  * Canonical output: the step re-run; `unacknowledged()` - every tracked
- * workflow, group and unacknowledged replica (a lone un-notified survivor is
- * listed here, never silent).
+ * workflow, group and unacknowledged replica, or the group's membership
+ * marked unavailable (a lone un-notified survivor is listed here, never
+ * silent). A member that never answers stays listed with its alarm: the
+ * only future exit for it is an explicit durable operator retirement fact,
+ * which does not exist yet.
  * Prohibited: no step is completed here; a superseded owner (its evidence
  * refused for workflow or fence) stops re-driving.
  */
 
-import {ReplicaOperationResponseStatus} from
-  '../rebalancer/replica-operation-constants.js';
 import {wasNodeRecordReadyWhenWritten} from '../node/node-readiness-policy.js';
-import {GROUP_RETIREMENT_REFUSAL} from './group-retirement-evidence.js';
 
 const REDRIVE_TRIGGER = Object.freeze({
   FAILED_ACK: 'failed-ack',
   NODE_READY: 'node-ready',
   NODE_DEPARTED: 'node-departed',
-  MEMBER_ROW_DELETED: 'member-row-deleted',
+  MEMBER_ROW_CHANGED: 'member-row-changed',
+  GROUP_ROW_CHANGED: 'group-row-changed',
   FALLBACK: 'fallback-backoff',
 });
 
@@ -76,84 +84,15 @@ const REDRIVE_DEFAULT = Object.freeze({
 
 const NODES_TABLE = 'nodes';
 const SERVICES_TABLE = 'services';
+const PARTITIONS_TABLE = 'partitions';
 const TABLES_TABLE = 'tables';
 const DELETE_OPERATION = 'DELETE';
-const ACCEPTED_REMOVAL_STATUSES = Object.freeze(new Set([
-  ReplicaOperationResponseStatus.INITIATED,
-  ReplicaOperationResponseStatus.IN_PROGRESS,
-  ReplicaOperationResponseStatus.COMPLETED,
-]));
-// A refusal saying this owner's evidence is not the record's: a newer owner
-// (fence) or another workflow holds the record.
-const SUPERSEDED_REFUSALS = Object.freeze(new Set([
-  GROUP_RETIREMENT_REFUSAL.WORKFLOW_MISMATCH,
-  GROUP_RETIREMENT_REFUSAL.FENCE_MISMATCH,
-]));
-const INCOMPLETE_ERROR = 'Group retirement incomplete: unacknowledged ' +
-  'replicas ';
-const REPLICA_ID_SEPARATOR = ',';
 
 function fieldsOf(entry) {
   return {workflowId: entry.workflowId, partitionId: entry.partitionId,
     unacknowledgedReplicaIds: entry.unacknowledged.map((member) =>
-      member.replicaId)};
-}
-
-function rowField(row, snake, camel) {
-  return String(row?.[snake] ?? row?.[camel] ?? '');
-}
-
-/**
- * Deliver the group-retirement REMOVE to every member not yet acknowledged
- * (one pass, never stopping at the first failure), and answer which members
- * acknowledged. When any did not, throws an Error carrying
- * {unacknowledged: [{replicaId, nodeId, refusal}], superseded,
- * acknowledgedReplicaIds}: the step is incomplete, so its caller neither
- * deletes the group's row nor reports completion.
- * @param {Object} options
- * @param {Array<Object>} options.serviceRows - The group's services rows.
- * @param {Array<string>} [options.acknowledgedReplicaIds] - Already
- *   acknowledged (durable progress): not re-sent.
- * @param {Function} options.deliver - async ({replicaId, nodeId}) =>
- *   the handler's answer (or null when undelivered).
- * @return {Promise<string[]>} Every acknowledged replica id.
- */
-async function dispatchGroupRetirementRemovals({serviceRows,
-  acknowledgedReplicaIds = [], deliver}) {
-  const acknowledged = [...acknowledgedReplicaIds];
-  const unacknowledged = [];
-  for (const row of serviceRows) {
-    const member = {
-      replicaId: rowField(row, 'replica_id', 'replicaId'),
-      nodeId: rowField(row, 'node_id', 'nodeId'),
-    };
-    if (!member.replicaId || !member.nodeId ||
-        acknowledged.includes(member.replicaId)) {
-      continue;
-    }
-    const answer = await deliver(member).catch(() => null);
-    if (ACCEPTED_REMOVAL_STATUSES.has(String(answer?.status || ''))) {
-      acknowledged.push(member.replicaId);
-    } else {
-      unacknowledged.push({...member,
-        refusal: answer?.groupRetirementRefusal ?? null});
-    }
-  }
-  if (unacknowledged.length > 0) {
-    throw incompleteRetirementError(unacknowledged, acknowledged);
-  }
-  return acknowledged;
-}
-
-function incompleteRetirementError(unacknowledged, acknowledged) {
-  return Object.assign(new Error(INCOMPLETE_ERROR +
-    unacknowledged.map((member) => member.replicaId)
-      .join(REPLICA_ID_SEPARATOR)), {
-    unacknowledged,
-    superseded: unacknowledged.some((member) =>
-      SUPERSEDED_REFUSALS.has(member.refusal)),
-    acknowledgedReplicaIds: acknowledged,
-  });
+      member.replicaId),
+    membershipUnavailable: entry.membershipUnavailable};
 }
 
 /**
@@ -217,14 +156,17 @@ class GroupRetirementRedrive {
    * @param {Array<Object>} report.unacknowledged - [{replicaId, nodeId}].
    * @param {boolean} [report.superseded] - The evidence was refused as
    *   superseded (workflow or fence): stop re-driving.
+   * @param {boolean} [report.membershipUnavailable] - The group's frozen
+   *   member set could not be established (its committed configuration was
+   *   not readable): the step waits for its group's rows to change.
    * @param {Function} report.redrive - async () => re-runs the step.
    */
   report({workflowId, partitionId, unacknowledged, superseded = false,
-    redrive}) {
+    membershipUnavailable = false, redrive}) {
     const key = `${workflowId}\u0000${partitionId}`;
     const fields = {workflowId, partitionId,
       unacknowledgedReplicaIds: unacknowledged.map((member) =>
-        member.replicaId)};
+        member.replicaId), membershipUnavailable};
     if (superseded) {
       this.settle(workflowId, partitionId);
       this.logger.warn(REDRIVE_LOG_MSG.SUPERSEDED, fields);
@@ -234,6 +176,7 @@ class GroupRetirementRedrive {
       {key, workflowId, partitionId, attempts: 0, timer: null,
         exhausted: false};
     entry.unacknowledged = unacknowledged;
+    entry.membershipUnavailable = membershipUnavailable;
     entry.redrive = redrive;
     entry.attempts += 1;
     this.entries.set(key, entry);
@@ -267,14 +210,12 @@ class GroupRetirementRedrive {
 
   /**
    * @return {Array<Object>} Every incomplete retirement:
-   *   {workflowId, partitionId, unacknowledgedReplicaIds, attempts}.
+   *   {workflowId, partitionId, unacknowledgedReplicaIds,
+   *   membershipUnavailable, attempts}.
    */
   unacknowledged() {
     return [...this.entries.values()].map((entry) => Object.freeze({
-      workflowId: entry.workflowId,
-      partitionId: entry.partitionId,
-      unacknowledgedReplicaIds: entry.unacknowledged.map((member) =>
-        member.replicaId),
+      ...fieldsOf(entry),
       attempts: entry.attempts,
     }));
   }
@@ -322,10 +263,7 @@ class GroupRetirementRedrive {
       REDRIVE_DEFAULT.BACKOFF_BASE_MS * (2 ** (fallbackRuns - 1)));
     this.scheduler.clearTimeout(entry.timer);
     entry.timer = this.scheduler.setTimeout(() => {
-      this.logger.warn(REDRIVE_LOG_MSG.FALLBACK, {
-        workflowId: entry.workflowId, partitionId: entry.partitionId,
-        unacknowledgedReplicaIds: entry.unacknowledged.map((member) =>
-          member.replicaId),
+      this.logger.warn(REDRIVE_LOG_MSG.FALLBACK, {...fieldsOf(entry),
         delayMs});
       this.run(entry, REDRIVE_TRIGGER.FALLBACK);
     }, delayMs);
@@ -358,12 +296,8 @@ class GroupRetirementRedrive {
     if (!trigger) {
       return;
     }
-    const matches = tableName === NODES_TABLE ?
-      (member) => member.nodeId === String(row?.node_id || '') :
-      (member) => member.replicaId ===
-        String(row?.replica_id ?? row?.service_id ?? '');
     for (const entry of [...this.entries.values()]) {
-      if (entry.unacknowledged.some(matches)) {
+      if (entryMatchesRow(entry, tableName, row)) {
         this.run(entry, trigger);
       }
     }
@@ -378,19 +312,37 @@ class GroupRetirementRedrive {
       return this.isNodeRowReady(row) ? REDRIVE_TRIGGER.NODE_READY :
         REDRIVE_TRIGGER.NODE_DEPARTED;
     }
-    if (tableName === SERVICES_TABLE && operation === DELETE_OPERATION) {
-      return REDRIVE_TRIGGER.MEMBER_ROW_DELETED;
+    if (tableName === SERVICES_TABLE) {
+      return REDRIVE_TRIGGER.MEMBER_ROW_CHANGED;
     }
-    return null;
+    return tableName === PARTITIONS_TABLE ?
+      REDRIVE_TRIGGER.GROUP_ROW_CHANGED : null;
   }
 }
 
+// Whether one system-row change concerns an entry: the node or services row
+// of one of its unacknowledged members, or - its membership unavailable - a
+// services or partitions row of its group.
+function entryMatchesRow(entry, tableName, row) {
+  const groupRow = String(row?.partition_id ?? '') === entry.partitionId;
+  if (tableName === NODES_TABLE) {
+    return entry.unacknowledged.some((member) =>
+      member.nodeId === String(row?.node_id || ''));
+  }
+  if (tableName === PARTITIONS_TABLE) {
+    return entry.membershipUnavailable && groupRow;
+  }
+  return (entry.membershipUnavailable && groupRow) ||
+    entry.unacknowledged.some((member) => member.replicaId ===
+      String(row?.replica_id ?? row?.service_id ?? ''));
+}
+
 const OBSERVED_TABLES = Object.freeze(new Set([NODES_TABLE, SERVICES_TABLE,
-  TABLES_TABLE]));
+  PARTITIONS_TABLE, TABLES_TABLE]));
 
 /**
- * Deliver every nodes-, services- and tables-row change of a system-table
- * cache to `listener`.
+ * Deliver every nodes-, services-, partitions- and tables-row change of a
+ * system-table cache to `listener`.
  * @param {Object|null} cache - The runtime's system-table cache.
  * @param {Function} listener - (tableName, operation, row) => void.
  * @return {Function|null} Unsubscribe, or null when there is no cache.
@@ -428,6 +380,5 @@ function createGroupRetirementRedrive(workflow, options) {
 
 export {
   createGroupRetirementRedrive,
-  dispatchGroupRetirementRemovals,
   observeSystemRows,
 };

@@ -33,6 +33,10 @@ import {ManagedMergeWorkflowDissolutionMethods} from
   '../../src/partition/managed-merge-workflow-dissolution-methods.js';
 import {ManagedMergeWorkflowStateMethods} from
   '../../src/partition/managed-merge-workflow-state-methods.js';
+import {ManagedSplitWorkflowStateMethods} from
+  '../../src/partition/managed-split-workflow-state-methods.js';
+import {ReplicaOperationMessageType} from
+  '../../src/rebalancer/replica-operation-constants.js';
 import {ManagedSplitWorkflowExecutionGateMethods} from
   '../../src/partition/managed-split-workflow-execution-gate-methods.js';
 import {isSplitSourceAckTransitionAllowed} from
@@ -125,6 +129,8 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
     partitionRowDeletes: [],
     terminals: [],
     deliveries: [],
+    membershipReads: 0,
+    membershipReadAvailable: true,
   };
   world.emitSystemRow = (tableName, operation, row) => {
     for (const listener of [...world.systemRowListeners]) {
@@ -216,6 +222,42 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
     }
     return world.sources.get(replicaId).handler.handleRemoveReplica(message);
   };
+  // The committed-membership read the workflow owner freezes its member set
+  // from: the PRODUCTION read (committed-membership-bootstrap-read.js)
+  // answered by the PRODUCTION handler of the node it asks; the leader's
+  // node (the live member that leads) stands in for the partitions row's
+  // leader hint.
+  world.membershipReader = {
+    systemTableCache: world.cache,
+    get nodeId() {
+      const live = members.filter((replicaId) =>
+        world.lifecycleOf(replicaId) !== RETIRED);
+      const leads = (replicaId) => {
+        try {
+          return cluster.coreStatus(replicaId).lead ===
+            cluster.raftPeerIdOf(replicaId);
+        } catch {
+          return false;
+        }
+      };
+      return `${live.find(leads) ?? live[0] ?? members[0]}-node`;
+    },
+    messageRouter: {
+      deliver: async (address, message) => {
+        world.membershipReads += 1;
+        const replicaId = String(address).replace(/-node\/.*$/u, '');
+        if (!world.membershipReadAvailable || world.retired.has(replicaId) ||
+            message?.type !==
+              ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP) {
+          return null;
+        }
+        // The router's delivered envelope around the handler's answer.
+        return {acknowledged: true, deliveryState: 'delivered',
+          ...await world.sources.get(replicaId).handler
+            .handleReadCommittedMembership(message)};
+      },
+    },
+  };
   world.setTablesRow = (row) => {
     world.tablesRows.set(row.table_id, row);
     queueMicrotask(() => world.emitSystemRow('tables', 'UPDATE', row));
@@ -257,6 +299,49 @@ function createFakeScheduler() {
     },
   };
   return scheduler;
+}
+
+// The PRODUCTION transition parse (sql-query-engine-table-routing-methods.js
+// parsePartitionTransition, the topology adapters' source): state + parsed
+// metadata, or null.
+function parsePartitionTransition(tableInfo) {
+  const state = tableInfo?.partition_transition_state ?? null;
+  const rawMetadata = tableInfo?.partition_transition_metadata ?? null;
+  if (!state || !rawMetadata) {
+    return null;
+  }
+  try {
+    const metadata = typeof rawMetadata === 'string' ?
+      JSON.parse(rawMetadata) : rawMetadata;
+    return metadata && typeof metadata === 'object' ? {state, metadata} : null;
+  } catch {
+    return null;
+  }
+}
+
+function pick(prototype, names) {
+  return Object.fromEntries(names.map((name) => [name, prototype[name]]));
+}
+
+// The PRODUCTION recovery of each family (no stub of resolveWorkflowState).
+const PRODUCTION_RECOVERY = Object.freeze({
+  split: pick(ManagedSplitWorkflowStateMethods.prototype, [
+    'resolveWorkflowState', 'recoverWorkflowState',
+    'restoreParticipantsFromMetadata', 'cloneTransitionValue']),
+  merge: {
+    ...pick(ManagedMergeWorkflowStateMethods.prototype, [
+      'resolveWorkflowState', 'recoverWorkflowState',
+      'findDurableMergeTransition', 'rebuildWorkflowFromDurableTransition',
+      'isMergeWorkflowStateUnavailable', 'buildMergeOwnerKey']),
+    ...pick(ManagedSplitWorkflowStateMethods.prototype, [
+      'restoreParticipantsFromMetadata', 'cloneTransitionValue']),
+  },
+});
+
+// The frozen-member module, by path (absent on a tree without it).
+function membersModule() {
+  return import('../../src/partition/group-retirement-members.js')
+    .catch(() => null);
 }
 
 // The production re-drive. The module is imported by path so a witness of
@@ -349,7 +434,7 @@ function persistParticipantToRecord(world, participant) {
  * @return {Promise<Object>} The owner.
  */
 async function createWorkflowOwner(world, {family, workflow,
-  resume = false}) {
+  resume = false, recover = false}) {
   const split = family === 'split';
   world.ownerCount = (world.ownerCount ?? 0) + 1;
   const owner = Object.create(split ?
@@ -365,12 +450,14 @@ async function createWorkflowOwner(world, {family, workflow,
       isMergeSourceAckTransitionAllowed)(from, to),
     now: () => (typeof owner.now === 'function' ? owner.now() : 1),
   });
-  await coordinator.registerWorkflow({...workflow, ownerKey: workflow.tableId,
-    participants: undefined});
-  for (const participant of workflow.participants || []) {
-    await coordinator.upsertParticipant(workflow.workflowId, {
-      ...participant, participantId: participant.participantKey,
-      fenceToken: workflow.fenceToken, acknowledgedAt: 1});
+  if (!recover) {
+    await coordinator.registerWorkflow({...workflow,
+      ownerKey: workflow.tableId, participants: undefined});
+    for (const participant of workflow.participants || []) {
+      await coordinator.upsertParticipant(workflow.workflowId, {
+        ...participant, participantId: participant.participantKey,
+        fenceToken: workflow.fenceToken, acknowledgedAt: 1});
+    }
   }
   const ownerLog = [];
   const logger = {
@@ -406,10 +493,18 @@ async function createWorkflowOwner(world, {family, workflow,
     workflowCoordinator: coordinator,
     resolveWorkflowState: (workflowId) =>
       coordinator.getWorkflowById(workflowId),
+    recoverWorkflowState: (workflowId) =>
+      coordinator.getWorkflowById(workflowId),
+    parsePartitionTransition,
     isSplitWorkflowStateUnavailable: (state) => !state?.workflowId,
     isMergeWorkflowStateUnavailable: (state) => !state?.workflowId,
-    ensureCanonicalSplitParticipants() {},
-    ensureCanonicalMergeParticipants() {},
+    ensureCanonicalSplitParticipants: ManagedSplitWorkflowStateMethods
+      .prototype.ensureCanonicalSplitParticipants,
+    ensureCanonicalMergeParticipants: ManagedMergeWorkflowStateMethods
+      .prototype.ensureCanonicalMergeParticipants,
+    readCommittedGroupMembers: async (partitionId) =>
+      (await membersModule())?.readCommittedGroupMemberIds(
+        world.membershipReader, partitionId) ?? [],
     listPartitionServiceRows: (partitionId) => world.cache.filter(SERVICES,
       (row) => row.partition_id === partitionId &&
         row.service_type === 'partition'),
@@ -463,6 +558,15 @@ async function createWorkflowOwner(world, {family, workflow,
       };
     },
   });
+  if (recover) {
+    // A restarted owner: an empty coordinator, the workflow recovered from
+    // the durable record by the PRODUCTION recovery of its family.
+    Object.assign(owner, PRODUCTION_RECOVERY[family]);
+  } else {
+    owner[split ? 'ensureCanonicalSplitParticipants' :
+      'ensureCanonicalMergeParticipants'](workflow.workflowId,
+      workflow.metadata);
+  }
   owner.groupRetirementRedrive = await createOwnerRedrive(owner, scheduler);
   if (resume) {
     await attachOwnerResume(owner, family, scheduler);

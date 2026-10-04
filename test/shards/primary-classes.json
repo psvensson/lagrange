@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1920,
+    "unit": 1922,
     "integration": 78,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2198,
-  "digest": "fnv1a32-f5c76e89",
+  "censusSize": 2200,
+  "digest": "fnv1a32-78203561",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1155,6 +1155,8 @@
     "test/partition/durable-replay-cursor.test.js": "unit",
     "test/partition/durable-voter-visibility-role-write.test.js": "unit",
     "test/partition/extracted-module-api-equivalence.property.test.js": "unit",
+    "test/partition/group-retirement-epoch-decode.test.js": "unit",
+    "test/partition/group-retirement-resume-claim.test.js": "unit",
     "test/partition/key-range-manager.test.js": "unit",
     "test/partition/learner-promotion-count-check-inputs.test.js": "unit",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "unit",

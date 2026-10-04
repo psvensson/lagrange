@@ -17,7 +17,13 @@
  *     typed and the old owner stops; the new owner retires the member on the
  *     new fence.
  * W4d owner restart mid-dissolution: the re-delivered (duplicate)
- *     CLEANUP_COMPLETED resumes the dissolution from the durable record.
+ *     CLEANUP_COMPLETED resumes the dissolution from the durable record (the
+ *     frozen set and the recorded answer).
+ * W4g a record with no frozen set (written before it existed) freezes the
+ *     committed configuration first: unreadable while its retired leader is
+ *     not replaced, re-run by the group's partitions-row change; a member
+ *     that retired before the freeze and released its row has no address
+ *     and no recorded answer, so it stays listed and nothing completes.
  * W4e the member restarts before any re-dispatch: it retires itself on the
  *     verified record; with the record unreadable it does not retire.
  * W4f while a member is unacknowledged the workflow neither deletes the
@@ -63,7 +69,9 @@ SPLIT_ACK_STATUS.CLEANUP_COMPLETED} = {}) {
     targetPartitionVersion: 2,
     sourcePartitionId: world.partitionId,
     targetPartitionIds: [`${world.partitionId}-l`, `${world.partitionId}-r`],
-    participants: {[SOURCE_KEY]: {status: participantStatus}},
+    // As persistWorkflowTransition writes a participant.
+    participants: {[SOURCE_KEY]: {participantKey: SOURCE_KEY,
+      status: participantStatus, fenceToken: fence, acknowledgedAt: 1}},
   };
   world.setTablesRow({
     table_id: TABLE_ID,
@@ -74,11 +82,13 @@ SPLIT_ACK_STATUS.CLEANUP_COMPLETED} = {}) {
   return metadata;
 }
 
+// recover: a restarted owner, the workflow recovered from the durable record
+// by the PRODUCTION split recovery.
 function openSplitOwner(world, {fence = FENCE, participantStatus =
-SPLIT_ACK_STATUS.CLEANUP_COMPLETED} = {}) {
+SPLIT_ACK_STATUS.CLEANUP_COMPLETED, recover = false} = {}) {
   const metadata = JSON.parse(
     world.tablesRows.get(TABLE_ID).partition_transition_metadata);
-  return createWorkflowOwner(world, {family: 'split', workflow: {
+  return createWorkflowOwner(world, {family: 'split', recover, workflow: {
     workflowId: WORKFLOW_ID, fenceToken: fence, tableId: TABLE_ID,
     partitionId: world.partitionId,
     status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE, metadata,
@@ -89,6 +99,10 @@ SPLIT_ACK_STATUS.CLEANUP_COMPLETED} = {}) {
 async function settleTurns(world, rounds = 10) {
   await driveUntilRemoved(world, [], rounds);
   await nextTurns();
+}
+
+function recordState(world) {
+  return world.tablesRows.get(TABLE_ID)?.partition_transition_state ?? null;
 }
 
 function deliveriesTo(world, replicaId) {
@@ -184,10 +198,14 @@ test('W4c an ownership change: the old fence is refused typed, the new ' +
   world.dropDeliveryTo.add(away);
   await oldOwner.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
   await settleTurns(world);
-  // A new owner claims the workflow: the record's fence advances.
+  // A new owner claims the workflow: the record's fence advances (the
+  // claim rewrites only the fence; the frozen members and the answers the
+  // old owner recorded stay on the record).
   const newFence = FENCE + 1;
-  splitRecord(world, {fence: newFence,
-    participantStatus: SPLIT_ACK_STATUS.DISSOLUTION_FAILED});
+  const claimed = world.tablesRows.get(TABLE_ID);
+  world.setTablesRow({...claimed, partition_transition_metadata:
+    JSON.stringify({...JSON.parse(claimed.partition_transition_metadata),
+      workflowFenceToken: newFence})});
   world.dropDeliveryTo.delete(away);
   // The old owner's event-driven re-drive still carries the old fence.
   world.emitNodeRow(readyNodeRow(`${away}-node`));
@@ -212,8 +230,7 @@ test('W4c an ownership change: the old fence is refused typed, the new ' +
     'an old-fence REMOVE is refused typed');
   // The new owner resumes from the record (the finished source re-delivers
   // its acknowledgement, the DISSOLUTION_FAILED -> CLEANUP_COMPLETED edge).
-  const newOwner = await openSplitOwner(world, {fence: newFence,
-    participantStatus: SPLIT_ACK_STATUS.DISSOLUTION_FAILED});
+  const newOwner = await openSplitOwner(world, {recover: true});
   await newOwner.acknowledgeSourceParticipant(WORKFLOW_ID, {
     participantKey: SOURCE_KEY, status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
     fenceToken: newFence});
@@ -230,34 +247,77 @@ test('W4d an owner restart mid-dissolution resumes from the durable record',
   async (t) => {
     const world = openGroupWorld(t, {partitionId: 'redrive-restart',
       voters: 3});
-    const [first] = world.members;
+    const [first, second, third] = world.members;
     splitRecord(world);
-    // The first owner reached exactly one member, then its process ended
-    // (the source participant stays CLEANUP_COMPLETED).
-    await world.sources.get(first).handler.handleRemoveReplica({
-      type: 'REMOVE_REPLICA', operationId: `${WORKFLOW_ID}:dissolve:${first}`,
-      operationType: 'REMOVE', partitionId: world.partitionId,
-      replicaId: first, reason: 'split_source_dissolution',
-      groupRetirement: {reason: GROUP_RETIRED, kind: 'split-source',
-        workflowId: WORKFLOW_ID, fenceToken: FENCE, tableId: TABLE_ID}});
+    // The first owner froze the members, reached exactly one, recorded its
+    // answer, then its process ended.
+    const firstOwner = await openSplitOwner(world);
+    world.dropDeliveryTo.add(second).add(third);
+    await firstOwner.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
     await driveUntilRemoved(world, [first]);
+    firstOwner.kill();
+    world.dropDeliveryTo.clear();
     t.same(world.terminals, [], 'setup: the split has not completed');
-    // The restarted owner recovers the workflow from the record; the
-    // finished source re-delivers CLEANUP_COMPLETED on leader activation -
-    // a duplicate of the persisted status.
-    const restarted = await openSplitOwner(world);
+    // The restarted owner recovers the workflow from the record (PRODUCTION
+    // recovery); the finished source re-delivers CLEANUP_COMPLETED on leader
+    // activation (the DISSOLUTION_FAILED -> CLEANUP_COMPLETED edge).
+    const restarted = await openSplitOwner(world, {recover: true});
     const answer = await restarted.acknowledgeSourceParticipant(WORKFLOW_ID, {
       participantKey: SOURCE_KEY, status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
       fenceToken: FENCE});
-    t.equal(answer.result, 'duplicate', 'the re-delivery is a duplicate');
+    t.equal(answer.result, 'accepted', 'the re-delivery is accepted');
     t.equal(await driveUntilRemoved(world, world.members), true,
       'the restarted owner resumed the dissolution');
     for (const replicaId of world.members) {
       assertMemberRetired(t, world, replicaId, 'W4d');
     }
+    t.equal(deliveriesTo(world, first).length, 1,
+      'the recorded answer is not asked again');
     t.same(world.terminals, [WORKFLOW_ID], 'the split completed');
     assertNoBackstopOrConfChange(t, world, 'W4d');
   });
+
+test('W4g a record with no frozen set whose leader already retired: ' +
+  'unreadable until a new leader answers; a member that retired before the ' +
+  'freeze and lost its row stays listed (fail-closed)', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'redrive-legacy',
+    voters: 3});
+  const [first] = world.members;
+  splitRecord(world);
+  // Written before the frozen set existed: one member (the leader) retired
+  // and released its row, nothing was recorded.
+  await world.sources.get(first).handler.handleRemoveReplica({
+    type: 'REMOVE_REPLICA', operationId: `${WORKFLOW_ID}:dissolve:${first}`,
+    operationType: 'REMOVE', partitionId: world.partitionId,
+    replicaId: first, reason: 'split_source_dissolution',
+    groupRetirement: {reason: GROUP_RETIRED, kind: 'split-source',
+      workflowId: WORKFLOW_ID, fenceToken: FENCE, tableId: TABLE_ID}});
+  await driveUntilRemoved(world, [first]);
+  const restarted = await openSplitOwner(world, {recover: true});
+  await restarted.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
+  await settleTurns(world);
+  t.same(restarted.groupRetirementRedrive.unacknowledged().map((entry) =>
+    entry.membershipUnavailable), [true],
+  'listed as membership-unavailable while no leader answers');
+  t.same(world.terminals, [], 'nothing completed on an unread membership');
+  t.same(world.partitionRowDeletes, [], 'the partition row is kept');
+  // The survivors elect; the new leader's partitions-row update is the
+  // event that re-runs it.
+  await settleTurns(world);
+  world.emitSystemRow('partitions', 'UPDATE',
+    {partition_id: world.partitionId});
+  await driveUntilRemoved(world, world.members.slice(1));
+  for (const replicaId of world.members.slice(1)) {
+    assertMemberRetired(t, world, replicaId, 'W4g');
+  }
+  t.same(restarted.groupRetirementRedrive.unacknowledged().map((entry) =>
+    entry.unacknowledgedReplicaIds), [[first]],
+  'the member with no address and no recorded answer stays listed');
+  t.same(world.terminals, [], 'nothing completes without its answer');
+  t.same(world.partitionRowDeletes, [], 'the partition row is kept');
+  t.equal(recordState(world), PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+    'the record stays retiring (its only future exit: an operator fact)');
+});
 
 test('W4e a member restarting before any re-dispatch retires itself on ' +
   'the verified record; an unreadable record retires nothing',

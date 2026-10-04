@@ -12,6 +12,7 @@ import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
 import {
   isRetryableManagedSplitTransition,
 } from './managed-split-retry-policy.js';
+import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_DEFERRED = 'deferred';
@@ -147,6 +148,9 @@ class ManagedSplitWorkflowStateMethods {
           workflowId,
           transition.metadata,
         ),
+        // The durable ownership claim triple (one decode with the merge
+        // owner): the claim and fenced-transition CAS witness against it.
+        ...durableOwnershipClaimOf(transition.metadata),
         createdAt: Number(
           tableInfo?.created_at ??
             tableInfo?.createdAt ??

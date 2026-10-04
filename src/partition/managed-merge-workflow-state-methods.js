@@ -15,6 +15,7 @@ import {
   MERGE_PARTICIPANT_PREFIX,
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
+import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
 
 /**
  * Build the durable ownership identity for a merge coordinator process:
@@ -278,7 +279,6 @@ class ManagedMergeWorkflowStateMethods {
       return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
     }
 
-    const durableMetadata = transition.metadata || {};
     const workflow = this.workflowCoordinator.createWorkflowRecord({
       workflowId,
       ownerKey: this.buildMergeOwnerKey(sourcePartitionIds),
@@ -299,24 +299,7 @@ class ManagedMergeWorkflowStateMethods {
       // Restore the durable ownership claim triple: the fenced-transition
       // CAS witnesses against it, and a recovered/resynced record that
       // dropped it would diverge from the durable row on the next renew.
-      fenceToken: Number.isInteger(
-        durableMetadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN],
-      ) ?
-        durableMetadata[
-          PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN
-        ] :
-        undefined,
-      workflowOwnerId:
-        durableMetadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID],
-      leaseExpiresAt: Number.isFinite(
-        durableMetadata[
-          PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
-        ],
-      ) ?
-        Number(durableMetadata[
-          PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
-        ]) :
-        undefined,
+      ...durableOwnershipClaimOf(transition.metadata),
       createdAt: Number(resolveFirstDefinedValue(
         tableInfo, DURABLE_ROW_CREATED_AT_KEYS, this.now(),
       )),

@@ -12,15 +12,13 @@ import {
   GROUP_RETIREMENT_KIND,
   buildGroupRetirementEvidence,
 } from './group-retirement-evidence.js';
-import {dispatchGroupRetirementRemovals} from
-  './group-retirement-redrive.js';
+import {retireFrozenGroupMembers} from './group-retirement-members.js';
 import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
-  SPLIT_ACK_CHECKPOINT_FIELD,
   SPLIT_ACK_MIRROR_REMOVED_SATISFIED_STATUSES,
   SPLIT_ACK_STATUS,
   SPLIT_PARTICIPANT_PREFIX,
@@ -44,19 +42,19 @@ const SPLIT_TERMINAL_PREDECESSOR_STATUSES = Object.freeze(new Set([
 ]));
 
 /**
- * The durable progress a failed dissolution records: the replicas that did
- * acknowledge, so a resumed dissolution re-sends only to the others.
- * @param {Error} error - The incomplete dispatch's error.
- * @return {Object} The acknowledgement's checkpoint fields, or none.
+ * The participant of one split child (left = the first target, right = the
+ * second), whose checkpoint carries that child group's frozen members.
+ * @param {Object} workflow - Workflow snapshot.
+ * @param {string} childPartitionId
+ * @return {string}
  */
-function dissolutionProgressCheckpoint(error) {
-  if (!Array.isArray(error?.acknowledgedReplicaIds)) {
-    return {};
-  }
-  return {[PARTICIPANT_ACK_FIELD.CHECKPOINT]: {
-    [SPLIT_ACK_CHECKPOINT_FIELD.DISSOLVED_REPLICA_IDS]:
-      error.acknowledgedReplicaIds,
-  }};
+function splitChildParticipantKey(workflow, childPartitionId) {
+  const targetPartitionIds = workflow?.metadata?.[
+    PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS];
+  return Array.isArray(targetPartitionIds) &&
+    targetPartitionIds.indexOf(childPartitionId) === 0 ?
+    SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD :
+    SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD;
 }
 
 /**
@@ -301,12 +299,12 @@ class ManagedSplitWorkflowDissolutionMethods {
       const dissolvedReplicaIds = await this.dispatchSplitReplicaRemovals(
         workflowId,
         sourcePartitionId,
+        SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
         LOCAL_STR_SPLIT_SOURCE_DISSOLUTION,
         buildGroupRetirementEvidence({
           kind: GROUP_RETIREMENT_KIND.SPLIT_SOURCE,
           workflow,
         }),
-        this.resolveSplitDissolvedReplicaIds(workflow),
       );
       const deleteWitness =
         await this.deletePartitionMetadata(sourcePartitionId);
@@ -317,11 +315,9 @@ class ManagedSplitWorkflowDissolutionMethods {
         [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
           SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
         [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
+        // The frozen and answered sets are already durable on the
+        // participant checkpoint (group-retirement-members.js), kept as is.
         [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
-        [PARTICIPANT_ACK_FIELD.CHECKPOINT]: {
-          [SPLIT_ACK_CHECKPOINT_FIELD.DISSOLVED_REPLICA_IDS]:
-            dissolvedReplicaIds,
-        },
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
       });
       this.groupRetirementRedrive.settle(workflowId, sourcePartitionId);
@@ -336,14 +332,14 @@ class ManagedSplitWorkflowDissolutionMethods {
         sourcePartitionId,
         error: error?.message || error,
       });
-      // The progress so far is durable on the failed acknowledgement, so a
-      // resumed dissolution re-sends only to unacknowledged members.
+      // The progress so far is durable on the participant checkpoint (each
+      // positive answer as it arrived), so a resumed dissolution re-sends
+      // only to the frozen members that have not answered.
       await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
         [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
           SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
         [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
         [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.DISSOLUTION_FAILED,
-        ...dissolutionProgressCheckpoint(error),
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
       });
       this.reportIncompleteGroupRetirement(workflowId, sourcePartitionId,
@@ -373,22 +369,6 @@ class ManagedSplitWorkflowDissolutionMethods {
   }
 
   /**
-   * The replicas whose dissolution REMOVE is already acknowledged, from
-   * the source participant's durable checkpoint.
-   * @param {Object|null} workflow
-   * @return {string[]}
-   * @private
-   */
-  resolveSplitDissolvedReplicaIds(workflow) {
-    const participant = workflow?.participants instanceof Map ?
-      workflow.participants.get(SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION) :
-      null;
-    const ids = participant?.checkpoint?.[
-      SPLIT_ACK_CHECKPOINT_FIELD.DISSOLVED_REPLICA_IDS];
-    return Array.isArray(ids) ? ids.map(String) : [];
-  }
-
-  /**
    * Hand an incomplete group retirement (members did not acknowledge) to
    * the workflow owner's re-drive (group-retirement-redrive.js).
    * @param {string} workflowId
@@ -404,7 +384,8 @@ class ManagedSplitWorkflowDissolutionMethods {
     }
     this.groupRetirementRedrive.report({workflowId, partitionId,
       unacknowledged: error.unacknowledged,
-      superseded: error.superseded === true, redrive});
+      superseded: error.superseded === true,
+      membershipUnavailable: error.membershipUnavailable === true, redrive});
   }
 
   /**
@@ -450,6 +431,7 @@ class ManagedSplitWorkflowDissolutionMethods {
           await this.dispatchSplitReplicaRemovals(
             workflowId,
             childPartitionId,
+            splitChildParticipantKey(workflow, childPartitionId),
             LOCAL_STR_SPLIT_ABORTED_CHILD_TEARDOWN,
             buildGroupRetirementEvidence({
               kind: GROUP_RETIREMENT_KIND.SPLIT_ABORTED_CHILD,
@@ -507,26 +489,28 @@ class ManagedSplitWorkflowDissolutionMethods {
   }
 
   /**
-   * Dispatch REMOVE_REPLICA for every authoritative replica of one
-   * retired partition (the dissolved source or an aborted child). The
-   * group ends as a unit (owner decision 2026-10-04): every REMOVE carries
-   * the workflow's group-retirement evidence.
+   * Dispatch REMOVE_REPLICA to every frozen member of one retired group
+   * (the dissolved source or an aborted child): the group's committed
+   * configuration frozen on its participant at the first dispatch
+   * (group-retirement-members.js). The group ends as a unit (owner decision
+   * 2026-10-04): every REMOVE carries the workflow's group-retirement
+   * evidence.
    * @param {string} workflowId
    * @param {string} partitionId
+   * @param {string} participantKey - The group's participant.
    * @param {string} reason - Replica-removal reason label.
    * @param {Object} groupRetirement - buildGroupRetirementEvidence's
    *   evidence for this retired group.
-   * @param {string[]} [acknowledgedReplicaIds] - Already acknowledged
-   *   (durable progress): not re-sent.
-   * @return {Promise<string[]>} Replica ids with accepted removal
-   *   dispatch; throws (unacknowledged members) when any did not accept.
+   * @return {Promise<string[]>} Every positively answered replica id;
+   *   throws (unacknowledged members) until every frozen member answered.
    * @private
    */
-  dispatchSplitReplicaRemovals(workflowId, partitionId, reason,
-    groupRetirement, acknowledgedReplicaIds = []) {
-    return dispatchGroupRetirementRemovals({
-      serviceRows: this.listPartitionServiceRows(partitionId),
-      acknowledgedReplicaIds,
+  dispatchSplitReplicaRemovals(workflowId, partitionId, participantKey,
+    reason, groupRetirement) {
+    return retireFrozenGroupMembers(this, {
+      workflowId,
+      participantKey,
+      partitionId,
       deliver: ({replicaId, nodeId}) => this.deliverReplicaRemoval({
         nodeId,
         message: this.buildSplitReplicaRemovalMessage({

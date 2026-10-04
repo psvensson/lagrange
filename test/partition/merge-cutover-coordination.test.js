@@ -674,6 +674,14 @@ async (t) => {
     insertCalls,
     deleteCalls,
     cdcIntegrationService,
+    // One replica row per partition (the merged target included): a target
+    // whose members cannot be read is never deleted (fail-closed), so the
+    // teardown this guard asserts needs a member to retire.
+    listPartitionServiceRows: (partitionId) => [{
+      partition_id: partitionId,
+      replica_id: `${partitionId}-r1`,
+      node_id: 'node-a',
+    }],
   });
   const result = await fixture.workflow.execute({
     leftPartitionId: FIXTURE_LEFT_PARTITION_ID,
@@ -825,7 +833,16 @@ test('merge dissolution - a failed dissolution is re-attemptable: a ' +
 test('merge abort - an abort racing a retry execute() still lands: the ' +
     'retry window is refused, durable FAILED persists (no wedge), and a ' +
     'settled retry is viable (R2 guard)', async (t) => {
-  const fixture = await startMergedFixture(t);
+  const fixture = await startMergedFixture(t, {
+    // One replica row per partition (the merged target included): a target
+    // whose members cannot be read is never deleted (fail-closed), so the
+    // teardown this guard asserts needs a member to retire.
+    listPartitionServiceRows: (partitionId) => [{
+      partition_id: partitionId,
+      replica_id: `${partitionId}-r1`,
+      node_id: 'node-a',
+    }],
+  });
 
   // Source failure: the abort is fire-and-forget on the FIFO owner lane.
   await ackSourceThroughGraph(

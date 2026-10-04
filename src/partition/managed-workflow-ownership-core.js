@@ -51,6 +51,30 @@ function stampOwnershipClaimMetadata(metadata, workflow) {
 }
 
 /**
+ * The durable ownership claim triple one transition metadata object
+ * carries (the inverse of stampOwnershipClaimMetadata): what a recovered or
+ * resynced workflow must hold, or the fenced-transition and claim CAS
+ * witness a row the durable record never had. A field the record does not
+ * carry well-formed is undefined.
+ * @param {Object|null} metadata - Durable transition metadata.
+ * @return {{fenceToken: (number|undefined), workflowOwnerId: *,
+ *   leaseExpiresAt: (number|undefined)}}
+ */
+function durableOwnershipClaimOf(metadata) {
+  const fenceToken =
+    metadata?.[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN];
+  const leaseExpiresAt = metadata?.[
+    PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT];
+  return {
+    fenceToken: Number.isInteger(fenceToken) ? fenceToken : undefined,
+    workflowOwnerId:
+      metadata?.[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID],
+    leaseExpiresAt: Number.isFinite(leaseExpiresAt) ?
+      Number(leaseExpiresAt) : undefined,
+  };
+}
+
+/**
  * Claim (or renew) durable ownership of one workflow through the
  * coordinator. Renew keeps the current fence token; a fresh claim
  * starts the next fence epoch.
@@ -112,6 +136,7 @@ async function renewWorkflowOwnershipCore(
 
 export {
   claimWorkflowOwnershipCore,
+  durableOwnershipClaimOf,
   renewWorkflowOwnershipCore,
   stampOwnershipClaimMetadata,
 };

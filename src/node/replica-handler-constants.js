@@ -90,6 +90,9 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_GROUP_RETIREMENT_REFUSED:
     'Replica removal refused: its group-retirement evidence does not match ' +
     'the durable workflow record',
+  REMOVE_GROUP_RETIRED_CLEANUP_DEFERRED:
+    'Group-retirement REMOVE of a replica this node already removed: ' +
+    'answered completed; its cleanup reconcile stays deferred',
   REMOVE_FAILED: 'Replica removal failed',
   REMOVE_STATUS_WRITE_DEFERRED:
     'Replica removal status write deferred after retryable control-plane failure',

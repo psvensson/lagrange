@@ -222,6 +222,30 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       );
     }
     /**
+     * A group-retirement REMOVE of a replica this node already removed (its
+     * own verified REMOVE, or the open-time safety net, retired it): the
+     * member's own positive answer to its workflow owner, which completes
+     * only on such answers. Its cleanup reconcile (e.g. the row already
+     * released) stays the ordinary path's deferred debt; an ordinary REMOVE
+     * keeps answering that ERROR.
+     * @param {Object} request - REMOVE_REPLICA request.
+     * @param {Error} error - The cleanup reconcile's failure.
+     * @return {Object} COMPLETED response.
+     * @private
+     */
+    answerRemovedGroupMember(request, error) {
+      const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
+      this.logger.warn(
+        REPLICA_HANDLER_LOG_MSG.REMOVE_GROUP_RETIRED_CLEANUP_DEFERRED, {
+          operationId: request?.[ReplicaOperationField.OPERATION_ID],
+          partitionId: request?.[ReplicaOperationField.PARTITION_ID],
+          replicaId, nodeId: this.nodeId, error: error?.message});
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.COMPLETED,
+        {replicaId, nodeId: this.nodeId, cleanupDeferred: true},
+      );
+    }
+    /**
      * @param {Object} request
      * @param {Object|null} [groupRetirement] - The verified group-retirement
      *   decision, or null for an ordinary REMOVE.
@@ -375,6 +399,9 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         try {
           await this.reconcileRemovedReplicaCleanup(replicaId, partitionId);
         } catch (error) {
+          if (request?.[ReplicaOperationField.GROUP_RETIREMENT]) {
+            return this.answerRemovedGroupMember(request, error);
+          }
           this.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
             operationId,
             replicaId,

@@ -10,8 +10,10 @@
  *     at the lease's expiry, visible as a WARN when it drives.
  * L2  an aborted teardown + owner restart is resumed the same way.
  * L3  a departed or deleted node re-checks; a deleted member services row
- *     ends the step; the exhaustion ERROR is logged once across heartbeats
- *     and the entry stays re-drivable.
+ *     only re-runs the step (owner ruling 2026-10-04: never proof the member
+ *     is gone) - the member stays required and listed, nothing completes;
+ *     the exhaustion ERROR is logged once across heartbeats and the entry
+ *     stays re-drivable.
  * L4  a re-run that returns early arms the fallback with a WARN; the
  *     merge-source, aborted-child and aborted-target lost REMOVEs recover.
  * L5  a replica opened with its record unreadable WARNs once.
@@ -22,7 +24,13 @@
  *
  * Same world as group-retirement-redrive.test.js (real ports, PRODUCTION
  * handlers, reconcile, dissolution/teardown, coordinator, re-drive and
- * resume; injected owner clock).
+ * resume, the PRODUCTION committed-membership read the member set is frozen
+ * from, and - for a restarted owner - the PRODUCTION recovery of its
+ * family; injected owner clock).
+ * A merge's sibling source is recorded already dissolved, and an aborted
+ * split's sibling child has no group in this world: its membership is
+ * unreadable, so it stays listed as membership-unavailable (never "no
+ * members").
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -69,9 +77,11 @@ const SHAPE = Object.freeze({
     names: {sourcePartitionIds: [p, `${p}-sib`],
       targetPartitionIds: [`${p}-m`]},
     state: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE, active: 2,
-    participants: [p, `${p}-sib`].map((id) => ({
-      participantKey: buildMergeSourceParticipantKey(id),
-      status: MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED}))}),
+    participants: [
+      {participantKey: buildMergeSourceParticipantKey(p),
+        status: MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED},
+      {participantKey: buildMergeSourceParticipantKey(`${p}-sib`),
+        status: MERGE_ACK_STATUS.SOURCE_DISSOLVED}]}),
   'merge:true': (p) => ({
     names: {sourcePartitionIds: [`${p}-a`, `${p}-b`],
       targetPartitionIds: [p]},
@@ -93,13 +103,14 @@ function install(world, {family = 'split', aborted = false,
     participants: shape.participants};
 }
 
-function openOwner(world, shape, {resume = false, owner: ownerFields = {}} =
-{}) {
-  return createWorkflowOwner(world, {family: shape.family, resume, workflow: {
-    workflowId: WORKFLOW_ID, fenceToken: FENCE, tableId: TABLE_ID,
-    partitionId: world.partitionId, status: shape.state,
-    metadata: shape.metadata, participants: shape.participants,
-    ...ownerFields}});
+function openOwner(world, shape, {resume = false, recover = false,
+  owner: ownerFields = {}} = {}) {
+  return createWorkflowOwner(world, {family: shape.family, resume, recover,
+    workflow: {
+      workflowId: WORKFLOW_ID, fenceToken: FENCE, tableId: TABLE_ID,
+      partitionId: world.partitionId, status: shape.state,
+      metadata: shape.metadata, participants: shape.participants,
+      ...ownerFields}});
 }
 
 function drive(owner, shape) {
@@ -157,7 +168,10 @@ for (const [label, aborted] of [['L1 split source', false],
     // The owner process ends; its in-memory re-drive ends with it.
     first.kill();
     world.dropDeliveryTo.delete(lone);
-    const restarted = await openOwner(world, shape, {resume: true});
+    // The restarted owner recovers the workflow from the durable record
+    // through its family's PRODUCTION recovery (no stubbed state).
+    const restarted = await openOwner(world, shape, {resume: true,
+      recover: true});
     t.equal(await driveUntilRemoved(world, world.members), true,
       'every member completed its removal');
     t.ok(retired(world, lone), 'the lone member retired as group-retired');
@@ -189,9 +203,14 @@ test('L1b the previous owner\'s lease is still live: one re-scan at its ' +
   await settle(world);
   first.kill();
   world.dropDeliveryTo.delete(lone);
+  // The dead incarnation's live lease, on the durable record.
+  const record = world.tablesRows.get(TABLE_ID);
+  world.tablesRows.set(TABLE_ID, {...record, partition_transition_metadata:
+    JSON.stringify({...JSON.parse(record.partition_transition_metadata),
+      workflowOwnerId: 'owner-dead-incarnation',
+      workflowLeaseExpiresAt: 50000})});
   const restarted = await openOwner(world, shape, {resume: true,
-    owner: {workflowOwnerId: 'owner-dead-incarnation',
-      leaseExpiresAt: 50000}});
+    recover: true});
   await settle(world);
   t.same(world.exitsOf(lone), [], 'a live foreign lease: nothing drives yet');
   t.equal(world.scheduler.pending().length >= 1, true,
@@ -227,7 +246,8 @@ test('L1c a running owner resumes on the record change that makes it ' +
 });
 
 test('L3 a departed node re-checks; the member\'s deleted services row ' +
-  'ends the step; exhaustion is one ERROR and stays re-drivable',
+  'only re-runs the step - it stays required and listed; exhaustion is one ' +
+  'ERROR and stays re-drivable',
 async (t) => {
   const world = openGroupWorld(t, {partitionId: 'live-l3', voters: 3});
   const [, away, gone] = world.members;
@@ -255,22 +275,36 @@ async (t) => {
   t.ok(world.deliveries.filter((d) => d.replicaId === gone).length > before,
     'a node DELETE re-checks the member');
   t.same(world.exitsOf(gone), [], 'it is never proof the member is gone');
-  // The member's own durable registration is deleted (its node's cleanup):
-  // it is no longer part of the group's membership list.
+  // The member's services row is deleted (any deleter: its node's cleanup,
+  // an absence sweep, a lagging view): never proof the member is gone.
   const row = world.cache.get('services', gone);
   world.cache.delete('services', gone);
   world.emitSystemRow('services', 'DELETE', row);
   await settle(world, 3);
   t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
-    entry.unacknowledgedReplicaIds), [[away]],
-  'only the still-registered member stays listed');
+    [...entry.unacknowledgedReplicaIds].sort()), [[away, gone].sort()],
+  'the member whose row was deleted stays required and listed');
   // The exhausted entry is still re-drivable by its node's ready event.
   world.dropDeliveryTo.delete(away);
   world.emitNodeRow(readyNodeRow(`${away}-node`));
   t.equal(await driveUntilRemoved(world, [away]), true,
     'the ready event re-drove the exhausted entry');
   t.ok(retired(world, away), 'it retired');
-  t.same(world.terminals, [WORKFLOW_ID], 'the split completed');
+  t.same(world.terminals, [],
+    'nothing completes while the frozen member gone never answered');
+  t.ok(world.partitionRows.has(world.partitionId),
+    'the group\'s partition row is kept');
+  t.equal(recordState(world), shape.state, 'the record stays retiring');
+  t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
+    entry.unacknowledgedReplicaIds), [[gone]], 'gone is listed with its alarm');
+  // Its row comes back (a re-registration, a hydrating view): an address.
+  world.dropDeliveryTo.delete(gone);
+  world.cache.upsert('services', row);
+  world.emitSystemRow('services', 'INSERT', row);
+  t.equal(await driveUntilRemoved(world, [gone]), true,
+    'the row event re-drove it and it answered');
+  t.same(world.terminals, [WORKFLOW_ID],
+    'the split completed only after every frozen member answered');
 });
 
 test('L4 a re-run that returns early arms the fallback with a WARN',
@@ -283,7 +317,7 @@ test('L4 a re-run that returns early arms the fallback with a WARN',
     const resolve = owner.resolveWorkflowState;
     let calls = 0;
     // The re-run finds no workflow state and returns early.
-    owner.resolveWorkflowState = (id) => (++calls > 2 ? null : resolve(id));
+    owner.resolveWorkflowState = (id) => (++calls > 3 ? null : resolve(id));
     await drive(owner, shape);
     await settle(world);
     t.ok(logsOf(owner, 'warn', /returned without completing/u).some(
@@ -313,8 +347,15 @@ for (const [label, family, aborted] of [
     }
     t.ok(world.partitionRowDeletes.includes(world.partitionId),
       'the group\'s partition row is deleted after the last member');
-    t.same(owner.groupRetirementRedrive.unacknowledged(), [],
-      'nothing left unacknowledged');
+    t.same(owner.groupRetirementRedrive.unacknowledged().filter((entry) =>
+      entry.partitionId === world.partitionId), [],
+    'nothing of this group left unacknowledged');
+    if (family === 'split') {
+      t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
+        [entry.partitionId, entry.membershipUnavailable]),
+      [[`${world.partitionId}-sib`, true]],
+      'the sibling child with no readable group stays listed, unavailable');
+    }
     t.equal(world.scheduler.fired, 0, 'no fallback fired');
     assertQuiet(t, world, label);
   });
@@ -424,4 +465,188 @@ test('F5 NOT_FOUND is not an acknowledgement', async (t) => {
     'the member that answered NOT_FOUND was re-driven and retired');
   t.same(world.partitionRowDeletes, [world.partitionId],
     'the partition row was deleted only after its real acknowledgement');
+});
+
+// B1 (P3a): a member that never answered; its services row is deleted (any
+// deleter). The step never completes on it; when the member itself comes
+// back (a restart: the open-time safety net retires it on the still-retiring
+// record) its own answer completes the step.
+test('B1 a deleted services row never completes the step; the member\'s ' +
+  'own answer does', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'live-b1', voters: 3});
+  const [first, away, gone] = world.members;
+  const shape = install(world);
+  const owner = await openOwner(world, shape);
+  world.dropDeliveryTo.add(gone);
+  await drive(owner, shape);
+  await settle(world);
+  await driveUntilRemoved(world, [first, away], 30);
+  const row = world.cache.get('services', gone);
+  world.cache.delete('services', gone);
+  world.emitSystemRow('services', 'DELETE', row);
+  await settle(world, 5);
+  await driveUntilRemoved(world, [first, away], 30);
+  t.same(world.terminals, [], 'no completion');
+  t.equal(recordState(world), shape.state, 'the record stays retiring');
+  t.notOk(world.partitionRowDeletes.includes(world.partitionId),
+    'the partition row is kept');
+  t.same(world.exitsOf(gone), [], 'gone never retired');
+  t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
+    entry.unacknowledgedReplicaIds), [[gone]], 'gone stays listed');
+  // gone restarts: the safety net reads the still-retiring record.
+  const {handler, service} = world.sources.get(gone);
+  handler.localReplicas.delete(gone);
+  handler.localServices.delete(gone);
+  handler.registerExistingReplica({replicaId: gone,
+    partitionId: world.partitionId, service});
+  t.equal(await driveUntilRemoved(world, [gone]), true,
+    'the safety net retired gone');
+  t.ok(retired(world, gone), 'as group-retired');
+  t.same(world.terminals, [], 'its self-retirement is not the owner\'s ' +
+    'answer yet');
+  // Its node is ready again: the owner asks it (at its recorded address)
+  // and the member answers its own completed removal.
+  world.dropDeliveryTo.delete(gone);
+  world.emitNodeRow(readyNodeRow(`${gone}-node`));
+  await settle(world, 5);
+  t.same(world.terminals, [WORKFLOW_ID],
+    'completed on gone\'s own answer, after every frozen member answered');
+  t.same(world.partitionRowDeletes, [world.partitionId],
+    'the partition row was deleted once, then');
+});
+
+// B2 (P3b): the owner resumes while its services view is not hydrated.
+test('B2 a resume against an empty services view sends nothing and ' +
+  'completes nothing; the view\'s hydration re-runs it', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'live-b2', voters: 3,
+    reconcile: false});
+  const shape = install(world);
+  const rows = world.members.map((id) => world.cache.get('services', id));
+  for (const id of world.members) world.cache.delete('services', id);
+  const owner = await openOwner(world, shape, {resume: true,
+    recover: true});
+  await settle(world, 5);
+  t.equal(world.deliveries.length, 0, 'no REMOVE without an address');
+  t.same(world.terminals, [], 'no completion');
+  t.same(world.partitionRowDeletes, [], 'the partition row is kept');
+  t.equal(recordState(world), shape.state, 'the record stays retiring');
+  t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
+    [...entry.unacknowledgedReplicaIds].sort()), [[...world.members].sort()],
+  'every frozen member is listed, none dropped as "no members"');
+  const frozen = JSON.parse(world.tablesRows.get(TABLE_ID)
+    .partition_transition_metadata).participants[SOURCE_KEY]
+    .checkpoint?.requiredReplicaIds;
+  t.same(frozen, [...world.members].sort(),
+    'the committed configuration is frozen on the durable record');
+  for (const row of rows) {
+    world.cache.upsert('services', row);
+    world.emitSystemRow('services', 'INSERT', row);
+  }
+  t.equal(await driveUntilRemoved(world, world.members), true,
+    'the hydrated rows re-ran it and every member retired');
+  t.same(world.terminals, [WORKFLOW_ID], 'it completed only then');
+});
+
+test('B2b an unreadable committed configuration is membership-unavailable, ' +
+  'never "no members"; the group\'s row change re-runs it', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'live-b2b', voters: 3});
+  const shape = install(world);
+  world.membershipReadAvailable = false;
+  const owner = await openOwner(world, shape, {resume: true,
+    recover: true});
+  await settle(world, 5);
+  t.equal(world.deliveries.length, 0, 'nothing sent');
+  t.same(world.terminals, [], 'no completion');
+  t.same(world.partitionRowDeletes, [], 'the partition row is kept');
+  t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
+    entry.membershipUnavailable), [true], 'listed: membership unavailable');
+  world.membershipReadAvailable = true;
+  world.emitSystemRow('partitions', 'UPDATE',
+    {partition_id: world.partitionId});
+  t.equal(await driveUntilRemoved(world, world.members), true,
+    'the row change re-ran it and every member retired');
+  t.same(world.terminals, [WORKFLOW_ID], 'it completed only then');
+});
+
+test('B2c a partial services view: the member with no row stays required',
+  async (t) => {
+    const world = openGroupWorld(t, {partitionId: 'live-b2c', voters: 3});
+    const [, , missing] = world.members;
+    const shape = install(world);
+    const row = world.cache.get('services', missing);
+    world.cache.delete('services', missing);
+    const owner = await openOwner(world, shape);
+    await drive(owner, shape);
+    await driveUntilRemoved(world, world.members.slice(0, 2));
+    await settle(world, 5);
+    t.same(world.terminals, [], 'no completion on the two listed rows');
+    t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
+      entry.unacknowledgedReplicaIds), [[missing]],
+    'the member missing from the view is listed');
+    world.cache.upsert('services', row);
+    world.emitSystemRow('services', 'INSERT', row);
+    t.equal(await driveUntilRemoved(world, [missing]), true,
+      'its row re-ran it');
+    t.same(world.terminals, [WORKFLOW_ID], 'completed after it answered');
+  });
+
+test('B4 an answer whose durable record failed is not progress: the member ' +
+  'stays listed and is asked again', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'live-b4', voters: 3});
+  const shape = install(world);
+  const owner = await openOwner(world, shape);
+  const coordinator = owner.workflowCoordinator;
+  const persist = coordinator.persistParticipant;
+  let writes = 0;
+  let unrecorded = null;
+  // The freeze, the address book and two answers land; the last answer's
+  // write of the pass fails.
+  coordinator.persistParticipant = async (participant) => {
+    writes += 1;
+    if (writes === 5) {
+      unrecorded = participant.checkpoint.dissolvedReplicaIds.at(-1);
+      throw new Error('tables write failed');
+    }
+    return persist(participant);
+  };
+  const dissolved = () => JSON.parse(world.tablesRows.get(TABLE_ID)
+    .partition_transition_metadata).participants[SOURCE_KEY]
+    .checkpoint?.dissolvedReplicaIds ?? [];
+  await owner.groupRetirementRedrive.exclusive('hold', async () => {
+    await owner.dissolveSplitSourcePartition(WORKFLOW_ID);
+  });
+  t.ok(unrecorded, 'setup: one answer\'s record write failed');
+  t.notOk(dissolved().includes(unrecorded), 'it is not on the record');
+  t.notOk(owner.resolveWorkflowState(WORKFLOW_ID).participants
+    .get(SOURCE_KEY).checkpoint.dissolvedReplicaIds.includes(unrecorded),
+  'nor in memory');
+  t.same(world.terminals, [], 'no completion');
+  t.equal(await driveUntilRemoved(world, world.members), true,
+    'every member retired');
+  await settle(world, 5);
+  t.same(world.terminals, [WORKFLOW_ID],
+    'completed once every answer was recorded');
+  t.ok(world.deliveries.filter((d) => d.replicaId === unrecorded).length >= 2,
+    'the member whose answer was not recorded was asked again');
+});
+
+test('B5 an owner whose fence is older than the participant record\'s ' +
+  'records nothing and sends nothing', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'live-b5', voters: 3});
+  const shape = install(world);
+  const owner = await openOwner(world, shape);
+  owner.resolveWorkflowState(WORKFLOW_ID).participants.get(SOURCE_KEY)
+    .fenceToken = FENCE + 2;
+  const before = world.tablesRows.get(TABLE_ID).partition_transition_metadata;
+  await drive(owner, shape);
+  await settle(world, 3);
+  t.equal(world.deliveries.length, 0, 'no REMOVE sent');
+  t.equal(JSON.parse(world.tablesRows.get(TABLE_ID)
+    .partition_transition_metadata).participants[SOURCE_KEY]
+    .checkpoint?.requiredReplicaIds, undefined, 'no member set recorded');
+  t.ok(before.length > 0, 'setup');
+  t.ok(logsOf(owner, 'warn', /superseded/u).length >= 1,
+    'it stops as superseded');
+  t.same(owner.groupRetirementRedrive.unacknowledged(), [],
+    'it tracks nothing');
 });

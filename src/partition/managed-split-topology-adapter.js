@@ -1,4 +1,5 @@
 import {TABLES} from '../constants/index.js';
+import {readCommittedGroupMemberIds} from './group-retirement-members.js';
 import {observeSystemRows} from './group-retirement-redrive.js';
 import {
   classifySystemPartition,
@@ -162,9 +163,22 @@ class ManagedSplitTopologyAdapter {
   }
 
   /**
-   * Observe nodes-, services- and tables-row changes (the workflow owner's
-   * group-retirement events: node ready/departed, member row deleted,
-   * retiring record).
+   * The committed member identities of one partition's group (voters and
+   * learners), read from its leader by the creation owner's
+   * committed-membership read over this node's rebalance coordinator: the
+   * group-retirement step's frozen member set (group-retirement-members.js).
+   * @param {string} partitionId - Partition ID.
+   * @return {Promise<string[]>} Throws the read's typed refusal.
+   */
+  readCommittedGroupMembers(partitionId) {
+    return readCommittedGroupMemberIds(
+      this.sqlQueryEngine?.rebalanceCoordinator || null, partitionId);
+  }
+
+  /**
+   * Observe nodes-, services-, partitions- and tables-row changes (the
+   * workflow owner's group-retirement events: node ready/departed, member
+   * row changed, group row changed, retiring record).
    * @param {Function} listener - (tableName, operation, row) => void.
    * @return {Function|null} Unsubscribe.
    */

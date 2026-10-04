@@ -193,6 +193,14 @@ function buildWorkflow(options = {}) {
       options.listTablePartitionRows || (() => []),
     listPartitionServiceRows:
       options.listPartitionServiceRows || (() => []),
+    // The group leader's committed configuration (production: the
+    // committed-membership read): here, the replicas the test's own rows
+    // declare for the group. No rows: membership unavailable.
+    readCommittedGroupMembers: options.readCommittedGroupMembers ||
+      (async (partitionId) => ((options.listPartitionServiceRows ||
+        (() => []))(partitionId) || []).map((row) =>
+        String(row?.replica_id ?? row?.replicaId ?? ''))
+        .filter((id) => id.length > 0)),
     deliverReplicaRemoval:
       options.deliverReplicaRemoval || (async () => null),
     // Cutover readiness evidence: by default every child's canonical

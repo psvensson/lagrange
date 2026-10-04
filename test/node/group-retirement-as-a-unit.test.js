@@ -251,8 +251,21 @@ for (const [kind, voters] of [
       t.equal(world.partitionRowDeletes.filter((id) =>
         id === world.partitionId).length, 1,
       'the group\'s partition row is deleted once, after every member');
-      t.same(owner.groupRetirementRedrive.unacknowledged(), [],
-        'nothing is left unacknowledged');
+      t.same(owner.groupRetirementRedrive.unacknowledged().filter(
+        (entry) => entry.partitionId === world.partitionId), [],
+      'nothing of this group is left unacknowledged');
+      if (kind === 'split-aborted-child') {
+        // The other child has no group in this world: its committed
+        // configuration is unreadable, so it stays listed - never "no
+        // members", and its partition row is never deleted on that.
+        t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
+          [entry.partitionId, entry.membershipUnavailable]),
+        [[`${world.partitionId}-other-child`, true]],
+        'the other child stays listed, membership unavailable');
+        t.notOk(world.partitionRowDeletes.includes(
+          `${world.partitionId}-other-child`),
+        'no row is deleted for a group whose members were never read');
+      }
       if (kind === 'split-source') {
         t.same(world.terminals, [WORKFLOW_ID],
           'the split reached its terminal (SOURCE_DISSOLVED)');

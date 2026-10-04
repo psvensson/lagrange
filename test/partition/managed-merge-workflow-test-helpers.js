@@ -96,6 +96,12 @@ function parseDurablePartitionTransition(tableInfo) {
  * @param {*} fallback
  * @return {*}
  */
+// The replica ids a test's services rows declare for one group.
+function committedMembersOfRows(rows) {
+  return (rows || []).map((row) => String(row?.replica_id ?? row?.replicaId ??
+    '')).filter((id) => id.length > 0);
+}
+
 function resolveOption(options, name, fallback) {
   return Object.hasOwn(options, name) ? options[name] : fallback;
 }
@@ -302,6 +308,15 @@ function buildMergeWorkflow(options = {}) {
     listPartitionServiceRows: opt(
       'listPartitionServiceRows',
       (partitionId) => serviceRowsByPartitionId[partitionId] || [],
+    ),
+    // The group leader's committed configuration (production: the
+    // committed-membership read): here, the replicas the test's own rows
+    // declare for the group. No rows: membership unavailable.
+    readCommittedGroupMembers: opt(
+      'readCommittedGroupMembers',
+      async (partitionId) => committedMembersOfRows(
+        (options.listPartitionServiceRows ||
+          ((id) => serviceRowsByPartitionId[id] || []))(partitionId)),
     ),
     deliverReplicaRemoval: opt(
       'deliverReplicaRemoval',
