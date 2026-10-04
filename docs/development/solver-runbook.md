@@ -143,8 +143,11 @@ it rebases the local commits over them, refusing on a dirty tracked tree or a
 conflict. Direct branch pushes are preservation actions. A normal `git push` to one or
 more non-`main` branch refs skips the local proof gate so a committed WIP can
 always be preserved remotely; that remote branch is not Quest-land, merge,
-release or publication approval. Set `LAGRANGE_PUSH_PROVE_BRANCH=1` when you
-deliberately want the full local push gate on a feature branch.
+release or publication approval, and nothing proves it: `ci.yml` runs only on
+`main` and on pull requests into `main`, so the hook prints one `unproven` line
+with the cone command, `node scripts/lab.js test changed --lane all --split
+--sha <sha>`. Set `LAGRANGE_PUSH_PROVE_BRANCH=1` when you deliberately want the
+full local push gate on a feature branch.
 
 Pushes that update `main` still take the full gate. If that exact tree already
 passed `test:gate:postpush`, `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only

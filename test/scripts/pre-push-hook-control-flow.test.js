@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {parse} from 'yaml';
 import {gitProcessEnvironment} from
   '../../scripts/checks/git-process-environment.js';
 
@@ -189,6 +190,58 @@ test('a non-main branch can explicitly request the full local proof', () => {
   const [call] = materializerCalls(run.recorded);
   assert.ok(call, 'the explicit proof request materializes the pushed commit');
   assert.equal(call.argv[1], shas.head);
+});
+
+// A preserved branch has never been proven and nothing else tells its author
+// (preserved-branches-get-their-cone): the fast path says so once, with the
+// command that proves the first pushed commit's cone.
+const UNPROVEN_HINT = /^pre-push: unproven - .*$/gmu;
+const hintLines = (output) => output.match(UNPROVEN_HINT) ?? [];
+const CONE_COMMAND = 'node scripts/lab.js test changed --lane all --split --sha ';
+
+test('a non-main branch push says once that its cone is unproven and how to prove it', () => {
+  const run = runHook(`refs/heads/feature ${shas.head} refs/heads/feature ${ZERO_SHA}\n`);
+  assert.equal(run.status, 0, run.output);
+  assert.deepEqual(materializerCalls(run.recorded), [], 'the hint proves nothing itself');
+  const hints = hintLines(run.output);
+  assert.equal(hints.length, 1, `exactly one hint line: ${run.output}`);
+  assert.ok(hints[0].includes(`${CONE_COMMAND}${shas.head} `), hints[0]);
+  assert.ok(hints[0].includes('LAGRANGE_PUSH_PROVE_BRANCH=1'), hints[0]);
+  // A deletion has no cone: the hint names the first commit actually pushed.
+  const mixed = runHook(`refs/heads/old ${ZERO_SHA} refs/heads/old ${shas.base}\n` +
+    `refs/heads/feature ${shas.second} refs/heads/feature ${ZERO_SHA}\n`);
+  assert.equal(mixed.status, 0, mixed.output);
+  const [mixedHint, ...extra] = hintLines(mixed.output);
+  assert.deepEqual(extra, [], mixed.output);
+  assert.ok(mixedHint?.includes(`${CONE_COMMAND}${shas.second} `), mixed.output);
+});
+
+test('the unproven hint is absent wherever a proof runs or there is nothing to prove', () => {
+  const cases = [
+    ['a main push', `refs/heads/main ${shas.head} refs/heads/main ${shas.base}\n`, {}],
+    ['a branch push that asks for the proof',
+      `refs/heads/feature ${shas.head} refs/heads/feature ${ZERO_SHA}\n`,
+      {LAGRANGE_PUSH_PROVE_BRANCH: '1'}],
+    ['a deletion-only preservation push',
+      `refs/heads/old ${ZERO_SHA} refs/heads/old ${shas.base}\n`, {}],
+  ];
+  for (const [label, lines, env] of cases) {
+    const run = runHook(lines, env);
+    assert.equal(run.status, 0, `${label}: ${run.output}`);
+    assert.deepEqual(hintLines(run.output), [], `${label}: ${run.output}`);
+  }
+});
+
+test('the unproven hint states ci.yml\'s own trigger', () => {
+  const [hint] = hintLines(
+    runHook(`refs/heads/feature ${shas.head} refs/heads/feature ${ZERO_SHA}\n`).output);
+  assert.match(hint ?? '',
+    /the change gate \(ci\.yml\) runs only on main and pull requests into main/u);
+  // The claim is the workflow's: when ci.yml starts covering another branch,
+  // this goes red until the hint says so.
+  const ci = parse(fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), UTF8));
+  assert.deepEqual(ci.on.push, {branches: ['main']}, 'ci.yml push trigger');
+  assert.deepEqual(ci.on.pull_request, {branches: ['main']}, 'ci.yml pull_request trigger');
 });
 
 test('the hook hands the pushed commit to the materializer and runs no content stage itself', () => {

@@ -28,7 +28,7 @@
   "censusSize": 2285,
   "digest": "fnv1a32-72594200",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2b11ef3d",
+  "observationDigest": "fnv1a32-c1bab4c5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11484,6 +11484,7 @@
     "test/scripts/pre-push-hook-control-flow.test.js": {
       "files": [
         ".githooks/pre-push",
+        ".github/workflows/ci.yml",
         "README.md",
         "package.json",
         "scripts/check-circular-dependencies.js",

@@ -79,6 +79,7 @@ PUSHING_MAIN=0
 SAW_REF=0
 PUSHED_SHA=""
 PUSHED_REF=""
+PRESERVED_SHA=""
 MAIN_REMOTE_SHA=""
 ALL_PROVEN_TAG_REFS=1
 ALL_NON_MAIN_BRANCH_REFS=1
@@ -92,6 +93,9 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
   if [ -z "${PUSHED_SHA}" ]; then
     PUSHED_SHA="${local_sha}"
     PUSHED_REF="${_local_ref}"
+  fi
+  if [ -z "${PRESERVED_SHA}" ] && [ "${local_sha}" != "${ZERO_SHA}" ]; then
+    PRESERVED_SHA="${local_sha}"
   fi
   if [ "${remote_ref}" = "refs/heads/main" ]; then
     PUSHING_MAIN=1
@@ -190,12 +194,17 @@ fi
 # boundaries. A committed SHA must always be remotely preservable even while
 # its Quest witnesses are intentionally red. Main, tags/proof refs and mixed
 # pushes do not take this path. Operators can opt a branch into the full local
-# proof with LAGRANGE_PUSH_PROVE_BRANCH=1.
+# proof with LAGRANGE_PUSH_PROVE_BRANCH=1. Nothing else proves such a push -
+# ci.yml runs on main and on pull requests into main only - so the fast path
+# says so once, naming the first pushed commit's cone command (a deletion has
+# none). Re-pushing an up-to-date ref runs no hook, so the lab command leads.
 stage "branch-preservation-fast-path" "non-main branch preservation check"
 if [ "${ALL_NON_MAIN_BRANCH_REFS}" = "1" ] && [ -z "${LAGRANGE_PUSH_PROVE_BRANCH:-}" ]; then
   echo "pre-push: non-main branch preservation push - skipping local proof gate"
   echo "pre-push: remote preservation is NOT merge, Quest-land, release, or publication approval"
-  echo "pre-push: set LAGRANGE_PUSH_PROVE_BRANCH=1 to prove a feature branch locally before push"
+  if [ -n "${PRESERVED_SHA}" ]; then
+    echo "pre-push: unproven - the change gate (ci.yml) runs only on main and pull requests into main; prove this cone with: node scripts/lab.js test changed --lane all --split --sha ${PRESERVED_SHA} (or push with LAGRANGE_PUSH_PROVE_BRANCH=1)"
+  fi
   exit 0
 fi
 
