@@ -69,6 +69,10 @@ const HYDRATION_STEP = Object.freeze({
   WIRE_PARTITIONS: 'wirePartitionServicesForNormalMode',
   WIRE_MESSAGE_GROUPS: 'wireMessageGroupServicesForNormalMode',
 });
+const SEED_SYSTEM_LEADERS_IN_CACHE_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'seed system-table write leaders visible in the system table cache',
+});
 const SEED_REQUIRED_WRITE_TABLES = Object.freeze([
   TABLES.NODES,
   TABLES.NODE_ENDPOINTS,
@@ -592,6 +596,15 @@ class SeedCacheHydrationPhase {
       timeoutMs,
       // A wait this node takes, on this node's clock.
       now: resolveHostedNodeClock(d),
+      logger: d.getLogger(),
+      spentWait: SEED_SYSTEM_LEADERS_IN_CACHE_WAIT,
+      scope: {nodeId: d.getNodeId()},
+      describeLastObserved: (readiness, context) => ({
+        timeoutKind: context.timeoutKind,
+        attempts: context.attempt,
+        missingCount: readiness?.missingCount ?? null,
+        missingLeaders: readiness?.missingLeaders || null,
+      }),
       subscriptions: [
         (notify) => subscribeToSystemTableCacheChanges(cache, notify),
       ],

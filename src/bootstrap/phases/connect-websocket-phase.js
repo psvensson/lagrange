@@ -33,7 +33,13 @@ import {
   MESSAGE_ROUTER_SHARED,
 } from '../../transport/message-router-shared.js';
 
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+
 const OWNER_MESSAGE_ROUTER_SETUP = 'MessageRouterSetup';
+const SEED_WEBSOCKET_CONNECT_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'websocket connection to the seed node (or any cluster peer)',
+});
 const {
   WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
 } = MESSAGE_ROUTER_SHARED;
@@ -452,6 +458,19 @@ class ConnectWebSocketPhase {
         }
 
         if (remainingMs <= 0) {
+          reportWaitBoundSpent(logger, {
+            ...SEED_WEBSOCKET_CONNECT_WAIT,
+            boundMs: retryTimeoutMs,
+            elapsedMs,
+            lastObserved: {
+              attempts: attempt,
+              lastError: error?.message || String(error),
+              lastErrorCode: error?.code ?? null,
+              connectedPeerCount: 0,
+              seedWsAddress,
+            },
+            scope: {nodeId: this.nodeId, seedNodeId},
+          });
           break;
         }
 

@@ -6,7 +6,6 @@ import {
   BOOTSTRAP_API_CACHE_VISIBILITY,
   BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_ERROR,
-  BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_SQL,
 } from '../bootstrap-api-constants.js';
 import {BOOTSTRAP_PIPELINE_ERROR_CODE} from '../bootstrap-constants.js';
@@ -34,6 +33,10 @@ const REGISTERED_SERVICE_CACHE_OPTIONAL_FIELDS = Object.freeze([
   COLUMN.ADDRESS,
 ]);
 const SERVICE_OWNER_READ_DEFERRED_CODE = 'SERVICE_OWNER_READ_DEFERRED';
+const SERVICE_REGISTRATION_CACHE_VISIBILITY_WAIT = Object.freeze({
+  wait: 'SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'registered service row visible in the services cache',
+});
 class ServiceRegistrationVisibilityOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
@@ -336,9 +339,21 @@ class ServiceRegistrationVisibilityOwner {
     const pollIntervalMs =
       BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_CACHE_VISIBILITY_POLL_INTERVAL_MS;
     let lastDiagnostics = null;
+    let timeoutDiagnostics = null;
     await waitForStartupConvergence({
       timeoutMs,
       pollIntervalMs,
+      logger: this.getLogger(),
+      spentWait: SERVICE_REGISTRATION_CACHE_VISIBILITY_WAIT,
+      scope: {
+        serviceId: expectedService[COLUMN.SERVICE_ID],
+        nodeId: expectedService[COLUMN.NODE_ID],
+      },
+      describeLastObserved: (_result, context) => ({
+        timeoutKind: context.timeoutKind,
+        attempts: context.attempt,
+        lastVisibilityCheck: timeoutDiagnostics?.lastVisibilityCheck || null,
+      }),
       subscriptions: [
         (notify) =>
           subscribeToSystemTableCacheChanges(this.getSystemTableCache(), notify, {
@@ -361,15 +376,11 @@ class ServiceRegistrationVisibilityOwner {
         );
       },
       createTimeoutError: (_result, context) => {
-        const timeoutDiagnostics = this.buildRegisteredServiceVisibilityTimeoutDiagnostics(
+        timeoutDiagnostics = this.buildRegisteredServiceVisibilityTimeoutDiagnostics(
           expectedService,
           lastDiagnostics,
           timeoutMs,
           context.elapsedMs,
-        );
-        this.getLogger().warn(
-          BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT,
-          timeoutDiagnostics,
         );
 
         return this.buildRegisterServiceValidationError(

@@ -8,6 +8,7 @@
 import {TABLES} from '../constants/index.js';
 import {ConfigurationManager} from './configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   CONFIG_KEY,
   CONFIG_SUBSYSTEM,
@@ -36,6 +37,17 @@ const DYNAMIC_CONFIG_STARTUP_LOG_MSG = Object.freeze({
     'Failed to initialize raft adaptive timing controller',
   ADAPTIVE_CONTROLLER_SHUTDOWN_FAILED:
     'Failed to shutdown raft adaptive timing controller',
+});
+const DYNAMIC_CONFIG_STARTUP_SPENT_WAIT = Object.freeze({
+  INITIAL_READ: Object.freeze({
+    wait: 'DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS',
+    awaited: 'startup dynamic-config key read (falls back to defaults)',
+  }),
+  CONTROLLER_INIT: Object.freeze({
+    wait: 'DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS',
+    awaited: 'adaptive timing controller initialize() (continues without it)',
+  }),
+  PROMISE_SETTLED: false,
 });
 const DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS = 300; // ends-on: dynamicConfigService.get(key) resolves
 const DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS = 300; // ends-on: adaptiveTimingController.initialize() resolves
@@ -67,13 +79,31 @@ function resolveControllerInitTimeoutMs(options = {}) {
 }
 
 /**
+ * Report a spent startup bound (timer branch only); the site knows only
+ * which key/step it was awaiting and that it had not settled.
+ * @param {Object} spent - {logger, spentWait, lastObserved}.
+ * @param {number} timeoutMs
+ */
+function reportStartupWaitSpent(spent, timeoutMs) {
+  reportWaitBoundSpent(spent.logger, {
+    ...spent.spentWait,
+    boundMs: timeoutMs,
+    elapsedMs: timeoutMs,
+    lastObserved: {
+      ...spent.lastObserved,
+      promiseSettled: DYNAMIC_CONFIG_STARTUP_SPENT_WAIT.PROMISE_SETTLED,
+    },
+  });
+}
+
+/**
  * Apply timeout to a promise.
  * @param {Promise<*>} promise
  * @param {number} timeoutMs
  * @param {string} errorMessage
  * @return {Promise<*>}
  */
-function withTimeout(promise, timeoutMs, errorMessage) {
+function withTimeout(promise, timeoutMs, errorMessage, spent) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const timer = setTimeout(() => {
@@ -81,6 +111,7 @@ function withTimeout(promise, timeoutMs, errorMessage) {
         return;
       }
       settled = true;
+      reportStartupWaitSpent(spent, timeoutMs);
       reject(new Error(errorMessage));
     }, timeoutMs);
     if (typeof timer.unref === 'function') {
@@ -113,12 +144,22 @@ function withTimeout(promise, timeoutMs, errorMessage) {
  * @param {number} timeoutMs
  * @return {Promise<*>}
  */
-async function readStartupConfigValue(dynamicConfigService, key, timeoutMs) {
+async function readStartupConfigValue(
+  dynamicConfigService,
+  key,
+  timeoutMs,
+  logger,
+) {
   return withTimeout(
     dynamicConfigService.get(key),
     timeoutMs,
     LOCAL_STR_TIMED_OUT_READING_STARTUP_DYNAMIC_CONFIG + key +
       LOCAL_STR_AFTER + timeoutMs + LOCAL_STR_MS,
+    {
+      logger,
+      spentWait: DYNAMIC_CONFIG_STARTUP_SPENT_WAIT.INITIAL_READ,
+      lastObserved: {key},
+    },
   );
 }
 
@@ -391,6 +432,7 @@ async function createDynamicConfigStartupWiring(options = {}) {
           dynamicConfigService,
           entry.key,
           initialReadTimeoutMs,
+          logger,
         );
         entry.apply(value);
       } catch (error) {
@@ -408,6 +450,7 @@ async function createDynamicConfigStartupWiring(options = {}) {
           dynamicConfigService,
           key,
           initialReadTimeoutMs,
+          logger,
         );
         if (!Number.isFinite(value)) {
           return;
@@ -440,6 +483,11 @@ async function createDynamicConfigStartupWiring(options = {}) {
       controllerInitTimeoutMs,
       LOCAL_STR_TIMED_OUT_INITIALIZING_ADAPTIVE_TIMING_C +
         controllerInitTimeoutMs + LOCAL_STR_MS,
+      {
+        logger,
+        spentWait: DYNAMIC_CONFIG_STARTUP_SPENT_WAIT.CONTROLLER_INIT,
+        lastObserved: {nodeId: options.nodeId || null},
+      },
     );
   } catch (error) {
     adaptiveTimingController = null;

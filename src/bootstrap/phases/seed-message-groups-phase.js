@@ -37,6 +37,12 @@ import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
  * @param {string} replicaId
  * @return {string}
  */
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+
+const SEED_MESSAGE_GROUP_LEADERSHIP_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'a leader among the seed message-group replicas',
+});
 const formatReplicaMissingAtStart = (replicaId) =>
   `Message-group replica ${replicaId} missing at start`;
 
@@ -334,6 +340,13 @@ class SeedMessageGroupsPhase {
       }
     }
 
+    this.reportMessageGroupLeadershipSpent(logger, {
+      groupId,
+      replicaIds,
+      timeoutMs,
+      elapsedMs: now() - startTime,
+      lastDelayMs: delay,
+    });
     const error = new Error(
       BOOTSTRAP_ERROR.messageGroupLeadershipTimeout(
         groupId, timeoutMs,
@@ -342,6 +355,32 @@ class SeedMessageGroupsPhase {
     error.groupId = groupId;
     error.timeoutMs = timeoutMs;
     throw error;
+  }
+
+  /**
+   * Report the spent message-group leadership wait with each replica's
+   * last observed presence and role.
+   * @param {Object} logger
+   * @param {Object} spent - {groupId, replicaIds, timeoutMs, elapsedMs,
+   *   lastDelayMs}.
+   */
+  reportMessageGroupLeadershipSpent(logger, spent) {
+    const services = this.delegates.getMessageGroupServices();
+    const replicas = spent.replicaIds.map((replicaId) => {
+      const service = services.get(replicaId);
+      return {
+        replicaId,
+        present: Boolean(service),
+        leaderId: service?.getLeaderId?.() ?? null,
+      };
+    });
+    reportWaitBoundSpent(logger, {
+      ...SEED_MESSAGE_GROUP_LEADERSHIP_WAIT,
+      boundMs: spent.timeoutMs,
+      elapsedMs: spent.elapsedMs,
+      lastObserved: {replicas, lastDelayMs: spent.lastDelayMs},
+      scope: {nodeId: this.delegates.getNodeId(), groupId: spent.groupId},
+    });
   }
 
   /**

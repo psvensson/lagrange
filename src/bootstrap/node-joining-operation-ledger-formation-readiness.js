@@ -14,6 +14,7 @@ import {
 import {
   observeCriticalPlacement,
 } from './critical-placement-formation-observer.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   JOINING_DEFAULT,
@@ -36,6 +37,10 @@ const OPERATION_LEDGER_FORMATION_BARRIER_RELEASE_STATES = new Set([
 ]);
 const OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT_CODE =
   'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT';
+const OPERATION_LEDGER_FORMATION_BARRIER_WAIT = Object.freeze({
+  wait: 'priorityPlacementFormationTimeoutMs',
+  awaited: 'engaged formation cohort startup authority ready (operation-ledger spread)',
+});
 
 function resolveFormationBarrierDuration(value, fallback, minimum) {
   return Number.isFinite(value) ? Math.max(minimum, value) : fallback;
@@ -355,7 +360,17 @@ class NodeJoiningOperationLedgerFormationReadiness
       snapshot.candidateNodeIds.length >= formationReplicaCount &&
       snapshot.preReadyCandidateNodeIds.length >= formationWaveNodeCount;
   }
-  buildOperationLedgerFormationBarrierTimeout(snapshot) {
+  buildOperationLedgerFormationBarrierTimeout(snapshot, spent = {}) {
+    reportWaitBoundSpent(this.logger, {
+      ...OPERATION_LEDGER_FORMATION_BARRIER_WAIT,
+      boundMs: spent.timeoutMs,
+      elapsedMs: snapshot.now - spent.startedAt,
+      lastObserved: {
+        state: spent.state,
+        ...buildOperationLedgerFormationBarrierLogFields(snapshot),
+      },
+      scope: {nodeId: this.nodeId, partitionId: snapshot.partitionId},
+    });
     const error = new Error(
       JOINING_ERROR_MSG.OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT,
     );
@@ -436,7 +451,11 @@ class NodeJoiningOperationLedgerFormationReadiness
         return;
       }
       if (barrierEngaged && snapshot.now >= timeoutDeadline) {
-        throw this.buildOperationLedgerFormationBarrierTimeout(snapshot);
+        throw this.buildOperationLedgerFormationBarrierTimeout(snapshot, {
+          startedAt,
+          timeoutMs,
+          state,
+        });
       }
       if (
         barrierEngaged &&

@@ -3,6 +3,14 @@ import {NodeJoiningPublicationActivation} from './node-joining-publication-activ
 import {
   buildStartupRuntimeHandoffSnapshot,
 } from './shared/startup-sql-runtime-handoff.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
+const JOIN_HTTP_POST_WAIT = Object.freeze({
+  wait: 'httpTimeoutMs',
+  awaited: 'HTTP POST response from the seed/control-plane endpoint',
+  PHASE_AWAITING_HEADERS: 'awaiting_response_headers',
+  PHASE_AWAITING_BODY: 'awaiting_response_body',
+});
 
 const {
   BootstrapTopologySnapshotOwner,
@@ -299,6 +307,23 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     return JSON.stringify(candidate).length > JSON.stringify(existing).length;
   }
   /**
+   * Report a spent HTTP POST timeout (abort branch only).
+   * @param {number} timeoutMs
+   * @param {number} startedAtMs - Site clock at request start.
+   * @param {Object} observed - {url, phase, status?}.
+   * @private
+   */
+  reportHttpPostSpent(timeoutMs, startedAtMs, observed) {
+    reportWaitBoundSpent(this.logger, {
+      wait: JOIN_HTTP_POST_WAIT.wait,
+      awaited: JOIN_HTTP_POST_WAIT.awaited,
+      boundMs: timeoutMs,
+      elapsedMs: this.now() - startedAtMs,
+      lastObserved: {...observed},
+      scope: {nodeId: this.nodeId},
+    });
+  }
+  /**
    * Make an HTTP POST request.
    * @param {string} url - URL to post to.
    * @param {Object} body - Request body.
@@ -312,6 +337,8 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       this.config.httpTimeoutMs;
     // AbortController is a global in Node.js 22+
     const controller = new globalThis.AbortController();
+    const httpPostStartedAtMs = this.now();
+    const observed = {url, phase: JOIN_HTTP_POST_WAIT.PHASE_AWAITING_HEADERS};
     const timeoutId = setTimeout(
       () => controller.abort(),
       timeoutMs,
@@ -326,6 +353,8 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+      observed.phase = JOIN_HTTP_POST_WAIT.PHASE_AWAITING_BODY;
+      observed.status = response.status;
       if (!response.ok) {
         const retryAfterHeader = response.headers.get(
           JOINING_HTTP.HEADER_RETRY_AFTER,
@@ -363,6 +392,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === JOINING_ERROR_NAME.ABORT) {
+        this.reportHttpPostSpent(timeoutMs, httpPostStartedAtMs, observed);
         const httpTimeoutError = JOINING_ERROR_MSG.httpTimeout;
         const timeoutError = new Error(httpTimeoutError(timeoutMs));
         // A request timeout is transient by nature. Mark it so the

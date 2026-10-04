@@ -248,7 +248,6 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   WAITING_PARTITION_LEADERS: 'Waiting for partition leadership',
   PARTITION_LEADERS_IMMEDIATE: 'All partition leaders found immediately',
   PARTITION_LEADERS_FOUND: 'All partition leaders found',
-  PARTITION_LEADERS_PENDING: 'Some partitions still electing leaders, failing bootstrap',
   CREATING_SYSTEM_PARTITION: 'Creating system table partition',
   PARTITION_REPLICA_CREATED: 'Partition replica created',
   PARTITION_CREATION_BATCH_STARTING:

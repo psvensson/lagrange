@@ -23,12 +23,21 @@ import {
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
 import {ReplicaStatus} from '../../rebalancer/replica-status.js';
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 import {
   COLUMN,
   SERVICE_TYPE,
   TABLES,
 } from '../../constants/index.js';
 
+const JOIN_SYSTEM_SERVICE_LEADERS_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'system service write leaders visible in the system table cache',
+});
+const JOIN_METADATA_INGRESS_LEADERSHIP_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'a local message-group replica metadata-ingress ready',
+});
 const JOINING_REQUIRED_WRITE_TABLES = Object.freeze([
   TABLES.NODES,
   TABLES.NODE_ENDPOINTS,
@@ -130,10 +139,46 @@ class WaitForLeadershipPhase {
 
     // Timeout - fail joining (transient under load; tag retryable so the join
     // resume loop re-enters the wait within budget instead of exiting).
+    this.reportMetadataIngressLeadershipSpent(logger, {
+      timeoutMs,
+      elapsedMs: now() - startTime,
+      requiredTables,
+      lastDelayMs: delay,
+    });
     const leadershipTimeout = JOINING_ERROR_MSG.leadershipTimeout;
     throw tagJoinLeadershipTimeoutRetryable(
       new Error(leadershipTimeout(timeoutMs)),
     );
+  }
+
+  /**
+   * Report the spent metadata-ingress leadership wait with what the local
+   * message-group replicas last showed.
+   * @param {Object} logger
+   * @param {Object} spent - {timeoutMs, elapsedMs, requiredTables, lastDelayMs}.
+   */
+  reportMetadataIngressLeadershipSpent(logger, spent) {
+    const replicas = [];
+    for (const [replicaId, service] of
+      this.delegates.getMessageGroupServices()) {
+      replicas.push({
+        replicaId,
+        isLeader: service?.isLeaderReplica?.() === true,
+        leaderId: service?.getLeaderId?.() ?? null,
+      });
+    }
+    reportWaitBoundSpent(logger, {
+      ...JOIN_METADATA_INGRESS_LEADERSHIP_WAIT,
+      boundMs: spent.timeoutMs,
+      elapsedMs: spent.elapsedMs,
+      lastObserved: {
+        requiredTables: spent.requiredTables,
+        lastDelayMs: spent.lastDelayMs,
+        messageGroupReplicaCount: replicas.length,
+        replicas,
+      },
+      scope: {nodeId: this.nodeId},
+    });
   }
 
   /**
@@ -154,6 +199,15 @@ class WaitForLeadershipPhase {
 
     await waitForStartupConvergence({
       timeoutMs,
+      logger,
+      spentWait: JOIN_SYSTEM_SERVICE_LEADERS_WAIT,
+      scope: {nodeId: this.nodeId},
+      describeLastObserved: (readiness, context) => ({
+        timeoutKind: context.timeoutKind,
+        attempts: context.attempt,
+        missingCount: readiness?.missingCount ?? null,
+        missingLeaders: readiness?.missingLeaders || null,
+      }),
       subscriptions: [
         (notify) => subscribeToSystemTableCacheChanges(
           systemTableCache,

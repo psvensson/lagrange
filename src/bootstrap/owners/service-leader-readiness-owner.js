@@ -33,7 +33,13 @@ import {
   isMembershipOwnerRestartReentryOutcome,
 } from '../../control-plane/membership-lifecycle-controller.js';
 
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+
 const LOCAL_STR_ALL_SERVICE_LEADERS_READY = 'All service leaders ready';
+const SEED_PARTITION_LEADERS_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'any live system partition leader among local partition services',
+});
 const AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS = 1500; // ends-on: the authoritative partitions/services read answers
 const AUTHORITATIVE_LEADER_REFRESH_OUTCOME = Object.freeze({
   AUTHORITY_UNAVAILABLE: 'authority_unavailable',
@@ -223,6 +229,19 @@ class ServiceLeaderReadinessOwner {
       await new Promise((resolve) => setTimeout(resolve, delay));
       delay = Math.min(delay * backoff, maxDelay);
     }
+    // Expiry falls through (unchanged); the spent wait is reported.
+    reportWaitBoundSpent(this.getLogger(), {
+      ...SEED_PARTITION_LEADERS_WAIT,
+      boundMs: timeoutMs,
+      elapsedMs: Date.now() - start,
+      lastObserved: {
+        partitionServiceCount: services.size,
+        partitionIds: [...partitionIds],
+        liveLeaderTableCount: 0,
+        lastDelayMs: delay,
+      },
+      scope: {nodeId: this.getSeedNodeId()},
+    });
   }
 
   getMissingServiceLeaders() {

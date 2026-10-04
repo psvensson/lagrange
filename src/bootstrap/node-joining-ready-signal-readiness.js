@@ -21,6 +21,7 @@ import {
 } from '../control-plane/startup-authority-placement-eligibility.js';
 import {TABLES} from '../constants/index.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   CDC_REESTABLISHMENT,
@@ -36,6 +37,16 @@ const {
   waitForMetadataPublicationReadiness,
 } = NODE_JOINING_SERVICE_SHARED;
 
+const READY_SIGNAL_SPENT_WAIT = Object.freeze({
+  HEARTBEAT: Object.freeze({
+    wait: 'readySignalMaxAttempts',
+    awaited: 'durably visible READY heartbeat publication',
+  }),
+  CDC_SUBSCRIPTIONS: Object.freeze({
+    wait: 'CDC_REESTABLISHMENT.TIMEOUT_MS',
+    awaited: 'CDC subscriptions active before advertising readiness',
+  }),
+});
 const INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE = Object.freeze({
   CDC_SUBSCRIPTION: 'cdc_subscription',
   LOCAL_QUERY_TRANSPORT: 'local_query_transport',
@@ -142,6 +153,9 @@ class NodeJoiningReadySignalReadiness
     await waitForLocalQueryTransportReadiness({
       messageRouter: this.messageRouter,
       sleep: (delayMs) => this.sleep(delayMs),
+      now: () => this.now(),
+      logger: this.logger,
+      scope: {nodeId: this.nodeId},
       maxAttempts: this.config.readySignalMaxAttempts,
       initialDelayMs: this.config.readySignalRetryDelayMs,
       maxDelayMs: this.config.readySignalRetryMaxDelayMs,
@@ -179,6 +193,9 @@ class NodeJoiningReadySignalReadiness
       readinessSnapshotProvider: () =>
         this.getReadySignalMetadataPublicationReadinessSnapshot(),
       sleep: (delayMs) => this.sleep(delayMs),
+      now: () => this.now(),
+      logger: this.logger,
+      scope: {nodeId: this.nodeId},
       maxAttempts: this.config.readySignalMaxAttempts,
       initialDelayMs: this.config.readySignalRetryDelayMs,
       maxDelayMs: this.config.readySignalRetryMaxDelayMs,
@@ -456,6 +473,7 @@ class NodeJoiningReadySignalReadiness
       Math.max(1, Math.floor(this.config.readySignalRetryDelayMs)) :
       JOINING_DEFAULT.readySignalRetryDelayMs;
     let lastError = null;
+    const readySignalStartedAtMs = this.now();
     const waitLogMessage = JOINING_LOG_MSG.READY_SIGNAL_RETRYING;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       this.recordInfrastructureJoinReadySignalProgress({
@@ -493,10 +511,16 @@ class NodeJoiningReadySignalReadiness
         delayMs = Math.min(Math.floor(delayMs * backoffMultiplier), maxDelayMs);
       }
     }
-    this.logger.error(JOINING_LOG_MSG.READY_SIGNAL_FAILED, {
-      nodeId: this.nodeId,
-      attempts: maxAttempts,
-      error: lastError?.message || STRING.UNKNOWN,
+    reportWaitBoundSpent(this.logger, {
+      ...READY_SIGNAL_SPENT_WAIT.HEARTBEAT,
+      boundMs: null,
+      elapsedMs: this.now() - readySignalStartedAtMs,
+      lastObserved: {
+        attempts: maxAttempts,
+        lastError: lastError?.message || STRING.UNKNOWN,
+        lastFailureCode: this.resolveInfrastructureJoinFailureCode(lastError),
+      },
+      scope: {nodeId: this.nodeId},
     });
     throw lastError;
   }
@@ -532,10 +556,17 @@ class NodeJoiningReadySignalReadiness
       }
       await this.sleep(pollMs);
     }
-    this.logger.warn(JOINING_LOG_MSG.CDC_READINESS_GATE_DEGRADED, {
-      nodeId: this.nodeId,
-      timeoutMs,
+    // Degraded fallthrough (unchanged): readiness proceeds unconfirmed.
+    reportWaitBoundSpent(this.logger, {
+      ...READY_SIGNAL_SPENT_WAIT.CDC_SUBSCRIPTIONS,
+      boundMs: timeoutMs,
       elapsedMs: this.now() - startMs,
+      lastObserved: {
+        cdcSubscriptionsActive: this.cdcSubscriptionsActive,
+        subscriptionStatus: this.getCdcSubscriptionStatus?.() ?? null,
+        pollMs,
+      },
+      scope: {nodeId: this.nodeId},
     });
   }
   /**

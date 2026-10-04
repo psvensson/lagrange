@@ -212,8 +212,6 @@ const JOINING_LOG_MSG = Object.freeze({
     'Resuming join session after retryable control-plane failure',
   RETRYABLE_FAILURE_LIFECYCLE_RESET:
     'Reset join lifecycle state machine for retryable resume attempt',
-  RETRYABLE_FAILURE_RESUME_EXHAUSTED:
-    'Join retryable resume budget exhausted',
   WS_INFRA_READY: 'WebSocket infrastructure setup complete',
   STATE_QUERY_START: 'Querying system state',
   STATE_QUERY_HYDRATING_CACHE: 'Hydrating system table cache',
@@ -272,17 +270,12 @@ const JOINING_LOG_MSG = Object.freeze({
   FAILED_JOIN_CLEANUP_SUMMARY:
     'Failed join cleanup summary',
   CDC_SUBSCRIPTION_RETRY: 'CDC subscription retry',
-  CDC_SUBSCRIPTION_RETRY_EXHAUSTED: 'CDC subscription retry exhausted',
   CDC_RECOVERY_DIAGNOSTICS: 'CDC recovery diagnostics',
   CDC_REESTABLISHMENT_COMPLETE: 'CDC re-establishment complete',
-  CDC_REESTABLISHMENT_TIMEOUT: 'CDC re-establishment timeout',
   CDC_READINESS_GATE_WAITING:
     'Waiting for CDC subscriptions before advertising readiness',
   CDC_READINESS_GATE_PASSED:
     'CDC subscriptions confirmed active before readiness advertisement',
-  CDC_READINESS_GATE_DEGRADED:
-    'CDC subscriptions not confirmed within timeout, ' +
-    'advertising readiness with degraded CDC status',
   CDC_CATCHUP_HYDRATION_SKIPPED:
     'CDC catch-up hydration skipped: integration service unavailable',
   CDC_CATCHUP_HYDRATION_FAILED:

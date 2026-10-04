@@ -55,6 +55,8 @@ import {
   LOG_OPPORTUNISTIC_BACKFILL_SKIPPED,
   LOG_SNAPSHOT_MISSING,
 } from './query-system-state-phase-constants.js';
+import {reportJoinRegistrationRetriesSpent} from
+  './join-registration-wait-report.js';
 
 /**
  * Handles the query-system-state phase of the join process.
@@ -580,6 +582,8 @@ class QuerySystemStatePhase {
     const maxAttempts = this.resolveJoinRegistrationMaxAttempts();
     let attempt = 0;
     let nextDelayMs = JOIN_NODE_REGISTRATION_RETRY_DELAY_MS;
+    const now = this.resolveNow();
+    const registrationStartedAtMs = now();
 
     while (true) {
       attempt += 1;
@@ -601,6 +605,11 @@ class QuerySystemStatePhase {
           isRetryableControlPlaneError(error) &&
           attempt < maxAttempts;
         if (!retryable) {
+          reportJoinRegistrationRetriesSpent(this, error, {
+            attempt,
+            maxAttempts,
+            elapsedMs: now() - registrationStartedAtMs,
+          });
           throw error;
         }
 
@@ -723,6 +732,11 @@ class QuerySystemStatePhase {
       options.skipCacheWait = true;
     }
     return options;
+  }
+
+  resolveNow() {
+    const now = this.delegates.getNow?.();
+    return typeof now === 'function' ? now : Date.now;
   }
 
   resolveJoinRegistrationMaxAttempts() {

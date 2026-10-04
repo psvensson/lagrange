@@ -9,6 +9,7 @@ import {
   startLogsTablePersistenceOnReadiness,
 } from './logging/logs-persistence-startup.js';
 import {LogsTableService} from './logging/logs-table-service.js';
+import {reportWaitBoundSpent} from './logging/wait-bound-spent.js';
 import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_LOG_MSG,
@@ -21,8 +22,11 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_FAILED_TO_PUBLISH_NODE_SHUTDOWN_STATUS = 'Failed to publish node shutdown status';
 const LOCAL_STR_SHUTDOWN_ALREADY_IN_PROGRESS_FORCING_PRO = 'Shutdown already in progress, forcing process exit';
 const LOCAL_STR_SHUTDOWN_STEP = 'Shutdown step timing';
-const LOCAL_STR_SHUTDOWN_STEP_TIMEBOX =
-  'Shutdown best-effort step exceeded time-box, continuing to exit';
+const SHUTDOWN_BEST_EFFORT_STEP_WAIT = Object.freeze({
+  wait: 'SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS',
+  awaited: 'best-effort shutdown step settled (time-boxed; exit continues)',
+  STEP_SETTLED: false,
+});
 // CL-030 fix C: shutdownLogsTablePersistence (a PURELY-LOCAL observability flush)
 // can block ~5-7s under churn. It swallows its own errors, so the only risk is
 // BLOCKING the path to exit(0); time-box it so a slow control plane never makes a
@@ -261,10 +265,17 @@ async function timeBoxBestEffortShutdownStep(logger, signal, step, timeoutMs, ru
       timedOut: outcome === timedOut,
     });
     if (outcome === timedOut) {
-      logger.warn(LOCAL_STR_SHUTDOWN_STEP_TIMEBOX, {
-        signal,
-        step,
-        timeoutMs,
+      reportWaitBoundSpent(logger, {
+        wait: SHUTDOWN_BEST_EFFORT_STEP_WAIT.wait,
+        awaited: SHUTDOWN_BEST_EFFORT_STEP_WAIT.awaited,
+        boundMs: timeoutMs,
+        elapsedMs: Date.now() - startedAt,
+        lastObserved: {
+          step,
+          signal,
+          stepSettled: SHUTDOWN_BEST_EFFORT_STEP_WAIT.STEP_SETTLED,
+        },
+        scope: {step},
       });
     }
   } finally {

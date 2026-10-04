@@ -4,6 +4,7 @@ import {
   createTimeoutBudgetError,
 } from '../../control-plane/timeout-budget.js';
 import {TRANSPORT_EVENT} from '../../constants/transport.js';
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 
 const LOCAL_STR_WAITFORSTARTUPCONVERGENCE_REQUIRES_EVALU = 'waitForStartupConvergence requires evaluate';
 const LOCAL_STR_INTERNAL_WAKE = 'internal_wake';
@@ -11,6 +12,10 @@ const LOCAL_STR_INTERNAL_WAKE = 'internal_wake';
 const STARTUP_CONVERGENCE_TIMEOUT_KIND = Object.freeze({
   NO_PROGRESS: 'no_progress',
   ABSOLUTE_DEADLINE_EXHAUSTED: 'absolute_deadline_exhausted',
+});
+const STARTUP_CONVERGENCE_WAIT = Object.freeze({
+  wait: 'startup_convergence',
+  awaited: 'startup convergence evaluate() ready',
 });
 const STARTUP_CONVERGENCE_SIGNAL = Object.freeze({
   POLL_TICK: 'poll_tick',
@@ -96,6 +101,59 @@ function subscribeToMessageRouterEvents(
       unbind();
     }
   };
+}
+
+/**
+ * Summarise the gate's own last observation when the caller supplies none.
+ * @param {Object|null} lastResult
+ * @param {Object} timeoutContext
+ * @param {Object|null} lastSignal
+ * @return {Object}
+ */
+function summarizeStartupConvergenceObservation(
+  lastResult,
+  timeoutContext,
+  lastSignal,
+) {
+  return {
+    attempts: timeoutContext.attempt,
+    timeoutKind: timeoutContext.timeoutKind,
+    lastProgressElapsedMs: timeoutContext.lastProgressElapsedMs,
+    lastSignalKind: lastSignal?.kind ?? null,
+    lastResultReady: lastResult?.ready ?? null,
+    lastResultReason: lastResult?.reason ?? lastResult?.state ?? null,
+    lastResultMissingCount: lastResult?.missingCount ?? null,
+  };
+}
+
+/**
+ * Report the spent startup-convergence bound (expiry branch only).
+ * Callers name their wait through `options.spentWait` and may describe
+ * their own last observation through `options.describeLastObserved`.
+ * @param {Object} options - The gate options.
+ * @param {Object} spent - {lastResult, timeoutContext, lastSignal, error}.
+ */
+function reportStartupConvergenceSpent(options, spent) {
+  const spentWait = options.spentWait || STARTUP_CONVERGENCE_WAIT;
+  const described = typeof options.describeLastObserved === 'function' ?
+    options.describeLastObserved(
+      spent.lastResult,
+      spent.timeoutContext,
+      spent.error,
+    ) :
+    null;
+  reportWaitBoundSpent(options.logger || null, {
+    wait: spentWait.wait,
+    awaited: spentWait.awaited,
+    boundMs: spent.timeoutContext.timeoutMs,
+    elapsedMs: spent.timeoutContext.elapsedMs,
+    lastObserved: described || summarizeStartupConvergenceObservation(
+      spent.lastResult,
+      spent.timeoutContext,
+      spent.lastSignal,
+    ),
+    scope: options.scope,
+  });
 }
 
 async function waitForStartupConvergence(options = {}) {
@@ -272,23 +330,39 @@ async function waitForStartupConvergence(options = {}) {
     lastProgressElapsedMs: Math.max(0, lastProgressAtMs - startMs),
     elapsedMs: Math.max(0, now() - startMs),
   };
-  if (typeof options.createTimeoutError === 'function') {
-    throw options.createTimeoutError(lastResult, timeoutContext);
-  }
+  const error = typeof options.createTimeoutError === 'function' ?
+    options.createTimeoutError(lastResult, timeoutContext) :
+    buildStartupConvergenceTimeoutError(options, {
+      timeoutBudget,
+      timeoutClassification,
+      timeoutContext,
+      lastResult,
+    });
+  reportStartupConvergenceSpent(options, {
+    lastResult,
+    timeoutContext,
+    lastSignal,
+    error,
+  });
+  throw error;
+}
 
+function buildStartupConvergenceTimeoutError(options, timeout) {
+  const {timeoutMs, timeoutKind, lastProgressElapsedMs} =
+    timeout.timeoutContext;
   const error = createTimeoutBudgetError({
     message:
       options.timeoutMessage ||
       `startup convergence timed out after ${timeoutMs}ms`,
-    budget: timeoutBudget,
-    classification: timeoutClassification,
+    budget: timeout.timeoutBudget,
+    classification: timeout.timeoutClassification,
     nestedOperation: options.operationName || 'startup_convergence',
   });
   error.timeoutMs = timeoutMs;
   error.timeoutKind = timeoutKind;
-  error.lastProgressElapsedMs = timeoutContext.lastProgressElapsedMs;
-  error.result = lastResult;
-  throw error;
+  error.lastProgressElapsedMs = lastProgressElapsedMs;
+  error.result = timeout.lastResult;
+  return error;
 }
 
 export {

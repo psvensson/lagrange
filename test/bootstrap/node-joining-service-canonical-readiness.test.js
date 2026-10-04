@@ -421,13 +421,20 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
       }],
       'timeout should retain in-flight replica operation details',
     );
+    // The spent readiness bound is reported once as wait_bound_spent; the
+    // former timeout diagnostics ride in lastObserved.
+    const spentEvents = errorEvents.filter(
+      (event) => event.context?.event === 'wait_bound_spent');
+    t.equal(spentEvents.length, 1, 'timeout logs exactly one wait_bound_spent');
+    t.equal(spentEvents[0]?.context?.wait, 'joinReadinessTimeoutMs',
+      'timeout log names the spent join-readiness bound');
     t.same(
-      errorEvents.at(-1)?.context?.missingNodeEndpointNodeIds,
+      spentEvents[0]?.context?.lastObserved?.missingNodeEndpointNodeIds,
       ['joining-node-join-gate-3'],
       'timeout log should include missing websocket endpoint diagnostics',
     );
     t.equal(
-      errorEvents.at(-1)?.context?.timeoutKind,
+      spentEvents[0]?.context?.lastObserved?.timeoutKind,
       'no_progress',
       'timeout log should classify stagnant readiness explicitly',
     );

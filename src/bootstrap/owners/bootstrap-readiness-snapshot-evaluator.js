@@ -15,6 +15,7 @@ import {
 } from '../shared/local-query-transport-readiness.js';
 import {hasBootstrapJoinAuthority} from './bootstrap-join-projection-policy.js';
 import {BOOTSTRAP_READINESS_OWNER_LITERAL} from './bootstrap-readiness-owner-literals.js';
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 
 const BOOTSTRAP_READINESS_DEPENDENCY = Object.freeze({
   SQL_ENGINE_READY: 'sql_engine_ready',
@@ -28,6 +29,11 @@ const BOOTSTRAP_READINESS_DEPENDENCY = Object.freeze({
 const READINESS_PROBE_ASYNC_TIMEOUT_ERROR_CODE =
   'READINESS_PROBE_ASYNC_TIMEOUT';
 const READINESS_PROBE_ASYNC_TIMEOUT_MS = 250; // ends-on: evaluateReadinessSnapshotAsync() resolves
+const READINESS_PROBE_ASYNC_WAIT = Object.freeze({
+  wait: 'READINESS_PROBE_ASYNC_TIMEOUT_MS',
+  awaited: 'async readiness diagnostics for an HTTP probe (falls back to the sync snapshot)',
+  ASYNC_SETTLED: false,
+});
 
 const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
   evaluateReadinessSnapshot() {
@@ -105,15 +111,21 @@ const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
       if (!this.isReadinessProbeAsyncTimeout(error)) {
         throw error;
       }
-      this.getLogger()?.debug?.(
-        BOOTSTRAP_READINESS_OWNER_LITERAL.READINESS_PROBE_ASYNC_DIAGNOSTICS_TIMED_OUT_USING +
-          BOOTSTRAP_READINESS_OWNER_LITERAL.SYNCHRONOUS_READINESS_SNAPSHOT_FALLBACK,
-        {
-          seedNodeId: this.getSeedNodeId(),
-          timeoutMs: READINESS_PROBE_ASYNC_TIMEOUT_MS,
+      const fallbackSnapshot = this.evaluateReadinessSnapshot();
+      reportWaitBoundSpent(this.getLogger() || null, {
+        wait: READINESS_PROBE_ASYNC_WAIT.wait,
+        awaited: READINESS_PROBE_ASYNC_WAIT.awaited,
+        boundMs: READINESS_PROBE_ASYNC_TIMEOUT_MS,
+        elapsedMs: READINESS_PROBE_ASYNC_TIMEOUT_MS,
+        lastObserved: {
+          asyncSettled: READINESS_PROBE_ASYNC_WAIT.ASYNC_SETTLED,
+          fallbackPhase: fallbackSnapshot?.phase ?? null,
+          fallbackReady: fallbackSnapshot?.ready ?? null,
         },
-      );
-      return this.evaluateReadinessSnapshot();
+        scope: {nodeId: this.getSeedNodeId()},
+        subject: this.getSeedNodeId(),
+      });
+      return fallbackSnapshot;
     }
   },
 

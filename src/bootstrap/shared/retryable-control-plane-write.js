@@ -6,8 +6,13 @@ import {
   NUM,
   TIME_MS,
 } from '../../constants/index.js';
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 
 const DEFAULT_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY; // ends-on: the control-plane write is accepted (non-retryable result)
+const RETRYABLE_CONTROL_PLANE_WRITE_WAIT = Object.freeze({
+  wait: 'runRetryableControlPlaneWrite.timeoutMs',
+  awaited: 'retryable control-plane write accepted',
+});
 const DEFAULT_RETRY_BASE_DELAY_MS = NUM.HUNDRED;
 const DEFAULT_RETRY_MAX_DELAY_MS = TIME_MS.SECOND;
 
@@ -15,11 +20,46 @@ async function defaultSleep(delayMs) {
   await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
-function shouldRetryControlPlaneWrite(resultOrError, deadlineMs, now) {
+/**
+ * Report a retryable write whose retry deadline is spent. The caller names
+ * its write through `options.spentWait` / `options.scope` / `options.logger`.
+ * @param {Object|Error} resultOrError - The last failed result or error.
+ * @param {Object} spent - {options, attempt, timeoutMs, elapsedMs}.
+ */
+function reportControlPlaneWriteSpent(resultOrError, spent) {
+  const options = spent.options;
+  reportWaitBoundSpent(options.logger || null, {
+    ...(options.spentWait || RETRYABLE_CONTROL_PLANE_WRITE_WAIT),
+    boundMs: spent.timeoutMs,
+    elapsedMs: spent.elapsedMs,
+    lastObserved: {
+      attempts: spent.attempt,
+      lastErrorCode: resultOrError?.code ?? resultOrError?.errorCode ?? null,
+      lastError: resultOrError?.message ?? resultOrError?.error ?? null,
+      retryAfterMs: getControlPlaneRetryAfterMs(resultOrError),
+    },
+    scope: options.scope,
+  });
+}
+
+function shouldRetryControlPlaneWrite(
+  resultOrError,
+  deadlineMs,
+  now,
+  spent,
+) {
   if (!isRetryableControlPlaneError(resultOrError)) {
     return false;
   }
-  return now() < deadlineMs;
+  const nowMs = now();
+  if (nowMs < deadlineMs) {
+    return true;
+  }
+  reportControlPlaneWriteSpent(resultOrError, {
+    ...spent,
+    elapsedMs: nowMs - (deadlineMs - spent.timeoutMs),
+  });
+  return false;
 }
 
 async function delayRetryableControlPlaneWrite(
@@ -96,7 +136,11 @@ async function runRetryableControlPlaneWrite(executor, options = {}) {
       if (result?.success !== false) {
         return result;
       }
-      if (!shouldRetryControlPlaneWrite(result, deadlineMs, now)) {
+      if (!shouldRetryControlPlaneWrite(result, deadlineMs, now, {
+        options,
+        attempt,
+        timeoutMs,
+      })) {
         return result;
       }
       nextDelayMs = await delayRetryableControlPlaneWrite(
@@ -114,7 +158,11 @@ async function runRetryableControlPlaneWrite(executor, options = {}) {
       );
       continue;
     } catch (error) {
-      if (!shouldRetryControlPlaneWrite(error, deadlineMs, now)) {
+      if (!shouldRetryControlPlaneWrite(error, deadlineMs, now, {
+        options,
+        attempt,
+        timeoutMs,
+      })) {
         throw error;
       }
       nextDelayMs = await delayRetryableControlPlaneWrite(

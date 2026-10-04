@@ -41,7 +41,13 @@ import {
   CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS,
 } from './create-message-group-replica-lifecycle.js';
 
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+
 const LOCAL_STR_FUNCTION = 'function';
+const MESSAGE_GROUP_REGISTRATION_WAIT = Object.freeze({
+  wait: 'joinRetryPolicy.retryTimeoutMs',
+  awaited: 'message-group replica service registration accepted by the seed',
+});
 const LOCAL_STR_CREATE_SELF_HOSTED_MESSAGE_GROUP_METADAT = 'CREATE_SELF_HOSTED message-group metadata staged for deferred authoritative publication';
 const MESSAGE_GROUP_REPLICA_ID_INFIX = '-r';
 
@@ -419,6 +425,7 @@ class CreateMessageGroupPhase {
     const startTime = nowFn();
     let attempt = 0;
     let lastError = null;
+    let lastClassification = null;
 
     while (nowFn() - startTime < retryTimeoutMs) {
       attempt += 1;
@@ -493,6 +500,7 @@ class CreateMessageGroupPhase {
             error,
             retryableTimeoutErrorMessage,
           );
+        lastClassification = classification;
         const retryAction =
           resolveRetryableMessageGroupRegistrationFailureAction({
             classification,
@@ -547,18 +555,58 @@ class CreateMessageGroupPhase {
         retryTimeoutMs,
       ),
     );
-    logger.error(
-      JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_FAILED,
-      {
-        nodeId: this.nodeId,
-        replicaId,
-        groupId,
-        attempts: attempt,
-        elapsedMs: nowFn() - startTime,
-        error: error.message,
-      },
-    );
+    this.logMessageGroupRegistrationFailed(logger, error, {
+      replicaId,
+      groupId,
+      attempts: attempt,
+      elapsedMs: nowFn() - startTime,
+      retryTimeoutMs,
+      lastClassification,
+    });
     throw error;
+  }
+
+  /**
+   * Log the terminal message-group registration failure. A spent retry
+   * window (no attempt, or a still-retryable last failure) is reported as
+   * wait_bound_spent; a non-retryable failure keeps the plain error line.
+   * @param {Object} logger
+   * @param {Error} error
+   * @param {Object} failure
+   */
+  logMessageGroupRegistrationFailed(logger, error, failure) {
+    const classification = failure.lastClassification;
+    if (classification && classification.retryable !== true) {
+      logger.error(
+        JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_FAILED,
+        {
+          nodeId: this.nodeId,
+          replicaId: failure.replicaId,
+          groupId: failure.groupId,
+          attempts: failure.attempts,
+          elapsedMs: failure.elapsedMs,
+          error: error.message,
+        },
+      );
+      return;
+    }
+    reportWaitBoundSpent(logger, {
+      ...MESSAGE_GROUP_REGISTRATION_WAIT,
+      boundMs: failure.retryTimeoutMs,
+      elapsedMs: failure.elapsedMs,
+      lastObserved: {
+        attempts: failure.attempts,
+        lastError: error.message,
+        lastCode: classification?.code ?? null,
+        lastStatusCode: classification?.statusCode ?? null,
+        retryAfterMs: classification?.retryAfterMs ?? null,
+      },
+      scope: {
+        nodeId: this.nodeId,
+        replicaId: failure.replicaId,
+        groupId: failure.groupId,
+      },
+    });
   }
 
   /**

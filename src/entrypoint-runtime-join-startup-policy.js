@@ -12,12 +12,41 @@ import {
   ENTRYPOINT_RUNTIME_VALUE,
 } from './constants/entrypoint.js';
 import {raiseBootIncarnationFloor} from './bootstrap/boot-incarnation-owner.js';
+import {reportWaitBoundSpent} from './logging/wait-bound-spent.js';
 
 const LOCAL_STR_ABORT = 'abort';
 const LOCAL_STR_UNAVAILABLE = 'unavailable';
 const LOCAL_NUM_ZERO = 0;
 const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_TWO = 2;
+const JOIN_REATTEMPT_WAIT = Object.freeze({
+  wait: 'LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS',
+  awaited: 'a successful join across process-level join reattempts',
+});
+
+/**
+ * Report exhausted process-level join reattempts. Only a retryable join
+ * result spends the reattempt bound; a non-retryable one is a plain
+ * failure already logged as FAILED_JOIN.
+ * @param {Object} options - The reattempt options.
+ * @param {number} joinAttempt
+ */
+function reportJoinReattemptsSpent(options, joinAttempt) {
+  if (options.joinResult.retryable !== true) {
+    return;
+  }
+  reportWaitBoundSpent(options.logger, {
+    ...JOIN_REATTEMPT_WAIT,
+    boundMs: null,
+    lastObserved: {
+      attempts: joinAttempt + LOCAL_NUM_ONE,
+      maxAttempts: options.reattemptPolicy.maxAttempts,
+      phase: options.joinResult.phase ?? null,
+      lastError: options.joinResult.error ?? null,
+    },
+    scope: {nodeId: options.nodeId},
+  });
+}
 
 function throwIfStartupAborted(signal) {
   if (signal?.aborted) {
@@ -104,6 +133,7 @@ async function resolveFailedJoinReattempt(options) {
   const allowed = options.joinResult.retryable === true &&
     joinAttempt + LOCAL_NUM_ONE < options.reattemptPolicy.maxAttempts;
   if (!allowed) {
+    reportJoinReattemptsSpent(options, joinAttempt);
     throw new Error(
       options.joinResult.error || ENTRYPOINT_LOG_MSG.FAILED_JOIN,
     );
