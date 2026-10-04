@@ -44,7 +44,7 @@ against the resulting exact head.
 
 ## Stage A — query access foundation
 
-### A1 — `partition-key-ordering-owner-completion-v11` — ACTIVE
+### A1 — `partition-key-ordering-owner-completion-v12` — ACTIVE
 
 **Roadmap:** `RM-0.3-qs-typed-key-ordering`.
 
@@ -93,6 +93,15 @@ A1-v11 owns exactly those two findings by capturing the Map constructor,
 enforcing the existing 64-row route-call cadence before copy/grouping, rejecting
 column sets above SQLite's 32,766 bind-variable ceiling, and preserving
 bind-derived per-statement batching through `strict-own-data`.
+
+A1-v11 subsequently closed v10's snapshot collection-boundary findings and
+reached a sealed 10 → 0 attempt. Its category-complete PR #97 review found one
+remaining production-semantic gap retained by the final review surface:
+captured Array.prototype.push still performs [[Set]] and can be intercepted by
+an inherited numeric Array.prototype setter. A1-v12 replaces every internal
+snapshot-route append (partition order/rows, placeholders, value rows and
+params) with one Object.defineProperty-backed own-data append owner captured at
+module load.
 
 **Current falsifier:** current main still has both a locale-sensitive string
 order in `compareRoutingKeys` and a raw
