@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {run} from '../../scenarios/public-path-multinode-baseline.js';
 import {
   DATASET_GENERATOR,
+  assertPartitionSpread,
   expectedAccountSummary,
   generateDatasetRows,
 } from '../../scenarios/public-path-baseline-helpers.js';
@@ -633,4 +634,26 @@ describe('public-path-multinode-baseline scenario', () => {
     assert.equal(failed[0].details.step, SPLIT_SPREAD_GATE);
     assert.equal(gateRecords(state)[0].details.passed, false);
   });
+
+  it('W8 the report spread re-assertion counts leader HOSTS, never node ids',
+    () => {
+      const hostOf = (nodeId) => ({'node-1': 'provider-0',
+        'node-2': 'provider-0', 'node-3': 'provider-1'})[nodeId] || null;
+      const twoNodesOneHost = [
+        {leader_node_id: 'node-1', partition_id: 'p-1'},
+        {leader_node_id: 'node-2', partition_id: 'p-2'},
+      ];
+      assert.throws(() => assertPartitionSpread(twoNodesOneHost, hostOf),
+        /all partition leaders on 1 host\(s\)/u);
+      assert.throws(() => assertPartitionSpread(twoNodesOneHost),
+        /no node -> host authority/u);
+      assert.throws(() => assertPartitionSpread([
+        {leader_node_id: 'node-1', partition_id: 'p-1'},
+        {leader_node_id: 'node-9', partition_id: 'p-2'},
+      ], hostOf), /no host identity for leader node\(s\) node-9/u);
+      assert.equal(assertPartitionSpread([
+        {leader_node_id: 'node-1', partition_id: 'p-1'},
+        {leader_node_id: 'node-3', partition_id: 'p-2'},
+      ], hostOf).distinctPartitionHosts, 2);
+    });
 });
