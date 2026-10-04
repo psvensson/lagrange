@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2183,
+    "ordinary": 2185,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2200,
-  "digest": "fnv1a32-47264000",
+  "censusSize": 2202,
+  "digest": "fnv1a32-27b979c7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -233,6 +233,7 @@
     "test/bootstrap/query-state-single-owner.test.js": "ordinary",
     "test/bootstrap/readiness-handoff-liveness-witness.test.js": "ordinary",
     "test/bootstrap/register-node-in-cluster.test.js": "ordinary",
+    "test/bootstrap/register-service-move-handoff-refused.test.js": "ordinary",
     "test/bootstrap/rejoin-hints.test.js": "ordinary",
     "test/bootstrap/replica-evidence-conflict.test.js": "ordinary",
     "test/bootstrap/replica-runtime-attachment-authority.test.js": "ordinary",
@@ -1553,6 +1554,7 @@
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "ordinary",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "ordinary",
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "ordinary",
+    "test/rebalancer/message-group-membership-change-parked.test.js": "ordinary",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "ordinary",
     "test/rebalancer/message-group-rebalancer-wiring.test.js": "ordinary",
     "test/rebalancer/move-planner-capacity-gating.test.js": "ordinary",

@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 280,
+    "bootstrap-membership": 281,
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 205,
@@ -12,7 +12,7 @@
     "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 254,
+    "placement-rebalance": 255,
     "query-sql": 164,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2200,
-  "digest": "fnv1a32-837330ca",
+  "censusSize": 2202,
+  "digest": "fnv1a32-d6c7eb4b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9349bc14",
+  "observationDigest": "fnv1a32-ed21e22b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -253,6 +253,7 @@
     "test/bootstrap/query-state-single-owner.test.js": "bootstrap-membership",
     "test/bootstrap/readiness-handoff-liveness-witness.test.js": "bootstrap-membership",
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
+    "test/bootstrap/register-service-move-handoff-refused.test.js": "bootstrap-membership",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap-membership",
     "test/bootstrap/replica-runtime-attachment-authority.test.js": "bootstrap-membership",
@@ -1573,6 +1574,7 @@
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "placement-rebalance",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "placement-rebalance",
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "placement-rebalance",
+    "test/rebalancer/message-group-membership-change-parked.test.js": "placement-rebalance",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "placement-rebalance",
     "test/rebalancer/message-group-rebalancer-wiring.test.js": "placement-rebalance",
     "test/rebalancer/move-planner-capacity-gating.test.js": "placement-rebalance",
@@ -7115,9 +7117,8 @@
     },
     "test/node/message-group-service-handler.test.js": {
       "files": [
-        "src/bootstrap/shared/message-group-transport-handler.js",
         "src/node/message-group-service-handler.js",
-        "test/test-helpers/replica-handler-identity-fixture.js"
+        "src/rebalancer/rebalancer-constants.js"
       ],
       "env": [
         "NODE_ENV"
@@ -9109,6 +9110,11 @@
       ]
     },
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/message-group-membership-change-parked.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
       ]
