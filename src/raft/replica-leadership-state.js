@@ -168,7 +168,5 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
 export {
   applyReplicaLeadership,
   applyReplicaDemotion,
-  clearReplicaLeaderUpdateState,
-  reconcileReplicaLeaderChange,
   wireReplicaLifecycleEvents,
 };

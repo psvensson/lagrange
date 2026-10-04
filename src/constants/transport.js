@@ -129,10 +129,6 @@ const OUTBOUND_DELIVERY_PRIORITY = Object.freeze({
   BACKGROUND: 'background',
 });
 
-const TRANSPORT_STRING = Object.freeze({
-  NEWLINE: '\n',
-});
-
 const TRANSPORT_FORMAT = Object.freeze({
   buildWebSocketAddress: (host, port) =>
     `${TRANSPORT_DEFAULT.WS_PROTOCOL}${host}:${port}`,
@@ -443,7 +439,6 @@ export {
   TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_ERROR_MSG,
   TRANSPORT_NUM,
-  TRANSPORT_STRING,
   TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
   WS_LOG_MSG,

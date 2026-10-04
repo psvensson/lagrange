@@ -17,7 +17,7 @@ import {
 // and lets a REAL raft leadership migration drive the control-plane owner handoff.
 //
 // This is the multi-node, real-migration-driven generalisation of the DT4 full-chain scenario
-// (dt4-full-chain-scenario.test.js), which composed the same real owner driver with ONE raft
+// (the DT4 full-chain scenario, retired with the legacy consensus runtime), which composed the same real owner driver with ONE raft
 // node on ONE clock and faked the leadership loss with change({state}). Here the leadership loss
 // is a REAL partition-induced migration across THREE nodes on the network, and an owner driver
 // runs on EACH node's network clock.

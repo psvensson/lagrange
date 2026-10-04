@@ -35,7 +35,7 @@ Choose by invariant shape:
 
 | Invariant shape | Use |
 | --- | --- |
-| Real multi-node Raft or control-plane ordering | `virtual-network.js`, `raft-network-host.js`, and `test/distributed/harness/pct-search.js` |
+| Real multi-node Raft or control-plane ordering | `virtual-network.js`, [`test/test-helpers/raft-rs-network-host.js`](../test/test-helpers/raft-rs-network-host.js) (real raft-rs ports), and `test/distributed/harness/pct-search.js` |
 | Callback-driven topology gates and trace replay | [`test/distributed/harness/deterministic-simulator.js`](../test/distributed/harness/deterministic-simulator.js) |
 | Heartbeat, CDC, stale-read, or readiness convergence over time | [`test/convergence/deterministic-convergence-harness.js`](../test/convergence/deterministic-convergence-harness.js) |
 | A local decision kernel | A unit or property test against the real owner method and real state representation |

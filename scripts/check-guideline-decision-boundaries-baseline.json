@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-08-05T17:56:03.717Z",
-  "rawViolationCount": 826,
+  "rawViolationCount": 808,
   "violations": [
     {
       "filePath": "examples/call-binding-account-summary/run-call-binding-account-summary.js",
@@ -279,15 +279,6 @@
       "functionName": "reportNonMeasuringReason",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "scripts/run-raft-logic-investigation-spike.js",
-      "line": 411,
-      "column": 7,
-      "functionName": "captureRestartAnomalyArtifact",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"statusSnapshots\"",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
@@ -2063,42 +2054,6 @@
       "functionName": "createReadOnlyCache",
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 212) and SQL/DB (line 206) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/cache/system-cache-proxy.js",
-      "line": 235,
-      "column": 1,
-      "functionName": "get",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 235) and SQL/DB (line 234) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/cache/system-cache-proxy.js",
-      "line": 256,
-      "column": 1,
-      "functionName": "query",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 256) and SQL/DB (line 257) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/cache/system-cache-proxy.js",
-      "line": 284,
-      "column": 1,
-      "functionName": "filter",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 284) and SQL/DB (line 283) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/cache/system-cache-proxy.js",
-      "line": 304,
-      "column": 1,
-      "functionName": "getAll",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 304) and SQL/DB (line 303) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -7322,123 +7277,6 @@
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 136) and SQL/DB (line 111) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/message-group-worker-service-message-methods.js",
-      "line": 487,
-      "column": 1,
-      "functionName": "createMessageGroupWorkerServiceMessageMethods",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 487) and SQL/DB (line 225) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/message-group-worker-service-runtime-methods.js",
-      "line": 259,
-      "column": 1,
-      "functionName": "createMessageGroupWorkerServiceRuntimeMethods",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 259) and SQL/DB (line 134) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/message-group-worker-service.js",
-      "line": 215,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 215) and SQL/DB (line 218) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/message-group-worker-service.js",
-      "line": 268,
-      "column": 1,
-      "functionName": "onInitialize",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 268) and SQL/DB (line 265) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/message-group-worker-service.js",
-      "line": 301,
-      "column": 1,
-      "functionName": "initializeRaft",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 301) and SQL/DB (line 296) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/message-group-worker-service.js",
-      "line": 564,
-      "column": 1,
-      "functionName": "onStop",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 564) and SQL/DB (line 551) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/partition-worker-service.js",
-      "line": 166,
-      "column": 1,
-      "functionName": "constructor",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 166) and SQL/DB (line 173) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/partition-worker-service.js",
-      "line": 252,
-      "column": 1,
-      "functionName": "initializeRaft",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 252) and SQL/DB (line 244) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/sqlite-system-cache.js",
-      "line": 72,
-      "column": 1,
-      "functionName": "initialize",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 72) and SQL/DB (line 89) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/sqlite-system-cache.js",
-      "line": 195,
-      "column": 1,
-      "functionName": "createDynamicTable",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 195) and SQL/DB (line 207) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/sqlite-system-cache.js",
-      "line": 303,
-      "column": 1,
-      "functionName": "updateRecord",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 303) and SQL/DB (line 316) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/sqlite-system-cache.js",
-      "line": 330,
-      "column": 1,
-      "functionName": "deleteRecord",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 330) and SQL/DB (line 334) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/worker/sqlite-system-cache.js",
-      "line": 386,
-      "column": 1,
-      "functionName": "applyReplicationState",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 386) and SQL/DB (line 396) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
