@@ -1,6 +1,9 @@
 import {
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_REFUSAL,
+} from './raft-committed-membership-constants.js';
 
 const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 const LIFECYCLE_STATE = Object.freeze({
@@ -27,7 +30,17 @@ const LIFECYCLE_REASON = Object.freeze({
   IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
   RETIRED: 'retired',
   STALE_RUNTIME_GENERATION: 'runtime-generation-not-registered',
+  // A replica whose own history was proven lost while it ran (owner decision
+  // O4): retired with this reason, it is refused with it, also after a
+  // restart.
+  RESEED_REQUIRED: COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED,
 });
+
+// The refusal a retired row answers: a reseed hold keeps its own reason.
+function retiredRefusalReason(reason) {
+  return reason === LIFECYCLE_REASON.RESEED_REQUIRED ?
+    LIFECYCLE_REASON.RESEED_REQUIRED : LIFECYCLE_REASON.RETIRED;
+}
 
 function frozenResult(outcome, reason, detail = null) {
   return Object.freeze({outcome, reason, detail});
@@ -62,7 +75,7 @@ class RaftRsReplicaLifecycleOwner {
       )
     `);
     const row = db.prepare(`
-      SELECT peer_id, replica_identity, state
+      SELECT peer_id, replica_identity, state, reason
       FROM ${LIFECYCLE_TABLE}
       WHERE group_id = ? AND (peer_id = ? OR replica_identity = ?)
     `).get(groupId, peerId, replicaIdentity);
@@ -94,7 +107,7 @@ class RaftRsReplicaLifecycleOwner {
       } else {
         this.#state = row.state;
         this.#refusalReason = row.state === LIFECYCLE_STATE.RETIRED ?
-          LIFECYCLE_REASON.RETIRED : null;
+          retiredRefusalReason(row.reason) : null;
       }
     }
   }
@@ -145,23 +158,46 @@ class RaftRsReplicaLifecycleOwner {
     if (this.#activeCount > 0) {
       await new Promise((resolve) => this.#waiters.push(resolve));
     }
-    this.#db.prepare(`
-      UPDATE ${LIFECYCLE_TABLE}
-      SET state = 'retired', reason = ?, changed_at = ?
-      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-    `).run(
-      String(reason || LIFECYCLE_REASON.RETIRED),
-      new Date().toISOString(),
-      this.#groupId,
-      this.#peerId,
-      this.#replicaIdentity,
-    );
+    this.#writeRetired(String(reason || LIFECYCLE_REASON.RETIRED));
     this.#state = LIFECYCLE_STATE.RETIRED;
     this.#refusalReason = LIFECYCLE_REASON.RETIRED;
     return frozenResult(
       RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.RETIRED);
   }
 
+  /**
+   * Hold this replica for a reseed, durably and at once: called from inside
+   * the runtime turn that proved its history lost, so it does not wait for
+   * that turn. Every later execution is refused RESEED_REQUIRED, and a
+   * restart reads the same refusal from the row.
+   * @return {Object} Frozen outcome.
+   */
+  holdForReseed() {
+    if (this.#state !== LIFECYCLE_STATE.ACTIVE) {
+      return frozenResult(
+        RAFT_OPERATION_OUTCOME.CORE_REFUSED, this.#refusalReason);
+    }
+    this.#writeRetired(LIFECYCLE_REASON.RESEED_REQUIRED);
+    this.#state = LIFECYCLE_STATE.RETIRED;
+    this.#refusalReason = LIFECYCLE_REASON.RESEED_REQUIRED;
+    return frozenResult(
+      RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.RESEED_REQUIRED);
+  }
+
+
+  #writeRetired(reason) {
+    this.#db.prepare(`
+      UPDATE ${LIFECYCLE_TABLE}
+      SET state = 'retired', reason = ?, changed_at = ?
+      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
+    `).run(
+      reason,
+      new Date().toISOString(),
+      this.#groupId,
+      this.#peerId,
+      this.#replicaIdentity,
+    );
+  }
 
   #release() {
     this.#activeCount -= 1;

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2176,
+    "ordinary": 2179,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2193,
-  "digest": "fnv1a32-ce024d99",
+  "censusSize": 2196,
+  "digest": "fnv1a32-8f435465",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1433,7 +1433,10 @@
     "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "ordinary",
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "ordinary",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "ordinary",
+    "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "ordinary",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "ordinary",
+    "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "ordinary",
+    "test/raft/raft-rs-backend/local-log-guard-refusals.test.js": "ordinary",
     "test/raft/raft-rs-backend/membership-changed-event.test.js": "ordinary",
     "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js": "ordinary",
     "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "ordinary",

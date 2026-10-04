@@ -47,6 +47,8 @@ import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
 
+import {coreTrappingAppend} from
+  '../raft/raft-rs-backend/core-trap-envelope.js';
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
@@ -111,8 +113,6 @@ const GROUP_TIMING = Object.freeze({
 });
 // An inbound heartbeat whose commit lies far beyond any log: raft-rs traps
 // on it (the seam the runtime's own recovery tests use for a CORE_FATAL).
-const TRAPPING_COMMIT = '999999';
-const HEARTBEAT_MESSAGE_TYPE = 8;
 const FOREIGN_PEER_OFFSET = 1000;
 // The verifier's r4-c2b and r4-s1 shapes: a load that keeps failing a store
 // for this long, a leader's paced writes each larger than the free pages a
@@ -654,19 +654,13 @@ test('W-B6-5: a core failure (the shared WASM instance trapped) still ' +
     const before = victim.partition.raft.readStatus();
     const siblingBefore = untouchedFacts(sibling.partition, sibling.dbPath);
 
-    const accepted = await victim.partition.raft.step({
+    const accepted = await victim.partition.raft.step(coreTrappingAppend({
+      dbFile: victim.dbPath,
       groupId: victim.partition.partitionId,
-      to: before.peerId,
-      message: {
-        from: String(Number(before.peerId) + FOREIGN_PEER_OFFSET),
-        to: before.peerId,
-        msgType: HEARTBEAT_MESSAGE_TYPE,
-        term: String(Number(before.term) + 1),
-        logTerm: '0',
-        index: '0',
-        commit: TRAPPING_COMMIT,
-      },
-    });
+      status: before,
+      from: String(Number(before.peerId) + FOREIGN_PEER_OFFSET),
+      term: String(Number(before.term) + 1),
+    }));
     assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'setup: the envelope is admitted');
     const originalConsoleError = console.error;

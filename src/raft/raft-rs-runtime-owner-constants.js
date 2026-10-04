@@ -110,6 +110,9 @@ const RUNTIME_PHASE = Object.freeze({
   DURABLE_RECORD_READ: 'durable-record-read',
   // A throw the runtime did not type, contained by the group's port.
   UNEXPECTED_THROW: 'unexpected-throw',
+  // A delivered envelope refused before step by the local-log guard
+  // (raft-rs-local-log-guard.js).
+  LOCAL_LOG_GUARD: 'local-log-guard',
 });
 const RUNTIME_REASON = Object.freeze({
   CORE_REFUSED: 'core-refused',
@@ -146,6 +149,10 @@ const RUNTIME_REASON = Object.freeze({
   // under the hard cutover (owner decision O3) it is refused for a reseed,
   // never retried and never opened.
   DURABLE_RECORD_INCOMPATIBLE: 'durable-record-incompatible',
+  // The replica's own history is proven lost while it runs (owner decision
+  // O4 detected at the ingress): the group is held durably and every further
+  // operation is refused; the value is the committed-membership boundary's.
+  RESEED_REQUIRED: COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED,
   CLOSED: 'closed',
   // A conf-change proposal the core would drop (a pending configuration
   // index above its applied index, or a joint configuration): answered as a
@@ -159,6 +166,20 @@ const RUNTIME_REASON = Object.freeze({
   // The command reached the core; the Readies it produced wait in the core
   // until the store admits their persistence again.
   READY_DEFERRED: 'ready-deferred-user-transaction-open',
+});
+// Why the local-log guard refused a delivered envelope (each one a
+// panicking precondition of the core; raft-rs-local-log-guard.js names the
+// producer each one implies).
+const RAFT_RS_LOCAL_LOG_REFUSAL = Object.freeze({
+  PEER_COMMIT_BEYOND_LOCAL_LOG: 'peer-commit-beyond-local-log',
+  APPEND_BELOW_LOCAL_COMMIT: 'append-entries-below-local-commit',
+  EMPTY_FORWARDED_PROPOSAL: 'empty-forwarded-proposal',
+  APPEND_RESPONSE_BEYOND_LOCAL_LOG: 'append-response-beyond-local-log',
+});
+// What the runtime reports to its port's structured log: a refused delivery
+// (first per sender and reason).
+const RUNTIME_FAULT_REPORT = Object.freeze({
+  INBOUND_STEP_REFUSED: 'inbound-step-refused',
 });
 // A Ready already taken holds the core's pending Ready, so its remaining
 // durable writes cannot be refused after an asynchronous send: they wait for
@@ -197,11 +218,13 @@ export {
   PEER_DELIVERY_OBSERVATION_LIMIT,
   PEER_DELIVERY_OUTCOME,
   PERSISTENCE_ADMISSION_WAIT,
+  RAFT_RS_LOCAL_LOG_REFUSAL,
   RECOVERY_REQUIRED,
   ROLE,
   ROLE_LEADER,
   RUNTIME_COMMAND,
   RUNTIME_EVENT,
+  RUNTIME_FAULT_REPORT,
   RUNTIME_PHASE,
   RUNTIME_REASON,
   UNHEALTHY,

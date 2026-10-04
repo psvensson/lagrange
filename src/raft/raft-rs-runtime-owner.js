@@ -27,6 +27,11 @@ import {
   sendMessages,
 } from './raft-rs-peer-delivery.js';
 import {
+  openedLastIndex,
+  persistedLastIndexAfter,
+} from './raft-rs-local-log-guard.js';
+import {refuseInboundStep} from './raft-rs-runtime-faults.js';
+import {
   decideLeadershipTransfer,
   droppedByLeadershipTransfer,
   leadershipTransferInProgress,
@@ -477,6 +482,8 @@ function openGroupInCurrentRuntime(group, opening) {
     return created.result;
   }
   group.handle = created.value;
+  group.persistedLastIndex = openedLastIndex(
+    opening.restore ? opening.record : null);
   // Every (re)construction and restore announces its first observed
   // configuration again: a listener's baseline must be level-correct.
   group.announcedConfStateKey = CONF_STATE_NOT_ANNOUNCED;
@@ -535,7 +542,7 @@ function resumeAfterReconstruction(group, expectedGeneration) {
 // that failure alone, and the replaced core's handle names nothing in the
 // new one.
 function openingForReplacement(group) {
-  if (group.closed) {
+  if (group.closed || group.reseedHold !== null) {
     return null;
   }
   const opening = readOpeningRecord(group);
@@ -697,6 +704,9 @@ function forgetExpiredRecovery(group) {
 // Failure scope follows the failure class: a core failure replaces the shared
 // runtime; a host failure reconstructs its own group.
 function ensureExecution(group) {
+  if (group.reseedHold !== null) {
+    return group.reseedHold;
+  }
   if (runtimeHealth !== HEALTHY) {
     return replaceRuntime(group);
   }
@@ -923,6 +933,8 @@ function drainReady(group, expectedGeneration, cycles = 0) {
   }
   try {
     group.store.persistReady(group.groupId, taken.value);
+    group.persistedLastIndex = persistedLastIndexAfter(
+      group.persistedLastIndex, taken.value);
   } catch (error) {
     return groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE, error);
   }
@@ -1328,6 +1340,14 @@ function drainInbound(group, expectedGeneration, continuation) {
     return continuation();
   }
   const envelope = group.inbound.shift();
+  // The local-log guard decides before the core is entered: a refused
+  // envelope is recorded against its sender and never stepped; one that
+  // proves this replica's history lost holds the group and ends the turn.
+  const guarded = refuseInboundStep(group, envelope, expectedGeneration);
+  if (guarded !== null) {
+    return group.reseedHold ??
+      drainInbound(group, expectedGeneration, continuation);
+  }
   const stepped = invokeCoreAt(
     group, expectedGeneration, 'step', envelope.message);
   // The core refusing a delivered envelope is that envelope's outcome, not
@@ -1459,8 +1479,12 @@ function createRuntimeDispatcher(request) {
     applyTransactionRolledBack: request.applyTransactionRolledBack,
     runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,
+    holdForReseed: request.holdForReseed,
+    reportFault: request.reportFault,
     emit: request.emit,
     handle: null,
+    persistedLastIndex: 0n,
+    reseedHold: null,
     lastStatus: null,
     statusObservation: null,
     announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
@@ -1512,6 +1536,9 @@ function createRuntimeDispatcher(request) {
       // the failure persists.
       if (group.health === RECOVERY_REQUIRED && insideRetryWindow(group)) {
         return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
+      }
+      if (group.reseedHold !== null) {
+        return group.reseedHold;
       }
       group.inbound.push(snapshotEnvelope(envelope));
       scheduleInboundDrain(group);

@@ -60,6 +60,8 @@ import * as runtimeConstants from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
 import * as runtimeTuning from '../../src/raft/raft-rs-runtime-tuning.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {coreTrappingAppend} from
+  '../raft/raft-rs-backend/core-trap-envelope.js';
 
 const TEMP_PREFIX = 'unreadable-durable-record-';
 const DB_FILE = 'partition.sqlite';
@@ -79,8 +81,6 @@ const WINDOW_MARGIN_MS = 50;
 const LEADER_WRITE_INTERVAL_MS = 25;
 // An inbound heartbeat whose commit lies far beyond any log: raft-rs traps on
 // it (the seam the runtime's own recovery tests use for a CORE_FATAL).
-const TRAPPING_COMMIT = '999999';
-const HEARTBEAT_MESSAGE_TYPE = 8;
 const FOREIGN_PEER_OFFSET = 1000;
 // A test clock of the configuration's own (the verifier's group timing).
 const GROUP_TIMING = Object.freeze({
@@ -559,23 +559,17 @@ test('F-ap: a follower restarted while its record table is missing is ' +
   }
 });
 
-// Traps the shared core through one partition's port: a heartbeat whose
-// commit lies beyond its log, driven by a tick.
+// Traps the shared core through one partition's port
+// (core-trap-envelope.js), driven by a tick.
 async function trapCoreThrough(partition) {
   const before = partition.raft.readStatus();
-  const accepted = await partition.raft.step({
+  const accepted = await partition.raft.step(coreTrappingAppend({
+    dbFile: partition.dbPath,
     groupId: partition.partitionId,
-    to: before.peerId,
-    message: {
-      from: String(Number(before.peerId) + FOREIGN_PEER_OFFSET),
-      to: before.peerId,
-      msgType: HEARTBEAT_MESSAGE_TYPE,
-      term: String(Number(before.term) + 1),
-      logTerm: '0',
-      index: '0',
-      commit: TRAPPING_COMMIT,
-    },
-  });
+    status: before,
+    from: String(Number(before.peerId) + FOREIGN_PEER_OFFSET),
+    term: String(Number(before.term) + 1),
+  }));
   assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     'setup: the trapping envelope is admitted');
   const originalConsoleError = console.error;

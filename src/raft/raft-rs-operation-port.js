@@ -43,6 +43,7 @@ import {
 } from './raft-rs-replica-lifecycle-owner.js';
 import {registerPeerIdentityReservationOwner} from
   './raft-rs-membership-administration.js';
+import {reportRaftRsRuntimeFault} from './raft-rs-runtime-fault-log.js';
 import {
   CORE_OK,
   CORE_REFUSED,
@@ -225,6 +226,8 @@ function createRaftRsOperationPort(request) {
     // inbound) is admitted by this replica's lifecycle owner like every
     // operation the port is asked for, inside the same containment.
     admitScheduledEntry: (work) => protocolTurn(work),
+    holdForReseed: () => holdForReseed(),
+    reportFault: reportRaftRsRuntimeFault,
     emit,
   }) : null;
 
@@ -258,6 +261,13 @@ function createRaftRsOperationPort(request) {
     }
     return coreOk('scheduling-stopped');
   };
+  // A group whose own history the local-log guard proved lost is held for a
+  // reseed by its lifecycle owner (durable, survives a restart) and its
+  // ticks stop.
+  function holdForReseed() {
+    stopScheduling();
+    return lifecycle.holdForReseed();
+  }
   // The scheduled tick is a contained port operation: it answers typed and
   // never throws into its timer.
   const scheduleTicks = () => {
