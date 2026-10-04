@@ -153,7 +153,7 @@ function createCdcIntegrationServiceFixture(rows, options = {}) {
 }
 
 // The MOVE_REPLICA handoff is refused at /register-service (owner decision
-// 2026-10-04, zero-Liferaft cutover). The services-row write and the
+// 2026-10-04, raft-rs full cutover). The services-row write and the
 // cache-visibility wait the handoff ran remain in the tree until the MOVE
 // subsystem's deletion (an open epic obligation); until then their
 // witnesses drive them directly and read the answer the handoff returned

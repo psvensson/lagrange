@@ -164,7 +164,7 @@ class MessageGroupServiceHandler extends EventEmitter {
 
   /**
    * CREATE_REPLICA for a message group is refused (owner decision
-   * 2026-10-04, zero-Liferaft cutover): no message-group replica is created
+   * 2026-10-04, raft-rs full cutover): no message-group replica is created
    * on a dispatcher's word until the fresh-identity ADD path for message
    * groups exists. The create this answered opened a GENESIS self-founder
    * from the services rows that elected at once; under a reissued replica

@@ -451,7 +451,7 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   DEFERRED_RETRY_PENDING: 'deferred_retry_pending',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
   NODE_NOT_READY: 'node_not_ready',
-  // Owner decision 2026-10-04 (zero-Liferaft cutover): a message group's
+  // Owner decision 2026-10-04 (raft-rs full cutover): a message group's
   // replica membership does not change - no ADD, REPLACE, MOVE or
   // CREATE_REPLICA - until the fresh-identity ADD/promote path for message
   // groups exists. A replica opened under a reissued name would reuse a raft

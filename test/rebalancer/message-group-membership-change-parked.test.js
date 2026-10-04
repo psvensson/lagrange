@@ -1,4 +1,4 @@
-// Owner decision 2026-10-04 (zero-Liferaft cutover): a message group's
+// Owner decision 2026-10-04 (raft-rs full cutover): a message group's
 // replica membership does not change until the fresh-identity ADD/promote
 // path for message groups exists. mg-1 lives entirely on the seed, and the
 // message-group placement policy (spread across nodes, target 3) gives the

@@ -200,7 +200,7 @@ describe('MessageGroupServiceHandler', () => {
     );
   });
 
-  // Owner decision 2026-10-04 (zero-Liferaft cutover): a message group's
+  // Owner decision 2026-10-04 (raft-rs full cutover): a message group's
   // replica membership does not change until the fresh-identity ADD path
   // exists. CREATE_REPLICA opened a GENESIS self-founder from the services
   // rows that elected at once; under a reissued replica name it reused a
