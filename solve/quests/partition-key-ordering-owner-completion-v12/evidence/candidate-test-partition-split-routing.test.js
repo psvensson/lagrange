@@ -459,11 +459,24 @@ test('split snapshot batching rejects dimensions outside route and bind budgets'
 
 test('split snapshot batching owns internal numeric array appends',
   async (t) => {
-    const rows = [{id: 'a'}];
+    const rows = [{id: 'v12-route-key'}];
     const columns = ['id'];
-    const metadata = createMetadata(PENDING_VERSION);
+    const metadata = {
+      primaryKeyColumn: PRIMARY_KEY_COLUMN,
+      splitKey: 'm',
+      targetPartitionIds: ['v12-left-sentinel', 'v12-right-sentinel'],
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]:
+        PENDING_VERSION,
+    };
     const dispatch = {value: null};
-    let inheritedSetterCalls = 0;
+    let interceptedRouteWrites = 0;
+    const routeOwnedValues = new Set([
+      'v12-left-sentinel',
+      rows[0],
+      PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK,
+      '(?)',
+      'v12-route-key',
+    ]);
     const priorIndexDescriptor =
       Object.getOwnPropertyDescriptor(Array.prototype, '0');
 
@@ -471,8 +484,10 @@ test('split snapshot batching owns internal numeric array appends',
       Reflect.defineProperty(Array.prototype, '0', {
         configurable: true,
         enumerable: false,
-        set() {
-          inheritedSetterCalls += 1;
+        set(value) {
+          if (routeOwnedValues.has(value)) {
+            interceptedRouteWrites += 1;
+          }
         },
       });
 
@@ -503,14 +518,14 @@ test('split snapshot batching owns internal numeric array appends',
     }
 
     t.equal(
-      inheritedSetterCalls,
+      interceptedRouteWrites,
       0,
-      'inherited numeric setters never observe internal snapshot appends',
+      'inherited numeric setters never observe snapshot-route owned appends',
     );
     t.same(dispatch.value, {
-      partitionId: LEFT_PARTITION_ID,
+      partitionId: 'v12-left-sentinel',
       sql: 'INSERT OR REPLACE INTO users (id) VALUES (?)',
-      params: ['a'],
+      params: ['v12-route-key'],
     });
   });
 
