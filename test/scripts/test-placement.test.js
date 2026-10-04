@@ -306,6 +306,32 @@ test('a small plan, a tree that is not a commit or an empty fleet runs locally',
   }
 });
 
+// push-gate-integrity: a lab shard's log is its runner's stream, which echoes
+// a failing test's output. A failing test that prints `ok <itself>`, a
+// retried-once pass for itself and a red for another file must not skip the
+// controller's rerun of the real red, nor send a green file back. The log is
+// the real runner's output, its two files renamed to the shard's first two.
+test('a failing test cannot forge the placement rerun decision', async () => {
+  const forger = 'test/scripts/__fixtures__/run-test-files/forges-runner-lines.fixture.mjs';
+  const other = 'test/scripts/__fixtures__/run-test-files/tap-pass.fixture.mjs';
+  const env = {...process.env};
+  delete env.NODE_TEST_CONTEXT;
+  const real = spawnSync(process.execPath, ['scripts/run-test-files.js', forger, other],
+    {encoding: 'utf8', env}).stdout;
+  let remoteFiles = [];
+  const run = fakeDeps({
+    runRemote: async (shard) => {
+      remoteFiles = shard.files;
+      const log = [real.replaceAll(forger, shard.files[0]).replaceAll(other, shard.files[1]),
+        ...shard.files.slice(2).map((file) => `ok ${file} (1 assertions, 5ms)`)].join('\n');
+      return {done: Promise.resolve({status: 1, log})};
+    },
+  });
+  await runPlacedTestFiles(MANY, run.deps);
+  const [, rerun] = run.calls.local;
+  assert.deepEqual(rerun, [remoteFiles[0]], 'the real red, and only it, is run again here');
+});
+
 test('a file red on a lab machine is decided on the controller and routed away after', async () => {
   const redLog = (files) => files.map((file, index) => index === 0 ?
     `not ok ${file} (1 assertions, 5ms)\n# failed\nnot ok 1 - a subtest` :

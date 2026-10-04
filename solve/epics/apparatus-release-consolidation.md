@@ -33,6 +33,7 @@ quests:
   - fleet-capability-discovery
   - test-placement
   - lab-readiness-by-dependency-graph
+  - push-gate-integrity
 authorizes:
   - scripts
   - test

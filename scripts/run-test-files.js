@@ -678,8 +678,8 @@ function printTestResult(result) {
   );
   if (result.ok) return;
   process.stdout.write(`# ${result.reasons.join(REASON_SEPARATOR)}\n`);
-  if (result.output) process.stdout.write(result.output);
-  if (result.stderr) process.stderr.write(result.stderr);
+  if (result.output) process.stdout.write(echoedOutput(result.output));
+  if (result.stderr) process.stderr.write(echoedOutput(result.stderr));
 }
 
 function runTestFileSync(file, options = {}) {
@@ -851,7 +851,25 @@ const TEST_FILE_LINE = Object.freeze({
   BATCH_SIGNAL: /^# test-files batch ended by (\S+):/u,
   RELAYED_PREFIX: /^\[[^\]]+\] /u,
 });
+// Where an echoed line starts (the text's start and after each line end, when
+// anything follows), the indent it gets, and the end it must close with.
+const ECHOED_LINE_START = /(?:\r\n|\r(?!\n)|\n|^)(?=[^])/gu;
+const ECHOED_INDENT = '    ';
+const ECHOED_LINE_END = /\n$/u;
+const ECHOED_LINE_TERMINATOR = '\n';
 const RED_VERDICT = 'not ok';
+
+// push-gate-integrity: a failing test's own output is echoed indented, every
+// line of it (after any line end a reader splits on: \n, \r\n or a lone \r),
+// and closed by a line end, so no line a test prints can begin where a runner
+// line does - every TEST_FILE_LINE shape is anchored at column zero - and the
+// runner's next line can never be glued onto the test's last one. Until then
+// a failing test could print `ok <file> (...)` after its own red verdict, or a
+// complete-looking `# test-files total=...`, and every reader believed it.
+function echoedOutput(text) {
+  return `${text.replace(ECHOED_LINE_START, `$&${ECHOED_INDENT}`)}` +
+    (ECHOED_LINE_END.test(text) ? '' : ECHOED_LINE_TERMINATOR);
+}
 const READER_SHAPES = Object.freeze(['VERDICT', 'SUMMARY', 'PLANNED', 'BATCH_SIGNAL']);
 const formatPlannedLine = (files) => `# test-files planned=${files}`;
 const formatBatchSignalLine = (signal, files) =>

@@ -39,6 +39,13 @@ function gitOutput(args) {
   return result.stdout.trim();
 }
 
+// It takes no argument: one it does not know refuses before the proof runs
+// (push-gate-integrity).
+if (process.argv.length > 2) {
+  process.stderr.write(`unknown argument ${process.argv[2]}\nusage: run-release-proof.js\n`);
+  process.exit(2);
+}
+
 const headSha = gitOutput(['rev-parse', 'HEAD']);
 const existing = resolveProof({
   proofId: PROOF.RELEASE_FULL,

@@ -30,6 +30,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {parseArgs} from 'node:util';
 
 import {
   planChangeProof,
@@ -53,7 +54,6 @@ import {
   SUBSYSTEM_MANIFEST_PATH,
 } from './test-subsystem-classification-constants.js';
 
-const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const regExpTest = Function.call.bind(RegExp.prototype.test);
 const jsonParse = JSON.parse.bind(JSON);
@@ -65,7 +65,12 @@ const root = path.resolve(
 const UTF8 = 'utf8';
 const NEWLINE = '\n';
 const INDENT = '  ';
-const EXPLAIN_FLAG = '--explain';
+// The whole command line: --explain or nothing. Anything else refuses before
+// any work - an unknown argument once ran the whole placed corpus
+// (push-gate-integrity).
+const COMMAND_LINE = Object.freeze({explain: Object.freeze({type: 'boolean'})});
+const USAGE = 'usage: push-gate-change-proof.js [--explain]';
+const EXIT_USAGE = 2;
 const LOG_PREFIX = '[push-gate-change-proof]';
 const NPM = 'npm';
 const NPM_RUN_SILENT = Object.freeze(['run', '-s']);
@@ -365,7 +370,15 @@ function headRevision() {
 }
 
 function main() {
-  const explain = arrayIncludes(process.argv, EXPLAIN_FLAG);
+  let explain = false;
+  try {
+    explain = parseArgs({args: process.argv.slice(2), options: COMMAND_LINE, strict: true})
+      .values.explain === true;
+  } catch (error) {
+    process.stderr.write(`${LOG_PREFIX} ${error.message}${NEWLINE}${USAGE}${NEWLINE}`);
+    process.exitCode = EXIT_USAGE;
+    return;
+  }
   const range = resolvedCheckRange(null, process.env, root);
   const plan = planChangeProof({base: range.base});
   if (plan === null) {

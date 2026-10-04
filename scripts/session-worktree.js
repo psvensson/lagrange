@@ -101,18 +101,23 @@ function cleanupTempParent(worktreePath) {
 }
 
 function removeWorktree(root, worktreePath) {
+  let removed = true;
   try {
     git(root, ['worktree', 'remove', '--force', worktreePath]);
   } catch (error) {
     reportCleanupWarning(error);
-    // Fall back to pruning so a partial add never strands worktree metadata.
-    try {
-      git(root, ['worktree', 'prune']);
-    } catch (pruneError) {
-      reportCleanupWarning(pruneError);
-    }
+    removed = false;
   }
   cleanupTempParent(worktreePath);
+  if (removed) return;
+  // Fall back to pruning so a partial add never strands worktree metadata -
+  // once the directory is gone: a checkout whose .git link was replaced still
+  // looks alive to prune while it exists (push-gate-integrity).
+  try {
+    git(root, ['worktree', 'prune']);
+  } catch (pruneError) {
+    reportCleanupWarning(pruneError);
+  }
 }
 
 function listWorktrees(root) {

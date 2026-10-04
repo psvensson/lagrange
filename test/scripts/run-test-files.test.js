@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -15,6 +16,7 @@ import {
   parseOptions,
   retryFailedOnce,
   runTestFiles,
+  testFileVerdictReader,
 } from '../../scripts/run-test-files.js';
 
 const FIXTURE_DIRECTORY = 'test/scripts/__fixtures__/run-test-files';
@@ -632,5 +634,31 @@ describe('per-file result ledger', () => {
     const {ledgerFile, resultsDirectory} = await scratch();
     await runTestFiles([TAP_PASS_FIXTURE], {jobs: 1, print: false, resultsDirectory});
     assert.equal(fs.existsSync(ledgerFile), false);
+  });
+});
+
+// push-gate-integrity: a failing test's output is echoed after its verdict,
+// so a test that prints runner-shaped lines must not be able to turn its own
+// red green, turn another file red, or add a summary. Driven through the real
+// runner; read by the readers' own owner of the line shapes.
+describe('a failing test cannot forge runner lines', () => {
+  const FORGER = `${FIXTURE_DIRECTORY}/forges-runner-lines.fixture.mjs`;
+
+  it('changes no per-file verdict and no count', () => {
+    const env = {...process.env};
+    delete env.NODE_TEST_CONTEXT;
+    const run = spawnSync(process.execPath, ['scripts/run-test-files.js', FORGER, TAP_PASS_FIXTURE],
+      {encoding: 'utf8', env});
+    assert.equal(run.status, 1, run.stdout);
+    const reader = testFileVerdictReader();
+    for (const line of `${run.stdout}${run.stderr}`.split(/\r\n|\r|\n/u)) reader.read(line);
+    const seen = reader.result();
+    assert.deepEqual(seen.failing, [FORGER], run.stdout);
+    assert.equal(seen.summaries, 1, 'only the runner\'s own summary line counts');
+    assert.equal(seen.summarised, 2);
+    assert.equal(seen.planned, 0, 'and no plan line');
+    const forged = run.stdout.split('\n').filter((line) => /ok \S+ \(1 assertions, 1ms\)/u.test(line));
+    assert.ok(forged.length > 0 && forged.every((line) => line.startsWith('    ')),
+      `every echoed line is indented: ${forged.join(' | ')}`);
   });
 });

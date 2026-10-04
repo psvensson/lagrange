@@ -29,7 +29,7 @@ import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import {isDeepStrictEqual} from 'node:util';
+import {isDeepStrictEqual, parseArgs} from 'node:util';
 import {fileURLToPath} from 'node:url';
 
 import {selectChangedTests} from './checks/change-selection.js';
@@ -89,10 +89,14 @@ import {
 } from './checks/test-primary-classification-constants.js';
 
 const UTF8 = 'utf8';
-const BASE_FLAG = '--base';
-const HEAD_FLAG = '--head';
-const EXPLAIN_FLAG = '--explain';
-const LIST_FLAG = '--list';
+// The whole command line. Anything else - an unknown flag, a positional, a
+// valueless --base or --head - is the usage refusal, before any work.
+const COMMAND_LINE = Object.freeze({
+  base: Object.freeze({type: 'string'}),
+  head: Object.freeze({type: 'string'}),
+  explain: Object.freeze({type: 'boolean'}),
+  list: Object.freeze({type: 'boolean'}),
+});
 const DEFAULT_HEAD = 'HEAD';
 const NEWLINE = '\n';
 const INDENT = '  ';
@@ -120,7 +124,6 @@ const USAGE =
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
-const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arraySlice = Function.call.bind(Array.prototype.slice);
 const jsonParse = JSON.parse.bind(JSON);
@@ -568,22 +571,21 @@ function renderExplain(plan) {
 
 // An optional flag that is present but has no value is a usage error, never a
 // silently ignored one: `--base` with a missing sha must not quietly downgrade
-// to a worktree-only proof.
-function flagValue(argv, flag) {
-  if (!arrayIncludes(argv, flag)) return {present: false, value: null};
-  return {present: true, value: argv[arrayIndexOf(argv, flag) + 1] || null};
-}
-
+// to a worktree-only proof; and an unknown argument never runs the cone.
 function parseInvocation(argv) {
-  const base = flagValue(argv, BASE_FLAG);
-  const head = flagValue(argv, HEAD_FLAG);
+  let values = null;
+  try {
+    ({values} = parseArgs({args: argv, options: COMMAND_LINE, strict: true}));
+  } catch {
+    return {valid: false};
+  }
   return {
-    valid: !(base.present && !base.value) && !(head.present && !head.value),
-    base: resolvedCheckBase(base.value, process.env, root),
-    head: head.value,
-    headRevision: head.value || DEFAULT_HEAD,
-    explain: arrayIncludes(argv, EXPLAIN_FLAG),
-    list: arrayIncludes(argv, LIST_FLAG),
+    valid: values.base !== '' && values.head !== '',
+    base: resolvedCheckBase(values.base || null, process.env, root),
+    head: values.head || null,
+    headRevision: values.head || DEFAULT_HEAD,
+    explain: values.explain === true,
+    list: values.list === true,
   };
 }
 

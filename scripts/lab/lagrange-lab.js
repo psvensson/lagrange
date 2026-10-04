@@ -557,11 +557,31 @@ const COMMAND_HANDLERS = Object.freeze({
   [COMMAND.PROVISION]: (action, args) => commandProvision(args),
 });
 
+// The flags each command reads: one it does not read refuses before the
+// command runs - `lab test all --bogus` used to place the corpus
+// (push-gate-integrity). --help is everyone's.
+const COMMAND_FLAGS = Object.freeze({
+  [COMMAND.NODE]: ['os', 'arch', 'roles', 'ssh', 'ip', 'labels', FLAG.DOCKER_SOCKET, FLAG.K3S_NODE],
+  [COMMAND.RUNNER]: ['repo', 'service'],
+  [COMMAND.HARNESS]: ['nodes', 'base', FLAG.NODES_PER_HOST, FLAG.DRY_RUN],
+  [COMMAND.K3S]: ['server', 'version'],
+  [COMMAND.TEST]: Object.values(LAB_TEST_FLAG),
+  [COMMAND.FLEET]: [FLEET_JSON_FLAG],
+  [COMMAND.PROVISION]: ['copy', 'output'],
+});
+
 async function main() {
   const args = parseArgs(process.argv.slice(ARGV_COMMAND_OFFSET));
   const command = args.positional[POSITIONAL.COMMAND];
   const action = args.positional[POSITIONAL.ACTION];
   if (!command || command === COMMAND.HELP || args.flags.help) return usage();
+  const unknown = Object.keys(args.flags)
+    .find((flag) => !(Object.hasOwn(COMMAND_FLAGS, command) ? COMMAND_FLAGS[command] : [])
+      .includes(flag));
+  if (unknown !== undefined) {
+    usage();
+    throw new Error(`unknown argument ${FLAG.PREFIX}${unknown} for ${command} (usage above)`);
+  }
   // Own keys only: a plain object would answer `constructor` or `toString`
   // from its prototype and run something for a command that does not exist.
   const handler = Object.hasOwn(COMMAND_HANDLERS, command) ?

@@ -12,6 +12,8 @@
 // was handed. Git here always addresses the directory it is given, never an
 // inherited repository pointer.
 
+import path from 'node:path';
+
 const INHERITED_GIT_REPOSITORY_POINTERS = Object.freeze([
   'GIT_DIR',
   'GIT_WORK_TREE',
@@ -23,15 +25,24 @@ const INHERITED_GIT_REPOSITORY_POINTERS = Object.freeze([
   'GIT_PREFIX',
 ]);
 
+// Nor an ENCLOSING one (push-gate-integrity): a checkout made inside another
+// repository - the gate's and the publisher's, under test-output/ - must never
+// be answered for by that repository when its own .git link is gone. With the
+// checkout named, discovery stops at it: its parent is the ceiling.
+const DISCOVERY_CEILING = 'GIT_CEILING_DIRECTORIES';
+
 /**
- * Copy `base` without any inherited git repository pointer.
+ * Copy `base` without any inherited git repository pointer and, given the
+ * checkout git must address, with discovery stopped at that checkout.
  * @param {NodeJS.ProcessEnv} [base]
+ * @param {string|null} [checkout] absolute path of the checkout
  * @return {NodeJS.ProcessEnv}
  */
-export function gitProcessEnvironment(base = process.env) {
+export function gitProcessEnvironment(base = process.env, checkout = null) {
   const env = {...base};
   for (const name of INHERITED_GIT_REPOSITORY_POINTERS) {
     delete env[name];
   }
+  if (checkout) env[DISCOVERY_CEILING] = path.dirname(checkout);
   return env;
 }

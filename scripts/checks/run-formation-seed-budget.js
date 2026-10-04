@@ -69,6 +69,11 @@ function parseArguments(argv) {
     if (argv[index] === REPORT_ARG) {
       options.report = argv[index + 1] || null;
       index += 1;
+    } else {
+      // Anything else refuses before a formation starts (push-gate-integrity).
+      process.stderr.write(`unknown argument ${argv[index]}\nusage: run-formation-seed-budget.js ` +
+        `[${REPORT_ARG} <file>]\n`);
+      process.exit(2);
     }
   }
   return options;

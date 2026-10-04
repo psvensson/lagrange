@@ -12,7 +12,7 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {
-  linkWorkspaceDependencies, pruneTestOutput, recordProvedCorpus,
+  linkWorkspaceDependencies, pruneTestOutput, recordProvedCorpus, retainGateDiagnostics,
 } from '../../scripts/publish-head.js';
 
 function tree(base, relativeFiles) {
@@ -176,4 +176,41 @@ test('retention is bounded and never fails a finished publish', () => {
   assert.equal(pruneTestOutput(() => ({status: null, signal: 'SIGKILL',
     stdout: '', stderr: ''}), '/repo', say), false);
   assert.match(said.join(''), /retention skipped: the pruner was stopped by SIGKILL/u);
+});
+
+// push-gate-integrity: the gate-diagnostics prune ordered entries by mtime
+// alone, so a run written in the same tick as (or older by clock than) the
+// kept ones could be the one pruned - retention deleted what it had just
+// written - and it pruned any entry there, not only the runs it keeps.
+test('retention never prunes the run it just wrote, nor anything not a run', () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'retain-tick-'));
+  const root = path.join(parent, 'root');
+  const kept = path.join(root, 'test-output', 'push-gate');
+  const failed = (sha) => {
+    const checkout = path.join(parent, sha);
+    tree(checkout, ['test-output/acceptance/p/proof.json']);
+    fs.writeFileSync(path.join(checkout, 'test-output/acceptance/g.report.json'),
+      JSON.stringify({commands: [{id: 'p', status: 'FAIL',
+        artifactIdentity: {path: 'test-output/acceptance/p/proof.json'}}]}));
+    return retainGateDiagnostics(root, checkout, sha);
+  };
+  try {
+    const tick = Date.now() / 1000 + 60;
+    const earlier = ['a', 'b', 'c', 'd', 'f'].map((digit) => digit.repeat(40));
+    for (const sha of earlier) {
+      failed(sha);
+      fs.utimesSync(path.join(kept, sha), tick, tick);
+    }
+    fs.mkdirSync(path.join(kept, 'operator-notes'));
+    fs.utimesSync(path.join(kept, 'operator-notes'), 1, 1);
+    const latest = '9'.repeat(40);
+    assert.equal(failed(latest), path.join(kept, latest));
+    assert.ok(fs.existsSync(path.join(kept, latest, 'g.report.json')),
+      'the run just written survives its own retention');
+    assert.deepEqual(fs.readdirSync(kept).sort(),
+      [...earlier.slice(1), latest, 'operator-notes'].sort(),
+      'one tick: the order is the name, and only a sha-named run is ever pruned');
+  } finally {
+    fs.rmSync(parent, {recursive: true, force: true});
+  }
 });
