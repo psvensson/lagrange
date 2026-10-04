@@ -48,7 +48,6 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
     'Failed to hydrate replica metadata from authoritative system-table query',
   WAITING_VOTER_READY: 'Waiting for replica voter-ready activation',
   VOTER_READY_ACTIVATED: 'Replica reached voter-ready activation state',
-  VOTER_READY_TIMEOUT: 'Replica did not reach voter-ready activation before timeout',
   OPERATION_IN_PROGRESS: 'Operation already in progress',
   OPERATION_NOT_FOUND: 'Replica operation not found in system table cache',
   ASYNC_CREATE_FAILED: 'Async replica creation failed',

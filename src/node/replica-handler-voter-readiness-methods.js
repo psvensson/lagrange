@@ -11,6 +11,7 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {
   isBootstrapCriticalSystemPartitionId,
 } from '../bootstrap/system-partition-classification.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
@@ -22,6 +23,43 @@ import {
 } from './replica-handler-transition-policy.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const VOTER_READY_ACTIVATION_WAIT = Object.freeze({
+  wait: 'REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS',
+  awaited: 'local replica promoted to a routable voter (voter-ready activation)',
+});
+
+/**
+ * The voter-ready activation wait spent its bound: one wait_bound_spent
+ * ERROR with the role, services-row status and address the handler last
+ * observed for the replica.
+ * @param {Object} handler - The ReplicaHandler.
+ * @param {Object} spent - {replicaId, partitionId, startedAtMs, polls}.
+ * @return {void}
+ */
+function reportVoterReadyActivationSpent(handler, spent) {
+  const serviceRow = handler.systemTableCache?.get?.(
+    SYSTEM_TABLE_NAME.SERVICES,
+    spent.replicaId,
+  ) ?? null;
+  reportWaitBoundSpent(handler.logger, {
+    ...VOTER_READY_ACTIVATION_WAIT,
+    boundMs: handler.syncTimeoutMs,
+    elapsedMs: Date.now() - spent.startedAtMs,
+    lastObserved: {
+      trackedRaftRole: handler.getTrackedReplicaRole?.(spent.replicaId) ?? null,
+      serviceRowPresent: serviceRow !== null,
+      serviceRowStatus: serviceRow?.status ?? null,
+      serviceRowRaftRole: serviceRow?.raft_role ?? null,
+      serviceRowHasAddress: Boolean(serviceRow?.address),
+      polls: spent.polls,
+    },
+    scope: {
+      nodeId: handler.nodeId,
+      partitionId: spent.partitionId,
+      replicaId: spent.replicaId,
+    },
+  });
+}
 
 function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
   class ReplicaHandlerVoterReadinessMethods {
@@ -148,9 +186,12 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
         nodeId: this.nodeId,
       });
       this.throwIfShuttingDown();
-      const deadline = Date.now() + this.syncTimeoutMs;
+      const startedAtMs = Date.now();
+      const deadline = startedAtMs + this.syncTimeoutMs;
+      let polls = 0;
       while (Date.now() <= deadline) {
         this.throwIfShuttingDown();
+        polls += 1;
         if (this.isReplicaVoterReady(replicaId)) {
           // CL-035: seed the locally-decided voting role into the local
           // SERVICES row so the REPLACE remove-safety gate observes the
@@ -177,11 +218,11 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           setTimeout(resolve, VOTER_READY_CHECK_INTERVAL_MS);
         });
       }
-      this.logger.warn(REPLICA_HANDLER_LOG_MSG.VOTER_READY_TIMEOUT, {
+      reportVoterReadyActivationSpent(this, {
         replicaId,
         partitionId,
-        timeoutMs: this.syncTimeoutMs,
-        nodeId: this.nodeId,
+        startedAtMs,
+        polls,
       });
       throw new Error(
         `Replica ${replicaId} did not become voter-ready within ${this.syncTimeoutMs}ms`,

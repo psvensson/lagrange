@@ -5,6 +5,7 @@
 import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {assertCritical} from '../utils/assert.js';
 import {COLUMN, NUM, TABLES} from '../constants/index.js';
 import {
@@ -32,6 +33,35 @@ const INTER_GROUP_LATENCY_SQL = Object.freeze({
   SELECT_BY_EDGE_ID:
     'SELECT * FROM inter_group_latencies WHERE latency_edge_id = ?',
 });
+
+const LATENCY_MEASUREMENT_RETRY_WAIT = Object.freeze({
+  wait: 'LATENCY_PING_TIMEOUT_MS x (retryCount + 1)',
+  awaited: 'one acknowledged ping to measure the node RTT',
+});
+
+/**
+ * Every measurement attempt to a node failed: one wait_bound_spent ERROR
+ * per target, folded while the observed outcome is unchanged (measurement
+ * runs on a cadence).
+ * @param {Object} service - The latency measurement service.
+ * @param {string} targetNodeId - The measured node.
+ * @param {Object} spent - {timeoutMs, retryCount, startedAtMs, lastError}.
+ * @return {void}
+ */
+function reportLatencyMeasurementSpent(service, targetNodeId, spent) {
+  reportWaitBoundSpent(service.logger, {
+    ...LATENCY_MEASUREMENT_RETRY_WAIT,
+    boundMs: spent.timeoutMs * (spent.retryCount + 1),
+    elapsedMs: service.now() - spent.startedAtMs,
+    lastObserved: {
+      attempts: spent.retryCount + 1,
+      pingTimeoutMs: spent.timeoutMs,
+      lastThrownError: spent.lastError,
+    },
+    scope: {nodeId: service.nodeId ?? null, targetNodeId},
+    subject: targetNodeId,
+  });
+}
 
 const LATENCY_MEASUREMENT_CONFIG_MIN = Object.freeze({
   PING_TIMEOUT_MS: 1,
@@ -170,9 +200,12 @@ class LatencyMeasurementService extends EventEmitter {
     const timeoutMs = this.resolveTimeoutMs(options.timeoutMs);
     const retryCount = this.resolveRetryCount(options.retryCount);
 
+    let measurementStartedAt = Number.POSITIVE_INFINITY;
+    let lastError = null;
     for (let attempt = 0; attempt <= retryCount; attempt += 1) {
       this.stats.measurementAttemptCount += 1;
       const startedAt = this.now();
+      measurementStartedAt = Math.min(measurementStartedAt, startedAt);
       this.stats.lastMeasurementAt = startedAt;
       try {
         const acknowledged = await this.messageRouter.pingNode(
@@ -189,6 +222,7 @@ class LatencyMeasurementService extends EventEmitter {
           return {rttMs, attempt};
         }
       } catch (error) {
+        lastError = error.message;
         this.logger.debug(LATENCY_MEASUREMENT_LOG_MSG.MEASUREMENT_FAILED, {
           nodeId: this.nodeId,
           targetNodeId,
@@ -198,6 +232,12 @@ class LatencyMeasurementService extends EventEmitter {
       }
     }
 
+    reportLatencyMeasurementSpent(this, targetNodeId, {
+      timeoutMs,
+      retryCount,
+      startedAtMs: measurementStartedAt,
+      lastError,
+    });
     this.emit(LATENCY_MEASUREMENT_EVENT.MEASUREMENT_FAILED, {
       sourceNodeId: this.nodeId,
       targetNodeId,

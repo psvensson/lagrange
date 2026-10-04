@@ -1,9 +1,48 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
 import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
 
 const MESSAGE_GROUP_SERVICE_OUTBOUND_DISPATCH_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
+const DIRECT_DELIVERY_RETRY_WAIT = Object.freeze({
+  wait: 'MESSAGE_GROUP_RETRY_MAX_ATTEMPTS (direct delivery)',
+  awaited: 'acknowledged direct transport delivery to the target service',
+});
+
+/**
+ * Direct delivery spent its attempt budget without an acknowledgement:
+ * one wait_bound_spent ERROR with the last failure. The caller then falls
+ * back to the raft-persisted path or throws, unchanged.
+ * @param {Object} service - The message-group replica.
+ * @param {Object} messageEnvelope - The envelope (id, targetService,
+ *   attempts, createdAt).
+ * @param {number} maxAttempts - The attempt budget spent.
+ * @param {Error|null} lastError - The last attempt's failure.
+ * @return {void}
+ */
+function reportDirectDeliveryExhausted(
+  service, messageEnvelope, maxAttempts, lastError) {
+  reportWaitBoundSpent(service.logger, {
+    ...DIRECT_DELIVERY_RETRY_WAIT,
+    boundMs: null,
+    elapsedMs: Number.isFinite(messageEnvelope.createdAt) ?
+      service.now() - messageEnvelope.createdAt : null,
+    lastObserved: {
+      maxAttempts,
+      envelopeAttempts: messageEnvelope.attempts,
+      lastError: lastError?.message ?? null,
+      lastErrorCode: lastError?.code ?? null,
+      deferRetry: lastError?.deferRetry === true,
+    },
+    scope: {
+      groupId: service.groupId ?? null,
+      replicaId: service.replicaId ?? null,
+      messageId: messageEnvelope.id,
+      targetService: messageEnvelope.targetService,
+    },
+  });
+}
 
 function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
   const {
@@ -229,6 +268,8 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           );
         }
       }
+      reportDirectDeliveryExhausted(
+        this, messageEnvelope, maxAttempts, lastError);
       if (lastError?.deferRetry === true) {
         return {
           delivered: false,

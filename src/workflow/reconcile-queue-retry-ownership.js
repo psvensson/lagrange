@@ -1,3 +1,4 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   mergeWorkItemCompletionWaiters,
   rejectWorkItemCompletionWaiters,
@@ -26,6 +27,10 @@ const FAILURE_LOG_MSG =
   'Reconcile queue item deferred after retryable drain failure';
 const EXHAUSTED_LOG_MSG =
   'Reconcile queue item stopped after exhausting retryable drain attempts';
+const RETRY_ATTEMPTS_WAIT = Object.freeze({
+  wait: 'reconcile queue retryPolicy.maxAttempts',
+  awaited: 'a successful drain of the owner key within its retry budget',
+});
 const MapConstructor = Map;
 const ProxyConstructor = Proxy;
 const mapDelete = Function.call.bind(Map.prototype.delete);
@@ -276,7 +281,29 @@ function recordExhausted(queue, ownerKey, item, retryState, overrides = {}) {
   );
   pushFailureSample(queue, exhaustedState);
   queue.emit(RETRY_EXHAUSTED, exhaustedState);
-  queue.logger.error(EXHAUSTED_LOG_MSG, {...exhaustedState});
+  logExhausted(queue, exhaustedState);
+}
+
+// A failed timer registration is not a spent bound and keeps its own
+// ERROR; an attempt budget that ran out is one wait_bound_spent ERROR.
+function logExhausted(queue, exhaustedState) {
+  if (exhaustedState.failureReason === TIMER_REGISTRATION_FAILED) {
+    queue.logger.error(EXHAUSTED_LOG_MSG, {...exhaustedState});
+    return;
+  }
+  reportWaitBoundSpent(queue.logger, {
+    ...RETRY_ATTEMPTS_WAIT,
+    boundMs: null,
+    elapsedMs: null,
+    lastObserved: {
+      failureCount: exhaustedState.failureCount,
+      maxAttempts: exhaustedState.maxAttempts,
+      failureReason: exhaustedState.failureReason,
+      errorCode: exhaustedState.errorCode ?? null,
+      errorMessage: exhaustedState.errorMessage ?? null,
+    },
+    scope: {queue: exhaustedState.queue, ownerKey: exhaustedState.ownerKey},
+  });
 }
 
 function mergeConcurrentItemContext(item, concurrentlyEnqueued) {

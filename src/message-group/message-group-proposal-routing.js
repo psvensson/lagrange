@@ -8,6 +8,7 @@
 // backoff and every stop are the replica's message retry owner's
 // (message-retry-handler.js).
 
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {
@@ -19,6 +20,39 @@ import {
   messageGroupCommandRefusalError,
 } from './message-group-committed-command-admission.js';
 import {RetryStatus} from './message-retry-handler.js';
+
+const PROPOSAL_DEADLINE_WAIT = Object.freeze({
+  wait: 'proposeTimeoutMs (MESSAGE_GROUP_DELIVERY_TIMEOUT_MS / attempts)',
+  awaited: 'local raft port to append the proposed message-group command',
+});
+
+/**
+ * One proposal attempt spent its per-attempt deadline: one
+ * wait_bound_spent ERROR with the role the replica held at expiry.
+ * @param {Object} service - The message-group replica.
+ * @param {Object} command - The proposed command.
+ * @param {number} attempt - The 1-based routing attempt.
+ * @param {number} timeoutMs - The per-attempt deadline.
+ * @return {void}
+ */
+function reportProposalDeadlineSpent(service, command, attempt, timeoutMs) {
+  reportWaitBoundSpent(service.logger, {
+    ...PROPOSAL_DEADLINE_WAIT,
+    boundMs: timeoutMs,
+    elapsedMs: timeoutMs,
+    lastObserved: {
+      attempt,
+      commandType: command?.type ?? null,
+      isCurrentRaftLeader: service.isCurrentRaftLeader?.() ?? null,
+      raftRole: service.getRole?.() ?? null,
+    },
+    scope: {
+      groupId: service.groupId ?? null,
+      replicaId: service.replicaId ?? null,
+      causeId: command?.causeId ?? null,
+    },
+  });
+}
 
 /**
  * Refuse, typed, a command the committed-command owner does not admit.
@@ -93,14 +127,16 @@ async function proposeMessageGroupCommand(service, command) {
  * @param {Promise} proposal - The proposal.
  * @param {number} timeoutMs - The per-attempt deadline.
  * @param {Object} timers - {setTimeout, clearTimeout}.
+ * @param {Function} onSpent - Called once when the deadline expires.
  * @return {Promise<*>} The proposal's answer.
  */
-function withinProposalDeadline(proposal, timeoutMs, timers) {
+function withinProposalDeadline(proposal, timeoutMs, timers, onSpent) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return proposal;
   }
   return new Promise((resolve, reject) => {
     const timeoutHandle = timers.setTimeout(() => {
+      onSpent();
       reject(new Error(
         `${MESSAGE_GROUP_CDC_ERROR_MSG.PROPOSE_TIMEOUT} after ${timeoutMs}ms`));
     }, timeoutMs);
@@ -128,7 +164,9 @@ function routeAttempt(service, command, attempt, options) {
       mode: MESSAGE_GROUP_PROPOSAL_ROUTE.PROPOSE,
       settled: withinProposalDeadline(
         proposeMessageGroupCommand(service, command),
-        options.proposeTimeoutMs, options.timers),
+        options.proposeTimeoutMs, options.timers,
+        () => reportProposalDeadlineSpent(
+          service, command, attempt, options.proposeTimeoutMs)),
     };
   }
   const mode = MESSAGE_GROUP_PROPOSAL_ROUTE.FORWARD;

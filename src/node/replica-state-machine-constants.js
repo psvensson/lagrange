@@ -124,7 +124,6 @@ const REPLICA_STATE_MACHINE_LOG_MSG = Object.freeze({
     'Deferred durable services row converged after control-plane recovery',
   CANONICAL_LEADER_CLEAR_DEFERRED:
     'Canonical partition leader clear deferred after replica state persisted',
-  OPERATION_TIMEOUT: 'Replica operation timed out',
   RECOVERY_START: 'Handling node recovery in state machine',
   RECOVERY_NO_CACHE: 'No system table cache provided for recovery',
   RECOVERY_QUERY_FAILED: 'Failed to query services table for recovery',

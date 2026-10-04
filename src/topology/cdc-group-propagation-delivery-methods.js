@@ -6,6 +6,10 @@ import {getSystemCachePrimaryKeyFieldOrFallback} from '../cache/system-cache-key
 import {isTableInternalCachePropagationEnabled} from '../cache/cdc-table-policy.js';
 import {resolveCdcPropagationDeliveryProfile} from '../cache/cdc-propagation-delivery-profile.js';
 import {PRESSURE_GOVERNOR_ACTION, PressureGovernor} from '../control-plane/pressure-governor.js';
+import {
+  reportCdcPropagationBackgroundRetrySpent,
+  reportCdcPropagationForegroundRetrySpent,
+} from './cdc-group-propagation-retry-wait-report.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from './latency-topology-constants.js';
 import {
   CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
@@ -113,12 +117,11 @@ class CDCGroupPropagationDeliveryMethods {
       attempt += 1;
     }
     if (deliveryFailures.length > 0) {
-      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
-        nodeId: this.nodeId,
+      reportCdcPropagationForegroundRetrySpent(this, {
         tableName: deliveryLabel.tableName,
         operation: deliveryLabel.operation,
-        eventCount: deliveryLabel.eventCount,
-        attempts: maxAttempts,
+        attempt: maxAttempts,
+        maxAttempts,
         failureCount: deliveryFailures.length,
       });
       const retryTargets = this.convertFailuresToRetryTargets(deliveryFailures);
@@ -364,14 +367,12 @@ class CDCGroupPropagationDeliveryMethods {
     options = null;
     const maxTotalAttempts = this.deliveryRetryMaxAttempts + this.backgroundRetryMaxAttempts;
     if (attempt >= maxTotalAttempts) {
-      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
-        nodeId: this.nodeId,
+      reportCdcPropagationBackgroundRetrySpent(this, {
         tableName,
         operation,
         attempt,
-        maxTotalAttempts,
+        maxAttempts: maxTotalAttempts,
         failureCount: targets.length,
-        background: true,
       });
       return;
     }
@@ -402,14 +403,12 @@ class CDCGroupPropagationDeliveryMethods {
         1;
     const maxTotalAttempts = this.deliveryRetryMaxAttempts + this.backgroundRetryMaxAttempts;
     if (attempt >= maxTotalAttempts) {
-      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
-        nodeId: this.nodeId,
+      reportCdcPropagationBackgroundRetrySpent(this, {
         tableName: entry?.tableName,
         operation: entry?.operation,
         attempt,
-        maxTotalAttempts,
+        maxAttempts: maxTotalAttempts,
         failureCount: entry?.pendingEventsByKey?.size || 0,
-        background: true,
       });
       if (retryKey) {
         this.backgroundRetryEntriesByKey.delete(retryKey);
@@ -574,14 +573,12 @@ class CDCGroupPropagationDeliveryMethods {
    */ rescheduleBackgroundRetryEntry(retryKey, entry) {
     const maxTotalAttempts = this.deliveryRetryMaxAttempts + this.backgroundRetryMaxAttempts;
     if (entry.attempt >= maxTotalAttempts) {
-      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
-        nodeId: this.nodeId,
+      reportCdcPropagationBackgroundRetrySpent(this, {
         tableName: entry.tableName,
         operation: entry.operation,
         attempt: entry.attempt,
-        maxTotalAttempts,
+        maxAttempts: maxTotalAttempts,
         failureCount: entry.pendingEventsByKey.size,
-        background: true,
       });
       if (retryKey) {
         this.backgroundRetryEntriesByKey.delete(retryKey);

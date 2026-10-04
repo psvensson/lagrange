@@ -3,6 +3,7 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {raftRsLifecycleAdministration} from
@@ -13,7 +14,10 @@ import {
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
-import {awaitReplicaConsensusExit} from './replica-removal-consensus-exit.js';
+import {
+  REPLICA_CONSENSUS_EXIT_REASON,
+  awaitReplicaConsensusExit,
+} from './replica-removal-consensus-exit.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_REMOVE_EXECUTION_REASON = Object.freeze({
@@ -22,6 +26,46 @@ const REPLICA_REMOVE_EXECUTION_REASON = Object.freeze({
 const REPLICA_REMOVAL_COMPLETION_DEFERRED =
   'REPLICA_REMOVAL_COMPLETION_DEFERRED';
 const REPLICA_LEADER_CLEAR_DEFERRED = 'REPLICA_LEADER_CLEAR_DEFERRED';
+const REMOVAL_CONSENSUS_EXIT_WAIT = Object.freeze({
+  wait: 'REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS',
+  awaited: 'retiring replica\'s applied configuration no longer names it ' +
+    '(removal committed) or its group unavailable',
+});
+
+/**
+ * Log one consensus-exit outcome: the backstop elapsing is a spent wait
+ * (one wait_bound_spent ERROR with what the handler last observed of the
+ * retiring replica); every other exit is the ordinary info line.
+ * @param {Object} handler - The ReplicaHandler.
+ * @param {Object} exit - Frozen {reason} from awaitReplicaConsensusExit.
+ * @param {Object} context - {operationId, replicaId, partitionId,
+ *   startedAtMs}.
+ * @return {void}
+ */
+function logReplicaRemovalConsensusExit(handler, exit, context) {
+  const {operationId, replicaId, partitionId, startedAtMs} = context;
+  if (exit.reason !== REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP) {
+    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
+      operationId,
+      replicaId,
+      partitionId,
+      nodeId: handler.nodeId,
+      reason: exit.reason,
+    });
+    return;
+  }
+  reportWaitBoundSpent(handler.logger, {
+    ...REMOVAL_CONSENSUS_EXIT_WAIT,
+    boundMs: REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS,
+    elapsedMs: Date.now() - startedAtMs,
+    lastObserved: {
+      exitReason: exit.reason,
+      trackedRaftRole: handler.getTrackedReplicaRole?.(replicaId) ?? null,
+      lifecycleState: handler.getTrackedReplicaLifecycleState(replicaId),
+    },
+    scope: {nodeId: handler.nodeId, operationId, partitionId, replicaId},
+  });
+}
 
 function retryableRemovalDebtError(code, message, metadata = {}) {
   const error = new Error(message);
@@ -514,17 +558,17 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
     async awaitReplicaRemovalConsensusExit(service, {operationId, replicaId,
       partitionId}) {
       this.removalConsensusExitRelease ??= new AbortController();
+      const startedAtMs = Date.now();
       const exit = await awaitReplicaConsensusExit(service, {
         replicaId,
         backstopMs: REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS,
         signal: this.removalConsensusExitRelease.signal,
       });
-      this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
+      logReplicaRemovalConsensusExit(this, exit, {
         operationId,
         replicaId,
         partitionId,
-        nodeId: this.nodeId,
-        reason: exit.reason,
+        startedAtMs,
       });
       return exit;
     }

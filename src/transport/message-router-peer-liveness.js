@@ -1,12 +1,44 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
 const {
   ConnectionState,
-  ROUTER_LOG_MSG,
   RouterMessageType,
   TRANSPORT_NUM,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
+
+const PING_PONG_WAIT = Object.freeze({
+  wait: 'PING_TIMEOUT_MS',
+  awaited: 'PONG from the pinged node',
+});
+
+/**
+ * A ping spent its bound without a PONG: one wait_bound_spent ERROR per
+ * node, folded while what the router observed of it is unchanged (probers
+ * ping on a cadence). Whether recent inbound traffic still answered the
+ * ping as alive is part of what was observed.
+ * @param {Object} router - The message router.
+ * @param {string} nodeId - The pinged node.
+ * @param {Object} probe - {sentAtMs, timeoutMs}.
+ * @param {Object} observed - {connectionReplaced, livenessEvidence}.
+ * @return {void}
+ */
+function reportPingPongSpent(router, nodeId, probe, observed) {
+  reportWaitBoundSpent(router.logger, {
+    ...PING_PONG_WAIT,
+    boundMs: probe.timeoutMs,
+    elapsedMs: router.timeSource.now() - probe.sentAtMs,
+    lastObserved: {
+      connectionReplaced: observed.connectionReplaced,
+      answeredAliveByRecentInbound:
+        observed.livenessEvidence?.recent === true,
+      livenessWindowMs: observed.livenessEvidence?.livenessWindowMs ?? null,
+    },
+    scope: {nodeId: router.nodeId ?? null, targetNodeId: nodeId},
+    subject: nodeId,
+  });
+}
 
 function buildRecentPeerLivenessEvidence(
   lastInboundAt,
@@ -41,27 +73,24 @@ function resolvePingTimeout(
   nodeId,
   initiatingConnection,
   initiatingWebSocket,
-  pingId,
+  probe,
   resolve,
 ) {
-  router.pendingPings.delete(pingId);
+  router.pendingPings.delete(probe.pingId);
   const currentConnection = router.nodeConnections.get(nodeId);
   if (
     currentConnection !== initiatingConnection ||
     currentConnection.state !== ConnectionState.CONNECTED ||
     currentConnection.ws !== initiatingWebSocket
   ) {
+    reportPingPongSpent(router, nodeId, probe,
+      {connectionReplaced: true, livenessEvidence: null});
     resolve(false);
     return;
   }
   const livenessEvidence = getRouterPeerLivenessEvidence(router, nodeId);
-  if (livenessEvidence.recent) {
-    router.logger.info(ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND, {
-      nodeId,
-      lastInboundAgoMs: livenessEvidence.lastInboundAgoMs,
-      livenessWindowMs: livenessEvidence.livenessWindowMs,
-    });
-  }
+  reportPingPongSpent(router, nodeId, probe,
+    {connectionReplaced: false, livenessEvidence});
   resolve(livenessEvidence.recent);
 }
 
@@ -77,6 +106,7 @@ export async function pingNode(router, nodeId, timeoutMs = null) {
   const pingId = uuidv4();
   const timeout = timeoutMs ?? router.pingTimeoutMs;
   const initiatingWebSocket = connection.ws;
+  const probe = {pingId, sentAtMs: router.timeSource.now(), timeoutMs: timeout};
   return new Promise((resolve) => {
     const timer = router.timeSource.setTimeout(() => {
       resolvePingTimeout(
@@ -84,7 +114,7 @@ export async function pingNode(router, nodeId, timeoutMs = null) {
         nodeId,
         connection,
         initiatingWebSocket,
-        pingId,
+        probe,
         resolve,
       );
     }, timeout);
