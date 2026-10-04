@@ -14,10 +14,12 @@ function captureLogger() {
   const record = (level) => (message, context) => {
     lines.push({level, message, context});
   };
+  const consoleLines = [];
   const errors = () => lines.filter((line) => line.level === ERROR_LEVEL);
   return {
     lines,
     errors,
+    consoleOnly: () => consoleLines,
     warns: () => lines.filter((line) => line.level === 'warn'),
     spent: () => errors().filter(
       (line) => line.context?.event === SPENT_EVENT),
@@ -26,6 +28,9 @@ function captureLogger() {
       warn: record('warn'),
       info: record('info'),
       debug: record('debug'),
+      logConsoleOnly: (level, message, context) => {
+        consoleLines.push({level, message, context});
+      },
     },
   };
 }
