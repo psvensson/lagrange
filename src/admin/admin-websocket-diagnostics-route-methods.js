@@ -9,6 +9,7 @@ import {
 } from '../control-plane/timeout-budget.js';
 import {resolveControlSnapshotQueryResult} from './admin-control-snapshot-query-result-helper.js';
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const SNAPSHOT_RETRY_LOG_MSG =
   'Snapshot query encountered pressure or timeout. Retrying after stale socket cleanup...';
@@ -23,6 +24,12 @@ const CONTROL_SNAPSHOT_ATTEMPT_STATE = Object.freeze({
   READY: 'ready',
 });
 const NO_CONTROL_SNAPSHOT_RETRY_RESULT = Symbol('noControlSnapshotRetryResult');
+const CONTROL_SNAPSHOT_RETRY_WAIT = Object.freeze({
+  wait: 'control_snapshot_query_timeout',
+  awaited: 'a pressure-free control snapshot within the caller deadline',
+  noAttemptOutcome: 'no_attempt_completed',
+  resultOutcome: 'pressure_result',
+});
 
 const {
   ADMIN_CONTROL_SNAPSHOT,
@@ -111,6 +118,43 @@ function resolveControlSnapshotTerminalResult(
     nestedOperation: LOCAL_NESTED_OPERATION_ADMIN_CONTROL_SNAPSHOT,
     now: nowFn,
   });
+}
+
+function describeControlSnapshotRetryOutcome(resultOrError) {
+  if (resultOrError === NO_CONTROL_SNAPSHOT_RETRY_RESULT) {
+    return CONTROL_SNAPSHOT_RETRY_WAIT.noAttemptOutcome;
+  }
+  return resultOrError instanceof Error ?
+    resultOrError.code || resultOrError.message :
+    CONTROL_SNAPSHOT_RETRY_WAIT.resultOutcome;
+}
+
+// The caller deadline is spent before a retry could run: report it, then
+// answer exactly as before (the last result, the last error, or a timeout).
+function resolveSpentControlSnapshotRetry(
+  owner,
+  resultOrError,
+  retryBudgetState,
+  attempts,
+) {
+  const budget = retryBudgetState.budget;
+  const now = typeof owner.nowFn === 'function' ? owner.nowFn : Date.now;
+  reportWaitBoundSpent(owner.logger, {
+    wait: CONTROL_SNAPSHOT_RETRY_WAIT.wait,
+    awaited: CONTROL_SNAPSHOT_RETRY_WAIT.awaited,
+    boundMs: budget.configuredBudgetMs,
+    elapsedMs: now() - budget.startedAtMs,
+    lastObserved: {
+      attempts,
+      lastOutcome: describeControlSnapshotRetryOutcome(resultOrError),
+    },
+    scope: {nodeId: owner.nodeId ?? null},
+  });
+  return resolveControlSnapshotTerminalResult(
+    resultOrError,
+    retryBudgetState,
+    owner.nowFn,
+  );
 }
 
 const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
@@ -389,10 +433,11 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
         this.nowFn,
       );
       if (attempt.state === CONTROL_SNAPSHOT_ATTEMPT_STATE.DEADLINE_EXHAUSTED) {
-        return resolveControlSnapshotTerminalResult(
+        return resolveSpentControlSnapshotRetry(
+          this,
           resultOrError,
           retryBudgetState,
-          this.nowFn,
+          attempts,
         );
       }
       try {
@@ -414,10 +459,11 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
           retryBudgetState,
           this.nowFn,
         )) {
-          return resolveControlSnapshotTerminalResult(
+          return resolveSpentControlSnapshotRetry(
+            this,
             resultOrError,
             retryBudgetState,
-            this.nowFn,
+            attempts,
           );
         }
         attempts += 1;

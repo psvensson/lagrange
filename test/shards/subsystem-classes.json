@@ -2,33 +2,33 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 113,
+    "admin-diagnostics": 115,
     "architecture-governance": 19,
-    "bootstrap-membership": 280,
-    "cdc-metadata": 58,
+    "bootstrap-membership": 283,
+    "cdc-metadata": 60,
     "cli-tooling": 96,
-    "control-plane": 205,
+    "control-plane": 209,
     "convergence-topology": 83,
     "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 254,
-    "query-sql": 164,
+    "placement-rebalance": 255,
+    "query-sql": 165,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 144,
+    "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 144,
+    "storage-partition": 145,
     "storage-raft": 103,
     "test-infrastructure": 139,
-    "transactions": 15,
-    "transport-messaging": 86,
+    "transactions": 16,
+    "transport-messaging": 88,
     "wasm-toolchain": 57
   },
-  "censusSize": 2197,
-  "digest": "fnv1a32-a05695d9",
+  "censusSize": 2216,
+  "digest": "fnv1a32-963a1555",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7492cab1",
+  "observationDigest": "fnv1a32-fd0aacc8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -65,6 +65,7 @@
     "test/admin/admin-meta-endpoint-builder.test.js": "admin-diagnostics",
     "test/admin/admin-mutation-guard.pbt.test.js": "admin-diagnostics",
     "test/admin/admin-mutation-guard.test.js": "admin-diagnostics",
+    "test/admin/admin-preflight-repair-wait-bound-spent.test.js": "admin-diagnostics",
     "test/admin/admin-preflight-snapshot.test.js": "admin-diagnostics",
     "test/admin/admin-query-result-envelope-participant-failures.test.js": "admin-diagnostics",
     "test/admin/admin-query-result-message-envelope.test.js": "admin-diagnostics",
@@ -279,6 +280,7 @@
     "test/bootstrap/shared/startup-sql-runtime-handoff.test.js": "bootstrap-membership",
     "test/bootstrap/startup-authority-consumption.test.js": "bootstrap-membership",
     "test/bootstrap/startup-convergence-gate.test.js": "bootstrap-membership",
+    "test/bootstrap/startup-convergence-wait-bound-spent.test.js": "bootstrap-membership",
     "test/bootstrap/startup-recovery-coordinator.test.js": "bootstrap-membership",
     "test/bootstrap/startup-runtime-handoff-owner.test.js": "bootstrap-membership",
     "test/bootstrap/startup-runtime-surface-owner.test.js": "bootstrap-membership",
@@ -340,6 +342,7 @@
     "test/cdc/cdc-pipeline-metrics.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-readiness-gate.property.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-readiness-gate.test.js": "cdc-metadata",
+    "test/cdc/cdc-pipeline-readiness-wait-bound-spent.test.js": "cdc-metadata",
     "test/cdc/cdc-propagation-metrics.test.js": "cdc-metadata",
     "test/cdc/cdc-refresh-authoritative-cache-row.test.js": "cdc-metadata",
     "test/cdc/cdc-shutdown-terminal-owner-write.test.js": "cdc-metadata",
@@ -463,6 +466,7 @@
     "test/config/control-plane-gateway-mutation-guardrails.test.js": "architecture-governance",
     "test/config/control-plane-gateway-registry-guardrails.test.js": "architecture-governance",
     "test/config/dynamic-config-service.test.js": "control-plane",
+    "test/config/dynamic-config-startup-wait-bound-spent.test.js": "control-plane",
     "test/config/dynamic-config-startup-wiring.test.js": "control-plane",
     "test/config/full-corpus-canary-workflow.test.js": "control-plane",
     "test/config/latency-topology-ownership-guardrails.test.js": "architecture-governance",
@@ -482,6 +486,7 @@
     "test/contract/message-router-contract.test.js": "architecture-governance",
     "test/contract/native-call-context-contract.test.js": "architecture-governance",
     "test/control-plane/active-node-projection.test.js": "control-plane",
+    "test/control-plane/admission-and-suspicion-wait-bound-spent.test.js": "control-plane",
     "test/control-plane/authoritative-control-plane-view.test.js": "control-plane",
     "test/control-plane/authoritative-node-evidence-reconciler.test.js": "control-plane",
     "test/control-plane/binding-schema-v3-handler-interfaces.test.js": "control-plane",
@@ -536,6 +541,7 @@
     "test/control-plane/heartbeat-periodic-writes.property.test.js": "control-plane",
     "test/control-plane/heartbeat-storage-budget-preservation.test.js": "control-plane",
     "test/control-plane/heartbeat-terminal-node-row-endpoint.test.js": "control-plane",
+    "test/control-plane/heartbeat-wait-bound-spent.test.js": "control-plane",
     "test/control-plane/incarnation-reuse-cross-owner-anchor.test.js": "control-plane",
     "test/control-plane/invariant-engine.test.js": "control-plane",
     "test/control-plane/lease-sweep-expired.property.test.js": "control-plane",
@@ -658,6 +664,7 @@
     "test/control-plane/replica-dispatch-node-state-update.test.js": "control-plane",
     "test/control-plane/replica-dispatch-priority-lane-admission.test.js": "control-plane",
     "test/control-plane/replica-dispatch-priority-recovery-bootstrap-self-exemption.test.js": "control-plane",
+    "test/control-plane/replica-dispatch-readiness-refresh-wait-bound-spent.test.js": "control-plane",
     "test/control-plane/replica-dispatch-routing.property.test.js": "control-plane",
     "test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js": "control-plane",
     "test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js": "control-plane",
@@ -943,6 +950,7 @@
     "test/entrypoint/embedded-lagrange-input.test.js": "bootstrap-membership",
     "test/entrypoint/entrypoint-admin-runtime-cleanup.test.js": "bootstrap-membership",
     "test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js": "bootstrap-membership",
+    "test/entrypoint/join-reattempt-wait-bound-spent.test.js": "bootstrap-membership",
     "test/entrypoint/shutdown-best-effort-step-timebox.test.js": "bootstrap-membership",
     "test/examples/comparative-efficiency-movielens-public-request-workload.test.js": "examples-e2e",
     "test/examples/dockerized-pg-client-compatibility-example.test.js": "examples-e2e",
@@ -954,6 +962,7 @@
     "test/function/change-binding-compilation.test.js": "services-runtime",
     "test/function/context-cdc-consistency.property.test.js": "services-runtime",
     "test/function/context-manager.test.js": "services-runtime",
+    "test/function/function-query-executor-wait-bound-spent.test.js": "services-runtime",
     "test/function/function-query-executor.test.js": "services-runtime",
     "test/function/function-registry-no-executor.property.test.js": "services-runtime",
     "test/function/function-registry.test.js": "services-runtime",
@@ -1041,6 +1050,7 @@
     "test/logging/logging-service.test.js": "admin-diagnostics",
     "test/logging/logs-persistence-startup.test.js": "admin-diagnostics",
     "test/logging/logs-table-service.test.js": "admin-diagnostics",
+    "test/logging/wait-bound-spent.test.js": "admin-diagnostics",
     "test/message-group/cdc-handler.test.js": "transport-messaging",
     "test/message-group/cdc-non-leader-propagation.test.js": "transport-messaging",
     "test/message-group/error-message-consistency.property.test.js": "transport-messaging",
@@ -1059,6 +1069,7 @@
     "test/message-group/message-group-service-strict-cdc-join-convergence.test.js": "transport-messaging",
     "test/message-group/message-group-service.test.js": "transport-messaging",
     "test/message-group/message-group-target-resolver.test.js": "transport-messaging",
+    "test/message-group/message-retry-handler-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/metadata-cache-removal.test.js": "transport-messaging",
     "test/message-group/no-silent-delivery-failures.property.test.js": "transport-messaging",
     "test/message-group/raft-response-address-validation.test.js": "transport-messaging",
@@ -1071,6 +1082,7 @@
     "test/migration/migration-partition-alter-routing.test.js": "cdc-metadata",
     "test/migration/migration-pipeline.test.js": "cdc-metadata",
     "test/migration/migration-recovery-trigger.test.js": "cdc-metadata",
+    "test/migration/migration-retry-wait-bound-spent.test.js": "cdc-metadata",
     "test/migration/migration-workflow.integration.test.js": "cdc-metadata",
     "test/migration/sql-query-engine-dual-write-mode.test.js": "cdc-metadata",
     "test/model/active-gate/active-gate-convergence.model.test.js": "architecture-governance",
@@ -1116,6 +1128,7 @@
     "test/node/replica-handler-owner-path-bypass.test.js": "bootstrap-membership",
     "test/node/replica-handler-replacement-election-already-leader.test.js": "bootstrap-membership",
     "test/node/replica-handler-replica-membership.test.js": "bootstrap-membership",
+    "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": "bootstrap-membership",
     "test/node/replica-handler.test.js": "bootstrap-membership",
     "test/node/replica-lifecycle-durable-generation.test.js": "bootstrap-membership",
     "test/node/replica-lifecycle-manager.test.js": "bootstrap-membership",
@@ -1235,6 +1248,7 @@
     "test/partition/partition-write-leadership-transfer.test.js": "storage-partition",
     "test/partition/partition-write-typed-releases.test.js": "storage-partition",
     "test/partition/pending-request-round-trip.property.test.js": "storage-partition",
+    "test/partition/pending-request-tracker-wait-bound-spent.test.js": "storage-partition",
     "test/partition/pending-request-tracker.test.js": "storage-partition",
     "test/partition/proposal-queue-capacity.property.test.js": "storage-partition",
     "test/partition/proposal-queue-size-invariant.property.test.js": "storage-partition",
@@ -1307,6 +1321,7 @@
     "test/query/distributed-sql-hard-cutover.guard.test.js": "query-sql",
     "test/query/distributed-transaction-coordinator.property.test.js": "query-sql",
     "test/query/distributed-transaction-coordinator.test.js": "query-sql",
+    "test/query/distributed-transaction-wait-bound-spent.test.js": "query-sql",
     "test/query/distributed-write-coordinator-participant-failure-log.test.js": "query-sql",
     "test/query/distributed-write-coordinator.property.test.js": "query-sql",
     "test/query/distributed-write-coordinator.test.js": "query-sql",
@@ -1688,6 +1703,7 @@
     "test/rebalancer/replace-witness-boundary.test.js": "placement-rebalance",
     "test/rebalancer/replica-inventory.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-confirmation-authority-read.test.js": "placement-rebalance",
+    "test/rebalancer/replica-operation-dispatch-wait-bound-spent.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-insert-retry-idempotency.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-liveness.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-membership-epoch-binding.test.js": "placement-rebalance",
@@ -1789,6 +1805,7 @@
     "test/runtime/endpoint-sync-planner.test.js": "services-runtime",
     "test/runtime/endpoint-sync-source-client.test.js": "services-runtime",
     "test/runtime/endpoint-sync-source-query.test.js": "services-runtime",
+    "test/runtime/endpoint-sync-source-wait-bound-spent.test.js": "services-runtime",
     "test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js": "services-runtime",
     "test/runtime/movielens-affinity-demo-wiring.test.js": "services-runtime",
     "test/runtime/movielens-failure-report-participant-failures.test.js": "services-runtime",
@@ -2122,6 +2139,7 @@
     "test/transport/message-router-endpoint-address-change-redial.test.js": "transport-messaging",
     "test/transport/message-router-join-request.test.js": "transport-messaging",
     "test/transport/message-router-late-response-classification.test.js": "transport-messaging",
+    "test/transport/message-router-ping-wait-bound-spent.test.js": "transport-messaging",
     "test/transport/message-router-quarantine-liveness-guard.test.js": "transport-messaging",
     "test/transport/message-router-readiness-inflight-reserve.test.js": "transport-messaging",
     "test/transport/message-router-readiness-reserve.test.js": "transport-messaging",
@@ -2226,6 +2244,7 @@
     "test/workflow/owner-key-reconcile-queue-current-work.test.js": "transactions",
     "test/workflow/owner-key-reconcile-queue-failure-atomicity.test.js": "transactions",
     "test/workflow/owner-key-reconcile-queue.test.js": "transactions",
+    "test/workflow/reconcile-queue-retry-wait-bound-spent.test.js": "transactions",
     "test/workflow/workflow-step-runner.test.js": "transactions"
   },
   "observations": {
@@ -2315,6 +2334,12 @@
       "files": [
         "src/admin/admin-deprecation.js",
         "src/admin/admin-meta-command-handlers.js"
+      ]
+    },
+    "test/admin/admin-preflight-repair-wait-bound-spent.test.js": {
+      "files": [
+        "src/admin/admin-preflight-snapshot.js",
+        "src/logging/wait-bound-spent.js"
       ]
     },
     "test/admin/admin-query-result-envelope-participant-failures.test.js": {
@@ -3120,6 +3145,12 @@
         "src/cdc/cdc-pipeline-readiness-gate.js"
       ]
     },
+    "test/cdc/cdc-pipeline-readiness-wait-bound-spent.test.js": {
+      "files": [
+        "src/cdc/cdc-pipeline-readiness-gate.js",
+        "src/logging/wait-bound-spent.js"
+      ]
+    },
     "test/cdc/cdc-propagation-metrics.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -3376,6 +3407,11 @@
         "NODE_HEARTBEAT_INTERVAL_MS"
       ]
     },
+    "test/config/dynamic-config-startup-wait-bound-spent.test.js": {
+      "files": [
+        "src/config/dynamic-config-startup-wiring.js"
+      ]
+    },
     "test/config/dynamic-config-startup-wiring.test.js": {
       "files": [
         "src/config/dynamic-config-startup-wiring.js"
@@ -3423,6 +3459,11 @@
     "test/control-plane/active-node-projection.test.js": {
       "files": [
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/control-plane/admission-and-suspicion-wait-bound-spent.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js"
       ]
     },
     "test/control-plane/authoritative-control-plane-view.test.js": {
@@ -3665,6 +3706,16 @@
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
         "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
+    "test/control-plane/heartbeat-wait-bound-spent.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js",
+        "src/logging/wait-bound-spent.js",
+        "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/control-plane/incarnation-reuse-cross-owner-anchor.test.js": {
@@ -4220,6 +4271,15 @@
     "test/control-plane/replica-dispatch-priority-recovery-bootstrap-self-exemption.test.js": {
       "files": [
         "src/control-plane/replica-dispatch-priority-recovery-bootstrap.js"
+      ]
+    },
+    "test/control-plane/replica-dispatch-readiness-refresh-wait-bound-spent.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js",
+        "src/control-plane/replica-dispatch-service.js",
+        "src/logging/wait-bound-spent.js"
       ]
     },
     "test/control-plane/replica-dispatch-routing.property.test.js": {
@@ -6925,6 +6985,11 @@
         "src/live-query/live-query-startup-wiring.js"
       ]
     },
+    "test/logging/wait-bound-spent.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js"
+      ]
+    },
     "test/message-group/cdc-non-leader-propagation.test.js": {
       "files": [
         "src/raft/raft-operation-port-constants.js",
@@ -7022,9 +7087,19 @@
         "test/test-helpers/controllable-consensus-port.js"
       ]
     },
+    "test/message-group/message-retry-handler-wait-bound-spent.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js"
+      ]
+    },
     "test/message-group/metadata-cache-removal.test.js": {
       "directories": [
         "src"
+      ]
+    },
+    "test/migration/migration-retry-wait-bound-spent.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js"
       ]
     },
     "test/node/call-cell-partition-fence.test.js": {
@@ -7205,6 +7280,11 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js"
       ]
     },
     "test/node/replica-handler.test.js": {
@@ -9594,6 +9674,11 @@
         "src"
       ]
     },
+    "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js"
+      ]
+    },
     "test/rebalancer/replica-operation-repository-time-authority.test.js": {
       "files": [
         "src/rebalancer/replica-operation-repository.js"
@@ -10024,6 +10109,11 @@
       "files": [
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js"
+      ]
+    },
+    "test/runtime/endpoint-sync-source-wait-bound-spent.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js"
       ]
     },
     "test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js": {
@@ -12803,6 +12893,11 @@
         "src/transport/router-message-handler.js"
       ]
     },
+    "test/transport/message-router-ping-wait-bound-spent.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js"
+      ]
+    },
     "test/transport/node-address-resolution-contract.test.js": {
       "files": [
         "src/bootstrap/phases/connect-websocket-phase.js",
@@ -13001,6 +13096,12 @@
     },
     "test/workflow/owner-key-reconcile-queue.test.js": {
       "files": [
+        "src/workflow/owner-key-reconcile-queue.js"
+      ]
+    },
+    "test/workflow/reconcile-queue-retry-wait-bound-spent.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js",
         "src/workflow/owner-key-reconcile-queue.js"
       ]
     },

@@ -34,7 +34,6 @@ const CDC_LIFECYCLE_LOG_MSG = Object.freeze({
   EVENT_DROPPED_OVERFLOW: 'CDC event dropped due to buffer overflow',
   BUFFER_REPLAY_STARTED: 'Replaying buffered CDC events to subscriber',
   BUFFER_REPLAY_COMPLETE: 'Buffered CDC event replay complete',
-  CONFIRMATION_TIMEOUT: 'CDC confirmation timed out',
   CONFIRMATION_SHUTDOWN: 'CDC confirmation rejected due to shutdown',
   PIPELINE_NOT_READY: 'CDC pipeline readiness conditions not met',
   PIPELINE_READY: 'CDC pipeline readiness confirmed',

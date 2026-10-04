@@ -19,6 +19,7 @@ import {
   captureCacheRecordBeforeAbsenceRepair,
   resolveCacheVisibilityRepairReadAuthority,
 } from './cdc-integration-service-cache-visibility-authority.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   AUTHORITATIVE_FALLBACK_OUTCOME,
@@ -46,6 +47,16 @@ const {
 
 const CDC_INTEGRATION_SERVICE_CACHE_VISIBILITY_CONSTRUCTOR = 'constructor';
 const buildCacheWaitTimeoutMessage = CDC_ERROR_MSG.CACHE_WAIT_TIMEOUT;
+const CACHE_VISIBILITY_WAIT = Object.freeze({
+  wait: 'CACHE_WAIT_TIMEOUT_MS',
+  awaited: 'routed system-table write visible in the local cache',
+});
+
+// The cache-wait bound is spent: the write did not arrive through CDC in
+// time, and the authoritative repair fallback starts next.
+function reportCacheVisibilityWaitSpent(service, spent) {
+  reportWaitBoundSpent(service.logger, {...CACHE_VISIBILITY_WAIT, ...spent});
+}
 
 /**
  * Post-write cache visibility methods for the CDC integration service. Owns
@@ -158,6 +169,16 @@ class CDCIntegrationServiceCacheVisibilityWait {
             cleanup();
             return;
           }
+          reportCacheVisibilityWaitSpent(this, {
+            boundMs: cacheWaitBudgetMs,
+            elapsedMs: timeSource.now() - timeoutBudget.startedAtMs,
+            lastObserved: {
+              recordPresent: this.hasCacheRecord(tableName, key),
+              expectPresent,
+              fallbackPhase,
+            },
+            scope: {nodeId: this.nodeId, tableName, key},
+          });
           let visibilityResult = buildSystemTableVisibilityResult({
             visibilityState: null,
           });

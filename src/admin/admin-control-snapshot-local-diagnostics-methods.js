@@ -1,3 +1,5 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD =
   'deferInlineOwnerCommand';
@@ -8,6 +10,28 @@ const BOUNDED_SNAPSHOT_PROBE_MIN_DEADLINE_MS = 2000; // ends-on: n/a clamp
 const BOUNDED_SNAPSHOT_PROBE_DEADLINE_SAFETY_MARGIN_MS = 2000; // ends-on: n/a margin
 const BOUNDED_SNAPSHOT_PROBE_SHORT_BUDGET_DIVISOR = 2;
 const BOUNDED_SNAPSHOT_PROBE_MIN_SHORT_DEADLINE_MS = 1; // ends-on: n/a clamp
+const BOUNDED_SNAPSHOT_PROBE_WAIT = Object.freeze({
+  wait: 'BOUNDED_SNAPSHOT_PROBE_DEADLINE',
+  awaited: 'full local control snapshot resolve',
+  resolveStateInFlight: 'in_flight',
+  fallback: 'bounded_observation_probe',
+});
+
+// The full resolve did not settle within the probe deadline; the snapshot
+// degrades to the bounded cache-only observation probe.
+function reportBoundedSnapshotProbeSpent(owner, deadlineMs, startedAtMs) {
+  reportWaitBoundSpent(owner.logger, {
+    wait: BOUNDED_SNAPSHOT_PROBE_WAIT.wait,
+    awaited: BOUNDED_SNAPSHOT_PROBE_WAIT.awaited,
+    boundMs: deadlineMs,
+    startedAtMs,
+    lastObserved: {
+      fullResolveState: BOUNDED_SNAPSHOT_PROBE_WAIT.resolveStateInFlight,
+      fallback: BOUNDED_SNAPSHOT_PROBE_WAIT.fallback,
+    },
+    scope: {nodeId: owner.nodeId},
+  });
+}
 
 function resolveBoundedSnapshotProbeDeadlineMs(queryTimeoutMs) {
   if (!Number.isFinite(queryTimeoutMs) || queryTimeoutMs <= 0) {
@@ -572,6 +596,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
         return this.resolveLocalControlSnapshot(resolveOptions);
       }
       let deadlineTimer = null;
+      const probeStartedAtMs = Date.now();
       const resolvePromise = Promise.resolve(
         this.resolveLocalControlSnapshot(resolveOptions),
       );
@@ -586,6 +611,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
         if (raced !== BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL) {
           return raced;
         }
+        reportBoundedSnapshotProbeSpent(this, deadlineMs, probeStartedAtMs);
         const boundedSnapshot = await this.buildLocalControlSnapshot({
           ...resolveOptions,
           boundedObservationProbe: true,

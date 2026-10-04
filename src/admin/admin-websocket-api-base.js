@@ -231,6 +231,7 @@ class AdminWebSocketAPIBase {
     this.preflightSnapshot = new AdminPreflightSnapshot({
       [ADMIN_FIELD.STORAGE_VIEW]: this[ADMIN_FIELD.STORAGE_VIEW],
       nodeId: this.nodeId,
+      logger: this.logger,
       messageRouter: this.messageRouter,
       [ADMIN_FIELD.MUTATION_TARGET]: this[ADMIN_FIELD.MUTATION_TARGET],
       sqlQueryEngine: this.sqlQueryEngine,

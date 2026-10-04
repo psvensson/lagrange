@@ -17,11 +17,20 @@ import {
   createHostCallDescriptor,
   createParentHostCallResponder,
 } from './cell-host-call-protocol.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const BYTE_ENCODING = 'utf8';
 const STARTUP_TIMEOUT_MS = 10_000; // ends-on: the cell worker posts its ready message
 const HEALTH_TIMEOUT_MS = 1_000; // ends-on: the cell worker answers the health probe
 const CPU_SAMPLE_INTERVAL_MS = 2;
+const CELL_STARTUP_WAIT = Object.freeze({
+  wait: 'STARTUP_TIMEOUT_MS',
+  awaited: 'component cell worker ready message',
+});
+const CELL_MESSAGE_WAIT = Object.freeze({
+  wait: 'cell_worker_message_timeout',
+  awaited: 'component cell worker reply to a posted message',
+});
 const CELL_WORKER_SOURCE_FILE = 'wasi-component-cell-worker.js';
 const CELL_WORKER_BUNDLE_FILE = 'request-cell-worker.bundle.mjs';
 const CELL_WORLD = Object.freeze({
@@ -310,7 +319,15 @@ class WasiComponentCellRuntime {
 
   waitForReady(state) {
     return new Promise((resolve, reject) => {
+      const startedAtMs = Date.now();
       const timer = setTimeout(() => {
+        reportWaitBoundSpent(null, {
+          ...CELL_STARTUP_WAIT,
+          boundMs: STARTUP_TIMEOUT_MS,
+          startedAtMs,
+          lastObserved: {ready: state.ready === true},
+          scope: {serviceId: state.cell.serviceId},
+        });
         reject(new WasiComponentCellError(
           WASI_COMPONENT_CELL_ERROR_CODE.START_FAILED,
           'Component startup timed out',
@@ -338,9 +355,21 @@ class WasiComponentCellRuntime {
     budgetLimitMs = timeoutMs,
   ) {
     const id = this.nextMessageId++;
+    const startedAtMs = Date.now();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         state.pending.delete(id);
+        reportWaitBoundSpent(null, {
+          ...CELL_MESSAGE_WAIT,
+          boundMs: timeoutMs,
+          startedAtMs,
+          lastObserved: {
+            messageType: type,
+            pendingMessages: state.pending.size,
+            busy: state.busy === true,
+          },
+          scope: {serviceId: state.cell.serviceId, messageId: id},
+        });
         reject(budgetFailure(
           CELL_BUDGET_FIELD.WALL_TIME_MS,
           budgetLimitMs + WALL_BUDGET_EXHAUSTED_ACTUAL_OFFSET_MS,
