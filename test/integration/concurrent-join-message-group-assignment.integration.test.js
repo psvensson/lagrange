@@ -22,15 +22,13 @@ const TEST_TIMEOUT_MS = 120000;
 const NODE_ONE_ID = '550e8400-e29b-41d4-a716-446655440231';
 const NODE_TWO_ID = '550e8400-e29b-41d4-a716-446655440232';
 
-// Concurrent joins are intentionally NOT globally blocked while a
-// MOVE_REPLICA handoff is in flight: since fab1b6de the handler's global
-// admission gate (isMoveReplicaBootstrapAdmissionGloballyBlocked) is a
-// deliberate no-op, and safety is enforced per replica instead —
-// determineAndReserveMessageGroupAssignment runs under the reservation
-// lock and excludes already-reserved replicas from candidate selection
-// (move-replica-assignment-admission-blocking.js), so concurrent joiners
-// receive UNIQUE MOVE_REPLICA assignments and the same replica can never
-// be granted twice.
+// W8 (identity-reuse safety fix, A3): a real seed bootstrapped with its mg-1
+// on the real rs-raft runtime; concurrent joiners each host their own new
+// message group, no joiner is given any replica of mg-1, and mg-1's
+// committed configuration and services rows stay the seed's. This file once
+// pinned UNIQUE MOVE_REPLICA assignments of mg-1 replicas to concurrent
+// joiners: a message-group replica's raft id derives from its name, so each
+// such move re-opened a committed identity on an empty log.
 //
 // Two joiners are only concurrent inside the handler if the seed admits two
 // bootstrap requests at once. Production admits one by default
@@ -91,69 +89,61 @@ async function withSeedApi(t, apiOptions, run) {
       nodeId: seedNodeId,
     });
     seedApi.setSqlQueryEngine(seedQueryEngine);
-    await run(seedApi);
+    await run(seedApi, bootstrapResult);
   } finally {
     await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
   }
 }
 
-test('concurrent MOVE_REPLICA bootstrap requests receive unique assignments', {
+function seedGroupFacts(bootstrapResult) {
+  const services = [...bootstrapResult.messageGroupServices.values()];
+  return {
+    replicaIds: services.map((service) => service.replicaId).sort(),
+    voters: services.map((service) =>
+      [...service.raft.readStatus().confState.voters].sort()),
+  };
+}
+
+test('concurrent joiners each host their own message group; mg-1 stays ' +
+  'the seed\'s', {
   timeout: TEST_TIMEOUT_MS,
 }, async (t) => {
   await withSeedApi(t, {
     maxConcurrentBootstrapRequests: REQUESTS_ADMITTED_AT_ONCE,
-  }, async (seedApi) => {
+  }, async (seedApi, bootstrapResult) => {
+    const seedGroupBefore = seedGroupFacts(bootstrapResult);
+    t.equal(seedGroupBefore.replicaIds.length, 3,
+      'setup: the seed hosts all three mg-1 replicas');
     const [responseOne, responseTwo] = await Promise.all([
       seedApi.getFastify().inject(joinRequest(NODE_ONE_ID, 19231)),
       seedApi.getFastify().inject(joinRequest(NODE_TWO_ID, 19232)),
     ]);
 
     t.equal(responseOne.statusCode, 200, 'first bootstrap request should succeed');
-    t.equal(
-      responseTwo.statusCode,
-      200,
-      'second bootstrap request should also succeed with its own assignment',
-    );
+    t.equal(responseTwo.statusCode, 200,
+      'second bootstrap request should also succeed with its own assignment');
 
-    const bodyOne = responseOne.json();
-    const bodyTwo = responseTwo.json();
-
-    t.equal(
-      bodyOne.messageGroupAssignment?.strategy,
-      'MOVE_REPLICA',
-      'first join should use MOVE_REPLICA',
-    );
-    t.equal(
-      bodyTwo.messageGroupAssignment?.strategy,
-      'MOVE_REPLICA',
-      'second join should use MOVE_REPLICA',
-    );
-    t.ok(
-      bodyOne.messageGroupAssignment?.replicaToMove,
-      'first assignment should include replicaToMove',
-    );
-    t.ok(
-      bodyTwo.messageGroupAssignment?.replicaToMove,
-      'second assignment should include replicaToMove',
-    );
-    t.not(
-      bodyOne.messageGroupAssignment?.replicaToMove,
-      bodyTwo.messageGroupAssignment?.replicaToMove,
-      'concurrent joiners must receive unique MOVE_REPLICA replicas',
-    );
-    t.ok(
-      bodyOne.messageGroupAssignment?.assignmentId,
-      'first assignment should carry a reservation assignmentId',
-    );
-    t.ok(
-      bodyTwo.messageGroupAssignment?.assignmentId,
-      'second assignment should carry a reservation assignmentId',
-    );
-    t.not(
-      bodyOne.messageGroupAssignment?.assignmentId,
-      bodyTwo.messageGroupAssignment?.assignmentId,
-      'concurrent joiners must hold distinct reservations',
-    );
+    const assignments = [responseOne.json(), responseTwo.json()]
+      .map((body) => body.messageGroupAssignment);
+    for (const assignment of assignments) {
+      t.equal(assignment?.strategy, 'CREATE_SELF_HOSTED',
+        'the joiner hosts its own message group');
+      t.notOk(assignment?.replicaToMove, 'no mg-1 replica is moved');
+      t.notOk(assignment?.assignmentId, 'no move reservation is taken');
+      t.notOk(seedGroupBefore.replicaIds.some((replicaId) =>
+        replicaId.startsWith(`${assignment?.groupId}-`)),
+      'the joiner\'s group is not the seed\'s');
+    }
+    t.not(assignments[0]?.groupId, assignments[1]?.groupId,
+      'each joiner hosts a distinct group');
+    t.same(seedGroupFacts(bootstrapResult), seedGroupBefore,
+      'mg-1\'s replicas and committed voters stay the seed\'s');
+    const seedId = bootstrapResult.messageRouter.nodeId;
+    const seedRows = NodeService.getInstance().getSystemTableCache()
+      .getAll('services').filter((row) =>
+        seedGroupBefore.replicaIds.includes(row.service_id));
+    t.ok(seedRows.length > 0 && seedRows.every((row) =>
+      row.node_id === seedId), 'mg-1\'s services rows stay on the seed');
   });
 });
 

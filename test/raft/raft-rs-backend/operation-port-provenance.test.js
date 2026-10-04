@@ -5,6 +5,7 @@ import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {coreTrappingAppend} from './core-trap-envelope.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -61,19 +62,14 @@ test('core and host outcomes are separated by execution provenance',
       let fatal;
       try {
         console.error = () => undefined;
-        const accepted = await fatalCluster.node(victim).step({
-          groupId: fatalCluster.partitionId,
-          to: victimStatus.peerId,
-          message: {
+        const accepted = await fatalCluster.node(victim).step(
+          coreTrappingAppend({
+            dbFile: fatalCluster.replica(victim).dbFile,
+            groupId: fatalCluster.partitionId,
+            status: victimStatus,
             from: fatalCluster.raftPeerIdOf(leader),
-            to: victimStatus.peerId,
-            msgType: 8,
             term: String(victimStatus.term),
-            logTerm: '0',
-            index: '0',
-            commit: '999999',
-          },
-        });
+          }));
         assert.equal(accepted.reason, 'inbound-enqueued');
         fatal = await fatalCluster.node(victim).tick();
       } finally {

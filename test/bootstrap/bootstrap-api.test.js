@@ -13,7 +13,6 @@ import {
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
 import {
-  BOOTSTRAP_API_ASSIGNMENT,
   BOOTSTRAP_API_LOG_MSG,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
@@ -24,9 +23,6 @@ import {
   SERVICE_REGISTRATION_HANDOFF_OWNER,
   SERVICE_REGISTRATION_HANDOFF_REASON,
 } from '../../src/bootstrap/owners/service-registration-handoff-owner.js';
-import {
-  configureSyntheticMoveReplicaRegisterServiceHandoff,
-} from './move-replica-assignment-token-test-helpers.js';
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../../src/bootstrap/bootstrap-constants.js';
@@ -842,26 +838,22 @@ async (t) => {
   });
 
   await api.initialize(0, {listen: false});
-  api.waitForRegisteredServiceCacheVisibility = async () => {};
-  const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
-    api,
-    {
-      service_id: 'mg-1-r1',
-      node_id: 'joiner-node-1',
-      replica_id: 'mg-1-r1',
-    },
-  );
-
+  // An ordinary registration (the joiner's own message-group replica): the
+  // MOVE_REPLICA handoff this case used to drive is refused at
+  // register-service (owner decision 2026-10-04,
+  // register-service-move-handoff-refused.test.js), so a registration row
+  // can no longer carry an assignment token at all. No services row exists
+  // yet for it (the owner read is not this case's subject).
+  api.readCurrentRegisteredServiceRow = async () => null;
   const response = await api.getFastify().inject({
     method: 'POST',
     url: '/register-service',
     payload: {
-      service_id: 'mg-1-r1',
+      service_id: 'mg-joiner-node-1-r1',
       service_type: SERVICE_TYPE.MESSAGE_GROUP,
       node_id: 'joiner-node-1',
-      group_id: 'mg-1',
-      replica_id: 'mg-1-r1',
-      [BOOTSTRAP_API_ASSIGNMENT.FIELD_ID]: assignmentId,
+      group_id: 'mg-joiner-node-1',
+      replica_id: 'mg-joiner-node-1-r1',
       status: SERVICE_STATUS.STOPPED,
     },
   });
@@ -887,23 +879,23 @@ async (t) => {
       consumerPrecondition: {
         consumerOwner: SERVICE_REGISTRATION_HANDOFF_OWNER.CONSUMER,
         consumerBoundary: SERVICE_REGISTRATION_HANDOFF_OWNER.CONSUMER_BOUNDARY,
-        handoffRequired: true,
+        handoffRequired: false,
       },
       freshnessRevisionRequirement: {
         requiredFreshness: OWNER_OUTCOME_FRESHNESS.FRESH,
         observedFreshness: OWNER_OUTCOME_FRESHNESS.FRESH,
-        visibilityRequired: true,
+        visibilityRequired: false,
         visibilitySatisfied: true,
         requirementSatisfied: true,
       },
       acknowledgementRule: {
         serviceRowAcknowledged: true,
         cacheVisibilityAcknowledgement:
-          SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT.ACKNOWLEDGED,
+          SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT.NOT_REQUIRED,
         sourceRemovalAcknowledgement:
-          SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT.ACKNOWLEDGED,
+          SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT.NOT_REQUIRED,
         handoffCompletionAcknowledgement:
-          SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT.ACKNOWLEDGED,
+          SERVICE_REGISTRATION_HANDOFF_ACKNOWLEDGEMENT.NOT_REQUIRED,
         acknowledgementSatisfied: true,
       },
       retryDeferBehavior: {
@@ -915,7 +907,7 @@ async (t) => {
         terminalState: OWNER_OUTCOME_STATE.READY,
       },
     },
-    'completed MOVE_REPLICA service registration should expose the fulfilled handoff contract',
+    'a completed ordinary service registration exposes the fulfilled contract with no handoff',
   );
   t.ok(
     responseBody[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]
@@ -930,11 +922,6 @@ async (t) => {
     sqlCalls[0].sql,
     /^INSERT INTO services \(/,
     'register-service should persist through the canonical services table',
-  );
-  t.notMatch(
-    sqlCalls[0].sql,
-    new RegExp(BOOTSTRAP_API_ASSIGNMENT.FIELD_ID),
-    'register-service SQL fallback should exclude assignment token metadata',
   );
   t.equal(
     sqlCalls[0].options.phaseScope,

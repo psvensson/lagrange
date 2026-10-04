@@ -92,6 +92,8 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
     'MOVE_REPLICA assignment reservation conflict detected',
   MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED:
     'MOVE_REPLICA assignment token validation failed',
+  MOVE_REPLICA_HANDOFF_REFUSED:
+    'MOVE_REPLICA handoff refused at register-service',
   SERVICE_REGISTRATION_DEFERRED:
     'Register-service metadata publication deferred',
   SERVICE_REGISTRATION_WRITE_RETRY:
@@ -104,8 +106,6 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
   CACHE_UNAVAILABLE_GROUPS: 'System table cache not available for message group lookup',
   CACHE_UNAVAILABLE_PARTITIONS: 'System table cache not available for partition leader lookup',
   JOIN_ASSIGNMENT: `${BOOTSTRAP_LOG_PREFIX.JOIN_DEBUG} Determining message group assignment`,
-  JOIN_MOVABLE_REPLICA:
-    `${BOOTSTRAP_LOG_PREFIX.JOIN_DEBUG} Found movable replica - using MOVE_REPLICA strategy`,
   LEADERS_NOT_READY: 'Bootstrap blocked - missing raft group leaders',
   UPDATE_NODE_STATUS_UNSUPPORTED:
     'updateNodeStatus is not supported - use CDC integration service',
@@ -163,6 +163,10 @@ const BOOTSTRAP_API_ERROR = Object.freeze({
     'assignment_id lookup is temporarily unavailable',
   REPLICA_OWNER_CONFLICT:
     'active replica owner conflict for message-group replica',
+  MOVE_REPLICA_HANDOFF_UNSUPPORTED:
+    'MOVE_REPLICA handoff is refused: a message-group replica is never ' +
+    'moved onto another node (its replica identity would be reused); ' +
+    'the joiner self-hosts its own message group',
   SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT: (serviceId, nodeId, timeoutMs) =>
     `Timed out waiting for services cache visibility for service ${serviceId} ` +
     `on node ${nodeId} after ${timeoutMs}ms`,
@@ -178,6 +182,11 @@ const BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE = Object.freeze({
   ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE:
     'ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE',
   REPLICA_OWNER_CONFLICT: 'REPLICA_OWNER_CONFLICT',
+  // Owner decision 2026-10-04 (raft-rs full cutover): every MOVE_REPLICA
+  // handoff at /register-service is refused, unconditionally and before the
+  // assignment reservation is read (its expired lease would otherwise be
+  // force-renewed for a pre-upgrade joiner).
+  MOVE_REPLICA_HANDOFF_UNSUPPORTED: 'MOVE_REPLICA_HANDOFF_UNSUPPORTED',
 });
 
 const BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON =

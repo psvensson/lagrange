@@ -1,7 +1,7 @@
 /**
  * Property-based test for Message Group Replica Distribution.
  * Property 8: For any cluster configuration, every node should have at least
- * one local message group replica, and the rebalancer should create/move
+ * one local message group replica, and the rebalancer should create
  * replicas to maintain this invariant as nodes join or leave.
  * Validates: Requirements 4.3, 7.6, 7.7, 8.6
  */
@@ -130,33 +130,6 @@ class ClusterSimulator {
   }
 
   /**
-   * Move a replica to a different node.
-   * @param {string} replicaId - Replica ID.
-   * @param {string} targetNodeId - Target node ID.
-   */
-  moveReplica(replicaId, targetNodeId) {
-    for (const group of this.messageGroups.values()) {
-      if (group.replicas.has(replicaId)) {
-        const sourceNodeId = group.replicas.get(replicaId);
-
-        // Remove from source node
-        const sourceNode = this.nodes.get(sourceNodeId);
-        if (sourceNode) {
-          sourceNode.replicas.delete(replicaId);
-        }
-
-        // Add to target node
-        group.replicas.set(replicaId, targetNodeId);
-        const targetNode = this.nodes.get(targetNodeId);
-        if (targetNode) {
-          targetNode.replicas.add(replicaId);
-        }
-        break;
-      }
-    }
-  }
-
-  /**
    * Check if every node has at least one local replica.
    * @return {boolean} True if invariant holds.
    */
@@ -184,49 +157,15 @@ class ClusterSimulator {
   }
 
   /**
-   * Find a message group with movable replicas (2+ on same node).
-   * @return {Object|null} Group info with movable replica.
-   */
-  findMovableReplica() {
-    for (const [groupId, group] of this.messageGroups) {
-      const replicasByNode = new Map();
-
-      for (const [replicaId, nodeId] of group.replicas) {
-        if (!replicasByNode.has(nodeId)) {
-          replicasByNode.set(nodeId, []);
-        }
-        replicasByNode.get(nodeId).push(replicaId);
-      }
-
-      for (const [nodeId, replicas] of replicasByNode) {
-        if (replicas.length >= 2) {
-          return {
-            groupId,
-            sourceNodeId: nodeId,
-            replicaId: replicas[0],
-          };
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
    * Rebalance to ensure every node has a local replica.
-   * Implements the bootstrap strategy from the design.
+   * Implements the bootstrap strategy: a node without a replica hosts its
+   * own message group. A replica is never moved to it (a message-group
+   * replica's raft id derives from its name; identity-reuse safety fix).
    */
   rebalance() {
     const nodesWithoutReplicas = this.getNodesWithoutReplicas();
 
     for (const targetNodeId of nodesWithoutReplicas) {
-      // Strategy 1: Move replica from node with 2+ replicas
-      const movable = this.findMovableReplica();
-      if (movable) {
-        this.moveReplica(movable.replicaId, targetNodeId);
-        continue;
-      }
-
-      // Strategy 2: Create self-hosted message group
       const groupId = `mg-${targetNodeId}`;
       this.createMessageGroup(groupId, [
         targetNodeId,

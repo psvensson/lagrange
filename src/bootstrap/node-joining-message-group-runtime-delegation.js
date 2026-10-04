@@ -249,18 +249,6 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     );
   }
   /**
-   * Phase 3b: Join existing message group by moving a replica.
-   * Requirements: 8.3 - Services created AFTER self-connection established.
-   * @param {Object} assignment - Assignment instructions.
-   * @return {Promise<void>}
-   * @private
-   */
-  async phaseJoinExistingMessageGroup(assignment) {
-    return this.joinMessageGroupRuntimeOwner.phaseJoinExistingMessageGroup(
-      assignment,
-    );
-  }
-  /**
    * Register a message group service in the cluster's services table.
    * This ensures other nodes can discover this replica.
    * @param {string} groupId - Message group ID.

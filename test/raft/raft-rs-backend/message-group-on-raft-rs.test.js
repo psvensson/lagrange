@@ -18,8 +18,12 @@ import Database from 'better-sqlite3';
 
 import {MessageGroupService} from
   '../../../src/message-group/message-group-service.js';
-import {MESSAGE_GROUP_SERVICE_ERROR_MSG} from
-  '../../../src/message-group/constants.js';
+import {
+  MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME,
+  MESSAGE_GROUP_SERVICE_ERROR_MSG,
+} from '../../../src/message-group/constants.js';
+import {COMMITTED_MEMBERSHIP_REFUSAL} from
+  '../../../src/raft/raft-committed-membership-constants.js';
 import {MESSAGE_GROUP_COMMAND_REFUSAL} from
   '../../../src/message-group/message-group-committed-command-admission.js';
 import {MessageRouter} from '../../../src/transport/message-router.js';
@@ -367,9 +371,13 @@ test('message group membership comes from committed ConfState', async () => {
     const followerLogs = followers.map(recordLog);
 
     // A deferred joiner: it is no voter, schedules nothing and so never
-    // campaigns, whatever its bootstrap peer list names.
+    // campaigns, whatever its bootstrap peer list names. It is a fresh
+    // identity, deferred until its join converged; it does not claim to
+    // re-open a member of the existing group (isJoiningExistingGroup), which
+    // with no durable record is refused durable-record-missing (A2, the
+    // identity-reuse safety fix; witnessed below).
     const joiner = await host.open(JOINER, [...FOUNDERS, JOINER],
-      {isJoiningExistingGroup: true});
+      {deferElectionUntilJoinConvergence: true});
     let joinerCandidacies = 0;
     joiner.raft.subscribe(RAFT_EVENT.CANDIDATE, () => {
       joinerCandidacies += 1;
@@ -491,3 +499,34 @@ test('message group restart preserves term vote and configuration',
       await host.dispose();
     }
   });
+
+// W7 (identity-reuse safety fix, A2): a message-group replica that says it
+// joins an existing group opens under the founders' GENESIS stamp; with no
+// durable record it holds none of its identity's history, so the port
+// refuses it durable-record-missing before the core is entered and the
+// replica's startup surfaces the typed consensus init refusal. The same
+// replica with a record is restored from it.
+test('message group replica joining an existing group with no record is ' +
+  'refused durable-record-missing at startup', async () => {
+  const host = await createGroupHost();
+  try {
+    const services = await openFounders(host);
+    await electedLeader(services);
+    await host.close(FOUNDERS[2]);
+    fs.rmSync(host.dbFileOf(FOUNDERS[2]), {force: true});
+    await assert.rejects(
+      host.open(FOUNDERS[2], FOUNDERS, {isJoiningExistingGroup: true}),
+      (error) => error.code ===
+        MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED &&
+        error.consensus?.reason ===
+          COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING);
+    await host.close(FOUNDERS[2]);
+    await host.close(FOUNDERS[1]);
+    const restored = await host.open(FOUNDERS[1], FOUNDERS,
+      {isJoiningExistingGroup: true});
+    assert.equal(statusOf(restored).outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'a replica with its record is restored, joining flag or not');
+  } finally {
+    await host.dispose();
+  }
+});

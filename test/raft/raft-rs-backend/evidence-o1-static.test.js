@@ -106,6 +106,9 @@ test('enumerations: every refusal of the boundary is decided at one named ' +
     targetValidation: ['STAMP_INVALID', 'GENESIS_REFUSED_GROUP_EXISTS'],
     // Refused by the port's opening (O4 / A3).
     portOpening: ['DURABLE_RECORD_MISSING'],
+    // Held by the runtime ingress: a peer proved the replica's own history
+    // lost while it ran (O4 detected at runtime, local-log guard).
+    ingressHold: ['RESEED_REQUIRED'],
   });
   assertClassifies('STAMP_DEFECT', COMMITTED_MEMBERSHIP_STAMP_DEFECT, {
     shape: ['MISSING', 'UNKNOWN_KIND', 'MALFORMED'],
@@ -125,6 +128,8 @@ test('enumerations: the runtime reasons the gate and the record add sit ' +
       'GROUP_RECONSTRUCTED'],
     // O4 / O3: a replica that cannot prove its role from its record.
     recordRefusal: ['DURABLE_RECORD_MISSING', 'DURABLE_RECORD_INCOMPATIBLE'],
+    // O4 at runtime: the local-log guard's durable hold.
+    historyLoss: ['RESEED_REQUIRED'],
     // The core's own eligibility, decided after the gate.
     eligibility: ['NOT_ACTIVE_VOTER'],
     hostAndLifecycle: ['CORE_REFUSED', 'GENERATION_CHANGED',
@@ -157,6 +162,8 @@ test('enumerations: the runtime reasons the gate and the record add sit ' +
     hostAndLifecycle: ['GENERATION_CHANGED', 'ADDRESS_RESOLUTION', 'SEND',
       'SEND_NO_HANDLER', 'APPLICATION', 'READY_DRAIN', 'READY_PERSISTENCE',
       'DISPATCH', 'UNEXPECTED_THROW'],
+    // A delivered envelope refused before step (local-log guard).
+    ingressGuard: ['LOCAL_LOG_GUARD'],
   });
   assertClassifies('RECORD_COMPATIBILITY', RAFT_RS_RECORD_COMPATIBILITY, {
     restores: ['COMPATIBLE'],

@@ -714,7 +714,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @return {Promise<void>}
    */
   async checkRebalance() {
-    if (!this.isLeader || this.isShuttingDown) {
+    if (!this.isLeader || this.isShuttingDown || this.isPlanningParked()) {
       return;
     }
 

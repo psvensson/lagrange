@@ -79,9 +79,9 @@ const TARGET_THRESHOLD = 12;
 // origin/main ec63fbb00 merge and the native-append inference deletion.
 // 2026-10-04: tightened 1773 -> 1770 on the checker's hint after the
 // origin/main d60c30921 merge (consensus-cutover closeout tree).
-// 2026-10-04: tightened 1770 -> 1767 on the checker's hint after the
-// one-spread-authority deletion (closure synthesis, D9 ranking, D3 latch).
-const BASELINE_COUNT = 1767;
+// 2026-10-04: tightened 1770 -> 1765 on the checker's hint after the
+// message-group MOVE_REPLICA selection and execution were deleted.
+const BASELINE_COUNT = 1762;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

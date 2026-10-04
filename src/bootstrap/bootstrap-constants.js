@@ -5,8 +5,10 @@ const DEFAULT_REPLICA_STAGGER_DELAY_MS = 50;
 const DEFAULT_MAX_CONCURRENT_SERVICE_ACTIONS = 16;
 const DEFAULT_REPLICA_REGISTRATION_TRACE_ENABLED = false;
 
+// How a joining node gets its message group: it hosts its own. A
+// message-group identity is never moved to a joiner (its raft id derives
+// from its name); an assignment naming any other strategy is refused.
 const BOOTSTRAP_ASSIGNMENT_STRATEGY = Object.freeze({
-  MOVE_REPLICA: 'MOVE_REPLICA',
   CREATE_SELF_HOSTED: 'CREATE_SELF_HOSTED',
 });
 

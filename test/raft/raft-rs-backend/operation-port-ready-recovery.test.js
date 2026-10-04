@@ -10,6 +10,7 @@ import {applyCommittedEntryTransaction} from
 import {RAFT_RS_ENTRY_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {coreTrappingAppend} from './core-trap-envelope.js';
 
 const HOST_FAILURE = 'HOST_FAILURE';
 const CORE_FATAL = 'CORE_FATAL';
@@ -286,19 +287,13 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
       let fatal;
       try {
         console.error = () => undefined;
-        const accepted = await cluster.node(victim).step({
+        const accepted = await cluster.node(victim).step(coreTrappingAppend({
+          dbFile: cluster.replica(victim).dbFile,
           groupId: cluster.partitionId,
-          to: victimStatus.peerId,
-          message: {
-            from: leaderPeerId,
-            to: victimStatus.peerId,
-            msgType: 8,
-            term: String(victimStatus.term),
-            logTerm: '0',
-            index: '0',
-            commit: '999999',
-          },
-        });
+          status: victimStatus,
+          from: leaderPeerId,
+          term: String(victimStatus.term),
+        }));
         assert.equal(accepted.reason, 'inbound-enqueued');
         fatal = await cluster.node(victim).tick();
       } finally {
@@ -359,19 +354,14 @@ test('runtime traps and temporary host unavailability preserve logical identity'
       let trapped;
       try {
         console.error = () => undefined;
-        const accepted = await trappedCluster.node(victim).step({
-          groupId: trappedCluster.partitionId,
-          to: before.peerId,
-          message: {
+        const accepted = await trappedCluster.node(victim).step(
+          coreTrappingAppend({
+            dbFile: trappedCluster.replica(victim).dbFile,
+            groupId: trappedCluster.partitionId,
+            status: before,
             from: trappedCluster.raftPeerIdOf(leader),
-            to: before.peerId,
-            msgType: 8,
             term: String(before.term),
-            logTerm: '0',
-            index: '0',
-            commit: '999999',
-          },
-        });
+          }));
         assert.equal(accepted.reason, 'inbound-enqueued');
         trapped = await trappedCluster.node(victim).tick();
       } finally {

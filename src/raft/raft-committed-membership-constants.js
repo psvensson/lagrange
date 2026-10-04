@@ -69,8 +69,13 @@ const COMMITTED_MEMBERSHIP_READ_PURPOSE = Object.freeze({
 //                         holds a record is restored from it instead);
 //   DURABLE_RECORD_MISSING
 //                         a replica that must restore (a rejoin, or a
-//                         COMMITTED stamp that already names it a voter)
-//                         holds no durable record.
+//                         COMMITTED stamp that already names it a voter, or
+//                         a GENESIS stamp on a replica joining an existing
+//                         group) holds no durable record;
+//   RESEED_REQUIRED       a replica's own history is proven lost while it
+//                         runs (a peer holds it to a commit beyond its
+//                         persisted log): held durably, never reopened,
+//                         replaced under a fresh identity.
 const COMMITTED_MEMBERSHIP_REFUSAL = Object.freeze({
   NOT_LEADER: 'membership-read-not-leader',
   JOINT: 'membership-in-joint-transition',
@@ -81,6 +86,7 @@ const COMMITTED_MEMBERSHIP_REFUSAL = Object.freeze({
   STAMP_INVALID: 'membership-stamp-invalid',
   GENESIS_REFUSED_GROUP_EXISTS: 'membership-genesis-refused-group-exists',
   DURABLE_RECORD_MISSING: 'durable-record-missing',
+  RESEED_REQUIRED: 'reseed-required',
 });
 
 // Why a dispatched stamp is STAMP_INVALID (the refusal's detail).

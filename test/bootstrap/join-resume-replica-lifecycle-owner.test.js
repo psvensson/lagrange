@@ -202,7 +202,6 @@ test('F3: a preserved join resume keeps exactly one replica lifecycle owner ' +
         buildLeaderMessageGroup(onSubscribe));
     }
   };
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.createCdcIntegrationService = () => {
     if (!service.cdcIntegrationService) {
@@ -450,7 +449,6 @@ function buildJoiner(runtime, {bootIncarnation, fault, onMembership}) {
           faultOnce(FAULT.CONTROL_PLANE)));
     }
   };
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.createCdcIntegrationService = () => {
     if (!service.cdcIntegrationService) {

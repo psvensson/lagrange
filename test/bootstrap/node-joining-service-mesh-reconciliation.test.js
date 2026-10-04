@@ -77,7 +77,7 @@ test('NodeJoiningService - keeps heartbeat-maintenance NODE_STATE_UPDATE on the 
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
       },
     };
@@ -159,7 +159,7 @@ test('NodeJoiningService - prefers live local control-plane ingress over a stale
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           'seed-node-1/message-group/mg-1-r3',
@@ -222,7 +222,7 @@ test('NodeJoiningService - READY heartbeats ignore a stale local ingress lease '
   service.bootstrapResponse = {
     seedNodeId: 'seed-node-1',
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       peerAddresses: [
         'seed-node-1/message-group/mg-1-r3',
@@ -301,7 +301,7 @@ test('NodeJoiningService - READY heartbeats ignore a stale local ingress lease '
   service.bootstrapResponse = {
     seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       peerAddresses: [
         `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r3`,
@@ -384,7 +384,7 @@ test('NodeJoiningService - READY heartbeats retry a local ingress fallback ' +
   service.bootstrapResponse = {
     seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       peerAddresses: [
         `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r3`,
@@ -480,7 +480,7 @@ test('NodeJoiningService - READY heartbeats evaluate local target routing on ' +
   service.bootstrapResponse = {
     seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       peerAddresses: [
         `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r3`,
@@ -578,7 +578,7 @@ test('NodeJoiningService - does not retry NODE_STATE_UPDATE on non-transport fai
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
       },
     };

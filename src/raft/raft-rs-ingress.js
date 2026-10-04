@@ -4,7 +4,13 @@
 // know authoritatively - that the envelope names a group and a partition,
 // that this peer and this group are the intended recipient, that the payload
 // decodes into the shape the binding parses - and raft-rs owns everything
-// else. Raft's own checks are not reproduced here.
+// else. Raft's own checks are not reproduced here. What the schema does
+// check beyond decoding is the shape raft-rs's own sender writes for each
+// message type (a term present or absent, contiguous append entries, a
+// forwarded proposal that is a port proposal, no type this binding never
+// sends, positions the host carries exactly): raft-rs traps on, or commits
+// for good, every shape it never writes, and a remote peer must never be
+// able to crash the core (M5). None of it reads who the sender is.
 //
 // `admitRaftRsMessage` is given the envelope, the local group and the local
 // peer. It is given NO core and NO handle, so it cannot read the receiver's
@@ -15,17 +21,49 @@
 import {
   RAFT_RS_ENTRY_TYPE,
 } from './raft-rs-ready-loop-constants.js';
+import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
 import {
   RAFT_RS_ENTRY_POSITION_FIELDS,
   RAFT_RS_INGRESS_OUTCOME,
   RAFT_RS_INGRESS_REFUSAL,
   RAFT_RS_MESSAGE_TYPE_RANGE,
+  RAFT_RS_MESSAGE_TYPE,
   RAFT_RS_PEER_ID_FIELDS,
   RAFT_RS_POSITION_FIELDS,
+  RAFT_RS_POSITION_MAX,
 } from './raft-rs-ingress-constants.js';
 
 const DECIMAL_DIGITS = /^\d+$/u;
 const ENTRY_TYPES = Object.freeze(Object.values(RAFT_RS_ENTRY_TYPE));
+const NO_TERM = '0';
+const ENTRY_DATA_ENCODING = 'base64';
+// The type-specific shape checks, after the entries decode.
+const TYPE_SHAPE_CHECKS = Object.freeze({
+  [RAFT_RS_MESSAGE_TYPE.APPEND]: (message) =>
+    appendContiguityRefusal(message),
+  [RAFT_RS_MESSAGE_TYPE.PROPOSE]: (message) =>
+    forwardedProposalRefusal(message),
+});
+// raft-rs send(): a forwarded proposal never carries a term; every message
+// below always carries the sender's (non-zero) term.
+const TERMLESS_TYPES = new Set([RAFT_RS_MESSAGE_TYPE.PROPOSE]);
+const TERMED_TYPES = new Set([
+  RAFT_RS_MESSAGE_TYPE.APPEND,
+  RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE,
+  RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE,
+  RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE_RESPONSE,
+  RAFT_RS_MESSAGE_TYPE.HEARTBEAT,
+  RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE,
+  RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER,
+  RAFT_RS_MESSAGE_TYPE.TIMEOUT_NOW,
+  RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE,
+  RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE_RESPONSE,
+]);
+const TYPES_WITHOUT_PRODUCER = new Set([
+  RAFT_RS_MESSAGE_TYPE.SNAPSHOT,
+  RAFT_RS_MESSAGE_TYPE.READ_INDEX,
+  RAFT_RS_MESSAGE_TYPE.READ_INDEX_RESPONSE,
+]);
 
 /**
  * @param {*} value - Anything.
@@ -79,18 +117,127 @@ function routingRefusal(envelope, localGroupId, localPeerId) {
  * @return {Object|null} A refusal, or null.
  */
 function scalarFieldRefusal(message) {
-  const fields = [
-    [RAFT_RS_PEER_ID_FIELDS, RAFT_RS_INGRESS_REFUSAL.MALFORMED_PEER_ID],
-    [RAFT_RS_POSITION_FIELDS, RAFT_RS_INGRESS_REFUSAL.MALFORMED_POSITION],
-  ];
-  for (const [names, outcome] of fields) {
-    for (const field of names) {
-      if (message[field] !== undefined && !isDecimalString(message[field])) {
-        return refused(outcome, `${field}=${message[field]}`);
-      }
+  for (const field of RAFT_RS_PEER_ID_FIELDS) {
+    if (message[field] !== undefined && !isDecimalString(message[field])) {
+      return refused(RAFT_RS_INGRESS_REFUSAL.MALFORMED_PEER_ID,
+        `${field}=${message[field]}`);
+    }
+  }
+  for (const field of RAFT_RS_POSITION_FIELDS) {
+    if (message[field] !== undefined && !isPosition(message[field])) {
+      return refused(RAFT_RS_INGRESS_REFUSAL.MALFORMED_POSITION,
+        `${field}=${message[field]}`);
     }
   }
   return null;
+}
+
+/**
+ * @param {*} value - Anything.
+ * @return {boolean} Whether it is a position the host carries exactly.
+ */
+function isPosition(value) {
+  return isDecimalString(value) && BigInt(value) <= RAFT_RS_POSITION_MAX;
+}
+
+function positionOf(value) {
+  return value === undefined ? 0n : BigInt(value);
+}
+
+/**
+ * The message's shape against what raft-rs's own sender writes for its type
+ * (raft-rs-ingress-constants.js names each refusal's trap).
+ * @param {Object} message - A message whose scalars decode.
+ * @return {Object|null} A refusal, or null.
+ */
+function producerShapeRefusal(message) {
+  const type = message.msgType;
+  if (TYPES_WITHOUT_PRODUCER.has(type)) {
+    return refused(
+      RAFT_RS_INGRESS_REFUSAL.MESSAGE_TYPE_WITHOUT_PRODUCER, type);
+  }
+  const termed = (message.term ?? NO_TERM) !== NO_TERM;
+  if ((TERMED_TYPES.has(type) && !termed) ||
+      (TERMLESS_TYPES.has(type) && termed)) {
+    return refused(RAFT_RS_INGRESS_REFUSAL.TERM_PRESENCE_MISMATCH,
+      `msgType=${type} term=${message.term}`);
+  }
+  return null;
+}
+
+// Whether a forwarded entry is what a port proposes (the leader appends it
+// as it is, and every replica applies it).
+function isPortProposal(entry) {
+  if (entry.entryType !== RAFT_RS_ENTRY_TYPE.NORMAL ||
+      typeof entry.data !== 'string') {
+    return false;
+  }
+  const bytes = Buffer.from(entry.data, ENTRY_DATA_ENCODING);
+  if (bytes.toString(ENTRY_DATA_ENCODING) !== entry.data) {
+    return false;
+  }
+  try {
+    decodeCommittedProposal(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A forwarded proposal's entries are each what a port proposes.
+ * @param {Object} message - A forwarded proposal whose entries decode.
+ * @return {Object|null} A refusal, or null.
+ */
+function forwardedProposalRefusal(message) {
+  const entry = (message.entries || []).find((each) => !isPortProposal(each));
+  return entry === undefined ? null : refused(
+    RAFT_RS_INGRESS_REFUSAL.FORWARDED_ENTRY_NOT_A_PROPOSAL,
+    `entryType=${entry.entryType}`);
+}
+
+/**
+ * An append names the entry before it consistently (a non-zero index with a
+ * non-zero logTerm), its entries run contiguous from its index + 1, their
+ * terms do not
+ * decrease, the first is not below the message's logTerm and the last is
+ * not above its term. One pass of integer compares over the batch.
+ * @param {Object} message - An append whose entries decode.
+ * @return {Object|null} A refusal, or null.
+ */
+function appendContiguityRefusal(message) {
+  const entries = message.entries || [];
+  // The entry before the append exists at a non-zero index only with a
+  // non-zero term (every entry is written at a term >= 1); raft-rs answers
+  // the term of an index beyond its log as 0, so logTerm 0 there would
+  // "match" a position the receiver does not hold.
+  if ((positionOf(message.index) > 0n) !==
+      (positionOf(message.logTerm) > 0n)) {
+    return refused(RAFT_RS_INGRESS_REFUSAL.NON_CONTIGUOUS_ENTRIES,
+      `index=${message.index} logTerm=${message.logTerm}`);
+  }
+  let expectedIndex = positionOf(message.index) + 1n;
+  let previousTerm = positionOf(message.logTerm);
+  for (const entry of entries) {
+    const term = positionOf(entry.term);
+    if (positionOf(entry.index) !== expectedIndex || term < previousTerm) {
+      return refused(RAFT_RS_INGRESS_REFUSAL.NON_CONTIGUOUS_ENTRIES,
+        `index=${entry.index} term=${entry.term}`);
+    }
+    expectedIndex += 1n;
+    previousTerm = term;
+  }
+  return entries.length > 0 && previousTerm > positionOf(message.term) ?
+    refused(RAFT_RS_INGRESS_REFUSAL.NON_CONTIGUOUS_ENTRIES,
+      `last term=${previousTerm} message term=${message.term}`) : null;
+}
+
+// The shape half of the schema, once the scalars decode and the recipient
+// matches: what raft-rs's own sender writes for the type, then the entries.
+function shapeRefusal(message) {
+  const check = TYPE_SHAPE_CHECKS[message.msgType];
+  return producerShapeRefusal(message) ?? entriesRefusal(message.entries) ??
+    (check === undefined ? null : check(message));
 }
 
 /**
@@ -119,7 +266,7 @@ function messageRefusal(message, localPeerId) {
   if (message.to !== undefined && message.to !== localPeerId) {
     return refused(RAFT_RS_INGRESS_REFUSAL.RECIPIENT_MISMATCH, message.to);
   }
-  return entriesRefusal(message.entries);
+  return shapeRefusal(message);
 }
 
 /**
@@ -143,7 +290,7 @@ function entriesRefusal(entries) {
         RAFT_RS_INGRESS_REFUSAL.MALFORMED_ENTRY, entry.entryType);
     }
     for (const field of RAFT_RS_ENTRY_POSITION_FIELDS) {
-      if (entry[field] !== undefined && !isDecimalString(entry[field])) {
+      if (entry[field] !== undefined && !isPosition(entry[field])) {
         return refused(
           RAFT_RS_INGRESS_REFUSAL.MALFORMED_ENTRY, `${field}=${entry[field]}`);
       }

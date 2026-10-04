@@ -27,6 +27,16 @@ import {
   sendMessages,
 } from './raft-rs-peer-delivery.js';
 import {
+  openedLastIndex,
+  persistedLastIndexAfter,
+} from './raft-rs-local-log-guard.js';
+import {
+  recordReseedHold,
+  refuseInboundStep,
+  reportCoreTrap,
+  reportRuntimeReplaced,
+} from './raft-rs-runtime-faults.js';
+import {
   decideLeadershipTransfer,
   droppedByLeadershipTransfer,
   leadershipTransferInProgress,
@@ -176,6 +186,13 @@ let runtimeGeneration = 0;
 let nextGroupKey = 1;
 let actualCoreEntries = 0;
 let actualCoreEntryObserver = null;
+// A test's fault at the core boundary: called inside the core call's
+// containment with the group, the operation and its arguments, it may throw
+// as the core itself would (a WebAssembly.RuntimeError is a trap). No peer
+// input can trap the core once the ingress refuses every shape raft-rs
+// traps on, so the trap witnesses inject theirs here. Never set in
+// production.
+let coreFaultInjector = null;
 const groups = new Map();
 // A recorded observation is shaped once, when a busy-queue read asks for it.
 const SHAPED_STATUS = new WeakMap();
@@ -381,6 +398,7 @@ function invokeCore(group, operation, ...args) {
   try {
     const parameters = CORE_CALL_WITHOUT_HANDLE.has(operation) ?
       args : [group.handle, ...args];
+    coreFaultInjector?.(group.groupId, operation, args);
     return {ok: true, value: core[operation](...parameters)};
   } catch (error) {
     if (isCoreRefusal(error)) {
@@ -395,6 +413,8 @@ function invokeCore(group, operation, ...args) {
       };
     }
     runtimeHealth = UNHEALTHY;
+    reportCoreTrap(group, operation, args, String(error?.message || error),
+      runtimeGeneration);
     return {
       ok: false,
       result: outcome(CORE_FATAL, {
@@ -477,6 +497,8 @@ function openGroupInCurrentRuntime(group, opening) {
     return created.result;
   }
   group.handle = created.value;
+  group.persistedLastIndex = openedLastIndex(
+    opening.restore ? opening.record : null);
   // Every (re)construction and restore announces its first observed
   // configuration again: a listener's baseline must be level-correct.
   group.announcedConfStateKey = CONF_STATE_NOT_ANNOUNCED;
@@ -535,7 +557,7 @@ function resumeAfterReconstruction(group, expectedGeneration) {
 // that failure alone, and the replaced core's handle names nothing in the
 // new one.
 function openingForReplacement(group) {
-  if (group.closed) {
+  if (group.closed || group.reseedHold !== null) {
     return null;
   }
   const opening = readOpeningRecord(group);
@@ -564,11 +586,15 @@ function replaceRuntime(trigger) {
     }
     const restored = openGroupInCurrentRuntime(group, opening);
     if (restored.outcome !== CORE_OK) {
+      reportRuntimeReplaced(trigger, {runtimeGeneration,
+        groupsRestored: restoredGroups.length, failure: restored.reason});
       return restored;
     }
     group.recovery = null;
     restoredGroups.push(group);
   }
+  reportRuntimeReplaced(trigger, {runtimeGeneration,
+    groupsRestored: restoredGroups.length, failure: null});
   const expectedGeneration = runtimeGeneration;
   let triggerResumed = outcome(CORE_OK, {
     reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
@@ -697,6 +723,9 @@ function forgetExpiredRecovery(group) {
 // Failure scope follows the failure class: a core failure replaces the shared
 // runtime; a host failure reconstructs its own group.
 function ensureExecution(group) {
+  if (group.reseedHold !== null) {
+    return recordReseedHold(group);
+  }
   if (runtimeHealth !== HEALTHY) {
     return replaceRuntime(group);
   }
@@ -923,6 +952,8 @@ function drainReady(group, expectedGeneration, cycles = 0) {
   }
   try {
     group.store.persistReady(group.groupId, taken.value);
+    group.persistedLastIndex = persistedLastIndexAfter(
+      group.persistedLastIndex, taken.value);
   } catch (error) {
     return groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE, error);
   }
@@ -1328,6 +1359,14 @@ function drainInbound(group, expectedGeneration, continuation) {
     return continuation();
   }
   const envelope = group.inbound.shift();
+  // The local-log guard decides before the core is entered: a refused
+  // envelope is recorded against its sender and never stepped; one that
+  // proves this replica's history lost holds the group and ends the turn.
+  const guarded = refuseInboundStep(group, envelope, expectedGeneration);
+  if (guarded !== null) {
+    return group.reseedHold ??
+      drainInbound(group, expectedGeneration, continuation);
+  }
   const stepped = invokeCoreAt(
     group, expectedGeneration, 'step', envelope.message);
   // The core refusing a delivered envelope is that envelope's outcome, not
@@ -1459,8 +1498,14 @@ function createRuntimeDispatcher(request) {
     applyTransactionRolledBack: request.applyTransactionRolledBack,
     runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,
+    holdForReseed: request.holdForReseed,
+    reportFault: request.reportFault,
     emit: request.emit,
     handle: null,
+    persistedLastIndex: 0n,
+    reseedHold: null,
+    reseedHoldRecorded: false,
+    reseedHoldWriteFailures: 0,
     lastStatus: null,
     statusObservation: null,
     announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
@@ -1473,6 +1518,7 @@ function createRuntimeDispatcher(request) {
     inboundDrainDeadline: null,
     peerDelivery: new Map(),
     inboundStepRefusals: new Map(),
+    inboundRefusalReports: new Map(),
     closed: false,
   };
   groups.set(group.key, group);
@@ -1513,6 +1559,9 @@ function createRuntimeDispatcher(request) {
       if (group.health === RECOVERY_REQUIRED && insideRetryWindow(group)) {
         return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
       }
+      if (group.reseedHold !== null) {
+        return recordReseedHold(group);
+      }
       group.inbound.push(snapshotEnvelope(envelope));
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
@@ -1545,10 +1594,20 @@ function setActualCoreEntryObserver(observer) {
   actualCoreEntryObserver = typeof observer === 'function' ? observer : null;
 }
 
+/**
+ * Test seam: a fault injected at the core boundary (see coreFaultInjector).
+ * @param {Function|null} injector - (groupId, operation, args) => void, or
+ *   null to remove it.
+ */
+function setCoreFaultInjector(injector) {
+  coreFaultInjector = typeof injector === 'function' ? injector : null;
+}
+
 export {
   CORE_OK,
   CORE_REFUSED,
   createRuntimeDispatcher,
   setActualCoreEntryObserver,
+  setCoreFaultInjector,
   verifyRaftRsBinding,
 };

@@ -184,6 +184,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
   NOT_LEADER_SKIP: 'Not leader, skipping rebalance',
   NO_AVAILABLE_NODES: 'Skipping rebalance - no available nodes in cache',
   NO_REBALANCE_NEEDED: 'No rebalancing needed',
+  MESSAGE_GROUP_MEMBERSHIP_CHANGE_PARKED:
+    'Message-group replica planning parked: membership change unsupported until the fresh-identity ADD path exists',
   START_REBALANCE: 'Starting rebalancing',
   PRE_EXECUTION_HANDOFF: 'Rebalancer pre-execution handoff',
   SCHEDULE_NEXT: 'Scheduled next rebalance check',
@@ -449,6 +451,13 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   DEFERRED_RETRY_PENDING: 'deferred_retry_pending',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
   NODE_NOT_READY: 'node_not_ready',
+  // Owner decision 2026-10-04 (raft-rs full cutover): a message group's
+  // replica membership does not change - no ADD, REPLACE, MOVE or
+  // CREATE_REPLICA - until the fresh-identity ADD/promote path for message
+  // groups exists. A replica opened under a reissued name would reuse a raft
+  // id whose history the group holds elsewhere (the 2026-10 defect).
+  MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED:
+    'message_group_membership_change_unsupported',
 });
 
 /**

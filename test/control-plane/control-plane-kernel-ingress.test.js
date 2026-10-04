@@ -25,7 +25,7 @@ test('ControlPlaneKernelIngress - resolves bootstrap ingress without cache metad
       getBootstrapResponse: () => ({
         seedNodeId: 'seed-node-1',
         messageGroupAssignment: {
-          strategy: AssignmentStrategy.MOVE_REPLICA,
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           groupId: 'mg-1',
           replicaToMove: 'mg-1-r1',
           peerAddresses: [
@@ -138,7 +138,7 @@ test('ControlPlaneKernelIngress - can prefer ingress-ready non-leader local ingr
       getBootstrapResponse: () => ({
         seedNodeId: 'seed-node-1',
         messageGroupAssignment: {
-          strategy: AssignmentStrategy.MOVE_REPLICA,
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           groupId: 'mg-1',
           peerAddresses: [
             'seed-node-1/message-group/mg-1-r1',
@@ -181,7 +181,7 @@ test('ControlPlaneKernelIngress - prefers seed ingress before other remote ingre
       getBootstrapResponse: () => ({
         seedNodeId: 'seed-node-1',
         messageGroupAssignment: {
-          strategy: AssignmentStrategy.MOVE_REPLICA,
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           groupId: 'mg-1',
           replicaToMove: 'mg-1-r1',
           peerAddresses: [
@@ -223,7 +223,7 @@ test('ControlPlaneKernelIngress - prefers confirmed ingress lease and suppresses
       getBootstrapResponse: () => ({
         seedNodeId: 'seed-node-1',
         messageGroupAssignment: {
-          strategy: AssignmentStrategy.MOVE_REPLICA,
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           groupId: 'mg-1',
           peerAddresses: [
             'seed-node-1/message-group/mg-1-r3',
@@ -275,7 +275,7 @@ test('ControlPlaneKernelIngress - prefers live local ingress over a stale confir
       getBootstrapResponse: () => ({
         seedNodeId: 'seed-node-1',
         messageGroupAssignment: {
-          strategy: AssignmentStrategy.MOVE_REPLICA,
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           groupId: 'mg-1',
           peerAddresses: [
             'seed-node-1/message-group/mg-1-r3',
@@ -320,7 +320,7 @@ test('ControlPlaneKernelIngress - does not reuse a stale confirmed local lease '
     getBootstrapResponse: () => ({
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           'seed-node-1/message-group/mg-1-r3',
@@ -379,7 +379,7 @@ test('ControlPlaneKernelIngress - excludes disconnected bootstrap ingress candid
       getBootstrapResponse: () => ({
         seedNodeId: 'seed-node-1',
         messageGroupAssignment: {
-          strategy: AssignmentStrategy.MOVE_REPLICA,
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           groupId: 'mg-1',
           peerAddresses: [
             'seed-node-1/message-group/mg-1-r3',
@@ -410,7 +410,7 @@ test('ControlPlaneKernelIngress - can retain disconnected bootstrap ingress ' +
     getBootstrapResponse: () => ({
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           'seed-node-1/message-group/mg-1-r3',
@@ -446,7 +446,7 @@ test('ControlPlaneKernelIngress - READY heartbeats prefer remote ingress before 
       getBootstrapResponse: () => ({
         seedNodeId: 'seed-node-1',
         messageGroupAssignment: {
-          strategy: AssignmentStrategy.MOVE_REPLICA,
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           groupId: 'mg-1',
           peerAddresses: [
             'seed-node-1/message-group/mg-1-r1',
@@ -490,7 +490,7 @@ test('ControlPlaneKernelIngress - CONNECTED formation heartbeats prefer remote '
     getBootstrapResponse: () => ({
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           'seed-node-1/message-group/mg-1-r1',
@@ -547,7 +547,7 @@ test('ControlPlaneKernelIngress - READY heartbeats can keep optimistic remote in
       getBootstrapResponse: () => ({
         seedNodeId: 'seed-node-1',
         messageGroupAssignment: {
-          strategy: AssignmentStrategy.MOVE_REPLICA,
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
           groupId: 'mg-1',
           peerAddresses: [
             'seed-node-1/message-group/mg-1-r1',
@@ -594,7 +594,7 @@ test('ControlPlaneKernelIngress - READY heartbeats evaluate local routing on ' +
     getBootstrapResponse: () => ({
       seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`,
@@ -683,7 +683,7 @@ test('ControlPlaneKernelIngress - does not reuse a confirmed local lease ' +
     getBootstrapResponse: () => ({
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           'seed-node-1/message-group/mg-1-r1',
@@ -747,7 +747,7 @@ async (t) => {
     getBootstrapResponse: () => ({
       seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`,
@@ -822,7 +822,7 @@ async (t) => {
     getBootstrapResponse: () => ({
       seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`,

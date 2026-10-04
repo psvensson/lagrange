@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 280,
+    "bootstrap-membership": 281,
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 206,
@@ -12,23 +12,23 @@
     "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 257,
+    "placement-rebalance": 256,
     "query-sql": 164,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
     "storage-partition": 144,
-    "storage-raft": 99,
-    "test-infrastructure": 139,
+    "storage-raft": 106,
+    "test-infrastructure": 140,
     "transactions": 15,
-    "transport-messaging": 85,
+    "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2196,
-  "digest": "fnv1a32-dd7efb85",
+  "censusSize": 2205,
+  "digest": "fnv1a32-87101c68",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c52dcbd3",
+  "observationDigest": "fnv1a32-70245cba",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -253,6 +253,7 @@
     "test/bootstrap/query-state-single-owner.test.js": "bootstrap-membership",
     "test/bootstrap/readiness-handoff-liveness-witness.test.js": "bootstrap-membership",
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap-membership",
+    "test/bootstrap/register-service-move-handoff-refused.test.js": "bootstrap-membership",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap-membership",
     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap-membership",
     "test/bootstrap/replica-runtime-attachment-authority.test.js": "bootstrap-membership",
@@ -976,7 +977,7 @@
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "cdc-metadata",
     "test/integration/cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
-    "test/integration/concurrent-move-replica-assignment.integration.test.js": "placement-rebalance",
+    "test/integration/concurrent-join-message-group-assignment.integration.test.js": "transport-messaging",
     "test/integration/control-plane-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/convergence-control-snapshot.integration.test.js": "control-plane",
     "test/integration/create-table-partition-provisioning.integration.test.js": "storage-partition",
@@ -999,7 +1000,6 @@
     "test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js": "services-runtime",
     "test/integration/minimal-deployment-call-cell-production-wiring.integration.test.js": "services-runtime",
     "test/integration/minimal-deployment-runtime-access-policy-live-validation.integration.test.js": "services-runtime",
-    "test/integration/move-replica-handoff.integration.test.js": "placement-rebalance",
     "test/integration/multi-node-cluster.integration.test.js": "distributed-harness",
     "test/integration/multi-node-raft-replication.integration.test.js": "storage-raft",
     "test/integration/node-join-convergence-slo.integration.test.js": "bootstrap-membership",
@@ -1456,7 +1456,12 @@
     "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/local-log-guard-refusals.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js": "storage-raft",
     "test/raft/raft-rs-backend/membership-changed-event.test.js": "storage-raft",
     "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "storage-raft",
@@ -1472,8 +1477,10 @@
     "test/raft/raft-rs-backend/partition-peer-admission.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "storage-raft",
@@ -1569,6 +1576,7 @@
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "placement-rebalance",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "placement-rebalance",
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "placement-rebalance",
+    "test/rebalancer/message-group-membership-change-parked.test.js": "placement-rebalance",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "placement-rebalance",
     "test/rebalancer/message-group-rebalancer-wiring.test.js": "placement-rebalance",
     "test/rebalancer/move-planner-capacity-gating.test.js": "placement-rebalance",
@@ -2002,6 +2010,7 @@
     "test/scripts/stop-distributed-harness-containers.test.js": "test-infrastructure",
     "test/scripts/summarize-distributed-failure-report.test.js": "test-infrastructure",
     "test/scripts/summarize-representative-evidence.test.js": "test-infrastructure",
+    "test/scripts/test-placement-lab-split.test.js": "test-infrastructure",
     "test/scripts/test-placement.test.js": "test-infrastructure",
     "test/scripts/test-primary-classification.test.js": "test-infrastructure",
     "test/scripts/test-resource-classification.test.js": "test-infrastructure",
@@ -2654,6 +2663,13 @@
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js",
         "test/integration/helpers/cluster-test-helpers.js"
+      ]
+    },
+    "test/bootstrap/join-message-group-phase.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/bootstrap/node-joining-service-test-support.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/join-resume-replica-lifecycle-owner.test.js": {
@@ -6469,7 +6485,7 @@
         "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
-    "test/integration/concurrent-move-replica-assignment.integration.test.js": {
+    "test/integration/concurrent-join-message-group-assignment.integration.test.js": {
       "files": [
         "src/bootstrap/bootstrap-api-constants.js",
         "src/bootstrap/bootstrap-constants.js",
@@ -6715,11 +6731,6 @@
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasm-component-driver.js"
-      ]
-    },
-    "test/integration/move-replica-handoff.integration.test.js": {
-      "files": [
-        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/integration/multi-node-cluster.integration.test.js": {
@@ -7117,9 +7128,8 @@
     },
     "test/node/message-group-service-handler.test.js": {
       "files": [
-        "src/bootstrap/shared/message-group-transport-handler.js",
         "src/node/message-group-service-handler.js",
-        "test/test-helpers/replica-handler-identity-fixture.js"
+        "src/rebalancer/rebalancer-constants.js"
       ],
       "env": [
         "NODE_ENV"
@@ -7513,10 +7523,12 @@
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-proposal-codec.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/core-trap-envelope.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -7651,8 +7663,12 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/core-trap-envelope.js",
         "test/raft/raft-rs-backend/process-escape-counter.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
@@ -8279,6 +8295,7 @@
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-group-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -8293,6 +8310,7 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -8306,6 +8324,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -8318,6 +8337,7 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -8344,6 +8364,7 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -8363,6 +8384,28 @@
         "package.json"
       ]
     },
+    "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
@@ -8373,6 +8416,41 @@
       ],
       "directories": [
         "src"
+      ]
+    },
+    "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/local-log-guard-refusals.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
       ]
     },
     "test/raft/raft-rs-backend/membership-changed-event.test.js": {
@@ -8387,9 +8465,9 @@
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
         "src/config/configuration-manager.js",
-        "src/message-group/constants.js",
         "src/message-group/message-group-committed-command-admission.js",
         "src/message-group/message-group-service.js",
+        "src/raft/raft-committed-membership-constants.js",
         "test/test-helpers/boot-incarnation-fixture.js"
       ],
       "directories": [
@@ -8439,6 +8517,8 @@
     "test/raft/raft-rs-backend/operation-port-provenance.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -8448,7 +8528,9 @@
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-ready-loop-constants.js",
@@ -8485,6 +8567,7 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -8537,6 +8620,19 @@
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },
+    "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
@@ -8553,6 +8649,19 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/reseed-hold-durability.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },
@@ -9012,6 +9121,11 @@
       ]
     },
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/message-group-membership-change-parked.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
       ]
@@ -10435,7 +10549,8 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
@@ -10462,7 +10577,8 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
@@ -10503,7 +10619,8 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
@@ -11131,7 +11248,8 @@
         "package.json",
         "scripts/check-guideline-decision-boundaries-baseline.json",
         "scripts/check-guideline-literals-baseline.json",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/lab.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
@@ -11309,7 +11427,8 @@
         "Dockerfile",
         "package-lock.json",
         "package.json",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
@@ -11340,7 +11459,9 @@
         "Dockerfile",
         "package-lock.json",
         "package.json",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/impact-proof-cone-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
@@ -11365,7 +11486,8 @@
         ".github/workflows/full-corpus-canary.yml",
         "package-lock.json",
         "package.json",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/lab.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js"
@@ -11392,8 +11514,8 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/push-gate-corpus-worktree.js",
-        "scripts/checks/test-resource-classification-constants.js",
         "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
         "scripts/prune-test-output.js",
@@ -11715,8 +11837,9 @@
         "scripts/checks/push-gate-change-proof.js",
         "scripts/checks/run-static-audits.js",
         "scripts/checks/test-primary-classification.js",
-        "scripts/checks/test-resource-classification-constants.js",
         "scripts/checks/test-timeout-declarations.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-primary-classes.js",
         "scripts/generate-test-resource-classes.js",
         "scripts/generate-test-subsystem-classes.js",
@@ -11882,7 +12005,8 @@
       "files": [
         "package-lock.json",
         "package.json",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
@@ -12013,7 +12137,8 @@
         "package-lock.json",
         "package.json",
         "scripts/check-subsystem.js",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
@@ -12044,7 +12169,8 @@
       "files": [
         "package-lock.json",
         "package.json",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-test-subsystem-classes.js",
         "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
@@ -12179,12 +12305,31 @@
         "test/scripts/__fixtures__/topology-convergence/active-gate-snapshot-partial-residual.fixture.json"
       ]
     },
+    "test/scripts/test-placement-lab-split.test.js": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js"
+      ],
+      "directories": [
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
     "test/scripts/test-placement.test.js": {
       "files": [
         "README.md",
         "package-lock.json",
         "package.json",
-        "scripts/checks/test-resource-classification-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
         "scripts/lab/probe.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
@@ -12202,6 +12347,7 @@
         "APPDATA",
         "GIT_DIR",
         "LAGRANGE_LAB_HOME",
+        "PRODUCER_FAILS",
         "XDG_CONFIG_HOME"
       ]
     },

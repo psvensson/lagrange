@@ -309,7 +309,6 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
     service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
   };
   service.phaseCreateSelfHostedMessageGroup = async () => {};
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.initializeReplicaHandler = () => {};
   service.initializeMessageGroupServiceHandler = () => {};
@@ -588,7 +587,6 @@ test('NodeJoiningService - activates message-group rows after membership write',
         getLeaderId: () => 'mg-1-r0',
       });
     };
-    service.phaseJoinExistingMessageGroup = async () => {};
     service.phaseWaitForLeadership = async () => {};
     service.createCdcIntegrationService = () => {
       service.cdcIntegrationService = {
@@ -699,7 +697,6 @@ test('NodeJoiningService - resumes same join session without replaying ' +
       getLeaderId: () => 'mg-1-r0',
     });
   };
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {
     phaseCalls.push('leadership');
   };
@@ -861,7 +858,6 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
         getLeaderId: () => 'mg-1-r0',
       });
     };
-    service.phaseJoinExistingMessageGroup = async () => {};
     service.phaseWaitForLeadership = async () => {
       phaseCalls.push('leadership');
     };
@@ -995,7 +991,6 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
       completeJoinConvergence() {},
     });
   };
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.initializeJoinInfrastructure = async () => {
     calls.infrastructure += 1;
@@ -1268,7 +1263,6 @@ test(
         getLeaderId: () => 'mg-join-r1',
       });
     };
-    service.phaseJoinExistingMessageGroup = async () => {};
     service.phaseWaitForLeadership = async () => {};
     service.initializeReplicaHandler = () => {};
     service.initializeMessageGroupServiceHandler = () => {
