@@ -38,7 +38,9 @@ const TARGET_THRESHOLD = 20;
 // replaced the dispatch node-state write path (measured with the hint).
 // 2026-10-03: tightened 155 -> 153 on the checker's hint after the
 // origin/main ec63fbb00 merge and the native-append inference deletion.
-const BASELINE_COUNT = 153;
+// 2026-10-04: tightened 153 -> 152 on the checker's hint (the scenario
+// result summary's status label split out of the table printer).
+const BASELINE_COUNT = 152;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

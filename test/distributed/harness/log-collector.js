@@ -6,16 +6,79 @@
  * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7
  */
 
-import {mkdir, readdir, rm, writeFile} from 'node:fs/promises';
-import {join} from 'node:path';
+import {
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  rmdir,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
+import {join, relative} from 'node:path';
 import {
   OUTPUT,
   LOG_SUBSCRIPTION_CAPABILITY,
   CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
 
-// Module-load capture (the harness tree's ambient-intrinsics rule).
+// Module-load captures (the harness tree's ambient-intrinsics rule).
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arraySort = Function.call.bind(Array.prototype.sort);
+const dateToIsoString = Function.call.bind(Date.prototype.toISOString);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const stringIndexOf = Function.call.bind(String.prototype.indexOf);
+const stringLastIndexOf = Function.call.bind(String.prototype.lastIndexOf);
+const stringReplace = Function.call.bind(String.prototype.replace);
+const stringReplaceAll = Function.call.bind(String.prototype.replaceAll);
+const stringSlice = Function.call.bind(String.prototype.slice);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+
+// --- Earlier-run archive ----------------------------------------------------
+// Every run of a scenario under one output root shares {outputDir}/{scenario}
+// and {outputDir}/.full-logs/{scenario} (scripts/lab/harness.js passes no
+// --output). A starting run must not read an earlier run's files as its own
+// evidence, and must never destroy them either, so at cluster start the
+// earlier run's artifacts MOVE, as one unit, into
+//   {outputDir}/{scenario}/.previous-<earlier run start, ISO, ':' -> '-'>/
+// holding every top-level entry of the scenario dir (curated *.log,
+// _timeline.log, _analysis.json, events/samples/snapshots.ndjson, the
+// playback manifest and viewer, debug-trace files, failure-bundle.* and
+// triage-summary.*) plus the scenario's full-log dir as <archive>/.full-logs/
+// (moved by the caller's archiveFullLogs hook: full-node-log-capture.js).
+// Nothing of the starting run exists yet: Cluster.start archives before the
+// playback recorder, the trace recorder or any node log capture starts.
+// Layout: one self-contained dir per run, so one bound prunes curated and
+// full logs together, and a reader that lists the current scenario dir's
+// files (the failure bundle's readdir) or globs `.full-logs/*/` sees only
+// the current run. Run start: the earlier run's first playback event (the
+// recorder's cluster.start), else the earliest mtime of its entries.
+// Bundle resolution: every path string inside the archived *.json / *.md
+// artifacts (failure-bundle, triage-summary, playback manifest) is rewritten
+// to its archived location, and archive.json records each original ->
+// archived move (relative to the output root), so the bundle a human finds
+// for an earlier run (in its archive) points at readable files of that run.
+// Disk bound: ARCHIVED_SCENARIO_RUNS_KEPT archives per scenario; the oldest
+// beyond the bound is deleted. That pruning is the only removal of an
+// earlier run's evidence, and it is by age, never by a starting run's reset.
+const ARCHIVED_SCENARIO_RUNS_KEPT = 3;
+const RUN_ARCHIVE_PREFIX = '.previous-';
+const RUN_ARCHIVE_MANIFEST_FILENAME = 'archive.json';
+const RUN_ARCHIVE_MANIFEST_SCHEMA_VERSION = 1;
+const RUN_ARCHIVE_NAME_ATTEMPTS = 100;
+const RUN_ARCHIVE_PATH_REWRITE_EXTENSIONS = Object.freeze(['.json', '.md']);
+const RUN_START_SOURCE_EVENTS = OUTPUT.PLAYBACK_EVENTS_FILENAME;
+const RUN_START_SOURCE_MTIME = 'mtime';
+const RUN_START_SOURCE_ARCHIVE_TIME = 'archive-time';
+const RUN_START_PROBE_BYTES = 65536;
+const ISO_TIME_SEPARATOR = ':';
+const ARCHIVE_NAME_TIME_SEPARATOR = '-';
+const PATH_SEPARATOR = '/';
+const PATH_TOKEN_PATTERN = /[^\s"'`()<>[\],]+/gu;
+const ERROR_CODE_EXISTS = 'EEXIST';
+const JSON_INDENT = 2;
 
 const LIVE_SELECT_PREFIX = 'LIVE SELECT * FROM logs';
 const FINAL_SNAPSHOT_QUERY = 'SELECT * FROM logs ORDER BY timestamp';
@@ -51,6 +114,239 @@ const DEFAULT_LOG_SUBSCRIPTION_CAPABILITIES = Object.freeze({
   [LOG_SUBSCRIPTION_CAPABILITY.STREAM_EVENTS]: false,
   [LOG_SUBSCRIPTION_CAPABILITY.LIVE_SELECT_QUERY]: true,
 });
+
+// The earlier run's first playback event is the recorder's cluster.start,
+// written when that run's cluster started; only the first line is read.
+async function readFirstPlaybackEventTimestamp(eventsPath) {
+  let handle = null;
+  try {
+    handle = await open(eventsPath, 'r');
+    const probe = Buffer.alloc(RUN_START_PROBE_BYTES);
+    const {bytesRead} = await handle.read(probe, ZERO, RUN_START_PROBE_BYTES,
+      ZERO);
+    const text = probe.toString(ENCODING_UTF8, ZERO, bytesRead);
+    const lineEnd = stringIndexOf(text, NEWLINE);
+    const firstLine = lineEnd >= ZERO ? stringSlice(text, ZERO, lineEnd) : text;
+    const timestamp = JSON.parse(firstLine)?.timestamp;
+    return Number.isFinite(timestamp) ? timestamp : null;
+  } catch (_unreadable) {
+    return null;
+  } finally {
+    await handle?.close();
+  }
+}
+
+async function earliestEntryMtime(scenarioDir, names) {
+  let earliest = null;
+  for (const name of names) {
+    try {
+      const {mtimeMs} = await stat(join(scenarioDir, name));
+      earliest = earliest === null ? mtimeMs : Math.min(earliest, mtimeMs);
+    } catch (_vanished) {
+      // An entry that vanished has no time to offer.
+    }
+  }
+  return earliest;
+}
+
+async function determineEarlierRunStart(scenarioDir, names) {
+  const fromEvents = await readFirstPlaybackEventTimestamp(
+    join(scenarioDir, OUTPUT.PLAYBACK_EVENTS_FILENAME));
+  if (fromEvents !== null) {
+    return {at: fromEvents, source: RUN_START_SOURCE_EVENTS};
+  }
+  const fromMtime = await earliestEntryMtime(scenarioDir, names);
+  if (fromMtime !== null) {
+    return {at: Math.floor(fromMtime), source: RUN_START_SOURCE_MTIME};
+  }
+  return {at: Date.now(), source: RUN_START_SOURCE_ARCHIVE_TIME};
+}
+
+function runArchiveBaseName(runStartMs) {
+  return RUN_ARCHIVE_PREFIX + stringReplaceAll(
+    dateToIsoString(new Date(runStartMs)), ISO_TIME_SEPARATOR,
+    ARCHIVE_NAME_TIME_SEPARATOR);
+}
+
+// Creates the archive dir; a name already taken (two runs that started in
+// the same millisecond) gets a numeric suffix rather than a merge.
+async function reserveRunArchiveDir(scenarioDir, baseName) {
+  for (let attempt = ZERO; attempt < RUN_ARCHIVE_NAME_ATTEMPTS; attempt += 1) {
+    const name = attempt === ZERO ? baseName :
+      baseName + ARCHIVE_NAME_TIME_SEPARATOR + attempt;
+    try {
+      await mkdir(join(scenarioDir, name));
+      return name;
+    } catch (error) {
+      if (error?.code !== ERROR_CODE_EXISTS) {
+        throw error;
+      }
+    }
+  }
+  throw new Error(`no free run archive name for ${baseName} in ${scenarioDir}`);
+}
+
+// Rewrites one path token that names a location under rule.from (a path
+// relative to the output root, matched at a path-segment boundary so any
+// workspace-relative or absolute spelling of it matches) to rule.to. A
+// token already inside an earlier archive is left alone; a bare scenario
+// name (no separator) is not a path and never matches.
+function rewritePathTokenUnder(token, rule) {
+  if (stringEndsWith(token, PATH_SEPARATOR + rule.from)) {
+    return stringSlice(token, ZERO, token.length - rule.from.length) + rule.to;
+  }
+  const marker = PATH_SEPARATOR + rule.from + PATH_SEPARATOR;
+  const markerIndex = stringLastIndexOf(token, marker);
+  let headLength = markerIndex + PATH_SEPARATOR.length;
+  if (markerIndex < ZERO) {
+    if (!stringStartsWith(token, rule.from + PATH_SEPARATOR)) {
+      return null;
+    }
+    headLength = ZERO;
+  }
+  const rest = stringSlice(token,
+    headLength + rule.from.length + PATH_SEPARATOR.length);
+  if (stringStartsWith(rest, RUN_ARCHIVE_PREFIX)) {
+    return null;
+  }
+  return stringSlice(token, ZERO, headLength) + rule.to + PATH_SEPARATOR +
+    rest;
+}
+
+function rewriteArchivedPaths(text, rules) {
+  return stringReplace(text, PATH_TOKEN_PATTERN, (token) => {
+    for (const rule of rules) {
+      const rewritten = rewritePathTokenUnder(token, rule);
+      if (rewritten !== null) {
+        return rewritten;
+      }
+    }
+    return token;
+  });
+}
+
+function isPathRewrittenArtifact(name) {
+  for (const extension of RUN_ARCHIVE_PATH_REWRITE_EXTENSIONS) {
+    if (stringEndsWith(name, extension)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function rewriteArchivedArtifacts(archiveDir, names, rules) {
+  const rewrittenIn = [];
+  for (const name of names) {
+    if (!isPathRewrittenArtifact(name)) {
+      continue;
+    }
+    const artifactPath = join(archiveDir, name);
+    let text;
+    try {
+      text = await readFile(artifactPath, ENCODING_UTF8);
+    } catch (_notAFile) {
+      continue;
+    }
+    const rewritten = rewriteArchivedPaths(text, rules);
+    if (rewritten !== text) {
+      await writeFile(artifactPath, rewritten, ENCODING_UTF8);
+      rewrittenIn.push(name);
+    }
+  }
+  return rewrittenIn;
+}
+
+async function listEntryNames(dir) {
+  try {
+    return await readdir(dir);
+  } catch (_missing) {
+    return [];
+  }
+}
+
+// The disk bound: keep the newest ARCHIVED_SCENARIO_RUNS_KEPT archives
+// (names sort by run start), delete the older ones.
+async function pruneRunArchives(scenarioDir) {
+  const archives = arraySort(arrayFilter(await listEntryNames(scenarioDir),
+    (name) => stringStartsWith(name, RUN_ARCHIVE_PREFIX)));
+  const pruned = [];
+  while (archives.length > ARCHIVED_SCENARIO_RUNS_KEPT) {
+    const oldest = archives.shift();
+    await rm(join(scenarioDir, oldest), {force: true, recursive: true});
+    pruned.push(oldest);
+  }
+  return pruned;
+}
+
+/**
+ * Move an earlier run's artifacts out of the scenario dir into that run's
+ * archive (layout, bundle resolution and disk bound: see the Earlier-run
+ * archive block above).
+ * @param {{outputDir: string, scenarioName: string,
+ *   archiveFullLogs?: function(string): Promise<?{from: string, to: string}>}}
+ *   options
+ * @return {Promise<?Object>} The archive record, or null when there was no
+ *   earlier run to archive.
+ */
+async function archivePreviousScenarioRun(
+  {outputDir, scenarioName, archiveFullLogs},
+) {
+  const scenarioDir = join(outputDir, scenarioName);
+  const runNames = arrayFilter(await listEntryNames(scenarioDir),
+    (name) => !stringStartsWith(name, RUN_ARCHIVE_PREFIX));
+  await mkdir(scenarioDir, {recursive: true});
+  const runStart = await determineEarlierRunStart(scenarioDir, runNames);
+  const archiveName = await reserveRunArchiveDir(scenarioDir,
+    runArchiveBaseName(runStart.at));
+  const archiveDir = join(scenarioDir, archiveName);
+  const scenarioTail = relative(outputDir, scenarioDir);
+  const archiveTail = relative(outputDir, archiveDir);
+  const moved = [];
+  for (const name of runNames) {
+    await rename(join(scenarioDir, name), join(archiveDir, name));
+    moved.push({
+      from: scenarioTail + PATH_SEPARATOR + name,
+      to: archiveTail + PATH_SEPARATOR + name,
+    });
+  }
+  // Rules apply first-match: the full-log tree comes before the scenario dir
+  // so a `.full-logs/{scenario}/...` path never matches the scenario rule. A
+  // full-log tree that did not move gets an identity rule (to === from).
+  const rules = [];
+  const fullLogsMove = typeof archiveFullLogs === 'function' ?
+    await archiveFullLogs(archiveDir) : null;
+  if (fullLogsMove) {
+    const fullLogsFrom = relative(outputDir, fullLogsMove.from);
+    const fullLogsTo = fullLogsMove.moved ?
+      relative(outputDir, fullLogsMove.to) : fullLogsFrom;
+    rules.push({from: fullLogsFrom, to: fullLogsTo});
+    if (fullLogsMove.moved) {
+      moved.push({from: fullLogsFrom, to: fullLogsTo});
+    }
+  }
+  if (moved.length === ZERO) {
+    await rmdir(archiveDir);
+    return null;
+  }
+  rules.push({from: scenarioTail, to: archiveTail});
+  const pathsRewrittenIn = await rewriteArchivedArtifacts(archiveDir,
+    runNames, rules);
+  const manifest = {
+    schemaVersion: RUN_ARCHIVE_MANIFEST_SCHEMA_VERSION,
+    scenario: scenarioName,
+    runStartedAt: runStart.at,
+    runStartedAtSource: runStart.source,
+    archivedAt: Date.now(),
+    pathsRelativeTo: 'outputDir',
+    moved,
+    pathsRewrittenIn,
+    keptArchives: ARCHIVED_SCENARIO_RUNS_KEPT,
+  };
+  await writeFile(join(archiveDir, RUN_ARCHIVE_MANIFEST_FILENAME),
+    JSON.stringify(manifest, null, JSON_INDENT) + NEWLINE, ENCODING_UTF8);
+  const pruned = await pruneRunArchives(scenarioDir);
+  return {archiveDir, archiveName, manifest, pruned};
+}
 
 /**
  * LogCollector — buffers log events from live query subscription
@@ -208,31 +504,22 @@ class LogCollector {
   }
 
   /**
-   * Clear an EARLIER run's curated logs from the scenario directory before
+   * Move an EARLIER run's artifacts out of the scenario directory before
    * this run writes any. The directory is shared by every run of the
    * scenario under one output root and node ids are fresh per run, so
    * without this the failure bundle and triage read other runs' node logs
-   * as this run's evidence.
+   * as this run's evidence. They are archived, never deleted (see the
+   * Earlier-run archive block at the top of this module).
    * @param {string} scenarioName
-   * @return {Promise<Array<string>>} The removed file names.
+   * @param {{archiveFullLogs?: Function}} [options]
+   * @return {Promise<?Object>} The archive record, or null.
    */
-  async resetScenarioOutput(scenarioName) {
-    const scenarioDir = join(this._outputDir, scenarioName);
-    let names = [];
-    try {
-      names = await readdir(scenarioDir);
-    } catch (_missing) {
-      return [];
-    }
-    const removed = [];
-    for (const name of names) {
-      if (stringEndsWith(name, LOG_FILE_EXTENSION) ||
-          name === OUTPUT.ANALYSIS_FILENAME) {
-        await rm(join(scenarioDir, name), {force: true});
-        removed.push(name);
-      }
-    }
-    return removed;
+  async archivePreviousScenarioRun(scenarioName, options = {}) {
+    return archivePreviousScenarioRun({
+      archiveFullLogs: options.archiveFullLogs,
+      outputDir: this._outputDir,
+      scenarioName,
+    });
   }
 
   /**
@@ -530,6 +817,7 @@ function decodeDockerLogFrames(payload) {
 }
 
 export {
+  ARCHIVED_SCENARIO_RUNS_KEPT,
   LogCollector,
   formatLogEntry,
   compareTimestamps,

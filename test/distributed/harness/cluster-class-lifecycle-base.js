@@ -894,10 +894,18 @@ class ClusterLifecycleBase {
 
   // This run owns the scenario's artifact directory from here on: an
   // earlier run's curated and full node logs must not be read as its
-  // evidence (the directory is shared per scenario, node ids are not).
+  // evidence (the directory is shared per scenario, node ids are not), and
+  // must never be destroyed either: they move, with that run's failure
+  // bundle, into the earlier run's archive dir (log-collector.js
+  // archivePreviousScenarioRun owns the layout, the bound and the bundle
+  // path rewrite; resetScenarioFullLogs moves the full logs into it).
   async _resetScenarioRunArtifacts() {
-    await this._logCollector.resetScenarioOutput(this._scenarioName);
-    await resetScenarioFullLogs(this._config?.outputDir, this._scenarioName);
+    const outputDir = this._config?.outputDir;
+    const scenarioName = this._scenarioName;
+    await this._logCollector.archivePreviousScenarioRun(scenarioName, {
+      archiveFullLogs: (archiveDir) =>
+        resetScenarioFullLogs(outputDir, scenarioName, archiveDir),
+    });
   }
 
   async start() {

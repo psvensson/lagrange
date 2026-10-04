@@ -9,21 +9,43 @@
  *   is active and whose raft role is a voter role (leader, follower,
  *   candidate). Learners, syncing/pending/creating/removing/failed rows
  *   and rows with no published raft role are not active voters.
- * - a HOST: the Docker provider the harness placed the node on
- *   (`cluster._hostAssignment[nodeIndex]`, stamped on each NodeHandle as
- *   `hostIdentity` when the harness starts it). Two nodes on one provider
- *   are one host. A node id is never a host.
+ * - a HOST: the MACHINE the harness placed the node on, named only by
+ *   declared/observed topology (scenario-host-topology.js: the provider's
+ *   declared machine id, else its resolved internal address; nothing
+ *   else). Two nodes on one provider, and two providers on one machine,
+ *   are one host. It is stamped on each NodeHandle as `hostIdentity` when
+ *   the harness starts it. A node id, a provider index or missing
+ *   topology is never a host: an unknown host fails closed.
+ *
+ * Every spread claim states its UNIT (claim.spreadUnit, SPREAD_UNIT):
+ * 'host' counts distinct machines by the host authority, 'node' counts
+ * distinct node ids (and says host spread was not measured). The gate
+ * record and the failure text carry the unit; a claim without one is
+ * invalid (spread_unit_invalid).
  *
  * What a gate built on these rows can and cannot see: the harness reads
  * the replicated `services` and `partitions` ROWS. No admin or diagnostic
  * read exposes the raft-rs ConfState (committed voters) per group, so a
  * gate here measures service rows, not committed raft membership, and its
  * record says so (MEMBERSHIP_EVIDENCE).
+ *
+ * Blind spots of the split claim (rows, polled):
+ * (a) a MERGE: its sources and target all read as current partitions, so
+ *     a merge-shaped table can satisfy the claim (merge is disabled in the
+ *     scenarios that use it);
+ * (b) a parent never observed while its row existed, whose row was
+ *     re-versioned to the children's version, reads as a child;
+ * (c) a parent never observed whose row is already gone: closed here -
+ *     ACTIVE replicas of a partition id of the table with no partitions
+ *     row are an unmet fact (orphan_active_replicas).
+ * (b) and (c) need the first readback after the cutover; the scenario
+ * gates poll from before the split.
  */
 
 import {SERVICE_STATUS} from '../../../src/constants/service-status.js';
 import {SERVICE_TYPE} from '../../../src/constants/service.js';
 import {isVoterRaftRole} from '../../../src/raft/replica-voter-readiness.js';
+import {SPREAD_UNIT, isSpreadUnit} from './scenario-host-topology.js';
 
 // Module-load captures (the harness tree's ambient-intrinsics rule).
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -32,12 +54,20 @@ const arraySome = Function.call.bind(Array.prototype.some);
 const arraySort = Function.call.bind(Array.prototype.sort);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const setHas = Function.call.bind(Set.prototype.has);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const mapGet = Function.call.bind(Map.prototype.get);
 
 const ZERO = 0;
 const ONE = 1;
 
-const HOST_AUTHORITY = 'harness_docker_provider_assignment';
+// A SPLITTING/MERGING row is mid-transition: never a settled child.
+const TRANSITIONAL_PARTITION_STATES = Object.freeze(new Set([
+  'splitting',
+  'merging',
+]));
+const TABLE_PARTITION_SEPARATORS = Object.freeze(['-', '_']);
+
+const HOST_AUTHORITY = 'declared_provider_machine_topology';
 
 const MEMBERSHIP_EVIDENCE = Object.freeze({
   committedMembershipObserved: false,
@@ -60,12 +90,39 @@ const UNMET_FACT = Object.freeze({
   CHILD_LEADER_MISSING: 'child_leader_missing',
   CHILD_LEADER_NOT_ACTIVE_VOTER: 'child_leader_not_active_voter',
   CHILD_REPLICA_HOSTS_INSUFFICIENT: 'child_replica_hosts_insufficient',
+  CHILD_REPLICA_NODES_INSUFFICIENT: 'child_replica_nodes_insufficient',
   CHILD_REPLICA_POLICY_UNKNOWN: 'child_replica_policy_unknown',
   CLUSTER_HOSTS_INSUFFICIENT: 'cluster_hosts_insufficient',
+  CLUSTER_NODES_INSUFFICIENT: 'cluster_nodes_insufficient',
   HOST_IDENTITY_UNKNOWN: 'host_identity_unknown',
   LEADER_HOSTS_INSUFFICIENT: 'leader_hosts_insufficient',
+  LEADER_NODES_INSUFFICIENT: 'leader_nodes_insufficient',
+  ORPHAN_ACTIVE_REPLICAS: 'orphan_active_replicas',
   PARENT_NOT_DISSOLVED: 'parent_not_dissolved',
+  PARTITION_TRANSITIONAL: 'partition_transitional',
+  READBACK_FAILED: 'readback_failed',
   SPLIT_CHILDREN_MISSING: 'split_children_missing',
+  SPREAD_UNIT_INVALID: 'spread_unit_invalid',
+});
+
+const SPREAD_FACT = Object.freeze({
+  [SPREAD_UNIT.HOST]: Object.freeze({
+    childReplicas: UNMET_FACT.CHILD_REPLICA_HOSTS_INSUFFICIENT,
+    cluster: UNMET_FACT.CLUSTER_HOSTS_INSUFFICIENT,
+    leaders: UNMET_FACT.LEADER_HOSTS_INSUFFICIENT,
+  }),
+  [SPREAD_UNIT.NODE]: Object.freeze({
+    childReplicas: UNMET_FACT.CHILD_REPLICA_NODES_INSUFFICIENT,
+    cluster: UNMET_FACT.CLUSTER_NODES_INSUFFICIENT,
+    leaders: UNMET_FACT.LEADER_NODES_INSUFFICIENT,
+  }),
+});
+
+const SPREAD_UNIT_STATEMENT = Object.freeze({
+  [SPREAD_UNIT.HOST]: 'spread unit: host (distinct machines by the ' +
+    'declared provider machine topology)',
+  [SPREAD_UNIT.NODE]: 'spread unit: node (distinct node ids; host spread ' +
+    'NOT measured)',
 });
 
 function nonEmptyString(value) {
@@ -100,10 +157,26 @@ function describeHostIdentity(node) {
   return {
     hostId,
     label: nonEmptyString(identity?.label) || hostId,
+    source: nonEmptyString(identity?.source),
     providerIndex: Number.isInteger(identity?.providerIndex) ?
       identity.providerIndex :
       null,
   };
+}
+
+const HOST_IDENTITY_ABSENT = 'host_identity_absent';
+
+// One node of the record's nodeHosts: its host, or why it has none.
+function describeListedNode(nodeId, node, host) {
+  if (host === null) {
+    return {host: null,
+      hostLabel: nonEmptyString(node?.hostIdentity?.label),
+      hostMissingReason: nonEmptyString(node?.hostIdentity?.missingReason) ||
+        HOST_IDENTITY_ABSENT,
+      hostSource: null, nodeId};
+  }
+  return {host: host.hostId, hostLabel: host.label, hostMissingReason: null,
+    hostSource: host.source, nodeId};
 }
 
 /**
@@ -121,8 +194,7 @@ function buildNodeHostIndex(nodes) {
     }
     const host = describeHostIdentity(node);
     byNodeId.set(nodeId, host);
-    listed.push({host: host?.hostId ?? null, hostLabel: host?.label ?? null,
-      nodeId});
+    listed.push(describeListedNode(nodeId, node, host));
   }
   const hostIds = new Set();
   for (const host of byNodeId.values()) {
@@ -292,13 +364,24 @@ function leaderUnmetFacts(child, claim, base) {
   return [];
 }
 
+// The members a spread count counts, in the claim's unit.
+function replicaSpreadMembers(child, unit) {
+  return unit === SPREAD_UNIT.HOST ?
+    child.activeVoterHosts.hosts :
+    child.activeVoterNodeIds;
+}
+
 function childUnmetFacts(child, claim) {
   const base = {partitionId: child.partitionId};
   const unmet = replicaCountUnmetFacts(child, claim, base);
-  if (child.activeVoterHosts.hosts.length < claim.minReplicaHostsPerChild) {
-    unmet.push({...base, fact: UNMET_FACT.CHILD_REPLICA_HOSTS_INSUFFICIENT,
-      observed: child.activeVoterHosts.hosts.length,
-      required: claim.minReplicaHostsPerChild});
+  if (isSpreadUnit(claim.spreadUnit)) {
+    const members = replicaSpreadMembers(child, claim.spreadUnit);
+    if (members.length < claim.minReplicaSpreadPerChild) {
+      unmet.push({...base,
+        fact: SPREAD_FACT[claim.spreadUnit].childReplicas,
+        observed: members.length, required: claim.minReplicaSpreadPerChild,
+        unit: claim.spreadUnit});
+    }
   }
   unmet.push(...leaderUnmetFacts(child, claim, base));
   return unmet;
@@ -325,7 +408,10 @@ function parentUnmetFacts(parentIds, partitions, serviceRows) {
   return unmet;
 }
 
-function hostIdentityUnmetFacts(partitions, children) {
+function hostIdentityUnmetFacts(partitions, children, claim) {
+  if (claim.spreadUnit !== SPREAD_UNIT.HOST) {
+    return [];
+  }
   const unknown = new Set();
   for (const partition of partitions) {
     for (const nodeId of partition.activeVoterHosts.unknownNodeIds) {
@@ -343,6 +429,91 @@ function hostIdentityUnmetFacts(partitions, children) {
   }];
 }
 
+function transitionalUnmetFacts(partitions) {
+  const unmet = [];
+  for (const partition of partitions) {
+    if (setHas(TRANSITIONAL_PARTITION_STATES, lowerCaseOrEmpty(partition.state))) {
+      unmet.push({fact: UNMET_FACT.PARTITION_TRANSITIONAL,
+        partitionId: partition.partitionId, state: partition.state});
+    }
+  }
+  return unmet;
+}
+
+function belongsToTables(partitionId, tableIds) {
+  for (const tableId of tableIds) {
+    if (partitionId === tableId) {
+      return true;
+    }
+    for (const separator of TABLE_PARTITION_SEPARATORS) {
+      if (stringStartsWith(partitionId, tableId + separator)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Blind spot (c): ACTIVE replicas of one of the table's partition ids
+// that has no partitions row and was never observed as a parent.
+function tableAndRowIdsOf(partitionRows) {
+  const tableIds = new Set();
+  const rowIds = new Set();
+  for (const row of partitionRows) {
+    const tableId = nonEmptyString(row?.table_id);
+    if (tableId !== null) {
+      tableIds.add(tableId);
+    }
+    rowIds.add(row?.partition_id);
+  }
+  return {rowIds, tableIds};
+}
+
+function orphanPartitionIdOf(service, ids, knownParentIds) {
+  const partitionId = nonEmptyString(service?.partition_id);
+  if (partitionId === null || setHas(ids.rowIds, partitionId) ||
+      setHas(knownParentIds, partitionId) ||
+      lowerCaseOrEmpty(service?.status) !== SERVICE_STATUS.ACTIVE) {
+    return null;
+  }
+  return belongsToTables(partitionId, ids.tableIds) ? partitionId : null;
+}
+
+function orphanUnmetFacts(partitionRows, knownParentIds, serviceRows) {
+  const ids = tableAndRowIdsOf(partitionRows);
+  const counts = new Map();
+  for (const service of serviceRows) {
+    const partitionId = orphanPartitionIdOf(service, ids, knownParentIds);
+    if (partitionId !== null) {
+      counts.set(partitionId, (mapGet(counts, partitionId) || ZERO) + ONE);
+    }
+  }
+  return arrayMap(arraySort([...counts.keys()]), (partitionId) => ({
+    activeReplicaCount: mapGet(counts, partitionId),
+    fact: UNMET_FACT.ORPHAN_ACTIVE_REPLICAS,
+    partitionId,
+  }));
+}
+
+// The record shows what a parent dissolved BY ROWS still has: its
+// leftover replica rows of any status (a removing replica may still run).
+function parentResidualReplicas(parentIds, partitions, serviceRows,
+  hostIndex) {
+  const residual = [];
+  for (const parentId of arraySort([...parentIds])) {
+    if (arraySome(partitions, (entry) => entry.partitionId === parentId)) {
+      continue;
+    }
+    const replicas = arrayMap(arrayFilter(serviceRows, (service) =>
+      service?.partition_id === parentId),
+    (service) => describeReplica(service, hostIndex));
+    if (replicas.length > ZERO) {
+      residual.push({partitionId: parentId, replicas});
+    }
+  }
+  return residual;
+}
+
 function leaderHostsOf(children) {
   const hosts = new Set();
   for (const child of children) {
@@ -353,6 +524,48 @@ function leaderHostsOf(children) {
   return arraySort([...hosts]);
 }
 
+function leaderNodesOf(children) {
+  const nodes = new Set();
+  for (const child of children) {
+    if (child.leader.nodeId !== null) {
+      nodes.add(child.leader.nodeId);
+    }
+  }
+  return arraySort([...nodes]);
+}
+
+// The leader spread in the claim's unit (null members for an invalid unit).
+function leaderSpreadOf(children, unit) {
+  if (!isSpreadUnit(unit)) {
+    return {members: [], unit: unit ?? null};
+  }
+  return {
+    members: unit === SPREAD_UNIT.HOST ?
+      leaderHostsOf(children) :
+      leaderNodesOf(children),
+    unit,
+  };
+}
+
+function spreadUnmetFacts(claim, leaderSpread) {
+  if (!isSpreadUnit(claim.spreadUnit)) {
+    return [{fact: UNMET_FACT.SPREAD_UNIT_INVALID,
+      unit: claim.spreadUnit ?? null}];
+  }
+  if (leaderSpread.members.length >= claim.minDistinctLeaders) {
+    return [];
+  }
+  const entry = {fact: SPREAD_FACT[claim.spreadUnit].leaders,
+    observed: leaderSpread.members.length,
+    required: claim.minDistinctLeaders, unit: claim.spreadUnit};
+  if (claim.spreadUnit === SPREAD_UNIT.HOST) {
+    entry.leaderHosts = leaderSpread.members;
+  } else {
+    entry.leaderNodes = leaderSpread.members;
+  }
+  return [entry];
+}
+
 /**
  * Evaluate the completed-split + spread claim on ONE ground-truth
  * readback.
@@ -361,10 +574,12 @@ function leaderHostsOf(children) {
  * @param {Array<Object>} input.serviceRows `services` rows.
  * @param {Object} input.hostIndex From buildNodeHostIndex.
  * @param {Set<string>} input.knownParentIds Mutated: parents seen so far.
- * @param {Object} input.claim {minChildren, minReplicaHostsPerChild,
- *   minDistinctLeaderHosts, requireParentDissolved, requireChildLeader,
- *   requirePolicyReplicaCount} - every condition is explicit in the claim.
- * @return {Object} {satisfied, unmet, partitions, leaderHosts, fingerprint}
+ * @param {Object} input.claim {spreadUnit, minChildren,
+ *   minReplicaSpreadPerChild, minDistinctLeaders, requireParentDissolved,
+ *   requireChildLeader, requirePolicyReplicaCount} - every condition is
+ *   explicit in the claim, the spread counts in `spreadUnit`.
+ * @return {Object} {satisfied, unmet, partitions, leaderSpread,
+ *   leaderHosts, fingerprint}
  */
 function evaluateSplitSpreadClaim({
   partitionRows, serviceRows, hostIndex, knownParentIds, claim,
@@ -382,6 +597,7 @@ function evaluateSplitSpreadClaim({
     describePartition(row, PARTITION_ROLE.PARENT, serviceRows, hostIndex));
   const partitions = [...parents, ...children];
   const leaderHosts = leaderHostsOf(children);
+  const leaderSpread = leaderSpreadOf(children, claim.spreadUnit);
   const unmet = [];
   if (!topology.splitObserved || children.length < claim.minChildren) {
     unmet.push({fact: UNMET_FACT.SPLIT_CHILDREN_MISSING,
@@ -394,19 +610,20 @@ function evaluateSplitSpreadClaim({
   for (const child of children) {
     unmet.push(...childUnmetFacts(child, claim));
   }
-  if (leaderHosts.length < claim.minDistinctLeaderHosts) {
-    unmet.push({fact: UNMET_FACT.LEADER_HOSTS_INSUFFICIENT,
-      leaderHosts, observed: leaderHosts.length,
-      required: claim.minDistinctLeaderHosts});
-  }
-  unmet.push(...hostIdentityUnmetFacts(partitions, children));
+  unmet.push(...spreadUnmetFacts(claim, leaderSpread));
+  unmet.push(...hostIdentityUnmetFacts(partitions, children, claim));
+  unmet.push(...transitionalUnmetFacts(partitions));
+  unmet.push(...orphanUnmetFacts(partitionRows, knownParentIds, serviceRows));
   return {
     fingerprint: JSON.stringify(arrayMap(partitions, (entry) => [
       entry.partitionId, entry.role, entry.leader.nodeId,
       entry.activeVoterNodeIds,
     ])),
     leaderHosts,
+    leaderSpread,
     parentIdsObserved: arraySort([...knownParentIds]),
+    parentResidualReplicas: parentResidualReplicas(
+      knownParentIds, partitions, serviceRows, hostIndex),
     partitions,
     satisfied: unmet.length === ZERO,
     unmet,
@@ -415,8 +632,9 @@ function evaluateSplitSpreadClaim({
 
 function describeUnmetFact(entry) {
   const details = [];
-  for (const key of ['partitionId', 'observed', 'required', 'leaderNodeId',
-    'activeReplicaCount', 'leaderHosts', 'nodeIds']) {
+  for (const key of ['partitionId', 'state', 'unit', 'observed', 'required',
+    'leaderNodeId', 'activeReplicaCount', 'leaderHosts', 'leaderNodes',
+    'nodeIds', 'error']) {
     if (entry[key] !== undefined && entry[key] !== null) {
       details.push(`${key}=${JSON.stringify(entry[key])}`);
     }
@@ -436,51 +654,83 @@ function tallyUnmetFacts(tally, unmet) {
   }
 }
 
+// A readback (or its onReadback hook) threw: the outcome so far, with the
+// error as a named unmet fact, rides on the error for the gate record.
+function attachFailedOutcome(error, state, startedAtMs, now) {
+  const message = String(error?.message || error);
+  const evaluation = state.evaluation || {};
+  const outcome = {
+    elapsedMs: now() - startedAtMs,
+    error: message,
+    evaluation: {...evaluation, unmet: [...(evaluation.unmet || []),
+      {error: message, fact: UNMET_FACT.READBACK_FAILED}]},
+    passed: false,
+    readbacks: state.readbacks,
+    stableReadbacks: ZERO,
+    unmetTally: Object.fromEntries(state.tally),
+  };
+  if (error && typeof error === 'object') {
+    try {
+      error.groundTruthOutcome = outcome;
+    } catch (_frozen) {
+      // A frozen error still propagates; the caller records what it can.
+    }
+  }
+  return outcome;
+}
+
+async function pollOnce(state, options) {
+  state.evaluation = options.evaluate(await options.readback());
+  state.readbacks += ONE;
+  tallyUnmetFacts(state.tally, state.evaluation.unmet);
+  if (state.evaluation.satisfied) {
+    state.streak = state.evaluation.fingerprint === state.streakFingerprint ?
+      state.streak + ONE :
+      ONE;
+    state.streakFingerprint = state.evaluation.fingerprint;
+  } else {
+    state.streak = ZERO;
+    state.streakFingerprint = null;
+  }
+  if (options.onReadback) {
+    await options.onReadback(state.evaluation);
+  }
+}
+
 /**
  * Poll a ground-truth claim until it holds on N consecutive readbacks
  * with an identical fingerprint, or the budget is spent. Stability is
- * the FULL claim holding on every one of those readbacks; a transient
- * satisfying readback resets nothing but its own streak.
+ * the FULL claim holding on every one of those readbacks; any unmet
+ * readback resets the streak. A readback (or onReadback) that throws
+ * rethrows with `error.groundTruthOutcome`, the failed outcome so far.
  * @param {Object} options
  * @return {Promise<Object>} {passed, evaluation, readbacks, elapsedMs,
  *   unmetTally, stableReadbacks}
  */
-async function pollGroundTruthClaim({
-  readback, evaluate, stableReadbacksRequired, budgetMs, pollMs, sleep, now,
-  onReadback = null,
-}) {
+async function pollGroundTruthClaim(options) {
+  const {stableReadbacksRequired, budgetMs, pollMs, sleep, now} = options;
   const startedAtMs = now();
-  const tally = new Map();
-  let readbacks = ZERO;
-  let streak = ZERO;
-  let streakFingerprint = null;
-  let evaluation = null;
-  while (now() - startedAtMs < budgetMs) {
-    evaluation = evaluate(await readback());
-    readbacks += ONE;
-    tallyUnmetFacts(tally, evaluation.unmet);
-    if (evaluation.satisfied) {
-      streak = evaluation.fingerprint === streakFingerprint ? streak + ONE : ONE;
-      streakFingerprint = evaluation.fingerprint;
-    } else {
-      streak = ZERO;
-      streakFingerprint = null;
+  const state = {evaluation: null, readbacks: ZERO, streak: ZERO,
+    streakFingerprint: null, tally: new Map()};
+  try {
+    while (now() - startedAtMs < budgetMs) {
+      await pollOnce(state, options);
+      if (state.streak >= stableReadbacksRequired) {
+        break;
+      }
+      await sleep(pollMs);
     }
-    if (onReadback !== null) {
-      await onReadback(evaluation);
-    }
-    if (streak >= stableReadbacksRequired) {
-      break;
-    }
-    await sleep(pollMs);
+  } catch (error) {
+    attachFailedOutcome(error, state, startedAtMs, now);
+    throw error;
   }
   return {
     elapsedMs: now() - startedAtMs,
-    evaluation,
-    passed: streak >= stableReadbacksRequired,
-    readbacks,
-    stableReadbacks: streak,
-    unmetTally: Object.fromEntries(tally),
+    evaluation: state.evaluation,
+    passed: state.streak >= stableReadbacksRequired,
+    readbacks: state.readbacks,
+    stableReadbacks: state.streak,
+    unmetTally: Object.fromEntries(state.tally),
   };
 }
 
@@ -489,19 +739,31 @@ async function pollGroundTruthClaim({
  * @param {Object} input
  * @return {Object}
  */
+// The spread a record states, always with its unit (null = invalid claim).
+function recordSpread(evaluation, claim) {
+  return {
+    leaderSpread: evaluation.leaderSpread ||
+      {members: [], unit: claim?.spreadUnit ?? null},
+    spreadUnit: claim?.spreadUnit ?? null,
+  };
+}
+
 function buildGateRecord({gate, claim, hostIndex, outcome, budgetMs,
   stableReadbacksRequired}) {
   const evaluation = outcome.evaluation || {};
   return {
+    ...recordSpread(evaluation, claim),
     budgetMs,
     claim,
     elapsedMs: outcome.elapsedMs,
+    error: outcome.error || null,
     gate,
     hostAuthority: hostIndex.authority,
     leaderHosts: evaluation.leaderHosts || [],
     membershipEvidence: MEMBERSHIP_EVIDENCE,
     nodeHosts: hostIndex.nodes,
     parentIdsObserved: evaluation.parentIdsObserved || [],
+    parentResidualReplicas: evaluation.parentResidualReplicas || [],
     partitions: evaluation.partitions || [],
     passed: outcome.passed,
     readbacks: outcome.readbacks,
@@ -521,30 +783,50 @@ function describeGateFailure(record) {
   const last = arrayMap(record.unmet, describeUnmetFact).join('; ');
   const tally = arrayMap(Object.keys(record.unmetTally), (fact) =>
     `${fact} x${record.unmetTally[fact]}`).join(', ');
+  const unit = SPREAD_UNIT_STATEMENT[record.spreadUnit] ||
+    `${UNMET_FACT.SPREAD_UNIT_INVALID} (${JSON.stringify(record.spreadUnit)})`;
   return `${record.gate} not met within ${record.budgetMs}ms ` +
     `(${record.readbacks} readbacks, ${record.stableReadbacks}/` +
-    `${record.stableReadbacksRequired} stable; ` +
+    `${record.stableReadbacksRequired} stable; ${unit}; ` +
     `${MEMBERSHIP_EVIDENCE.statement}; hosts by ` +
     `${record.hostAuthority}): last readback unmet: ${last || 'none'}; ` +
     `unmet across readbacks: ${tally || 'none'}`;
 }
 
 /**
- * A claim that needs more distinct hosts than the cluster has cannot be
- * proven on this topology; the gate says so instead of waiting.
+ * A claim that needs more distinct hosts (or nodes) than the cluster has
+ * cannot be proven on this topology; the gate says so instead of waiting.
+ * In the host unit a node with no host identity leaves the cluster's host
+ * count unknown, which fails closed.
  * @param {Object} hostIndex
- * @param {number} requiredHosts
+ * @param {Object} claim {spreadUnit, minDistinctLeaders,
+ *   minReplicaSpreadPerChild}
  * @return {Object|null} The unmet fact, or null.
  */
-function clusterHostShortfall(hostIndex, requiredHosts) {
-  if (hostIndex.hostIds.length >= requiredHosts) {
+function clusterSpreadShortfall(hostIndex, claim) {
+  if (!isSpreadUnit(claim.spreadUnit)) {
+    return {fact: UNMET_FACT.SPREAD_UNIT_INVALID,
+      unit: claim.spreadUnit ?? null};
+  }
+  const required = Math.max(claim.minDistinctLeaders,
+    claim.minReplicaSpreadPerChild);
+  if (required <= ONE) {
     return null;
   }
-  return {
-    fact: UNMET_FACT.CLUSTER_HOSTS_INSUFFICIENT,
-    observed: hostIndex.hostIds.length,
-    required: requiredHosts,
-  };
+  const unknown = arrayFilter(hostIndex.nodes, (node) => node.host === null);
+  if (claim.spreadUnit === SPREAD_UNIT.HOST && unknown.length > ZERO) {
+    return {fact: UNMET_FACT.HOST_IDENTITY_UNKNOWN,
+      nodeIds: arrayMap(unknown, (node) => node.nodeId), required,
+      unit: claim.spreadUnit};
+  }
+  const observed = claim.spreadUnit === SPREAD_UNIT.HOST ?
+    hostIndex.hostIds.length :
+    hostIndex.nodes.length;
+  if (observed >= required) {
+    return null;
+  }
+  return {fact: SPREAD_FACT[claim.spreadUnit].cluster, observed, required,
+    unit: claim.spreadUnit};
 }
 
 export {
@@ -553,7 +835,7 @@ export {
   UNMET_FACT,
   buildGateRecord,
   buildNodeHostIndex,
-  clusterHostShortfall,
+  clusterSpreadShortfall,
   countDistinctHosts,
   describeGateFailure,
   evaluateSplitSpreadClaim,

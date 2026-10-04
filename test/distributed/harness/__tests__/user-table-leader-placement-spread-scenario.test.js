@@ -98,7 +98,7 @@ function buildStubCluster(state) {
     const providerIndex = state.nodeProviders[index - 1];
     nodes.push({
       containerId: `container-${index}`,
-      hostIdentity: {hostId: `provider-${providerIndex}`,
+      hostIdentity: {hostId: `host:machine-${providerIndex}`,
         label: `10.0.0.${providerIndex + 1}`, providerIndex},
       id: `node-${index}`,
       ip: `10.0.0.${index}`,
@@ -145,20 +145,21 @@ describe('user-table-leader-placement-spread scenario', () => {
   it('passes when the platform spreads and holds child leaders', async () => {
     const state = greenState();
     const detail = await run(buildStubCluster(state));
-    assert.equal(detail.schemaVersion, 2);
+    assert.equal(detail.schemaVersion, 3);
+    assert.equal(detail.topology.spreadUnit, 'node');
     assert.equal(detail.tableName, 'leader_spread_activity');
     assert.equal(detail.preQuiescenceStablePolls, QUIESCENCE_POLLS);
     assert.ok(detail.preQuiescenceHoldMs >= 0);
-    assert.equal(detail.topology.distinctLeaderHosts, 2);
+    assert.equal(detail.topology.distinctLeaderNodes, 2);
     assert.equal(detail.topology.partitions.length, 2);
     assert.ok(arrayEvery(detail.topology.partitions,
-      (partition) => partition.replicaHostCount === 3));
+      (partition) => partition.replicaNodeCount === 3));
     const gates = arrayFilter(state.events, (event) =>
       event.type === 'scenario.gate');
     assert.deepEqual(arrayMap(gates, (event) =>
       [event.entityId, event.details.passed]), [
-      ['managed-split', true], ['replica-spread-support', true],
-      ['leader-spread', true], ['leader-spread-hold', true],
+      ['managed-split', true], ['replica-node-spread-support', true],
+      ['leader-node-spread', true], ['leader-node-spread-hold', true],
     ]);
   });
 
@@ -174,12 +175,12 @@ describe('user-table-leader-placement-spread scenario', () => {
     );
   });
 
-  it('fails when every child leader stays on one host', async () => {
+  it('fails when every child leader stays on one node', async () => {
     const state = greenState();
     state.partitionRows = SINGLE_HOST_PARTITION_ROWS;
     await assert.rejects(
       run(buildStubCluster(state)),
-      /leader-spread not met .*leader_hosts_insufficient\(observed=1 required=2/u,
+      /leader-node-spread not met .*spread unit: node .*leader_nodes_insufficient\(unit="node" observed=1 required=2/u,
     );
   });
 
@@ -197,7 +198,7 @@ describe('user-table-leader-placement-spread scenario', () => {
     state.serviceRows = CO_LOCATED_SERVICE_ROWS;
     await assert.rejects(
       run(buildStubCluster(state)),
-      /replica-spread-support not met .*child_replica_hosts_insufficient/u,
+      /replica-node-spread-support not met .*child_replica_nodes_insufficient/u,
     );
   });
 
@@ -227,7 +228,7 @@ describe('user-table-leader-placement-spread scenario', () => {
           SPREAD_PARTITION_ROWS;
       const detail = await run(buildStubCluster(state));
       assert.equal(detail.topology.partitions.length, 2);
-      assert.equal(detail.topology.distinctLeaderHosts, 2);
+      assert.equal(detail.topology.distinctLeaderNodes, 2);
       const split = arrayFind(state.events, (event) =>
         event.type === 'scenario.gate' && event.entityId === 'managed-split');
       assert.equal(split.details.passed, true);
@@ -247,11 +248,32 @@ describe('user-table-leader-placement-spread scenario', () => {
       /managed-split not met .*parent_not_dissolved\(partitionId="p-0"/u);
   });
 
-  it('two nodes on one host do not make leader spread', async () => {
+  it('counts distinct leader NODES (its stated unit): two leader nodes on ' +
+    'one host pass, and the record says host spread was not measured',
+  async () => {
     const state = greenState();
     state.nodeProviders = [0, 0, 1];
-    await assert.rejects(run(buildStubCluster(state)),
-      /leader-spread not met .*leader_hosts_insufficient\(observed=1 required=2 leaderHosts=\["provider-0"\]\)/u);
+    const detail = await run(buildStubCluster(state));
+    assert.equal(detail.topology.spreadUnit, 'node');
+    assert.equal(detail.topology.distinctLeaderNodes, 2);
+    assert.equal(detail.topology.distinctLeaderHosts, undefined);
+    const spread = arrayFilter(state.events, (event) =>
+      event.type === 'scenario.gate' &&
+      event.entityId === 'leader-node-spread')[0].details;
+    assert.equal(spread.spreadUnit, 'node');
+    assert.deepEqual(spread.leaderSpread.unit, 'node');
+    assert.equal(spread.leaderSpread.members.length, 2);
+    assert.deepEqual(spread.leaderHosts, ['host:machine-0']);
+  });
+
+  it('a node-unit claim does not need host topology', async () => {
+    const state = greenState();
+    const cluster = buildStubCluster(state);
+    for (const node of cluster.getNodes()) {
+      node.hostIdentity = null;
+    }
+    const detail = await run(cluster);
+    assert.equal(detail.topology.distinctLeaderNodes, 2);
   });
 
   it('learner and syncing rows do not support replica spread', async () => {
@@ -263,7 +285,7 @@ describe('user-table-leader-placement-spread scenario', () => {
       ...arraySlice(SPREAD_SERVICE_ROWS, 3),
     ];
     await assert.rejects(run(buildStubCluster(state)),
-      /replica-spread-support not met .*child_replica_hosts_insufficient\(partitionId="p-1" observed=1 required=2\)/u);
+      /replica-node-spread-support not met .*child_replica_nodes_insufficient\(partitionId="p-1" unit="node" observed=1 required=2\)/u);
   });
 
   it('fails when spread itself is lost during the hold', async () => {

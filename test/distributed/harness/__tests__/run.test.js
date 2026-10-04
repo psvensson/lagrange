@@ -36,6 +36,7 @@ import {
   formatRunSummary,
 } from '../../run.js';
 import {buildReportMetadata} from '../../run-report-metadata.js';
+import {computeStandardSummary, computeSummary} from '../report-writer.js';
 import {CLI} from '../constants.js';
 import {DockerProvider} from '../docker-provider.js';
 import {
@@ -1402,3 +1403,72 @@ describe('formatRunSummary', () => {
     assert.doesNotMatch(output, /ops,/);
   });
 });
+
+describe('runScenarios: a scenario the config cannot carry is REFUSED (R1)',
+  () => {
+    const publicPathPath = new URL(
+      '../../scenarios/public-path-multinode-baseline.js',
+      import.meta.url,
+    ).pathname;
+
+    it('refuses before any cluster exists, names required vs available, ' +
+      'and never reads as passed or failed', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'refused-run-'));
+      let clustersBuilt = 0;
+      try {
+        const {report, hasFailures, hasRefusals} = await runScenarios(
+          {size: 3, docker: {socketPath: '/var/run/docker.sock'},
+            image: 'test:latest', resourceLimits: {}, timeouts: {}},
+          [{name: 'public-path-multinode-baseline', path: publicPathPath}],
+          {output: join(dir, 'r.json'), verbose: false,
+            stateMachinePressurePreflight: {ready: true},
+            clusterFactory() {
+              clustersBuilt += 1;
+              throw new Error('no cluster may start for a refused scenario');
+            }},
+        );
+        assert.equal(clustersBuilt, 0);
+        assert.equal(hasFailures, false);
+        assert.equal(hasRefusals, true);
+        const entry = report.scenarios[0];
+        assert.equal(entry.passed, false);
+        assert.equal(entry.outcome, 'refused');
+        assert.equal(entry.verdict, 'REFUSED_NOT_RUN');
+        assert.equal(entry.verdictReason, 'refused_insufficient_host_topology');
+        assert.equal(entry.refusal.required, 2);
+        assert.equal(entry.refusal.available, null);
+        assert.match(entry.error,
+          /refused_insufficient_host_topology: requires >= 2 distinct host/u);
+        const preview = {summary: computeSummary(report.scenarios),
+          standardSummary: computeStandardSummary(report.scenarios, [])};
+        assert.deepEqual({...preview.summary, duration: 0},
+          {duration: 0, failed: 1, passed: 0, refused: 1, total: 1});
+        assert.equal(preview.standardSummary.scenarios[0].current.outcome,
+          'refused');
+        const output = formatRunSummary(preview, report.scenarios);
+        assert.match(output, /0\/1 passed, 0 failed, 1 refused \(not run\)/u);
+        assert.match(output, /REFUSED \(not run\) public-path-multinode-baseline/u);
+        assert.doesNotMatch(output, /PASS|FAIL /u);
+      } finally {
+        await rm(dir, {force: true, recursive: true});
+      }
+    });
+
+    it('a config declaring two machines runs it (no refusal)', async () => {
+      let clustersBuilt = 0;
+      const {hasRefusals} = await runScenarios(
+        {size: 3, docker: {hosts: ['tcp://a:1', 'tcp://b:2'],
+          hostInfo: [{internalIp: '10.0.0.1'}, {internalIp: '10.0.0.2'}]},
+        image: 'test:latest', resourceLimits: {}, timeouts: {}},
+        [{name: 'public-path-multinode-baseline', path: publicPathPath}],
+        {output: '/tmp/test-report.json', verbose: false,
+          stateMachinePressurePreflight: {ready: true},
+          clusterFactory() {
+            clustersBuilt += 1;
+            throw new Error('docker unavailable in unit tests');
+          }},
+      );
+      assert.equal(clustersBuilt, 1);
+      assert.equal(hasRefusals, false);
+    });
+  });

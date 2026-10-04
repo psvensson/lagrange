@@ -40,6 +40,7 @@ import {
   createTableTopologyHelpers,
 } from './user-table-topology-helpers.js';
 import {PARTITION_ROLE} from '../harness/scenario-ground-truth.js';
+import {SPREAD_UNIT} from '../harness/scenario-host-topology.js';
 import {createScenarioStepRunner} from '../harness/scenario-step-log.js';
 import {
   DATASET_GENERATOR,
@@ -66,21 +67,34 @@ const ZERO = 0;
 const ONE = 1;
 const MIN_PARTITION_COUNT = 2;
 const MIN_DISTINCT_LEADER_HOSTS = 2;
-const SPLIT_SPREAD_GATE = 'split-leader-spread';
+const SPLIT_SPREAD_GATE = 'split-leader-host-spread';
 // What the scenario claims to prove (module docstring, quest statement and
 // the formation handoff criteria "RF=3 committed membership, leaders
 // present, placement across multiple hosts"): one COMPLETED managed split
 // (the parent dissolved, both children carrying the measured data), each
 // child holding its policy replica count of active voters across more
 // than one host, a leader for each child, and the child leaders on at
-// least two distinct hosts.
+// least two distinct hosts. The spread unit is HOST (distinct machines).
 const SPLIT_SPREAD_CLAIM = Object.freeze({
   minChildren: MIN_PARTITION_COUNT,
-  minDistinctLeaderHosts: MIN_DISTINCT_LEADER_HOSTS,
-  minReplicaHostsPerChild: MIN_DISTINCT_LEADER_HOSTS,
+  minDistinctLeaders: MIN_DISTINCT_LEADER_HOSTS,
+  minReplicaSpreadPerChild: MIN_DISTINCT_LEADER_HOSTS,
   requireChildLeader: true,
   requireParentDissolved: true,
   requirePolicyReplicaCount: true,
+  spreadUnit: SPREAD_UNIT.HOST,
+});
+
+/**
+ * The topology this scenario's claim needs, declared so the runner can
+ * refuse it BEFORE starting anything on a config that cannot carry it
+ * (refused_insufficient_host_topology): leaders on distinct HOSTS need at
+ * least two declared machines. Physical host spread is proven on the lab
+ * and GCP configs; single-host local configs are refused, never passed.
+ */
+export const SCENARIO_TOPOLOGY_REQUIREMENT = Object.freeze({
+  minDistinctHosts: MIN_DISTINCT_LEADER_HOSTS,
+  spreadUnit: SPREAD_UNIT.HOST,
 });
 const DEFAULT_INVOCATION_COUNT = 60;
 const TOPOLOGY_STABLE_READBACKS = 2;

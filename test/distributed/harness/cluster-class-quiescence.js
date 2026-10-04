@@ -60,11 +60,10 @@ const {
   summarizeBootstrapProgress,
 } = CLUSTER_CLASS_SHARED_CONTEXT;
 import {ClusterLoadOrchestration} from './cluster-class-load-orchestration.js';
+import {describeProviderMachine} from './scenario-host-topology.js';
 
 const QUIESCENCE_NODE_ID_UNKNOWN = 'unknown';
 const PLAYBACK_SCOPE_SCENARIO = 'scenario';
-const HOST_IDENTITY_PREFIX = 'provider-';
-const LOCAL_DOCKER_HOST_LABEL = 'local-docker';
 const QUIESCENCE_CANONICAL_BLOCKER_NONE = 'none';
 const QUIESCENCE_INSTABILITY_SUMMARY_NONE = 'none';
 const QUIESCENCE_STABLE_WINDOW_EXTENSION_MARGIN_MS = 100;
@@ -1222,22 +1221,13 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
     return fallbackProviderIndex;
   }
 
-  // The authority for where a node runs: the Docker provider the harness
-  // placed it on. Two nodes on one provider are one host.
+  // The authority for where a node runs: the MACHINE behind the Docker
+  // provider the harness placed it on, named only by declared/observed
+  // topology (scenario-host-topology describeProviderMachine); a provider
+  // with no such fact has no host identity and every consumer fails
+  // closed - never the provider index, the endpoint or the node id.
   _describeProviderHost(providerIdx) {
-    const dockerConfig = this._config?.docker || {};
-    const info = Array.isArray(dockerConfig.hostInfo) ?
-      dockerConfig.hostInfo[providerIdx] :
-      null;
-    const dockerHost = Array.isArray(dockerConfig.hosts) ?
-      dockerConfig.hosts[providerIdx] :
-      null;
-    return Object.freeze({
-      hostId: HOST_IDENTITY_PREFIX + String(providerIdx),
-      label: info?.internalIp || info?.externalIp || dockerHost ||
-        LOCAL_DOCKER_HOST_LABEL,
-      providerIndex: providerIdx,
-    });
+    return describeProviderMachine(this._config, providerIdx);
   }
 
   async _startNode(nodeId, role, seedIp, nodeIndex) {

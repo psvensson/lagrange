@@ -6,6 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {CHECKS_DIR, PROBE} from './schema.js';
+import {
+  SCENARIO_OUTCOME,
+  scenarioOutcomeOf,
+} from '../../test/distributed/harness/scenario-outcome.js';
 
 const TEXT_ENCODING = 'utf8';
 const REPORT_DIR = 'test-output/reports';
@@ -111,12 +115,24 @@ function verdictReasonOf(data, scenario) {
   return scenarioEntry(data, scenario)?.current?.verdictReason || null;
 }
 
+// A REFUSED (not run) scenario - the config's host topology could not
+// carry its claim - is no sample at all: it never extends a pass streak,
+// never produces a pass receipt, and never counts as a measured failure.
+function isRefusedRun(data, scenario) {
+  const entry = scenarioEntry(data, scenario);
+  return entry !== null &&
+    (scenarioOutcomeOf(entry) === SCENARIO_OUTCOME.REFUSED ||
+      scenarioOutcomeOf(entry?.current) === SCENARIO_OUTCOME.REFUSED);
+}
+
 function isNonMeasuringRun(data, scenario) {
-  return NON_MEASURING_VERDICT_REASONS.includes(verdictReasonOf(data, scenario));
+  return isRefusedRun(data, scenario) ||
+    NON_MEASURING_VERDICT_REASONS.includes(verdictReasonOf(data, scenario));
 }
 
 function scenarioPassed(data, scenario) {
   const entry = scenarioEntry(data, scenario);
+  if (isRefusedRun(data, scenario)) return false;
   if (typeof entry?.passed === 'boolean') return entry.passed;
   if (typeof entry?.current?.passed === 'boolean') return entry.current.passed;
   return data?.summary?.failed === 0;

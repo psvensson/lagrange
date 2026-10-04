@@ -455,6 +455,39 @@ function resolveSnapshotExpectedPartitionIds(snapshot) {
   return expectedPartitionIds;
 }
 
+// A partition with no voter-count entry has zero observed voters: it is under
+// its replica target, never silently at it.
+const ABSENT_PARTITION_VOTER_COUNT = 0;
+
+function resolveExpectedPartitionVoterCount(snapshot, partitionId) {
+  const voterCount = snapshot.voterCounts.get(partitionId);
+  return Number.isFinite(voterCount) ? voterCount : ABSENT_PARTITION_VOTER_COUNT;
+}
+
+function countSnapshotVoterTargetDebt(snapshot, expectedPartitionIds,
+  targetVoterCount) {
+  const debt = {overTargetCount: 0, overTargetExcess: 0,
+    underTargetCount: 0, underTargetDeficit: 0};
+  if (!(snapshot?.voterCounts instanceof Map)) {
+    return debt;
+  }
+  for (const voterCount of snapshot.voterCounts.values()) {
+    if (voterCount > targetVoterCount) {
+      debt.overTargetCount += 1;
+      debt.overTargetExcess += voterCount - targetVoterCount;
+    }
+  }
+  for (const partitionId of expectedPartitionIds) {
+    const voterCount =
+      resolveExpectedPartitionVoterCount(snapshot, partitionId);
+    if (voterCount < targetVoterCount) {
+      debt.underTargetCount += 1;
+      debt.underTargetDeficit += targetVoterCount - voterCount;
+    }
+  }
+  return debt;
+}
+
 function buildConvergenceSnapshotDebt(snapshot, targetVoterCount) {
   const expectedPartitionIds = resolveSnapshotExpectedPartitionIds(snapshot);
   let missingLeaderCount = 0;
@@ -463,22 +496,10 @@ function buildConvergenceSnapshotDebt(snapshot, targetVoterCount) {
       missingLeaderCount += 1;
     }
   }
-
-  let overTargetCount = 0;
-  let overTargetExcess = 0;
-  if (snapshot?.voterCounts instanceof Map) {
-    for (const voterCount of snapshot.voterCounts.values()) {
-      if (voterCount > targetVoterCount) {
-        overTargetCount += 1;
-        overTargetExcess += voterCount - targetVoterCount;
-      }
-    }
-  }
-
   return {
     missingLeaderCount,
-    overTargetCount,
-    overTargetExcess,
+    ...countSnapshotVoterTargetDebt(
+      snapshot, expectedPartitionIds, targetVoterCount),
     inFlightReplicaOperationCount: Number(
       snapshot?.inFlightReplicaOperationCount || 0,
     ),
@@ -491,6 +512,8 @@ function compareConvergenceSnapshotDebt(left, right) {
     'overTargetCount',
     'inFlightReplicaOperationCount',
     'overTargetExcess',
+    'underTargetCount',
+    'underTargetDeficit',
   ];
   for (const key of keys) {
     const delta = Number(left?.[key] || 0) - Number(right?.[key] || 0);
@@ -501,21 +524,117 @@ function compareConvergenceSnapshotDebt(left, right) {
   return 0;
 }
 
-function isConvergedSnapshot(snapshot, targetVoterCount) {
+const CONVERGED_SNAPSHOT_STATE = Object.freeze({
+  CONVERGED: 'converged',
+  CONVERGED_UNDER_REPLICATION_TOLERATED:
+    'converged_under_replication_tolerated',
+  NO_EXPECTED_PARTITIONS: 'no_expected_partitions',
+  MISSING_LEADER: 'missing_leader',
+  VOTER_COUNT_EVIDENCE_ABSENT: 'voter_count_evidence_absent',
+  OVER_TARGET_VOTERS: 'over_target_voters',
+  UNDER_TARGET_VOTERS: 'under_target_voters',
+  IN_FLIGHT_REPLICA_OPERATIONS: 'in_flight_replica_operations',
+});
+const CONVERGED_SNAPSHOT_TOLERANCE_OPTION = 'tolerateUnderReplication';
+
+// Under-replication is tolerated only when the caller names why, at its call
+// site: `{tolerateUnderReplication: '<reason>'}`. A tolerance without a
+// reason is refused rather than read as strict or as tolerant.
+function resolveUnderReplicationToleranceReason(options) {
+  const reason = options?.[CONVERGED_SNAPSHOT_TOLERANCE_OPTION];
+  if (reason === undefined) {
+    return null;
+  }
+  if (typeof reason !== 'string' || reason.length === 0) {
+    throw new TypeError(
+      CONVERGED_SNAPSHOT_TOLERANCE_OPTION +
+        ' must be a non-empty reason string naming why the call site ' +
+        'tolerates partitions below the replica target',
+    );
+  }
+  return reason;
+}
+
+function buildConvergedSnapshotDecision(state, details = {}) {
+  return Object.freeze({
+    state,
+    converged:
+      state === CONVERGED_SNAPSHOT_STATE.CONVERGED ||
+      state === CONVERGED_SNAPSHOT_STATE.CONVERGED_UNDER_REPLICATION_TOLERATED,
+    underTargetPartitionIds: Object.freeze(
+      details.underTargetPartitionIds || [],
+    ),
+    underReplicationToleranceReason:
+      details.underReplicationToleranceReason || null,
+  });
+}
+
+// Convergence holds only when every expected partition has a leader, no
+// replica operation is in flight, and every expected partition has exactly
+// its replica target of voters. An expected partition without a voter-count
+// entry has zero observed voters (under target), never "at target".
+// The first blocker that is not a voter-count shortfall, or null.
+function resolveConvergedSnapshotBlocker(snapshot, expectedPartitionIds,
+  targetVoterCount) {
+  if (expectedPartitionIds.size === 0) {
+    return CONVERGED_SNAPSHOT_STATE.NO_EXPECTED_PARTITIONS;
+  }
+  for (const partitionId of expectedPartitionIds) {
+    if (!snapshot?.leaders?.has(partitionId)) {
+      return CONVERGED_SNAPSHOT_STATE.MISSING_LEADER;
+    }
+  }
+  if (Number(snapshot?.inFlightReplicaOperationCount || 0) > 0) {
+    return CONVERGED_SNAPSHOT_STATE.IN_FLIGHT_REPLICA_OPERATIONS;
+  }
+  return resolveVoterCountBlocker(snapshot, targetVoterCount);
+}
+
+function resolveVoterCountBlocker(snapshot, targetVoterCount) {
+  if (!(snapshot?.voterCounts instanceof Map)) {
+    return CONVERGED_SNAPSHOT_STATE.VOTER_COUNT_EVIDENCE_ABSENT;
+  }
+  for (const voterCount of snapshot.voterCounts.values()) {
+    if (voterCount > targetVoterCount) {
+      return CONVERGED_SNAPSHOT_STATE.OVER_TARGET_VOTERS;
+    }
+  }
+  return null;
+}
+
+function classifyConvergedSnapshot(snapshot, targetVoterCount, options = {}) {
+  const underReplicationToleranceReason =
+    resolveUnderReplicationToleranceReason(options);
   const expectedPartitionIds = resolveSnapshotExpectedPartitionIds(snapshot);
-  const allHaveLeaders =
-    expectedPartitionIds.size > 0 &&
-    [...expectedPartitionIds].every((partitionId) =>
-      snapshot?.leaders?.has(partitionId),
-    );
-  const hasOverTarget =
-    snapshot?.voterCounts instanceof Map &&
-    [...snapshot.voterCounts.values()].some(
-      (voterCount) => voterCount > targetVoterCount,
-    );
-  const hasInFlightReplicaOperations =
-    Number(snapshot?.inFlightReplicaOperationCount || 0) > 0;
-  return allHaveLeaders && !hasOverTarget && !hasInFlightReplicaOperations;
+  const blocker = resolveConvergedSnapshotBlocker(
+    snapshot, expectedPartitionIds, targetVoterCount);
+  if (blocker !== null) {
+    return buildConvergedSnapshotDecision(blocker);
+  }
+  const underTargetPartitionIds = [];
+  for (const partitionId of expectedPartitionIds) {
+    if (
+      resolveExpectedPartitionVoterCount(snapshot, partitionId) <
+      targetVoterCount
+    ) {
+      underTargetPartitionIds.push(partitionId);
+    }
+  }
+  underTargetPartitionIds.sort();
+  if (underTargetPartitionIds.length === 0) {
+    return buildConvergedSnapshotDecision(CONVERGED_SNAPSHOT_STATE.CONVERGED);
+  }
+  return buildConvergedSnapshotDecision(
+    underReplicationToleranceReason === null ?
+      CONVERGED_SNAPSHOT_STATE.UNDER_TARGET_VOTERS :
+      CONVERGED_SNAPSHOT_STATE.CONVERGED_UNDER_REPLICATION_TOLERATED,
+    {underTargetPartitionIds, underReplicationToleranceReason},
+  );
+}
+
+function isConvergedSnapshot(snapshot, targetVoterCount, options = {}) {
+  return classifyConvergedSnapshot(snapshot, targetVoterCount, options)
+    .converged === true;
 }
 
 /**
@@ -533,6 +652,13 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
       options.targetVoterCount :
       CONVERGENCE_DEFAULTS.targetVoterCount;
   const forceRepair = options?.forceRepair === true;
+  // Validated here, outside the per-node try, so a reasonless tolerance is
+  // refused instead of being swallowed as a node read error.
+  const underReplicationToleranceReason =
+    resolveUnderReplicationToleranceReason(options);
+  const convergedSnapshotOptions = underReplicationToleranceReason === null ?
+    {} :
+    {[CONVERGED_SNAPSHOT_TOLERANCE_OPTION]: underReplicationToleranceReason};
   const reachabilityTimeoutMs =
     Number.isFinite(options?.reachabilityTimeoutMs) &&
     options.reachabilityTimeoutMs > 0 ?
@@ -585,7 +711,9 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
           ')';
         continue;
       }
-      if (isConvergedSnapshot(snapshot, targetVoterCount)) {
+      if (
+        isConvergedSnapshot(snapshot, targetVoterCount, convergedSnapshotOptions)
+      ) {
         return snapshot;
       }
       const snapshotDebt = buildConvergenceSnapshotDebt(
@@ -751,6 +879,12 @@ async function waitForConvergence(nodes, options = {}) {
       targetVoterCount,
       forceRepair,
       snapshotTimeoutMs,
+      ...(options?.[CONVERGED_SNAPSHOT_TOLERANCE_OPTION] === undefined ?
+        {} :
+        {
+          [CONVERGED_SNAPSHOT_TOLERANCE_OPTION]:
+            options[CONVERGED_SNAPSHOT_TOLERANCE_OPTION],
+        }),
     });
     if (!snapshot.nodeId && snapshot.error) {
       oracleBlindnessTracker.recordBlindPoll(snapshot.error, now);
@@ -1706,6 +1840,8 @@ export const ASSERTIONS_CONVERGENCE_WAIT = {
   resolveSnapshotExpectedPartitionIds,
   buildConvergenceSnapshotDebt,
   compareConvergenceSnapshotDebt,
+  CONVERGED_SNAPSHOT_STATE,
+  classifyConvergedSnapshot,
   isConvergedSnapshot,
   queryReachableClusterSnapshot,
   waitForConvergence,

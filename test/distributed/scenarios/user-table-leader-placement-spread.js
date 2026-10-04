@@ -3,9 +3,9 @@
  *
  * Creates an ordinary user table on a live 3-node cluster, drives a
  * managed split through split-friendly policies plus write activity,
- * waits for the children's replicas to occupy at least two distinct
- * hosts, and then requires the platform itself to spread the child
- * partition RAFT LEADERS across more than one host: the rebalancer's
+ * waits for the children's active voters to occupy at least two distinct
+ * NODES, and then requires the platform itself to spread the child
+ * partition RAFT LEADERS across more than one NODE: the rebalancer's
  * user-table leader-placement cure must mint the leader handoffs — the
  * scenario never fabricates topology and exposes no admin transfer.
  *
@@ -15,6 +15,14 @@
  * support spread, or if leadership keeps churning after spread is
  * reached (the hysteresis guard: spread must hold through a bounded
  * stability hold with an unchanged leader fingerprint).
+ *
+ * Unit (owner ruling 2026-10-04): this scenario certifies distinct-NODE
+ * leader spread - what the production cure promises
+ * (src/rebalancer/user-table-leader-placement-cure.js counts leader node
+ * ids) - NOT host / failure-domain spread. Every claim, gate record and
+ * report field carries `spreadUnit: 'node'`. Host-aware user-table leader
+ * placement is a separate placement-owner quest; until it lands and is
+ * proven, no host spread may be claimed from this scenario.
  *
  * The measured phases start only after a cluster-wide leader-quiescence
  * hold: the cure must move leadership away from a HEALTHY stable leader
@@ -45,6 +53,10 @@ import {
   createScenarioStepRunner,
   recordScenarioGate,
 } from '../harness/scenario-step-log.js';
+import {
+  SPREAD_UNIT,
+  requireSpreadUnit,
+} from '../harness/scenario-host-topology.js';
 
 const SCENARIO_NAME = 'user-table-leader-placement-spread';
 const TABLE_NAME = 'leader_spread_activity';
@@ -53,8 +65,8 @@ const ZERO = 0;
 const ONE = 1;
 const MIN_NODE_COUNT = 3;
 const MIN_PARTITION_COUNT = 2;
-const MIN_DISTINCT_LEADER_HOSTS = 2;
-const MIN_DISTINCT_REPLICA_HOSTS = 2;
+const MIN_DISTINCT_LEADER_NODES = 2;
+const MIN_DISTINCT_REPLICA_NODES = 2;
 const SPREAD_POLL_MS = 500;
 const SPLIT_WAIT_TIMEOUT_MS = 180_000;
 const REPLICA_SPREAD_TIMEOUT_MS = 120_000;
@@ -80,34 +92,46 @@ const MAX_SENTINEL_ROWS = 40;
 const QUIESCENCE_POLL_MS = 1000;
 const QUIESCENCE_STABLE_POLLS = 30;
 const QUIESCENCE_TIMEOUT_MS = 420_000;
-const REPORT_DETAIL_SCHEMA_VERSION = 2;
+// v3: spread counts are in NODES and carry `spreadUnit` (owner ruling
+// 2026-10-04); v2 named node counts "hosts".
+const REPORT_DETAIL_SCHEMA_VERSION = 3;
 
 // What each measured gate claims (module docstring), stated as explicit
-// ground-truth conditions (scenario-ground-truth): HOSTS are the
-// harness's provider placement, replicas are active voters, and the
-// managed split is complete only once the parent is dissolved.
+// ground-truth conditions (scenario-ground-truth): spread counts distinct
+// NODES (spreadUnit 'node'), replicas are active voters, and the managed
+// split is complete only once the parent is dissolved.
 const MANAGED_SPLIT_CLAIM = Object.freeze({
   minChildren: MIN_PARTITION_COUNT,
-  minDistinctLeaderHosts: ZERO,
-  minReplicaHostsPerChild: ZERO,
+  minDistinctLeaders: ZERO,
+  minReplicaSpreadPerChild: ZERO,
   requireChildLeader: false,
   requireParentDissolved: true,
   requirePolicyReplicaCount: false,
+  spreadUnit: SPREAD_UNIT.NODE,
 });
 const REPLICA_SPREAD_CLAIM = Object.freeze({
   ...MANAGED_SPLIT_CLAIM,
-  minReplicaHostsPerChild: MIN_DISTINCT_REPLICA_HOSTS,
+  minReplicaSpreadPerChild: MIN_DISTINCT_REPLICA_NODES,
 });
 const LEADER_SPREAD_CLAIM = Object.freeze({
   ...REPLICA_SPREAD_CLAIM,
-  minDistinctLeaderHosts: MIN_DISTINCT_LEADER_HOSTS,
+  minDistinctLeaders: MIN_DISTINCT_LEADER_NODES,
   requireChildLeader: true,
 });
 const GATE = Object.freeze({
-  LEADER_SPREAD: 'leader-spread',
-  LEADER_SPREAD_HOLD: 'leader-spread-hold',
+  LEADER_SPREAD: 'leader-node-spread',
+  LEADER_SPREAD_HOLD: 'leader-node-spread-hold',
   MANAGED_SPLIT: 'managed-split',
-  REPLICA_SPREAD_SUPPORT: 'replica-spread-support',
+  REPLICA_SPREAD_SUPPORT: 'replica-node-spread-support',
+});
+
+/**
+ * The topology this scenario's claim needs: distinct NODES, so no host
+ * minimum (the run asserts its node count itself).
+ */
+export const SCENARIO_TOPOLOGY_REQUIREMENT = Object.freeze({
+  minDistinctHosts: ZERO,
+  spreadUnit: SPREAD_UNIT.NODE,
 });
 
 const SQL = Object.freeze({
@@ -230,7 +254,7 @@ async function waitForManagedSplit(cluster, nodes, seedNode, deps) {
 }
 
 // Leader spread is only achievable once every child has ACTIVE VOTERS on
-// at least two distinct hosts; gate on that first so a leader-spread
+// at least two distinct NODES; gate on that first so a leader-spread
 // timeout can never mask a replica-placement failure.
 async function waitForReplicaSpreadSupport(cluster, nodes, deps,
   knownParentIds) {
@@ -238,7 +262,7 @@ async function waitForReplicaSpreadSupport(cluster, nodes, deps,
     deps, GATE.REPLICA_SPREAD_SUPPORT, REPLICA_SPREAD_CLAIM,
     deps.replicaSpreadTimeoutMs, {knownParentIds}));
   return new Map(proven.record.partitions.map((entry) =>
-    [entry.partitionId, entry.activeVoterHosts.hosts.length]));
+    [entry.partitionId, entry.activeVoterNodeIds.length]));
 }
 
 function childLeaderRows(record) {
@@ -251,7 +275,7 @@ function childLeaderRows(record) {
 }
 
 // The measured gate: the PLATFORM must move child leaders apart onto
-// distinct HOSTS, holding across consecutive identical readbacks so a
+// distinct NODES, holding across consecutive identical readbacks so a
 // mid-handoff window is never frozen into the measured topology.
 async function waitForLeaderSpread(cluster, nodes, deps, knownParentIds) {
   const proven = await helpers.waitForSplitClaim(cluster, nodes, claimGate(
@@ -292,7 +316,7 @@ function holdGateRecord(frozen, evaluation, outcome, deps) {
 // The hysteresis gate: once spread is reached, no child's leader may
 // move - that is the flapping the cure's deadband and one-directional
 // bound must prevent - and the full leader-spread claim (children only,
-// parent dissolved, leaders on distinct hosts) must hold on every poll.
+// parent dissolved, leaders on distinct nodes) must hold on every poll.
 async function assertLeaderSpreadHolds(cluster, nodes, frozen, deps,
   knownParentIds) {
   const startedAtMs = deps.now();
@@ -331,17 +355,22 @@ async function assertLeaderSpreadHolds(cluster, nodes, frozen, deps,
   return evaluation;
 }
 
-function composeTopologyDetail(evaluation, replicaHostCounts) {
+function composeTopologyDetail(evaluation, replicaNodeCounts) {
   const partitions = evaluation.partitions
     .filter((entry) => entry.role === PARTITION_ROLE.CHILD)
     .map((entry) => ({
       leaderNodeId: entry.leader.nodeId,
       partitionId: entry.partitionId,
-      replicaHostCount: replicaHostCounts.get(entry.partitionId) ?? ZERO,
+      replicaNodeCount: replicaNodeCounts.get(entry.partitionId) ?? ZERO,
     }));
+  const leaderSpread = requireSpreadUnit({
+    members: evaluation.leaderSpread?.members,
+    spreadUnit: evaluation.leaderSpread?.unit,
+  }, SPREAD_UNIT.NODE, `${SCENARIO_NAME} leader spread evidence`);
   return {
-    distinctLeaderHosts: evaluation.leaderHosts.length,
+    distinctLeaderNodes: leaderSpread.members.length,
     partitions,
+    spreadUnit: leaderSpread.spreadUnit,
   };
 }
 
@@ -379,21 +408,25 @@ export async function run(cluster) {
   await step('seed-dataset', () => helpers.seedDataset(seedNode, rows, deps));
 
   // Measured phases: split, replica-spread support, then the platform
-  // spreading the child leaders across hosts - and holding them spread.
+  // spreading the child leaders across nodes - and holding them spread.
   const split = await step(GATE.MANAGED_SPLIT, () =>
     waitForManagedSplit(cluster, nodes, seedNode, deps));
   const knownParentIds = split.knownParentIds;
-  const replicaHostCounts = await step(GATE.REPLICA_SPREAD_SUPPORT, () =>
+  const replicaNodeCounts = await step(GATE.REPLICA_SPREAD_SUPPORT, () =>
     waitForReplicaSpreadSupport(cluster, nodes, deps, knownParentIds));
   const spread = await step(GATE.LEADER_SPREAD, () =>
     waitForLeaderSpread(cluster, nodes, deps, knownParentIds));
   const held = await step(GATE.LEADER_SPREAD_HOLD, () =>
     assertLeaderSpreadHolds(cluster, nodes, spread, deps, knownParentIds));
 
-  const topology = composeTopologyDetail(held, replicaHostCounts);
+  const topology = composeTopologyDetail(held, replicaNodeCounts);
+  requireSpreadUnit(topology, SPREAD_UNIT.NODE,
+    `${SCENARIO_NAME} final topology`);
   assert.ok(
-    topology.distinctLeaderHosts >= MIN_DISTINCT_LEADER_HOSTS,
-    `${SCENARIO_NAME}: final topology lost leader spread`,
+    topology.distinctLeaderNodes >= MIN_DISTINCT_LEADER_NODES,
+    `${SCENARIO_NAME}: final topology lost leader spread (unit: node, ` +
+    `${topology.distinctLeaderNodes} distinct leader node(s), need >= ` +
+    `${MIN_DISTINCT_LEADER_NODES})`,
   );
   return {
     leaderFingerprint: spread.fingerprint,

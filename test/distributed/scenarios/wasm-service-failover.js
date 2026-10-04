@@ -17,6 +17,12 @@ import {runExamplesCatalog} from '../../../scripts/examples/build-upload-run.js'
 
 const PRE_KILL_SETTLE_MS = SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs;
 const POST_KILL_CONVERGENCE_TIMEOUT_MS = 60000;
+// The scenario runs on three nodes and kills one: replica-target-3 partitions
+// cannot regain three voters on two survivors, so the post-kill convergence
+// wait names the under-replication it tolerates.
+const WASM_FAILOVER_UNDER_REPLICATION_REASON =
+  'three-node cluster with one node killed: two survivors cannot host a ' +
+  'third voter for replica-target-3 partitions';
 const WASM_SERVICES_QUERY =
   'SELECT * FROM services WHERE service_type = \'wasm_service\'';
 const MIN_WASM_REPLICAS = 1;
@@ -123,6 +129,7 @@ async function run(cluster) {
     settleTimeoutMs: POST_KILL_CONVERGENCE_TIMEOUT_MS,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
+    tolerateUnderReplication: WASM_FAILOVER_UNDER_REPLICATION_REASON,
   });
 
   assert.ok(

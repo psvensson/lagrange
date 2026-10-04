@@ -19,7 +19,7 @@ import {
 import {
   buildGateRecord,
   buildNodeHostIndex,
-  clusterHostShortfall,
+  clusterSpreadShortfall,
   describeGateFailure,
   evaluateSplitSpreadClaim,
   pollGroundTruthClaim,
@@ -289,13 +289,28 @@ function createTableTopologyHelpers({scenarioName, tableName, sql}) {
     throw new Error(`${scenarioName}: ${describeGateFailure(record)}`);
   }
 
+  // A readback that throws still leaves a gate record of what the gate
+  // saw before it, with the error, before the error propagates.
+  async function recordedPoll(cluster, recordInput, pollOptions) {
+    try {
+      return await pollGroundTruthClaim(pollOptions);
+    } catch (error) {
+      if (error?.groundTruthOutcome) {
+        recordScenarioGate(cluster, buildGateRecord({...recordInput,
+          outcome: error.groundTruthOutcome}));
+      }
+      throw error;
+    }
+  }
+
   /**
    * The one split/spread gate: each readback reads the table's
    * partitions rows AND the services rows, and the explicit claim must
    * hold on `stableReadbacks` consecutive readbacks with an identical
    * partition/role/leader/voter fingerprint. Pass or fail, it records
    * the facts it decided on (scenario.gate) and states what it measured.
-   * A claim needing more hosts than the cluster has is refused at once.
+   * A claim needing more hosts (or nodes, in its spread unit) than the
+   * cluster has, or naming no valid unit, is refused at once.
    * @param {Object} cluster
    * @param {Array<Object>} nodes
    * @param {Object} gate {name, claim, budgetMs, pollMs, stableReadbacks,
@@ -312,15 +327,14 @@ function createTableTopologyHelpers({scenarioName, tableName, sql}) {
       hostIndex,
       stableReadbacksRequired: gate.stableReadbacks,
     };
-    const shortfall = clusterHostShortfall(hostIndex, Math.max(
-      gate.claim.minDistinctLeaderHosts, gate.claim.minReplicaHostsPerChild));
+    const shortfall = clusterSpreadShortfall(hostIndex, gate.claim);
     if (shortfall !== null) {
       failClaimGate(cluster, buildGateRecord({...recordInput, outcome: {
         elapsedMs: ZERO, evaluation: {unmet: [shortfall]}, passed: false,
         readbacks: ZERO, stableReadbacks: ZERO, unmetTally: {},
       }}));
     }
-    const outcome = await pollGroundTruthClaim({
+    const outcome = await recordedPoll(cluster, recordInput, {
       budgetMs: gate.budgetMs,
       evaluate: ({partitionRows, serviceRows}) => evaluateSplitSpreadClaim({
         claim: gate.claim, hostIndex, knownParentIds, partitionRows,

@@ -35,7 +35,7 @@ const INSTALL_SQL = 'INSTALL SERVICE $1';
 const CREATE_BINDING_SQL = 'CREATE BINDING $1';
 const LOCAL_SELECT_SAMPLES_PER_NODE = 4;
 
-const SPLIT_SPREAD_GATE = 'split-leader-spread';
+const SPLIT_SPREAD_GATE = 'split-leader-host-spread';
 const REPLAY_FIXTURE_DIR = 'test/fixtures/scenario-ground-truth/';
 const REPLAY_BUDGET_MS = 180_000;
 
@@ -257,7 +257,7 @@ function buildStubCluster(state) {
   const nodes = arrayMap(state.nodeIds, (id, index) => ({
     containerId: `container-${id}`,
     hostIdentity: {
-      hostId: `provider-${state.nodeHosts[id]}`,
+      hostId: `host:machine-${state.nodeHosts[id]}`,
       label: `10.0.0.${state.nodeHosts[id] + 1}`,
       providerIndex: state.nodeHosts[id],
     },
@@ -372,14 +372,16 @@ function gateRecords(state) {
 }
 
 describe('public-path-multinode-baseline scenario', () => {
-  it('composes the schemaVersion-1 detail on a green run', async () => {
+  it('composes the schemaVersion-2 detail on a green run, every spread ' +
+    'count with its unit', async () => {
     const detail = await run(buildStubCluster(greenState()));
 
-    assert.equal(detail.schemaVersion, 1);
+    assert.equal(detail.schemaVersion, 2);
     assert.match(detail.datasetDigest, /^[0-9a-f]{64}$/u);
     assert.match(detail.generatorDigest, /^[0-9a-f]{64}$/u);
     assert.equal(detail.topology.nodeCount, 3);
     assert.equal(detail.topology.distinctPartitionHosts, 2);
+    assert.equal(detail.topology.spreadUnit, 'host');
     assert.deepEqual(
       arrayMap(detail.topology.partitions, (entry) => entry.partitionId),
       ['p-1', 'p-2'],
@@ -390,6 +392,7 @@ describe('public-path-multinode-baseline scenario', () => {
     assert.equal(detail.parity.mismatches, 0);
     assert.equal(detail.parity.oracle, 'independent-recompute');
     assert.equal(detail.localReadProof.distinctNodes, 2);
+    assert.equal(detail.localReadProof.spreadUnit, 'node');
     assert.equal(detail.latencyMs.count, INVOCATION_COUNT);
     assert.ok(detail.bytes.finalBytes > 0);
     assert.ok(detail.bytes.partialBytes > 0);
@@ -490,7 +493,7 @@ describe('public-path-multinode-baseline scenario', () => {
 
     await assert.rejects(
       run(buildStubCluster(state)),
-      /leader_hosts_insufficient\(observed=1 required=2/u,
+      /leader_hosts_insufficient\(unit="host" observed=1 required=2/u,
     );
   });
 
@@ -518,7 +521,7 @@ describe('public-path-multinode-baseline scenario', () => {
     'the undissolved parent', async () => {
     const state = replayState(1);
     await assert.rejects(run(buildStubCluster(state)), (error) => {
-      assert.match(error.message, /split-leader-spread not met/u);
+      assert.match(error.message, /split-leader-host-spread not met/u);
       assert.match(error.message, /child_active_voter_count_mismatch\(partitionId="tbl-[0-9a-f]+_p_[0-9a-f]+_left" observed=2 required=3\)/u);
       assert.match(error.message, /child_active_voter_count_mismatch\(partitionId="tbl-[0-9a-f]+_p_[0-9a-f]+_right" observed=2 required=3\)/u);
       assert.match(error.message, /parent_not_dissolved\(partitionId="tbl-[0-9a-f]+-p1"/u);
@@ -535,7 +538,7 @@ describe('public-path-multinode-baseline scenario', () => {
       const state = replayState(2);
       await assert.rejects(run(buildStubCluster(state)), (error) => {
         assert.match(error.message,
-          /leader_hosts_insufficient\(observed=1 required=2 leaderHosts=\["provider-0"\]\)/u);
+          /leader_hosts_insufficient\(unit="host" observed=1 required=2 leaderHosts=\["host:machine-0"\]\)/u);
         assert.match(error.message, /parent_not_dissolved/u);
         return true;
       });
@@ -547,7 +550,7 @@ describe('public-path-multinode-baseline scenario', () => {
       assert.ok(stringStartsWith(children[0].leader.nodeId, 'a381d398'));
       for (const child of children) {
         assert.equal(child.activeVoterCount, 3);
-        assert.equal(child.leader.host, 'provider-0');
+        assert.equal(child.leader.host, 'host:machine-0');
       }
     });
 
@@ -556,7 +559,7 @@ describe('public-path-multinode-baseline scenario', () => {
     const state = replayState(3);
     await assert.rejects(run(buildStubCluster(state)), (error) => {
       assert.match(error.message, /last readback unmet: .*child_active_voter_count_mismatch\([^)]*observed=2 required=3\)/u);
-      assert.match(error.message, /leader_hosts_insufficient\(observed=1 required=2/u);
+      assert.match(error.message, /leader_hosts_insufficient\(unit="host" observed=1 required=2/u);
       // The window the old gate passed in: the parent still counted.
       assert.match(error.message, /unmet across readbacks: .*parent_not_dissolved x\d+/u);
       return true;
@@ -576,18 +579,20 @@ describe('public-path-multinode-baseline scenario', () => {
       const record = gateRecords(state)[0].details;
       assert.equal(record.passed, true);
       assert.equal(record.stableReadbacks, record.stableReadbacksRequired);
-      assert.equal(record.hostAuthority, 'harness_docker_provider_assignment');
+      assert.equal(record.hostAuthority, 'declared_provider_machine_topology');
+      assert.equal(record.spreadUnit, 'host');
       assert.equal(record.membershipEvidence.source, 'services_rows');
       assert.equal(record.membershipEvidence.committedMembershipObserved,
         false);
-      assert.deepEqual(record.leaderHosts, ['provider-0', 'provider-1']);
+      assert.deepEqual(record.leaderHosts, ['host:machine-0', 'host:machine-1']);
       assert.deepEqual(record.claim, {
         minChildren: 2,
-        minDistinctLeaderHosts: 2,
-        minReplicaHostsPerChild: 2,
+        minDistinctLeaders: 2,
+        minReplicaSpreadPerChild: 2,
         requireChildLeader: true,
         requireParentDissolved: true,
         requirePolicyReplicaCount: true,
+        spreadUnit: 'host',
       });
       assert.equal(record.budgetMs, REPLAY_BUDGET_MS);
       assert.ok(Number.isFinite(record.elapsedMs));
@@ -614,7 +619,7 @@ describe('public-path-multinode-baseline scenario', () => {
       const state = greenState();
       state.nodeHosts = {'node-1': 0, 'node-2': 0, 'node-3': 1};
       await assert.rejects(run(buildStubCluster(state)),
-        /leader_hosts_insufficient\(observed=1 required=2 leaderHosts=\["provider-0"\]\)/u);
+        /leader_hosts_insufficient\(unit="host" observed=1 required=2 leaderHosts=\["host:machine-0"\]\)/u);
     });
 
   it('W6 a failing gate records the failed step for triage', async () => {
@@ -637,8 +642,8 @@ describe('public-path-multinode-baseline scenario', () => {
 
   it('W8 the report spread re-assertion counts leader HOSTS, never node ids',
     () => {
-      const hostOf = (nodeId) => ({'node-1': 'provider-0',
-        'node-2': 'provider-0', 'node-3': 'provider-1'})[nodeId] || null;
+      const hostOf = (nodeId) => ({'node-1': 'host:machine-0',
+        'node-2': 'host:machine-0', 'node-3': 'host:machine-1'})[nodeId] || null;
       const twoNodesOneHost = [
         {leader_node_id: 'node-1', partition_id: 'p-1'},
         {leader_node_id: 'node-2', partition_id: 'p-2'},

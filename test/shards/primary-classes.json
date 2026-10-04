@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1922,
+    "unit": 1924,
     "integration": 77,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2199,
-  "digest": "fnv1a32-cc3082f5",
+  "censusSize": 2201,
+  "digest": "fnv1a32-6aa2ee82",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -886,6 +886,7 @@
     "test/distributed/harness/__tests__/scenario-config.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-ground-truth.test.js": "unit",
+    "test/distributed/harness/__tests__/scenario-host-topology.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-registry.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-run-artifact-hygiene.test.js": "unit",
     "test/distributed/harness/__tests__/seed-restart-under-load-scenario.test.js": "unit",
@@ -1975,6 +1976,7 @@
     "test/scripts/run-live-repetitions.test.js": "unit",
     "test/scripts/run-test-ci.test.js": "unit",
     "test/scripts/run-test-files.test.js": "unit",
+    "test/scripts/scenario-refused-outcome-consumers.test.js": "unit",
     "test/scripts/select-change-tests.test.js": "unit",
     "test/scripts/selection-golden-corpus.test.js": "unit",
     "test/scripts/service-portability-claims-contract.test.js": "unit",

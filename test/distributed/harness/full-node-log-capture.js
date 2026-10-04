@@ -14,7 +14,7 @@
 
 import {gzip as gzipCallback, createGzip} from 'node:zlib';
 import {promisify} from 'node:util';
-import {mkdir, rm, writeFile} from 'node:fs/promises';
+import {mkdir, rename, writeFile} from 'node:fs/promises';
 import {createWriteStream, createReadStream} from 'node:fs';
 import {once} from 'node:events';
 import {createInterface} from 'node:readline';
@@ -80,16 +80,36 @@ function nodeLogContainerFilePath() {
   return NODE_LOG_DIR_CONTAINER + '/' + NODE_LOG_FILENAME;
 }
 
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
 // The full logs of a scenario live under one directory shared by every run
-// of that scenario; an earlier run's files are not this run's evidence.
-async function resetScenarioFullLogs(outputDir, scenarioName) {
-  if (typeof outputDir !== 'string' || outputDir.length === 0 ||
-      typeof scenarioName !== 'string' || scenarioName.length === 0) {
-    return false;
+// of that scenario; an earlier run's files are not this run's evidence, and
+// they are not discarded either. The whole {scenario} full-log dir (the
+// gzipped captures and the bind-mounted per-node dirs) moves, by one rename,
+// to {archiveDir}/.full-logs: the earlier run's archive, whose layout and
+// bound log-collector.js archivePreviousScenarioRun owns. Without an archive
+// dir nothing is touched (null). Otherwise returns {from, to, moved}; `moved`
+// is false when there was no earlier full-log dir (from is still reported so
+// the archive's path rewrite never mistakes a .full-logs path for a path in
+// the scenario dir).
+async function resetScenarioFullLogs(outputDir, scenarioName, archiveDir) {
+  if (!isNonEmptyString(outputDir) || !isNonEmptyString(scenarioName) ||
+      !isNonEmptyString(archiveDir)) {
+    return null;
   }
-  await rm(join(outputDir, FULL_LOGS_DIRNAME, scenarioName),
-    {force: true, recursive: true});
-  return true;
+  const from = join(outputDir, FULL_LOGS_DIRNAME, scenarioName);
+  const to = join(archiveDir, FULL_LOGS_DIRNAME);
+  try {
+    await rename(from, to);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return {from, to, moved: false};
+    }
+    throw error;
+  }
+  return {from, to, moved: true};
 }
 
 function fullLogDestPath(outputDir, scenarioName, nodeId) {

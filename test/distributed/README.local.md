@@ -268,13 +268,46 @@ Use these values with `--scenario`:
 2. `examples-catalog`
 3. `network-partition-split-brain`
 4. `node-failure-rebalance`
-5. `public-path-multinode-baseline`
+5. `public-path-multinode-baseline` — REFUSED (not run) on this single-host
+   config: `refused_insufficient_host_topology` (see below)
 6. `public-seam-durability` (zero-cutover validation scenario; see below)
 7. `rolling-restart`
 8. `three-node-seed-rebalance`
-9. `user-table-leader-placement-spread`
+9. `user-table-leader-placement-spread` (certifies distinct-NODE leader spread;
+   see below)
 10. `wasm-service-failover`
 11. `write-ack-visibility`
+
+**Host topology and the spread unit (owner ruling 2026-10-04).** A spread
+claim states its unit. `public-path-multinode-baseline` claims child leaders on
+distinct HOSTS (`spreadUnit: 'host'`) and declares
+`SCENARIO_TOPOLOGY_REQUIREMENT = {minDistinctHosts: 2}`. The runner compares
+that with the config's host authority BEFORE starting anything
+(`test/distributed/harness/scenario-host-topology.js`): a host is a machine
+named only by declared topology (`docker.hostInfo[i].machineId`, else
+`docker.hostInfo[i].internalIp`), never a node id, a provider index, a Docker
+endpoint or the local socket. Every single-host local config
+(`local-three-node.json`, `public-path-baseline-three-node.json`,
+`user-table-leader-spread-three-node.json`) declares no host topology, so the
+scenario is REFUSED / NOT-RUN there: the report entry carries
+`outcome: 'refused'` and a named `refusal` (required vs available), the verdict
+is `REFUSED_NOT_RUN`, no cluster starts and no failure bundle is written, the
+run exits `3` (never `0`, never `1`), and the matrix, summary table, triage and
+quest probes show it as REFUSED — never PASS and never certification evidence.
+Physical host spread is proven only on the lab (`npm run distributed:lab`; the
+lab harness declares each node's observed boot id as `machineId`, so two
+providers on one machine count once) and on GCP (`npm run distributed:gcp`;
+one VM per provider, by internal address). Local logical coverage of the gate
+is the synthetic 5-node/4-host regression test
+`test/distributed/harness/__tests__/scenario-host-topology.test.js` (unsplit →
+splitting → under-replicated children → leaders on one host, including two
+leaders on the shared host → truthful pass).
+
+`user-table-leader-placement-spread` certifies distinct-NODE leader spread
+(`spreadUnit: 'node'`), which is what the production cure
+(`src/rebalancer/user-table-leader-placement-cure.js`) promises; it runs on the
+local configs and claims nothing about hosts or failure domains. Host-aware
+user-table leader placement is a separate placement-owner quest.
 
 `public-seam-durability` is the provider-neutral durability scenario at the
 public seam: it writes an image-like object (`objects` BYTEA row plus an

@@ -827,10 +827,15 @@ const CLI = Object.freeze({
 // --- Exit Codes ---
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
+// Nothing failed, but at least one scenario was REFUSED (not run: the
+// config's host topology cannot carry its claim). Never 0: a refused run
+// is not a pass; never 1: it is not a failure (scenario-outcome.js).
+const EXIT_REFUSED = 3;
 
 const EXIT_CODES = Object.freeze({
   SUCCESS: EXIT_SUCCESS,
   FAILURE: EXIT_FAILURE,
+  REFUSED: EXIT_REFUSED,
 });
 
 export {

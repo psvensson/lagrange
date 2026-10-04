@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2182,
+    "ordinary": 2184,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2199,
-  "digest": "fnv1a32-27fc310b",
+  "censusSize": 2201,
+  "digest": "fnv1a32-76320f44",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -885,6 +885,7 @@
     "test/distributed/harness/__tests__/scenario-config.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-ground-truth.test.js": "ordinary",
+    "test/distributed/harness/__tests__/scenario-host-topology.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-registry.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-run-artifact-hygiene.test.js": "ordinary",
     "test/distributed/harness/__tests__/seed-restart-under-load-scenario.test.js": "ordinary",
@@ -1974,6 +1975,7 @@
     "test/scripts/run-live-repetitions.test.js": "ordinary",
     "test/scripts/run-test-ci.test.js": "ordinary",
     "test/scripts/run-test-files.test.js": "ordinary",
+    "test/scripts/scenario-refused-outcome-consumers.test.js": "ordinary",
     "test/scripts/select-change-tests.test.js": "ordinary",
     "test/scripts/selection-golden-corpus.test.js": "ordinary",
     "test/scripts/service-portability-claims-contract.test.js": "ordinary",
