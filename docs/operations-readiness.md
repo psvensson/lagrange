@@ -150,6 +150,14 @@ Do not claim an RPO or RTO that has not been measured end to end.
 `0.x` releases carry no backward-compatibility guarantee. There is no published
 supported rolling-upgrade, downgrade, or mixed-version contract.
 
+In-place upgrade, rolling or full-stop, is unsupported from any build that moved
+a message-group replica to a joining node under its existing replica name:
+every release through 0.2.5, the unreleased 0.2.6, and main before the
+identity-reuse fix. After such an upgrade a node holding a message-group replica
+whose name it did not create can elect a second leader and lose acknowledged
+writes. Rebuild such a cluster, or dump and restore it, instead. See
+[current capabilities and limitations](current-capabilities-and-limitations.md).
+
 Before changing versions:
 
 1. reproduce the workload on a disposable cluster;

@@ -33,6 +33,42 @@ consensus lifecycle is a separate state-replication path and does not invent
 membership locally: it requires placement/topology to supply the founding
 replica set.
 
+### A replica held for reseed
+
+A raft-rs replica whose own log is proven shorter than what its group's leader
+holds it to have acknowledged has lost history. The proof is a heartbeat from a
+member of the replica's own configuration, at a term not below its own, whose
+commit lies beyond the replica's persisted log. Such a replica would otherwise
+vote and campaign on an empty or short log. The runtime holds it for reseed:
+it never steps, ticks, votes or campaigns again, and every operation on it is
+refused with `reseed-required`. Other groups on the node keep running.
+
+What an operator sees:
+
+- one ERROR line `raft-rs inbound step refused` (subsystem `raft-rs`, reason
+  `peer-commit-beyond-local-log`) naming the group, the replica, the sender,
+  the message's term and commit, and the replica's persisted last index;
+- the replica's lifecycle row in `_raft_rs_replica_lifecycle`, in the
+  replica's own SQLite database: `state = 'retired'`,
+  `reason = 'reseed-required'`. Find held replicas on a node with
+  `SELECT group_id, replica_identity, changed_at FROM _raft_rs_replica_lifecycle
+  WHERE reason = 'reseed-required'` against each replica database. No admin or
+  diagnostics endpoint reports this row today;
+- if the row could not be written (for example `SQLITE_BUSY`), one ERROR line
+  `raft-rs reseed hold not yet durable`. The hold stays in force in memory,
+  and the replica's next operation or delivery writes the row again.
+
+The hold is permanent. There is no reseed procedure and no release: the
+replica stays out of consensus, also across restarts, and its group runs on
+its other replicas. Restoring the group's replica count needs a
+fresh-replica-identity ADD path for that group kind, which does not exist yet
+for message groups.
+
+Message group mg-1 currently keeps all of its replicas on the seed node. Its
+committed state therefore lives only on the seed's disk: losing that disk loses
+mg-1's committed state, and there is no recovery path. A joining node hosts only
+its own message group.
+
 ### SQLite partition logs are bounded by production snapshotting
 
 The Raft snapshot protocol (create / atomic install / bulk transfer /

@@ -160,6 +160,11 @@
       "summary": "Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress."
     },
     {
+      "id": "message-group-seed-placement",
+      "area": "Replication",
+      "summary": "Message group mg-1 keeps all of its replicas on the seed node until a fresh-replica-identity ADD path for message groups exists: losing the seed's disk loses mg-1's committed state, with no recovery path. A replica held for reseed after proven history loss stays out of consensus for good; there is no reseed procedure yet."
+    },
+    {
       "id": "single-process-data-directory",
       "area": "Storage lifecycle",
       "summary": "Replica cleanup and recreation are durably serialized by services.service_id. A directory-local SQLite ownership lock rejects a second live OS process before provenance, rejoin, or replica storage activity."
@@ -198,6 +203,11 @@
       "id": "backup-and-upgrades",
       "area": "Operations",
       "summary": "Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x."
+    },
+    {
+      "id": "upgrade-from-message-group-move-builds",
+      "area": "Operations",
+      "summary": "In-place upgrade is unsupported from any build that moved a message-group replica to a joining node under its existing replica name: every release through 0.2.5 (npm 0.1.1, 0.2.4-rc.0 to rc.2 and 0.2.5; Docker 0.1.0, 0.1.1, 0.2.4-rc.2 and 0.2.5), the unreleased 0.2.6, and main before the identity-reuse fix. A node holding a message-group replica whose name it did not create can elect a second leader and lose acknowledged writes after the upgrade; rebuild such clusters or dump and restore them."
     }
   ]
 }

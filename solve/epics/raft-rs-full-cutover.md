@@ -204,6 +204,75 @@ side's now-unreachable MOVE reservation/handoff machinery
 (`src/bootstrap/owners/move-replica-*`, its bootstrap-api and register-service
 handoff wiring) is deleted with that quest or before it.
 
+Amendment 2026-10-04 (corrective attempt after verifier
+identity-safety-review-1 rejected the identity-reuse safety fix; owner rulings
+of 2026-10-04 relayed by the lead):
+
+- mg-1 stays on the seed. Its committed state lives only on the seed's disk:
+  losing that disk loses mg-1's committed state, and there is no recovery
+  path. The seed's disk is a single point of durable loss for mg-1, and while
+  it is down every control-plane function mg-1 owns stops cluster-wide. A
+  replica held for reseed (`reseed-required`) has no recovery path either: no
+  reseed procedure and no release exist. The fresh-replica-identity ADD and
+  promotion path for message groups is therefore a closing condition of this
+  epic (see Completion criteria, part a), not a follow-up.
+- Until that path exists, every message-group membership change (ADD,
+  REPLACE, MOVE, and a CREATE_REPLICA arriving at a node) is refused with one
+  typed reason, at the rebalancer's planning and fail-closed at the
+  `MessageGroupServiceHandler`. A joiner hosting its own group and a durable
+  rejoin of a node's own replica remain allowed.
+- The legacy `POST /register-service` MOVE handoff is refused unconditionally
+  at the wire. Deleting the seed-side subsystem it fronted
+  (`src/bootstrap/owners/move-replica-*`, about 2.3k lines, its bootstrap-api
+  reservation endpoints and the register-service handoff wiring) is the
+  follow-up quest `move-replica-handoff-deletion` (part b). It shares code
+  with ordinary service registration, which must keep working.
+- Upgrade residual (verifier probe `probe-residual.mjs` R1): two message-group
+  replicas re-opened empty under names a joiner received by MOVE_REPLICA can
+  elect each other in term 1 before any heartbeat from the seed reaches them,
+  and an acknowledged write is lost when the seed returns. In-place upgrade
+  from every affected build is declared UNSUPPORTED (owner ruling A).
+  Affected builds (checked 2026-10-04 against git history, the npm registry
+  and Docker Hub): every commit from 30d64250a (2026-01-19, "bootable system
+  and working admin cli", the first commit carrying the MOVE_REPLICA
+  assignment strategy and the joiner's join-existing-group phase) up to and
+  excluding 9d006ff31 on this branch, which removed it. That covers every
+  release tag v0.1.0 through v0.2.5 (including v0.2.4-rc.0..rc.2 and v0.2.4,
+  which was tagged and never published), every published artifact (npm
+  `lagrange-server` 0.1.1, 0.2.4-rc.0, 0.2.4-rc.1, 0.2.4-rc.2 and 0.2.5;
+  Docker `psvensson/lagrange` 0.1.0, 0.1.1, 0.2.4-rc.2, 0.2.5 and `latest`;
+  the Helm chart shipped with 0.2.5), the unreleased 0.2.6 (CHANGELOG entry
+  of 2026-09-30, untagged), and origin/main up to at least d60c30921
+  (2026-10-04), which still contains the join-time MOVE. The affected STATE
+  is a node holding a message-group replica (`mg-<n>-r<k>`) whose name that
+  node did not create: it received it by MOVE_REPLICA at join, so after the
+  upgrade it re-opens under a raft id derived from that name with no history
+  of its own. A cluster in which no node ever joined (single seed) does not
+  carry the state. Clusters that ever ran such a build with a joined node are
+  rebuilt or dumped and restored; no in-place path is offered. Recorded in
+  `docs/current-capabilities.json` (limitation
+  `upgrade-from-message-group-move-builds`), the implementation-status
+  authority `audit:current-capabilities` checks. The sweep that would make
+  such an upgrade safe is the required follow-up quest
+  `message-group-foreign-replica-startup-sweep` (part b). No per-group
+  identity high-water mark is built.
+- Votes stay un-gated by the participation gate: refusing a vote while the
+  local gate is closed locked a group out for good (verifier reproduced
+  `evidence-o1-restart-equivalence` M4, H1 + self), and nothing in an empty
+  shell's local state separates it from a genuine founder at genesis.
+- Residual stated, not closed: the node transport does not authenticate a
+  sender (limitation `node-transport-security`), and raft ids derive from
+  replica names, so a sender that presents a member's id at a current term
+  can still hold a replica for reseed or step a leader down. The sender rule
+  stops unknown ids and stale terms only.
+- No document may present a mechanism that does not exist yet as an
+  operational exit (owner ruling B). The only exits today are rebuilding the
+  cluster or dump and restore; there is no per-replica reseed, release of a
+  `reseed-required` hold, fresh-identity re-add, or startup sweep yet. The
+  "recreate/reseed the replica under rs-raft" wording under "No compatibility
+  migration" names no existing per-replica procedure either: for legacy state
+  the exit is likewise recreating the cluster or dump and restore.
+
 ### Generic/worker/WASM replica helpers
 
 `RaftGroup`, `RaftReplicaBase`, worker partition/message-group services, and
@@ -419,6 +488,11 @@ state-machine concern and should be renamed/re-owned rather than removed.
 
 ## Completion criteria
 
+Structured 2026-10-04 (owner ruling C) in three parts. An epic-level finding of
+"no regression from main" does not clear a release-level blocker in part c.
+
+### a. Conditions required to close this epic
+
 This epic closes only when:
 
 - all active consensus groups are rs-raft;
@@ -433,4 +507,61 @@ This epic closes only when:
 - old dependency is absent;
 - active-surface zero-reference ratchet is green;
 - exact-main release proof is durably recorded;
-- Q0 reports READY for core convergence.
+- Q0 reports READY for core convergence;
+- (owner ruling B, 2026-10-04) a fresh-replica-identity ADD and promotion
+  path for message groups exists and is proven: a new raft id joins as a
+  learner, catches up and is promoted through a committed configuration
+  change, and mg-1 is replicated off the seed with it. Reason: the identity
+  reuse it replaces demonstrably lost acknowledged committed state; until it
+  exists the seed's disk is a single point of durable loss for mg-1, and a
+  replica held for reseed has no recovery path.
+
+### b. Follow-up quests created
+
+- `message-group-foreign-replica-startup-sweep` (REQUIRED; owner ruling A).
+  Statement: at node startup, before any message-group replica opens, every
+  message-group replica whose persisted identity this node did not create is
+  quarantined durably (held, never opened as a voter), once. Done when: the
+  verifier's R1 shape upgraded in place (two such replicas, seed unreachable
+  at their restart) opens no second leader and loses no acknowledged write,
+  witnessed on real ports; a genuine founder and a node's own durable rejoin
+  still open. Mandatory before an in-place upgrade from an affected version
+  is advertised anywhere. It does not build a per-group identity high-water
+  mark.
+- `move-replica-handoff-deletion`. Statement: delete the seed-side MOVE
+  reservation/handoff subsystem (`src/bootstrap/owners/move-replica-*`, its
+  bootstrap-api reservation endpoints and the register-service handoff
+  wiring) that the wire refusal of 2026-10-04 left unreachable, keeping
+  ordinary service registration. Done when: no reference to the subsystem
+  remains, ordinary registration witnesses stay green, and the wire refusal
+  witness is replaced by the absence of the route's MOVE branch.
+- `group-retirement-operator-retirement-fact` (owner ruling C, 2026-10-04).
+  Statement: an operator mechanism retires a member that lingers in a retired
+  group (a replica of a group retired as a unit whose own retirement never
+  completed) by writing an explicit, durable operator retirement fact for the
+  exact group and member identity. The fact is authoritative, idempotent and
+  auditable (who, when, which group/member identity), survives cleanup of the
+  group's workflow records, and is never inferred from a missing row. Done
+  when: retiring a lingering member through the fact ends it; replaying the
+  fact is a no-op; a member whose workflow records were cleaned up is still
+  refused without the fact and retired with it; the fact for one identity
+  never retires another. Until it lands this epic keeps the current behaviour:
+  a lingering member stays fail-closed indefinitely, with no timer as its
+  exit.
+
+### c. Conditions that remain 0.3 release blockers
+
+- (recorded from another branch's findings, 2026-10-04) prepared or
+  in-flight 2PC transactions are not awaited at split/merge cutover, so
+  atomicity is lost. The defect exists on main and belongs to the
+  transaction-replication owner. It blocks any release that claims split or
+  merge is supported with transactional work in flight: for 0.3 either that
+  owner's quest fixes it, or the supported-contract and release
+  documentation explicitly exclude transactional split/merge.
+- In-place upgrade from a build that moved message-group replicas (part b,
+  first quest) stays unsupported and stated so in the release documentation
+  until the sweep lands.
+- A finding of "no regression from main" at epic level (for example for the
+  2PC split/merge defect above, which main already has) does not clear a
+  release-level blocker: each item here is cleared only by its own fix or by
+  the release's supported-contract documentation excluding it.
