@@ -420,3 +420,14 @@ This epic closes only when:
 - active-surface zero-reference ratchet is green;
 - exact-main release proof is durably recorded;
 - Q0 reports READY for core convergence.
+
+## Amendments
+
+- 2026-10-04, owner decision: ruling F2 (2026-09-26, a removed replica keeps
+  participating until its own removal commits) is amended - "a group retired
+  by a durable cutover exits AS A UNIT". F2 stays for every removal from a
+  continuing group; split/merge source dissolution and aborted split-child /
+  merge-target teardown retire the whole group on verified durable-workflow
+  evidence with no conf change, and the 30 s consensus-exit backstop is an
+  ERROR alarm only. Record:
+  [`f2-amendment-group-retirement-2026-10-04.md`](raft-rs-full-cutover/quest-records/replace-source-removal-owner/f2-amendment-group-retirement-2026-10-04.md).
