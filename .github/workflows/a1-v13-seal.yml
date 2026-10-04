@@ -1,0 +1,36 @@
+name: a1-v13-seal
+on:
+  push:
+    branches:
+      - quest/0-3-queryable-core-foundation
+    paths:
+      - .github/workflows/a1-v13-seal.yml
+permissions:
+  contents: write
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Seal v13 before witness implementation
+        run: node scripts/solve.js start --id partition-key-ordering-owner-completion-v13
+      - name: Commit seal and remove bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add solve/quests/partition-key-ordering-owner-completion-v13/quest.json solve/quests/partition-key-ordering-owner-completion-v13/log.ndjson
+          git rm .github/workflows/a1-v13-seal.yml
+          git commit -m "0.3 A1: seal v13 intrinsic-stability predicate"
+          git push origin HEAD:quest/0-3-queryable-core-foundation
