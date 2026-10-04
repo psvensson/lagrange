@@ -404,6 +404,13 @@ export {HEADROOM, SKIP_ENV as THERMAL_SKIP_ENV, THERMAL_REFUSAL, THERMAL_REFUSAL
   THERMAL_REFUSAL_LINE};
 
 function main() {
+  // It takes no argument: one it does not know refuses (push-gate-integrity).
+  if (process.argv.length > 2) {
+    process.stderr.write(`unknown argument ${process.argv[2]}${NEWLINE}` +
+      `usage: wait-for-thermal-headroom.js${NEWLINE}`);
+    process.exitCode = 2;
+    return;
+  }
   const result = waitForThermalHeadroom({
     log: (line) => process.stdout.write(`${line}${NEWLINE}`),
   });

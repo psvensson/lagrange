@@ -28,7 +28,7 @@
   "censusSize": 2285,
   "digest": "fnv1a32-72594200",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2b11ef3d",
+  "observationDigest": "fnv1a32-9c1cdd6b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -10271,6 +10271,8 @@
         "test/release/public-api-side-effect-boundary.test.js",
         "test/release/release-pipeline-proof-reuse.test.js",
         "test/runtime/pgwire-protocol-ordering.test.js",
+        "test/scripts/__fixtures__/run-test-files/forges-runner-lines.fixture.mjs",
+        "test/scripts/__fixtures__/run-test-files/tap-pass.fixture.mjs",
         "test/scripts/run-test-files.test.js",
         "test/solve/commands.test.js"
       ]
@@ -11642,23 +11644,33 @@
         "scripts/checks/change-selection-constants.js",
         "scripts/checks/change-selection.js",
         "scripts/checks/changed-paths.js",
+        "scripts/checks/formation-health.js",
         "scripts/checks/helper-import-closure.js",
         "scripts/checks/impact-proof-cone-constants.js",
         "scripts/checks/push-gate-change-proof.js",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/run-formation-seed-budget.js",
         "scripts/checks/run-static-audits.js",
         "scripts/checks/test-primary-classification.js",
         "scripts/checks/test-resource-classification-constants.js",
         "scripts/checks/test-timeout-declarations.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-priority-recovery-owner-inventory.js",
         "scripts/generate-test-primary-classes.js",
         "scripts/generate-test-resource-classes.js",
         "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab.js",
         "scripts/lab/probe.js",
         "scripts/lab/process.js",
         "scripts/lab/state.js",
         "scripts/plan-test-lane.js",
         "scripts/proof-authority.js",
+        "scripts/publish-head.js",
         "scripts/run-classified-test-files.js",
         "scripts/run-project-hardening-acceptance.js",
+        "scripts/run-release-proof.js",
+        "scripts/run-test-ci.sh",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/solve.js",
@@ -11690,6 +11702,7 @@
       "env": [
         "APPDATA",
         "LAGRANGE_LAB_HOME",
+        "SIDE_EFFECT_LOG",
         "XDG_CONFIG_HOME"
       ]
     },
@@ -11935,6 +11948,9 @@
       ]
     },
     "test/scripts/run-test-files.test.js": {
+      "files": [
+        "scripts/run-test-files.js"
+      ],
       "directories": [
         "test/scripts/__fixtures__/run-test-files"
       ]
@@ -12121,6 +12137,8 @@
         "scripts/select-change-tests.js",
         "test/query/budget-limit-error.test.js",
         "test/query/distributed-merge-engine.test.js",
+        "test/scripts/__fixtures__/run-test-files/forges-runner-lines.fixture.mjs",
+        "test/scripts/__fixtures__/run-test-files/tap-pass.fixture.mjs",
         "test/scripts/check-operation-dispatch-completion-owner.test.js",
         "test/shards/primary-classes.json"
       ],

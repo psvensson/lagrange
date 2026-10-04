@@ -18,6 +18,7 @@ import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {parseArgs} from 'node:util';
 import {
   changedRecords,
   resolvedCheckRange,
@@ -38,7 +39,9 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 
 const NPM_BINARY = 'npm';
 const NPM_RUN_ARGUMENTS = Object.freeze(['run', '-s']);
-const FAST_FAIL_FLAG = '--fast-fail';
+// The whole command line; anything else refuses before an audit runs.
+const COMMAND_LINE = Object.freeze({'fast-fail': Object.freeze({type: 'boolean'})});
+const USAGE = 'usage: run-static-audits.js [--fast-fail]\n';
 const STATUS_LABEL = Object.freeze({FAIL: 'FAIL', PASS: 'PASS'});
 const SUMMARY_HEADER = '\nstatic-audits summary:\n';
 const FAILURE_TAIL =
@@ -158,7 +161,14 @@ function runAudit(scriptName) {
 }
 
 function main() {
-  const fastFail = arrayIncludes(process.argv, FAST_FAIL_FLAG);
+  let fastFail = false;
+  try {
+    fastFail = parseArgs({args: process.argv.slice(2), options: COMMAND_LINE, strict: true})
+      .values['fast-fail'] === true;
+  } catch (error) {
+    process.stderr.write(`${error.message}\n${USAGE}`);
+    process.exit(2);
+  }
   const root = process.cwd();
   const changedPaths = rangeChangedPaths(root);
   const inputsByCommand = obligationInputs(root);

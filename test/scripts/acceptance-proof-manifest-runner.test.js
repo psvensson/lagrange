@@ -1,5 +1,6 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -496,6 +497,23 @@ describe('failing-file run summary completeness', () => {
       '',
     ].join('\n'));
     assert.match(summary, /^ {2}failing test files: 1 of 2 planned file\(s\) not covered by a summary - list may be incomplete$/mu);
+  });
+
+  // push-gate-integrity: through the real runner, a failing test that prints
+  // runner-shaped lines (a total covering the plan, an ok for itself, a red
+  // for another file) changes neither the named files nor the completeness.
+  it('is not forged by a failing test\'s own output', () => {
+    const forger = 'test/scripts/__fixtures__/run-test-files/forges-runner-lines.fixture.mjs';
+    const other = 'test/scripts/__fixtures__/run-test-files/tap-pass.fixture.mjs';
+    const env = {...process.env};
+    delete env.NODE_TEST_CONTEXT;
+    const real = spawnSync(process.execPath, ['scripts/run-test-files.js', forger, other],
+      {encoding: 'utf8', env}).stdout;
+    const {summary} = summaryOfFailedOutput([formatPlannedLine(3), real,
+      'thermal: thermal-headroom-exhausted - 1 file(s) not run: test/b2/never.test.js', ''].join('\n'));
+    assert.match(summary, /^ {2}failing test files: 1 of 3 planned file\(s\) not covered by a summary - list may be incomplete$/mu);
+    assert.match(summary, new RegExp(`^ {4}${forger}$`, 'mu'), summary);
+    assert.doesNotMatch(summary, new RegExp(`^ {4}${other}$`, 'mu'), summary);
   });
 
   it('never counts a command that ended by a signal', () => {

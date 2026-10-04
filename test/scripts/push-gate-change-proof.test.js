@@ -808,3 +808,68 @@ test('recording is best effort: the gate never fails on bookkeeping', () => {
     }, write: (value) => unspawned.push(value)}), null);
   assert.deepEqual(unspawned, [], 'no sha, no receipt, no noise');
 });
+
+// push-gate-integrity: `push-gate-change-proof.js --help` ran the whole placed
+// corpus across six machines and downloaded a dataset - the script read only
+// --explain and ignored everything else. Every gate, publisher, solver and lab
+// entry point with side effects refuses an argument it does not know, with a
+// usage line and a non-zero exit, before any work. Observed, not timed: each
+// runs under a preload that records every child process and network call it
+// starts, and the record must stay empty.
+const SIDE_EFFECT_OBSERVER = [
+  'import cp from "node:child_process"; import http from "node:http";',
+  'import https from "node:https"; import fs from "node:fs"; import {syncBuiltinESMExports} from "node:module";',
+  'const record = (what) => fs.appendFileSync(process.env.SIDE_EFFECT_LOG, `${what}\\n`);',
+  'for (const name of ["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"]) {',
+  '  cp[name] = (...args) => { record(`${name} ${args[0]}`); throw new Error("observed"); }; }',
+  'for (const mod of [http, https]) for (const name of ["request", "get"]) {',
+  '  mod[name] = () => { record(`${name}`); throw new Error("observed"); }; }',
+  'globalThis.fetch = async () => { record("fetch"); throw new Error("observed"); };',
+  'syncBuiltinESMExports();',
+].join('\n');
+const UNKNOWN_ARGUMENT_ENTRY_POINTS = Object.freeze([
+  ['scripts/checks/push-gate-change-proof.js'],
+  ['scripts/checks/run-static-audits.js'],
+  ['scripts/select-change-tests.js', '--list'],
+  ['scripts/generate-global-owner-debt-inventory.js'],
+  ['scripts/generate-priority-recovery-owner-inventory.js'],
+  ['scripts/checks/formation-health.js'],
+  ['scripts/checks/run-formation-seed-budget.js'],
+  ['scripts/checks/wait-for-thermal-headroom.js'],
+  ['scripts/run-release-proof.js'],
+  ['scripts/solve.js', 'land', '--id', 'push-gate-integrity'],
+  ['scripts/lab.js', 'test', 'all'],
+  ['scripts/proof-authority.js', 'record', 'corpus-full-v1', 'a'.repeat(40)],
+  ['scripts/run-project-hardening-acceptance.js'],
+  ['scripts/publish-head.js'],
+  ['scripts/checks/push-gate-corpus-worktree.js'],
+]);
+
+test('every gate entry point refuses an unknown argument before any work', () => {
+  const scratch = fs.mkdtempSync(path.join(process.cwd(), 'test-output', 'unknown-argument-'));
+  try {
+    for (const [script, ...known] of UNKNOWN_ARGUMENT_ENTRY_POINTS) {
+      // lab's --help is its own (it prints the usage and runs nothing).
+      for (const unknown of script === 'scripts/lab.js' ? ['--bogus'] : ['--help', '--bogus']) {
+        const log = path.join(scratch, `${path.basename(script)}${unknown}.log`);
+        fs.writeFileSync(log, '');
+        const env = {...process.env, SIDE_EFFECT_LOG: log};
+        delete env.NODE_TEST_CONTEXT;
+        const ran = spawnSync(process.execPath, [
+          `--import=data:text/javascript,${encodeURIComponent(SIDE_EFFECT_OBSERVER)}`,
+          script, ...known, unknown], {cwd: process.cwd(), encoding: 'utf8', env, timeout: 60000});
+        const said = `${ran.stdout}${ran.stderr}`;
+        assert.notEqual(ran.status, 0, `${script} ${unknown} exits non-zero: ${said}`);
+        assert.match(said, /usage/iu, `${script} ${unknown} prints a usage line: ${said}`);
+        assert.equal(fs.readFileSync(log, 'utf8'), '',
+          `${script} ${unknown} started nothing before refusing: ${said}`);
+      }
+    }
+    // No npm on its PATH: an unrefused argument fails on npm, never runs CI.
+    const shell = spawnSync('/bin/bash', ['scripts/run-test-ci.sh', '--help'],
+      {cwd: process.cwd(), encoding: 'utf8', env: {...process.env, PATH: scratch}});
+    assert.equal(shell.status, 2, `run-test-ci.sh refuses before npm: ${shell.stderr}`);
+  } finally {
+    fs.rmSync(scratch, {recursive: true, force: true});
+  }
+});

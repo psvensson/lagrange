@@ -145,15 +145,25 @@ export function runProjectHardeningAcceptance(options = {}) {
   return {run, receiptPath, scenarioPath};
 }
 
+const USAGE = 'usage: run-project-hardening-acceptance.js [--manifest <file>] ' +
+  '[--scenario <id>] [--receipt-dir <dir>]';
+// A flag without its value is refused too: a trailing --manifest used to fall
+// back to the default (whole-gate) manifest (push-gate-integrity).
 function parseArgs(argv) {
   const options = {};
+  const value = (index) => {
+    if (argv[index] === undefined) {
+      throw new Error(`argument requires a value: ${argv[index - 1]}\n${USAGE}`);
+    }
+    return argv[index];
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === ACCEPTANCE_PROOF.FLAG_MANIFEST) options.manifestPath = argv[++index];
-    else if (arg === ACCEPTANCE_PROOF.FLAG_SCENARIO) options.scenario = argv[++index];
+    if (arg === ACCEPTANCE_PROOF.FLAG_MANIFEST) options.manifestPath = value(++index);
+    else if (arg === ACCEPTANCE_PROOF.FLAG_SCENARIO) options.scenario = value(++index);
     else if (arg === ACCEPTANCE_PROOF.FLAG_RECEIPT_DIR) {
-      options.receiptDir = argv[++index];
-    } else throw new Error(`unknown argument: ${arg}`);
+      options.receiptDir = value(++index);
+    } else throw new Error(`unknown argument: ${arg}\n${USAGE}`);
   }
   return options;
 }

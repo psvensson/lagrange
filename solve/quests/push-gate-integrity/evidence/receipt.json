@@ -1,0 +1,86 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "push-gate-integrity",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/proof-authority-falsifiers.test.js": "88a10e303b07777f0f6d89839b12f334a9a9969150b59c7cb0442754b2c259c1",
+    "test/scripts/push-gate-change-proof.test.js": "7784263fb797a0ef0f4246f37f77d6691d05fa87de4161036bec8abab16324d8",
+    "test/scripts/publish-head-workspace-links.test.js": "83897f9b2bf27fcbb712b3cf63bc86d541d0aa55bf11d9b49d338e89e047f32b",
+    "test/scripts/run-test-files.test.js": "99f12e8ea313abdd13835de7c2c30b1a79c4f263310987edb9c5542003ff794a",
+    "test/scripts/acceptance-proof-manifest-runner.test.js": "7b997e4c6c394fa597f6d973da31b2b3fbcc3b6834814e91ebc883805b7afd41",
+    "test/scripts/test-placement.test.js": "96246a1ff5e0abcd13fcb2b6bb85698e77d83b554e3134d125b156cb0219e907"
+  },
+  "generatedAt": "2026-10-04T08:39:26.145Z",
+  "receipts": [
+    {
+      "id": "removed-git-link-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a gate command that removes the checkout \\\\.git link is refused, not passed$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "push-gate-corpus-worktree.js --gate <sha> --run \"rm .git\": exit 1, [push-gate] refused: checkout-identity-lost, diagnostics kept, no checkout directory or worktree registration left",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "replaced-git-link-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a gate command that points the checkout \\\\.git link at another repository is refused$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "the .git link rewritten to another repository's gitdir: the same typed refusal, nothing stranded",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "stray-file-after-removed-link-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a gate command that removes \\\\.git and leaves a stray file is refused$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "a removed link plus a stray file: refused, never a clean status read from the enclosing repository",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "stop-request-stops-the-command",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^SIGTERM to the gate process stops its command and keeps its diagnostics$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "SIGTERM to the gate pid alone while the command sleeps: the gate ends by the signal, the command group is stopped before it finishes, diagnostics kept, checkout removed",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "stranded-checkout-released",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the next gate releases a checkout stranded by a gate that died$\" test/scripts/proof-authority-falsifiers.test.js",
+      "detail": "a registered gate checkout whose owner record names a dead pid is released (diagnostics first) by the next gate",
+      "testFile": "test/scripts/proof-authority-falsifiers.test.js"
+    },
+    {
+      "id": "unknown-argument-refused-before-work",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^every gate entry point refuses an unknown argument before any work$\" test/scripts/push-gate-change-proof.test.js",
+      "detail": "each gate/publisher/solve/lab entry point run with --help and --bogus under a preload that records every child process and network call: non-zero, a usage line, nothing recorded; run-test-ci.sh refuses with exit 2",
+      "testFile": "test/scripts/push-gate-change-proof.test.js"
+    },
+    {
+      "id": "retention-keeps-what-it-wrote",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^retention never prunes the run it just wrote, nor anything not a run$\" test/scripts/publish-head-workspace-links.test.js",
+      "detail": "retainGateDiagnostics with five kept runs of one (later) mtime tick: the run just written survives, the prune order is the name, a non-sha entry is never pruned",
+      "testFile": "test/scripts/publish-head-workspace-links.test.js"
+    },
+    {
+      "id": "forged-lines-change-no-runner-verdict",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^changes no per-file verdict and no count$\" test/scripts/run-test-files.test.js",
+      "detail": "the real runner on a failing fixture that prints forged verdict/summary/plan/retried/relayed/CR lines on stdout and stderr: testFileVerdictReader names only the forger, one summary, no plan; every echoed line indented",
+      "testFile": "test/scripts/run-test-files.test.js"
+    },
+    {
+      "id": "forged-lines-change-no-acceptance-summary",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^is not forged by a failing test's own output$\" test/scripts/acceptance-proof-manifest-runner.test.js",
+      "detail": "renderRunSummary over a plan of 3, the real runner output and a thermal refusal: incomplete (1 of 3 not covered), names the forger, not the passing file",
+      "testFile": "test/scripts/acceptance-proof-manifest-runner.test.js"
+    },
+    {
+      "id": "forged-lines-change-no-placement-rerun",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a failing test cannot forge the placement rerun decision$\" test/scripts/test-placement.test.js",
+      "detail": "runPlacedTestFiles with a lab shard log that is the real runner output: the controller reruns the real red and only it",
+      "testFile": "test/scripts/test-placement.test.js"
+    }
+  ]
+}

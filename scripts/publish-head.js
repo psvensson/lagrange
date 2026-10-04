@@ -14,6 +14,7 @@ import {
   PROOF_SCOPE_PATH,
   WORKSPACE_INJECTION_ENV,
 } from './checks/change-selection-constants.js';
+import {gitProcessEnvironment} from './checks/git-process-environment.js';
 import {parseLaneArgs, planLane} from './plan-test-lane.js';
 import {THERMAL_REFUSAL_EXIT} from './checks/wait-for-thermal-headroom.js';
 
@@ -140,7 +141,17 @@ const STATUS_COMMAND = 'status';
 const PORCELAIN_ARGUMENT = '--porcelain';
 const DIRTY_GATE_ERROR =
   'publish: pre-push gate mutated the exact-HEAD worktree';
+const GIT_LINK = '.git';
+const CHECKOUT_GIT_DIR_ARGUMENTS = Object.freeze(['rev-parse', '--absolute-git-dir']);
+const CHECKOUT_HEAD_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
+// The typed refusal, and the identity fields it compares (head last).
+const CHECKOUT_IDENTITY_LOST = 'checkout-identity-lost';
+const CHECKOUT_IDENTITY_FIELDS = Object.freeze(['link', 'resolves', 'head']);
+const CHECKOUT_IDENTITY_UNREADABLE = 'identity unreadable after the gate: ';
+const CHECKOUT_IDENTITY_CHANGED = ' changed during the gate';
 const MISSING_VALUE_ERROR = 'publish: option requires a value: ';
+const PUBLISH_USAGE = 'usage: publish-head.js [--runner github|self-hosted] ' +
+  '[--fixes-red <sha> --reason <why>] [--allow-missing-data] | --post-merge <sha>';
 const ALLOW_MISSING_DATA_ARGUMENT = '--allow-missing-data';
 const DATA_DIRECTORY = 'data';
 const DATA_ABSENT_ERROR_PREFIX = 'publish: data/ is absent in ';
@@ -164,6 +175,8 @@ const INJECTION_SEPARATOR = ',';
 const GATE_DIAGNOSTIC_DIR = path.join('test-output', 'push-gate');
 // Each kept failure holds a capture of up to 64 MB: keep the newest few.
 const GATE_DIAGNOSTIC_KEEP = 5;
+// A kept run is named by its sha (SHA-1 or SHA-256 object names).
+const GATE_DIAGNOSTIC_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const GATE_DIAGNOSTIC_REPLACED = ' (replacing an earlier failed run of this sha)';
 const ACCEPTANCE_OUTPUT_DIR = path.join('test-output', 'acceptance');
 const REPORT_SUFFIX = '.report.json';
@@ -400,6 +413,77 @@ function assertWorkspaceDependencyLinks(dependencyLinks) {
   }
 }
 
+// push-gate-integrity: what makes a gate checkout the checkout of the gated
+// sha - its own .git link (the same file, unchanged), the gitdir that link
+// resolves to and the commit checked out there. Gate checkouts live inside the
+// enclosing repository's test-output/, which that repository ignores: a git
+// read that discovers upward from a checkout whose link the gate's command
+// removed answered for the ENCLOSING repository, reported it clean and passed
+// the gate. Every read here stops discovery at the checkout, and the commit
+// and the status are read through the gitdir recorded before the run, so they
+// can only ever answer for this checkout - or fail.
+function checkoutGit(run, checkout, gitDir, args) {
+  const pinned = gitDir ? [`--git-dir=${gitDir}`, `--work-tree=${checkout}`] : [];
+  return output(run, GIT_COMMAND, [...pinned, ...args],
+    {cwd: checkout, env: gitProcessEnvironment(process.env, checkout)});
+}
+
+function readCheckoutIdentity(run, checkout, gitDir) {
+  const link = path.join(checkout, GIT_LINK);
+  const stat = fs.lstatSync(link);
+  const resolves = checkoutGit(run, checkout, null, CHECKOUT_GIT_DIR_ARGUMENTS);
+  return {
+    checkout,
+    link: [stat.dev, stat.ino, stat.isFile() ? fs.readFileSync(link, UTF8) : stat.mode].join(':'),
+    resolves,
+    head: checkoutGit(run, checkout, gitDir ?? resolves, CHECKOUT_HEAD_ARGUMENTS),
+  };
+}
+
+function identityLost(checkout, detail) {
+  const error = new Error(`${CHECKOUT_IDENTITY_LOST}: ${detail} (${checkout})`);
+  error.code = CHECKOUT_IDENTITY_LOST;
+  return error;
+}
+
+/**
+ * The identity of a fresh gate checkout of `sha`, read before anything runs
+ * in it.
+ * @param {string} checkout
+ * @param {string} sha
+ * @param {Function} [run]
+ * @return {{checkout: string, link: string, resolves: string, head: string}}
+ */
+function checkoutIdentity(checkout, sha, run = spawnSync) {
+  const identity = readCheckoutIdentity(run, checkout, null);
+  if (identity.head !== sha) throw identityLost(checkout, CHECKOUT_IDENTITY_FIELDS.at(-1));
+  return identity;
+}
+
+/**
+ * The checkout's own porcelain status after a gate ran in it, or the typed
+ * refusal `checkout-identity-lost` when it is no longer the checkout it was:
+ * its .git link removed, replaced or rewritten, resolving elsewhere, or
+ * another commit checked out. Never an answer from another repository.
+ * @param {{checkout: string, link: string, resolves: string, head: string}} identity
+ * @param {Function} [run]
+ * @return {string}
+ */
+function exactCheckoutStatus(identity, run = spawnSync) {
+  let now = null;
+  try {
+    now = readCheckoutIdentity(run, identity.checkout, identity.resolves);
+  } catch (error) {
+    throw identityLost(identity.checkout, `${CHECKOUT_IDENTITY_UNREADABLE}${error.message}`);
+  }
+  const changed = CHECKOUT_IDENTITY_FIELDS.filter((field) => now[field] !== identity[field]);
+  if (changed.length > 0) {
+    throw identityLost(identity.checkout, `${changed.join(ARG_SEPARATOR)}${CHECKOUT_IDENTITY_CHANGED}`);
+  }
+  return checkoutGit(run, identity.checkout, identity.resolves,
+    [STATUS_COMMAND, PORCELAIN_ARGUMENT]);
+}
+
 // Copy the failing gate's receipt, and the artifact (and raw stdout) of its
 // FIRST failing command, out of the worktree before cleanup removes them: one
 // run per sha (a later one replaces it, aloud), the newest GATE_DIAGNOSTIC_KEEP
@@ -422,10 +506,16 @@ function retainGateDiagnostics(root, worktree, head) {
     fs.copyFileSync(
       path.join(source, newest), path.join(destination, newest));
     kept = replaced ? `${destination}${GATE_DIAGNOSTIC_REPLACED}` : destination;
-    const age = (name) => -fs.statSync(path.join(parent, name)).mtimeMs;
-    const older = arraySort(fs.readdirSync(parent), (left, right) => age(left) - age(right))
-      .slice(GATE_DIAGNOSTIC_KEEP);
-    for (const name of older) fs.rmSync(path.join(parent, name), {recursive: true, force: true});
+    // The run just written always stays; of the other sha-named runs the
+    // newest fill the rest, newest by mtime and then by name, so two runs in
+    // one mtime tick order the same way every time. Nothing else here is ours.
+    const age = (name) => fs.statSync(path.join(parent, name)).mtimeMs;
+    const others = arraySort(arrayFilter(fs.readdirSync(parent),
+      (name) => name !== head && GATE_DIAGNOSTIC_SHA.test(name)),
+    (left, right) => age(right) - age(left) || (left < right ? 1 : -1));
+    for (const name of others.slice(GATE_DIAGNOSTIC_KEEP - 1)) {
+      fs.rmSync(path.join(parent, name), {recursive: true, force: true});
+    }
     const report = JSON.parse(
       fs.readFileSync(path.join(source, newest), UTF8));
     const failing = arrayFind(report.commands || [],
@@ -443,8 +533,10 @@ function retainGateDiagnostics(root, worktree, head) {
 }
 
 function gateExactHead(run, root, worktree, head, remoteBefore, args) {
+  const identity = checkoutIdentity(worktree, head, run);
   const dependencyLinks = linkWorkspaceDependencies(root, worktree);
-  const gateEnv = {...process.env};
+  // Discovery stops at the checkout for the gate and for the push after it.
+  const gateEnv = gitProcessEnvironment(process.env, worktree);
   // Declare what this layer injected. Repository code decides what must be
   // proved; the workspace only says which paths it put there that git will
   // otherwise report as untracked repository content.
@@ -460,9 +552,7 @@ function gateExactHead(run, root, worktree, head, remoteBefore, args) {
   });
   assertWorkspaceDependencyLinks(dependencyLinks);
   for (const dependencyLink of dependencyLinks) fs.unlinkSync(dependencyLink.link);
-  const gateStatus = git(run, worktree, [
-    STATUS_COMMAND, PORCELAIN_ARGUMENT,
-  ]);
+  const gateStatus = exactCheckoutStatus(identity, run);
   if (gateStatus) {
     throw new Error(`${DIRTY_GATE_ERROR}${NEWLINE}${gateStatus}`);
   }
@@ -1249,7 +1339,7 @@ function parseArgs(argv) {
     else if (token === ALLOW_MISSING_DATA_ARGUMENT) parsed.allowMissingData = true;
     else if (token === POST_MERGE_ARGUMENT) {
       parsed.postMerge = valueAfter(index++, token);
-    } else throw new Error(`publish: unknown argument ${token}`);
+    } else throw new Error(`publish: unknown argument ${token}${NEWLINE}${PUBLISH_USAGE}`);
   }
   if (parsed.postMerge && Object.keys(parsed).length > 1) {
     throw new Error(POST_MERGE_TEXT.ONLY_OPTION);
@@ -1263,7 +1353,9 @@ export function parsePublishArgs(argv) {
 
 function main() {
   const argv = process.argv.slice(2);
-  if (argv[0] === LOCAL_CORPUS_ARGUMENT && argv.length === 2) {
+  // The detached local corpus this publisher starts names a full sha; any
+  // other shape goes to the strict parser below and is refused there.
+  if (argv[0] === LOCAL_CORPUS_ARGUMENT && argv.length === 2 && GATE_DIAGNOSTIC_SHA.test(argv[1])) {
     const root = process.cwd();
     process.exitCode = runLocalCorpus(root, argv[1],
       {stateDir: localCorpusPlaces(spawnSync, root).stateDir});
@@ -1299,10 +1391,13 @@ if (process.argv[1] &&
 }
 
 export {
+  CHECKOUT_IDENTITY_LOST,
   LOCAL_CORPUS_OWED,
   POST_MERGE_REFUSAL,
   GATE_WORKSPACE_DIRECTORIES,
   assertWorkspaceDependencyLinks,
+  checkoutIdentity,
+  exactCheckoutStatus,
   linkWorkspaceDependencies,
   retainGateDiagnostics,
 };

@@ -31,25 +31,32 @@
 //     the pushed ref lines on stdin; refuse if the run left the checkout
 //     dirty. The pre-push hook calls this for itself when it is not already
 //     inside such a checkout, so every stage proves the pushed bytes and the
-//     working tree is never a proof input.)
+//     working tree is never a proof input. It also refuses when the run cost
+//     the checkout its identity - push-gate-integrity.)
+//   (--supervise <checkout> --gate <sha> --run ... is the gate's own
+//     supervisor of its command; nothing else calls it.)
 //
 // Exit 0 when every corpus gate passes on the snapshot; exit 1 on the first
 // failing gate; exit 2 on usage error. The throwaway worktree is always
 // removed; a failed --gate run first keeps its diagnostics (publish-head.js).
 
 import process from 'node:process';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {execFileSync, spawn, spawnSync} from 'node:child_process';
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {
   createSnapshotWorktree,
   removeWorktree,
 } from '../session-worktree.js';
 import {
+  CHECKOUT_IDENTITY_LOST,
   GATE_WORKSPACE_DIRECTORIES,
   assertWorkspaceDependencyLinks,
+  checkoutIdentity,
+  exactCheckoutStatus,
   linkWorkspaceDependencies,
   retainGateDiagnostics,
 } from '../publish-head.js';
@@ -64,18 +71,28 @@ const IN_PLACE_FLAG = '--in-place';
 const GATE_FLAG = '--gate';
 const REF_LINES_FLAG = '--ref-lines';
 const RUN_FLAG = '--run';
+const SUPERVISE_FLAG = '--supervise';
 const GATE_HOOK_COMMAND = Object.freeze(['bash', '.githooks/pre-push']);
 const GATE_PUSHED_SHA_ENV = 'LAGRANGE_GATE_PUSHED_SHA';
 const GATE_RED_MAIN_CHECKED_ENV = 'LAGRANGE_GATE_RED_MAIN_CHECKED';
 const ENABLED_ENV_VALUE = '1';
 const INJECTION_SEPARATOR = ',';
-const GIT_STATUS_ARGUMENTS = Object.freeze(['status', '--porcelain']);
 const GIT_PEEL_ARGUMENTS = Object.freeze(['rev-parse', '--verify', '--quiet']);
 const COMMIT_PEEL_SUFFIX = '^{commit}';
 const GIT_WORKTREE_ADD_ARGUMENTS = Object.freeze(
   ['worktree', 'add', '--detach', '--quiet']);
-const CLEANUP_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM', 'SIGHUP']);
+// The supervisor's stop: the signals it forwards to the command's group (the
+// second is the one it sends when the gate process is gone), how often it
+// looks for its gate, and how long a stopped group gets before SIGKILL.
+const STOP_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM', 'SIGHUP']);
+const KILL_SIGNAL = 'SIGKILL';
+const GATE_WATCH_MS = 100;
+const STOP_GRACE_MS = 5000;
 const SIGNAL_EXIT_BASE = 128;
+const INHERIT_STDIO = 'inherit';
+const ERRNO_NO_PERMISSION = 'EPERM';
+// Beside each gate checkout: the gate process that owns it and the sha.
+const GATE_OWNER_FILE = 'gate-owner';
 // The gate checkout lives under the repository (gitignored), as the
 // publisher's does: a checkout under the system temp dir fails the tests that
 // resolve their fixtures against os.tmpdir(). The parent keeps the session
@@ -105,6 +122,10 @@ const LOCAL_TEXT = Object.freeze({
   GATE_LINKS_BROKEN: '[push-gate] a workspace injection link was replaced during the gate\n',
   GATE_RETAINED: '[push-gate] gate diagnostics retained in ',
   GATE_NOTHING_RETAINED: '[push-gate] no acceptance receipt to retain from the gate checkout\n',
+  GATE_IDENTITY_LOST: '[push-gate] refused: ',
+  GATE_STOPPED: '[push-gate] the gate process ended while its command ran: ' +
+    'the command\'s process group was stopped\n',
+  GATE_STRANDED: '[push-gate] releasing a gate checkout whose gate is gone: ',
 });
 const stringTrim = Function.call.bind(String.prototype.trim);
 
@@ -138,11 +159,12 @@ function repoRoot() {
 // exact pushed tree; otherwise gate the live working-tree state (committed
 // HEAD plus uncommitted tracked and untracked-non-ignored files), which is
 // what a pre-push hook is about to ship.
-function gateWorktreePath(root) {
+function gateWorktreePath(root, owner = null) {
   const parent = path.join(root, ...GATE_WORKTREE_PARENT);
   fs.mkdirSync(parent, {recursive: true});
-  return path.join(fs.mkdtempSync(path.join(parent, GATE_WORKTREE_PREFIX)),
-    GATE_WORKTREE_LEAF);
+  const directory = fs.mkdtempSync(path.join(parent, GATE_WORKTREE_PREFIX));
+  if (owner) fs.writeFileSync(path.join(directory, GATE_OWNER_FILE), `${process.pid} ${owner}`);
+  return path.join(directory, GATE_WORKTREE_LEAF);
 }
 
 function materializeTreeUnderTest(root, ref, worktreePath = undefined) {
@@ -220,7 +242,7 @@ function peelToCommit(root, sha) {
 // A fresh detached checkout of exactly the commit: nothing from the working
 // tree is copied, so a file the pushed .gitignore ignores cannot leak in.
 function checkoutExactCommit(root, commit) {
-  const worktreePath = gateWorktreePath(root);
+  const worktreePath = gateWorktreePath(root, commit);
   execFileSync(GIT_BINARY,
     [GIT_WORKING_TREE_FLAG, root, ...GIT_WORKTREE_ADD_ARGUMENTS,
       worktreePath, commit],
@@ -228,37 +250,106 @@ function checkoutExactCommit(root, commit) {
   return worktreePath;
 }
 
-// An interrupted gate must not strand its checkout: the signal removes the
-// worktree, then re-raises through the conventional exit code.
-function removeWorktreeOnSignal(root, worktreePath) {
-  const handlers = [];
-  for (const signal of CLEANUP_SIGNALS) {
-    const handler = () => {
-      removeWorktree(root, worktreePath);
-      process.exit(SIGNAL_EXIT_BASE + (os.constants.signals[signal] || 0));
-    };
-    process.on(signal, handler);
-    handlers.push([signal, handler]);
+// push-gate-integrity: a stop request is honoured. The gate itself runs
+// synchronously and installs no signal handler - a handler only replaced the
+// default action while spawnSync blocked, so a SIGTERM sent to the gate
+// process alone was swallowed and the command ran on to decide the verdict.
+// The default action now ends the gate at once, by the signal. The command
+// runs under a supervisor (this script again, --supervise) in its own process
+// group: the supervisor forwards a signal sent to it, and when the gate
+// process is gone it stops the group (TERM, then KILL after a grace), keeps
+// the diagnostics and removes the checkout. A checkout stranded by a gate that
+// died outside that window (making or releasing the checkout) is released by
+// the next gate of the repository: every gate checkout records its owner.
+function supervisedCommand(worktreePath, sha, command) {
+  return [fileURLToPath(import.meta.url), SUPERVISE_FLAG, worktreePath,
+    GATE_FLAG, sha, RUN_FLAG, ...command];
+}
+
+function releaseGateCheckout(root, worktreePath, sha) {
+  const retained = retainGateDiagnostics(root, worktreePath, sha);
+  process.stderr.write(retained ? `${LOCAL_TEXT.GATE_RETAINED}${retained}\n` :
+    LOCAL_TEXT.GATE_NOTHING_RETAINED);
+  removeWorktree(root, worktreePath);
+}
+
+function ownerAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === ERRNO_NO_PERMISSION;
   }
-  return () => {
-    for (const [signal, handler] of handlers) process.off(signal, handler);
+}
+
+function releaseStrandedGateCheckouts(root) {
+  const parent = path.join(root, ...GATE_WORKTREE_PARENT);
+  for (const entry of fs.existsSync(parent) ? fs.readdirSync(parent) : []) {
+    const owner = path.join(parent, entry, GATE_OWNER_FILE);
+    if (!fs.existsSync(owner)) continue;
+    const [pid, sha] = stringTrim(fs.readFileSync(owner, TEXT_ENCODING))
+      .split(LOCAL_TEXT.ARGUMENT_SEPARATOR);
+    if (ownerAlive(Number(pid))) continue;
+    process.stderr.write(`${LOCAL_TEXT.GATE_STRANDED}${sha} (gate ${pid})\n`);
+    releaseGateCheckout(root, path.join(parent, entry, GATE_WORKTREE_LEAF), sha);
+  }
+}
+
+function superviseGateCommand(root, {gateSha: sha, checkout, command}) {
+  const gate = process.ppid;
+  const child = spawn(command[0], command.slice(1),
+    {cwd: checkout, stdio: INHERIT_STDIO, detached: true});
+  const signalGroup = (signal) => {
+    try {
+      process.kill(-child.pid, signal);
+    } catch {
+      // the group is gone
+    }
   };
+  let stopping = false;
+  const stop = (signal) => {
+    if (stopping) return;
+    stopping = true;
+    signalGroup(signal);
+    setTimeout(() => signalGroup(KILL_SIGNAL), STOP_GRACE_MS).unref();
+  };
+  for (const signal of STOP_SIGNALS) process.on(signal, () => stop(signal));
+  const watch = setInterval(() => {
+    if (process.ppid !== gate) stop(STOP_SIGNALS[1]);
+  }, GATE_WATCH_MS);
+  child.on('error', (error) => {
+    process.stderr.write(`[push-gate] could not run ${command[0]}: ${error.message}\n`);
+    process.exit(EXIT_GATE_FAILURE);
+  });
+  child.on('exit', (code, signal) => {
+    clearInterval(watch);
+    if (process.ppid !== gate) {
+      signalGroup(KILL_SIGNAL);
+      process.stderr.write(LOCAL_TEXT.GATE_STOPPED);
+      fs.writeFileSync(path.join(path.dirname(checkout), GATE_OWNER_FILE),
+        `${process.pid} ${sha}`);
+      releaseGateCheckout(root, checkout, sha);
+    }
+    process.exit(code ?? SIGNAL_EXIT_BASE + (os.constants.signals[signal] || 0));
+  });
 }
 
 function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
+  releaseStrandedGateCheckouts(root);
   const sha = peelToCommit(root, requestedSha);
   const worktreePath = checkoutExactCommit(root, sha);
-  const releaseSignals = removeWorktreeOnSignal(root, worktreePath);
   // Every end but a pass - a throw included - keeps the publisher's
   // diagnostics: the checkout is the only copy of what a failed gate wrote.
   let passed = false;
   try {
+    const identity = checkoutIdentity(worktreePath, sha);
     const links = linkWorkspaceDependencies(root, worktreePath);
     // A push from a linked worktree exports that worktree's GIT_DIR into the
     // hook; inherited, it would make the gate's own git reads - HEAD, status,
-    // the lint range - answer for the pusher's checkout, not this one.
+    // the lint range - answer for the pusher's checkout, not this one; and no
+    // git read in the run may discover past the checkout into this one.
     const env = {
-      ...gitProcessEnvironment(),
+      ...gitProcessEnvironment(process.env, worktreePath),
       [WORKSPACE_INJECTION_ENV]:
         GATE_WORKSPACE_DIRECTORIES.join(INJECTION_SEPARATOR),
       [GATE_PUSHED_SHA_ENV]: sha,
@@ -269,17 +360,13 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
     process.stdout.write(
       `${LOCAL_TEXT.GATE_MATERIALIZED}${sha}${LOCAL_TEXT.GATE_IN}` +
       `${worktreePath}: ${command.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)}\n`);
-    const result = spawnSync(command[0], command.slice(1), {
-      cwd: worktreePath,
-      env,
-      input,
-      stdio: ['pipe', 'inherit', 'inherit'],
-    });
-    if (result.error) {
-      process.stderr.write(`[push-gate] could not run ${command[0]}: ` +
-        `${result.error.message}\n`);
-      return EXIT_GATE_FAILURE;
-    }
+    const result = spawnSync(process.execPath,
+      supervisedCommand(worktreePath, sha, command), {
+        cwd: root,
+        env,
+        input,
+        stdio: ['pipe', INHERIT_STDIO, INHERIT_STDIO],
+      });
     try {
       assertWorkspaceDependencyLinks(links);
     } catch {
@@ -287,23 +374,20 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
       return EXIT_GATE_FAILURE;
     }
     for (const link of links) fs.unlinkSync(link.link);
-    const status = stringTrim(execFileSync(GIT_BINARY,
-      [GIT_WORKING_TREE_FLAG, worktreePath, ...GIT_STATUS_ARGUMENTS],
-      {encoding: TEXT_ENCODING}));
+    const status = stringTrim(exactCheckoutStatus(identity));
     if (status.length > 0) {
       process.stderr.write(`${LOCAL_TEXT.GATE_DIRTY}${status}\n`);
       return EXIT_GATE_FAILURE;
     }
     passed = result.status === 0;
     return result.status ?? EXIT_GATE_FAILURE;
+  } catch (error) {
+    if (error.code !== CHECKOUT_IDENTITY_LOST) throw error;
+    process.stderr.write(`${LOCAL_TEXT.GATE_IDENTITY_LOST}${error.message}\n`);
+    return EXIT_GATE_FAILURE;
   } finally {
-    releaseSignals();
-    if (!passed) {
-      const retained = retainGateDiagnostics(root, worktreePath, sha);
-      process.stderr.write(retained ? `${LOCAL_TEXT.GATE_RETAINED}${retained}\n` :
-        LOCAL_TEXT.GATE_NOTHING_RETAINED);
-    }
-    removeWorktree(root, worktreePath);
+    if (passed) removeWorktree(root, worktreePath);
+    else releaseGateCheckout(root, worktreePath, sha);
   }
 }
 
@@ -319,7 +403,8 @@ function gateMaterializedTree(root, ref) {
 // The command line, read once: each flag names what it selects, and an
 // unknown argument is the usage refusal.
 function parseGateArguments(args) {
-  const parsed = {ref: null, inPlace: false, gateSha: null, refLinesFile: null, command: null};
+  const parsed = {ref: null, inPlace: false, gateSha: null, refLinesFile: null, command: null,
+    checkout: null};
   for (let index = 0; index < args.length; index += 1) {
     const hasValue = index + 1 < args.length;
     if (args[index] === REF_FLAG && hasValue) {
@@ -333,6 +418,9 @@ function parseGateArguments(args) {
     } else if (args[index] === REF_LINES_FLAG && hasValue) {
       parsed.refLinesFile = args[index + 1];
       index += 1;
+    } else if (args[index] === SUPERVISE_FLAG && hasValue) {
+      parsed.checkout = args[index + 1];
+      index += 1;
     } else if (args[index] === RUN_FLAG && hasValue) {
       parsed.command = args.slice(index + 1);
       break;
@@ -345,8 +433,9 @@ function parseGateArguments(args) {
 
 // The three modes exclude each other, and the exact-sha extras belong to
 // the exact-sha mode only.
-function validateGateArguments({ref, inPlace, gateSha, refLinesFile, command}) {
+function validateGateArguments({ref, inPlace, gateSha, refLinesFile, command, checkout}) {
   if (inPlace && ref !== null) usage();
+  if (checkout !== null && (gateSha === null || command === null || refLinesFile !== null)) usage();
   if (gateSha !== null && (inPlace || ref !== null)) usage();
   if (gateSha === null && (refLinesFile !== null || command !== null)) usage();
 }
@@ -357,6 +446,7 @@ function main(argv) {
   const {ref, inPlace, gateSha, refLinesFile, command} = parsed;
 
   const root = repoRoot();
+  if (parsed.checkout !== null) return superviseGateCommand(root, parsed);
   if (gateSha !== null) {
     return gateExactSha(root, {
       sha: gateSha,

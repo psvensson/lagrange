@@ -316,11 +316,13 @@ function failedGateCheckout(parent, name, artifact = 'test-output/acceptance/p/p
   return worktree;
 }
 
+const MISSING_SHA = 'e'.repeat(40);
+
 tap.test('retained gate diagnostics are bounded, replaced aloud, and honest', (t) => {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'retain-bound-'));
   const root = path.join(parent, 'root');
   const kept = path.join(root, 'test-output', 'push-gate');
-  const shas = Array.from({length: 7}, (_unused, index) => `sha${index}`);
+  const shas = Array.from({length: 7}, (_unused, index) => String(index).repeat(40));
   shas.forEach((sha, index) => {
     t.equal(retainGateDiagnostics(root, failedGateCheckout(parent, sha), sha),
       path.join(kept, sha), 'a first failure of a sha is kept where it says');
@@ -328,16 +330,16 @@ tap.test('retained gate diagnostics are bounded, replaced aloud, and honest', (t
   });
   t.same(fs.readdirSync(kept).sort(), shas.slice(2),
     'only the newest five shas are kept; older ones are pruned');
-  t.equal(fs.readFileSync(path.join(kept, 'sha6', 'proof.json.stdout.txt'), 'utf8'), 'sha6',
+  t.equal(fs.readFileSync(path.join(kept, shas[6], 'proof.json.stdout.txt'), 'utf8'), shas[6],
     'the raw stdout beside the artifact is kept too');
-  t.equal(retainGateDiagnostics(root, failedGateCheckout(parent, 'again'), 'sha6'),
-    `${path.join(kept, 'sha6')} (replacing an earlier failed run of this sha)`,
+  t.equal(retainGateDiagnostics(root, failedGateCheckout(parent, 'again'), shas[6]),
+    `${path.join(kept, shas[6])} (replacing an earlier failed run of this sha)`,
     'a second failure of one sha says it replaced the first');
-  t.equal(fs.readFileSync(path.join(kept, 'sha6', 'proof.json'), 'utf8'), 'again');
+  t.equal(fs.readFileSync(path.join(kept, shas[6], 'proof.json'), 'utf8'), 'again');
   t.equal(retainGateDiagnostics(root,
-    failedGateCheckout(parent, 'missing', 'test-output/acceptance/p/gone.json'), 'shaM'),
-  path.join(kept, 'shaM'), 'a kept receipt is reported even when its artifact is missing');
-  t.ok(fs.existsSync(path.join(kept, 'shaM', 'g.report.json')));
+    failedGateCheckout(parent, 'missing', 'test-output/acceptance/p/gone.json'), MISSING_SHA),
+  path.join(kept, MISSING_SHA), 'a kept receipt is reported even when its artifact is missing');
+  t.ok(fs.existsSync(path.join(kept, MISSING_SHA, 'g.report.json')));
   fs.rmSync(parent, {recursive: true, force: true});
   t.end();
 });

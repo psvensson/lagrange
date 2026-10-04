@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {parseArgs} from 'node:util';
 
 import {cruise} from 'dependency-cruiser';
 
@@ -428,8 +429,16 @@ async function writeInventory(root = ROOT, output = OUTPUT) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const outputIndex = process.argv.indexOf('--output');
-  const output = outputIndex >= 0 ? process.argv[outputIndex + 1] : OUTPUT;
+  // --output <file> or nothing; anything else refuses before anything is read.
+  let output = OUTPUT;
+  try {
+    output = parseArgs({args: process.argv.slice(2), strict: true,
+      options: {output: {type: 'string'}}}).values.output || OUTPUT;
+  } catch (error) {
+    process.stderr.write(`${error.message}\nusage: generate-priority-recovery-owner-inventory.js ` +
+      '[--output <file>]\n');
+    process.exit(2);
+  }
   const result = await writeInventory(process.cwd(), output);
   process.stdout.write(`${result.destination}\n`);
   process.stdout.write(`${JSON.stringify(result.inventory.metrics)}\n`);

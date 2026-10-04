@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath, pathToFileURL} from 'node:url';
+import {parseArgs} from 'node:util';
 
 import {cruise} from 'dependency-cruiser';
 
@@ -57,8 +58,16 @@ import {IMPORT_GRAPH_SEAL_PATH} from './checks/impact-proof-cone-constants.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = OWNER_DEBT.output;
 const NODE_MODULES_PREFIX = 'node_modules/';
-const VERIFY_IMPORT_GRAPH_FLAG = '--verify-import-graph';
-const REFRESH_IMPORT_GRAPH_ONLY_FLAG = '--refresh-import-graph-only';
+// The whole command line; anything else refuses before anything is written.
+const COMMAND_LINE = Object.freeze({
+  'verify-import-graph': Object.freeze({type: 'boolean'}),
+  'refresh-import-graph-only': Object.freeze({type: 'boolean'}),
+  'refresh': Object.freeze({type: 'boolean'}),
+  'refresh-import-graph': Object.freeze({type: 'boolean'}),
+  'output': Object.freeze({type: 'string'}),
+});
+const USAGE = 'usage: generate-global-owner-debt-inventory.js [--verify-import-graph | ' +
+  '--refresh-import-graph-only | [--refresh] [--refresh-import-graph] [--output <file>]]';
 const IMPORT_GRAPH_PRODUCER_MISMATCH_ERROR =
   'import graph does not match the canonical live producer';
 const IMPORT_GRAPH_SEAL_SCHEMA_VERSION = 1;
@@ -971,23 +980,31 @@ function writeInventory(root, inventory, output = OUTPUT) {
   return destination;
 }
 
+function commandLine(args) {
+  try {
+    return parseArgs({args, options: COMMAND_LINE, strict: true}).values;
+  } catch (error) {
+    throw new Error(`${error.message}\n${USAGE}`);
+  }
+}
+
 async function runCli(args = process.argv.slice(2)) {
-  if (args.includes(VERIFY_IMPORT_GRAPH_FLAG)) {
+  const options = commandLine(args);
+  if (options['verify-import-graph']) {
     const receipt = await verifyImportGraphReport(process.cwd());
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
     return;
   }
-  if (args.includes(REFRESH_IMPORT_GRAPH_ONLY_FLAG)) {
+  if (options['refresh-import-graph-only']) {
     await refreshImportGraphReport(process.cwd(), listJavaScriptFiles(process.cwd()));
     const receipt = await verifyImportGraphReport(process.cwd());
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
     return;
   }
-  const outputIndex = args.indexOf('--output');
-  const output = outputIndex >= 0 ? args[outputIndex + 1] : OUTPUT;
+  const output = options.output || OUTPUT;
   const inventory = await buildInventory(process.cwd(), {
-    refresh: args.includes('--refresh'),
-    refreshImportGraph: args.includes('--refresh-import-graph'),
+    refresh: options.refresh === true,
+    refreshImportGraph: options['refresh-import-graph'] === true,
   });
   const destination = writeInventory(process.cwd(), inventory, output);
   process.stdout.write(`${destination}\n`);

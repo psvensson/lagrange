@@ -622,6 +622,9 @@ function parseCli(argv) {
     else if (arg === FLAG_PRODUCER_KIND) options.producer.kind = rest[++index] || EMPTY_TEXT;
     else if (arg === FLAG_PRODUCER_ID) options.producer.id = rest[++index] || EMPTY_TEXT;
     else if (arg === FLAG_PRODUCER_URL) options.producer.url = rest[++index] || EMPTY_TEXT;
+    // A flag nobody reads refuses before a ref is read or pushed
+    // (push-gate-integrity): the usage answer below.
+    else options.command = null;
   }
   return options;
 }

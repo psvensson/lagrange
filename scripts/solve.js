@@ -121,6 +121,27 @@ function cmdBoard(root) {
   return board(root);
 }
 
+// What each command accepts (besides --json), and how many positionals: an
+// argument a command does not know refuses before it does anything - `land
+// --id x --bogus` used to land (push-gate-integrity).
+const COMMAND_LINE = Object.freeze({
+  start: {flags: ['id'], positionals: 0},
+  note: {flags: ['id', 'kind', 'status', 'evidence', 'verifier', 'verdict', NEXT_OWNER_FLAG,
+    'by', ...NOTE_SHAPES.map((shape) => shape.flag)], positionals: 0},
+  probe: {flags: ['id', 'epic'], positionals: 0},
+  land: {flags: ['id'], positionals: 0},
+  evidence: {flags: ['id', 'text', 'replace', AUTHORIZE_ASSET_FLAG], positionals: 2},
+  board: {flags: [], positionals: 0},
+});
+
+function unknownArgument(command, {flags, positional}) {
+  const accepted = COMMAND_LINE[command];
+  const flag = Object.keys(flags).find((name) =>
+    name !== JSON_FLAG.slice(FLAG_PREFIX.length) && !accepted.flags.includes(name));
+  if (flag !== undefined) return `${FLAG_PREFIX}${flag}`;
+  return positional[accepted.positionals];
+}
+
 const COMMANDS = {
   'start': cmdStart,
   'note': cmdNote,
@@ -179,6 +200,11 @@ function main(argv, root = REPO_ROOT) {
     return EXIT_USAGE;
   }
   const parsed = parseArgs(rest);
+  const unknown = unknownArgument(command, parsed);
+  if (unknown !== undefined) {
+    process.stderr.write(`unknown argument ${unknown}${LINE_SEPARATOR}${USAGE}${LINE_SEPARATOR}`);
+    return EXIT_USAGE;
+  }
   try {
     const result = handler(root, parsed);
     const output = parsed.flags[JSON_FLAG.slice(FLAG_PREFIX.length)] ?

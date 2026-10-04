@@ -154,6 +154,13 @@ const ARG = Object.freeze({
   BOT_COMMITS: '--bot-commits',
   LIMIT: '--limit',
 });
+// An argument this command does not know refuses before any formation runs
+// or any trend is written (push-gate-integrity).
+const UNKNOWN_ARGUMENT = 'formation-health: unknown argument ';
+const USAGE = 'usage: formation-health.js [--report <file>] [--gcp] [--summary [--limit <n>]] ' +
+  '[--metric] [--trend <file>] [--calibration <file>] [--bot-commits] | ' +
+  '--verify-trend-push <base> <head>';
+const EXIT_USAGE = 2;
 
 const COLUMNS = Object.freeze([
   Object.freeze({key: 'at', width: 20}),
@@ -196,6 +203,8 @@ function parseArguments(argv) {
       index += 1;
     } else if (argument === ARG.BOT_COMMITS) {
       options.botCommits = true;
+    } else {
+      throw new Error(`${UNKNOWN_ARGUMENT}${argument}`);
     }
   }
   return options;
@@ -493,10 +502,12 @@ function verifyTrendPush(root, base, head, trend = DEFAULT_TREND_PATH) {
   }
 }
 
-// `--verify-trend-push <base> <head>`, or null when not asked.
+// `--verify-trend-push <base> <head>` and nothing else, or null when not asked.
 function parseTrendPushArguments(argv) {
   const index = arrayIndexOf(argv, TREND_PUSH_FLAG);
-  return index < 0 ? null : {base: argv[index + 1] || '', head: argv[index + 2] || ''};
+  if (index < 0) return null;
+  if (index !== 0 || argv.length > 3) throw new Error(`${UNKNOWN_ARGUMENT}${argv.join(' ')}`);
+  return {base: argv[index + 1] || '', head: argv[index + 2] || ''};
 }
 
 function runTrendPushVerification({root = REPO_ROOT, base, head,
@@ -610,9 +621,17 @@ function isDirectInvocation() {
 
 if (isDirectInvocation()) {
   const argv = process.argv.slice(ARGV_OFFSET);
-  const trendPush = parseTrendPushArguments(argv);
+  let trendPush = null;
+  let options = null;
+  try {
+    trendPush = parseTrendPushArguments(argv);
+    options = trendPush ? null : parseArguments(argv);
+  } catch (error) {
+    process.stderr.write(`${error.message}${LINE_SEPARATOR}${USAGE}${LINE_SEPARATOR}`);
+    process.exit(EXIT_USAGE);
+  }
   process.exitCode = trendPush ? runTrendPushVerification(trendPush) :
-    runFormationHealth(parseArguments(argv)).exitCode;
+    runFormationHealth(options).exitCode;
 }
 
 export {

@@ -13,11 +13,12 @@
 // script, one fixture file, one fixture directory) and the tests that observe
 // each of them, classified by the real generators inside the fixture.
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {execFileSync, spawn, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {setTimeout as sleep} from 'node:timers/promises';
 import {gitProcessEnvironment} from
   '../../scripts/checks/git-process-environment.js';
 import {
@@ -345,4 +346,128 @@ test('a gate that dirtied its checkout keeps its diagnostics', () => {
 test('a gate that throws after its command keeps its diagnostics', () => {
   // The checkout's git link points nowhere: the gate's own status read throws.
   gateKeepsDiagnostics('printf "gitdir: /nonexistent" > .git');
+});
+
+// push-gate-integrity: the gate checkout lives inside the fixture repository's
+// test-output/, which that repository ignores. A command that removed or
+// replaced the checkout's .git link made the gate's own status read discover
+// the ENCLOSING repository, report it clean and pass. The gate now refuses by
+// name, keeps its diagnostics and strands nothing - no directory, no
+// registered worktree.
+function gateRefusesLostIdentity(script) {
+  const kept = path.join(repo, 'test-output', 'push-gate', baseSha);
+  fs.rmSync(kept, {recursive: true, force: true});
+  try {
+    const gated = run([MATERIALIZER, '--gate', baseSha, '--run', 'sh', '-c',
+      `${WRITE_GATE_REPORT}; ${script}`]);
+    assert.equal(gated.status, 1, `${gated.stdout}${gated.stderr}`);
+    assert.match(gated.stderr, /\[push-gate\] refused: checkout-identity-lost: /u);
+    assert.equal(fs.existsSync(path.join(kept, 'gate.report.json')), true,
+      `the diagnostics are kept: ${gated.stderr}`);
+    const checkout = /proving \S+ in (\S+):/u.exec(gated.stdout)?.[1];
+    assert.equal(fs.existsSync(path.dirname(checkout)), false, 'the checkout is gone');
+    assert.equal(git(['worktree', 'list', '--porcelain']).includes(checkout), false,
+      'and no worktree registration is left behind');
+  } finally {
+    fs.rmSync(kept, {recursive: true, force: true});
+    git(['worktree', 'prune']);
+    restore();
+  }
+}
+
+test('a gate command that removes the checkout .git link is refused, not passed', () => {
+  gateRefusesLostIdentity('rm .git');
+});
+
+test('a gate command that points the checkout .git link at another repository is refused', () => {
+  gateRefusesLostIdentity('rm .git && git init --quiet ../elsewhere && ' +
+    'printf "gitdir: %s/.git\\n" "$(cd ../elsewhere && pwd)" > .git');
+});
+
+test('a gate command that removes .git and leaves a stray file is refused', () => {
+  gateRefusesLostIdentity('rm .git && echo stray > stray.txt');
+});
+
+// The whole run, not only the gate's own status read, is stopped at the
+// checkout: a stage that read HEAD or the status after a test removed the link
+// (the change proof's treeIsCommit before it records a corpus receipt) would
+// otherwise answer for the enclosing repository.
+test('no git read in a gate run discovers past its checkout', () => {
+  try {
+    const gated = run([MATERIALIZER, '--gate', baseSha, '--run', 'sh', '-c',
+      'rm .git; git rev-parse --show-toplevel || echo no-repository']);
+    assert.match(gated.stdout, /^no-repository$/mu, `${gated.stdout}${gated.stderr}`);
+    assert.doesNotMatch(gated.stdout, new RegExp(`^${fs.realpathSync(repo)}$`, 'mu'));
+  } finally {
+    git(['worktree', 'prune']);
+    restore();
+  }
+});
+
+// push-gate-integrity: a stop request sent to the gate process alone was
+// swallowed - the command ran on and decided the verdict. Now the gate ends by
+// the signal, its command's process group is stopped before it finishes, the
+// diagnostics are kept and the checkout removed.
+test('SIGTERM to the gate process stops its command and keeps its diagnostics', async () => {
+  const kept = path.join(repo, 'test-output', 'push-gate', baseSha);
+  const started = path.join(workspace, 'command-started');
+  const finished = path.join(workspace, 'command-finished');
+  fs.rmSync(kept, {recursive: true, force: true});
+  const gate = spawn(process.execPath, [MATERIALIZER, '--gate', baseSha, '--run', 'sh', '-c',
+    `${WRITE_GATE_REPORT}; echo $$ > ${started}; sleep 20; touch ${finished}`],
+  {cwd: repo, env: env(), stdio: ['ignore', 'pipe', 'pipe']});
+  let output = '';
+  gate.stdout.on('data', (chunk) => {
+    output += chunk;
+  });
+  gate.stderr.on('data', (chunk) => {
+    output += chunk;
+  });
+  const closed = new Promise((resolve) => gate.on('close', (code, signal) => resolve({code, signal})));
+  try {
+    for (let poll = 0; poll < 200 && !fs.existsSync(started); poll += 1) await sleep(50);
+    const commandPid = Number(fs.readFileSync(started, UTF8));
+    gate.kill('SIGTERM');
+    const ended = await closed;
+    assert.ok(ended.signal === 'SIGTERM' || ended.code !== 0,
+      `the gate ends non-zero, by the signal: ${JSON.stringify(ended)} ${output}`);
+    assert.equal(fs.existsSync(finished), false, 'the command was stopped, not run to its end');
+    assert.throws(() => process.kill(commandPid, 0), /ESRCH/u, 'the command is gone');
+    assert.equal(fs.existsSync(path.join(kept, 'gate.report.json')), true,
+      `the diagnostics are kept: ${output}`);
+    const checkout = /proving \S+ in (\S+):/u.exec(output)?.[1];
+    assert.equal(fs.existsSync(path.dirname(checkout)), false, 'the checkout is removed');
+  } finally {
+    gate.kill('SIGKILL');
+    fs.rmSync(kept, {recursive: true, force: true});
+    fs.rmSync(started, {force: true});
+    restore();
+  }
+});
+
+// A gate that died outside its command (making or releasing its checkout)
+// leaves a checkout whose recorded owner is gone; the next gate releases it,
+// keeping its diagnostics (R13: owned and bounded).
+test('the next gate releases a checkout stranded by a gate that died', () => {
+  const stranded = path.join(repo, 'test-output', 'push-gate-worktrees',
+    'session-worktree-stranded');
+  const checkout = path.join(stranded, 'tree');
+  const kept = path.join(repo, 'test-output', 'push-gate', baseSha);
+  const dead = spawnSync(process.execPath, ['-e', '0']).pid;
+  try {
+    git(['worktree', 'add', '--detach', '--quiet', checkout, baseSha]);
+    fs.writeFileSync(path.join(stranded, 'gate-owner'), `${dead} ${baseSha}`);
+    execFileSync('sh', ['-c', WRITE_GATE_REPORT], {cwd: checkout});
+    const gated = run([MATERIALIZER, '--gate', baseSha, '--run', 'true']);
+    assert.equal(gated.status, 0, `${gated.stdout}${gated.stderr}`);
+    assert.equal(fs.existsSync(stranded), false, 'the stranded checkout is released');
+    assert.equal(git(['worktree', 'list', '--porcelain']).includes(checkout), false);
+    assert.equal(fs.existsSync(path.join(kept, 'gate.report.json')), true,
+      `its diagnostics are kept first: ${gated.stderr}`);
+  } finally {
+    fs.rmSync(stranded, {recursive: true, force: true});
+    fs.rmSync(kept, {recursive: true, force: true});
+    git(['worktree', 'prune']);
+    restore();
+  }
 });
