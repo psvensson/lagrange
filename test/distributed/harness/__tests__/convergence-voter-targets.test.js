@@ -6,6 +6,7 @@ import {
   buildPartitionVoterTargets,
   buildUnclaimedVoterTargetVerdict,
   classifyVoterTargets,
+  describeVoterTargetVerdict,
   readPartitionVoterTargets,
 } from '../convergence-voter-targets.js';
 import {
@@ -107,18 +108,49 @@ describe('waitForConvergence: voters must reach each partition\'s policy ' +
     assert.equal(zero.voterTargets.state, VOTER_TARGET_STATE.EVIDENCE_ABSENT);
   });
 
-  it('a tolerated under-replication passes only with its reason, and the ' +
-    'result records it', async () => {
+  it('a tolerated under-replication passes only with its reason and a ' +
+    'declared voter floor, and the result records both', async () => {
     const reason = 'witness: one of three nodes is down';
-    const outcome = await verdictOf(2, 3, {tolerateUnderReplication: reason});
+    const tolerance = {minVoters: 2, reason};
+    const outcome = await verdictOf(2, 3, {tolerateUnderReplication: tolerance});
     assert.equal(outcome.passed, true);
     assert.equal(outcome.voterTargets.state, VOTER_TARGET_STATE.TOLERATED);
     assert.equal(outcome.voterTargets.toleranceReason, reason);
+    assert.equal(outcome.voterTargets.toleranceMinVoters, 2);
     assert.deepEqual(outcome.voterTargets.underTarget,
       [{partitionId: 'p1', target: 3, voters: 2}]);
-    await assert.rejects(waitForConvergence([clusterOf(2, 3)],
-      {...FAST, tolerateUnderReplication: ''}), /tolerateUnderReplication/u);
   });
+
+  it('below the declared floor is under_target_voters, never tolerated',
+    async () => {
+      const tolerance = {minVoters: 2, reason: 'witness: floor of two'};
+      const one = await verdictOf(1, 3, {tolerateUnderReplication: tolerance});
+      assert.equal(one.passed, false);
+      assert.equal(one.voterTargets.state, VOTER_TARGET_STATE.UNDER_TARGET);
+      for (const voters of [0, 1]) {
+        const verdict = classifyVoterTargets({
+          expectedPartitionIds: new Set(['p1', 'p2']),
+          tolerance,
+          voterCeiling: 3,
+          voterCounts: new Map([['p1', 2], ['p2', voters]]),
+          voterTargets: new Map([['p1', 3], ['p2', 3]]),
+        });
+        assert.equal(verdict.state, VOTER_TARGET_STATE.UNDER_TARGET,
+          `${voters} of 3 voters under a floor of 2`);
+        assert.equal(verdict.satisfied, false);
+      }
+    });
+
+  it('a tolerance without a reason or without a voter floor is refused',
+    async () => {
+      for (const tolerance of ['', 'a reason but no floor', {reason: 'r'},
+        {minVoters: 2}, {minVoters: 0, reason: 'r'},
+        {minVoters: 1.5, reason: 'r'}, {minVoters: 2, reason: ''}]) {
+        await assert.rejects(waitForConvergence([clusterOf(2, 3)],
+          {...FAST, tolerateUnderReplication: tolerance}),
+        /tolerateUnderReplication/u, JSON.stringify(tolerance));
+      }
+    });
 });
 
 describe('voter-target authority', () => {
@@ -143,6 +175,30 @@ describe('voter-target authority', () => {
       const none = await readPartitionVoterTargets([failing]);
       assert.equal(none.targets, null);
       assert.equal(none.error, 'down');
+    });
+
+  it('partitions rows outside the claimed set are named, never dropped',
+    async () => {
+      const verdict = classifyVoterTargets({expectedPartitionIds: ['p1'],
+        policyPartitionIds: ['p1', 'p8', 'p9'], voterCeiling: 3,
+        voterCounts: new Map([['p1', 3]]),
+        voterTargets: new Map([['p1', 3], ['p9', 3]])});
+      assert.equal(verdict.state, VOTER_TARGET_STATE.AT_TARGET);
+      // p9 has a target, p8 a row with no usable replica_count: both named.
+      assert.deepEqual(verdict.unclaimedPartitionIds, ['p8', 'p9']);
+      assert.match(describeVoterTargetVerdict(verdict), /unclaimed\[p8,p9\]/u);
+      const claimedAll = classifyVoterTargets({expectedPartitionIds: ['p1'],
+        voterCeiling: 3, voterCounts: new Map([['p1', 3]]),
+        voterTargets: new Map([['p1', 3]])});
+      assert.deepEqual(claimedAll.unclaimedPartitionIds, []);
+      // Through the wait: the policy read's extra row reaches the record.
+      const node = clusterOf(3, undefined);
+      withPolicyTargets(node, ['p1', 'p7'], 3);
+      const result = await waitForConvergence([node],
+        {...FAST, targetVoterCount: 3});
+      assert.deepEqual(result.voterTargets.unclaimedPartitionIds, ['p7']);
+      const read = await readPartitionVoterTargets([node]);
+      assert.deepEqual(read.partitionIds, ['p1', 'p7']);
     });
 
   it('membership freeze names an over-target, never hides it', () => {

@@ -82,6 +82,27 @@ async function waitForControlSnapshotLeaderCoverage(node) {
   }, CONTROL_SNAPSHOT_TIMEOUT_MS, CONTROL_SNAPSHOT_POLL_INTERVAL_MS);
 }
 
+// The convergence wait's refusal as {voterTargetState, message}; both are
+// absent when the wait unexpectedly converged.
+async function convergenceRefusal(node) {
+  try {
+    await waitForConvergence([node], {
+      settleTimeoutMs: 1000,
+      finalAdjudicationDrainTimeoutMs: 0,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 1000,
+      sampleIntervalMs: 50,
+      targetVoterCount: 3,
+    });
+  } catch (error) {
+    return {
+      voterTargetState: error?.diagnostics?.voterTargets?.state,
+      message: String(error?.message || ''),
+    };
+  }
+  return {voterTargetState: undefined, message: ''};
+}
+
 test('Convergence uses local control snapshot when distributed admin SQL reads fail',
   {timeout: 120000}, async (t) => {
     initializeTestEnvironment({
@@ -189,23 +210,11 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
 
       // With every partitions read failing there is no policy voter target:
       // convergence is refused, naming the absent evidence, never assumed.
-      let refusal = null;
-      try {
-        await waitForConvergence([convergenceNode], {
-          settleTimeoutMs: 1000,
-          finalAdjudicationDrainTimeoutMs: 0,
-          quietWindowMs: 0,
-          maxSustainedOverTargetMs: 1000,
-          sampleIntervalMs: 50,
-          targetVoterCount: 3,
-        });
-      } catch (error) {
-        refusal = error;
-      }
-      t.equal(refusal?.diagnostics?.voterTargets?.state,
+      const refusal = await convergenceRefusal(convergenceNode);
+      t.equal(refusal.voterTargetState,
         'voter_target_evidence_absent',
         'no policy target evidence refuses convergence by name');
-      t.match(String(refusal?.message || ''), /target read: .*participant failures/i,
+      t.match(refusal.message, /target read: .*participant failures/i,
         'the refusal names the failed policy target read');
 
       // The policy read recovers while services/replica_operations SQL still

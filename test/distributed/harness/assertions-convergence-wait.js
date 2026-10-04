@@ -20,7 +20,7 @@ import {
   classifyVoterTargets,
   describeVoterTargetVerdict,
   readPartitionVoterTargets,
-  resolveUnderReplicationToleranceReason,
+  resolveUnderReplicationTolerance,
 } from './convergence-voter-targets.js';
 const {
   SERVICES_QUERY,
@@ -574,7 +574,7 @@ function resolveConvergedSnapshotBlocker(snapshot, expectedPartitionIds) {
  * @return {Object} {state, converged, voterTargetVerdict}
  */
 function classifyConvergedSnapshot(snapshot, voterCeiling, options = {}) {
-  const toleranceReason = resolveUnderReplicationToleranceReason(options);
+  const tolerance = resolveUnderReplicationTolerance(options);
   const expectedPartitionIds = resolveSnapshotExpectedPartitionIds(snapshot);
   const blocker = resolveConvergedSnapshotBlocker(
     snapshot, expectedPartitionIds);
@@ -584,7 +584,7 @@ function classifyConvergedSnapshot(snapshot, voterCeiling, options = {}) {
   }
   const voterTargetVerdict = classifyVoterTargets({
     expectedPartitionIds,
-    toleranceReason,
+    tolerance,
     voterCeiling,
     voterCounts: snapshot.voterCounts,
     voterTargets: options.voterTargets ?? null,
@@ -618,15 +618,16 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
       options.targetVoterCount :
       CONVERGENCE_DEFAULTS.targetVoterCount;
   const forceRepair = options?.forceRepair === true;
-  // Validated here, outside the per-node try, so a reasonless tolerance is
-  // refused instead of being swallowed as a node read error.
-  const underReplicationToleranceReason =
-    resolveUnderReplicationToleranceReason(options);
+  // Validated here, outside the per-node try, so a tolerance without a
+  // reason or a voter floor is refused instead of being swallowed as a node
+  // read error.
+  const underReplicationTolerance =
+    resolveUnderReplicationTolerance(options);
   const convergedSnapshotOptions = {
     voterTargets: options?.voterTargets ?? null,
-    ...(underReplicationToleranceReason === null ?
+    ...(underReplicationTolerance === null ?
       {} :
-      {[TOLERANCE_OPTION]: underReplicationToleranceReason}),
+      {[TOLERANCE_OPTION]: underReplicationTolerance}),
   };
   const reachabilityTimeoutMs =
     Number.isFinite(options?.reachabilityTimeoutMs) &&
@@ -780,9 +781,10 @@ async function waitForConvergence(nodes, options = {}) {
   // A caller's targetVoterCount is a CEILING (over-replication bound); the
   // target each partition must reach is its own policy replica count,
   // read every poll (convergence-voter-targets.js). A tolerance of
-  // under-replication must name its reason, refused here if it does not.
-  const underReplicationToleranceReason =
-    resolveUnderReplicationToleranceReason(options);
+  // under-replication must name its reason and its voter floor, refused
+  // here if it does not.
+  const underReplicationTolerance =
+    resolveUnderReplicationTolerance(options);
   const forceRepairAfterMs = Number.isFinite(options.forceRepairAfterMs) ?
     options.forceRepairAfterMs :
     TIMEOUTS.ACTIVE_WAIT_FORCE_REPAIR_AFTER;
@@ -861,9 +863,9 @@ async function waitForConvergence(nodes, options = {}) {
       forceRepair,
       snapshotTimeoutMs,
       voterTargets: latestVoterTargetRead?.targets ?? null,
-      ...(underReplicationToleranceReason === null ?
+      ...(underReplicationTolerance === null ?
         {} :
-        {[TOLERANCE_OPTION]: underReplicationToleranceReason}),
+        {[TOLERANCE_OPTION]: underReplicationTolerance}),
     });
     if (!snapshot.nodeId && snapshot.error) {
       oracleBlindnessTracker.recordBlindPoll(snapshot.error, now);
@@ -971,7 +973,8 @@ async function waitForConvergence(nodes, options = {}) {
     latestVoterTargetVerdict = classifyVoterTargets({
       expectedPartitionIds: latestExpectedPartitionIds,
       membershipFreezeActive,
-      toleranceReason: underReplicationToleranceReason,
+      policyPartitionIds: latestVoterTargetRead.partitionIds,
+      tolerance: underReplicationTolerance,
       voterCeiling: targetVoterCount,
       voterCounts: latestCounts,
       voterTargets: latestVoterTargetRead.targets,

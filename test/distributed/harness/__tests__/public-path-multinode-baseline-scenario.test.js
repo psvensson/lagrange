@@ -12,6 +12,7 @@ import {
   createInvocationIdentity,
 } from '../../../../src/service/request-cell-routing-contract.js';
 import {REQUEST_CELL_AUTH} from '../constants.js';
+import {describeProviderMachine} from '../scenario-host-topology.js';
 
 // Module-load captures — the harness tree's ambient-intrinsics rule.
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
@@ -256,7 +257,9 @@ function buildStubCluster(state) {
   const queryHandler = buildQueryHandler(state);
   const nodes = arrayMap(state.nodeIds, (id, index) => ({
     containerId: `container-${id}`,
-    hostIdentity: {
+    // A replay carries its run's declared machine topology; a synthetic
+    // state names one machine per provider index.
+    hostIdentity: state.nodeMachines?.[id] ?? {
       hostId: `host:machine-${state.nodeHosts[id]}`,
       label: `10.0.0.${state.nodeHosts[id] + 1}`,
       providerIndex: state.nodeHosts[id],
@@ -351,15 +354,35 @@ function greenState() {
   };
 }
 
+// The run's declared machine topology as the config the host authority
+// reads: one Docker provider per declared machine, in provider order.
+function replayMachineConfig(fixture) {
+  const hostInfo = fixture.machineTopology.hostInfo;
+  return {docker: {
+    hostInfo: arrayMap(hostInfo, (machine) => ({
+      internalIp: machine.internalIp, machineId: machine.machineId})),
+    hosts: arrayMap(hostInfo, (machine) => `tcp://${machine.internalIp}:2375`),
+  }};
+}
+
 // Replays a real run's recorded readbacks through the scenario gate on a
-// virtual clock, with the run's own node -> host placement.
+// virtual clock, with the run's own node -> provider placement and its
+// declared provider -> machine topology, resolved by the production host
+// authority (describeProviderMachine), never keyed by provider index.
 function replayState(runNumber) {
   const fixture = readReplayFixture(runNumber);
+  const config = replayMachineConfig(fixture);
   const state = greenState();
   state.nodeIds = arrayMap(fixture.nodeHosts, (entry) => entry.nodeId);
   state.nodeHosts = {};
+  state.nodeMachines = {};
   for (const entry of fixture.nodeHosts) {
     state.nodeHosts[entry.nodeId] = entry.providerIndex;
+    const machine = describeProviderMachine(config, entry.providerIndex);
+    // The per-node label and the provider table must agree.
+    assert.equal(machine.hostId, `host:${entry.machineId}`, entry.nodeId);
+    assert.equal(machine.source, 'declared_machine_id');
+    state.nodeMachines[entry.nodeId] = machine;
   }
   state.replay = {clockMs: fixture.snapshots[0].timestamp, fixture};
   state.splitWaitTimeoutMs = REPLAY_BUDGET_MS;
@@ -538,7 +561,7 @@ describe('public-path-multinode-baseline scenario', () => {
       const state = replayState(2);
       await assert.rejects(run(buildStubCluster(state)), (error) => {
         assert.match(error.message,
-          /leader_hosts_insufficient\(unit="host" observed=1 required=2 leaderHosts=\["host:machine-0"\]\)/u);
+          /leader_hosts_insufficient\(unit="host" observed=1 required=2 leaderHosts=\["host:lab-tv-dator"\]\)/u);
         assert.match(error.message, /parent_not_dissolved/u);
         return true;
       });
@@ -550,7 +573,8 @@ describe('public-path-multinode-baseline scenario', () => {
       assert.ok(stringStartsWith(children[0].leader.nodeId, 'a381d398'));
       for (const child of children) {
         assert.equal(child.activeVoterCount, 3);
-        assert.equal(child.leader.host, 'host:machine-0');
+        // Node index 0 and node index 4 share tv-dator.
+        assert.equal(child.leader.host, 'host:lab-tv-dator');
       }
     });
 

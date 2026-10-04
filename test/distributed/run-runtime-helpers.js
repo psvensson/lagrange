@@ -452,7 +452,16 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       // config's host authority BEFORE anything starts: a config that
       // cannot carry the claim REFUSES the scenario (not run, never a
       // pass, never a failure), with no cluster, no bundle, no evidence.
-      const refusal = await refuseScenarioTopology(config, scenario);
+      // A module that fails to load fails THIS scenario only, named; the
+      // run continues with the next one.
+      const topology = await checkScenarioTopology(config, scenario,
+        startedAt, startMs);
+      if (topology.loadFailure !== null) {
+        hasFailures = true;
+        report.addResult(scenario.name, topology.loadFailure);
+        continue;
+      }
+      const refusal = topology.refusal;
       if (refusal !== null) {
         hasRefusals = true;
         if (options.verbose) {
@@ -777,6 +786,30 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     return refusal === null ?
       null :
       buildRefusedScenarioResult(refusal, new Date().toISOString());
+  }
+
+  // The topology check, isolated per scenario: a module import error is a
+  // failed result for that scenario (named), never an abort of the run.
+  async function checkScenarioTopology(config, scenario, startedAt, startMs) {
+    try {
+      return {loadFailure: null,
+        refusal: await refuseScenarioTopology(config, scenario)};
+    } catch (error) {
+      return {
+        loadFailure: {
+          passed: false,
+          duration: Date.now() - startMs,
+          startedAt,
+          error: scenario.name + ': scenario module failed to load: ' +
+            String(error?.message || error),
+          stackTrace: error?.stack || null,
+          analysisSummary: null,
+          clusterSize: resolveClusterSize(config),
+          performanceDiagnostics: null,
+        },
+        refusal: null,
+      };
+    }
   }
 
   function shouldPrintLiveLogEntry(entry) {

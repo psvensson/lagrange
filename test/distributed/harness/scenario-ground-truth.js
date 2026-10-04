@@ -16,6 +16,18 @@
  *   are one host. It is stamped on each NodeHandle as `hostIdentity` when
  *   the harness starts it. A node id, a provider index or missing
  *   topology is never a host: an unknown host fails closed.
+ *   What the "host" unit is: one KERNEL instance. The lab harness declares
+ *   each provider's machineId from that machine's
+ *   /proc/sys/kernel/random/boot_id, which is not namespaced, so every
+ *   container on one machine (and the controller beside main-linux) shares
+ *   one boot id and is one host; a VM has its own kernel and boot id, so
+ *   two VMs on one hypervisor are two hosts (on GCP the failure domain is
+ *   the VM: a distinct host means a distinct VM, not a distinct rack).
+ *   A declared internalIp (the fallback when no provider declares a
+ *   machineId: GCP, or a hand-written config) is TRUSTED as one machine
+ *   per address: a hand-written config that declares one machine under two
+ *   internal addresses counts it as two hosts. Only hand-written configs
+ *   can do that; certification-grade lab runs declare boot ids.
  *
  * Every spread claim states its UNIT (claim.spreadUnit, SPREAD_UNIT):
  * 'host' counts distinct machines by the host authority, 'node' counts

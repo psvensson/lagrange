@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417190,
-        "sha256": "ddf8431dc33e2126e47599c2d62633b9c410c31b3e3246214bd2c15a44f2a7ea"
+        "bytes": 416965,
+        "sha256": "455e16d6556518f17655c43fdc83fd61421c23d9ad52b70a678aa91ab9bc16d4"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2638681,
-        "sha256": "f445acb16fdc6953ac149846ebe40a3e18c3b3b9367ffd6fa597db02cd3b290b"
+        "bytes": 2638904,
+        "sha256": "38bf52af3d20601d645d7dac90318f9c90eb6fcead2ba55721deab69794e76ea"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a18d4d4dc00f9eb1ca0693554cc5964ea8447bb6953ea2367fc556a2ab65f875"
+        "sha256": "fb4db6b11e4456adc8cc3b9e20b962056d6a2a179a2e3301535f5bb4b1676a45"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "27d2f7d7d83b3b2c8bf4a2b966499c6c9ec3916fe8bb4f5238cff826532e9d05"
+        "sha256": "d43ffa1c88b0b72b44e2d922d73f97040f633ed6ea7fa7cec912b01e971d6ba5"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "75723ed1ca61a1fc394a2ff4066580c3d03c1050e0709b9683a3de86e3ea3760"
+    "inputDigest": "ba7a51a9a1d7f85bf3112aa19933048b1dda40b7ffa18436fb40ab91e3c40301"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417190,
-        "sha256": "ddf8431dc33e2126e47599c2d62633b9c410c31b3e3246214bd2c15a44f2a7ea"
+        "bytes": 416965,
+        "sha256": "455e16d6556518f17655c43fdc83fd61421c23d9ad52b70a678aa91ab9bc16d4"
       },
-      "declaredCount": 1765,
-      "observedCount": 1765,
-      "assignedCount": 1765
+      "declaredCount": 1764,
+      "observedCount": 1764,
+      "assignedCount": 1764
     },
     "cognitive": {
       "identity": {
@@ -99,8 +99,8 @@
         "source": 27,
         "test": 21
       },
-      "observedCount": 47,
-      "assignedCount": 47
+      "observedCount": 48,
+      "assignedCount": 48
     },
     "duplication": [
       {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a18d4d4dc00f9eb1ca0693554cc5964ea8447bb6953ea2367fc556a2ab65f875"
+          "sha256": "fb4db6b11e4456adc8cc3b9e20b962056d6a2a179a2e3301535f5bb4b1676a45"
         },
         "cloneGroups": 49,
         "duplicatedLines": 1559,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "27d2f7d7d83b3b2c8bf4a2b966499c6c9ec3916fe8bb4f5238cff826532e9d05"
+          "sha256": "d43ffa1c88b0b72b44e2d922d73f97040f633ed6ea7fa7cec912b01e971d6ba5"
         },
         "cloneGroups": 708,
         "duplicatedLines": 26760,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2638681,
-        "sha256": "f445acb16fdc6953ac149846ebe40a3e18c3b3b9367ffd6fa597db02cd3b290b"
+        "bytes": 2638904,
+        "sha256": "38bf52af3d20601d645d7dac90318f9c90eb6fcead2ba55721deab69794e76ea"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "abc5ce1875999e1a6f9a69f029d0279394fbcbf82f68d34ea00be2eacac816e4",
+      "sourceDigest": "b8a7b673557a1f6fd9f00f051537ff38c25a1494ed2da9a4cbaf38393df9c4ce",
       "moduleCount": 5033,
-      "edgeCount": 24729,
+      "edgeCount": 24733,
       "unresolvedCount": 36
     }
   },
@@ -185,13 +185,13 @@
     "sourceSignalCount": 2515,
     "assignedSignalCount": 2515,
     "uniqueAssignmentCount": 2515,
-    "digest": "a85a611e1fbf9c1b27ecb3f46b84318195746424df0f6a0f4cf064a0bbe39943"
+    "digest": "14b5b957c1f7c806e80cce5481398e0fe452a78c1b89c89c6daa53c8846d1d14"
   },
   "signalCounts": {
     "cognitive": 152,
-    "complexity": 1765,
+    "complexity": 1764,
     "duplication": 512,
-    "fileSize": 47,
+    "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
@@ -210,18 +210,18 @@
       "ownerAreas": [
         "test/distributed/harness"
       ],
-      "fileCount": 164,
-      "signalCount": 476,
+      "fileCount": 165,
+      "signalCount": 477,
       "complexity": 395,
       "cognitive": 0,
-      "oversizedFiles": 10,
+      "oversizedFiles": 11,
       "duplicatedLines": 13149,
       "cloneTouches": 308,
       "cycleGroups": 0,
       "lintExclusions": 10,
       "importIn": 353,
-      "importOut": 602,
-      "score": 2845.7,
+      "importOut": 616,
+      "score": 2857.7,
       "topPaths": [
         "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
         "test/distributed/harness/failure-bundle-playback-classification.js",
@@ -546,9 +546,9 @@
       "ownerAreas": [
         "test/integration"
       ],
-      "fileCount": 32,
-      "signalCount": 41,
-      "complexity": 23,
+      "fileCount": 31,
+      "signalCount": 40,
+      "complexity": 22,
       "cognitive": 0,
       "oversizedFiles": 0,
       "duplicatedLines": 1765,
@@ -556,8 +556,8 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 51,
-      "importOut": 336,
-      "score": 268.5,
+      "importOut": 329,
+      "score": 264.5,
       "topPaths": [
         "test/integration/versioned-cdc-readiness-convergence.integration.test.js",
         "test/integration/strict-preload-pressure-reproducer.integration.test.js",
@@ -3727,10 +3727,10 @@
           }
         ],
         "baseline": {
-          "score": 2845.7,
+          "score": 2857.7,
           "complexity": 395,
           "cognitive": 0,
-          "oversizedFiles": 10,
+          "oversizedFiles": 11,
           "duplicatedLines": 13149,
           "lintExclusions": 10
         },

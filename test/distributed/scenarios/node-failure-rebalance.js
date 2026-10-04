@@ -35,10 +35,14 @@ const SURVIVING_VOTER_COUNT = 2;
 // One of three nodes is killed and stays dead: two survivors cannot hold a
 // policy replica count of 3, so the post-kill convergence claim is
 // "every partition led and at most two voters", explicitly tolerating
-// under-replication (the verdict names it; it is never silent).
-const SURVIVOR_UNDER_REPLICATION_REASON =
-  'one of three nodes is killed and never restarted: two survivors cannot ' +
-  'hold a policy replica count of three';
+// under-replication (the verdict names it; it is never silent) down to the
+// floor the situation implies: the two survivors hold two voters, so a
+// partition at one (or zero) voters is still under_target_voters.
+const SURVIVOR_UNDER_REPLICATION_TOLERANCE = Object.freeze({
+  minVoters: SURVIVING_VOTER_COUNT,
+  reason: 'one of three nodes is killed and never restarted: two ' +
+    'survivors cannot hold a policy replica count of three',
+});
 const IGNORE_STALE_IN_FLIGHT_REPLICA_OPERATIONS = true;
 const SQL_LOG_ID_COLUMN = 'log_id';
 const ACKNOWLEDGED_WRITE_ALIAS = 'ack_id';
@@ -275,7 +279,7 @@ async function run(cluster) {
     settleTimeoutMs: POST_KILL_CONVERGENCE_TIMEOUT_MS,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: SURVIVING_VOTER_COUNT,
-    tolerateUnderReplication: SURVIVOR_UNDER_REPLICATION_REASON,
+    tolerateUnderReplication: SURVIVOR_UNDER_REPLICATION_TOLERANCE,
   });
 
   assert.ok(
@@ -318,7 +322,7 @@ async function run(cluster) {
   // 8. Assert post-rebalance closure contract holds
   const snapshot = await queryReachableClusterSnapshot(survivingNodes, {
     targetVoterCount: SURVIVING_VOTER_COUNT,
-    tolerateUnderReplication: SURVIVOR_UNDER_REPLICATION_REASON,
+    tolerateUnderReplication: SURVIVOR_UNDER_REPLICATION_TOLERANCE,
   });
   const publishedActiveNodeIds = normalizeNodeIdList(
     snapshot.publishedActiveNodeIds,
@@ -364,7 +368,8 @@ async function run(cluster) {
     expectedPartitionIds: snapshot.expectedPartitionIds,
     membershipFreezeActive: latestControlPlaneDiagnostics?.activeNodeViews
       ?.membershipFreeze?.active === true,
-    toleranceReason: SURVIVOR_UNDER_REPLICATION_REASON,
+    policyPartitionIds: voterTargetRead.partitionIds,
+    tolerance: SURVIVOR_UNDER_REPLICATION_TOLERANCE,
     voterCeiling: SURVIVING_VOTER_COUNT,
     voterCounts: snapshot.voterCounts,
     voterTargets: voterTargetRead.targets,

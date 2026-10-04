@@ -28,7 +28,7 @@
   "censusSize": 2203,
   "digest": "fnv1a32-a1f03cdd",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4b59eb45",
+  "observationDigest": "fnv1a32-ad552eac",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11192,7 +11192,11 @@
     },
     "test/scripts/distributed-matrix-cli.test.js": {
       "files": [
-        "scripts/run-distributed-matrix.js"
+        "scripts/run-distributed-matrix.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "test/distributed"
       ]
     },
     "test/scripts/dt-prove.test.js": {

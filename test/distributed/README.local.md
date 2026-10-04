@@ -297,7 +297,28 @@ quest probes show it as REFUSED — never PASS and never certification evidence.
 Physical host spread is proven only on the lab (`npm run distributed:lab`; the
 lab harness declares each node's observed boot id as `machineId`, so two
 providers on one machine count once) and on GCP (`npm run distributed:gcp`;
-one VM per provider, by internal address). Local logical coverage of the gate
+one VM per provider, by internal address).
+
+What one "host" is: a kernel instance, identified by its boot id
+(`/proc/sys/kernel/random/boot_id`). Containers on one machine share the
+kernel's boot id and are ONE host (the controller and main-linux are one
+host); a VM has its own kernel, so VMs — including two VMs on one
+hypervisor — are SEPARATE hosts. A declared `internalIp` is trusted as one
+machine per address: a hand-written config that declares one machine under
+two internal addresses is counted as two hosts. Only hand-written configs can
+do that; the lab harness declares boot ids, and no repository config declares
+`hostInfo`.
+
+Earlier runs' evidence: when a scenario's cluster starts, the previous run's
+artifacts under `<output>/<scenario>/` (and `.full-logs/<scenario>`) move into
+`<output>/<scenario>/.previous-<run start>/` with an `archive.json`. Only the
+newest 3 archives per scenario and output directory are kept; the archive
+step logs every prune, the new `archive.json` names the pruned archives
+(`prunedArchives`), and an archive left without `archive.json` by a crash
+mid-archive is named as partial (`partialArchives`, and in the log) — it
+still counts toward the bound of 3.
+
+Local logical coverage of the gate
 is the synthetic 5-node/4-host regression test
 `test/distributed/harness/__tests__/scenario-host-topology.test.js` (unsplit →
 splitting → under-replicated children → leaders on one host, including two

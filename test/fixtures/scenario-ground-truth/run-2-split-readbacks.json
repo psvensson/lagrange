@@ -1,35 +1,65 @@
 {
  "provenance": "Lab five-node formation run 2 of candidate 3626bdf43 (2026-10-04), scenario public-path-multinode-baseline. Rows copied from that run's playback snapshots.ndjson: the account_activity partitions rows and the services rows of those partitions, consecutive identical readbacks collapsed (the timestamp is the first snapshot of each distinct shape). Node placement: the harness assignment distributeNodes(5, 4 providers, nodesPerHost 2) = [0,1,2,3,0] by node index; the node index is read from the host-network per-node port block (8080 + 10 x index).",
+ "machineTopology": {
+  "provenance": "Declared machine topology of this run: the four Docker providers of the lab five-node config, in provider order, each a distinct physical lab machine. The run predates the harness boot_id capture, so each machineId is declared from the lab inventory (~/.config/lagrange/lab/inventory.json: one physical machine per internal address), never from the provider index. Node -> provider placement is the run's own (see provenance); provider -> machine is this table.",
+  "hostInfo": [
+   {
+    "machineId": "lab-tv-dator",
+    "machineLabel": "tv-dator",
+    "internalIp": "192.168.86.32"
+   },
+   {
+    "machineId": "lab-lenovo-laptop",
+    "machineLabel": "lenovo-laptop",
+    "internalIp": "192.168.86.27"
+   },
+   {
+    "machineId": "lab-adam-laptop",
+    "machineLabel": "adam-laptop",
+    "internalIp": "192.168.86.34"
+   },
+   {
+    "machineId": "lab-adams-gamla",
+    "machineLabel": "adams-gamla",
+    "internalIp": "192.168.86.41"
+   }
+  ]
+ },
  "nodeHosts": [
   {
    "nodeId": "44192740-3d6e-4883-b03a-e8994669a77c",
    "nodeIndex": 0,
    "providerIndex": 0,
-   "hostLabel": "192.168.86.32"
+   "machineId": "lab-tv-dator",
+   "machineLabel": "tv-dator"
   },
   {
    "nodeId": "55d28587-078c-432e-bdb2-2a4c9e1d65c3",
    "nodeIndex": 1,
    "providerIndex": 1,
-   "hostLabel": "192.168.86.27"
+   "machineId": "lab-lenovo-laptop",
+   "machineLabel": "lenovo-laptop"
   },
   {
    "nodeId": "a3a906cc-b488-422f-928b-03f67f411e25",
    "nodeIndex": 2,
    "providerIndex": 2,
-   "hostLabel": "192.168.86.34"
+   "machineId": "lab-adam-laptop",
+   "machineLabel": "adam-laptop"
   },
   {
    "nodeId": "cc76615c-d694-4533-8bd9-51380b347930",
    "nodeIndex": 3,
    "providerIndex": 3,
-   "hostLabel": "192.168.86.41"
+   "machineId": "lab-adams-gamla",
+   "machineLabel": "adams-gamla"
   },
   {
    "nodeId": "a381d398-a64e-4b4d-8ad5-aacdf0026f69",
    "nodeIndex": 4,
    "providerIndex": 0,
-   "hostLabel": "192.168.86.32"
+   "machineId": "lab-tv-dator",
+   "machineLabel": "tv-dator"
   }
  ],
  "snapshots": [

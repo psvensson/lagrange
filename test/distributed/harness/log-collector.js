@@ -26,6 +26,8 @@ import {
 
 // Module-load captures (the harness tree's ambient-intrinsics rule).
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayJoin = Function.call.bind(Array.prototype.join);
+const arraySlice = Function.call.bind(Array.prototype.slice);
 const arraySort = Function.call.bind(Array.prototype.sort);
 const dateToIsoString = Function.call.bind(Date.prototype.toISOString);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
@@ -63,6 +65,10 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 // Disk bound: ARCHIVED_SCENARIO_RUNS_KEPT archives per scenario; the oldest
 // beyond the bound is deleted. That pruning is the only removal of an
 // earlier run's evidence, and it is by age, never by a starting run's reset.
+// It is never silent: the archive step logs it, and the new archive.json
+// names the pruned archives (prunedArchives) and any partial archive (no
+// archive.json, a crash mid-archive; partialArchives) that counts toward
+// the bound.
 const ARCHIVED_SCENARIO_RUNS_KEPT = 3;
 const RUN_ARCHIVE_PREFIX = '.previous-';
 const RUN_ARCHIVE_MANIFEST_FILENAME = 'archive.json';
@@ -264,18 +270,53 @@ async function listEntryNames(dir) {
   }
 }
 
+async function hasRunArchiveManifest(archiveDir) {
+  try {
+    await stat(join(archiveDir, RUN_ARCHIVE_MANIFEST_FILENAME));
+    return true;
+  } catch (_absent) {
+    return false;
+  }
+}
+
 // The disk bound: keep the newest ARCHIVED_SCENARIO_RUNS_KEPT archives
-// (names sort by run start), delete the older ones.
-async function pruneRunArchives(scenarioDir) {
+// (names sort by run start); the older ones are planned for removal. A
+// partial archive (no archive.json: a crash mid-archive) still counts toward
+// the bound, so it is named, never silently consumed. The archive being
+// written now has no manifest yet and is not partial.
+async function planRunArchivePrune(scenarioDir, currentArchiveName) {
   const archives = arraySort(arrayFilter(await listEntryNames(scenarioDir),
     (name) => stringStartsWith(name, RUN_ARCHIVE_PREFIX)));
-  const pruned = [];
-  while (archives.length > ARCHIVED_SCENARIO_RUNS_KEPT) {
-    const oldest = archives.shift();
-    await rm(join(scenarioDir, oldest), {force: true, recursive: true});
-    pruned.push(oldest);
+  const partialArchives = [];
+  for (const name of archives) {
+    if (name !== currentArchiveName &&
+      !(await hasRunArchiveManifest(join(scenarioDir, name)))) {
+      partialArchives.push(name);
+    }
   }
-  return pruned;
+  const excess = archives.length - ARCHIVED_SCENARIO_RUNS_KEPT;
+  const prunedArchives = excess > ZERO ? arraySlice(archives, ZERO, excess) :
+    [];
+  return {partialArchives, prunedArchives};
+}
+
+function writeArchiveLogLine(line) {
+  process.stderr.write(line + NEWLINE);
+}
+
+function logRunArchive(log, scenarioName, archiveName, plan) {
+  log(`[harness] archive: earlier ${scenarioName} run moved into ` +
+    `${archiveName} (bound: ${ARCHIVED_SCENARIO_RUNS_KEPT} kept)`);
+  if (plan.prunedArchives.length > ZERO) {
+    log(`[harness] archive: pruned ${plan.prunedArchives.length} ` +
+      `${scenarioName} archive(s) beyond the bound: ` +
+      arrayJoin(plan.prunedArchives, ', '));
+  }
+  if (plan.partialArchives.length > ZERO) {
+    log(`[harness] archive: partial ${scenarioName} archive(s) without ` +
+      `${RUN_ARCHIVE_MANIFEST_FILENAME} (a crash mid-archive; counted toward ` +
+      'the bound): ' + arrayJoin(plan.partialArchives, ', '));
+  }
 }
 
 /**
@@ -283,13 +324,13 @@ async function pruneRunArchives(scenarioDir) {
  * archive (layout, bundle resolution and disk bound: see the Earlier-run
  * archive block above).
  * @param {{outputDir: string, scenarioName: string,
- *   archiveFullLogs?: function(string): Promise<?{from: string, to: string}>}}
- *   options
+ *   archiveFullLogs?: function(string): Promise<?{from: string, to: string}>,
+ *   log?: function(string): void}} options (log defaults to stderr)
  * @return {Promise<?Object>} The archive record, or null when there was no
  *   earlier run to archive.
  */
 async function archivePreviousScenarioRun(
-  {outputDir, scenarioName, archiveFullLogs},
+  {outputDir, scenarioName, archiveFullLogs, log},
 ) {
   const scenarioDir = join(outputDir, scenarioName);
   const runNames = arrayFilter(await listEntryNames(scenarioDir),
@@ -331,6 +372,7 @@ async function archivePreviousScenarioRun(
   rules.push({from: scenarioTail, to: archiveTail});
   const pathsRewrittenIn = await rewriteArchivedArtifacts(archiveDir,
     runNames, rules);
+  const plan = await planRunArchivePrune(scenarioDir, archiveName);
   const manifest = {
     schemaVersion: RUN_ARCHIVE_MANIFEST_SCHEMA_VERSION,
     scenario: scenarioName,
@@ -341,11 +383,17 @@ async function archivePreviousScenarioRun(
     moved,
     pathsRewrittenIn,
     keptArchives: ARCHIVED_SCENARIO_RUNS_KEPT,
+    prunedArchives: plan.prunedArchives,
+    partialArchives: plan.partialArchives,
   };
   await writeFile(join(archiveDir, RUN_ARCHIVE_MANIFEST_FILENAME),
     JSON.stringify(manifest, null, JSON_INDENT) + NEWLINE, ENCODING_UTF8);
-  const pruned = await pruneRunArchives(scenarioDir);
-  return {archiveDir, archiveName, manifest, pruned};
+  for (const name of plan.prunedArchives) {
+    await rm(join(scenarioDir, name), {force: true, recursive: true});
+  }
+  logRunArchive(typeof log === 'function' ? log : writeArchiveLogLine,
+    scenarioName, archiveName, plan);
+  return {archiveDir, archiveName, manifest, pruned: plan.prunedArchives};
 }
 
 /**
@@ -511,12 +559,13 @@ class LogCollector {
    * as this run's evidence. They are archived, never deleted (see the
    * Earlier-run archive block at the top of this module).
    * @param {string} scenarioName
-   * @param {{archiveFullLogs?: Function}} [options]
+   * @param {{archiveFullLogs?: Function, log?: Function}} [options]
    * @return {Promise<?Object>} The archive record, or null.
    */
   async archivePreviousScenarioRun(scenarioName, options = {}) {
     return archivePreviousScenarioRun({
       archiveFullLogs: options.archiveFullLogs,
+      log: options.log,
       outputDir: this._outputDir,
       scenarioName,
     });

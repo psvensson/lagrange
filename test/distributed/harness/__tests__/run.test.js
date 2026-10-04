@@ -1454,6 +1454,44 @@ describe('runScenarios: a scenario the config cannot carry is REFUSED (R1)',
       }
     });
 
+    it('a scenario module that fails to import fails that scenario only, ' +
+      'named; the next scenario still runs', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'import-error-run-'));
+      const missingPath = join(dir, 'missing-scenario-module.js');
+      const failPath = new URL('../__fixtures__/failing-scenario.js',
+        import.meta.url).pathname;
+      let clustersBuilt = 0;
+      try {
+        const {report, hasFailures, hasRefusals} = await runScenarios(
+          {size: 3, docker: {socketPath: '/var/run/docker.sock'},
+            image: 'test:latest', resourceLimits: {}, timeouts: {}},
+          [{name: 'import-error-scenario', path: missingPath},
+            {name: 'next-scenario', path: failPath}],
+          {output: join(dir, 'r.json'), verbose: false,
+            stateMachinePressurePreflight: {ready: true},
+            clusterFactory() {
+              clustersBuilt += 1;
+              throw new Error('docker unavailable in unit tests');
+            }},
+        );
+        assert.equal(hasFailures, true);
+        assert.equal(hasRefusals, false);
+        assert.equal(report.scenarios.length, 2);
+        assert.equal(report.scenarios[0].scenario, 'import-error-scenario');
+        assert.equal(report.scenarios[1].scenario, 'next-scenario');
+        const broken = report.scenarios[0];
+        assert.equal(broken.passed, false);
+        assert.notEqual(broken.outcome, 'refused');
+        assert.match(broken.error,
+          /import-error-scenario: scenario module failed to load: /u);
+        assert.match(broken.error, /missing-scenario-module\.js/u);
+        // The next scenario ran: its cluster was attempted.
+        assert.equal(clustersBuilt, 1);
+      } finally {
+        await rm(dir, {force: true, recursive: true});
+      }
+    });
+
     it('a config declaring two machines runs it (no refusal)', async () => {
       let clustersBuilt = 0;
       const {hasRefusals} = await runScenarios(

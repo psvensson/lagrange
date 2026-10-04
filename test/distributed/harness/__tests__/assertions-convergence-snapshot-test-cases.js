@@ -966,7 +966,8 @@ test('isConvergedSnapshot — tolerateUnderReplication names the tolerated ' +
     [REPLICA_TARGET_PARTITION_UNDER, REPLICA_TARGET_UNDER_VOTER_COUNT],
   ]);
   const options = {...REPLICA_TARGET_POLICY,
-    tolerateUnderReplication: REPLICA_TARGET_TOLERANCE_REASON};
+    tolerateUnderReplication: {minVoters: REPLICA_TARGET_UNDER_VOTER_COUNT,
+      reason: REPLICA_TARGET_TOLERANCE_REASON}};
   assert.strictEqual(
     isConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT, options),
     true,
@@ -990,6 +991,23 @@ test('isConvergedSnapshot — tolerateUnderReplication names the tolerated ' +
     }),
     /tolerateUnderReplication/,
     'a tolerance without a reason is refused, never a silent default',
+  );
+  assert.throws(
+    () => isConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT, {
+      ...REPLICA_TARGET_POLICY,
+      tolerateUnderReplication: REPLICA_TARGET_TOLERANCE_REASON,
+    }),
+    /tolerateUnderReplication/,
+    'a tolerance without a declared voter floor is refused',
+  );
+  assert.strictEqual(
+    classifyConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT, {
+      ...REPLICA_TARGET_POLICY,
+      tolerateUnderReplication: {minVoters: REPLICA_TARGET_VOTER_COUNT - 1,
+        reason: REPLICA_TARGET_TOLERANCE_REASON},
+    }).state,
+    'under_target_voters',
+    'a partition below the declared floor is never tolerated',
   );
 });
 

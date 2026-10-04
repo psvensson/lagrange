@@ -270,6 +270,55 @@ describe('scenario run artifact hygiene (W7)', () => {
         archiveNameFor));
   });
 
+  it('the prune is visible: the newest archive.json names what it pruned ' +
+    'and the archive step logs it', async () => {
+    const collector = new LogCollector(outputDir);
+    const lines = [];
+    const log = (line) => lines.push(line);
+    const runStarts = [];
+    let record = null;
+    for (let run = 0; run < ARCHIVED_RUNS_KEPT + 2; run += 1) {
+      const runStart = OLD_RUN_START + run * RUN_SPACING_MS;
+      runStarts.push(runStart);
+      record = await collector.archivePreviousScenarioRun(SCENARIO, {log});
+      await writeRun(outputDir,
+        {failed: false, nodeIds: [`run-${run}-node-1`], runStart});
+    }
+    record = await collector.archivePreviousScenarioRun(SCENARIO, {log});
+    // Two runs beyond the bound: the last two archive steps pruned run 0
+    // and run 1, each recorded in the archive written by that step.
+    const prunedName = archiveNameFor(runStarts[1]);
+    assert.deepEqual(record.manifest.prunedArchives, [prunedName]);
+    const newest = JSON.parse(await readFile(join(record.archiveDir,
+      'archive.json'), 'utf8'));
+    assert.deepEqual(newest.prunedArchives, [prunedName]);
+    assert.deepEqual(newest.partialArchives, []);
+    assert.ok(arraySome(lines, (line) => stringIncludes(line, prunedName) &&
+      stringIncludes(line, 'pruned')), lines.join('\n'));
+    assert.ok(arraySome(lines, (line) =>
+      stringIncludes(line, archiveNameFor(runStarts[0])) &&
+      stringIncludes(line, 'pruned')), lines.join('\n'));
+  });
+
+  it('a partial archive (no archive.json, a crash mid-archive) is named ' +
+    'in the log and the manifest, never silently counted', async () => {
+    const scenarioDir = join(outputDir, SCENARIO);
+    const partialName = archiveNameFor(OLD_RUN_START - RUN_SPACING_MS);
+    await mkdir(join(scenarioDir, partialName), {recursive: true});
+    await writeFile(join(scenarioDir, partialName, 'old-node-1.log'),
+      OLD_RUN_DECISION_LINE + '\n');
+    await writeRun(outputDir,
+      {failed: false, nodeIds: OLD_RUN_NODES, runStart: OLD_RUN_START});
+    const collector = new LogCollector(outputDir);
+    const lines = [];
+    const record = await collector.archivePreviousScenarioRun(SCENARIO,
+      {log: (line) => lines.push(line)});
+    assert.deepEqual(record.manifest.partialArchives, [partialName]);
+    assert.deepEqual(record.manifest.prunedArchives, []);
+    assert.ok(arraySome(lines, (line) => stringIncludes(line, partialName) &&
+      stringIncludes(line, 'partial')), lines.join('\n'));
+  });
+
   it('cluster start archives the earlier run before any capture starts',
     async () => {
       await writeRun(outputDir,

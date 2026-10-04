@@ -20,9 +20,13 @@
  * under_target_voters, over_target_voters, over_ceiling_voters,
  * voter_target_evidence_absent. A call site that legitimately tolerates
  * under-replication (a node is down, the survivors cannot hold the policy
- * count) declares `{tolerateUnderReplication: '<reason>'}`; the verdict is
- * then `under_replication_tolerated`, carrying the reason and the
- * under-target partitions, never a silent pass. A caller that makes no
+ * count) declares `{tolerateUnderReplication: {reason, minVoters}}`: the
+ * reason, and the voter FLOOR its situation implies (two survivors of a
+ * three-node cluster: 2). Every under-target partition at or above the
+ * floor gives `under_replication_tolerated`, carrying the reason, the floor
+ * and the under-target partitions, never a silent pass; any partition below
+ * the floor stays `under_target_voters`. A tolerance without a reason or
+ * without a floor is refused (it throws). A caller that makes no
  * voter-count claim at all (a quiescence probe) passes an explicit
  * not-claimed verdict with its reason.
  */
@@ -32,9 +36,11 @@ import {
 } from '../../../src/bootstrap/replication-target-authority.js';
 
 // Module-load captures (the harness tree's ambient-intrinsics rule).
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayJoin = Function.call.bind(Array.prototype.join);
+const arraySort = Function.call.bind(Array.prototype.sort);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const VOTER_TARGET_STATE = Object.freeze({
@@ -59,24 +65,38 @@ const TOLERANCE_OPTION = 'tolerateUnderReplication';
 const VOTER_TARGET_QUERY =
   'SELECT partition_id, replica_count FROM partitions';
 const ABSENT_VOTER_COUNT = 0;
+const MIN_TOLERATED_VOTERS = 1;
+
+function refuseTolerance(detail) {
+  throw new TypeError(TOLERANCE_OPTION + ' must be {reason, minVoters}: a ' +
+    'non-empty reason string naming why the call site tolerates partitions ' +
+    'below their policy replica target, and the positive integer voter ' +
+    'floor that situation implies (' + detail + ')');
+}
 
 /**
- * The reason a call site gives for tolerating under-replication, or null.
- * A tolerance without a reason is refused, never read as strict or tolerant.
+ * The under-replication a call site tolerates, or null. A tolerance without
+ * a reason or without a declared voter floor is refused, never read as
+ * strict or as tolerant at any deficit.
  * @param {Object} options
- * @return {string|null}
+ * @return {?{reason: string, minVoters: number}}
  */
-function resolveUnderReplicationToleranceReason(options) {
-  const reason = options?.[TOLERANCE_OPTION];
-  if (reason === undefined) {
+function resolveUnderReplicationTolerance(options) {
+  const tolerance = options?.[TOLERANCE_OPTION];
+  if (tolerance === undefined) {
     return null;
   }
-  if (typeof reason !== 'string' || reason.length === 0) {
-    throw new TypeError(TOLERANCE_OPTION + ' must be a non-empty reason ' +
-      'string naming why the call site tolerates partitions below their ' +
-      'policy replica target');
+  if (tolerance === null || typeof tolerance !== 'object') {
+    refuseTolerance('no voter floor declared');
   }
-  return reason;
+  const {reason, minVoters} = tolerance;
+  if (typeof reason !== 'string' || reason.length === 0) {
+    refuseTolerance('no reason');
+  }
+  if (!Number.isSafeInteger(minVoters) || minVoters < MIN_TOLERATED_VOTERS) {
+    refuseTolerance('minVoters ' + String(minVoters));
+  }
+  return Object.freeze({minVoters, reason});
 }
 
 /**
@@ -112,24 +132,38 @@ function orderReaders(nodes, preferNodeId) {
   ];
 }
 
+// Every partition id the policy read returned, with or without a usable
+// target, so a row outside the claimed set can be named.
+function partitionIdsOfRows(partitionRows) {
+  const ids = new Set();
+  for (const row of partitionRows) {
+    const partitionId = stringTrim(String(row?.partition_id || ''));
+    if (partitionId.length > 0) {
+      ids.add(partitionId);
+    }
+  }
+  return arraySort([...ids]);
+}
+
 /**
  * Read the policy targets from the first node that answers.
  * @param {Array<Object>} nodes
  * @param {{preferNodeId?: string}} [options]
- * @return {Promise<Object>} {targets: Map|null, sourceNodeId, error}
+ * @return {Promise<Object>} {targets: Map|null, partitionIds: string[]|null,
+ *   sourceNodeId, error}
  */
 async function readPartitionVoterTargets(nodes, options = {}) {
   let error = 'no node exposes a partitions read';
   for (const node of orderReaders(nodes, options.preferNodeId)) {
     try {
       const rows = rowsOf(await node.query(VOTER_TARGET_QUERY));
-      return {error: null, sourceNodeId: node.id,
-        targets: buildPartitionVoterTargets(rows)};
+      return {error: null, partitionIds: partitionIdsOfRows(rows),
+        sourceNodeId: node.id, targets: buildPartitionVoterTargets(rows)};
     } catch (readError) {
       error = String(readError?.message || readError);
     }
   }
-  return {error, sourceNodeId: null, targets: null};
+  return {error, partitionIds: null, sourceNodeId: null, targets: null};
 }
 
 function finiteCeiling(value) {
@@ -166,6 +200,29 @@ function collectPartitionFindings(input) {
   return findings;
 }
 
+// Tolerated only when the call site declared a tolerance and every
+// under-target partition holds at least its declared voter floor.
+function isToleratedUnderReplication(underTarget, tolerance) {
+  if (!tolerance) {
+    return false;
+  }
+  return arrayEvery(underTarget,
+    (entry) => entry.voters >= tolerance.minVoters);
+}
+
+// Partitions the policy read knows (a target, or a row without one) that
+// the caller did not claim: named in the record, never silently dropped.
+function collectUnclaimedPartitionIds(input) {
+  const known = new Set(input.policyPartitionIds || []);
+  if (input.voterTargets instanceof Map) {
+    for (const partitionId of input.voterTargets.keys()) {
+      known.add(partitionId);
+    }
+  }
+  return arraySort(arrayFilter([...known],
+    (partitionId) => !input.expectedPartitionIds.has(partitionId)));
+}
+
 function decideVoterTargetState(findings, input) {
   if (input.expectedPartitionIds.size === 0 ||
       !(input.voterTargets instanceof Map) ||
@@ -183,7 +240,7 @@ function decideVoterTargetState(findings, input) {
       VOTER_TARGET_STATE.OVER_TARGET;
   }
   if (findings.underTarget.length > 0) {
-    return input.toleranceReason ?
+    return isToleratedUnderReplication(findings.underTarget, input.tolerance) ?
       VOTER_TARGET_STATE.TOLERATED :
       VOTER_TARGET_STATE.UNDER_TARGET;
   }
@@ -193,10 +250,12 @@ function decideVoterTargetState(findings, input) {
 /**
  * The convergence verdict on voters, for the partitions a caller claims.
  * @param {Object} input {expectedPartitionIds: Set, voterCounts: Map,
- *   voterTargets: Map|null, voterCeiling, toleranceReason,
- *   membershipFreezeActive}
+ *   voterTargets: Map|null, voterCeiling, tolerance: ?{reason, minVoters}
+ *   (from resolveUnderReplicationTolerance), membershipFreezeActive,
+ *   policyPartitionIds?: every partition id the policy read returned}
  * @return {Object} frozen {state, satisfied, underTarget, overTarget,
- *   overCeiling, evidenceAbsent, voterCeiling, toleranceReason}
+ *   overCeiling, evidenceAbsent, voterCeiling, toleranceReason,
+ *   toleranceMinVoters, unclaimedPartitionIds}
  */
 function classifyVoterTargets(input) {
   const normalized = {
@@ -207,13 +266,14 @@ function classifyVoterTargets(input) {
   };
   const findings = collectPartitionFindings(normalized);
   const state = decideVoterTargetState(findings, normalized);
+  const tolerated = state === VOTER_TARGET_STATE.TOLERATED;
   return Object.freeze({
     ...findings,
     satisfied: SATISFIED_STATES.has(state),
     state,
-    toleranceReason: state === VOTER_TARGET_STATE.TOLERATED ?
-      input.toleranceReason :
-      null,
+    toleranceMinVoters: tolerated ? input.tolerance.minVoters : null,
+    toleranceReason: tolerated ? input.tolerance.reason : null,
+    unclaimedPartitionIds: collectUnclaimedPartitionIds(normalized),
     voterCeiling: Number.isFinite(input.voterCeiling) ?
       input.voterCeiling :
       null,
@@ -228,7 +288,8 @@ function classifyVoterTargets(input) {
 function buildUnclaimedVoterTargetVerdict(reason) {
   return Object.freeze({evidenceAbsent: [], overCeiling: [], overTarget: [],
     satisfied: true, state: VOTER_TARGET_STATE.NOT_CLAIMED,
-    toleranceReason: reason, underTarget: [], voterCeiling: null});
+    toleranceMinVoters: null, toleranceReason: reason,
+    unclaimedPartitionIds: [], underTarget: [], voterCeiling: null});
 }
 
 /**
@@ -249,6 +310,12 @@ function describeVoterTargetVerdict(verdict) {
       parts.push(`${key}[${list(verdict[key])}]`);
     }
   }
+  if (verdict.unclaimedPartitionIds?.length > 0) {
+    parts.push(`unclaimed[${arrayJoin(verdict.unclaimedPartitionIds, ',')}]`);
+  }
+  if (Number.isFinite(verdict.toleranceMinVoters)) {
+    parts.push(`minVoters=${verdict.toleranceMinVoters}`);
+  }
   if (verdict.toleranceReason) {
     parts.push(`reason=${verdict.toleranceReason}`);
   }
@@ -263,5 +330,5 @@ export {
   classifyVoterTargets,
   describeVoterTargetVerdict,
   readPartitionVoterTargets,
-  resolveUnderReplicationToleranceReason,
+  resolveUnderReplicationTolerance,
 };

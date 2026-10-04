@@ -45,6 +45,7 @@ const REASON = Object.freeze({
   RECEIPT_EMPTY: 'receipt file carries no receipts',
   REQUIRED_MISSING: 'probe args name no required receipts',
   NO_REPORTS: 'no report for the scenario',
+  REFUSED_NOT_RUN: 'refused_not_run',
   ORACLE_MISSING: 'oracle file missing or malformed',
   SCRIPT_OUTSIDE_CHECKS: `script probes live under ${CHECKS_DIR}/`,
   SCRIPT_NO_METRIC: 'script printed no numeric metric line',
@@ -123,6 +124,20 @@ function isRefusedRun(data, scenario) {
   return entry !== null &&
     (scenarioOutcomeOf(entry) === SCENARIO_OUTCOME.REFUSED ||
       scenarioOutcomeOf(entry?.current) === SCENARIO_OUTCOME.REFUSED);
+}
+
+// Why the latest sample measured nothing: a refused run names its refusal
+// (not run, with the topology reason), never "no report for the scenario".
+function nonMeasuringReasonOf(data, scenario) {
+  if (isRefusedRun(data, scenario)) {
+    const entry = scenarioEntry(data, scenario);
+    const refusal = entry?.refusal || entry?.current?.refusal;
+    const refusalReason = refusal?.reason || entry?.verdictReason ||
+      entry?.current?.verdictReason;
+    return refusalReason ? `${REASON.REFUSED_NOT_RUN}: ${refusalReason}` :
+      REASON.REFUSED_NOT_RUN;
+  }
+  return verdictReasonOf(data, scenario) || REASON.NO_REPORTS;
 }
 
 function isNonMeasuringRun(data, scenario) {
@@ -231,7 +246,7 @@ function measureScenarioHarness(root, args) {
     passingStreak: recent.filter((run) => scenarioPassed(run.data, scenario)).length,
     verdictReason: verdictReasonOf(latest.data, scenario)};
   if (isNonMeasuringRun(latest.data, scenario) || readMetric(latest.data, kind) === null) {
-    return {...notMeasuring(detail.verdictReason || REASON.NO_REPORTS, evidence),
+    return {...notMeasuring(nonMeasuringReasonOf(latest.data, scenario), evidence),
       invalidSample: true, detail};
   }
   return {
