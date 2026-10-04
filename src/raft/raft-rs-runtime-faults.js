@@ -1,6 +1,6 @@
 // What the runtime owner does with a fault it observes: a delivered envelope
-// the local-log guard refused (recorded against its sender, reported once
-// per sender and reason, and - when it proves this replica's own history
+// the local-log guard refused (recorded against its sender, reported at a
+// bounded rate per group and reason, and - when it proves this replica's own history
 // lost - the group held for a reseed), a core trap, and a runtime
 // replacement. The structured log line is written by the port's reporter,
 // injected on the group, so the runtime owner's import closure stays free of
@@ -105,6 +105,15 @@ function guardInputs(group) {
   };
 }
 
+// The ERROR line of a refusal is rate limited per (group, reason), whoever
+// the (unauthenticated) sender claims to be: the first occurrence, then the
+// 2nd, 4th, 8th, ... each naming how many occurred - at most log2(n) + 1
+// lines for n refusals of one reason, and no timer. The per-sender record
+// (recordInboundStepRefusal) still counts every refusal.
+function isPowerOfTwo(count) {
+  return (count & (count - 1)) === 0;
+}
+
 /**
  * Ask the local-log guard about one delivered envelope before it is stepped.
  * @param {Object} group - The runtime group.
@@ -119,9 +128,9 @@ function refuseInboundStep(group, envelope, runtimeGeneration) {
   if (refused === null) {
     return null;
   }
-  const sender = String(message?.from ?? envelope.from);
-  const first = group.inboundStepRefusals.get(sender)?.reason !==
-    refused.reason;
+  const occurrences = (group.inboundRefusalReports.get(refused.reason) ?? 0) +
+    1;
+  group.inboundRefusalReports.set(refused.reason, occurrences);
   const detail = {...messageFields(message),
     localLastIndex: String(group.persistedLastIndex)};
   const outcome = deepFreeze({
@@ -133,9 +142,9 @@ function refuseInboundStep(group, envelope, runtimeGeneration) {
     detail,
   });
   recordInboundStepRefusal(group, envelope, outcome);
-  if (first) {
+  if (refused.holds || isPowerOfTwo(occurrences)) {
     report(group, RUNTIME_FAULT_REPORT.INBOUND_STEP_REFUSED,
-      {reason: refused.reason, runtimeGeneration, ...detail});
+      {reason: refused.reason, occurrences, runtimeGeneration, ...detail});
   }
   return refused.holds ? enterReseedHold(group, outcome) : outcome;
 }

@@ -270,3 +270,56 @@ test('the persisted last index is set by each persist, reset by a ' +
   assert.equal(openedLastIndex({entries: [],
     snapshot: {metadata: {index: '30'}}}), 30n);
 });
+
+// The ERROR lines of refusals are bounded per (group, reason) whatever the
+// unauthenticated sender claims (the verifier's T2: 50 lines for 50
+// alternating-reason messages, and for 50 spoofed senders); the per-sender
+// record still counts every refusal.
+const FLOOD = 50;
+const LINES_PER_REASON_BOUND = Math.floor(Math.log2(FLOOD)) + 1;
+
+async function floodLines(cluster, replicaId, messageAt) {
+  const lines = await capturingErrors(async () => {
+    for (let index = 0; index < FLOOD; index += 1) {
+      await cluster.node(replicaId).step(envelopeTo(cluster.partitionId,
+        cluster.node(replicaId).readStatus().peerId, messageAt(index)));
+      await cluster.node(replicaId).tick();
+    }
+  });
+  return lines.filter(({context}) =>
+    context.report === RUNTIME_FAULT_REPORT.INBOUND_STEP_REFUSED);
+}
+
+test('refusal ERROR lines are rate limited per group and reason: one ' +
+  'sender alternating two reasons, and many spoofed senders', async () => {
+  const cluster = formedCluster('w5-rate', ['rt-a', 'rt-b', 'rt-c'],
+    FORMED_ENTRIES);
+  try {
+    const ids = peerIdsOf(cluster);
+    const leader = cluster.node('rt-a').readStatus();
+    const beyond = String(BigInt(leader.commitIndex) + BEYOND);
+    const alternating = await floodLines(cluster, 'rt-a', (index) =>
+      index % 2 === 0 ?
+        {msgType: RAFT_RS_MESSAGE_TYPE.PROPOSE, from: ids['rt-b'],
+          entries: []} :
+        {msgType: RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE, from: ids['rt-b'],
+          term: String(leader.term), index: beyond, reject: false});
+    assert.ok(alternating.length <= 2 * LINES_PER_REASON_BOUND,
+      `${alternating.length} lines for ${FLOOD} alternating refusals`);
+    assert.equal(refusalFrom(cluster, 'rt-a', ids['rt-b']).refusalCount,
+      FLOOD, 'the per-sender record no longer counts every refusal');
+    const spoofed = await floodLines(cluster, 'rt-a', (index) => ({
+      msgType: RAFT_RS_MESSAGE_TYPE.PROPOSE, from: String(1000 + index),
+      entries: []}));
+    assert.ok(spoofed.length <= LINES_PER_REASON_BOUND,
+      `${spoofed.length} lines for ${FLOOD} spoofed senders`);
+    const last = spoofed.at(-1).context;
+    assert.equal(last.reason,
+      RAFT_RS_LOCAL_LOG_REFUSAL.EMPTY_FORWARDED_PROPOSAL);
+    assert.ok(last.occurrences > FLOOD / 2,
+      `the summary does not count the refusals: ${last.occurrences}`);
+    assert.equal(cluster.node('rt-a').readStatus().role, 'leader');
+  } finally {
+    cluster.dispose();
+  }
+});

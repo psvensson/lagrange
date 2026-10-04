@@ -1,6 +1,6 @@
 // The structured log line of a fault the raft-rs runtime observed, written
-// at ERROR: a delivered envelope the local-log guard refused (first per
-// sender and reason), a core trap, a runtime replacement. Before this line
+// at ERROR: a delivered envelope the local-log guard refused (rate limited
+// per group and reason, raft-rs-runtime-faults.js), a core trap, a runtime replacement. Before this line
 // existed a trap reached only the panic hook's raw stderr. The runtime owner
 // is handed this reporter by its port and never imports logging itself
 // (restore-path fence).

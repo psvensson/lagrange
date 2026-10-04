@@ -1518,6 +1518,7 @@ function createRuntimeDispatcher(request) {
     inboundDrainDeadline: null,
     peerDelivery: new Map(),
     inboundStepRefusals: new Map(),
+    inboundRefusalReports: new Map(),
     closed: false,
   };
   groups.set(group.key, group);
