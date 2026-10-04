@@ -10,7 +10,7 @@ import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {inboundStepRefusal} from './raft-rs-local-log-guard.js';
 import {recordInboundStepRefusal} from './raft-rs-peer-delivery.js';
-import {whenPersistenceAdmitted} from './raft-rs-persistence-admission.js';
+import {persistenceAdmitted} from './raft-rs-persistence-admission.js';
 import {
   NO_LEADER,
   RUNTIME_FAULT_REPORT,
@@ -18,7 +18,6 @@ import {
   RUNTIME_REASON,
 } from './raft-rs-runtime-owner-constants.js';
 
-const NOT_ADMITTED = Object.freeze({closed: () => null, exceeded: () => null});
 const STEP = 'step';
 
 function report(group, kind, fields) {
@@ -41,9 +40,14 @@ function messageFields(message) {
 }
 
 // The group is held for a reseed: every further operation and delivery is
-// answered with the hold, nothing is stepped again, and the port records the
-// hold durably (its lifecycle owner) once the store admits a write - the
-// hold survives a restart and is never retried.
+// answered with the hold and nothing is stepped again. The hold is in force
+// in memory at once; its durable record (the port's lifecycle owner retires
+// the replica reseed-required, so a restart is refused the same way) is
+// written now when the store admits it, and otherwise - the store holds a
+// user transaction, or the write threw (SQLITE_BUSY, IOERR) - by the group's
+// next operation or delivery, which keep arriving (its leader keeps sending
+// heartbeats, its partition keeps reading its status): no timer of its own.
+// The first failed write is one ERROR line; the hold never lapses meanwhile.
 function enterReseedHold(group, refused) {
   group.reseedHold = deepFreeze({
     ...refused,
@@ -51,10 +55,37 @@ function enterReseedHold(group, refused) {
     recoveryRequired: true,
     detail: {...refused.detail, cause: refused.reason},
   });
+  group.reseedHoldRecorded = false;
+  group.reseedHoldWriteFailures = 0;
   group.inbound.length = 0;
-  const recorded = whenPersistenceAdmitted(group,
-    () => group.holdForReseed?.(group.reseedHold), NOT_ADMITTED);
-  recorded?.catch?.(() => undefined);
+  recordReseedHold(group);
+  return group.reseedHold;
+}
+
+/**
+ * Write a held group's durable hold if it is not written yet; a no-op once
+ * it is, or while the store does not admit a write (the next operation or
+ * delivery of the group asks again).
+ * @param {Object} group - The runtime group.
+ * @return {Object|null} The group's hold, or null when it holds none.
+ */
+function recordReseedHold(group) {
+  if (group.reseedHold === null || group.reseedHoldRecorded ||
+      !persistenceAdmitted(group)) {
+    return group.reseedHold;
+  }
+  try {
+    group.holdForReseed?.(group.reseedHold);
+    group.reseedHoldRecorded = true;
+  } catch (error) {
+    group.reseedHoldWriteFailures += 1;
+    if (group.reseedHoldWriteFailures === 1) {
+      report(group, RUNTIME_FAULT_REPORT.RESEED_HOLD_WRITE_FAILED, {
+        reason: String(error?.message || error),
+        ...(typeof error?.code === 'string' ? {code: error.code} : {}),
+      });
+    }
+  }
   return group.reseedHold;
 }
 
@@ -133,6 +164,7 @@ function reportRuntimeReplaced(trigger, fields) {
 }
 
 export {
+  recordReseedHold,
   refuseInboundStep,
   reportCoreTrap,
   reportRuntimeReplaced,

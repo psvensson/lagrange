@@ -31,6 +31,7 @@ import {
   persistedLastIndexAfter,
 } from './raft-rs-local-log-guard.js';
 import {
+  recordReseedHold,
   refuseInboundStep,
   reportCoreTrap,
   reportRuntimeReplaced,
@@ -715,7 +716,7 @@ function forgetExpiredRecovery(group) {
 // runtime; a host failure reconstructs its own group.
 function ensureExecution(group) {
   if (group.reseedHold !== null) {
-    return group.reseedHold;
+    return recordReseedHold(group);
   }
   if (runtimeHealth !== HEALTHY) {
     return replaceRuntime(group);
@@ -1495,6 +1496,8 @@ function createRuntimeDispatcher(request) {
     handle: null,
     persistedLastIndex: 0n,
     reseedHold: null,
+    reseedHoldRecorded: false,
+    reseedHoldWriteFailures: 0,
     lastStatus: null,
     statusObservation: null,
     announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
@@ -1548,7 +1551,7 @@ function createRuntimeDispatcher(request) {
         return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
       }
       if (group.reseedHold !== null) {
-        return group.reseedHold;
+        return recordReseedHold(group);
       }
       group.inbound.push(snapshotEnvelope(envelope));
       scheduleInboundDrain(group);

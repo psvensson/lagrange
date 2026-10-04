@@ -192,6 +192,10 @@ const RUNTIME_FAULT_REPORT = Object.freeze({
   INBOUND_STEP_REFUSED: 'inbound-step-refused',
   CORE_TRAPPED: 'core-trapped',
   RUNTIME_REPLACED: 'runtime-replaced',
+  // The durable record of a reseed hold could not be written (the hold stays
+  // in force in memory and the write is asked again by the group's next
+  // operation or delivery): reported on the first failure.
+  RESEED_HOLD_WRITE_FAILED: 'reseed-hold-write-failed',
 });
 // A Ready already taken holds the core's pending Ready, so its remaining
 // durable writes cannot be refused after an asynchronous send: they wait for

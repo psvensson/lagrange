@@ -158,6 +158,13 @@ class RaftRsReplicaLifecycleOwner {
     if (this.#activeCount > 0) {
       await new Promise((resolve) => this.#waiters.push(resolve));
     }
+    // A turn that was running while this retirement waited may have held
+    // the replica for a reseed: that row and its reason stay (the evidence
+    // of lost history is never overwritten by a later retirement).
+    if (this.#state !== LIFECYCLE_STATE.ACTIVE) {
+      return frozenResult(
+        RAFT_OPERATION_OUTCOME.CORE_REFUSED, this.#refusalReason);
+    }
     this.#writeRetired(String(reason || LIFECYCLE_REASON.RETIRED));
     this.#state = LIFECYCLE_STATE.RETIRED;
     this.#refusalReason = LIFECYCLE_REASON.RETIRED;

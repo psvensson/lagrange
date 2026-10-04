@@ -19,16 +19,16 @@
     "services-runtime": 144,
     "solver-tooling": 7,
     "storage-partition": 144,
-    "storage-raft": 104,
+    "storage-raft": 105,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2198,
-  "digest": "fnv1a32-1ae60643",
+  "censusSize": 2199,
+  "digest": "fnv1a32-0949fc5d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4b344a3d",
+  "observationDigest": "fnv1a32-bdd6174c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1476,6 +1476,7 @@
     "test/raft/raft-rs-backend/persistence-admission.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "storage-raft",
@@ -8629,6 +8630,19 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/reseed-hold-durability.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },

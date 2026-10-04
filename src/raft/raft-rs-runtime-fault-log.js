@@ -13,6 +13,8 @@ const RAFT_RS_FAULT_LOG_MSG = Object.freeze({
   [RUNTIME_FAULT_REPORT.INBOUND_STEP_REFUSED]: 'raft-rs inbound step refused',
   [RUNTIME_FAULT_REPORT.CORE_TRAPPED]: 'raft-rs core trapped',
   [RUNTIME_FAULT_REPORT.RUNTIME_REPLACED]: 'raft-rs runtime replaced',
+  [RUNTIME_FAULT_REPORT.RESEED_HOLD_WRITE_FAILED]:
+    'raft-rs reseed hold not yet durable',
 });
 
 /**
