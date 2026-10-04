@@ -20,6 +20,7 @@
 // authored index. --check-state (wired into CI via `npm run audit:closure-ledger`)
 // fails if any record lacks a STATE block or its STATE status drifts from the index.
 
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -196,6 +197,119 @@ export function parseClosureLedger(dir = LEDGER_DIR, indexPath = INDEX_PATH) {
   });
 }
 
+// Mechanism classes (MC-###): a recurring defect SHAPE, matched against a new
+// defect before its design starts. A class lives in the ledger in the record
+// form (its own file, a STATE block, a row in the index's Mechanism Classes
+// table) and the --check-state audit holds it to what it holds a record to
+// (STATE present, status agrees with the index) plus its own fields: a
+// definition, the detection question, and instances whose references resolve
+// - every listed commit is a commit in this repository, every quest has a
+// quest.json, every path exists. `pending` names references not yet on main
+// (an open PR's commits) and is recorded unchecked.
+const CLASS_FILE_PATTERN = /^MC-\d+\.md$/u;
+const CLASS_ROW_PATTERN = /\|\s*\[(MC-\d+)\][^|]*\|\s*([a-z-]+)[^|]*\|/gu;
+const CLASS_TEXT_FIELDS = Object.freeze(['definition', 'detectionQuestion']);
+const CLASS_REFERENCE_FIELDS = Object.freeze(['commits', 'quests', 'paths']);
+const CLASS_REFERENCE_SEPARATOR = /[,\s]+/u;
+const CLASS_REFERENCE_FENCE = /`/gu;
+const CLASS_MARKDOWN_SUFFIX = '.md';
+const CLASS_TEXT_ENCODING = 'utf8';
+const CLASS_QUESTS_DIR = 'solve/quests';
+const CLASS_QUEST_FILE = 'quest.json';
+const CLASS_COMMIT_SUFFIX = '^{commit}';
+const CLASS_GIT = 'git';
+const CLASS_GIT_VERIFY = Object.freeze(['cat-file', '-e']);
+const CLASS_GIT_STDIO = 'ignore';
+const CLASS_STATE_BLOCK = /^### STATE/mu;
+const CLASS_LINE_END = '\n';
+const CLASS_FIELD_FLAGS = 'mu';
+const CLASS_PROBLEM = Object.freeze({
+  NO_STATE: ': missing a ### STATE block',
+  NO_ROW: ': no row in the index Mechanism Classes table',
+  NO_FILE: ': indexed but has no closure-ledger file',
+  DRIFT: ': STATE status disagrees with the index',
+  NO_FIELD: ': missing ',
+  NO_REFERENCE: ': names no instance (commits, quests or paths)',
+  NO_COMMIT: ': names no commit in this repository: ',
+  NO_QUEST: ': names no quest with a quest.json: ',
+  NO_PATH: ': names a path that does not exist: ',
+});
+
+// One `- **field**: value` line; an empty value stays empty rather than
+// reading the next line.
+function classField(text, field) {
+  const match = text.match(new RegExp(`^-[ \\t]*\\*\\*${field}\\*\\*:[ \\t]*(.*)$`, CLASS_FIELD_FLAGS));
+  return match ? match[1].trim() : '';
+}
+
+function classReferences(text, field) {
+  const value = classField(text, field);
+  if (!value) return [];
+  return value.replace(CLASS_REFERENCE_FENCE, '').split(CLASS_REFERENCE_SEPARATOR)
+    .filter(Boolean);
+}
+
+function isCommit(root, sha) {
+  const result = spawnSync(CLASS_GIT, [...CLASS_GIT_VERIFY, `${sha}${CLASS_COMMIT_SUFFIX}`],
+    {cwd: root, stdio: CLASS_GIT_STDIO});
+  return result.status === EXIT_OK;
+}
+
+const CLASS_REFERENCE_CHECKS = Object.freeze({
+  commits: {problem: CLASS_PROBLEM.NO_COMMIT, holds: isCommit},
+  quests: {problem: CLASS_PROBLEM.NO_QUEST, holds: (root, id) =>
+    fs.existsSync(path.join(root, CLASS_QUESTS_DIR, id, CLASS_QUEST_FILE))},
+  paths: {problem: CLASS_PROBLEM.NO_PATH, holds: (root, file) =>
+    fs.existsSync(path.join(root, file))},
+});
+
+function classFileProblems(id, text, indexStatus, root) {
+  if (!CLASS_STATE_BLOCK.test(text)) return [`${id}${CLASS_PROBLEM.NO_STATE}`];
+  const problems = [];
+  if (indexStatus === undefined) problems.push(`${id}${CLASS_PROBLEM.NO_ROW}`);
+  else if (extractStatus(text).status !== indexStatus) problems.push(`${id}${CLASS_PROBLEM.DRIFT}`);
+  for (const field of CLASS_TEXT_FIELDS) {
+    if (!classField(text, field)) problems.push(`${id}${CLASS_PROBLEM.NO_FIELD}${field}`);
+  }
+  let referenced = 0;
+  for (const field of CLASS_REFERENCE_FIELDS) {
+    const check = CLASS_REFERENCE_CHECKS[field];
+    for (const reference of classReferences(text, field)) {
+      referenced += 1;
+      if (!check.holds(root, reference)) problems.push(`${id}${check.problem}${reference}`);
+    }
+  }
+  if (referenced === 0) problems.push(`${id}${CLASS_PROBLEM.NO_REFERENCE}`);
+  return problems;
+}
+
+/**
+ * The mechanism classes and what the audit finds wrong with them.
+ * @param {string} [dir] the closure-ledger record directory
+ * @param {string} [indexPath] the authored index
+ * @param {string} [root] the repository the references resolve in
+ * @return {{classes: string[], problems: string[]}}
+ */
+export function mechanismClassProblems(dir = LEDGER_DIR, indexPath = INDEX_PATH, root = ROOT) {
+  const index = new Map();
+  if (fs.existsSync(indexPath)) {
+    const indexText = fs.readFileSync(indexPath, CLASS_TEXT_ENCODING);
+    for (const match of indexText.matchAll(CLASS_ROW_PATTERN)) {
+      index.set(match[1], normalizeStatus(match[2]));
+    }
+  }
+  const files = fs.existsSync(dir) ?
+    fs.readdirSync(dir).filter((name) => CLASS_FILE_PATTERN.test(name)).sort() : [];
+  const classes = files.map((name) => name.slice(0, -CLASS_MARKDOWN_SUFFIX.length));
+  const problems = files.flatMap((name, position) => classFileProblems(classes[position],
+    fs.readFileSync(path.join(dir, name), CLASS_TEXT_ENCODING), index.get(classes[position]),
+    root));
+  for (const id of index.keys()) {
+    if (!classes.includes(id)) problems.push(`${id}${CLASS_PROBLEM.NO_FILE}`);
+  }
+  return {classes, problems};
+}
+
 // WS8.1 one-shot migration: prepend a `### STATE` header (seeded from the index
 // row + the record's last gate) to every record that lacks one. Idempotent — a
 // record that already has a STATE block is left untouched.
@@ -285,6 +399,32 @@ export function renderGenerated(records) {
   return `${lines.join('\n')}\n`;
 }
 
+// WS8.1 guard: every record must carry a STATE block, and its STATE status must
+// agree with the index; every mechanism class must be well formed and resolve.
+function checkState(records) {
+  const unnormalized = records.filter((r) => !r.normalized);
+  const drifted = records.filter((r) => r.drift);
+  const mechanism = mechanismClassProblems();
+  for (const problem of mechanism.problems) process.stderr.write(`${problem}${CLASS_LINE_END}`);
+  if (unnormalized.length > 0 || drifted.length > 0 || mechanism.problems.length > 0) {
+    if (unnormalized.length > 0) {
+      process.stderr.write(
+        `records missing a ### STATE block: ${unnormalized.map((r) => r.id).join(', ')}\n` +
+        'run `node scripts/closure-ledger-state.js --migrate-state`.\n');
+    }
+    for (const r of drifted) {
+      process.stderr.write(
+        `${r.id}: STATE status '${r.recordStatus}' disagrees with index ` +
+        `'${r.indexStatus}' — reconcile the record's STATE block and the index row.\n`);
+    }
+    return EXIT_DRIFT;
+  }
+  process.stdout.write(
+    `closure ledger STATE check: ${records.length} records normalized, 0 drift; ` +
+    `${mechanism.classes.length} mechanism classes resolve.\n`);
+  return EXIT_OK;
+}
+
 function main() {
   const argv = process.argv.slice(2);
 
@@ -302,26 +442,7 @@ function main() {
 
   // WS8.1 guard: every record must carry a STATE block, and its STATE status must
   // agree with the index. Wired into CI so the stale-top-line drift cannot recur.
-  if (argv.includes('--check-state')) {
-    const unnormalized = records.filter((r) => !r.normalized);
-    const drifted = records.filter((r) => r.drift);
-    if (unnormalized.length > 0 || drifted.length > 0) {
-      if (unnormalized.length > 0) {
-        process.stderr.write(
-          `records missing a ### STATE block: ${unnormalized.map((r) => r.id).join(', ')}\n` +
-          'run `node scripts/closure-ledger-state.js --migrate-state`.\n');
-      }
-      for (const r of drifted) {
-        process.stderr.write(
-          `${r.id}: STATE status '${r.recordStatus}' disagrees with index ` +
-          `'${r.indexStatus}' — reconcile the record's STATE block and the index row.\n`);
-      }
-      return EXIT_DRIFT;
-    }
-    process.stdout.write(
-      `closure ledger STATE check: ${records.length} records normalized, 0 drift.\n`);
-    return EXIT_OK;
-  }
+  if (argv.includes('--check-state')) return checkState(records);
 
   if (argv.includes('--json')) {
     process.stdout.write(`${JSON.stringify(records, null, 2)}\n`);

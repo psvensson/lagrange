@@ -23,6 +23,7 @@ A directory holding the sealed record, an append-only log, and while open the
 evidence its probe reads. The record fixes the statement, the owning epic and
 one binary `doneWhen` probe. Sealing measures that probe and refuses to seal
 unless it is red, so a quest can never be born already satisfied.
+Before designing a fix, match the defect against the [mechanism classes](../../../solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger.md#mechanism-classes).
 
 ## The four owner decisions
 
@@ -39,9 +40,11 @@ Nothing recorded is ever edited (R21); a correction is a new entry.
 
 ## Verification
 
-A change under `src/` lands only behind an independent verification newer
-than the last attempt, recorded with the verifier's identity and verdict. A
-standing rejection blocks landing until an attempt answers it.
+A change under `src/` lands only behind an independent approval newer than
+the last attempt, recorded with the verifier's identity and a record naming
+the [templates](../../development/verification-templates/INDEX.md) it applied
+and their red-on-revert. A standing rejection blocks landing until an attempt
+answers it.
 
 ## Landing and publishing
 

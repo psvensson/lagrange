@@ -4,7 +4,7 @@
 //   node scripts/solve.js start --id <quest>
 //   node scripts/solve.js note --id <quest> --finding "<text>" [--kind theory|altitude-check|decision|ruled-out|evidence] [--status active|supported|falsified|superseded] [--evidence <ref>]
 //   node scripts/solve.js note --id <quest> --attempt "<what changed>"
-//   node scripts/solve.js note --id <quest> --verification "<summary>" --verifier subagent:<id> --verdict approve|reject
+//   node scripts/solve.js note --id <quest> --verification "<summary>" --verifier subagent:<id> --verdict approve|reject [--evidence <record.json>]
 //   node scripts/solve.js note --id <quest> --blocked "<why>" --next-owner judgment|verification|authorization
 //   node scripts/solve.js note --id <quest> --exhausted "<why>" | --superseded "<why>" [--by <quest>]
 //   node scripts/solve.js probe --id <quest> | --epic <epic>
@@ -53,7 +53,8 @@ const NOTE_SHAPES = Object.freeze([
     kind: flags.kind, status: flags.status, evidence: flags.evidence})},
   {flag: 'attempt', build: (flags) => ({type: ENTRY_TYPE.ATTEMPT, text: flags.attempt})},
   {flag: 'verification', build: (flags) => ({type: ENTRY_TYPE.VERIFICATION,
-    text: flags.verification, verifier: flags.verifier, verdict: flags.verdict})},
+    text: flags.verification, verifier: flags.verifier, verdict: flags.verdict,
+    evidence: flags.evidence})},
   {flag: 'blocked', build: (flags) => ({type: ENTRY_TYPE.TERMINAL, status: QUEST_STATUS.BLOCKED,
     text: flags.blocked, nextOwner: flags[NEXT_OWNER_FLAG]})},
   {flag: 'exhausted', build: (flags) => ({type: ENTRY_TYPE.TERMINAL,

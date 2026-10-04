@@ -1,0 +1,104 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "verification-binds-and-classes",
+  "status": "pass",
+  "testFileDigests": {
+    "test/solve/commands.test.js": "1bc2a17f8b2ac8ffead136b619a796181d9ba38c72f009e5772471805650293a",
+    "test/scripts/closure-ledger-state.test.js": "96137dfa37e2d8088870de20ad52681f765c6f75f9ac9d78bb31e5aeb2ba54a5",
+    "test/scripts/steering-diet.test.js": "63560ea4273b09b0a92fa621d151bd2b1f981b8c6d0b101ec78bdcc4f3c46e09"
+  },
+  "generatedAt": "2026-10-04T17:35:57.717Z",
+  "receipts": [
+    {
+      "id": "src-landing-requires-the-record",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^land: red probe, standing rejection, src without verification, altitude, scope$\" test/solve/commands.test.js",
+      "detail": "the existing src/ landing path: a bare approve is refused naming the missing template; a complete record lands",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "approval-without-template-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a src/ approval that names no verification template is refused, naming it$\" test/solve/commands.test.js",
+      "detail": "(a) an approve with no record, or a record naming no template, is refused naming the admissible templates; the quest stays open",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "template-without-red-on-revert-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a src/ approval naming a template without its red-on-revert is refused, naming it$\" test/solve/commands.test.js",
+      "detail": "(b) a named template with no red-on-revert, or one lacking fields, is refused naming them",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "unknown-template-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an unknown template id is refused at note, and at land once its template is gone$\" test/solve/commands.test.js",
+      "detail": "(c) an unknown id is refused at note time and nothing is recorded",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "admissible-set-is-the-template-files",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the admissible templates are the template files themselves$\" test/solve/commands.test.js",
+      "detail": "(h) adding a template file makes its id admissible, removing it makes it inadmissible at note and at land",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "red-on-revert-binds-the-change",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a red-on-revert must bind the quest's own change, witness and evidence$\" test/solve/commands.test.js",
+      "detail": "(d) reverted path outside the src/ change, missing or unbound witness, missing evidence, evidence not naming the assertion, a cited line that does not name it or does not exist: each refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "census-sample-or-locality-required",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a src/ approval samples the author's census and history or proves locality$\" test/solve/commands.test.js",
+      "detail": "the census and history sample, or a locality proof with an existing census file, is required",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "retry-change-names-what-changed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a change adding a retry names the retry template and what changed between attempts$\" test/solve/commands.test.js",
+      "detail": "a change whose added src/ lines match the retry-loops trigger must name retry-loops with whatChanged",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "complete-src-verification-lands",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a complete src/ approval lands, and its record rides in the log$\" test/solve/commands.test.js",
+      "detail": "(e) a complete record lands and is embedded in the verification entry",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "rejection-then-complete-approval-lands",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a rejection, a newer attempt and a complete approval land$\" test/solve/commands.test.js",
+      "detail": "(g) REJECTION_STANDS unchanged: a rejection with or without a record blocks; a newer attempt makes it stale; a complete approval lands",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "non-src-quest-unchanged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a quest touching no src/ path lands on a bare approval, as before$\" test/solve/commands.test.js",
+      "detail": "(f) differential: green on origin/main d60c30921 and here",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "mechanism-classes-audited",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/closure-ledger-state.test.js",
+      "detail": "item 7: the four classes are in the ledger and resolve; a malformed class or an unresolvable commit, quest or path fails the audit; the design note and quest guidance point at the class list",
+      "testFile": "test/scripts/closure-ledger-state.test.js"
+    },
+    {
+      "id": "handoff-line-and-spent-wait",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the always-load layer tells a receiver a handoff claim is unproven and a spent wait fails$\" test/scripts/steering-diet.test.js",
+      "detail": "item 8 and R04: the AGENTS.md handoff line and the R04 spent-wait wording are present within the always-load budget",
+      "testFile": "test/scripts/steering-diet.test.js"
+    }
+  ]
+}

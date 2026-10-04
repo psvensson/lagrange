@@ -5,6 +5,7 @@ subagent runs. On the raft-snapshot-transfer-install epic (S1–S6,
 2026-07-26) the design verifier's round-1 refutations fell into the same
 four categories on all six rungs; a design note that satisfies these
 sections up front pre-empts most of that round.
+Match the defect against the [mechanism classes](../../../solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger.md#mechanism-classes) before designing.
 
 Required sections:
 
