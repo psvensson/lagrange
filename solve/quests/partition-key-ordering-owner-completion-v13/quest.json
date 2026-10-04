@@ -1,0 +1,51 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-key-ordering-owner-completion-v13",
+  "statement": "A1 split routing is stable under post-load mutation of every mutable built-in intrinsic it relies on, including Object.hasOwnProperty, String trim/toUpperCase/startsWith/includes, Array.isArray, Number.isInteger, Map constructor/prototype methods and Object.defineProperty; Map.prototype and other hostile intrinsic fixtures prove the live public routing path, while all v12 ordering, snapshot bounds, own-data append and batching semantics remain unchanged.",
+  "epic": "release-0-3-queryable-core",
+  "verificationTemplates": [
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/partition-key-ordering-owner-completion-v13.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersedes-v12-review",
+      "statement": "Supersedes v12 after independent PR #98 rejected its remaining live mutable-intrinsic dependencies and missing Map.prototype pollution fixture. Preserve v12 evidence unchanged."
+    },
+    {
+      "id": "capture-live-intrinsics",
+      "statement": "partition-split-routing captures at module initialization every mutable built-in intrinsic used for routing decisions or snapshot batch limits; post-load replacement cannot alter behavior."
+    },
+    {
+      "id": "map-prototype-fixture",
+      "statement": "A post-load Map.prototype get/set pollution witness exercises routeSplitSnapshotBatch and proves dispatch/result parity without invoking hostile replacements."
+    },
+    {
+      "id": "other-intrinsic-fixtures",
+      "statement": "Post-load replacement of Object.prototype.hasOwnProperty, String trim/toUpperCase/startsWith/includes, Array.isArray and Number.isInteger is exercised on live routing paths and cannot change outcomes."
+    },
+    {
+      "id": "preserve-v12",
+      "statement": "Preserve v12 own-data Object.defineProperty append isolation, v11 snapshot limits/batching/strict-own-data behavior, and all earlier A1 comparator/table-ID/evaluation semantics."
+    },
+    {
+      "id": "a2-boundary",
+      "statement": "Persisted key type metadata, large-integer representation, parser/bind precision and migration remain A2."
+    },
+    {
+      "id": "independent-review",
+      "statement": "Any v13 source candidate requires newer category-complete independent review of exact candidate fingerprints."
+    },
+    {
+      "id": "rs-raft-isolation",
+      "statement": "No Raft runtime, consensus transport, lifecycle, membership or formation behavior changes."
+    }
+  ]
+}
