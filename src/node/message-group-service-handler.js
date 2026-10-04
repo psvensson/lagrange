@@ -20,6 +20,7 @@ import {
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {REBALANCER_SKIP_REASON} from '../rebalancer/rebalancer-constants.js';
 import {
   EXECUTOR_OUTCOME_TYPE,
 } from '../rebalancer/executor-outcome-constants.js';
@@ -29,9 +30,6 @@ import {
   MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG,
   MESSAGE_GROUP_SERVICE_HANDLER_SUBSYSTEM,
 } from './message-group-service-handler-constants.js';
-import {
-  buildMessageGroupReplicaOptions,
-} from './message-group-replica-options.js';
 import {
   activateCreatedMessageGroupReplica,
   buildMessageGroupCreateFailureOptions,
@@ -164,146 +162,35 @@ class MessageGroupServiceHandler extends EventEmitter {
     return {...response, correlationId};
   }
 
-  async handleCreateReplica(request) {
-    const operationId =
-      request?.[ReplicaOperationField.OPERATION_ID];
-    const groupId = this.resolveGroupId(request);
-    const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
-
-    this.logger.info(
-      MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_REQUEST,
-      {operationId, groupId, replicaId, nodeId: this.nodeId},
-    );
-
-    if (!operationId || !groupId || !replicaId) {
-      this.logger.warn(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_MISSING_FIELDS,
-        {operationId, groupId, replicaId, nodeId: this.nodeId},
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.ERROR,
-        {
-          error:
-          MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.CREATE_REQUIRED_FIELDS,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-
-    const existingReplica =
-      this.getKnownLocalReplica(replicaId, groupId);
-    if (existingReplica &&
-        existingReplica.status === ReplicaStatus.ACTIVE) {
-      this.logger.info(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE,
-        {groupId, replicaId, nodeId: this.nodeId},
-      );
-      this.emitExecutorOutcome(
-        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_ACTIVE,
-        operationId,
-        WORKFLOW_STEP.ACTIVE,
-        {replicaId},
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.ALREADY_EXISTS,
-        {
-          replicaId,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-
-    if (existingReplica &&
-        existingReplica.status === ReplicaStatus.CREATING) {
-      this.logger.info(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_IN_PROGRESS,
-        {groupId, replicaId, nodeId: this.nodeId},
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.IN_PROGRESS,
-        {
-          replicaId,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-
-    if (this.inProgressOperations.has(operationId)) {
-      this.logger.info(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.OPERATION_IN_PROGRESS,
-        {operationId, nodeId: this.nodeId},
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.IN_PROGRESS,
-        {
-          operationId,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-
-    let replicaOptions;
-    try {
-      replicaOptions = this.buildReplicaOptions(groupId, replicaId, request);
-    } catch (error) {
-      this.logger.warn(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_TOPOLOGY_INVALID,
-        {
-          operationId,
-          groupId,
-          replicaId,
-          error: error.message,
-          nodeId: this.nodeId,
-        },
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.ERROR,
-        {
-          error: error.message,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-
-    this.localReplicas.set(replicaId, {
-      replicaId,
-      entityId: groupId,
-      status: ReplicaStatus.CREATING,
+  /**
+   * CREATE_REPLICA for a message group is refused (owner decision
+   * 2026-10-04, zero-Liferaft cutover): no message-group replica is created
+   * on a dispatcher's word until the fresh-identity ADD path for message
+   * groups exists. The create this answered opened a GENESIS self-founder
+   * from the services rows that elected at once; under a reissued replica
+   * name it reused a raft id whose history the group holds elsewhere. The
+   * planner mints no such operation (UnifiedRebalancer
+   * .messageGroupMembershipChangeRefusal); this answer fails a stray or
+   * pre-upgrade dispatch closed. It opens nothing - no create or start, no
+   * services row, no tracked operation - and is answered ERROR, so the
+   * coordinator fails the operation once instead of retrying it. The
+   * executor half (createReplicaAsync) is what the fresh-identity ADD reuses.
+   * @param {Object} request - The CREATE_REPLICA payload.
+   * @return {Object} The typed refusal.
+   */
+  handleCreateReplica(request) {
+    const reason =
+      REBALANCER_SKIP_REASON.MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED;
+    this.logger.warn(MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_REFUSED, {
+      operationId: request?.[ReplicaOperationField.OPERATION_ID],
+      groupId: this.resolveGroupId(request),
+      replicaId: request?.[ReplicaOperationField.REPLICA_ID],
+      nodeId: this.nodeId,
+      reason,
     });
-    this.inProgressOperations.set(operationId, {
-      type: ReplicaOperationMessageType.CREATE_REPLICA,
-      replicaId,
-      entityId: groupId,
-      startedAt: Date.now(),
-      replicaOptions,
-    });
-
-    setImmediate(() => {
-      this.createReplicaAsync({
-        operationId,
-        groupId,
-        replicaId,
-        replicaOptions,
-      }).catch((error) => {
-        this.logger.error(
-          MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED,
-          {
-            operationId,
-            replicaId,
-            error: error.message,
-            stack: error.stack,
-          },
-        );
-      });
-    });
-
     return buildReplicaOperationResponse(
-      ReplicaOperationResponseStatus.INITIATED,
-      {
-        operationId,
-        replicaId,
-        nodeId: this.nodeId,
-      },
+      ReplicaOperationResponseStatus.ERROR,
+      {error: reason, reason, nodeId: this.nodeId},
     );
   }
 
@@ -632,16 +519,6 @@ class MessageGroupServiceHandler extends EventEmitter {
     return request?.[ReplicaOperationField.ENTITY_ID] ||
       request?.[ReplicaOperationField.PARTITION_ID] ||
       null;
-  }
-
-  buildReplicaOptions(groupId, replicaId, request = {}) {
-    return buildMessageGroupReplicaOptions({
-      groupId,
-      replicaId,
-      request,
-      nodeId: this.nodeId,
-      systemTableCache: this.systemTableCache,
-    });
   }
 
   resolveActiveReplicaService(replicaId) {

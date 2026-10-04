@@ -12,7 +12,7 @@
     "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 254,
+    "placement-rebalance": 255,
     "query-sql": 164,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2197,
-  "digest": "fnv1a32-a05695d9",
+  "censusSize": 2198,
+  "digest": "fnv1a32-7982dfbb",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7492cab1",
+  "observationDigest": "fnv1a32-2fab9e68",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1570,6 +1570,7 @@
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "placement-rebalance",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "placement-rebalance",
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "placement-rebalance",
+    "test/rebalancer/message-group-membership-change-parked.test.js": "placement-rebalance",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "placement-rebalance",
     "test/rebalancer/message-group-rebalancer-wiring.test.js": "placement-rebalance",
     "test/rebalancer/move-planner-capacity-gating.test.js": "placement-rebalance",
@@ -7112,9 +7113,8 @@
     },
     "test/node/message-group-service-handler.test.js": {
       "files": [
-        "src/bootstrap/shared/message-group-transport-handler.js",
         "src/node/message-group-service-handler.js",
-        "test/test-helpers/replica-handler-identity-fixture.js"
+        "src/rebalancer/rebalancer-constants.js"
       ],
       "env": [
         "NODE_ENV"
@@ -9074,6 +9074,11 @@
       ]
     },
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/message-group-membership-change-parked.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
       ]

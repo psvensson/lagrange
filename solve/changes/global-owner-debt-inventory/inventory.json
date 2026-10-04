@@ -6,12 +6,12 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 417219,
-        "sha256": "1227e074694f0d6868f461c780277d7284934a299fac7e50a0b2929031bb66d8"
+        "sha256": "ac75b447e8dbf0c8df0c39b31b7dbc15a2d34ff69e5c2c858a3b88f2c3b20df5"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 35283,
-        "sha256": "5a1397076c37961d69361a85c5af54d1a3935445dfaef989936d3d93979ac8ec"
+        "sha256": "afd71bb3c8d283231cd8dcbea17a426ce63f8ecca423806702a30cfbbb4c3f75"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2629997,
-        "sha256": "3250858d5a51dc2abc71a03aada20193a513ec728c74c087e881a79903150239"
+        "bytes": 2630012,
+        "sha256": "80367f15bde5a5d405795d0095e9df9dbc2a4a7105c30bb6d86b1728401dcc3d"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "63b8aeb438826f4bfebf0fa2e78d1bdf385edcea85adf7f80d586334e91ae79f"
+        "sha256": "9513c6a30d024abdf3dc11c9a376a977b3266d19a54db9783732aa886c7ee9cd"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "0786cbbb37cc0888e435316c1408c6907cc3f009d8f34f023617852fe11f9515"
+        "sha256": "4ac37dfc0619adfec15a44d0337c8f7dbede0bc9f27e1e7c2863cb39f04a077a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "3c99067dd032e91f3eb360a24ba278c61dd343d32ac0fce48257298127356ff4"
+    "inputDigest": "1f7bfd7095556c134dd31dda30797ba2ec3e18ce167c1775e2b49a70728e47a5"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 417219,
-        "sha256": "1227e074694f0d6868f461c780277d7284934a299fac7e50a0b2929031bb66d8"
+        "sha256": "ac75b447e8dbf0c8df0c39b31b7dbc15a2d34ff69e5c2c858a3b88f2c3b20df5"
       },
       "declaredCount": 1765,
       "observedCount": 1765,
@@ -79,7 +79,7 @@
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 35283,
-        "sha256": "5a1397076c37961d69361a85c5af54d1a3935445dfaef989936d3d93979ac8ec"
+        "sha256": "afd71bb3c8d283231cd8dcbea17a426ce63f8ecca423806702a30cfbbb4c3f75"
       },
       "declaredCount": 153,
       "observedCount": 153,
@@ -99,8 +99,8 @@
         "source": 27,
         "test": 21
       },
-      "observedCount": 47,
-      "assignedCount": 47
+      "observedCount": 48,
+      "assignedCount": 48
     },
     "duplication": [
       {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "63b8aeb438826f4bfebf0fa2e78d1bdf385edcea85adf7f80d586334e91ae79f"
+          "sha256": "9513c6a30d024abdf3dc11c9a376a977b3266d19a54db9783732aa886c7ee9cd"
         },
         "cloneGroups": 49,
         "duplicatedLines": 1559,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "0786cbbb37cc0888e435316c1408c6907cc3f009d8f34f023617852fe11f9515"
+          "sha256": "4ac37dfc0619adfec15a44d0337c8f7dbede0bc9f27e1e7c2863cb39f04a077a"
         },
         "cloneGroups": 713,
         "duplicatedLines": 27072,
@@ -167,31 +167,31 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2629997,
-        "sha256": "3250858d5a51dc2abc71a03aada20193a513ec728c74c087e881a79903150239"
+        "bytes": 2630012,
+        "sha256": "80367f15bde5a5d405795d0095e9df9dbc2a4a7105c30bb6d86b1728401dcc3d"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "6a98bf9c2e666313b456a83feb1d50c615c45dcf32835a976d525c4f3d423c8a",
+      "sourceDigest": "77f3c2e91f90d50668e12766b00bb78f3143d05f5e055c72d901e8925257aa42",
       "moduleCount": 5020,
-      "edgeCount": 24639,
+      "edgeCount": 24637,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2518,
-    "assignedSignalCount": 2518,
-    "uniqueAssignmentCount": 2518,
-    "digest": "1706ed9123d462aa5fda3bdb89e57dc3661f6b79afd8a34ce18e15993c4a6743"
+    "sourceSignalCount": 2519,
+    "assignedSignalCount": 2519,
+    "uniqueAssignmentCount": 2519,
+    "digest": "82f2714d5e06f4ed072e71dffcccefb86e12d96dfffb5d04d692894cef024ebf"
   },
   "signalCounts": {
     "cognitive": 153,
     "complexity": 1765,
     "duplication": 514,
-    "fileSize": 47,
+    "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
@@ -239,17 +239,17 @@
         "test/rebalancer"
       ],
       "fileCount": 119,
-      "signalCount": 153,
+      "signalCount": 154,
       "complexity": 56,
       "cognitive": 0,
-      "oversizedFiles": 5,
+      "oversizedFiles": 6,
       "duplicatedLines": 12774,
       "cloneTouches": 301,
       "cycleGroups": 0,
       "lintExclusions": 15,
-      "importIn": 198,
+      "importIn": 199,
       "importOut": 696,
-      "score": 1547.6,
+      "score": 1559.6,
       "topPaths": [
         "test/rebalancer/unified-rebalancer-triggers-priority-cohort.test.js",
         "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
@@ -500,7 +500,7 @@
       "cycleGroups": 0,
       "lintExclusions": 2,
       "importIn": 8,
-      "importOut": 241,
+      "importOut": 238,
       "score": 277,
       "topPaths": [
         "test/node/replica-handler-create-topology-test-cases.js",
@@ -1254,7 +1254,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 218,
+      "importIn": 217,
       "importOut": 102,
       "score": 56,
       "topPaths": [
@@ -3614,6 +3614,80 @@
       },
       {
         "lane": "m4c",
+        "questId": "test-structure-burndown-test-rebalancer",
+        "owner": null,
+        "boundary": "test/rebalancer",
+        "exactScenarioCommand": "node scripts/run-test-structure-burndown-test-rebalancer-scenarios.js",
+        "pathscope": [
+          "scripts/run-test-structure-burndown-test-rebalancer-scenarios.js",
+          "solve/quests/test-structure-burndown-test-rebalancer.json",
+          "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
+          "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+          "test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js",
+          "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js",
+          "test/rebalancer/unified-rebalancer-closure-witness-followup-test-cases.js"
+        ],
+        "ownerAreas": [
+          "scripts/run-test-structure-burndown-test-rebalancer-scenarios.js",
+          "solve/quests",
+          "test/rebalancer"
+        ],
+        "engagementPaths": [
+          "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+          "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
+          "test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js",
+          "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js",
+          "test/rebalancer/unified-rebalancer-closure-witness-followup-test-cases.js"
+        ],
+        "engagementTargets": [
+          {
+            "path": "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+            "duplicatedLines": 754,
+            "oversizedLines": 0,
+            "lintExclusions": 1,
+            "structuralScore": 53
+          },
+          {
+            "path": "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
+            "duplicatedLines": 500,
+            "oversizedLines": 0,
+            "lintExclusions": 0,
+            "structuralScore": 50
+          },
+          {
+            "path": "test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js",
+            "duplicatedLines": 675,
+            "oversizedLines": 0,
+            "lintExclusions": 0,
+            "structuralScore": 50
+          },
+          {
+            "path": "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js",
+            "duplicatedLines": 530,
+            "oversizedLines": 0,
+            "lintExclusions": 0,
+            "structuralScore": 50
+          },
+          {
+            "path": "test/rebalancer/unified-rebalancer-closure-witness-followup-test-cases.js",
+            "duplicatedLines": 501,
+            "oversizedLines": 0,
+            "lintExclusions": 0,
+            "structuralScore": 50
+          }
+        ],
+        "baseline": {
+          "score": 1559.6,
+          "complexity": 56,
+          "cognitive": 0,
+          "oversizedFiles": 6,
+          "duplicatedLines": 12774,
+          "lintExclusions": 15
+        },
+        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
+      },
+      {
+        "lane": "m4c",
         "questId": "test-structure-burndown-test-distributed-harness",
         "owner": null,
         "boundary": "test/distributed/harness",
@@ -3683,80 +3757,6 @@
           "oversizedFiles": 10,
           "duplicatedLines": 13773,
           "lintExclusions": 10
-        },
-        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
-      },
-      {
-        "lane": "m4c",
-        "questId": "test-structure-burndown-test-rebalancer",
-        "owner": null,
-        "boundary": "test/rebalancer",
-        "exactScenarioCommand": "node scripts/run-test-structure-burndown-test-rebalancer-scenarios.js",
-        "pathscope": [
-          "scripts/run-test-structure-burndown-test-rebalancer-scenarios.js",
-          "solve/quests/test-structure-burndown-test-rebalancer.json",
-          "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
-          "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
-          "test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js",
-          "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js",
-          "test/rebalancer/unified-rebalancer-closure-witness-followup-test-cases.js"
-        ],
-        "ownerAreas": [
-          "scripts/run-test-structure-burndown-test-rebalancer-scenarios.js",
-          "solve/quests",
-          "test/rebalancer"
-        ],
-        "engagementPaths": [
-          "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
-          "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
-          "test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js",
-          "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js",
-          "test/rebalancer/unified-rebalancer-closure-witness-followup-test-cases.js"
-        ],
-        "engagementTargets": [
-          {
-            "path": "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
-            "duplicatedLines": 754,
-            "oversizedLines": 0,
-            "lintExclusions": 1,
-            "structuralScore": 53
-          },
-          {
-            "path": "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
-            "duplicatedLines": 500,
-            "oversizedLines": 0,
-            "lintExclusions": 0,
-            "structuralScore": 50
-          },
-          {
-            "path": "test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js",
-            "duplicatedLines": 675,
-            "oversizedLines": 0,
-            "lintExclusions": 0,
-            "structuralScore": 50
-          },
-          {
-            "path": "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js",
-            "duplicatedLines": 530,
-            "oversizedLines": 0,
-            "lintExclusions": 0,
-            "structuralScore": 50
-          },
-          {
-            "path": "test/rebalancer/unified-rebalancer-closure-witness-followup-test-cases.js",
-            "duplicatedLines": 501,
-            "oversizedLines": 0,
-            "lintExclusions": 0,
-            "structuralScore": 50
-          }
-        ],
-        "baseline": {
-          "score": 1547.6,
-          "complexity": 56,
-          "cognitive": 0,
-          "oversizedFiles": 5,
-          "duplicatedLines": 12774,
-          "lintExclusions": 15
         },
         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
       },
