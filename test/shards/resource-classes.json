@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2179,
+    "ordinary": 2180,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2196,
-  "digest": "fnv1a32-3240adc3",
+  "censusSize": 2197,
+  "digest": "fnv1a32-0ed4e1f7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1071,6 +1071,7 @@
     "test/node/failure-repair-intent-contract.test.js": "ordinary",
     "test/node/fault-recovery-behavior.property.test.js": "ordinary",
     "test/node/group-retirement-as-a-unit.test.js": "ordinary",
+    "test/node/group-retirement-redrive.test.js": "ordinary",
     "test/node/idempotent-operations.property.test.js": "ordinary",
     "test/node/lifecycle-readiness.test.js": "ordinary",
     "test/node/local-only-reconcile-activation-boundary.test.js": "ordinary",

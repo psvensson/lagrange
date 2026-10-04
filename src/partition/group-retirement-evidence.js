@@ -94,6 +94,7 @@ const RETIREMENT_RULE_BY_KIND = Object.freeze({
     mirrorRemoved: (metadata) => SPLIT_ACK_MIRROR_REMOVED_SATISFIED_STATUSES
       .has(sourceParticipantOf(metadata,
         SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION)),
+    participantKey: () => SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
   }),
   [GROUP_RETIREMENT_KIND.MERGE_SOURCE]: Object.freeze({
     states: Object.freeze([PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE]),
@@ -104,6 +105,7 @@ const RETIREMENT_RULE_BY_KIND = Object.freeze({
     mirrorRemoved: (metadata, partitionId) =>
       MERGE_ACK_MIRROR_REMOVED_SATISFIED_STATUSES.has(sourceParticipantOf(
         metadata, buildMergeSourceParticipantKey(partitionId))),
+    participantKey: buildMergeSourceParticipantKey,
   }),
   [GROUP_RETIREMENT_KIND.SPLIT_ABORTED_CHILD]: Object.freeze({
     states: Object.freeze([PARTITION_TRANSITION_STATE.FAILED]),
@@ -231,23 +233,57 @@ function decideGroupRetirement(evidence, {partitionId, tablesRow}) {
 }
 
 /**
- * Whether a durable transition record shows a source partition whose group
- * is ending: the record names it as a source and its persisted source
- * participant has finished mirroring (the dissolution precondition). Such a
- * source never resumes its replication worker - re-running a finished
- * source after the cutover is the orphaned-leader re-drive (run 3,
- * stale_fence) that group retirement removes.
+ * The persisted participant status of a source whose group is ending, or
+ * null. A source is ending when the record names it as a source of a
+ * promoted cutover and its persisted participant has finished mirroring
+ * (the dissolution precondition). Such a source never resumes its
+ * replication worker - re-running a finished source after the cutover is the
+ * orphaned-leader re-drive (run 3, stale_fence); its leader only re-delivers
+ * the finished acknowledgement so the workflow owner resumes the
+ * dissolution (group-retirement-redrive.js).
  * @param {string} kind - GROUP_RETIREMENT_KIND.SPLIT_SOURCE or MERGE_SOURCE.
  * @param {*} rawMetadata - The record's partition_transition_metadata.
  * @param {string} partitionId - The source partition.
- * @return {boolean}
+ * @return {Object} Frozen {retiring: false} or {retiring: true,
+ *   participantStatus}.
  */
-function isRetiringSourceRecord(kind, rawMetadata, partitionId) {
+function retiringSourceStatus(kind, rawMetadata, partitionId) {
   const metadata = parseTransitionMetadata(rawMetadata);
   const rule = RETIREMENT_RULE_BY_KIND[kind];
-  return Boolean(metadata) && rule.epochPromoted === true &&
-    rule.names(metadata, String(partitionId || '')) &&
-    rule.mirrorRemoved(metadata, String(partitionId || ''));
+  const group = String(partitionId || '');
+  const retiring = Boolean(metadata) && rule.names(metadata, group) &&
+    rule.mirrorRemoved(metadata, group);
+  return Object.freeze(retiring ? {retiring, participantStatus:
+    sourceParticipantOf(metadata, rule.participantKey(group))} : {retiring});
+}
+
+/**
+ * The control plane's authoritative read of one table's durable workflow
+ * record (its `tables` row, read from the record's owner).
+ * @param {Object} gateway - The control-plane system-table gateway.
+ * @param {string} tableId - The table.
+ * @return {Promise<Object>} {available: false} or {available: true,
+ *   tablesRow (null when there is none)}.
+ */
+async function readGroupRetirementRecord(gateway, tableId) {
+  let result = null;
+  try {
+    result = await readAuthoritativeControlPlaneRows(gateway, TABLES.TABLES,
+      RECORD_SQL, [tableId], {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      });
+  } catch (_error) {
+    return Object.freeze({available: false});
+  }
+  if (!isAuthoritativeControlPlaneRowReadSuccessful(result) ||
+      !Array.isArray(result.rows)) {
+    return Object.freeze({available: false});
+  }
+  return Object.freeze({available: true, tablesRow: result.rows.find((row) =>
+    String(row?.table_id || '') === String(tableId)) || null});
 }
 
 /**
@@ -264,31 +300,54 @@ async function verifyGroupRetirement(gateway, evidence, partitionId) {
   if (!isWellFormedEvidence(evidence)) {
     return refusal(GROUP_RETIREMENT_REFUSAL.EVIDENCE_MALFORMED);
   }
-  let result = null;
-  try {
-    result = await readAuthoritativeControlPlaneRows(gateway, TABLES.TABLES,
-      RECORD_SQL, [evidence.tableId], {
-        authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
-        workClass: PRESSURE_WORK_CLASS.CRITICAL,
-      });
-  } catch (_error) {
+  const record = await readGroupRetirementRecord(gateway, evidence.tableId);
+  if (!record.available) {
     return refusal(GROUP_RETIREMENT_REFUSAL.RECORD_UNAVAILABLE);
   }
-  if (!isAuthoritativeControlPlaneRowReadSuccessful(result) ||
-      !Array.isArray(result.rows)) {
-    return refusal(GROUP_RETIREMENT_REFUSAL.RECORD_UNAVAILABLE);
+  return decideGroupRetirement(evidence,
+    {partitionId, tablesRow: record.tablesRow});
+}
+
+/**
+ * The group-retirement evidence a replica's own durable workflow record
+ * carries for it on open or restart (the safety net for a member that missed
+ * its REMOVE): the record's own workflow id and fence, the kind whose rule
+ * retires the group, or null when no kind does. Never evidence from an
+ * absent or unreadable record.
+ * @param {Object} gateway - The control-plane system-table gateway.
+ * @param {string} tableId - The replica's table.
+ * @param {string} partitionId - The replica's partition.
+ * @return {Promise<Object|null>} Frozen evidence, or null.
+ */
+async function groupRetirementEvidenceFromRecord(gateway, tableId,
+  partitionId) {
+  if (typeof tableId !== STRING_TYPE || tableId.length === 0) {
+    return null;
   }
-  const tablesRow = result.rows.find((row) =>
-    String(row?.table_id || '') === evidence.tableId) || null;
-  return decideGroupRetirement(evidence, {partitionId, tablesRow});
+  const record = await readGroupRetirementRecord(gateway, tableId);
+  const metadata = parseTransitionMetadata(
+    record.tablesRow?.partition_transition_metadata);
+  if (!record.available || !metadata) {
+    return null;
+  }
+  const workflow = {
+    workflowId: metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID],
+    fenceToken:
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN],
+    tableId,
+  };
+  const kind = Object.values(GROUP_RETIREMENT_KIND).find((candidate) =>
+    decideGroupRetirement(buildGroupRetirementEvidence({kind: candidate,
+      workflow}), {partitionId, tablesRow: record.tablesRow}).retire === true);
+  return kind ? buildGroupRetirementEvidence({kind, workflow}) : null;
 }
 
 export {
   GROUP_RETIREMENT_KIND,
   GROUP_RETIREMENT_REASON,
+  GROUP_RETIREMENT_REFUSAL,
   buildGroupRetirementEvidence,
-  isRetiringSourceRecord,
+  groupRetirementEvidenceFromRecord,
+  retiringSourceStatus,
   verifyGroupRetirement,
 };

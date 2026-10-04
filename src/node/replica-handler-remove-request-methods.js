@@ -4,8 +4,15 @@ import {
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
-import {verifyGroupRetirement} from
-  '../partition/group-retirement-evidence.js';
+import {OperationType} from '../rebalancer/replica-operation-progress.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  GROUP_RETIREMENT_REASON,
+  groupRetirementEvidenceFromRecord,
+  verifyGroupRetirement,
+} from '../partition/group-retirement-evidence.js';
+
+const DISSOLVE_OPERATION_SEGMENT = ':dissolve:';
 import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
@@ -74,6 +81,50 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       }
       return verifyGroupRetirement(this.getControlPlaneSystemTableGateway(),
         evidence, request?.[ReplicaOperationField.PARTITION_ID]);
+    }
+    /**
+     * The safety net for a member that missed its REMOVE (owner decision
+     * 2026-10-04): a replica opened (started or restarted) for a partition
+     * whose durable workflow record retires its group is retired as a unit
+     * through the same verified path a group-retirement REMOVE takes - the
+     * evidence is the record's own (workflow id, fence), and acceptance
+     * re-reads and verifies it. An absent or unreadable record is never
+     * evidence: the replica opens as it always did, and the workflow owner's
+     * re-drive retires it. The local tables row is only a hint to skip the
+     * read when it shows no transition at all.
+     * @param {string} replicaId
+     * @return {Promise<Object|null>} The REMOVE answer, or null.
+     * @private
+     */
+    async retireIfOpenedIntoRetiredGroup(replicaId) {
+      const replica = this.getLocalReplica(replicaId);
+      const tableId = replica?.service?.tableId;
+      const hint = typeof tableId === 'string' ?
+        this.systemTableCache?.get?.(SYSTEM_TABLE_NAME.TABLES, tableId) :
+        null;
+      if (!replica?.partitionId || (hint && !hint.partition_transition_state)) {
+        return null;
+      }
+      const evidence = await groupRetirementEvidenceFromRecord(
+        this.getControlPlaneSystemTableGateway(), tableId,
+        replica.partitionId);
+      if (!evidence) {
+        return null;
+      }
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.OPENED_INTO_RETIRED_GROUP, {
+        replicaId, partitionId: replica.partitionId, kind: evidence.kind,
+        workflowId: evidence.workflowId, nodeId: this.nodeId});
+      return this.handleRemoveReplica({
+        [ReplicaOperationField.TYPE]:
+          ReplicaOperationMessageType.REMOVE_REPLICA,
+        [ReplicaOperationField.OPERATION_ID]:
+          evidence.workflowId + DISSOLVE_OPERATION_SEGMENT + replicaId,
+        [ReplicaOperationField.OPERATION_TYPE]: OperationType.REMOVE,
+        [ReplicaOperationField.PARTITION_ID]: replica.partitionId,
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+        [ReplicaOperationField.REASON]: GROUP_RETIREMENT_REASON,
+        [ReplicaOperationField.GROUP_RETIREMENT]: evidence,
+      });
     }
     /**
      * The typed answer to a REMOVE whose group-retirement evidence the

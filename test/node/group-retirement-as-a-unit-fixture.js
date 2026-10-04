@@ -33,6 +33,16 @@ import {ManagedMergeWorkflowDissolutionMethods} from
   '../../src/partition/managed-merge-workflow-dissolution-methods.js';
 import {ManagedMergeWorkflowStateMethods} from
   '../../src/partition/managed-merge-workflow-state-methods.js';
+import {ManagedSplitWorkflowExecutionGateMethods} from
+  '../../src/partition/managed-split-workflow-execution-gate-methods.js';
+import {isSplitSourceAckTransitionAllowed} from
+  '../../src/partition/split-ack-constants.js';
+import {
+  buildMergeSourceParticipantKey,
+  isMergeSourceAckTransitionAllowed,
+} from '../../src/partition/merge-ack-constants.js';
+import {DurableWorkflowCoordinator} from
+  '../../src/workflow/durable-workflow-coordinator.js';
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -104,9 +114,17 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
     tablesRows: new Map(),
     authoritativeTablesReadAvailable: true,
     dropDeliveryTo: new Set(),
-    acks: [],
+    loseOnce: new Set(),
     sources: new Map(),
     retired: new Set(),
+    scheduler: createFakeScheduler(),
+    nodeRowListeners: new Set(),
+    partitionRowDeletes: [],
+    terminals: [],
+    deliveries: [],
+  };
+  world.emitNodeRow = (row) => {
+    for (const listener of [...world.nodeRowListeners]) listener(row);
   };
   // The row-driven reconcile on every member, as PartitionService runs it.
   const memberServices = new Map(members.map((replicaId) => [replicaId, {
@@ -182,7 +200,11 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
   // The router: each REMOVE to the handler of the node its row names.
   world.deliverReplicaRemoval = async ({nodeId, message}) => {
     const replicaId = nodeId.replace(/-node$/u, '');
-    if (world.dropDeliveryTo.has(replicaId)) {
+    world.deliveries.push({replicaId,
+      fenceToken: message.groupRetirement?.fenceToken ?? null});
+    if (world.dropDeliveryTo.has(replicaId) ||
+        world.loseOnce.delete(replicaId)) {
+      world.deliveries.at(-1).lost = true;
       return null;
     }
     return world.sources.get(replicaId).handler.handleRemoveReplica(message);
@@ -199,42 +221,163 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
   return world;
 }
 
-function workflowOwnerFields(world, workflow) {
-  return {
-    logger: QUIET_LOGGER,
+// The owner-side clock: the re-drive's fallback backoff is scheduled here
+// and fires only when the test says so (never by wall time).
+function createFakeScheduler() {
+  const scheduler = {
+    armed: [],
+    fired: 0,
+    setTimeout(fn, ms) {
+      const timer = {fn, ms, cleared: false};
+      scheduler.armed.push(timer);
+      return timer;
+    },
+    clearTimeout(timer) {
+      if (timer) timer.cleared = true;
+    },
+    pending() {
+      return scheduler.armed.filter((timer) => !timer.cleared);
+    },
+    fireAll() {
+      for (const timer of scheduler.pending()) {
+        timer.cleared = true;
+        scheduler.fired += 1;
+        timer.fn();
+      }
+    },
+  };
+  return scheduler;
+}
+
+// The production re-drive. The module is imported by path so a witness of
+// it still loads (and goes red on its assertions) on a tree without it,
+// where the owner methods never consult a re-drive.
+async function createOwnerRedrive(owner, world) {
+  const module = await import('../../src/partition/group-retirement-redrive.js')
+    .catch(() => null);
+  if (!module) {
+    return {exclusive: (_key, step) => step(), report() {}, settle() {},
+      unacknowledged: () => []};
+  }
+  return module.createGroupRetirementRedrive(owner,
+    {groupRetirementScheduler: world.scheduler});
+}
+
+/**
+ * A ready heartbeat row for one node, as the nodes table carries it (the
+ * workflow owner's node-ready event).
+ * @param {string} nodeId
+ * @return {Object}
+ */
+function readyNodeRow(nodeId) {
+  return {node_id: nodeId, status: 'active', last_heartbeat: 1000,
+    ready_lease_expires_at: 2000};
+}
+
+// The durable record's participants follow the coordinator's persisted
+// participant state, as persistWorkflowTransition writes them.
+function persistParticipantToRecord(world, participant) {
+  const record = world.tablesRows.get(TABLE_ID);
+  if (!record) return;
+  const metadata = JSON.parse(record.partition_transition_metadata);
+  metadata.participants = {...(metadata.participants || {}),
+    [participant.participantKey]: JSON.parse(JSON.stringify(participant))};
+  world.setTablesRow({...record,
+    partition_transition_metadata: JSON.stringify(metadata)});
+}
+
+/**
+ * One workflow owner: the PRODUCTION dissolution/teardown methods and the
+ * PRODUCTION source-acknowledgement entry, over a real
+ * DurableWorkflowCoordinator (fence, duplicate and graph checks) whose
+ * participant persistence writes the world's durable record, and the
+ * PRODUCTION group-retirement re-drive (createGroupRetirementRedrive) on
+ * the world's node rows and owner clock.
+ * @param {Object} world
+ * @param {Object} options
+ * @param {string} options.family - 'split' | 'merge'.
+ * @param {Object} options.workflow - {workflowId, fenceToken, tableId,
+ *   partitionId, status, metadata, participants: [{participantKey,
+ *   status}]}.
+ * @return {Promise<Object>} The owner.
+ */
+async function createWorkflowOwner(world, {family, workflow}) {
+  const split = family === 'split';
+  const owner = Object.create(split ?
+    ManagedSplitWorkflowDissolutionMethods.prototype :
+    ManagedMergeWorkflowDissolutionMethods.prototype);
+  const coordinator = new DurableWorkflowCoordinator({
+    persistParticipant: async (participant) =>
+      persistParticipantToRecord(world, participant),
+    isParticipantTransitionAllowed: (_key, from, to) => (split ?
+      isSplitSourceAckTransitionAllowed :
+      isMergeSourceAckTransitionAllowed)(from, to),
     now: () => 1,
-    resolveWorkflowState: () => workflow,
+  });
+  await coordinator.registerWorkflow({...workflow, ownerKey: workflow.tableId,
+    participants: undefined});
+  for (const participant of workflow.participants || []) {
+    await coordinator.upsertParticipant(workflow.workflowId, {
+      ...participant, participantId: participant.participantKey,
+      fenceToken: workflow.fenceToken, acknowledgedAt: 1});
+  }
+  const ownerLog = [];
+  const logger = {
+    debug() {}, info() {},
+    warn: (message, fields) => ownerLog.push({level: 'warn', message, fields}),
+    error: (message, fields) =>
+      ownerLog.push({level: 'error', message, fields}),
+  };
+  Object.assign(owner, {
+    logger,
+    ownerLog,
+    now: () => 1,
+    workflowCoordinator: coordinator,
+    resolveWorkflowState: (workflowId) =>
+      coordinator.getWorkflowById(workflowId),
+    isSplitWorkflowStateUnavailable: (state) => !state?.workflowId,
+    isMergeWorkflowStateUnavailable: (state) => !state?.workflowId,
+    ensureCanonicalSplitParticipants() {},
+    ensureCanonicalMergeParticipants() {},
     listPartitionServiceRows: (partitionId) => world.cache.filter(SERVICES,
       (row) => row.partition_id === partitionId &&
         row.service_type === 'partition'),
     deliverReplicaRemoval: world.deliverReplicaRemoval,
-    deletePartitionMetadata: async () => ({success: true, affectedRows: 1}),
-    deleteSourcePartitionMetadata: async () =>
-      ({success: true, affectedRows: 1}),
-    workflowCoordinator: {
-      acknowledgeParticipant: async (workflowId, ack) => {
-        world.acks.push(ack);
-        return {result: 'accepted'};
-      },
+    deletePartitionMetadata: async (partitionId) => {
+      world.partitionRowDeletes.push(partitionId);
+      return {success: true, affectedRows: 1};
     },
-  };
-}
-
-/** @return {Object} The production split dissolution owner. */
-function splitWorkflowOwner(world, workflow) {
-  return Object.assign(
-    Object.create(ManagedSplitWorkflowDissolutionMethods.prototype),
-    workflowOwnerFields(world, workflow));
-}
-
-/** @return {Object} The production merge dissolution owner. */
-function mergeWorkflowOwner(world, workflow) {
-  return Object.assign(
-    Object.create(ManagedMergeWorkflowDissolutionMethods.prototype),
-    workflowOwnerFields(world, workflow), {
-      resolveMergeTargetPartitionId: ManagedMergeWorkflowStateMethods
-        .prototype.resolveMergeTargetPartitionId,
-    });
+    deleteSourcePartitionMetadata: async (partitionId) => {
+      world.partitionRowDeletes.push(partitionId);
+      return {success: true, affectedRows: 1};
+    },
+    // The terminal advance and clear are the workflow's own lane steps,
+    // outside this owner: the world records that they were reached.
+    advanceSplitPhase: async (workflowId, status) => {
+      coordinator.getWorkflowById(workflowId).status = status;
+    },
+    persistTerminalTransitionClear: async (state) => {
+      world.terminals.push(state.workflowId);
+    },
+    areAllMergeSourcesAtStatus: (state, statuses) =>
+      owner.resolveMergeSourcePartitionIds(state.metadata || {}).every((id) =>
+        statuses.has(String(state.participants.get(
+          buildMergeSourceParticipantKey(id))?.status || ''))),
+    resolveMergeSourcePartitionIds: ManagedMergeWorkflowStateMethods
+      .prototype.resolveMergeSourcePartitionIds,
+    resolveMergeTargetPartitionId: ManagedMergeWorkflowStateMethods
+      .prototype.resolveMergeTargetPartitionId,
+    acknowledgeSourceParticipant: ManagedSplitWorkflowExecutionGateMethods
+      .prototype.acknowledgeSourceParticipant,
+    buildRejectedSplitAckOutcome: ManagedSplitWorkflowExecutionGateMethods
+      .prototype.buildRejectedSplitAckOutcome,
+    observeNodeRows: (listener) => {
+      world.nodeRowListeners.add(listener);
+      return () => world.nodeRowListeners.delete(listener);
+    },
+  });
+  owner.groupRetirementRedrive = await createOwnerRedrive(owner, world);
+  return owner;
 }
 
 /**
@@ -268,9 +411,9 @@ async function driveUntilRemoved(world, replicaIds, rounds = 60) {
 
 export {
   TABLE_ID,
+  createWorkflowOwner,
   driveUntilRemoved,
-  mergeWorkflowOwner,
   nextTurns,
   openGroupWorld,
-  splitWorkflowOwner,
+  readyNodeRow,
 };

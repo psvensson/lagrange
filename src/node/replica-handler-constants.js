@@ -80,6 +80,9 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_CONSENSUS_EXIT_BACKSTOP_ALARM:
     'Consensus exit backstop elapsed: no committed exit event arrived for ' +
     'a retiring replica',
+  OPENED_INTO_RETIRED_GROUP:
+    'Replica opened into a group its durable workflow record retired; ' +
+    'retiring it as a unit',
   REMOVE_GROUP_RETIREMENT_REFUSED:
     'Replica removal refused: its group-retirement evidence does not match ' +
     'the durable workflow record',

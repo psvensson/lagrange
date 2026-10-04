@@ -1,12 +1,19 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   GROUP_RETIREMENT_KIND,
-  isRetiringSourceRecord,
+  retiringSourceStatus,
 } from './group-retirement-evidence.js';
+import {SPLIT_ACK_STATUS} from './split-ack-constants.js';
 import {
   findDurableMirrorTransitionForService,
   resolveSnapshotBarrierIndex,
 } from './partition-mirror-replay-cursor.js';
+
+function withRetiringSourceStatus(normalized, source) {
+  return normalized && source.retiring ?
+    {...normalized, retiringSourceStatus: source.participantStatus} :
+    normalized;
+}
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -119,13 +126,26 @@ class PartitionServiceSplitMirrorQueueMethods {
       ],
       matchesSource: (metadata) =>
         metadata.sourcePartitionId === this.partitionId,
-      // A source that already finished mirroring is ending with its group
-      // (group-retirement-evidence.js): nothing of it may resume.
-      normalizeMetadata: (rawMetadata) => isRetiringSourceRecord(
-        GROUP_RETIREMENT_KIND.SPLIT_SOURCE, rawMetadata, this.partitionId) ?
-        null : this.normalizeSplitTransitionMetadata(rawMetadata),
+      normalizeMetadata: (rawMetadata) => withRetiringSourceStatus(
+        this.normalizeSplitTransitionMetadata(rawMetadata),
+        retiringSourceStatus(GROUP_RETIREMENT_KIND.SPLIT_SOURCE, rawMetadata,
+          this.partitionId)),
     });
     if (!transition) {
+      return false;
+    }
+    // A source that already finished mirroring is ending with its group
+    // (group-retirement-evidence.js): nothing of it resumes. Its leader only
+    // re-delivers the finished acknowledgement, so the workflow owner of
+    // this node resumes an unfinished dissolution from the durable record
+    // (the DISSOLUTION_FAILED -> CLEANUP_COMPLETED edge, or a duplicate
+    // CLEANUP_COMPLETED after an owner restart mid-dissolution).
+    if (transition.metadata.retiringSourceStatus) {
+      if (transition.metadata.retiringSourceStatus !==
+          SPLIT_ACK_STATUS.SOURCE_DISSOLVED) {
+        await this.emitSplitSourceAck(transition.metadata,
+          SPLIT_ACK_STATUS.CLEANUP_COMPLETED);
+      }
       return false;
     }
     const reconstructed = this.reconstructSplitExecutionState({

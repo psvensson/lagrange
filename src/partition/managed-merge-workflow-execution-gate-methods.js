@@ -431,6 +431,8 @@ class ManagedMergeWorkflowExecutionGateMethods {
     // applied (mirrors the split owner): short-circuit every owner
     // reaction.
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
+      await this.resumeMergeDissolutionOnRedelivery(workflowId, ackResult,
+        ack);
       return this.buildRejectedMergeAckOutcome(workflowId, ackResult);
     }
 

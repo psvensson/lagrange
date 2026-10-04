@@ -1,4 +1,5 @@
 import {TABLES} from '../constants/index.js';
+import {observeSystemNodeRows} from './group-retirement-redrive.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
@@ -158,6 +159,17 @@ class ManagedSplitTopologyAdapter {
       const rowPartitionId = row?.partition_id ?? row?.partitionId;
       return String(rowPartitionId || '') === String(partitionId || '');
     });
+  }
+
+  /**
+   * Observe every nodes-row change (the workflow owner's node-ready event
+   * for a group-retirement re-drive).
+   * @param {Function} listener - (row) => void.
+   * @return {Function|null} Unsubscribe.
+   */
+  observeNodeRows(listener) {
+    return observeSystemNodeRows(getRuntimeView(this.sqlQueryEngine),
+      listener);
   }
 
   /**

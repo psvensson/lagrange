@@ -335,6 +335,8 @@ class ManagedSplitWorkflowExecutionGateMethods {
     // applied: short-circuit every owner reaction so a stale or
     // malformed ack can never drive a cutover, abort, or dissolution.
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
+      await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult,
+        ack);
       return this.buildRejectedSplitAckOutcome(workflowId, ackResult);
     }
 

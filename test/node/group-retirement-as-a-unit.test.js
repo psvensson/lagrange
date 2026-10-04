@@ -19,8 +19,9 @@
  * count; nothing sleeps.
  *
  * W1 split source, 3 voters; W2 sole-voter split source; W3 evidence
- * refusals; W4 a lost REMOVE; W5 merge source, aborted split child, aborted
- * merge target; W7 the backstop alarm. (W6, ordinary REMOVE unchanged, is
+ * refusals; W5 merge source, aborted split child, aborted merge target; W7
+ * the backstop alarm. The lost-REMOVE re-drive (W4a-W4f) is
+ * group-retirement-redrive.test.js. (W6, ordinary REMOVE unchanged, is
  * the differential recorded with the quest plus the unchanged F2 witnesses
  * replica-removal-consensus-exit.test.js and
  * replica-removal-leader-source.test.js.)
@@ -55,11 +56,10 @@ import {REPLICA_HANDLER_DEFAULT} from
   '../../src/node/replica-handler-constants.js';
 import {
   TABLE_ID,
+  createWorkflowOwner,
   driveUntilRemoved,
-  mergeWorkflowOwner,
   nextTurns,
   openGroupWorld,
-  splitWorkflowOwner,
 } from './group-retirement-as-a-unit-fixture.js';
 
 // The wire values of the decision (the module that owns them does not exist
@@ -103,9 +103,10 @@ const KIND = Object.freeze({
       participants: {[SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION]:
         {status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED}},
     },
-    drive: (world, workflow) =>
-      splitWorkflowOwner(world, workflow).dissolveSplitSourcePartition(
-        WORKFLOW_ID),
+    family: 'split',
+    participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+    finishedStatus: SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+    drive: (owner) => owner.finalizeSplitDissolutionIfReady(WORKFLOW_ID),
   }),
   'merge-source': (partitionId) => ({
     state: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
@@ -116,9 +117,11 @@ const KIND = Object.freeze({
       participants: {[buildMergeSourceParticipantKey(partitionId)]:
         {status: MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED}},
     },
-    drive: (world, workflow) =>
-      mergeWorkflowOwner(world, workflow).dissolveMergeSourcePartition(
-        WORKFLOW_ID, partitionId),
+    family: 'merge',
+    participantKey: buildMergeSourceParticipantKey(partitionId),
+    finishedStatus: MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+    drive: (owner) => owner.dissolveMergeSourcePartition(WORKFLOW_ID,
+      partitionId),
   }),
   'split-aborted-child': (partitionId) => ({
     state: PARTITION_TRANSITION_STATE.FAILED,
@@ -127,9 +130,9 @@ const KIND = Object.freeze({
       sourcePartitionId: `${partitionId}-source`,
       targetPartitionIds: [partitionId, `${partitionId}-other-child`],
     },
-    drive: (world, workflow) =>
-      splitWorkflowOwner(world, workflow).teardownAbortedSplitChildren(
-        WORKFLOW_ID, workflow),
+    family: 'split',
+    drive: (owner, workflow) =>
+      owner.teardownAbortedSplitChildren(WORKFLOW_ID, workflow),
   }),
   'merge-aborted-target': (partitionId) => ({
     state: PARTITION_TRANSITION_STATE.FAILED,
@@ -138,21 +141,24 @@ const KIND = Object.freeze({
       sourcePartitionIds: [`${partitionId}-a`, `${partitionId}-b`],
       targetPartitionIds: [partitionId],
     },
-    drive: (world, workflow) =>
-      mergeWorkflowOwner(world, workflow).teardownAbortedMergeTarget(
-        WORKFLOW_ID, workflow),
+    family: 'merge',
+    drive: (owner, workflow) =>
+      owner.teardownAbortedMergeTarget(WORKFLOW_ID, workflow),
   }),
 });
 
 /**
- * Install the durable record of one kind and build its workflow snapshot.
- * @return {Object} {workflow, record}.
+ * Install the durable record of one kind and open its workflow owner.
+ * @return {Promise<Object>} {workflow, record, owner, drive}.
  */
-function installRecord(world, kind, overrides = {}) {
+async function installRecord(world, kind, overrides = {}) {
   const shape = KIND[kind](world.partitionId);
+  const fence = overrides.fence ?? FENCE;
+  const participantStatus = overrides.participantStatus ??
+    shape.finishedStatus;
   const metadata = {
     workflowId: WORKFLOW_ID,
-    workflowFenceToken: FENCE,
+    workflowFenceToken: fence,
     targetPartitionVersion: TARGET_EPOCH,
     ...shape.metadata,
     ...(overrides.metadata || {}),
@@ -164,15 +170,42 @@ function installRecord(world, kind, overrides = {}) {
     partition_transition_metadata: JSON.stringify(metadata),
   };
   world.setTablesRow(record);
+  if (shape.participantKey) {
+    metadata.participants = {[shape.participantKey]: {status:
+      participantStatus}};
+    record.partition_transition_metadata = JSON.stringify(metadata);
+  }
+  world.setTablesRow(record);
+  return openOwner(world, kind, {fence, metadata, record, participantStatus,
+    status: record.partition_transition_state});
+}
+
+/**
+ * Open one workflow owner of a kind against the installed record (a new
+ * owner process: its own coordinator state recovered from the record).
+ * @return {Promise<Object>} {workflow, record, owner, drive}.
+ */
+async function openOwner(world, kind, {fence, metadata, record, status,
+  participantStatus}) {
+  const shape = KIND[kind](world.partitionId);
   const workflow = {
     workflowId: WORKFLOW_ID,
-    fenceToken: FENCE,
+    fenceToken: fence,
     tableId: TABLE_ID,
     partitionId: world.partitionId,
+    status,
     metadata,
+    participants: shape.participantKey ? [{
+      participantKey: shape.participantKey,
+      status: participantStatus ?? shape.finishedStatus,
+    }] : [],
   };
-  return {workflow, record, drive: () => shape.drive(world, workflow)};
+  const owner = await createWorkflowOwner(world,
+    {family: shape.family, workflow});
+  return {workflow, record, owner,
+    drive: () => shape.drive(owner, workflow)};
 }
+
 
 /**
  * The common oracle of a group retired as a unit.
@@ -210,15 +243,19 @@ for (const [kind, voters] of [
       const world = openGroupWorld(t, {partitionId: `retire-${kind}`,
         voters});
       t.equal(world.elected, true, 'setup: the group has a leader');
-      const {drive} = installRecord(world, kind);
+      const {drive, owner} = await installRecord(world, kind);
       await drive();
       t.equal(await driveUntilRemoved(world, world.members), true,
         'every member completed its removal');
       assertRetiredAsUnit(t, world, kind);
+      t.equal(world.partitionRowDeletes.filter((id) =>
+        id === world.partitionId).length, 1,
+      'the group\'s partition row is deleted once, after every member');
+      t.same(owner.groupRetirementRedrive.unacknowledged(), [],
+        'nothing is left unacknowledged');
       if (kind === 'split-source') {
-        t.same(world.acks.map((ack) => ack.status),
-          [SPLIT_ACK_STATUS.SOURCE_DISSOLVED],
-          'the dissolution is acknowledged SOURCE_DISSOLVED');
+        t.same(world.terminals, [WORKFLOW_ID],
+          'the split reached its terminal (SOURCE_DISSOLVED)');
       }
     });
 }
@@ -227,7 +264,7 @@ test('W2 the sole-voter split source retires at once, nothing proposed',
   async (t) => {
     const world = openGroupWorld(t, {partitionId: 'retire-sole', voters: 1});
     t.equal(world.elected, true, 'setup: the sole voter leads');
-    const {drive} = installRecord(world, 'split-source');
+    const {drive} = await installRecord(world, 'split-source');
     await drive();
     t.equal(await driveUntilRemoved(world, world.members, 5), true,
       'the sole voter completed its removal within five rounds');
@@ -270,9 +307,7 @@ const W3_CASES = Object.freeze([
   {name: 'cutover epoch never promoted', refusal: REFUSAL.EPOCH_MISMATCH,
     record: {activeEpoch: ACTIVE_EPOCH}},
   {name: 'source still mirroring', refusal: REFUSAL.SOURCE_MIRROR_ACTIVE,
-    record: {metadata: {participants: {
-      [SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION]:
-        {status: SPLIT_ACK_STATUS.CATCHUP_READY}}}}},
+    record: {participantStatus: SPLIT_ACK_STATUS.CATCHUP_READY}},
   {name: 'forged reason without a record', refusal: REFUSAL.RECORD_ABSENT,
     noRecord: true},
   {name: '"row gone" only (transition cleared, no workflow record)',
@@ -298,7 +333,7 @@ for (const testCase of W3_CASES) {
     const replicaId = world.members[0];
     const source = world.sources.get(replicaId);
     const kind = testCase.kind ?? 'split-source';
-    installRecord(world, kind, testCase.record || {});
+    await installRecord(world, kind, testCase.record || {});
     if (testCase.noRecord) world.tablesRows.clear();
     if (testCase.clearedRecord) {
       world.setTablesRow({table_id: TABLE_ID,
@@ -325,39 +360,6 @@ for (const testCase of W3_CASES) {
     t.same(world.exitsOf(replicaId), [], 'it never left consensus');
   });
 }
-
-test('W4 a lost REMOVE: the replica keeps running unarmed until the ' +
-  'workflow re-dispatches, then retires as a unit', async (t) => {
-  const world = openGroupWorld(t, {partitionId: 'retire-lost', voters: 3});
-  t.equal(world.elected, true, 'setup: the group has a leader');
-  const [first, lost, last] = world.members;
-  const {drive} = installRecord(world, 'split-source');
-  world.dropDeliveryTo.add(lost);
-  await drive();
-  await driveUntilRemoved(world, [first]);
-  t.same(world.acks.map((ack) => ack.status),
-    [SPLIT_ACK_STATUS.DISSOLUTION_FAILED],
-    'the lost delivery fails the dissolution (re-attemptable)');
-  t.same(world.exitsOf(first), [GROUP_RETIRED],
-    'the member that received its REMOVE retired as group-retired');
-  for (const replicaId of [lost, last]) {
-    t.equal(world.lifecycleOf(replicaId),
-      world.lifecycleAtSetup.get(replicaId),
-      `${replicaId} (no REMOVE received) is not retired`);
-    t.equal(world.cluster.node(replicaId).readStatus().outcome,
-      RAFT_OPERATION_OUTCOME.CORE_OK, `${replicaId}'s port still answers`);
-  }
-  t.same(world.consensusWaits, [], 'no consensus-exit wait was armed');
-  // The workflow's re-attempt of a DISSOLUTION_FAILED dissolution.
-  world.dropDeliveryTo.clear();
-  await drive();
-  t.equal(await driveUntilRemoved(world, world.members), true,
-    'after the re-dispatch every member completed its removal');
-  assertRetiredAsUnit(t, world, 'lost REMOVE');
-  t.same(world.acks.map((ack) => ack.status),
-    [SPLIT_ACK_STATUS.DISSOLUTION_FAILED, SPLIT_ACK_STATUS.SOURCE_DISSOLVED],
-    'the re-attempt dissolved the source');
-});
 
 test('W7 the consensus-exit backstop is an ERROR alarm', async (t) => {
   mock.timers.enable({apis: ['setTimeout']});

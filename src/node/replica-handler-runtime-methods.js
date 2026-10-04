@@ -393,6 +393,11 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         tableName: replicaInfo.tableName,
         nodeId: this.nodeId,
       });
+      // A member that missed its REMOVE must not linger in a retired group.
+      this.registerOperationTask(this.retireIfOpenedIntoRetiredGroup(replicaId)
+        .catch((error) => this.logger.warn(
+          REPLICA_HANDLER_LOG_MSG.OPENED_INTO_RETIRED_GROUP,
+          {replicaId, error: error?.message || String(error)})));
     }
     /**
      * Swap a tracked replica's LIVE service instance (snapshot-install

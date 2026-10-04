@@ -1,3 +1,5 @@
+import {createGroupRetirementRedrive} from
+  './group-retirement-redrive.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
@@ -180,6 +182,8 @@ class ManagedMergeWorkflow {
       options.workflowLeaseMs > 0 ?
       Math.floor(options.workflowLeaseMs) :
       DEFAULT_WORKFLOW_LEASE_MS;
+    this.groupRetirementRedrive =
+      createGroupRetirementRedrive(this, options);
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         persistWorkflow: async (workflow) =>

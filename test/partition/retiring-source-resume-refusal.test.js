@@ -7,8 +7,12 @@
 // leader before its own REMOVE arrives must not re-run the snapshot,
 // backfill and catch-up into children that are already authoritative - the
 // orphaned-leader re-drive of formation run 3 (stale_fence, "Partition split
-// transition metadata is required"). A source still mirroring resumes as
-// before (the control).
+// transition metadata is required"). Its leader only re-delivers the
+// finished acknowledgement (CLEANUP_COMPLETED / SOURCE_MIRROR_REMOVED) with
+// the record's fence, so the workflow owner of this node resumes an
+// unfinished dissolution (owner restart, ownership change); a dissolved
+// source re-delivers nothing. A source still mirroring resumes as before
+// (the control).
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -47,6 +51,7 @@ function transitionRow(state, metadata) {
 
 function resumeContext(row, base = {}) {
   const workerRuns = [];
+  const redelivered = [];
   const context = Object.assign(base, {
     partitionId: PARTITION_ID,
     role: RAFT_ROLE.LEADER,
@@ -62,8 +67,16 @@ function resumeContext(row, base = {}) {
       workerRuns.push('merge');
       return Promise.resolve();
     },
+    emitSplitSourceAck(metadata, status) {
+      redelivered.push({status, fence: metadata.workflowFenceToken});
+      return Promise.resolve({});
+    },
+    emitMergeSourceAck(metadata, status) {
+      redelivered.push({status, fence: metadata.workflowFenceToken});
+      return Promise.resolve({});
+    },
   });
-  return {context, workerRuns};
+  return {context, workerRuns, redelivered};
 }
 
 const splitRow = (status) => transitionRow(
@@ -74,23 +87,28 @@ const splitRow = (status) => transitionRow(
       [SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION]: {status}},
   });
 
-for (const status of [
-  SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
-  SPLIT_ACK_STATUS.DISSOLUTION_FAILED,
-  SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
+for (const [status, redelivers] of [
+  [SPLIT_ACK_STATUS.CLEANUP_COMPLETED, true],
+  [SPLIT_ACK_STATUS.DISSOLUTION_FAILED, true],
+  [SPLIT_ACK_STATUS.SOURCE_DISSOLVED, false],
 ]) {
   test(`a split source whose participant reads ${status} never resumes`,
     async () => {
       const proto = PartitionService.prototype;
-      const {context, workerRuns} = resumeContext(splitRow(status), {
-        normalizeSplitTransitionMetadata:
+      const {context, workerRuns, redelivered} = resumeContext(
+        splitRow(status), {
+          normalizeSplitTransitionMetadata:
           proto.normalizeSplitTransitionMetadata,
-      });
+        });
       const resumed = await proto.startOrResumeSplitReplicationFromDurable
         .call(context);
       assert.equal(resumed, false, 'no worker is resumed');
       assert.equal(context.splitReplication, null, 'nothing reconstructed');
       assert.deepEqual(workerRuns, [], 'the replication worker never runs');
+      assert.deepEqual(redelivered, redelivers ?
+        [{status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED, fence: 1}] : [],
+      'only the finished acknowledgement is re-delivered, with the ' +
+        'record\'s fence (none once dissolved)');
     });
 }
 
@@ -127,7 +145,7 @@ for (const status of [
           [FIELD.PARTICIPANTS]: {
             [buildMergeSourceParticipantKey(PARTITION_ID)]: {status}},
         });
-      const {context, workerRuns} = resumeContext(row, {
+      const {context, workerRuns, redelivered} = resumeContext(row, {
         normalizeMergeTransitionMetadata:
           proto.normalizeMergeTransitionMetadata,
       });
@@ -136,5 +154,8 @@ for (const status of [
       assert.equal(resumed, false, 'no worker is resumed');
       assert.equal(context.mergeReplication, null, 'nothing reconstructed');
       assert.deepEqual(workerRuns, [], 'the replication worker never runs');
+      assert.deepEqual(redelivered,
+        [{status: MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED, fence: 1}],
+        'only mirror-removed is re-delivered, with the record\'s fence');
     });
 }
