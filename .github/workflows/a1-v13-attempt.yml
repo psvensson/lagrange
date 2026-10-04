@@ -1,4 +1,5 @@
 name: a1-v13-attempt
+# retry after isolated Map witness
 on:
   push:
     branches:
@@ -58,7 +59,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/solve.js attempt --id partition-key-ordering-owner-completion-v13 --paths src/partition/partition-split-routing.js,test/partition/partition-split-routing.test.js --text "A1-v13 captures remaining mutable split-routing intrinsics and adds live hostile Map.prototype/Object/String/Array/Number witnesses; closure, focused routing tests and static guards green."
+          candidate_hashes="$(sha256sum \
+            src/partition/partition-split-routing.js \
+            test/partition/partition-split-routing.test.js | tr '\n' ';')"
+          node scripts/solve.js note \
+            --id partition-key-ordering-owner-completion-v13 \
+            --finding "A1-v13 GitHub Actions run ${GITHUB_RUN_ID}: closure, focused routing tests and static guards green. Candidate sha256: ${candidate_hashes}" \
+            --kind evidence \
+            --evidence "github-actions:${GITHUB_RUN_ID}"
+          node scripts/solve.js note \
+            --id partition-key-ordering-owner-completion-v13 \
+            --attempt "A1-v13 captures remaining mutable split-routing intrinsics and adds isolated live hostile Map.prototype/Object/String/Array/Number witnesses; closure, focused routing tests and static guards green in GitHub Actions run ${GITHUB_RUN_ID}."
           git restore \
             src/partition/partition-constants.js \
             src/utils/strict-own-data.js \
