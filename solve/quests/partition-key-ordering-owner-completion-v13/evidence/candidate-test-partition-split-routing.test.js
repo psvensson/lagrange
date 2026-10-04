@@ -10,6 +10,9 @@ import {
   resolveSplitSnapshotBatchRowLimit,
   routeSplitSnapshotBatch,
 } from '../../src/partition/partition-split-routing.js';
+import {
+  PARTITION_SERVICE_OPERATION,
+} from '../../src/partition/partition-service-constants.js';
 
 const TABLE_NAME = 'users';
 const PRIMARY_KEY_COLUMN = 'id';
@@ -679,6 +682,7 @@ test('split routing captures mutable intrinsics after module load', async (t) =>
     throw new Error('post-load mutable intrinsic executed');
   };
   const dispatches = [];
+  let resolvedRowLimit = null;
   try {
     Object.prototype.hasOwnProperty = hostile;
     String.prototype.trim = hostile;
@@ -702,10 +706,8 @@ test('split routing captures mutable intrinsics after module load', async (t) =>
         },
       },
     );
-    t.equal(
-      resolveSplitSnapshotBatchRowLimit(['id'], SNAPSHOT_MAX_ROWS_PER_CALL),
-      SNAPSHOT_MAX_ROWS_PER_CALL,
-    );
+    resolvedRowLimit =
+      resolveSplitSnapshotBatchRowLimit(['id'], SNAPSHOT_MAX_ROWS_PER_CALL);
   } finally {
     Object.prototype.hasOwnProperty = originals.hasOwnProperty;
     String.prototype.trim = originals.trim;
@@ -716,6 +718,7 @@ test('split routing captures mutable intrinsics after module load', async (t) =>
     Number.isInteger = originals.numberIsInteger;
   }
   t.equal(hostileCalls, 0, 'post-load intrinsic replacements are never called');
+  t.equal(resolvedRowLimit, SNAPSHOT_MAX_ROWS_PER_CALL);
   t.same(dispatches, [
     {partitionId: LEFT_PARTITION_ID, params: ['a']},
   ]);
