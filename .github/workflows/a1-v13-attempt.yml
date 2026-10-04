@@ -1,0 +1,56 @@
+name: a1-v13-attempt
+on:
+  push:
+    branches:
+      - quest/0-3-queryable-core-foundation
+    paths:
+      - .github/workflows/a1-v13-attempt.yml
+permissions:
+  contents: write
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Verify sealed v13 predicate
+        run: |
+          node scripts/solve.js probe --id partition-key-ordering-owner-completion-v13 || true
+      - name: Install exact v13 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp solve/quests/partition-key-ordering-owner-completion-v13/evidence/candidate-src-partition-split-routing.js src/partition/partition-split-routing.js
+          cp solve/quests/partition-key-ordering-owner-completion-v13/evidence/candidate-test-partition-split-routing.test.js test/partition/partition-split-routing.test.js
+      - name: Prove v13 closure
+        run: node scripts/checks/partition-key-ordering-owner-completion-v13.js
+      - name: Focused routing tests
+        run: npx tap --no-check-coverage --timeout=120 test/partition/partition-split-routing.test.js
+      - name: Candidate static guards
+        run: |
+          node node_modules/eslint/bin/eslint.js --no-warn-ignored src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
+          node scripts/check-guideline-literals.js src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
+          node scripts/check-guideline-decision-boundaries.js src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
+          node scripts/check-guideline-ambient-intrinsics.js src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
+          node scripts/check-guideline-silent-catch.js src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
+      - name: Record content-bound attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/solve.js attempt --id partition-key-ordering-owner-completion-v13 --paths src/partition/partition-split-routing.js,test/partition/partition-split-routing.test.js --text "A1-v13 captures remaining mutable split-routing intrinsics and adds live hostile Map.prototype/Object/String/Array/Number witnesses; closure, focused routing tests and static guards green."
+          git restore src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add solve/quests/partition-key-ordering-owner-completion-v13/log.ndjson
+          git rm .github/workflows/a1-v13-attempt.yml
+          git commit -m "0.3 A1: record v13 intrinsic-stability attempt"
+          git push origin HEAD:quest/0-3-queryable-core-foundation
