@@ -3,7 +3,9 @@
 // proving the core's `step` was never entered for the refused envelope (the
 // actual-core-entry observer counts no step while only the recipient is
 // driven), each recorded against its sender with its typed reason, and the
-// recipient still serving afterwards.
+// recipient still serving afterwards. Plus the structured ERROR lines of a
+// core trap and of the runtime replacement it causes, which before this
+// change reached only the panic hook's raw stderr.
 //
 //   P2  an append carrying an entry at or below the recipient's commit
 //       while its own index is not below it;
@@ -16,10 +18,12 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {
+  capturingErrors,
   envelopeTo,
   formedCluster,
   peerIdsOf,
 } from './identity-reuse-harness.js';
+import {coreTrappingAppend} from './core-trap-envelope.js';
 import {durableLog} from './committed-membership-oracles.js';
 import {
   RAFT_OPERATION,
@@ -33,6 +37,7 @@ import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
 import {
   RAFT_RS_LOCAL_LOG_REFUSAL,
+  RUNTIME_FAULT_REPORT,
   RUNTIME_PHASE,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from
@@ -191,6 +196,41 @@ test('W5 P6: a MsgTimeoutNow to a replica below its participation gate is ' +
     const after = cluster.node('p6-t').readStatus();
     assert.equal(after.term, gated.term, 'the gated replica campaigned');
     assert.notEqual(after.role, 'candidate');
+  } finally {
+    cluster.dispose();
+  }
+});
+
+test('a core trap and the runtime replacement it causes each write one ' +
+  'ERROR line naming the group, the peer and the reason', async () => {
+  const cluster = formedCluster('trap-log', ['tl-a', 'tl-b', 'tl-c'],
+    FORMED_ENTRIES);
+  try {
+    const ids = peerIdsOf(cluster);
+    const victim = cluster.node('tl-b').readStatus();
+    let trapped = null;
+    const errors = await capturingErrors(async () => {
+      await cluster.node('tl-b').step(coreTrappingAppend({
+        dbFile: cluster.dbFileOf('tl-b'), groupId: cluster.partitionId,
+        status: victim, from: ids['tl-a'], term: String(victim.term)}));
+      trapped = await cluster.node('tl-b').tick();
+      cluster.node('tl-a').readStatus();
+    });
+    assert.equal(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL);
+    const traps = errors.filter(({context}) =>
+      context.report === RUNTIME_FAULT_REPORT.CORE_TRAPPED);
+    assert.equal(traps.length, 1, JSON.stringify(errors));
+    assert.equal(traps[0].context.groupId, cluster.partitionId);
+    assert.equal(traps[0].context.replicaIdentity, 'tl-b');
+    assert.equal(traps[0].context.operation, STEP);
+    assert.equal(traps[0].context.from, ids['tl-a']);
+    assert.equal(traps[0].context.msgType, RAFT_RS_MESSAGE_TYPE.APPEND);
+    assert.equal(typeof traps[0].context.reason, 'string');
+    const replaced = errors.filter(({context}) =>
+      context.report === RUNTIME_FAULT_REPORT.RUNTIME_REPLACED);
+    assert.equal(replaced.length, 1, JSON.stringify(errors));
+    assert.equal(replaced[0].context.groupsRestored, 3);
+    assert.equal(replaced[0].context.failure, null);
   } finally {
     cluster.dispose();
   }

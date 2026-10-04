@@ -1,7 +1,8 @@
-// What the runtime owner does with a delivered envelope the local-log guard
-// refused: recorded against its sender, reported once per sender and reason,
-// and - when it proves this replica's own history lost - the group held for
-// a reseed. The structured log line is written by the port's reporter,
+// What the runtime owner does with a fault it observes: a delivered envelope
+// the local-log guard refused (recorded against its sender, reported once
+// per sender and reason, and - when it proves this replica's own history
+// lost - the group held for a reseed), a core trap, and a runtime
+// replacement. The structured log line is written by the port's reporter,
 // injected on the group, so the runtime owner's import closure stays free of
 // logging (restore-path fence).
 
@@ -17,6 +18,7 @@ import {
 } from './raft-rs-runtime-owner-constants.js';
 
 const NOT_ADMITTED = Object.freeze({closed: () => null, exceeded: () => null});
+const STEP = 'step';
 
 function report(group, kind, fields) {
   group.reportFault?.(kind, deepFreeze({
@@ -94,4 +96,33 @@ function refuseInboundStep(group, envelope, runtimeGeneration) {
   return refused.holds ? enterReseedHold(group, outcome) : outcome;
 }
 
-export {refuseInboundStep};
+/**
+ * A core call trapped the shared instance: one ERROR line naming the group,
+ * the operation and, for a step, the inbound message that reached it.
+ * @param {Object} group - The group whose operation trapped.
+ * @param {string} operation - The core call.
+ * @param {Array} args - Its arguments (a step's first is the message).
+ * @param {string} reason - The trap's message.
+ * @param {number} runtimeGeneration - The runtime that trapped.
+ */
+function reportCoreTrap(group, operation, args, reason, runtimeGeneration) {
+  report(group, RUNTIME_FAULT_REPORT.CORE_TRAPPED, {operation, reason,
+    runtimeGeneration, ...(operation === STEP ? messageFields(args[0]) : {})});
+}
+
+/**
+ * The shared runtime was replaced: one ERROR line naming the group whose
+ * operation found it unhealthy, how many groups were restored, and the
+ * restoration that failed, if one did.
+ * @param {Object} trigger - The group whose operation replaced it.
+ * @param {Object} fields - {runtimeGeneration, groupsRestored, failure}.
+ */
+function reportRuntimeReplaced(trigger, fields) {
+  report(trigger, RUNTIME_FAULT_REPORT.RUNTIME_REPLACED, fields);
+}
+
+export {
+  refuseInboundStep,
+  reportCoreTrap,
+  reportRuntimeReplaced,
+};

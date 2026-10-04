@@ -177,9 +177,11 @@ const RAFT_RS_LOCAL_LOG_REFUSAL = Object.freeze({
   APPEND_RESPONSE_BEYOND_LOCAL_LOG: 'append-response-beyond-local-log',
 });
 // What the runtime reports to its port's structured log: a refused delivery
-// (first per sender and reason).
+// (first per sender and reason), a core trap, and a runtime replacement.
 const RUNTIME_FAULT_REPORT = Object.freeze({
   INBOUND_STEP_REFUSED: 'inbound-step-refused',
+  CORE_TRAPPED: 'core-trapped',
+  RUNTIME_REPLACED: 'runtime-replaced',
 });
 // A Ready already taken holds the core's pending Ready, so its remaining
 // durable writes cannot be refused after an asynchronous send: they wait for

@@ -30,7 +30,11 @@ import {
   openedLastIndex,
   persistedLastIndexAfter,
 } from './raft-rs-local-log-guard.js';
-import {refuseInboundStep} from './raft-rs-runtime-faults.js';
+import {
+  refuseInboundStep,
+  reportCoreTrap,
+  reportRuntimeReplaced,
+} from './raft-rs-runtime-faults.js';
 import {
   decideLeadershipTransfer,
   droppedByLeadershipTransfer,
@@ -400,6 +404,8 @@ function invokeCore(group, operation, ...args) {
       };
     }
     runtimeHealth = UNHEALTHY;
+    reportCoreTrap(group, operation, args, String(error?.message || error),
+      runtimeGeneration);
     return {
       ok: false,
       result: outcome(CORE_FATAL, {
@@ -571,11 +577,15 @@ function replaceRuntime(trigger) {
     }
     const restored = openGroupInCurrentRuntime(group, opening);
     if (restored.outcome !== CORE_OK) {
+      reportRuntimeReplaced(trigger, {runtimeGeneration,
+        groupsRestored: restoredGroups.length, failure: restored.reason});
       return restored;
     }
     group.recovery = null;
     restoredGroups.push(group);
   }
+  reportRuntimeReplaced(trigger, {runtimeGeneration,
+    groupsRestored: restoredGroups.length, failure: null});
   const expectedGeneration = runtimeGeneration;
   let triggerResumed = outcome(CORE_OK, {
     reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
