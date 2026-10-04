@@ -1,3 +1,4 @@
+import {spawnSync} from 'node:child_process';
 import {test} from '../../src/test-helpers/tap.js';
 import Database from 'better-sqlite3';
 import {
@@ -671,8 +672,6 @@ test('split routing captures mutable intrinsics after module load', async (t) =>
     includes: String.prototype.includes,
     arrayIsArray: Array.isArray,
     numberIsInteger: Number.isInteger,
-    mapGet: Map.prototype.get,
-    mapSet: Map.prototype.set,
   };
   let hostileCalls = 0;
   const hostile = () => {
@@ -688,8 +687,6 @@ test('split routing captures mutable intrinsics after module load', async (t) =>
     String.prototype.includes = hostile;
     Array.isArray = hostile;
     Number.isInteger = hostile;
-    Map.prototype.get = hostile;
-    Map.prototype.set = hostile;
 
     await routeSplitSnapshotBatch(
       [{id: 'a'}],
@@ -717,14 +714,80 @@ test('split routing captures mutable intrinsics after module load', async (t) =>
     String.prototype.includes = originals.includes;
     Array.isArray = originals.arrayIsArray;
     Number.isInteger = originals.numberIsInteger;
-    Map.prototype.get = originals.mapGet;
-    Map.prototype.set = originals.mapSet;
   }
   t.equal(hostileCalls, 0, 'post-load intrinsic replacements are never called');
   t.same(dispatches, [
     {partitionId: LEFT_PARTITION_ID, params: ['a']},
   ]);
 });
+
+test('split snapshot batching captures Map prototype methods in an isolated runtime',
+  (t) => {
+    const routingModuleUrl =
+      new URL('../../src/partition/partition-split-routing.js', import.meta.url).href;
+    const constantsModuleUrl =
+      new URL('../../src/partition/partition-constants.js', import.meta.url).href;
+    const childSource = `
+      import {
+        routeSplitSnapshotBatch,
+      } from ${JSON.stringify(routingModuleUrl)};
+      import {
+        PARTITION_TRANSITION_METADATA_FIELD,
+      } from ${JSON.stringify(constantsModuleUrl)};
+
+      const originalGet = Map.prototype.get;
+      const originalSet = Map.prototype.set;
+      let hostileCalls = 0;
+      const hostile = () => {
+        hostileCalls += 1;
+        throw new Error('post-load Map.prototype intrinsic executed');
+      };
+      const dispatches = [];
+      try {
+        Map.prototype.get = hostile;
+        Map.prototype.set = hostile;
+        await routeSplitSnapshotBatch(
+          [{id: 'a'}],
+          ['id'],
+          {
+            primaryKeyColumn: 'id',
+            splitKey: 'm',
+            targetPartitionIds: ['users-left', 'users-right'],
+            [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 4,
+          },
+          {
+            tableName: 'users',
+            queryExecutor: {
+              async executeOnPartition(partitionId, _sql, params) {
+                dispatches.push({partitionId, params});
+                return {success: true};
+              },
+            },
+          },
+        );
+      } finally {
+        Map.prototype.get = originalGet;
+        Map.prototype.set = originalSet;
+      }
+      process.stdout.write(JSON.stringify({hostileCalls, dispatches}));
+    `;
+    const child = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', childSource],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+      },
+    );
+    t.equal(child.status, 0, child.stderr || 'isolated Map witness exits cleanly');
+    const result = JSON.parse(child.stdout);
+    t.equal(result.hostileCalls, 0,
+      'post-load Map.prototype replacements are never called by routing');
+    t.same(result.dispatches, [
+      {partitionId: LEFT_PARTITION_ID, params: ['a']},
+    ]);
+    t.end();
+  });
 
 test('split replay captures SQL string and own-property intrinsics', async (t) => {
   const originals = {
