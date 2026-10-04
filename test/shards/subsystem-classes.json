@@ -28,7 +28,7 @@
   "censusSize": 2285,
   "digest": "fnv1a32-72594200",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2b11ef3d",
+  "observationDigest": "fnv1a32-c6b5a713",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11226,6 +11226,7 @@
     },
     "test/scripts/impact-proof-cone.test.js": {
       "files": [
+        "CHANGELOG.md",
         "README.md",
         "dependency-cruiser.config.cjs",
         "package-lock.json",
@@ -11244,6 +11245,8 @@
         "scripts/inventory-ordinal-segments.js",
         "scripts/select-proof-cone.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "src/public-api.js",
         "test/shards/impact-contracts.json",
         "test/shards/impact-coverage.json",
@@ -11251,6 +11254,7 @@
         "test/shards/primary-classes.json"
       ],
       "directories": [
+        "data/releases",
         "scripts",
         "scripts/checks",
         "solve",
@@ -11491,13 +11495,16 @@
         "scripts/checks/formation-health.js",
         "scripts/checks/git-process-environment.js",
         "scripts/checks/push-gate-corpus-worktree.js",
-        "scripts/checks/wait-for-thermal-headroom.js"
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/solve/guards.js"
       ],
       "env": [
         "LAGRANGE_GATE_PUSHED_REF",
         "LAGRANGE_WORKSPACE_INJECTIONS",
+        "PRE_PUSH_FLOW_ADMISSION_SAYS",
         "PRE_PUSH_FLOW_CALLS",
         "PRE_PUSH_FLOW_GH_SAYS",
+        "PRE_PUSH_FLOW_STATUS_ADMISSION",
         "PRE_PUSH_FLOW_STATUS_TREND",
         "PRE_PUSH_FLOW_TREND_SAYS"
       ]
@@ -11767,6 +11774,8 @@
     "test/scripts/rule-set-revision.test.js": {
       "files": [
         "AGENTS.md",
+        "CHANGELOG.md",
+        "README.md",
         "dependency-cruiser.config.cjs",
         "docs/specs/decision-tables/steering-rule-authority-split.json",
         "docs/steering/router.md",
@@ -11789,12 +11798,15 @@
         "scripts/solve.js",
         "scripts/solve/guards.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "src/partition/partition-service.js",
         "test/shards/impact-contracts.json",
         "test/shards/primary-classes.json"
       ],
       "directories": [
         "architecture",
+        "data/releases",
         "docs",
         "docs/steering",
         "docs/steering/generated",
@@ -12460,6 +12472,7 @@
     "test/solve/commands.test.js": {
       "files": [
         ".githooks/pre-commit",
+        "CHANGELOG.md",
         "README.md",
         "dependency-cruiser.config.cjs",
         "package-lock.json",
@@ -12476,8 +12489,11 @@
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-priority-recovery-owner-inventory.js",
         "scripts/inventory-ordinal-segments.js",
+        "scripts/solve/guards.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "test/shards/impact-contracts.json",
         "test/shards/impact-graph-seal.json",
         "test/shards/primary-classes.json",
@@ -12485,6 +12501,7 @@
         "test/shards/subsystem-classes.json"
       ],
       "directories": [
+        "data/releases",
         "scripts",
         "scripts/checks",
         "solve",
@@ -12505,6 +12522,8 @@
     },
     "test/solve/guards.test.js": {
       "files": [
+        "CHANGELOG.md",
+        "README.md",
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
@@ -12520,10 +12539,13 @@
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/inventory-ordinal-segments.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
         "test/shards/impact-contracts.json",
         "test/shards/primary-classes.json"
       ],
       "directories": [
+        "data/releases",
         "scripts",
         "scripts/checks",
         "solve",

@@ -46,14 +46,14 @@ is owned by `npm run audit:doc-audience`, not by this table.
 
 ## Known owner gap
 
-Every outward action performed by this repository's own code now asks that
-owner before acting, and an action nobody has registered is refused. What sits
-outside it is the release workflow and the push hook: pushing a container image
-and creating a public release happen in workflow YAML, which cannot ask a
+Every outward action performed by this repository's own code asks that owner
+first, and an unregistered action is refused. Outside it: pushing a container
+image and creating a public release happen in workflow YAML, which cannot ask a
 module, so they are registered but unasked; the pre-push hook decides for
-itself whether the shared branch is red; and nothing refuses a force push or a
-release-tag push, which is true because no code here performs either rather
-than because anything would stop it.
+itself whether the shared branch is red; nothing refuses a force push or a
+release-tag push (no code here performs either). A merge made on GitHub never
+meets the push gate, so nothing here refuses a `src/` change arriving that way
+that is not a solver landing; only branch protection, outside this repository, could.
 
 ## When authorities disagree
 

@@ -20,6 +20,7 @@ const UTF8 = 'utf8';
 const HOOK = '.githooks/pre-push';
 const MATERIALIZER = 'scripts/checks/push-gate-corpus-worktree.js';
 const TREND_OWNER = 'scripts/checks/formation-health.js';
+const SOLVER_CLI = 'scripts/solve/guards.js';
 const STUBBED_SCRIPTS = Object.freeze([
   'scripts/check-circular-dependencies.js',
   'scripts/check-unused-exports.js',
@@ -57,6 +58,16 @@ const recorderSource = (name) =>
   'process.exit(Number(process.env[\'PRE_PUSH_FLOW_STATUS_\' + ' +
   `${JSON.stringify(name.toUpperCase())}] || 0));\n`;
 
+// The admission stub says what the real owner says when it admits: its
+// verdict line over exactly the range it was asked about (or what a test
+// makes it say), so the hook's need for the line is witnessed.
+const admissionStub = (name) => recorderSource(name).replace('process.exit(',
+  'if (process.env.PRE_PUSH_FLOW_ADMISSION_SAYS !== undefined) ' +
+  'console.log(process.env.PRE_PUSH_FLOW_ADMISSION_SAYS);\n' +
+  'else if (!(Number(process.env.PRE_PUSH_FLOW_STATUS_ADMISSION) > 0)) ' +
+  'console.log(\'solver-landing admission: admitted \' + process.argv[4] + \'..\' + ' +
+  'process.argv[6]);\nprocess.exit(');
+
 function buildFixture() {
   fs.mkdirSync(stubBin, {recursive: true});
   write(HOOK, fs.readFileSync(path.join(root, HOOK), UTF8), 0o755);
@@ -69,6 +80,7 @@ function buildFixture() {
     'else if (!(Number(process.env.PRE_PUSH_FLOW_STATUS_TREND) > 0)) ' +
     'console.log(\'formation health: trend push verified - stub\');\nprocess.exit('));
   for (const script of STUBBED_SCRIPTS) write(script, recorderSource('script'));
+  write(SOLVER_CLI, admissionStub('admission'));
   write('package.json', '{"name": "pre-push-flow-fixture", "type": "module"}\n');
   write('README.md', 'fixture\n');
   // A JavaScript file inside the lint pathspec, changed by the second commit,
@@ -122,7 +134,24 @@ function buildFixture() {
   git(['remote', 'add', 'origin', remote]);
   git(['push', '--quiet', 'origin', `${base}:refs/heads/main`]);
   git(['tag', '-a', 'receipt-fixture', '-m', 'receipt', base]);
-  return {base, second, head: git(['rev-parse', 'HEAD']),
+  // Off to the side of main: a push that weakens the admission code (it
+  // always admits) together with a direct src/ commit; and main before the
+  // gate existed (an admission file with no entry point, exiting 0 silently,
+  // like the pre-gate guards.js), then the bootstrap push that brings it.
+  const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+  const sideCommit = (from, file, message) => {
+    git(['checkout', '--quiet', '--detach', from]);
+    write(SOLVER_CLI, file);
+    write('src/sample.js', `export const sample = '${message}';\n`);
+    git(['add', '.']);
+    git(['commit', '--quiet', '-m', message]);
+    return git(['rev-parse', 'HEAD']);
+  };
+  const weakened = sideCommit(base, admissionStub('admission-pushed'), 'weakened gate');
+  const preGate = sideCommit(base, recorderSource('admission-old'), 'pre-gate main');
+  const bootstrap = sideCommit(preGate, admissionStub('admission'), 'bootstrap the gate');
+  git(['checkout', '--quiet', branch]);
+  return {base, second, weakened, preGate, bootstrap, head: git(['rev-parse', 'HEAD']),
     branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
     receiptTagObject: git(['rev-parse', 'receipt-fixture']),
     tagObject: git(['rev-parse', 'v-fixture'])};
@@ -436,4 +465,93 @@ test('a data-only trend push is proved before any fast path or the red-main guar
   const tag = runHook(`${ref} ${shas.receiptTagObject} ${ref} ${ZERO_SHA}\n`, DATA_ONLY);
   assert.equal(tag.status, 1, 'a receipt push with the request is refused: ' + tag.output);
   assert.deepEqual(trendCalls(tag.recorded), []);
+});
+
+// Owner decision 2026-10-04: a change under src/ reaches main only as a solver
+// landing. On a push that updates main the admission runs first among the
+// content stages, over exactly the pushed main sha and the remote main sha,
+// and its refusal stops the push before anything else runs; a push that does
+// not update main (preservation) never runs it. What it admits is witnessed
+// in test/solve/commands.test.js; here, that the gate asks it.
+function admissionCalls(recorded) {
+  return recorded.filter((entry) => entry.name === 'admission');
+}
+
+const IN_CHECKOUT = Object.freeze({LAGRANGE_WORKSPACE_INJECTIONS: 'node_modules,data',
+  LAGRANGE_GATE_RED_MAIN_CHECKED: '1', LAGRANGE_PUSH_SKIP_TESTS: '1'});
+
+test('a main push is judged by the solver-landing admission before any other content stage', () => {
+  const mainPush = `refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`;
+  const run = runHook(mainPush, {...IN_CHECKOUT, LAGRANGE_GATE_PUSHED_SHA: shas.second},
+    shas.second);
+  assert.equal(run.status, 0, run.output);
+  assert.deepEqual(admissionCalls(run.recorded).map((entry) => entry.argv),
+    [['admit', '--base', shas.base, '--head', shas.second]],
+    'exactly the pushed main range is judged');
+  const names = run.recorded.map((entry) => entry.name);
+  assert.equal(names[0], 'admission', `the admission runs first: ${names.join(' ')}`);
+  const refused = runHook(mainPush, {...IN_CHECKOUT, LAGRANGE_GATE_PUSHED_SHA: shas.second,
+    PRE_PUSH_FLOW_STATUS_ADMISSION: '1'}, shas.second);
+  assert.equal(refused.status, 1, refused.output);
+  assert.match(refused.output, /FAILED in stage: solver-landing-admission/u);
+  assert.deepEqual(refused.recorded.map((entry) => entry.name), ['admission'],
+    'a refused admission runs nothing after it');
+  // Main pushed beside another ref: main's own range is judged, whichever
+  // ref the gate's checkout holds.
+  const mixed = runHook(`refs/heads/feature ${shas.head} refs/heads/feature ${ZERO_SHA}\n` +
+    mainPush, {...IN_CHECKOUT, LAGRANGE_GATE_PUSHED_SHA: shas.head});
+  assert.equal(mixed.status, 0, mixed.output);
+  assert.deepEqual(admissionCalls(mixed.recorded).map((entry) => entry.argv),
+    [['admit', '--base', shas.base, '--head', shas.second]]);
+});
+
+test('a push that does not update main never runs the solver-landing admission', () => {
+  const branchPush = `refs/heads/feature ${shas.second} refs/heads/feature ${shas.base}\n`;
+  const preserved = runHook(branchPush);
+  assert.equal(preserved.status, 0, preserved.output);
+  assert.deepEqual(admissionCalls(preserved.recorded), [], 'preservation stays free');
+  const proved = runHook(branchPush, {...IN_CHECKOUT, LAGRANGE_GATE_PUSHED_SHA: shas.second,
+    LAGRANGE_PUSH_PROVE_BRANCH: '1'}, shas.second);
+  assert.equal(proved.status, 0, proved.output);
+  assert.deepEqual(admissionCalls(proved.recorded), [],
+    'a branch proved on request is still not a main admission');
+});
+
+// The rules in force judge: the admission runs from the remote main sha's
+// code, so a commit in the push cannot weaken the check that judges it; the
+// pushed code judges only the bootstrap push, and says so. Admission is the
+// owner's exit 0 AND its verdict line over exactly the judged range.
+test('the admission is judged by remote main\'s code and needs its verdict line', () => {
+  const push = (head, remote) => `refs/heads/main ${head} refs/heads/main ${remote}\n`;
+  const inCheckout = (head, env = {}) => ({...IN_CHECKOUT, LAGRANGE_GATE_PUSHED_SHA: head, ...env});
+  const names = (run) => run.recorded.map((entry) => entry.name);
+  // Remote main's code refuses the direct src/ commit; the pushed code, which
+  // would admit anything, is never run.
+  const weakened = runHook(push(shas.weakened, shas.base),
+    inCheckout(shas.weakened, {PRE_PUSH_FLOW_STATUS_ADMISSION: '1'}), shas.weakened);
+  assert.equal(weakened.status, 1, weakened.output);
+  assert.deepEqual(names(weakened), ['admission'], 'only remote main\'s admission code runs');
+  assert.match(weakened.output, /judged by the admission code of remote main/u);
+  // Pre-gate code restored in the push: still remote main's code judges.
+  const restored = runHook(push(shas.preGate, shas.base),
+    inCheckout(shas.preGate, {PRE_PUSH_FLOW_STATUS_ADMISSION: '1'}), shas.preGate);
+  assert.equal(restored.status, 1, restored.output);
+  assert.deepEqual(names(restored), ['admission']);
+  // Exit 0 without the verdict line, or with a line over another range, refuses.
+  for (const says of ['', `solver-landing admission: admitted ${shas.base}..${shas.head}`]) {
+    const silent = runHook(push(shas.second, shas.base),
+      inCheckout(shas.second, {PRE_PUSH_FLOW_ADMISSION_SAYS: says}), shas.second);
+    assert.equal(silent.status, 1, silent.output);
+    assert.match(silent.output, /FAILED in stage: solver-landing-admission/u);
+    assert.deepEqual(names(silent), ['admission'], 'nothing runs after a refusal');
+  }
+  // Bootstrap: remote main has no admission entry point, so the pushed code
+  // judges this one push, and the stage says so.
+  const bootstrap = runHook(push(shas.bootstrap, shas.preGate), inCheckout(shas.bootstrap),
+    shas.bootstrap);
+  assert.equal(bootstrap.status, 0, bootstrap.output);
+  assert.match(bootstrap.output, /bootstrap - remote main [0-9a-f]{40} has no admission entry point/u);
+  assert.deepEqual(admissionCalls(bootstrap.recorded).map((entry) => entry.argv),
+    [['admit', '--base', shas.preGate, '--head', shas.bootstrap]]);
+  assert.ok(!names(bootstrap).includes('admission-old'), 'the pre-gate code is never asked');
 });
