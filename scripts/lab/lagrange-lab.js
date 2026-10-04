@@ -16,7 +16,8 @@ import {configureRunner, runnerLabels} from './runner.js';
 import {
   WORKER_SETUP_FILE, copyWorkerSetup, discoverFleet, fleetRequirement, formatFleet,
   formatFleetRequirement,
-  labTestCommit, labTestDeps, labTestSelectorArgs, probeRemoteNode, recordFleet, runLabTest,
+  labTestCommit, labTestDeps, labTestSelectorArgs, prepareSelectorImportGraph, probeRemoteNode,
+  recordFleet, runLabTest,
   workerCloneUrl, workerSetupScript,
 } from './probe.js';
 import {
@@ -147,6 +148,9 @@ const ERROR_TEXT = Object.freeze({
   BASE_NEEDS_CHANGED: '--base-sha measures the change cone: it takes the changed profile',
   NOT_THE_RUNNER: ' no longer runs the classified runner: ',
   NO_LANE_FILES: ' has no files in lane ',
+  SPLIT_OR_ON: '--split spreads over every ready machine and --on names one: take one or the other',
+  UNKNOWN_FLAG: 'unknown flag --',
+  FLAGS_TAKEN: ': lab test takes --',
 });
 // How the corpus profile's npm script reads: `node <runner> <lane filters>`.
 const LAB_TEST_SCRIPT = Object.freeze({NODE: 'node',
@@ -156,6 +160,8 @@ const LAB_TEST_LINE = /\r?\n/u;
 const LAB_TEST_SHA_DIGITS = 12;
 const POSITIONAL = Object.freeze({COMMAND: 0, ACTION: 1, NAME: 2});
 const EXIT_FAILURE = 1;
+// A flag no command reads is a usage error: nothing runs on it.
+const EXIT_USAGE = 2;
 
 function usage() {
   process.stdout.write(USAGE);
@@ -462,6 +468,12 @@ async function commandK3s(action, args) {
 async function commandTest(profile, args) {
   const selected = TEST_PROFILE_COMMANDS[profile];
   if (!selected) throw new Error(`Unknown test profile: ${profile}`);
+  const flags = Object.values(LAB_TEST_FLAG);
+  const unknown = Object.keys(args.flags).find((flag) => !flags.includes(flag));
+  if (unknown !== undefined) {
+    throw Object.assign(new Error(`${ERROR_TEXT.UNKNOWN_FLAG}${unknown}${ERROR_TEXT.FLAGS_TAKEN}` +
+      `${flags.join(`${LIST_SEPARATOR} ${FLAG.PREFIX}`)}`), {exitCode: EXIT_USAGE});
+  }
   if (!Object.values(LAB_TEST_FLAG).some((flag) => Object.hasOwn(args.flags, flag))) {
     await run(NPM, [...selected]);
     return;
@@ -500,6 +512,7 @@ function labTestRequest(profile, flags) {
   if (split && lane !== LAB_TEST_LANE_ALL) throw new Error(ERROR_TEXT.SPLIT_NEEDS_ALL);
   if (flags[LAB_TEST_FLAG.ON] === true) throw new Error(ERROR_TEXT.NO_MACHINE_NAME);
   if (flags[LAB_TEST_FLAG.SHA] === true) throw new Error(ERROR_TEXT.NO_COMMIT_NAME);
+  if (split && flags[LAB_TEST_FLAG.ON] !== undefined) throw new Error(ERROR_TEXT.SPLIT_OR_ON);
   return {lane, split: split === true, on: flags[LAB_TEST_FLAG.ON] ?? null,
     sha: flags[LAB_TEST_FLAG.SHA] ?? null, baseSha: labTestBaseSha(profile, flags)};
 }
@@ -519,10 +532,15 @@ function labTestBaseSha(profile, flags) {
 // named), and the chosen lane of the classified plan of those files - planned
 // from the commit's own tree.
 async function labTestPlan(profile, {lane, baseSha}, commit) {
+  const node = (args) => capture(process.execPath, args,
+    {cwd: FLEET_REPO_ROOT, timeoutMs: LAB_TEST_SELECT_DEADLINE_MS});
+  if (profile !== LAB_TEST_PROFILE.ALL) {
+    await prepareSelectorImportGraph(FLEET_REPO_ROOT,
+      {produce: node, write: (line) => process.stdout.write(`${line}\n`)});
+  }
   const files = profile === LAB_TEST_PROFILE.ALL ?
     corpusFiles(commit.gitRoot, TEST_PROFILE_COMMANDS[profile].at(-1)) :
-    (await capture(process.execPath, labTestSelectorArgs({sha: commit.sha, baseSha}),
-      {cwd: FLEET_REPO_ROOT, timeoutMs: LAB_TEST_SELECT_DEADLINE_MS}))
+    (await node(labTestSelectorArgs({sha: commit.sha, baseSha})))
       .split(LAB_TEST_LINE).filter(Boolean);
   const plan = planClassifiedTestFiles(commit.gitRoot, files, lastResultsRoots(FLEET_REPO_ROOT));
   const chosen = lane === LAB_TEST_LANE_ALL ? plan :
@@ -573,5 +591,5 @@ async function main() {
 
 main().catch((error) => {
   process.stderr.write(`lab: ${error.message}\n`);
-  process.exitCode = EXIT_FAILURE;
+  process.exitCode = error.exitCode ?? EXIT_FAILURE;
 });
