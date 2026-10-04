@@ -684,7 +684,11 @@ test('split routing captures mutable intrinsics after module load in isolated ru
         toUpperCase: String.prototype.toUpperCase,
         startsWith: String.prototype.startsWith,
         includes: String.prototype.includes,
+        split: String.prototype.split,
+        match: String.prototype.match,
         arrayIsArray: Array.isArray,
+        arrayMap: Array.prototype.map,
+        regExpExec: RegExp.prototype.exec,
         numberIsInteger: Number.isInteger,
         mathFloor: Math.floor,
         mathMin: Math.min,
@@ -702,7 +706,11 @@ test('split routing captures mutable intrinsics after module load in isolated ru
         String.prototype.toUpperCase = hostile('toUpperCase');
         String.prototype.startsWith = hostile('startsWith');
         String.prototype.includes = hostile('includes');
+        String.prototype.split = hostile('split');
+        String.prototype.match = hostile('match');
         Array.isArray = hostile('arrayIsArray');
+        Array.prototype.map = hostile('arrayMap');
+        RegExp.prototype.exec = hostile('regExpExec');
         Number.isInteger = hostile('numberIsInteger');
         Math.floor = hostile('mathFloor');
         Math.min = hostile('mathMin');
@@ -733,7 +741,11 @@ test('split routing captures mutable intrinsics after module load in isolated ru
         String.prototype.toUpperCase = originals.toUpperCase;
         String.prototype.startsWith = originals.startsWith;
         String.prototype.includes = originals.includes;
+        String.prototype.split = originals.split;
+        String.prototype.match = originals.match;
         Array.isArray = originals.arrayIsArray;
+        Array.prototype.map = originals.arrayMap;
+        RegExp.prototype.exec = originals.regExpExec;
         Number.isInteger = originals.numberIsInteger;
         Math.floor = originals.mathFloor;
         Math.min = originals.mathMin;
