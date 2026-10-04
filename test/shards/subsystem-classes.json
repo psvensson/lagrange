@@ -28,7 +28,7 @@
   "censusSize": 2194,
   "digest": "fnv1a32-0d7a2820",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-658b74df",
+  "observationDigest": "fnv1a32-25e9f22a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11301,12 +11301,22 @@
         "package-lock.json",
         "package.json",
         "scripts/checks/test-resource-classification-constants.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
         "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
-        "test/distributed/run.js"
+        "test/distributed/run.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
       ],
       "env": [
         "APPDATA",
@@ -11694,6 +11704,7 @@
         "scripts/checks/helper-import-closure.js",
         "scripts/checks/impact-proof-cone-constants.js",
         "scripts/checks/push-gate-change-proof.js",
+        "scripts/checks/run-static-audits.js",
         "scripts/checks/test-primary-classification.js",
         "scripts/checks/test-resource-classification-constants.js",
         "scripts/checks/test-timeout-declarations.js",
@@ -11712,7 +11723,9 @@
         "scripts/solve.js",
         "src/cli/cli-constants.js",
         "src/constants/entrypoint.js",
+        "test/manifests/pre-push-stages.json",
         "test/manifests/project-hardening-proof-postpush-manifest.json",
+        "test/manifests/proof-obligations.json",
         "test/shards/impact-contracts.json",
         "test/shards/impact-coverage.json",
         "test/shards/impact-graph-seal.json",
@@ -11722,10 +11735,14 @@
         "test/shards/subsystem-classes.json"
       ],
       "directories": [
+        ".githooks",
+        ".github",
         "data",
         "data/releases",
+        "scripts",
         "solve",
         "solve/quests",
+        "src",
         "src/test-helpers",
         "test"
       ],

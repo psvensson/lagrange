@@ -14,7 +14,9 @@
 //   refused     the selector could not scope the change
 //   machinery   the change touches the selector, the runner, the generated
 //               selection state, the hook or the package manifests - a proof
-//               selected by the thing the change altered proves nothing
+//               selected by the thing the change altered proves nothing (a
+//               file under a trigger directory that the gate never reads is
+//               exempted by name in FULL_CORPUS_TRIGGER_RULES)
 //   size        the cone is more than half the corpus; the rest is cheap
 //   no range    no committed base could be resolved (working tree only)
 //   operator    LAGRANGE_PUSH_FULL_CORPUS=1
@@ -56,6 +58,7 @@ const arrayJoin = Function.call.bind(Array.prototype.join);
 const regExpTest = Function.call.bind(RegExp.prototype.test);
 const jsonParse = JSON.parse.bind(JSON);
 const objectKeys = Object.keys;
+const objectHasOwn = Object.hasOwn;
 
 const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -130,6 +133,12 @@ const TRIGGER = Object.freeze({
   NO_RANGE: 'no committed proof range: only the working tree could be diffed',
 });
 
+// A rule triggers on a path it matches unless it exempts that path by name.
+function ruleTriggersOn(rule, changedPath) {
+  return regExpTest(rule.pattern, changedPath) &&
+    !(rule.exempt !== undefined && objectHasOwn(rule.exempt, changedPath));
+}
+
 /**
  * The full-corpus triggers among the changed paths, one line per hit.
  * @param {string[]} changedPaths
@@ -141,7 +150,7 @@ export function fullCorpusTriggers(changedPaths) {
     ruleIndex += 1) {
     const rule = FULL_CORPUS_TRIGGER_RULES[ruleIndex];
     for (let pathIndex = 0; pathIndex < changedPaths.length; pathIndex += 1) {
-      if (regExpTest(rule.pattern, changedPaths[pathIndex])) {
+      if (ruleTriggersOn(rule, changedPaths[pathIndex])) {
         appendArrayValue(hits,
           `changed ${rule.id}: ${changedPaths[pathIndex]}`);
       }

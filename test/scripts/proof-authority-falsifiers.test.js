@@ -293,3 +293,56 @@ test('the gate reads its own checkout under a push hook\'s GIT_DIR', () => {
     git(['worktree', 'remove', '--force', other]);
   }
 });
+
+// failed-gate-keeps-evidence: the gate checkout is deleted on every exit, so
+// a failed gate must first copy its acceptance receipt and the first failing
+// command's captured artifact out to test-output/push-gate/<sha>/ - on a
+// failed run, a replaced injection link and a dirtied checkout alike.
+const GATE_REPORT = 'test-output/acceptance/gate.report.json';
+const GATE_ARTIFACT = 'test-output/acceptance/postpush/change-proof.json';
+const GATE_FAILURE_DETAIL = 'not ok test/kept.test.js (1 assertions, 1ms)';
+const WRITE_GATE_REPORT = [
+  'mkdir -p test-output/acceptance/postpush',
+  'printf \'%s\' \'{"commands":[{"id":"change-proof","status":"FAIL",' +
+    `"artifactIdentity":{"path":"${GATE_ARTIFACT}"}}]}' > ${GATE_REPORT}`,
+  `printf '%s' '${GATE_FAILURE_DETAIL}' > ${GATE_ARTIFACT}`,
+].join('; ');
+
+function gateKeepsDiagnostics(script) {
+  const kept = path.join(repo, 'test-output', 'push-gate', baseSha);
+  fs.rmSync(kept, {recursive: true, force: true});
+  try {
+    const gated = run([MATERIALIZER, '--gate', baseSha, '--run', 'sh', '-c',
+      `${WRITE_GATE_REPORT}; ${script}`]);
+    assert.equal(gated.status, 1, `${gated.stdout}${gated.stderr}`);
+    const checkout = /proving \S+ in (\S+):/u.exec(gated.stdout)?.[1];
+    assert.ok(checkout, `the gate names its checkout: ${gated.stdout}`);
+    assert.equal(fs.existsSync(checkout), false, 'the gate checkout is removed');
+    assert.equal(fs.existsSync(path.join(kept, 'gate.report.json')), true,
+      `the receipt is kept outside the removed checkout: ${gated.stderr}`);
+    assert.equal(fs.readFileSync(path.join(kept, 'change-proof.json'), UTF8),
+      GATE_FAILURE_DETAIL, 'the failing command artifact is kept with its detail');
+    assert.ok(gated.stderr.includes(`gate diagnostics retained in ${kept}`),
+      `the gate says where it kept them: ${gated.stderr}`);
+  } finally {
+    fs.rmSync(kept, {recursive: true, force: true});
+    restore();
+  }
+}
+
+test('a failed gate run keeps its diagnostics after the checkout is removed', () => {
+  gateKeepsDiagnostics('exit 1');
+});
+
+test('a gate whose injection link was replaced keeps its diagnostics', () => {
+  gateKeepsDiagnostics('rm node_modules && mkdir node_modules');
+});
+
+test('a gate that dirtied its checkout keeps its diagnostics', () => {
+  gateKeepsDiagnostics('echo dirtied >> package.json');
+});
+
+test('a gate that throws after its command keeps its diagnostics', () => {
+  // The checkout's git link points nowhere: the gate's own status read throws.
+  gateKeepsDiagnostics('printf "gitdir: /nonexistent" > .git');
+});

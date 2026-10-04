@@ -10,6 +10,7 @@ import {
   proveMergedHead,
   publishExactHead,
   parsePublishArgs,
+  retainGateDiagnostics,
   runLocalCorpus,
   validatePublishRequest,
 } from '../../scripts/publish-head.js';
@@ -297,6 +298,46 @@ tap.test('a failed gate retains its receipt outside the worktree', (t) => {
     fs.readFileSync(path.join(retained, 'second.json'), 'utf8'),
     /the real failure detail/u,
     'the retained artifact carries the detail, not just a filename');
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
+// failed-gate-keeps-evidence: every failed direct push gate retains now, so
+// the one retention owner bounds what it keeps (R13), says when a second
+// failure of the same sha replaces the first, and still reports the receipt
+// it kept when the named artifact is missing.
+function failedGateCheckout(parent, name, artifact = 'test-output/acceptance/p/proof.json') {
+  const worktree = path.join(parent, name);
+  fs.mkdirSync(path.join(worktree, 'test-output', 'acceptance', 'p'), {recursive: true});
+  fs.writeFileSync(path.join(worktree, 'test-output', 'acceptance', 'g.report.json'),
+    JSON.stringify({commands: [{id: 'proof', status: 'FAIL', artifactIdentity: {path: artifact}}]}));
+  fs.writeFileSync(path.join(worktree, 'test-output/acceptance/p/proof.json'), name);
+  fs.writeFileSync(path.join(worktree, 'test-output/acceptance/p/proof.json.stdout.txt'), name);
+  return worktree;
+}
+
+tap.test('retained gate diagnostics are bounded, replaced aloud, and honest', (t) => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'retain-bound-'));
+  const root = path.join(parent, 'root');
+  const kept = path.join(root, 'test-output', 'push-gate');
+  const shas = Array.from({length: 7}, (_unused, index) => `sha${index}`);
+  shas.forEach((sha, index) => {
+    t.equal(retainGateDiagnostics(root, failedGateCheckout(parent, sha), sha),
+      path.join(kept, sha), 'a first failure of a sha is kept where it says');
+    fs.utimesSync(path.join(kept, sha), index + 1, index + 1);
+  });
+  t.same(fs.readdirSync(kept).sort(), shas.slice(2),
+    'only the newest five shas are kept; older ones are pruned');
+  t.equal(fs.readFileSync(path.join(kept, 'sha6', 'proof.json.stdout.txt'), 'utf8'), 'sha6',
+    'the raw stdout beside the artifact is kept too');
+  t.equal(retainGateDiagnostics(root, failedGateCheckout(parent, 'again'), 'sha6'),
+    `${path.join(kept, 'sha6')} (replacing an earlier failed run of this sha)`,
+    'a second failure of one sha says it replaced the first');
+  t.equal(fs.readFileSync(path.join(kept, 'sha6', 'proof.json'), 'utf8'), 'again');
+  t.equal(retainGateDiagnostics(root,
+    failedGateCheckout(parent, 'missing', 'test-output/acceptance/p/gone.json'), 'shaM'),
+  path.join(kept, 'shaM'), 'a kept receipt is reported even when its artifact is missing');
+  t.ok(fs.existsSync(path.join(kept, 'shaM', 'g.report.json')));
   fs.rmSync(parent, {recursive: true, force: true});
   t.end();
 });

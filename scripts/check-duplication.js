@@ -76,6 +76,8 @@ const RATCHET_TARGETS = [
     // 2026-10-03: tightened 51/1624 -> 49/1559 on the checker's hint after
     // the origin/main ec63fbb00 merge and the native-append inference
     // deletion.
+    // origin/main 2026-10-03 tightened 54/1731 -> 52/1666 (failed-gate-
+    // keeps-evidence, checker hint); the lower value here supersedes it.
     baselineCloneGroupCount: 49,
     baselineDuplicatedLineCount: 1559,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
@@ -199,6 +201,8 @@ const RATCHET_TARGETS = [
     // and the single VirtualNetwork async drive.
     // 2026-10-03: tightened 718/27311 -> 717/27288 on the checker's hint
     // after the SQLite callback-facade round-trip property was retired.
+    // origin/main 2026-10-03 tightened 765/29388 -> 765/29385 (failed-gate-
+    // keeps-evidence, checker hint); the lower value here supersedes it.
     baselineCloneGroupCount: 717,
     baselineDuplicatedLineCount: 27288,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',

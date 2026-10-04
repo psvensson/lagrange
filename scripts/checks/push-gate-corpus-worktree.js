@@ -35,7 +35,7 @@
 //
 // Exit 0 when every corpus gate passes on the snapshot; exit 1 on the first
 // failing gate; exit 2 on usage error. The throwaway worktree is always
-// removed, including on gate failure.
+// removed; a failed --gate run first keeps its diagnostics (publish-head.js).
 
 import process from 'node:process';
 import {execFileSync, spawnSync} from 'node:child_process';
@@ -51,6 +51,7 @@ import {
   GATE_WORKSPACE_DIRECTORIES,
   assertWorkspaceDependencyLinks,
   linkWorkspaceDependencies,
+  retainGateDiagnostics,
 } from '../publish-head.js';
 import {
   WORKSPACE_INJECTION_ENV,
@@ -102,6 +103,8 @@ const LOCAL_TEXT = Object.freeze({
   GATE_IN: ' in ',
   GATE_DIRTY: '[push-gate] the gate mutated the exact checkout of the pushed sha:\n',
   GATE_LINKS_BROKEN: '[push-gate] a workspace injection link was replaced during the gate\n',
+  GATE_RETAINED: '[push-gate] gate diagnostics retained in ',
+  GATE_NOTHING_RETAINED: '[push-gate] no acceptance receipt to retain from the gate checkout\n',
 });
 const stringTrim = Function.call.bind(String.prototype.trim);
 
@@ -246,6 +249,9 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
   const sha = peelToCommit(root, requestedSha);
   const worktreePath = checkoutExactCommit(root, sha);
   const releaseSignals = removeWorktreeOnSignal(root, worktreePath);
+  // Every end but a pass - a throw included - keeps the publisher's
+  // diagnostics: the checkout is the only copy of what a failed gate wrote.
+  let passed = false;
   try {
     const links = linkWorkspaceDependencies(root, worktreePath);
     // A push from a linked worktree exports that worktree's GIT_DIR into the
@@ -288,9 +294,15 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
       process.stderr.write(`${LOCAL_TEXT.GATE_DIRTY}${status}\n`);
       return EXIT_GATE_FAILURE;
     }
+    passed = result.status === 0;
     return result.status ?? EXIT_GATE_FAILURE;
   } finally {
     releaseSignals();
+    if (!passed) {
+      const retained = retainGateDiagnostics(root, worktreePath, sha);
+      process.stderr.write(retained ? `${LOCAL_TEXT.GATE_RETAINED}${retained}\n` :
+        LOCAL_TEXT.GATE_NOTHING_RETAINED);
+    }
     removeWorktree(root, worktreePath);
   }
 }

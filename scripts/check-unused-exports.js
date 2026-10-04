@@ -42,6 +42,8 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-10-04: tightened 1430 -> 1424 per checker hint after the cutover-orphan
 // census deleted or de-exported six exports whose only importers the cutover
 // deleted.
+// (origin/main 2026-10-03 tightened 1434 -> 1433: renderRunSummary gained
+// its first importer; superseded by the lower value here.)
 const BASELINE_UNUSED_EXPORT_COUNT = 1424;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;

@@ -10,8 +10,14 @@ import {
   validateAcceptanceManifest,
 } from '../../scripts/checks/acceptance-proof-manifest-runner.js';
 import {
+  renderRunSummary,
   runProjectHardeningAcceptance,
 } from '../../scripts/run-project-hardening-acceptance.js';
+import {
+  formatBatchSignalLine,
+  formatPlannedLine,
+  formatTestFilesSummary,
+} from '../../scripts/run-test-files.js';
 
 function command(id = 'proof', overrides = {}) {
   return {
@@ -351,5 +357,176 @@ describe('acceptance proof manifest runner', () => {
       /run-project-hardening-acceptance\.js/u,
     );
     assert.match(packageJson.scripts['test:smoke'], new RegExp(smokeManifestPath));
+  });
+});
+
+// failed-gate-keeps-evidence: a failed command's captured output is the only
+// place its per-file verdicts exist, so the run summary names the failing
+// test files from it - the runner's file-level verdict lines only, decided by
+// the last verdict and a retried-once pass, bounded with a withheld count, and
+// never a count when the runner's summary line is absent.
+const FILE_LINE = /^ {4}(test\/\S+\.test\.js)$/u;
+
+function summaryOfFailedOutput(stdout, signal = null) {
+  const fixture = setup(manifest([command('change-proof')]));
+  const run = runAcceptanceManifest({
+    ...fixture,
+    execute: () => ({status: signal ? null : 1, signal, stdout, stderr: '', error: null}),
+  });
+  const summary = renderRunSummary(run, fixture.root);
+  fs.rmSync(fixture.root, {recursive: true, force: true});
+  return {
+    summary,
+    named: summary.split('\n').map((line) => FILE_LINE.exec(line)?.[1])
+      .filter(Boolean),
+  };
+}
+
+function verdict(outcome, file) {
+  return `${outcome} ${file} (2 assertions, 15ms)`;
+}
+
+describe('failing-file run summary', () => {
+  it('names exactly the failing test files of the failing command', () => {
+    const {summary, named} = summaryOfFailedOutput([
+      'classified lane ordinary: 3 file(s), jobs=2',
+      verdict('ok', 'test/a/green.test.js'),
+      verdict('not ok', 'test/a/red.test.js'),
+      '# test failed',
+      'TAP version 13',
+      'not ok 1 - a nested subtest that is not a file verdict',
+      '    not ok 1 - an indented nested subtest',
+      'not ok 2 - test/a/lookalike.test.js (1 assertions, 3ms)',
+      '# test-files total=2 pass=1 fail=1 assertions=4',
+      '[lab-a] ' + verdict('not ok', 'test/b/relayed-red.test.js'),
+      '[lab-a] ' + verdict('not ok', 'test/b/decided-green.test.js'),
+      '[lab-a] # test-files total=2 pass=0 fail=2 assertions=4',
+      verdict('ok', 'test/b/decided-green.test.js'),
+      '# test-files total=1 pass=1 fail=0 assertions=2',
+      '',
+    ].join('\n'));
+    assert.deepEqual(named, ['test/a/red.test.js', 'test/b/relayed-red.test.js'],
+      summary);
+    assert.match(summary, /^ {2}failing test files: 2$/mu);
+  });
+
+  it('does not name a file that passed its retried-once rerun', () => {
+    const {summary, named} = summaryOfFailedOutput([
+      verdict('not ok', 'test/a/flaky.test.js'),
+      verdict('not ok', 'test/a/broken.test.js'),
+      '# test-files total=2 pass=0 fail=2 assertions=4',
+      '# retry-failed-once: rerunning 2 failed file(s) standalone',
+      verdict('ok', 'test/a/flaky.test.js'),
+      '# retried-once pass test/a/flaky.test.js',
+      verdict('not ok', 'test/a/broken.test.js'),
+      '# retried-once fail test/a/broken.test.js',
+      '',
+    ].join('\n'));
+    assert.deepEqual(named, ['test/a/broken.test.js'], summary);
+    assert.match(summary, /^ {2}failing test files: 1$/mu);
+  });
+
+  it('reports an absent runner summary line as incomplete, never as a count', () => {
+    const {summary, named} = summaryOfFailedOutput([
+      verdict('ok', 'test/a/green.test.js'),
+      verdict('not ok', 'test/a/red.test.js'),
+      '',
+    ].join('\n'));
+    assert.match(summary,
+      /^ {2}failing test files: summary line absent - list may be incomplete$/mu);
+    assert.doesNotMatch(summary, /failing test files: \d/u);
+    assert.deepEqual(named, ['test/a/red.test.js'], summary);
+  });
+
+  it('bounds the failing-file list and counts what it withheld', () => {
+    const files = Array.from({length: 27},
+      (_unused, index) => `test/many/red-${String(index).padStart(2, '0')}.test.js`);
+    const {summary, named} = summaryOfFailedOutput([
+      ...files.map((file) => verdict('not ok', file)),
+      '# test-files total=27 pass=0 fail=27 assertions=54',
+      '',
+    ].join('\n'));
+    assert.match(summary, /^ {2}failing test files: 27$/mu);
+    assert.deepEqual(named, files.slice(0, 20), summary);
+    assert.match(summary, /^ {4}\.\.\. 7 more withheld /mu);
+  });
+});
+
+// failed-gate-keeps-evidence, corrective attempt: a count is printed only when
+// the list is complete - every file a classified run planned is covered by a
+// runner summary, no batch or command ended by a signal, and every verdict
+// line was read whole - never from the absence of one known bad sign.
+function summarised(files, failed = 0) {
+  return formatTestFilesSummary({total: files, passed: files - failed, failed,
+    assertions: 2 * files});
+}
+
+describe('failing-file run summary completeness', () => {
+  it('never counts a run whose batch was killed mid-run', () => {
+    const {summary, named} = summaryOfFailedOutput([
+      formatPlannedLine(3),
+      verdict('ok', 'test/b1/green.test.js'),
+      summarised(1),
+      formatBatchSignalLine('SIGKILL', 1),
+      verdict('not ok', 'test/b3/red.test.js'),
+      summarised(1, 1),
+      '',
+    ].join('\n'));
+    assert.match(summary, /^ {2}failing test files: 1 of 3 planned file\(s\) not covered by a summary - list may be incomplete$/mu);
+    assert.deepEqual(named, ['test/b3/red.test.js'], summary);
+    // Killed after its summary, during its retry: summaries cover the plan,
+    // and the signalled batch alone says the list is incomplete.
+    const retried = summaryOfFailedOutput([
+      formatPlannedLine(1),
+      verdict('not ok', 'test/b1/flaky.test.js'),
+      summarised(1, 1),
+      formatBatchSignalLine('SIGKILL', 1),
+      '',
+    ].join('\n')).summary;
+    assert.match(retried, /^ {2}failing test files: ended by SIGKILL - list may be incomplete$/mu);
+  });
+
+  it('never counts a run the thermal gate refused mid-run', () => {
+    const {summary} = summaryOfFailedOutput([
+      formatPlannedLine(2),
+      verdict('ok', 'test/b1/green.test.js'),
+      summarised(1),
+      '# thermal-headroom-exhausted: 1 file(s) not run: test/b2/never.test.js',
+      '',
+    ].join('\n'));
+    assert.match(summary, /^ {2}failing test files: 1 of 2 planned file\(s\) not covered by a summary - list may be incomplete$/mu);
+  });
+
+  it('never counts a command that ended by a signal', () => {
+    const {summary, named} = summaryOfFailedOutput([
+      verdict('not ok', 'test/a/red.test.js'),
+      summarised(1, 1),
+      '',
+    ].join('\n'), 'SIGTERM');
+    assert.match(summary, /^ {2}failing test files: ended by SIGTERM - list may be incomplete$/mu);
+    assert.deepEqual(named, ['test/a/red.test.js'], summary);
+  });
+
+  it('never counts a run with a verdict line too long to read', () => {
+    const {summary} = summaryOfFailedOutput([
+      verdict('not ok', `test/${'d/'.repeat(130)}long.test.js`),
+      summarised(1, 1),
+      '',
+    ].join('\n'));
+    assert.match(summary, /^ {2}failing test files: 1 verdict line\(s\) too long to read - list may be incomplete$/mu);
+  });
+
+  it('counts a complete classified run and says nothing for a non-test command', () => {
+    const {summary, named} = summaryOfFailedOutput([
+      formatPlannedLine(2),
+      verdict('ok', 'test/b1/green.test.js'),
+      verdict('not ok', 'test/b1/red.test.js'),
+      summarised(2, 1),
+      '',
+    ].join('\n'));
+    assert.match(summary, /^ {2}failing test files: 1$/mu);
+    assert.deepEqual(named, ['test/b1/red.test.js'], summary);
+    assert.doesNotMatch(summaryOfFailedOutput('src/a.js: 1 lint problem\n').summary,
+      /failing test files/u);
   });
 });

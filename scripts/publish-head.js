@@ -162,6 +162,9 @@ const INJECTION_SEPARATOR = ',';
 // one artifact naming the failing command - three ~17-minute runs on
 // 2026-08-19 were spent rediscovering what a retained receipt would have said.
 const GATE_DIAGNOSTIC_DIR = path.join('test-output', 'push-gate');
+// Each kept failure holds a capture of up to 64 MB: keep the newest few.
+const GATE_DIAGNOSTIC_KEEP = 5;
+const GATE_DIAGNOSTIC_REPLACED = ' (replacing an earlier failed run of this sha)';
 const ACCEPTANCE_OUTPUT_DIR = path.join('test-output', 'acceptance');
 const REPORT_SUFFIX = '.report.json';
 const UTF8 = 'utf8';
@@ -397,35 +400,46 @@ function assertWorkspaceDependencyLinks(dependencyLinks) {
   }
 }
 
-// Copy the failing gate's receipt, and the artifact of its FIRST failing
-// command, out of the worktree before cleanup removes them. Best-effort by
-// design: a diagnostic that throws would replace the real gate error with its
-// own, which is exactly the failure this function exists to prevent.
+// Copy the failing gate's receipt, and the artifact (and raw stdout) of its
+// FIRST failing command, out of the worktree before cleanup removes them: one
+// run per sha (a later one replaces it, aloud), the newest GATE_DIAGNOSTIC_KEEP
+// shas. Best-effort by design: a diagnostic that throws would replace the real
+// gate error with its own, which is exactly the failure this function exists
+// to prevent; a kept receipt is reported whatever fails after it.
 function retainGateDiagnostics(root, worktree, head) {
+  let kept = null;
   try {
     const source = path.join(worktree, ACCEPTANCE_OUTPUT_DIR);
     const reports = arrayFilter(fs.readdirSync(source),
       (name) => stringEndsWith(name, REPORT_SUFFIX));
     if (reports.length === 0) return null;
     const newest = arraySort(reports)[reports.length - 1];
-    const destination = path.join(root, GATE_DIAGNOSTIC_DIR, head);
+    const parent = path.join(root, GATE_DIAGNOSTIC_DIR);
+    const destination = path.join(parent, head);
+    const replaced = fs.existsSync(destination);
+    fs.rmSync(destination, {recursive: true, force: true});
     fs.mkdirSync(destination, {recursive: true});
     fs.copyFileSync(
       path.join(source, newest), path.join(destination, newest));
+    kept = replaced ? `${destination}${GATE_DIAGNOSTIC_REPLACED}` : destination;
+    const age = (name) => -fs.statSync(path.join(parent, name)).mtimeMs;
+    const older = arraySort(fs.readdirSync(parent), (left, right) => age(left) - age(right))
+      .slice(GATE_DIAGNOSTIC_KEEP);
+    for (const name of older) fs.rmSync(path.join(parent, name), {recursive: true, force: true});
     const report = JSON.parse(
       fs.readFileSync(path.join(source, newest), UTF8));
     const failing = arrayFind(report.commands || [],
       (command) => command.status === ACCEPTANCE_PROOF.STATUS_FAIL);
     const artifact = failing &&
       (failing.artifactIdentity || failing.requiredArtifact || {}).path;
-    if (artifact) {
-      const target = path.join(destination, path.basename(artifact));
-      fs.copyFileSync(path.join(worktree, artifact), target);
+    for (const file of artifact ?
+      [artifact, `${artifact}${ACCEPTANCE_PROOF.CAPTURED_STDOUT_SUFFIX}`] : []) {
+      fs.copyFileSync(path.join(worktree, file), path.join(destination, path.basename(file)));
     }
-    return destination;
   } catch {
-    return null;
+    // kept as far as it got
   }
+  return kept;
 }
 
 function gateExactHead(run, root, worktree, head, remoteBefore, args) {
@@ -1290,4 +1304,5 @@ export {
   GATE_WORKSPACE_DIRECTORIES,
   assertWorkspaceDependencyLinks,
   linkWorkspaceDependencies,
+  retainGateDiagnostics,
 };

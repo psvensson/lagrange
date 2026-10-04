@@ -213,6 +213,10 @@ function captureCommandOutput(root, command, execution, startedAt) {
     stdout: execution.stdout || '',
     stderr: execution.stderr || '',
   }, null, 2));
+  // The same stdout as raw text beside it, for a reader that takes it line by
+  // line through the bounded reader instead of parsing the document.
+  fs.writeFileSync(`${resolved.absolute}${ACCEPTANCE_PROOF.CAPTURED_STDOUT_SUFFIX}`,
+    execution.stdout || '');
 }
 
 function manifestSnapshot(root, manifestPath) {
@@ -288,6 +292,7 @@ function executeManifestCommand({
   );
   if (command.requiredArtifact.mode === CAPTURED_OUTPUT && artifactPath) {
     fs.rmSync(artifactPath.absolute, {force: true});
+    fs.rmSync(`${artifactPath.absolute}${ACCEPTANCE_PROOF.CAPTURED_STDOUT_SUFFIX}`, {force: true});
   }
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
