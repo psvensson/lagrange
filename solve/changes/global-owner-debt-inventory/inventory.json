@@ -6,7 +6,7 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 418304,
-        "sha256": "2a041e3a93f9f5d2905b4cf116ac9896f05ed06e59174dedf2a576b7f9700737"
+        "sha256": "d3591d9e9495a5392732b3eb26cff865a109eda691378ce8c2a28a8d2f6c5bce"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2624956,
-        "sha256": "0f339595d41978ff3fe34eb5acafb68205e56763725bb886979c03432a38859c"
+        "bytes": 2625087,
+        "sha256": "a05a3e5963479710fced31fa52df333fa43d37f33a6ba73c2fade414e45711d0"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "bd8891e295010c610de9a2651a960a2a365aa56de040f07fb847f0b8a682f05a"
+        "sha256": "9ee20a89a3bb132abb8d46c5d8df3415aa7e67c5628171bd221ac8c27983565f"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "a0b5532a7acc19d721862de81f405ba18856903fe4fbf7696c0e84b2c7b33a34"
+    "inputDigest": "6d5a21f19124647d3067097be34d1503595d6955178271a80dcf5ee4f10bc692"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 418304,
-        "sha256": "2a041e3a93f9f5d2905b4cf116ac9896f05ed06e59174dedf2a576b7f9700737"
+        "sha256": "d3591d9e9495a5392732b3eb26cff865a109eda691378ce8c2a28a8d2f6c5bce"
       },
       "declaredCount": 1770,
       "observedCount": 1770,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "bd8891e295010c610de9a2651a960a2a365aa56de040f07fb847f0b8a682f05a"
+          "sha256": "9ee20a89a3bb132abb8d46c5d8df3415aa7e67c5628171bd221ac8c27983565f"
         },
         "cloneGroups": 717,
         "duplicatedLines": 27288,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2624956,
-        "sha256": "0f339595d41978ff3fe34eb5acafb68205e56763725bb886979c03432a38859c"
+        "bytes": 2625087,
+        "sha256": "a05a3e5963479710fced31fa52df333fa43d37f33a6ba73c2fade414e45711d0"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "9cb33bc498fe925c506e1082734d0ab8d42c0dd2b40320dc9aae8706fc570962",
+      "sourceDigest": "20fbf090e6f5e30baf5d92f9c2c963d1e0bc9f6e3e4565e7f4a778089a80a1cf",
       "moduleCount": 5012,
-      "edgeCount": 24586,
+      "edgeCount": 24588,
       "unresolvedCount": 36
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2524,
     "assignedSignalCount": 2524,
     "uniqueAssignmentCount": 2524,
-    "digest": "df2e779196c2c9fd648fc9d3beeafd0a5be494e496fda878560b5d4a5db3fc20"
+    "digest": "51426ac66990a2cd5a7491145e6909738833521b032979a82fbabed12ac7a952"
   },
   "signalCounts": {
     "cognitive": 153,
@@ -388,7 +388,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 71,
-      "importOut": 133,
+      "importOut": 134,
       "score": 561.4,
       "topPaths": [
         "test/distributed/scenarios/postgres-baseline-comparison-discovery-readiness.js",

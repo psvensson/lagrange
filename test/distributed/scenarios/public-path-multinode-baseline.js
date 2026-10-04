@@ -31,6 +31,11 @@ import {
   readDeploymentManifest,
 } from './service-pipeline-deployment-helpers.js';
 import {
+  discoverPublicEndpoints,
+  openPgPublicClient,
+  provisionPublicListener,
+} from './public-seam-durability-client.js';
+import {
   buildUserActivityTableSql,
   createTableTopologyHelpers,
   selectSettledPartitionRows,
@@ -118,15 +123,19 @@ function resolveScenarioDependencies(cluster) {
     cluster?._scenarioOverrides?.publicPathBaseline || {};
   const noopOutput = async () => {};
   return {
+    discoverEndpoints: overrides.discoverEndpoints || discoverPublicEndpoints,
     fetchImpl: overrides.fetchImpl || fetch,
+    listenerTimeoutMs: overrides.listenerTimeoutMs,
     invocationCount: Number.isInteger(overrides.invocationCount) ?
       overrides.invocationCount :
       DEFAULT_INVOCATION_COUNT,
     logBuffer: overrides.logBuffer ||
       (() => cluster.getLogCollector().getBuffer()),
+    openPublicClient: overrides.openPublicClient || openPgPublicClient,
     pipeline: overrides.pipeline || createServicePipeline(),
     prepareProject: overrides.prepareProject ||
       (() => prepareServiceProject(SCENARIO_SUBDIR)),
+    provisionListener: overrides.provisionListener || provisionPublicListener,
     readManifest: overrides.readManifest || readDeploymentManifest,
     resourceSnapshot: overrides.resourceSnapshot ||
       defaultResourceSnapshot(cluster),
@@ -382,6 +391,12 @@ export async function run(cluster) {
   const seedNode = nodes.find((node) => node.role === 'seed') ||
     nodes[ZERO];
 
+  // Service-lifecycle SQL is admitted only over authenticated PG-wire.
+  // Request the sys-postgres-wire listener first, so its placement rides
+  // out the formation tail during the build and data phases.
+  await helpers.retryTransientAdminQuery(deps, 'provision-lifecycle-listener',
+    () => deps.provisionListener(seedNode, nodes.length));
+
   // Build the service through the pipeline owner (generate + build).
   const paths = await deps.prepareProject();
   await deps.pipeline.runGenerate({
@@ -409,8 +424,16 @@ export async function run(cluster) {
   const topology = assertPartitionSpread(spread.partitionRows);
 
   // Deploy the generated records, then measure over authenticated HTTP.
-  await deployThroughPipeline(
-    seedNode, deps, paths, buildResult.layoutPath);
+  await deployThroughPipeline({
+    adminNode: seedNode,
+    nodes,
+    options: {
+      discoverEndpoints: deps.discoverEndpoints,
+      openClient: deps.openPublicClient,
+      sleep: deps.sleep,
+      timeoutMs: deps.listenerTimeoutMs,
+    },
+  }, deps, paths, buildResult.layoutPath);
   const servingNodes = await waitForServingNodes(nodes, deps);
   const snapshotsBefore = await captureResourceSnapshots(nodes, deps);
   const invocations = await runMeasuredInvocations(servingNodes, deps);

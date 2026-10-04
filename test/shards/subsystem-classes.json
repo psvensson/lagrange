@@ -28,7 +28,7 @@
   "censusSize": 2194,
   "digest": "fnv1a32-0d7a2820",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-25e9f22a",
+  "observationDigest": "fnv1a32-04ff6eee",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -5817,9 +5817,6 @@
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
-        "test/distributed/scenarios/table-bootstrap-core-helpers.js",
-        "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
-        "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js",
         "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
       ],
       "directories": [

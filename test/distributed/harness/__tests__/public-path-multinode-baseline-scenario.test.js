@@ -25,6 +25,10 @@ const HTTP_OK = 200;
 const HTTP_UNAUTHORIZED = 503;
 const SHORT_SPLIT_TIMEOUT_MS = 50;
 const SQLITE_METRIC_TAG = 'metrics.partition.sqlite';
+const PGWIRE_PORT = 5432;
+const PACKAGE_ID = 'pkg-1';
+const INSTALL_SQL = 'INSTALL SERVICE $1';
+const CREATE_BINDING_SQL = 'CREATE BINDING $1';
 const LOCAL_SELECT_SAMPLES_PER_NODE = 4;
 
 const SPREAD_PARTITION_ROWS = Object.freeze([
@@ -47,7 +51,15 @@ function childInvocationIds() {
 }
 
 function buildQueryHandler(state) {
-  return async (sql) => {
+  return async (sql, params) => {
+    state.adminStatements.push(sql);
+    if (stringStartsWith(sql, 'UPDATE service_definitions')) {
+      state.provisioned = params;
+      return {rows: []};
+    }
+    if (stringStartsWith(sql, 'SELECT node_id, port, health_status')) {
+      return {rows: state.endpointRows};
+    }
     if (stringStartsWith(sql, 'CREATE TABLE') ||
         stringStartsWith(sql, 'INSERT') ||
         stringStartsWith(sql, 'UPDATE tables')) {
@@ -140,6 +152,36 @@ function buildLogEntries(nodeIds) {
   return entries;
 }
 
+// A PG-wire session double: records what reached it; `failures` holds a
+// queue of errors to throw per statement before answering.
+function buildPgClientDouble(state) {
+  return async (node, port) => {
+    state.pgSessions.push({nodeId: node.id, port});
+    return {
+      close: async () => {
+        state.pgClosed += 1;
+      },
+      query: async (sql, params) => {
+        state.pgStatements.push({params, sql});
+        const queued = state.pgFailures[sql];
+        if (queued && queued.length > 0) {
+          throw queued.shift();
+        }
+        return {rows: sql === INSTALL_SQL ? [{package_id: PACKAGE_ID}] : []};
+      },
+    };
+  };
+}
+
+// Replays what the pipeline owner's runDeploy sends through the injected
+// lifecycle client: INSTALL, then one CREATE BINDING.
+async function replayDeploy({createSqlClient}) {
+  const client = createSqlClient();
+  const installed = await client.execute(INSTALL_SQL, ['{"install":1}']);
+  await client.execute(CREATE_BINDING_SQL, ['{"binding":1}']);
+  return {packageId: installed.rows[0].package_id};
+}
+
 function buildStubCluster(state) {
   const queryHandler = buildQueryHandler(state);
   const nodes = arrayMap(['node-1', 'node-2', 'node-3'], (id, index) => ({
@@ -155,14 +197,16 @@ function buildStubCluster(state) {
       publicPathBaseline: {
         fetchImpl: buildFetchHandler(state),
         invocationCount: INVOCATION_COUNT,
+        listenerTimeoutMs: SHORT_SPLIT_TIMEOUT_MS,
         logBuffer: () => buildLogEntries(state.localReadNodeIds),
+        openPublicClient: buildPgClientDouble(state),
         pipeline: {
           runBuild: async () => ({
             descriptor: {digest: BUILD_DIGEST},
             layoutPath:
               '/tmp/artifacts/public-path-baseline/.lagrange/layout',
           }),
-          runDeploy: async () => ({packageId: 'pkg-1'}),
+          runDeploy: replayDeploy,
           runGenerate: async () => ({}),
         },
         prepareProject: async () => ({
@@ -196,7 +240,16 @@ function buildStubCluster(state) {
 
 function greenState() {
   return {
+    adminStatements: [],
+    endpointRows: [
+      {health_status: 'healthy', node_id: 'node-2', port: PGWIRE_PORT},
+      {health_status: 'healthy', node_id: 'node-1', port: PGWIRE_PORT},
+    ],
     localReadNodeIds: ['node-1', 'node-2'],
+    pgClosed: 0,
+    pgFailures: {},
+    pgSessions: [],
+    pgStatements: [],
     parityDrift: false,
     partitionRows: SPREAD_PARTITION_ROWS,
     runtimeKind: 'wasm_component',
@@ -230,6 +283,60 @@ describe('public-path-multinode-baseline scenario', () => {
     assert.ok(detail.unavailableReasons.retries.length > 0);
     assert.equal(detail.resources.perNode.length, 3);
   });
+
+  it('deploys service-lifecycle SQL over an authenticated PG-wire ' +
+    'session to the seed, never the admin lane', async () => {
+    const state = greenState();
+    await run(buildStubCluster(state));
+
+    // The listener is requested before any data-phase statement.
+    assert.ok(stringStartsWith(state.adminStatements[0],
+      'UPDATE service_definitions'));
+    const runtimeConfig = JSON.parse(state.provisioned[1]);
+    assert.equal(state.provisioned[0], 3);
+    assert.equal(runtimeConfig.authMode, 'password');
+    assert.equal(runtimeConfig.host, '0.0.0.0');
+    assert.deepEqual(state.pgSessions, [{nodeId: 'node-1', port: PGWIRE_PORT}]);
+    assert.deepEqual(arrayMap(state.pgStatements, (entry) => entry.sql),
+      [INSTALL_SQL, CREATE_BINDING_SQL]);
+    assert.equal(state.pgClosed, 1);
+    for (const sql of state.adminStatements) {
+      assert.ok(!stringStartsWith(sql, 'INSTALL') &&
+        !stringStartsWith(sql, 'CREATE BINDING'), sql);
+    }
+  });
+
+  it('fails when no PG-wire listener becomes reachable', async () => {
+    const state = greenState();
+    state.endpointRows = [
+      {health_status: 'starting', node_id: 'node-1', port: PGWIRE_PORT},
+    ];
+
+    await assert.rejects(
+      run(buildStubCluster(state)),
+      /no reachable authenticated PostgreSQL-wire listener/u,
+    );
+    assert.equal(state.pgStatements.length, 0);
+  });
+
+  it('retries only the idempotent INSTALL on a retry-safe outcome',
+    async () => {
+      const state = greenState();
+      const deferred = new Error('install deferred');
+      deferred.deferred = true;
+      state.pgFailures[INSTALL_SQL] = [deferred];
+      await run(buildStubCluster(state));
+      assert.deepEqual(arrayMap(state.pgStatements, (entry) => entry.sql),
+        [INSTALL_SQL, INSTALL_SQL, CREATE_BINDING_SQL]);
+
+      const refused = greenState();
+      const bindingDeferred = new Error('binding deferred');
+      bindingDeferred.deferred = true;
+      refused.pgFailures[CREATE_BINDING_SQL] = [bindingDeferred];
+      await assert.rejects(run(buildStubCluster(refused)),
+        /binding deferred/u);
+      assert.equal(refused.pgClosed, 1);
+    });
 
   it('fails when the runtime kind is native_js', async () => {
     const state = greenState();
