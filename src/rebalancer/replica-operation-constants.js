@@ -68,6 +68,9 @@ const ReplicaOperationField = Object.freeze({
   // In-memory only (never persisted): ReplicaOperationVisibilityClass.
   VISIBILITY_CLASS: 'visibilityClass',
   PROPOSAL: 'proposal',
+  // A REMOVE that retires its replica's whole group as a unit carries the
+  // workflow's evidence (partition/group-retirement-evidence.js).
+  GROUP_RETIREMENT: 'groupRetirement',
 });
 
 const ReplicaOperationResponseStatus = Object.freeze({

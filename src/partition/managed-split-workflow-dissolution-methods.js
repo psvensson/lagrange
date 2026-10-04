@@ -7,6 +7,10 @@ import {
 import {OperationType} from '../rebalancer/replica-operation-progress.js';
 import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
 import {
+  GROUP_RETIREMENT_KIND,
+  buildGroupRetirementEvidence,
+} from './group-retirement-evidence.js';
+import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
@@ -288,6 +292,10 @@ class ManagedSplitWorkflowDissolutionMethods {
         workflowId,
         sourcePartitionId,
         LOCAL_STR_SPLIT_SOURCE_DISSOLUTION,
+        buildGroupRetirementEvidence({
+          kind: GROUP_RETIREMENT_KIND.SPLIT_SOURCE,
+          workflow,
+        }),
       );
       const deleteWitness =
         await this.deletePartitionMetadata(sourcePartitionId);
@@ -353,6 +361,10 @@ class ManagedSplitWorkflowDissolutionMethods {
           workflowId,
           childPartitionId,
           LOCAL_STR_SPLIT_ABORTED_CHILD_TEARDOWN,
+          buildGroupRetirementEvidence({
+            kind: GROUP_RETIREMENT_KIND.SPLIT_ABORTED_CHILD,
+            workflow,
+          }),
         );
         await this.deletePartitionMetadata(childPartitionId);
       } catch (error) {
@@ -402,15 +414,20 @@ class ManagedSplitWorkflowDissolutionMethods {
 
   /**
    * Dispatch REMOVE_REPLICA for every authoritative replica of one
-   * retired partition (the dissolved source or an aborted child).
+   * retired partition (the dissolved source or an aborted child). The
+   * group ends as a unit (owner decision 2026-10-04): every REMOVE carries
+   * the workflow's group-retirement evidence.
    * @param {string} workflowId
    * @param {string} partitionId
    * @param {string} reason - Replica-removal reason label.
+   * @param {Object} groupRetirement - buildGroupRetirementEvidence's
+   *   evidence for this retired group.
    * @return {Promise<string[]>} Replica ids with accepted removal
    *   dispatch.
    * @private
    */
-  async dispatchSplitReplicaRemovals(workflowId, partitionId, reason) {
+  async dispatchSplitReplicaRemovals(workflowId, partitionId, reason,
+    groupRetirement) {
     const serviceRows = this.listPartitionServiceRows(partitionId);
     const dissolvedReplicaIds = [];
     for (const serviceRow of serviceRows) {
@@ -419,6 +436,7 @@ class ManagedSplitWorkflowDissolutionMethods {
         partitionId,
         serviceRow,
         reason,
+        groupRetirement,
       );
       if (dispatchedReplicaId) {
         dissolvedReplicaIds.push(dispatchedReplicaId);
@@ -433,6 +451,7 @@ class ManagedSplitWorkflowDissolutionMethods {
    * @param {string} partitionId
    * @param {Object} serviceRow
    * @param {string} reason - Replica-removal reason label.
+   * @param {Object} groupRetirement - The group-retirement evidence.
    * @return {Promise<string|null>} Replica id when dispatch was accepted.
    * @private
    */
@@ -441,6 +460,7 @@ class ManagedSplitWorkflowDissolutionMethods {
     partitionId,
     serviceRow,
     reason,
+    groupRetirement,
   ) {
     const replicaId = resolveServiceRowField(
       serviceRow, LOCAL_STR_REPLICA_ID_SNAKE, LOCAL_STR_REPLICA_ID_CAMEL,
@@ -458,6 +478,7 @@ class ManagedSplitWorkflowDissolutionMethods {
         partitionId,
         replicaId,
         reason,
+        groupRetirement,
       }),
     });
     const responseStatus = String(response?.status || '');
@@ -518,6 +539,7 @@ class ManagedSplitWorkflowDissolutionMethods {
       [ReplicaOperationField.ENTITY_TYPE]: SERVICE_TYPE.PARTITION,
       [ReplicaOperationField.ENTITY_ID]: options.partitionId,
       [ReplicaOperationField.REASON]: options.reason,
+      [ReplicaOperationField.GROUP_RETIREMENT]: options.groupRetirement,
     };
   }
 }

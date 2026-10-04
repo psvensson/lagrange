@@ -7,6 +7,10 @@ import {
 import {OperationType} from '../rebalancer/replica-operation-progress.js';
 import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
 import {
+  GROUP_RETIREMENT_KIND,
+  buildGroupRetirementEvidence,
+} from './group-retirement-evidence.js';
+import {
   MANAGED_MERGE_ERROR_MSG,
   MANAGED_MERGE_LOG_MSG,
   MERGE_ABORT_OUTCOME,
@@ -173,6 +177,10 @@ class ManagedMergeWorkflowDissolutionMethods {
       const dissolvedReplicaIds = await this.dispatchSourceReplicaRemovals(
         workflowId,
         sourcePartitionId,
+        buildGroupRetirementEvidence({
+          kind: GROUP_RETIREMENT_KIND.MERGE_SOURCE,
+          workflow,
+        }),
       );
       const deleteWitness =
         await this.deleteSourcePartitionMetadata(sourcePartitionId);
@@ -326,7 +334,11 @@ class ManagedMergeWorkflowDissolutionMethods {
       return;
     }
     try {
-      await this.dispatchSourceReplicaRemovals(workflowId, targetPartitionId);
+      await this.dispatchSourceReplicaRemovals(workflowId, targetPartitionId,
+        buildGroupRetirementEvidence({
+          kind: GROUP_RETIREMENT_KIND.MERGE_ABORTED_TARGET,
+          workflow,
+        }));
       await this.deleteSourcePartitionMetadata(targetPartitionId);
     } catch (error) {
       this.logger.warn(MANAGED_MERGE_LOG_MSG.TARGET_TEARDOWN_FAILED, {
@@ -374,13 +386,18 @@ class ManagedMergeWorkflowDissolutionMethods {
 
   /**
    * Dispatch REMOVE_REPLICA for every authoritative replica of one retired
-   * partition (a dissolved source or an aborted merge target).
+   * partition (a dissolved source or an aborted merge target). The group
+   * ends as a unit (owner decision 2026-10-04): every REMOVE carries the
+   * workflow's group-retirement evidence.
    * @param {string} workflowId
    * @param {string} sourcePartitionId
+   * @param {Object} groupRetirement - buildGroupRetirementEvidence's
+   *   evidence for this retired group.
    * @return {Promise<string[]>} Replica ids with accepted removal dispatch.
    * @private
    */
-  async dispatchSourceReplicaRemovals(workflowId, sourcePartitionId) {
+  async dispatchSourceReplicaRemovals(workflowId, sourcePartitionId,
+    groupRetirement) {
     const serviceRows = this.listPartitionServiceRows(sourcePartitionId);
     const dissolvedReplicaIds = [];
     for (const serviceRow of serviceRows) {
@@ -388,6 +405,7 @@ class ManagedMergeWorkflowDissolutionMethods {
         workflowId,
         sourcePartitionId,
         serviceRow,
+        groupRetirement,
       );
       if (dispatchedReplicaId) {
         dissolvedReplicaIds.push(dispatchedReplicaId);
@@ -401,6 +419,7 @@ class ManagedMergeWorkflowDissolutionMethods {
    * @param {string} workflowId
    * @param {string} sourcePartitionId
    * @param {Object} serviceRow
+   * @param {Object} groupRetirement - The group-retirement evidence.
    * @return {Promise<string|null>} Replica id when dispatch was accepted.
    * @private
    */
@@ -408,6 +427,7 @@ class ManagedMergeWorkflowDissolutionMethods {
     workflowId,
     sourcePartitionId,
     serviceRow,
+    groupRetirement,
   ) {
     const replicaId = resolveServiceRowField(
       serviceRow, LOCAL_STR_REPLICA_ID_SNAKE, LOCAL_STR_REPLICA_ID_CAMEL,
@@ -424,6 +444,7 @@ class ManagedMergeWorkflowDissolutionMethods {
         workflowId,
         partitionId: sourcePartitionId,
         replicaId,
+        groupRetirement,
       }),
     });
     const responseStatus = String(response?.status || '');
@@ -453,6 +474,7 @@ class ManagedMergeWorkflowDissolutionMethods {
       [ReplicaOperationField.ENTITY_TYPE]: SERVICE_TYPE.PARTITION,
       [ReplicaOperationField.ENTITY_ID]: options.partitionId,
       [ReplicaOperationField.REASON]: LOCAL_STR_MERGE_SOURCE_DISSOLUTION,
+      [ReplicaOperationField.GROUP_RETIREMENT]: options.groupRetirement,
     };
   }
 }
