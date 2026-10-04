@@ -36,8 +36,10 @@ import {
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {RAFT_MEMBERSHIP_ADMISSION_OUTCOME} from
-  '../../src/raft/raft-operation-port-constants.js';
+import {
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_TRANSPORT_PROTOCOL} from
   '../../src/raft/raft-rs-ingress-constants.js';
 import {recoveryRetryWindowMsOf} from
@@ -120,10 +122,15 @@ async function withTransferRunning(partitionId, body) {
       groupId: partitionId,
       from: transfereeId,
       to: status.peerId,
+      // The shape raft-rs's own sender writes: a forwarded transfer request
+      // carries the forwarding follower's term (raft.rs send()); the
+      // ingress refuses a term-less one.
       message: {msgType: transferLeaderMessageType(), from: transfereeId,
-        to: status.peerId},
+        to: status.peerId, term: String(status.term)},
     });
-    assert.ok(delivered, 'setup: the transfer request was handed over');
+    assert.equal(delivered?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'setup: the leader admits the transfer request a peer delivered ' +
+      `(${JSON.stringify(delivered)})`);
     await body({leader, status});
   } finally {
     network.deliver = deliver;
