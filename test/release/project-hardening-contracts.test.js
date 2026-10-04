@@ -1,7 +1,10 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {access, readFile, readdir} from 'node:fs/promises';
+import {spawnSync} from 'node:child_process';
 import {parse} from 'yaml';
+import {registeredActions} from '../../scripts/action-authority.js';
+import {parsePublishArgs} from '../../scripts/publish-head.js';
 import {ADMIN_DEFAULT} from '../../src/admin/admin-constants.js';
 import {
   DEFAULT_CONFIG,
@@ -239,8 +242,8 @@ describe('project hardening contracts', () => {
     assert.ok(health, 'the structural analysis still runs');
     assert.equal(health['continue-on-error'], true,
       'structural debt must never decide whether a change is proved');
-    assert.equal(health.if, 'github.event_name != \'pull_request\'',
-      'repository health belongs to main, not to a pull request');
+    assert.equal(health.if, 'github.ref == \'refs/heads/main\'',
+      'repository health belongs to main, not to a pull request or a branch');
     assert.ok(Number.isFinite(health['timeout-minutes']),
       'the analysis carries its own bound: continue-on-error absorbs a ' +
       'failing step, never a job timeout, so an overrun would fail the ' +
@@ -293,6 +296,117 @@ describe('project hardening contracts', () => {
       'only the newest head is worth proving');
   }
 
+  // preserved-branches-run-their-cone (owner, 2026-10-04): a quest/, land/ or
+  // review/ branch push proves its cone on a GitHub-hosted runner, against its
+  // merge-base with main; wip/ and every other prefix run nothing; no event
+  // reaches any other runner; main and pull requests behave as before.
+  const CI_WORKFLOW = '.github/workflows/ci.yml';
+  const readCi = async () => {
+    const text = await readFile(CI_WORKFLOW, UTF8);
+    return {text, ci: parse(text)};
+  };
+  const BRANCH_PUSH = 'branch push';
+  const MAIN_PUSH = 'main push';
+  const PULL_REQUEST = 'pull request';
+  // Every condition a gate step may carry, and whether it holds for each
+  // event (on a successful run). An unlisted condition fails the witness, so
+  // a new one is classified here before any event's step set can change.
+  const STEP_CONDITIONS = Object.freeze({
+    'runner.environment == \'github-hosted\'':
+      {[MAIN_PUSH]: true, [PULL_REQUEST]: true, [BRANCH_PUSH]: true},
+    'always()': {[MAIN_PUSH]: true, [PULL_REQUEST]: true, [BRANCH_PUSH]: true},
+    'failure()': {[MAIN_PUSH]: false, [PULL_REQUEST]: false, [BRANCH_PUSH]: false},
+    'github.ref == \'refs/heads/main\'':
+      {[MAIN_PUSH]: true, [PULL_REQUEST]: false, [BRANCH_PUSH]: false},
+    'always() && github.ref == \'refs/heads/main\'':
+      {[MAIN_PUSH]: true, [PULL_REQUEST]: false, [BRANCH_PUSH]: false},
+  });
+  const stepsFor = (ci, event) => ci.jobs.gate.steps.filter((step) => {
+    if (step.if === undefined) return true;
+    assert.ok(Object.hasOwn(STEP_CONDITIONS, step.if),
+      `classify the step condition ${step.if}`);
+    return STEP_CONDITIONS[step.if][event];
+  }).map((step) => step.name);
+  const PROOF_STEPS = Object.freeze(['Checkout', 'Resolve the proof range',
+    'Set up Node 22', 'Install gate CLI tools', 'Install dependencies',
+    'Fetch MovieLens dataset (digest-pinned)',
+    'Prepare generated test metadata', 'Ordinary proof',
+    'Upload the proof scope']);
+
+  it('runs the change gate on main, pull requests into main and the preserved prefixes only', async () => {
+    const {ci} = await readCi();
+    assert.deepEqual(Object.keys(ci.on).sort(),
+      ['pull_request', 'push', 'workflow_dispatch'],
+      'no pull_request_target, workflow_run or other trigger');
+    assert.deepEqual(ci.on.push, {branches: ['main', 'quest/**', 'land/**', 'review/**']},
+      'pushes to main and the owner\'s three prefixes; wip/** and the rest run nothing');
+    assert.deepEqual(ci.on.pull_request, {branches: ['main']});
+    assert.equal(ci.permissions.contents, 'read');
+    assert.deepEqual(Object.keys(ci.permissions), ['contents'], 'least privilege');
+    assert.deepEqual(Object.keys(ci.jobs), ['gate']);
+  });
+
+  it('runs every ci.yml job on a GitHub-hosted runner, whatever the event', async () => {
+    const {text, ci} = await readCi();
+    for (const [name, job] of Object.entries(ci.jobs)) {
+      assert.match(String(job['runs-on']), /^ubuntu-\d+\.\d+$/u,
+        `${name}: a literal hosted label, never an expression that could route`);
+    }
+    assert.doesNotMatch(text, /self-hosted/iu,
+      'no label, expression or marker can select another runner');
+    const plan = JSON.parse(await readFile('test/manifests/ci-resource-plan.json', UTF8));
+    assert.equal(plan.jobs['ci.yml/gate'].runsOn, ci.jobs.gate['runs-on']);
+  });
+
+  it('proves a branch push by its cone only, and main and pull requests as before', async () => {
+    const {ci} = await readCi();
+    // The step set each event runs. Main and pull requests are unchanged; a
+    // branch push runs exactly what a pull request runs: the proof, and none
+    // of main's structural analysis (formation-health --bot-commits included).
+    const mainOnly = ['Whole-repository structural analysis', 'Upload health evidence'];
+    assert.deepEqual(stepsFor(ci, MAIN_PUSH),
+      [...PROOF_STEPS, ...mainOnly]);
+    assert.deepEqual(stepsFor(ci, PULL_REQUEST), PROOF_STEPS);
+    assert.deepEqual(stepsFor(ci, BRANCH_PUSH), PROOF_STEPS);
+    // The proof is `npm run check` - the change selector, which refuses
+    // rather than widening and never runs the whole corpus - and nothing a
+    // branch push reaches names a corpus entry point.
+    const reached = ci.jobs.gate.steps
+      .filter((step) => stepsFor(ci, BRANCH_PUSH).includes(step.name))
+      .map((step) => String(step.run ?? '')).join('\n');
+    assert.deepEqual([...reached.matchAll(/^\s*npm run (?:-s )?(\S+)/gmu)]
+      .map((match) => match[1]), ['test:metadata:refresh', 'check']);
+    assert.doesNotMatch(reached,
+      /test:all|test:gate|check:release|push-gate-change-proof|run-release-proof/u);
+    const proof = ci.jobs.gate.steps.find((step) => step.name === 'Ordinary proof');
+    assert.equal(proof['continue-on-error'], undefined, 'a refused cone fails the run');
+    const scripts = JSON.parse(await readFile('package.json', UTF8)).scripts;
+    assert.equal(scripts.check, 'node scripts/check-fast-static.js && npm test');
+    assert.equal(scripts.test, 'node scripts/select-change-tests.js');
+  });
+
+  it('cancels a superseded branch or pull-request run and never a main run', async () => {
+    const {ci} = await readCi();
+    assert.deepEqual(ci.concurrency, {'group': 'ci-${{ github.ref }}',
+      'cancel-in-progress': '${{ github.ref != \'refs/heads/main\' }}'});
+  });
+
+  it('retires the commit-message runner route everywhere', () => {
+    const marker = ['[ci:', 'self-hosted]'].join('');
+    const found = spawnSync('git', ['grep', '-l', '-F', '-e', marker, '--', '.',
+      ':(exclude)solve/quests'], {encoding: UTF8});
+    assert.equal(found.status, 1, 'no tracked file outside quest history names ' +
+      `the route: ${found.stdout}${found.stderr}`);
+    assert.ok(!registeredActions().includes('route-self-hosted-runner'),
+      'the authority no longer registers the routing action');
+    // The publisher's option is refused by name, never silently accepted.
+    for (const argv of [['--runner', 'self-hosted'], ['--runner', 'github'], ['--runner']]) {
+      assert.throws(() => parsePublishArgs(argv),
+        /^Error: publish: --runner is retired: ci\.yml runs every event on a GitHub-hosted runner/u,
+        argv.join(' '));
+    }
+  });
+
   it('owns CI and release publication through GitHub Actions only', async () => {
     const [ciText, fullGateText, releaseText, ...surfaceTexts] =
       await Promise.all([
@@ -305,24 +419,13 @@ describe('project hardening contracts', () => {
     const fullGate = parse(fullGateText);
     const release = parse(releaseText);
 
-    assert.deepEqual(ci.on.push.branches, ['main']);
     assert.deepEqual(ci.on.pull_request.branches, ['main']);
-    // Runner routing survives; the PATH CLASSIFIER does not. Deciding what a
-    // change means belonged to two authorities - a YAML case statement here
-    // and the source taxonomy in the repository - and two authorities on one
-    // question eventually disagree. Routing is not that question: it is
-    // identity and environment, which is the workflow's job.
+    // The PATH CLASSIFIER is gone. Deciding what a change means belonged to
+    // two authorities - a YAML case statement here and the source taxonomy in
+    // the repository - and two authorities on one question eventually
+    // disagree.
     assert.equal(ci.jobs.changes, undefined,
       'CI must not carry a second authority on what a change means');
-    const runsOn = ci.jobs.gate['runs-on'];
-    assert.match(runsOn, /ubuntu-24\.04/u,
-      'GitHub-hosted is the default runner');
-    assert.match(runsOn, /\[ci:self-hosted\]/u,
-      'a head-commit marker still routes a push to the local box');
-    assert.doesNotMatch(runsOn, /\[ci:github\]/u,
-      'there is no opt-in marker: hosted is the default, not a choice');
-    assert.match(runsOn, /github\.event_name == 'push'/u,
-      'pull requests can carry fork code and must never reach self-hosted');
 
     // The proof range is supplied by the workflow and consumed by repository
     // code through one variable, so the static layer and the change proof

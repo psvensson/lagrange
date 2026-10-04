@@ -1,0 +1,40 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "preserved-branches-get-their-cone",
+  "status": "pass",
+  "testFileDigests": {
+    "test/scripts/pre-push-hook-control-flow.test.js": "f5524a47df8dda46ae7289e94fb66da6cddccba63e5acd4627eeae1168f3fc45",
+    "test/scripts/pre-push-stage-manifest.test.js": "492caaf87a44460ef6f6204fe2479bfcae58a34d1561173964084e81d85a2a09"
+  },
+  "generatedAt": "2026-10-04T07:56:15.650Z",
+  "receipts": [
+    {
+      "id": "one-hint-names-the-cone",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a non-main branch push says once that its cone is unproven and how to prove it$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "the real hook on a non-main push prints exactly one unproven line naming the lab cone command for the first pushed commit (a leading deletion skipped) and LAGRANGE_PUSH_PROVE_BRANCH=1; exit 0, nothing materialized",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "no-hint-where-a-proof-runs",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the unproven hint is absent wherever a proof runs or there is nothing to prove$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "no unproven line on a main push, on LAGRANGE_PUSH_PROVE_BRANCH=1, or on a deletion-only preservation push",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "hint-states-the-ci-trigger",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the unproven hint states ci\\\\.yml's own trigger$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "the printed CI claim is asserted against ci.yml's parsed push and pull_request triggers",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "stage-manifest-matches-the-hook",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the hook runs exactly the declared stages, in the declared order$\" test/scripts/pre-push-stage-manifest.test.js",
+      "detail": "the stage manifest still names the hook stages in order",
+      "testFile": "test/scripts/pre-push-stage-manifest.test.js"
+    }
+  ]
+}

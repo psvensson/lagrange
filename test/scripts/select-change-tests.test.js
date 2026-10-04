@@ -15,6 +15,7 @@
 // selector. These tests pin exactly that.
 
 import assert from 'node:assert/strict';
+import {execFileSync, spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,6 +40,7 @@ import {
   buildExecutionPlan,
   loadSafetySpine,
 } from '../../scripts/select-change-tests.js';
+import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 
 const root = process.cwd();
 const UTF8 = 'utf8';
@@ -437,4 +439,29 @@ test('the convergence-probe class is observed elsewhere, never part of a change 
     'every probe the selector wanted is named as observed elsewhere');
   assert.deepEqual(result.observedElsewhere[0].reasons, ['observer: directories'],
     'with the reason it would have run for');
+});
+
+// The command ci.yml's gate runs (`npm run check` -> `npm test`) on a range
+// whose cone cannot stand for it: it fails, named, and runs no test - the
+// same on a preserved-branch push as on a pull request, so a hosted branch
+// run can never become a corpus run (preserved-branches-run-their-cone). The
+// range is one unreachable commit: HEAD's tree with a release-surface field
+// of package.json changed (its objects are written loose, never referenced).
+test('a refused cone fails by name and runs nothing, never widening to the corpus', () => {
+  const gitHere = (args, input) => execFileSync('git', args, {cwd: root,
+    encoding: UTF8, input, env: gitProcessEnvironment()}).trim();
+  const manifest = JSON.parse(gitHere(['show', 'HEAD:package.json']));
+  const blob = gitHere(['hash-object', '-w', '--stdin'],
+    JSON.stringify({...manifest, main: 'src/elsewhere.js'}, null, 2) + '\n');
+  const tree = gitHere(['mktree'], gitHere(['ls-tree', 'HEAD']).split('\n')
+    .map((line) => (line.endsWith('\tpackage.json') ?
+      line.replace(/[0-9a-f]{40}(?=\tpackage\.json$)/u, blob) : line)).join('\n') + '\n');
+  const head = gitHere(['commit-tree', tree, '-p', 'HEAD', '-m', 'release surface']);
+  const run = spawnSync(process.execPath,
+    ['scripts/select-change-tests.js', '--base', 'HEAD', '--head', head],
+    {cwd: root, encoding: UTF8, env: {...process.env, LAGRANGE_CHECK_BASE: ''}});
+  assert.equal(run.status, 1, run.stdout + run.stderr);
+  assert.match(run.stderr,
+    /^MODULAR PROOF NOT SAFE\n {2}reason: RELEASE_PROOF_REQUIRED\n[\s\S]*run: npm run check:release\n$/u);
+  assert.equal(run.stdout, '', 'no plan was announced and no test file ran');
 });

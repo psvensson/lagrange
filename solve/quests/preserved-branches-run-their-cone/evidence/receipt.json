@@ -1,0 +1,99 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "preserved-branches-run-their-cone",
+  "status": "pass",
+  "testFileDigests": {
+    "test/release/project-hardening-contracts.test.js": "a28e33e59543632148927abbeb2549ff8555f946d5370e18ffd7a074350be293",
+    "test/scripts/check-base-range.test.js": "1b216e37565cc96bcf43aedf59dcd837474570492193c919dfa73a8e770923b1",
+    "test/scripts/select-change-tests.test.js": "8c01415dfe210dbb86199da80eddeff24fc24507d437fd52d17940ef112ce6c2",
+    "test/scripts/pre-push-hook-control-flow.test.js": "8a4deaf773aabd5e8d4f1664dca02ae9dc505292d8fe09e97bfc23ffe8d8ea9d",
+    "test/scripts/pre-push-stage-manifest.test.js": "492caaf87a44460ef6f6204fe2479bfcae58a34d1561173964084e81d85a2a09"
+  },
+  "generatedAt": "2026-10-04T09:23:42.770Z",
+  "receipts": [
+    {
+      "id": "ci-triggers-are-main-prs-and-preserved-prefixes",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^runs the change gate on main, pull requests into main and the preserved prefixes only$\" test/release/project-hardening-contracts.test.js",
+      "detail": "ci.yml triggers are exactly push [main, quest/**, land/**, review/**], pull_request [main] and workflow_dispatch; no pull_request_target; contents: read only; one job",
+      "testFile": "test/release/project-hardening-contracts.test.js"
+    },
+    {
+      "id": "every-ci-job-runs-hosted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^runs every ci\\\\.yml job on a GitHub-hosted runner, whatever the event$\" test/release/project-hardening-contracts.test.js",
+      "detail": "every ci.yml job runs-on is a literal ubuntu label, ci.yml contains no self-hosted string anywhere, and the resource plan names the same literal",
+      "testFile": "test/release/project-hardening-contracts.test.js"
+    },
+    {
+      "id": "branch-push-runs-the-cone-only",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^proves a branch push by its cone only, and main and pull requests as before$\" test/release/project-hardening-contracts.test.js",
+      "detail": "per-event step sets: main push and pull request unchanged, a branch push runs exactly the pull-request steps (no structural analysis); the only npm scripts reached are test:metadata:refresh and check (= fast static + select-change-tests); no corpus entry point; the proof step is not continue-on-error",
+      "testFile": "test/release/project-hardening-contracts.test.js"
+    },
+    {
+      "id": "superseded-branch-runs-cancel-never-main",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^cancels a superseded branch or pull-request run and never a main run$\" test/release/project-hardening-contracts.test.js",
+      "detail": "concurrency group ci-<ref>, cancel-in-progress exactly when the ref is not refs/heads/main",
+      "testFile": "test/release/project-hardening-contracts.test.js"
+    },
+    {
+      "id": "branch-push-proves-from-the-merge-base",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a branch push proves every commit since its merge-base with main, through ci\\\\.yml's range step$\" test/scripts/check-base-range.test.js",
+      "detail": "ci.yml's range step run as written in a CI-shaped clone: a new quest/ branch push declares no base, so the selector's publication merge-base is the fork point and both branch commits (not main's later one) are proved; main and PR bases unchanged; a missing origin/main fails the step",
+      "testFile": "test/scripts/check-base-range.test.js"
+    },
+    {
+      "id": "refused-cone-fails-by-name",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a refused cone fails by name and runs nothing, never widening to the corpus$\" test/scripts/select-change-tests.test.js",
+      "detail": "preservation: the gate's change selector on a release-surface range exits 1 with MODULAR PROOF NOT SAFE / RELEASE_PROOF_REQUIRED / run: npm run check:release and announces and runs nothing",
+      "testFile": "test/scripts/select-change-tests.test.js"
+    },
+    {
+      "id": "self-hosted-route-retired",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^retires the commit-message runner route everywhere$\" test/release/project-hardening-contracts.test.js",
+      "detail": "git grep finds the marker in no tracked file outside solve/quests; action-authority registers no route-self-hosted-runner; publish refuses --runner (any value) as retired",
+      "testFile": "test/release/project-hardening-contracts.test.js"
+    },
+    {
+      "id": "hook-prefixes-are-the-workflow-triggers",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the hook's remote-proof prefixes are the workflows' parsed push triggers$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "the hook's REMOTE_PROOF_PREFIXES equals the prefix->workflow map derived from every workflow's parsed push.branches (main excluded)",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "covered-push-names-its-workflow",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a push the workflows cover names the workflow and is never called unproven$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "the real hook, for a branch under each derived prefix: exit 0, nothing materialized, exactly one remote-proof line naming that workflow and the pushed sha, no unproven line",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "uncovered-push-is-unproven-with-its-precondition",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an uncovered branch push is unproven, once, with the clean-checkout cone command$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "the real hook on wip/, a bare and a look-alike branch: exactly one unproven line naming the branch, the open-PR caveat and the cone command from a clean checkout at the sha; a mixed push names the first uncovered commit with (first of N unproven refs)",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "no-hint-where-a-local-proof-runs",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^no remote-proof hint where the local proof runs or nothing was pushed$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "no hint line on a main push, under LAGRANGE_PUSH_PROVE_BRANCH=1 (covered or not), or on a deletion-only push",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "stage-manifest-matches-the-hook",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the hook runs exactly the declared stages, in the declared order$\" test/scripts/pre-push-stage-manifest.test.js",
+      "detail": "preservation: the stage manifest still names the hook stages in order",
+      "testFile": "test/scripts/pre-push-stage-manifest.test.js"
+    }
+  ]
+}

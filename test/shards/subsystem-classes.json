@@ -28,7 +28,7 @@
   "censusSize": 2285,
   "digest": "fnv1a32-72594200",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2b11ef3d",
+  "observationDigest": "fnv1a32-afac39d6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -9846,6 +9846,7 @@
     },
     "test/release/project-hardening-contracts.test.js": {
       "files": [
+        ".githooks/pre-push",
         ".github/workflows/ci.yml",
         ".github/workflows/full-corpus-canary.yml",
         ".github/workflows/full-gate.yml",
@@ -9855,22 +9856,29 @@
         "Dockerfile",
         "README.md",
         "RELEASE.md",
+        "data/formation-health/trend.ndjson",
         "docs/development/home-lab.md",
         "docs/development/solver-runbook.md",
         "docs/dockerhub-overview.md",
         "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/checks/run-golden-capability-guard-scenarios.js",
         "scripts/lab/harness.js",
         "scripts/lab/probe.js",
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js",
         "scripts/release-notes.js",
         "scripts/run-classified-test-files.js",
         "src/public-api.js",
+        "test/manifests/ci-resource-plan.json",
         "test/manifests/project-hardening-proof-manifest.json",
-        "test/manifests/project-hardening-proof-postpush-manifest.json"
+        "test/manifests/project-hardening-proof-postpush-manifest.json",
+        "test/shards/primary-classes.json"
       ],
       "directories": [
         ".github",
-        "scripts"
+        "scripts",
+        "test"
       ]
     },
     "test/release/public-api-boot-incarnation-contract.test.js": {
@@ -10571,6 +10579,7 @@
     },
     "test/scripts/check-base-range.test.js": {
       "files": [
+        ".github/workflows/ci.yml",
         "scripts/checks/git-process-environment.js"
       ],
       "directories": [
@@ -11492,6 +11501,9 @@
         "scripts/checks/git-process-environment.js",
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/checks/wait-for-thermal-headroom.js"
+      ],
+      "directories": [
+        ".github/workflows"
       ],
       "env": [
         "LAGRANGE_GATE_PUSHED_REF",

@@ -102,7 +102,6 @@ command could work out for itself:
 | --- | --- |
 | publishing a landed head | the standing authority to publish what has landed; nothing to pass |
 | pushing onto a red shared branch | `--fixes-red <the head it is red at> --reason "<why>"` |
-| routing a push to another runner | the marker in the reviewed head commit *and* `--runner` |
 | gating without the dataset | `--allow-missing-data` |
 | replacing a published evidence asset | `evidence add --replace`; without it the upload does not clobber |
 | publishing the package | `--authorize-version <version>`, which must equal the version about to go out |
@@ -135,16 +134,25 @@ If the exact push repairs the current red main, attribute that exception:
 npm run publish -- --fixes-red <origin-main-sha> --reason "<why this fixes red>"
 ```
 
-The default runner is GitHub-hosted. Self-hosted routing requires
-`[ci:self-hosted]` in the already-reviewed HEAD commit message and
-`--runner self-hosted`; publish validates the marker and never amends; when
+Every `ci.yml` run is GitHub-hosted; there is no route to another runner. When
 origin/main advanced only by inert data commits (the nightly formation trend)
-it rebases the local commits over them, refusing on a dirty tracked tree or a
-conflict. Direct branch pushes are preservation actions. A normal `git push` to one or
-more non-`main` branch refs skips the local proof gate so a committed WIP can
-always be preserved remotely; that remote branch is not Quest-land, merge,
-release or publication approval. Set `LAGRANGE_PUSH_PROVE_BRANCH=1` when you
-deliberately want the full local push gate on a feature branch.
+publish rebases the local commits over them, refusing on a dirty tracked tree
+or a conflict. Direct branch pushes are preservation actions. A normal `git
+push` to one or more non-`main` branch refs skips the local proof gate so a
+committed WIP can always be preserved remotely; that remote branch is not
+Quest-land, merge, release or publication approval. A push to `quest/**`,
+`land/**` or `review/**` runs `ci.yml`'s change cone against the branch's
+merge-base with `main` (never the corpus; a cone the selector refuses fails
+with `MODULAR PROOF NOT SAFE`, so prove that branch locally or in the lab);
+`release-proof/**` runs `full-gate.yml` and `release-publishability/**`
+`release.yml`; the hook says which in one line. Any other branch (`wip/**`
+included) is unproven unless an open pull request into `main` covers it, and
+the hook prints its cone command, `node scripts/lab.js test changed --lane all
+--split --sha <sha>`. Run it from a checkout exactly at `<sha>` with a clean
+tree, untracked files included (the controller runs its lanes in that tree
+and otherwise refuses), whose generated import graph exists (`npm run -s
+test:metadata:refresh` in a fresh worktree). Set `LAGRANGE_PUSH_PROVE_BRANCH=1`
+when you deliberately want the full local push gate on a feature branch.
 
 Pushes that update `main` still take the full gate. If that exact tree already
 passed `test:gate:postpush`, `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only

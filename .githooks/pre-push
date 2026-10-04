@@ -80,6 +80,16 @@ SAW_REF=0
 PUSHED_SHA=""
 PUSHED_REF=""
 MAIN_REMOTE_SHA=""
+# Branch prefixes a workflow's own push trigger proves remotely, as
+# <prefix>=<workflow>. A mirror, never an authority: the workflows' parsed
+# push.branches own it, and pre-push-hook-control-flow.test.js derives the set
+# from them and fails when the two differ.
+REMOTE_PROOF_PREFIXES="quest/=ci.yml land/=ci.yml review/=ci.yml release-proof/=full-gate.yml release-publishability/=release.yml"
+REMOTE_PROOF_WORKFLOWS=""
+REMOTE_PROOF_SHA=""
+UNPROVEN_SHA=""
+UNPROVEN_BRANCH=""
+UNPROVEN_REFS=0
 ALL_PROVEN_TAG_REFS=1
 ALL_NON_MAIN_BRANCH_REFS=1
 ZERO_SHA="0000000000000000000000000000000000000000"
@@ -101,6 +111,20 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
     refs/heads/*)
       if [ "${remote_ref}" = "refs/heads/main" ]; then
         ALL_NON_MAIN_BRANCH_REFS=0
+      elif [ "${local_sha}" != "${ZERO_SHA}" ]; then
+        proving_workflow=""
+        for entry in ${REMOTE_PROOF_PREFIXES}; do
+          case "${remote_ref#refs/heads/}" in "${entry%%=*}"*) proving_workflow="${entry#*=}"; break ;; esac
+        done
+        if [ -z "${proving_workflow}" ]; then
+          UNPROVEN_REFS=$((UNPROVEN_REFS + 1))
+          UNPROVEN_SHA="${UNPROVEN_SHA:-${local_sha}}"
+          UNPROVEN_BRANCH="${UNPROVEN_BRANCH:-${remote_ref#refs/heads/}}"
+        else
+          REMOTE_PROOF_SHA="${REMOTE_PROOF_SHA:-${local_sha}}"
+          case " ${REMOTE_PROOF_WORKFLOWS} " in *" ${proving_workflow} "*) ;;
+            *) REMOTE_PROOF_WORKFLOWS="${REMOTE_PROOF_WORKFLOWS:+${REMOTE_PROOF_WORKFLOWS} }${proving_workflow}" ;; esac
+        fi
       fi
       ;;
     *)
@@ -190,12 +214,21 @@ fi
 # boundaries. A committed SHA must always be remotely preservable even while
 # its Quest witnesses are intentionally red. Main, tags/proof refs and mixed
 # pushes do not take this path. Operators can opt a branch into the full local
-# proof with LAGRANGE_PUSH_PROVE_BRANCH=1.
+# proof with LAGRANGE_PUSH_PROVE_BRANCH=1. The fast path then says, in one
+# line, whether a workflow's push trigger proves the push remotely (ci.yml
+# runs the change cone for quest/, land/ and review/ branches) or that it is
+# unproven, with the lab command that proves the first such commit's cone.
 stage "branch-preservation-fast-path" "non-main branch preservation check"
 if [ "${ALL_NON_MAIN_BRANCH_REFS}" = "1" ] && [ -z "${LAGRANGE_PUSH_PROVE_BRANCH:-}" ]; then
   echo "pre-push: non-main branch preservation push - skipping local proof gate"
   echo "pre-push: remote preservation is NOT merge, Quest-land, release, or publication approval"
-  echo "pre-push: set LAGRANGE_PUSH_PROVE_BRANCH=1 to prove a feature branch locally before push"
+  if [ "${UNPROVEN_REFS}" -gt 0 ]; then
+    first_of=""
+    if [ "${UNPROVEN_REFS}" -gt 1 ]; then first_of=" (first of ${UNPROVEN_REFS} unproven refs)"; fi
+    echo "pre-push: unproven - no workflow runs on a push to ${UNPROVEN_BRANCH}, so nothing proves it unless an open pull request into main covers it; prove the cone from a clean checkout at ${UNPROVEN_SHA}: node scripts/lab.js test changed --lane all --split --sha ${UNPROVEN_SHA}${first_of}"
+  elif [ -n "${REMOTE_PROOF_WORKFLOWS}" ]; then
+    echo "pre-push: remote proof - this push triggers ${REMOTE_PROOF_WORKFLOWS} (results: gh run list --commit ${REMOTE_PROOF_SHA})"
+  fi
   exit 0
 fi
 

@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "preserved-branches-get-their-cone",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "A preserved branch has never been proven and nothing tells its author. Since the non-main preservation fast path landed (79e8c7cb9 + 4c98b0a59, 2026-10-02/03) a git push of only non-main branch refs skips the local gate, and ci.yml runs only on pushes to main and on pull requests into main, so the branch's change cone runs nowhere: origin/quest/0-3-queryable-core-foundation carried a red hook test and a stage manifest that did not match the hook, its four stacked PRs (#88, #91, #95, #96, three of them with review/ heads) and the conflicting PR #74 got no CI, and a red direct commit sat on a landing branch until the publish gate caught it. The owner's decision (2026-10-04) is to run the CI change gate on quest/** and land/** pushes on self-hosted lab runners; measured on 2026-10-04 that path is not usable (the only runner registered to psvensson/lagrange is the offline GCP proof VM, no lab host is registered to any repository, the documented private control repository does not exist, and the repository is public), so this quest implements the owner's stated fallback and does not route the gate to GitHub-hosted runners: the fast path prints exactly one line saying the push is unproven, that the change gate (ci.yml) runs only on main and pull requests into main, and the command that proves the first pushed commit's cone (node scripts/lab.js test changed --lane all --split --sha <sha>, or a push with LAGRANGE_PUSH_PROVE_BRANCH=1). The line is not printed for a main push, for LAGRANGE_PUSH_PROVE_BRANCH=1, or for a deletion-only push, and its CI claim is bound to ci.yml's own triggers by a witness so it cannot outlive a change to them.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/preserved-branches-get-their-cone/evidence/receipt.json",
+      "requiredReceipts": [
+        "one-hint-names-the-cone",
+        "no-hint-where-a-proof-runs",
+        "hint-states-the-ci-trigger",
+        "stage-manifest-matches-the-hook"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-new-apparatus",
+      "statement": "No workflow or script file is added; existing files change; ratchet baselines only tighten; the apparatus budget metric does not get worse."
+    },
+    {
+      "id": "never-hosted-for-the-cone",
+      "statement": "The change gate is not routed to GitHub-hosted runners for non-main pushes; ci.yml's triggers are unchanged until a self-hosted lab path exists."
+    },
+    {
+      "id": "one-line-fast-path-only",
+      "statement": "The hint is one line, printed only on the preservation fast path when a commit was pushed; the stage reads only the pushed ref lines (tree none) and the stage manifest still matches the hook."
+    },
+    {
+      "id": "claim-bound-to-its-owner",
+      "statement": "What the hint says about CI coverage is ci.yml's trigger, asserted against the parsed workflow; the hook does not become a second authority on which refs get CI."
+    }
+  ],
+  "sealedAt": "d60c309216ccc86712a26766b83c97b0583ab919"
+}

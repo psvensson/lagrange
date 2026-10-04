@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "preserved-branches-run-their-cone",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "A preserved branch is never proven and its author is told the wrong thing. Since the non-main preservation fast path landed (79e8c7cb9 + 4c98b0a59) a push of only non-main branch refs skips the local gate, and ci.yml runs only on pushes to main and pull requests into main, so quest/, land/ and review/ branches (and the stacked PRs whose heads they are) carried reds nobody saw; ci.yml also still carries a dead '[ci:self-hosted]' commit-message route to a label only the offline GCP proof VM has, with a header claiming pull requests can never reach a self-hosted runner, which a pull request's own copy of the workflow can always do. Owner decisions 2026-10-04 (after the rejected preserved-branches-get-their-cone, which this supersedes; its findings and measurements stand by reference): D1 a push to quest/**, land/** or review/** runs ci.yml's change gate on a GitHub-hosted runner, proving the CONE of the pushed head against its merge-base with main (not before..after, not HEAD^), never the corpus: a cone the selector refuses fails the run by name (MODULAR PROOF NOT SAFE) exactly as for a pull request, and nothing the branch run reaches is a corpus entry point or main's structural analysis; a newer push to the same branch cancels the superseded run, while main's runs are never cancelled; main pushes and pull requests into main run the same steps against the same base as before; permissions stay contents: read. D2 wip/** and every other prefix stay free of CI. D3 the '[ci:self-hosted]' route is retired: ci.yml has no trigger, label or expression by which any event selects a runner other than a GitHub-hosted one (no pull_request_target), the resource plan names the literal hosted label, publish refuses --runner as a retired option with a clear message, action-authority no longer registers route-self-hosted-runner, and no tracked file outside quest history names the marker. D4 the pre-push fast path keeps exactly one line: for a push whose pushed branches a workflow's push trigger covers it names that workflow (ci.yml for the three prefixes, full-gate.yml for release-proof/**, release.yml for release-publishability/**); otherwise it says the push is unproven unless an open pull request into main covers it and gives the cone command with its precondition, from a clean checkout at <sha> (the first uncovered commit; with a count when several refs are uncovered); nothing for a main push, LAGRANGE_PUSH_PROVE_BRANCH or a deletion-only push; the hook's prefix list is bound by a witness to the prefixes derived from every workflow's parsed push trigger, and the runbook states the command's prerequisites (exact clean checkout, generated import graph).",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/preserved-branches-run-their-cone/evidence/receipt.json",
+      "requiredReceipts": [
+        "ci-triggers-are-main-prs-and-preserved-prefixes",
+        "every-ci-job-runs-hosted",
+        "branch-push-runs-the-cone-only",
+        "superseded-branch-runs-cancel-never-main",
+        "branch-push-proves-from-the-merge-base",
+        "refused-cone-fails-by-name",
+        "self-hosted-route-retired",
+        "hook-prefixes-are-the-workflow-triggers",
+        "covered-push-names-its-workflow",
+        "uncovered-push-is-unproven-with-its-precondition",
+        "no-hint-where-a-local-proof-runs",
+        "stage-manifest-matches-the-hook"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-new-apparatus",
+      "statement": "No workflow or script file is added; existing files change; net workflow lines do not grow; ratchet baselines only tighten; the apparatus budget metric does not get worse."
+    },
+    {
+      "id": "cone-never-corpus-on-hosted",
+      "statement": "No trigger of ci.yml reaches the whole corpus on a hosted runner; a refused cone fails, it is never widened."
+    },
+    {
+      "id": "main-and-prs-unchanged",
+      "statement": "The steps, base and cancellation of main pushes and pull requests into main are those of d60c30921."
+    },
+    {
+      "id": "one-authority-per-question",
+      "statement": "Which refs a workflow proves is the workflows' push triggers; the hook's list is a mirror bound by a witness, and the runner of every job is the resource plan's literal."
+    }
+  ],
+  "supersedes": "preserved-branches-get-their-cone",
+  "sealedAt": "d60c309216ccc86712a26766b83c97b0583ab919"
+}
