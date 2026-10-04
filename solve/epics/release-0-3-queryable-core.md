@@ -8,7 +8,7 @@ doneWhen:
   args:
     file: solve/oracle/release-0-3-queryable-core.json
 quests:
-  - partition-key-ordering-owner-completion-v11
+  - partition-key-ordering-owner-completion-v12
 authorizes:
   - architecture
   - docs/development/agpl-feature-map.md
