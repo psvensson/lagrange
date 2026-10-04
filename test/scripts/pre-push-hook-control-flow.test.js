@@ -20,6 +20,7 @@ const UTF8 = 'utf8';
 const HOOK = '.githooks/pre-push';
 const MATERIALIZER = 'scripts/checks/push-gate-corpus-worktree.js';
 const TREND_OWNER = 'scripts/checks/formation-health.js';
+const SOLVER_CLI = 'scripts/solve/guards.js';
 const STUBBED_SCRIPTS = Object.freeze([
   'scripts/check-circular-dependencies.js',
   'scripts/check-unused-exports.js',
@@ -69,6 +70,7 @@ function buildFixture() {
     'else if (!(Number(process.env.PRE_PUSH_FLOW_STATUS_TREND) > 0)) ' +
     'console.log(\'formation health: trend push verified - stub\');\nprocess.exit('));
   for (const script of STUBBED_SCRIPTS) write(script, recorderSource('script'));
+  write(SOLVER_CLI, recorderSource('admission'));
   write('package.json', '{"name": "pre-push-flow-fixture", "type": "module"}\n');
   write('README.md', 'fixture\n');
   // A JavaScript file inside the lint pathspec, changed by the second commit,
@@ -436,4 +438,54 @@ test('a data-only trend push is proved before any fast path or the red-main guar
   const tag = runHook(`${ref} ${shas.receiptTagObject} ${ref} ${ZERO_SHA}\n`, DATA_ONLY);
   assert.equal(tag.status, 1, 'a receipt push with the request is refused: ' + tag.output);
   assert.deepEqual(trendCalls(tag.recorded), []);
+});
+
+// Owner decision 2026-10-04: a change under src/ reaches main only as a solver
+// landing. On a push that updates main the admission runs first among the
+// content stages, over exactly the pushed main sha and the remote main sha,
+// and its refusal stops the push before anything else runs; a push that does
+// not update main (preservation) never runs it. What it admits is witnessed
+// in test/solve/commands.test.js; here, that the gate asks it.
+function admissionCalls(recorded) {
+  return recorded.filter((entry) => entry.name === 'admission');
+}
+
+const IN_CHECKOUT = Object.freeze({LAGRANGE_WORKSPACE_INJECTIONS: 'node_modules,data',
+  LAGRANGE_GATE_RED_MAIN_CHECKED: '1', LAGRANGE_PUSH_SKIP_TESTS: '1'});
+
+test('a main push is judged by the solver-landing admission before any other content stage', () => {
+  const mainPush = `refs/heads/main ${shas.second} refs/heads/main ${shas.base}\n`;
+  const run = runHook(mainPush, {...IN_CHECKOUT, LAGRANGE_GATE_PUSHED_SHA: shas.second},
+    shas.second);
+  assert.equal(run.status, 0, run.output);
+  assert.deepEqual(admissionCalls(run.recorded).map((entry) => entry.argv),
+    [['admit', '--base', shas.base, '--head', shas.second]],
+    'exactly the pushed main range is judged');
+  const names = run.recorded.map((entry) => entry.name);
+  assert.equal(names[0], 'admission', `the admission runs first: ${names.join(' ')}`);
+  const refused = runHook(mainPush, {...IN_CHECKOUT, LAGRANGE_GATE_PUSHED_SHA: shas.second,
+    PRE_PUSH_FLOW_STATUS_ADMISSION: '1'}, shas.second);
+  assert.equal(refused.status, 1, refused.output);
+  assert.match(refused.output, /FAILED in stage: solver-landing-admission/u);
+  assert.deepEqual(refused.recorded.map((entry) => entry.name), ['admission'],
+    'a refused admission runs nothing after it');
+  // Main pushed beside another ref: main's own range is judged, whichever
+  // ref the gate's checkout holds.
+  const mixed = runHook(`refs/heads/feature ${shas.head} refs/heads/feature ${ZERO_SHA}\n` +
+    mainPush, {...IN_CHECKOUT, LAGRANGE_GATE_PUSHED_SHA: shas.head});
+  assert.equal(mixed.status, 0, mixed.output);
+  assert.deepEqual(admissionCalls(mixed.recorded).map((entry) => entry.argv),
+    [['admit', '--base', shas.base, '--head', shas.second]]);
+});
+
+test('a push that does not update main never runs the solver-landing admission', () => {
+  const branchPush = `refs/heads/feature ${shas.second} refs/heads/feature ${shas.base}\n`;
+  const preserved = runHook(branchPush);
+  assert.equal(preserved.status, 0, preserved.output);
+  assert.deepEqual(admissionCalls(preserved.recorded), [], 'preservation stays free');
+  const proved = runHook(branchPush, {...IN_CHECKOUT, LAGRANGE_GATE_PUSHED_SHA: shas.second,
+    LAGRANGE_PUSH_PROVE_BRANCH: '1'}, shas.second);
+  assert.equal(proved.status, 0, proved.output);
+  assert.deepEqual(admissionCalls(proved.recorded), [],
+    'a branch proved on request is still not a main admission');
 });

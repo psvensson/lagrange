@@ -117,8 +117,9 @@ correctness or drop an acknowledged obligation.
 
 ## R15. Work starts from one bounded, sealed unit
 
-**Invariant.** Work likely to need more than one measured attempt, or that
-changes an owner boundary, starts from a sealed statement with a binary probe.
+**Invariant.** A source change, or work likely to need more than one measured
+attempt or changing an owner boundary, starts from a sealed statement with a
+binary probe and reaches the shared branch only by landing it.
 **Owner.** `quest-lifecycle`
 **On conflict.** Seal the unit before continuing.
 
