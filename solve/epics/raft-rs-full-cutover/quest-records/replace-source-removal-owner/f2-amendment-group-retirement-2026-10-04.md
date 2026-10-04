@@ -176,3 +176,85 @@ production recovery, L3 inverted, B1, B2, B2b, B2c, B4, B5),
 `test/partition/group-retirement-resume-claim.test.js` (B3a, B3b, Mi, Mj,
 Mk, RC, RF), all red on fd424741b except B3a merge, which was already
 correct there.
+
+## Addendum (2026-10-04, re-verification round 3): never-provisioned targets, membership fences, COMPLETED-only
+
+Same binding ruling (fail-closed). It supersedes the first and third
+"Consequences stated plainly" bullets of the previous addendum.
+
+- Never-provisioned fact (`src/partition/target-provisioning-mark.js`): the
+  workflow record carries `targetProvisioning` keyed by target partition id,
+  written with the target ids. `none` is written only for ids the attempt
+  minted itself; `dispatched` is made durable BEFORE the target's first
+  replica create is sent (a failed write sends nothing). A retried plan
+  carries the prior record's own marks; a reused id without one gets none.
+  The teardown of an aborted child/target whose mark is durably `none`
+  freezes an EMPTY required set with `neverProvisioned: true` on its
+  participant and deletes its partitions row. `dispatched`, or no mark (a
+  record written before the mark existed), stays "membership unavailable".
+  A crash between the durable `dispatched` and the create leaves a row with
+  no group listed forever: fail-closed by design. The event that can resolve
+  it is the target's own group appearing (a services row of that group: a
+  create that did land registers one and re-runs the teardown); if no create
+  landed, nothing will, and its only future exit is the operator retirement
+  fact (which does not exist yet).
+- Membership fence: the frozen set comes from a RETIREMENT committed-
+  membership read, which refuses a joint configuration and a pending
+  configuration change (`pendingConfIndex > applied`) - "membership
+  unavailable", re-run by the group's row events. Every membership change
+  of a group its durable record retires is refused typed
+  (`membership-change-group-retiring`) at the partition's one conf-change
+  admission (`admitPartitionRaftPeer`, `proposePeerRetirement`,
+  `retirePartitionRaftPeer`); the rebalancer skips planning for it
+  (`group_retiring`) and its one creation boundary refuses it before
+  persisting. The fence reads the durable record as the node's view holds
+  it: a proposal at a leader whose view has not yet seen the record turn
+  retiring is the residual window.
+- A member is done only on COMPLETED (its replica durably retired):
+  INITIATED and IN_PROGRESS keep it listed (typed
+  `group-retirement-removal-in-progress`) and re-driven by its row events.
+  A member still removing, or a node that no longer tracks it after a
+  restart, answers COMPLETED from its own durable raft-rs lifecycle row:
+  `retired` with reason `group-retired`, for the exact replica identity and
+  group. No database, no row, another state or another reason (a
+  `reseed-required` hold) answers nothing from it (NOT_FOUND stays
+  NOT_FOUND). Ordinary REMOVE answers are unchanged.
+- Resume: a refused claim with no live foreign lease re-claims once at once
+  with the refreshed witness, at most once per record version.
+- Re-drive: the group gaining a leader (its leader's services row, the
+  partitions row's leader publication) is the named trigger for a
+  membership-unavailable step. Only the fallback's own runs spend its bound.
+
+Recorded, not changed:
+- P8: the driver never renews its lease during a long retirement, so any
+  record write after its lease lapsed lets another node claim (at most one
+  claim per record change). Follow-up: renew during the re-drive.
+- Participant persistence is an unconditional whole-metadata UPDATE (not
+  compare-and-swap; pre-existing). A stale owner can roll back the fence,
+  lease, frozen set or answered set. Wrongful completion stays impossible
+  (answered ids come only from COMPLETED answers; required = ConfState
+  united with answered), but it can cause redundant REMOVEs, a member listed
+  forever, or "membership unavailable" forever. Follow-up: CAS on participant
+  persistence.
+- The removed-replica cleanup sweep deletes a row-less replica database at
+  startup, and with it the lifecycle row the restart answer reads: a member
+  whose database was swept before its answer was recorded answers NOT_FOUND
+  and stays listed.
+- Mid-flight upgrade caveat (text for the epic's unsupported-upgrade
+  section): "A split or merge record written by code before the frozen
+  member set (3626bdf43, fd424741b) that is mid-dissolution at upgrade, with
+  a majority of the retiring group already retired and no frozen set on its
+  participant, has no leader left to answer the committed-membership read:
+  its step stays 'membership unavailable' forever. Likewise an aborted
+  split/merge record written before the provisioning mark keeps a target
+  that was never provisioned listed forever. Finish or abort every split and
+  merge before upgrading; there is no in-place migration."
+
+Witnesses: `test/partition/group-retirement-provisioning-mark.test.js`
+(P1-P7, split and merge through `execute`), `test/node/group-retirement-
+fences.test.js` (G2b-L learner, G2b-P pending change, G2b-A admission,
+G2b-R rebalancer, C1 INITIATED, P5 lifecycle answer, P3 leader),
+`test/partition/group-retirement-resume-claim.test.js` (P6), the
+split-aborted-child (W5) and L4 sibling assertions now on the
+never-provisioned fact; red on 74edc3d49 except G2b-L and P3 (already
+held; they kill the mutants "learners ignored" and "leader event removed").
