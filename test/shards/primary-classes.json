@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1917,
+    "unit": 1918,
     "integration": 78,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-d15d8e11",
+  "censusSize": 2196,
+  "digest": "fnv1a32-b81ca1f1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1226,6 +1226,7 @@
     "test/partition/raft-rs-transport-demux.test.js": "unit",
     "test/partition/range-integrity-validation.property.test.js": "unit",
     "test/partition/replica-operations-schema-migration.test.js": "unit",
+    "test/partition/retiring-source-resume-refusal.test.js": "unit",
     "test/partition/routing-key-comparator.test.js": "unit",
     "test/partition/split-abort-fence-parity.test.js": "unit",
     "test/partition/split-ack-constants.test.js": "unit",

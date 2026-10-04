@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 144,
+    "storage-partition": 145,
     "storage-raft": 99,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-bcd62cd3",
+  "censusSize": 2196,
+  "digest": "fnv1a32-f274b14f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-06de042a",
+  "observationDigest": "fnv1a32-bbd8aeca",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1245,6 +1245,7 @@
     "test/partition/raft-rs-transport-demux.test.js": "storage-partition",
     "test/partition/range-integrity-validation.property.test.js": "storage-partition",
     "test/partition/replica-operations-schema-migration.test.js": "storage-partition",
+    "test/partition/retiring-source-resume-refusal.test.js": "storage-partition",
     "test/partition/routing-key-comparator.test.js": "storage-partition",
     "test/partition/split-abort-fence-parity.test.js": "storage-partition",
     "test/partition/split-ack-constants.test.js": "storage-partition",
@@ -7753,6 +7754,12 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/partition/partition-service.js"
+      ]
+    },
+    "test/partition/retiring-source-resume-refusal.test.js": {
+      "files": [
+        "src/raft/raft-operation-port.js",
+        "test/partition/partition-rs-raft-restart-fixture.js"
       ]
     },
     "test/partition/split-cutover-owner-delegation.test.js": {

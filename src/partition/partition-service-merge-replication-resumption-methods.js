@@ -16,6 +16,10 @@ import {
   PARTITION_SERVICE_LOG_MSG,
 } from './partition-service-constants.js';
 import {
+  GROUP_RETIREMENT_KIND,
+  isRetiringSourceRecord,
+} from './group-retirement-evidence.js';
+import {
   findDurableMirrorTransitionForService,
   loadDurableDeltasBehindWatermark,
 } from './partition-mirror-replay-cursor.js';
@@ -46,8 +50,11 @@ class PartitionServiceMergeReplicationResumptionMethods {
       matchesSource: (metadata) =>
         Array.isArray(metadata.sourcePartitionIds) &&
         metadata.sourcePartitionIds.includes(this.partitionId),
-      normalizeMetadata: (rawMetadata) =>
-        this.normalizeMergeTransitionMetadata(rawMetadata),
+      // A source that already finished mirroring is ending with its group
+      // (group-retirement-evidence.js): nothing of it may resume.
+      normalizeMetadata: (rawMetadata) => isRetiringSourceRecord(
+        GROUP_RETIREMENT_KIND.MERGE_SOURCE, rawMetadata, this.partitionId) ?
+        null : this.normalizeMergeTransitionMetadata(rawMetadata),
     });
     if (!transition) {
       return false;

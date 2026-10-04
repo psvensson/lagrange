@@ -1,5 +1,9 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
+  GROUP_RETIREMENT_KIND,
+  isRetiringSourceRecord,
+} from './group-retirement-evidence.js';
+import {
   findDurableMirrorTransitionForService,
   resolveSnapshotBarrierIndex,
 } from './partition-mirror-replay-cursor.js';
@@ -115,8 +119,11 @@ class PartitionServiceSplitMirrorQueueMethods {
       ],
       matchesSource: (metadata) =>
         metadata.sourcePartitionId === this.partitionId,
-      normalizeMetadata: (rawMetadata) =>
-        this.normalizeSplitTransitionMetadata(rawMetadata),
+      // A source that already finished mirroring is ending with its group
+      // (group-retirement-evidence.js): nothing of it may resume.
+      normalizeMetadata: (rawMetadata) => isRetiringSourceRecord(
+        GROUP_RETIREMENT_KIND.SPLIT_SOURCE, rawMetadata, this.partitionId) ?
+        null : this.normalizeSplitTransitionMetadata(rawMetadata),
     });
     if (!transition) {
       return false;
