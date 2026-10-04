@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1921,
+    "unit": 1922,
     "integration": 77,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2198,
-  "digest": "fnv1a32-7e2df15d",
+  "censusSize": 2199,
+  "digest": "fnv1a32-cc3082f5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -887,6 +887,7 @@
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-ground-truth.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-registry.test.js": "unit",
+    "test/distributed/harness/__tests__/scenario-run-artifact-hygiene.test.js": "unit",
     "test/distributed/harness/__tests__/seed-restart-under-load-scenario.test.js": "unit",
     "test/distributed/harness/__tests__/seven-node-load-during-partitioning-scenario.test.js": "unit",
     "test/distributed/harness/__tests__/seven-node-postgres-baseline-partition-split-low-throughput-scenario.test.js": "unit",

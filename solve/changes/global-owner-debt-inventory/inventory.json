@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2631624,
-        "sha256": "ebef477194d494673443fc413f284dbbc96ba3e9db23412aa65c6193e4a85a63"
+        "bytes": 2632602,
+        "sha256": "36880fbc80ec05dcc6bdb4cd36f62405b6942f7a424cca415764a901fb1e9d93"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "d9064bcff682a263ecc654ef1231f9653fe9bcea1f1bd7b1b8e962b60704e5c6"
+    "inputDigest": "648f7e23c3d63a90cf46ba2a6bdecbb8de2f0f9af83a7db4d1689a8abff3f35f"
   },
   "reconciliation": {
     "complexity": {
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2631624,
-        "sha256": "ebef477194d494673443fc413f284dbbc96ba3e9db23412aa65c6193e4a85a63"
+        "bytes": 2632602,
+        "sha256": "36880fbc80ec05dcc6bdb4cd36f62405b6942f7a424cca415764a901fb1e9d93"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "e486e5ccdd1edbba8f371f8c039434f810867935ae3dd674630d3e3102a7cfb8",
-      "moduleCount": 5023,
-      "edgeCount": 24654,
+      "sourceDigest": "1e7b232bff13afca3623b44d2e530edd68cedf830a822a72bc89ec7bb5831284",
+      "moduleCount": 5024,
+      "edgeCount": 24664,
       "unresolvedCount": 36
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2518,
     "assignedSignalCount": 2518,
     "uniqueAssignmentCount": 2518,
-    "digest": "f97c2dac4ca2774ffa127f1dc18bf8f7927b42ac70f8ba254ec59b146d5d48dc"
+    "digest": "8ae96d24a342bed4661e9aed887d74c52d629114032046582bc22d5b639a0e9e"
   },
   "signalCounts": {
     "cognitive": 153,
@@ -219,8 +219,8 @@
       "cloneTouches": 318,
       "cycleGroups": 0,
       "lintExclusions": 10,
-      "importIn": 347,
-      "importOut": 593,
+      "importIn": 349,
+      "importOut": 594,
       "score": 2912.1,
       "topPaths": [
         "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",

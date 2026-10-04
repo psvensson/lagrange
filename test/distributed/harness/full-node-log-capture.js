@@ -14,7 +14,7 @@
 
 import {gzip as gzipCallback, createGzip} from 'node:zlib';
 import {promisify} from 'node:util';
-import {mkdir, writeFile} from 'node:fs/promises';
+import {mkdir, rm, writeFile} from 'node:fs/promises';
 import {createWriteStream, createReadStream} from 'node:fs';
 import {once} from 'node:events';
 import {createInterface} from 'node:readline';
@@ -78,6 +78,18 @@ function nodeLogHostFile(outputDir, scenarioName, nodeId) {
 }
 function nodeLogContainerFilePath() {
   return NODE_LOG_DIR_CONTAINER + '/' + NODE_LOG_FILENAME;
+}
+
+// The full logs of a scenario live under one directory shared by every run
+// of that scenario; an earlier run's files are not this run's evidence.
+async function resetScenarioFullLogs(outputDir, scenarioName) {
+  if (typeof outputDir !== 'string' || outputDir.length === 0 ||
+      typeof scenarioName !== 'string' || scenarioName.length === 0) {
+    return false;
+  }
+  await rm(join(outputDir, FULL_LOGS_DIRNAME, scenarioName),
+    {force: true, recursive: true});
+  return true;
 }
 
 function fullLogDestPath(outputDir, scenarioName, nodeId) {
@@ -453,6 +465,7 @@ export {
   nodeLogHostDir,
   nodeLogHostFile,
   nodeLogContainerFilePath,
+  resetScenarioFullLogs,
   NODE_LOG_FILE_ENV_VAR,
   NODE_LOG_DIR_CONTAINER,
   FULL_LOGS_DIRNAME,

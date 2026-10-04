@@ -10,6 +10,7 @@ import {
   nodeLogHostDir,
   nodeLogHostFile,
   nodeLogContainerFilePath,
+  resetScenarioFullLogs,
   INCARNATION_BOUNDARY_EVENT,
   NODE_LOG_FILE_ENV_VAR,
   NODE_LOG_DIR_CONTAINER,
@@ -891,6 +892,14 @@ class ClusterLifecycleBase {
     this._networkId = net.id;
   }
 
+  // This run owns the scenario's artifact directory from here on: an
+  // earlier run's curated and full node logs must not be read as its
+  // evidence (the directory is shared per scenario, node ids are not).
+  async _resetScenarioRunArtifacts() {
+    await this._logCollector.resetScenarioOutput(this._scenarioName);
+    await resetScenarioFullLogs(this._config?.outputDir, this._scenarioName);
+  }
+
   async start() {
     if (!this._cleanupUnregister) {
       this._cleanupUnregister = registerClusterCleanup(
@@ -899,6 +908,7 @@ class ClusterLifecycleBase {
       );
     }
     await this._prepareReusableClusterLeaseForStart();
+    await this._resetScenarioRunArtifacts();
 
     try {
       await this._playbackRecorder.start({

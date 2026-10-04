@@ -6,13 +6,16 @@
  * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7
  */
 
-import {writeFile, mkdir} from 'node:fs/promises';
+import {mkdir, readdir, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {
   OUTPUT,
   LOG_SUBSCRIPTION_CAPABILITY,
   CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
+
+// Module-load capture (the harness tree's ambient-intrinsics rule).
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 
 const LIVE_SELECT_PREFIX = 'LIVE SELECT * FROM logs';
 const FINAL_SNAPSHOT_QUERY = 'SELECT * FROM logs ORDER BY timestamp';
@@ -202,6 +205,34 @@ class LogCollector {
       return [...this._buffer];
     }
     return this._buffer.slice(this._buffer.length - n);
+  }
+
+  /**
+   * Clear an EARLIER run's curated logs from the scenario directory before
+   * this run writes any. The directory is shared by every run of the
+   * scenario under one output root and node ids are fresh per run, so
+   * without this the failure bundle and triage read other runs' node logs
+   * as this run's evidence.
+   * @param {string} scenarioName
+   * @return {Promise<Array<string>>} The removed file names.
+   */
+  async resetScenarioOutput(scenarioName) {
+    const scenarioDir = join(this._outputDir, scenarioName);
+    let names = [];
+    try {
+      names = await readdir(scenarioDir);
+    } catch (_missing) {
+      return [];
+    }
+    const removed = [];
+    for (const name of names) {
+      if (stringEndsWith(name, LOG_FILE_EXTENSION) ||
+          name === OUTPUT.ANALYSIS_FILENAME) {
+        await rm(join(scenarioDir, name), {force: true});
+        removed.push(name);
+      }
+    }
+    return removed;
   }
 
   /**

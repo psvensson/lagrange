@@ -9,7 +9,7 @@
     "cli-tooling": 96,
     "control-plane": 205,
     "convergence-topology": 83,
-    "distributed-harness": 170,
+    "distributed-harness": 171,
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 254,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2198,
-  "digest": "fnv1a32-a3b0964e",
+  "censusSize": 2199,
+  "digest": "fnv1a32-81d4dcae",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a7738d10",
+  "observationDigest": "fnv1a32-f7e1cf58",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -906,6 +906,7 @@
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-ground-truth.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-registry.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/scenario-run-artifact-hygiene.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/seed-restart-under-load-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/seven-node-load-during-partitioning-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/seven-node-postgres-baseline-partition-split-low-throughput-scenario.test.js": "distributed-harness",
@@ -5420,8 +5421,11 @@
     },
     "test/distributed/harness/__tests__/failure-bundle-fallback.test.js": {
       "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js"
@@ -5429,8 +5433,11 @@
     },
     "test/distributed/harness/__tests__/failure-bundle-playback-load-metrics-fallback.test.js": {
       "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js"
@@ -5438,8 +5445,11 @@
     },
     "test/distributed/harness/__tests__/failure-bundle-sql-query-engine-availability.test.js": {
       "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js"
@@ -5447,8 +5457,11 @@
     },
     "test/distributed/harness/__tests__/failure-bundle.test.js": {
       "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/failure-bundle-diagnostics-contract-reexport.js",
         "test/distributed/harness/failure-bundle-foundation.js",
@@ -5865,8 +5878,11 @@
     },
     "test/distributed/harness/__tests__/report-writer.test.js": {
       "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
@@ -5995,6 +6011,27 @@
       ],
       "directories": [
         "test/distributed/config"
+      ]
+    },
+    "test/distributed/harness/__tests__/scenario-run-artifact-hygiene.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
+        "test/distributed/harness/publication-evidence-contract.js",
+        "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "env": [
+        "LAGRANGE_CAPTURE_LOGS",
+        "LAGRANGE_DEBUG_LOGS"
       ]
     },
     "test/distributed/harness/__tests__/seed-restart-under-load-scenario.test.js": {
