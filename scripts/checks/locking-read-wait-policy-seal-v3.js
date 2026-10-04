@@ -13,7 +13,7 @@ const expectedState = Object.freeze({
     'participant_refusal_then_dtc_rollback_whole_transaction_and_confirm_release',
 });
 const expectedTyped = Object.freeze({
-  contention: 'locking_read_reservation_conflict',
+  contention: 'typed_locking_read_reservation_conflict',
   timeout: 'transaction_timeout',
   cancellation: 'transaction_cancelled',
   abort: 'transaction_aborted',
