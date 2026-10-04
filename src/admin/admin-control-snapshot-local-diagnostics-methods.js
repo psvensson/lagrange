@@ -4,10 +4,10 @@ const CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD =
 const BOUNDED_SNAPSHOT_PROBE_DEADLINE_SENTINEL = Symbol(
   'boundedSnapshotProbeDeadline',
 );
-const BOUNDED_SNAPSHOT_PROBE_MIN_DEADLINE_MS = 2000;
-const BOUNDED_SNAPSHOT_PROBE_DEADLINE_SAFETY_MARGIN_MS = 2000;
+const BOUNDED_SNAPSHOT_PROBE_MIN_DEADLINE_MS = 2000; // ends-on: n/a clamp
+const BOUNDED_SNAPSHOT_PROBE_DEADLINE_SAFETY_MARGIN_MS = 2000; // ends-on: n/a margin
 const BOUNDED_SNAPSHOT_PROBE_SHORT_BUDGET_DIVISOR = 2;
-const BOUNDED_SNAPSHOT_PROBE_MIN_SHORT_DEADLINE_MS = 1;
+const BOUNDED_SNAPSHOT_PROBE_MIN_SHORT_DEADLINE_MS = 1; // ends-on: n/a clamp
 
 function resolveBoundedSnapshotProbeDeadlineMs(queryTimeoutMs) {
   if (!Number.isFinite(queryTimeoutMs) || queryTimeoutMs <= 0) {

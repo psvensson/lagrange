@@ -140,7 +140,7 @@ const ADMIN_STREAM_LANE_SNAPSHOT = 'snapshot';
 const LOAD_LANE_READINESS_CACHE_MAX_AGE_MS = 5000;
 const LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS = 250;
 const LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS = 250;
-const LOAD_LANE_QUERY_TIMEOUT_CAP_MS = 15000;
+const LOAD_LANE_QUERY_TIMEOUT_CAP_MS = 15000; // ends-on: n/a clamp
 const LOAD_LANE_SOFT_ADMISSION_REASON_CODES = new Set([
   'schema_partition_unavailable',
   'leadership_unstable',
@@ -377,7 +377,7 @@ function createRetryableAdminOperationError(errorCode, message, options = {}) {
   return error;
 }
 
-const SQL_REQUEST_TIMEOUT_BUDGET_COMPLETION_MARGIN_MS = 250;
+const SQL_REQUEST_TIMEOUT_BUDGET_COMPLETION_MARGIN_MS = 250; // ends-on: n/a margin
 
 /**
  * Resolve one optional positive timeout override from message payload.

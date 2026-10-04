@@ -19,8 +19,8 @@ import {
 } from './cell-host-call-protocol.js';
 
 const BYTE_ENCODING = 'utf8';
-const STARTUP_TIMEOUT_MS = 10_000;
-const HEALTH_TIMEOUT_MS = 1_000;
+const STARTUP_TIMEOUT_MS = 10_000; // ends-on: the cell worker posts its ready message
+const HEALTH_TIMEOUT_MS = 1_000; // ends-on: the cell worker answers the health probe
 const CPU_SAMPLE_INTERVAL_MS = 2;
 const CELL_WORKER_SOURCE_FILE = 'wasi-component-cell-worker.js';
 const CELL_WORKER_BUNDLE_FILE = 'request-cell-worker.bundle.mjs';

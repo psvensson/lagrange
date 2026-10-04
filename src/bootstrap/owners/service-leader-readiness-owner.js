@@ -34,7 +34,7 @@ import {
 } from '../../control-plane/membership-lifecycle-controller.js';
 
 const LOCAL_STR_ALL_SERVICE_LEADERS_READY = 'All service leaders ready';
-const AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS = 1500;
+const AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS = 1500; // ends-on: the authoritative partitions/services read answers
 const AUTHORITATIVE_LEADER_REFRESH_OUTCOME = Object.freeze({
   AUTHORITY_UNAVAILABLE: 'authority_unavailable',
   BUDGET_EXHAUSTED: 'budget_exhausted',

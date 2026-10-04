@@ -27,7 +27,7 @@ const BOOTSTRAP_READINESS_DEPENDENCY = Object.freeze({
 
 const READINESS_PROBE_ASYNC_TIMEOUT_ERROR_CODE =
   'READINESS_PROBE_ASYNC_TIMEOUT';
-const READINESS_PROBE_ASYNC_TIMEOUT_MS = 250;
+const READINESS_PROBE_ASYNC_TIMEOUT_MS = 250; // ends-on: evaluateReadinessSnapshotAsync() resolves
 
 const BOOTSTRAP_READINESS_SNAPSHOT_EVALUATOR_METHODS = Object.freeze({
   evaluateReadinessSnapshot() {

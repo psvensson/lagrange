@@ -24,7 +24,7 @@
  *
  * @see testing-guidelines.md - Test Duration Hard Limit
  */
-export const UNIT_TEST_TIMEOUT_MS = 2000;
+export const UNIT_TEST_TIMEOUT_MS = 2000; // ends-on: the unit test completes
 
 /**
  * INTEGRATION_TEST_TIMEOUT_MS (30s) was removed 2026-08-23: its value
@@ -52,7 +52,7 @@ export const TEST_LEADERSHIP_WAIT_MS = 1000;
  *
  * @see src/constants/time.js - DEFAULT_RPC_TIMEOUT (30000ms production)
  */
-export const TEST_ACK_TIMEOUT_MS = 5000;
+export const TEST_ACK_TIMEOUT_MS = 5000; // ends-on: the replica operation acknowledgement arrives
 
 /**
  * Test-appropriate stabilization period (100ms).

@@ -8,10 +8,10 @@ const {
   QUERY_EXECUTOR_LITERAL,
 } = QUERY_EXECUTOR_SHARED;
 
-const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = 1;
-const READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS =
+const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = 1; // ends-on: n/a clamp
+const READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: the cold read candidate answers the delivery (1 ms: it is deferred unless already connected)
   READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
-const RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS =
+const RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: the cold recovery candidate answers the delivery (1 ms: it is deferred unless already connected)
   READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
 const RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE = 'connected';
 const RECOVERY_CANDIDATE_CONNECTING_CONNECTION_STATE = 'connecting';

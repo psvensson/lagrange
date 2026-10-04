@@ -56,7 +56,7 @@ const {
 
 const CDC_CONTROL_PLANE_WRITE_RESOURCE_KEY = 'control-plane:write';
 // CL-017(c): floor for the per-attempt share of the retry budget.
-const CDC_ROUTED_MUTATION_MIN_ATTEMPT_TIMEOUT_MS = 1000;
+const CDC_ROUTED_MUTATION_MIN_ATTEMPT_TIMEOUT_MS = 1000; // ends-on: n/a clamp
 const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
 const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
 const CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR = 'constructor';

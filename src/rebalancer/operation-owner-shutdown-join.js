@@ -28,7 +28,7 @@ const OPERATION_SHUTDOWN_JOIN_RESULT = Object.freeze({
   TIMED_OUT: 'timed_out',
 });
 
-const OPERATION_SHUTDOWN_JOIN_DEFAULT_TIMEOUT_MS = 5_000;
+const OPERATION_SHUTDOWN_JOIN_DEFAULT_TIMEOUT_MS = 5_000; // ends-on: every in-flight owner-lane execution settles
 
 function normalizeShutdownJoinTimeoutMs(timeoutMs) {
   const numeric = Number(timeoutMs);

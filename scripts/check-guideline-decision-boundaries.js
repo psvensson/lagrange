@@ -47,6 +47,10 @@ const VIOLATION_KIND = Object.freeze({
   MIXED_CACHE_AND_SQL: 'mixed_cache_and_sql_decision',
   SCHEMA_UNSAFE_WRITE: 'schema_unsafe_system_table_write',
   LOCAL_RETRY_LOOP: 'local_retry_loop',
+  WAIT_CONSTANT_UNDECLARED: 'wait_constant_end_event_undeclared',
+  WAIT_CONSTANT_TIMER_ONLY: 'wait_constant_timer_only',
+  WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND: 'wait_constant_unknown_non_wait_kind',
+  WAIT_CONSTANT_DECLARED: 'wait_constant_declared',
 });
 
 const SEMANTIC_NAME_PART = Object.freeze([
@@ -470,6 +474,148 @@ function checkLocalRetryLoop(node, functionName, filePath, violations) {
   });
 }
 
+// Named waits declare their ending event (owner rule, 2026-10-04: "a spent
+// wait is a failure"; every fully spent timeout so far hid a true bug). A
+// named wait constant in src/ carries `// ends-on: <event>` on its
+// declaration line or in the comment lines directly above it. `ends-on:
+// timer` (the timer is the only exit) is refused; a constant that is not a
+// wait declares `ends-on: n/a <kind>` with a kind from NON_WAIT_KIND. The set
+// of constants is derived from the source by WAIT_CONSTANT_NAME_PATTERN.
+const WAIT_CONSTANT_NAME_PATTERN =
+  /^(?:[A-Z0-9]+_)*(?:TIMEOUT|BACKSTOP|DEADLINE)(?:_[A-Z0-9]+)*_MS$/u;
+const ENDS_ON_PATTERN = /\/\/\s*ends-on:\s*(.*)$/u;
+const LINE_COMMENT_PREFIX = '//';
+const ENDS_ON_TIMER_ONLY = 'timer';
+const NON_WAIT_PREFIX = 'n/a ';
+const CONST_DECLARATION_KIND = 'const';
+const EXPORT_NAMED_DECLARATION = 'ExportNamedDeclaration';
+const END_EVENT_UNDECLARED = Object.freeze({declared: false});
+const SOURCE_ROOT_PREFIX = 'src/';
+const SOURCE_ROOT_SEGMENT = '/src/';
+const NON_WAIT_KIND = Object.freeze(new Set([
+  // a floor or cap applied to another wait's bound
+  'clamp',
+  // headroom subtracted from or added to another bound
+  'margin',
+  // a look-back window over past observations
+  'lookback',
+  // a recurring period
+  'period',
+  // a lifetime after which a record is stale
+  'ttl',
+  // a delay that is expected to elapse
+  'delay',
+]));
+const WAIT_CONSTANT_RULE_REFERENCE =
+  `${RULES_MD}R07. A semantic outcome is a named state ` +
+  '(a named wait declares the event that ends it before its bound)';
+const WAIT_CONSTANT_REASON = Object.freeze({
+  [VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED]:
+    'named wait constant has no `// ends-on: <event>` declaration',
+  [VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY]:
+    'a wait whose only exit is the timer is refused; name the event that ' +
+    'should end it before the bound',
+  [VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND]:
+    'ends-on: n/a must name an enumerated non-wait kind ' +
+    `(${[...NON_WAIT_KIND].join(LOCAL_STR_COMMA_SPACE)})`,
+});
+
+function isSourceRootPath(filePath) {
+  const normalized = filePath.split('\\').join('/');
+  return normalized.startsWith(SOURCE_ROOT_PREFIX) ||
+    normalized.includes(SOURCE_ROOT_SEGMENT);
+}
+
+function readEndsOnDeclaration(sourceLines, statementNode) {
+  const firstLineIndex = statementNode.loc.start.line - 1;
+  const trailing = ENDS_ON_PATTERN.exec(sourceLines[firstLineIndex] || '');
+  if (trailing) {
+    return {declared: true, value: trailing[1].trim()};
+  }
+  for (let index = firstLineIndex - 1; index >= 0; index -= 1) {
+    const text = sourceLines[index].trim();
+    if (!text.startsWith(LINE_COMMENT_PREFIX)) {
+      break;
+    }
+    const leading = ENDS_ON_PATTERN.exec(text);
+    if (leading) {
+      return {declared: true, value: leading[1].trim()};
+    }
+  }
+  return END_EVENT_UNDECLARED;
+}
+
+function classifyEndsOnDeclaration(declaration) {
+  if (!declaration.declared || declaration.value.length === 0) {
+    return VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED;
+  }
+  if (declaration.value === ENDS_ON_TIMER_ONLY) {
+    return VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY;
+  }
+  if (declaration.value.startsWith(NON_WAIT_PREFIX) &&
+      !NON_WAIT_KIND.has(declaration.value.slice(NON_WAIT_PREFIX.length).trim())) {
+    return VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND;
+  }
+  return VIOLATION_KIND.WAIT_CONSTANT_DECLARED;
+}
+
+function isNamedWaitDeclarator(node, parent) {
+  return node.type === LOCAL_STR_VARIABLEDECLARATOR &&
+    parent?.kind === CONST_DECLARATION_KIND &&
+    node.id?.type === LOCAL_STR_IDENTIFIER &&
+    WAIT_CONSTANT_NAME_PATTERN.test(node.id.name);
+}
+
+/**
+ * Every named wait constant (`const X_(TIMEOUT|BACKSTOP|DEADLINE)..._MS`) in
+ * a source file with its ends-on declaration, derived from the AST.
+ * @param {string} source - File text.
+ * @param {string} filePath - Path reported on each constant.
+ * @return {Array<Object>} {filePath, name, line, declaration, kind}.
+ */
+function collectNamedWaitConstants(source, filePath) {
+  const sourceLines = source.split('\n');
+  const constants = [];
+  walkAst(parseSourceFile(source), (node, parent, ancestors) => {
+    if (!isNamedWaitDeclarator(node, parent)) {
+      return;
+    }
+    const exportWrapper = ancestors[ancestors.length - 2];
+    const statementNode = exportWrapper?.type === EXPORT_NAMED_DECLARATION ?
+      exportWrapper :
+      parent;
+    const declaration = readEndsOnDeclaration(sourceLines, statementNode);
+    constants.push({
+      filePath,
+      name: node.id.name,
+      line: node.loc.start.line,
+      declaration,
+      kind: classifyEndsOnDeclaration(declaration),
+    });
+  });
+  return constants;
+}
+
+function checkNamedWaitConstants(source, filePath, violations) {
+  if (!isSourceRootPath(filePath)) {
+    return;
+  }
+  for (const constant of collectNamedWaitConstants(source, filePath)) {
+    if (constant.kind === VIOLATION_KIND.WAIT_CONSTANT_DECLARED) {
+      continue;
+    }
+    violations.push({
+      filePath,
+      line: constant.line,
+      column: 1,
+      functionName: constant.name,
+      kind: constant.kind,
+      reason: WAIT_CONSTANT_REASON[constant.kind],
+      ruleReference: WAIT_CONSTANT_RULE_REFERENCE,
+    });
+  }
+}
+
 function collectDecisionBoundaryViolationsFromSource(
   source,
   filePath,
@@ -482,6 +628,7 @@ function collectDecisionBoundaryViolationsFromSource(
 
   const ast = parseSourceFile(source);
   const violations = [];
+  checkNamedWaitConstants(source, filePath, violations);
 
   walkAst(ast, (node, parent, ancestors) => {
     checkSchemaUnsafeWrite(node, filePath, violations);
@@ -594,9 +741,12 @@ async function main(argv = process.argv.slice(2)) {
 runGuidelineCheckWhenDirect(import.meta.url, main);
 
 export {
+  DECISION_BASELINE_FILE_URL,
   FILE_CLASS,
   RULE_REFERENCE,
+  VIOLATION_KIND,
   buildDecisionBoundaryViolationIdentity,
+  collectNamedWaitConstants,
   classifyFilePath,
   collectDecisionBoundaryViolations,
   collectDecisionBoundaryViolationsWithBaseline,

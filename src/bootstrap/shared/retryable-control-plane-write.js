@@ -7,7 +7,7 @@ import {
   TIME_MS,
 } from '../../constants/index.js';
 
-const DEFAULT_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
+const DEFAULT_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY; // ends-on: the control-plane write is accepted (non-retryable result)
 const DEFAULT_RETRY_BASE_DELAY_MS = NUM.HUNDRED;
 const DEFAULT_RETRY_MAX_DELAY_MS = TIME_MS.SECOND;
 
