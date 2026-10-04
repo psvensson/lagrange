@@ -54,7 +54,6 @@ const OUTCOME = Object.freeze({
 const ACTION = Object.freeze({
   PUBLISH_HEAD: 'publish-head',
   PUBLISH_HEAD_ON_RED: 'publish-head-on-red',
-  ROUTE_SELF_HOSTED_RUNNER: 'route-self-hosted-runner',
   PUBLISH_WITHOUT_DATASET: 'publish-without-dataset',
   REPLACE_SHARED_EVIDENCE: 'replace-shared-evidence',
   DELETE_SHARED_EVIDENCE: 'delete-shared-evidence',
@@ -80,8 +79,6 @@ const UNREGISTERED = 'no authorization semantics are registered for this ' +
 const REQUIRES = Object.freeze({
   STANDING_PUBLISH: 'nothing beyond the standing authority to publish a landed head',
   RED_REPAIR: 'the exact head the shared branch is red at, and a reason',
-  RUNNER: 'a routing marker in the reviewed head commit, and an explicit ' +
-    'request to route there',
   PROOF_WEAKENING: 'an explicit request to proceed without the missing input, ' +
     'naming it',
   REPLACEMENT: 'an explicit request to replace, naming the asset',
@@ -105,8 +102,6 @@ const BECAUSE = Object.freeze({
   RED_HEAD_UNKNOWN: 'the red head could not be determined',
   WRONG_HEAD: 'the signal names a head the branch is not red at',
   NO_REASON: 'no reason was given',
-  RUNNER_UNREQUESTED: 'routing there was not asked for',
-  RUNNER_UNMARKED: 'the reviewed head carries no marker for that runner',
   NOTHING_MISSING_NAMED: 'nothing names what is missing',
   REPLACEMENT_UNREQUESTED: 'replacement was not asked for',
   NO_ASSET_NAMED: 'no asset was named',
@@ -152,20 +147,6 @@ function decideRedRepair(signal, context) {
     return refused(REQUIRES.RED_REPAIR, BECAUSE.NO_REASON);
   }
   return authorized(REQUIRES.RED_REPAIR);
-}
-
-// Routing elsewhere is authorized by a marker in the commit message that was
-// already reviewed AND by an explicit request. Either half alone is a
-// mismatch: a marker nobody asked to honour, or a request the reviewed commit
-// does not carry.
-function decideRunnerRouting(signal, context) {
-  if (signal.requested !== true) {
-    return refused(REQUIRES.RUNNER, BECAUSE.RUNNER_UNREQUESTED);
-  }
-  if (context.headCarriesMarker !== true) {
-    return refused(REQUIRES.RUNNER, BECAUSE.RUNNER_UNMARKED);
-  }
-  return authorized(REQUIRES.RUNNER);
 }
 
 // A deliberate weakening of the proof a publish runs: it must be asked for,
@@ -214,8 +195,6 @@ const REGISTRY = Object.freeze({
   }),
   [ACTION.PUBLISH_HEAD_ON_RED]: Object.freeze({
     requires: REQUIRES.RED_REPAIR, decide: decideRedRepair}),
-  [ACTION.ROUTE_SELF_HOSTED_RUNNER]: Object.freeze({
-    requires: REQUIRES.RUNNER, decide: decideRunnerRouting}),
   [ACTION.PUBLISH_WITHOUT_DATASET]: Object.freeze({
     requires: REQUIRES.PROOF_WEAKENING,
     decide: (signal) => decideProofWeakening(signal)}),

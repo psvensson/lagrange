@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {parse} from 'yaml';
 import {gitProcessEnvironment} from
   '../../scripts/checks/git-process-environment.js';
 
@@ -189,6 +190,94 @@ test('a non-main branch can explicitly request the full local proof', () => {
   const [call] = materializerCalls(run.recorded);
   assert.ok(call, 'the explicit proof request materializes the pushed commit');
   assert.equal(call.argv[1], shas.head);
+});
+
+// A preserved branch push says in one line whether a workflow proves it
+// remotely or that it is unproven (preserved-branches-run-their-cone). Which
+// prefixes a workflow covers is the workflows' own push trigger: derived here
+// from every workflow file, never retyped, and the hook's list must equal it.
+const WORKFLOWS = '.github/workflows';
+const UNPROVEN_LINE = /^pre-push: unproven - .*$/gmu;
+const REMOTE_LINE = /^pre-push: remote proof - .*$/gmu;
+const lines = (output, pattern) => output.match(pattern) ?? [];
+const coneCommand = (sha) =>
+  `prove the cone from a clean checkout at ${sha}: ` +
+  `node scripts/lab.js test changed --lane all --split --sha ${sha}`;
+const branchPush = (branch, sha) =>
+  `refs/heads/local ${sha} refs/heads/${branch} ${ZERO_SHA}\n`;
+
+function workflowPushPrefixes() {
+  const prefixes = {};
+  for (const file of fs.readdirSync(path.join(root, WORKFLOWS)).sort()) {
+    const on = parse(fs.readFileSync(path.join(root, WORKFLOWS, file), UTF8)).on;
+    assert.equal(on?.push?.['branches-ignore'], undefined, `${file}: branches-ignore`);
+    for (const glob of on?.push?.branches ?? []) {
+      if (glob === 'main') continue;
+      assert.match(glob, /^[a-z-]+\/\*\*$/u, `${file}: a push glob the hook can mirror`);
+      prefixes[glob.slice(0, -2)] = file;
+    }
+  }
+  return prefixes;
+}
+
+test('the hook\'s remote-proof prefixes are the workflows\' parsed push triggers', () => {
+  const hook = fs.readFileSync(path.join(root, HOOK), UTF8);
+  const [, declared] = hook.match(/^REMOTE_PROOF_PREFIXES="([^"]*)"$/mu) ?? [];
+  assert.ok(declared, 'the hook declares its mirror in one line');
+  const mirrored = Object.fromEntries(declared.split(' ')
+    .map((entry) => entry.split('=')));
+  assert.deepEqual(mirrored, workflowPushPrefixes());
+});
+
+test('a push the workflows cover names the workflow and is never called unproven', () => {
+  for (const [prefix, workflow] of Object.entries(workflowPushPrefixes())) {
+    const run = runHook(branchPush(`${prefix}probe`, shas.head));
+    assert.equal(run.status, 0, run.output);
+    assert.deepEqual(materializerCalls(run.recorded), [], run.output);
+    assert.deepEqual(lines(run.output, UNPROVEN_LINE), [], `${prefix}: ${run.output}`);
+    assert.deepEqual(lines(run.output, REMOTE_LINE), ['pre-push: remote proof - ' +
+      `this push triggers ${workflow} (results: gh run list --commit ${shas.head})`]);
+  }
+});
+
+test('an uncovered branch push is unproven, once, with the clean-checkout cone command', () => {
+  for (const branch of ['wip/x', 'feature', 'questx/y']) {
+    const run = runHook(branchPush(branch, shas.head));
+    assert.equal(run.status, 0, run.output);
+    assert.deepEqual(lines(run.output, REMOTE_LINE), [], run.output);
+    assert.deepEqual(lines(run.output, UNPROVEN_LINE), ['pre-push: unproven - no ' +
+      `workflow runs on a push to ${branch}, so nothing proves it unless an open ` +
+      `pull request into main covers it; ${coneCommand(shas.head)}`]);
+  }
+  // A deletion and a covered ref have no cone to prove: the line names the
+  // first uncovered commit, and counts the uncovered refs when there are more.
+  const mixed = runHook(`(delete) ${ZERO_SHA} refs/heads/old ${shas.base}\n` +
+    branchPush('quest/covered', shas.head) + branchPush('wip/a', shas.second) +
+    branchPush('wip/b', shas.head));
+  assert.equal(mixed.status, 0, mixed.output);
+  const [line, ...extra] = lines(mixed.output, UNPROVEN_LINE);
+  assert.deepEqual(extra, [], mixed.output);
+  assert.deepEqual(lines(mixed.output, REMOTE_LINE), [], mixed.output);
+  assert.ok(line?.includes('a push to wip/a,'), line);
+  assert.ok(line?.endsWith(`${coneCommand(shas.second)} (first of 2 unproven refs)`), line);
+});
+
+test('no remote-proof hint where the local proof runs or nothing was pushed', () => {
+  const cases = [
+    ['a main push', `refs/heads/main ${shas.head} refs/heads/main ${shas.base}\n`, {}],
+    ['a branch push that asks for the proof', branchPush('wip/x', shas.head),
+      {LAGRANGE_PUSH_PROVE_BRANCH: '1'}],
+    ['a covered push that asks for the proof', branchPush('quest/x', shas.head),
+      {LAGRANGE_PUSH_PROVE_BRANCH: '1'}],
+    ['a deletion-only preservation push',
+      `(delete) ${ZERO_SHA} refs/heads/quest/old ${shas.base}\n`, {}],
+  ];
+  for (const [label, refLines, env] of cases) {
+    const run = runHook(refLines, env);
+    assert.equal(run.status, 0, `${label}: ${run.output}`);
+    assert.deepEqual([...lines(run.output, UNPROVEN_LINE),
+      ...lines(run.output, REMOTE_LINE)], [], `${label}: ${run.output}`);
+  }
 });
 
 test('the hook hands the pushed commit to the materializer and runs no content stage itself', () => {

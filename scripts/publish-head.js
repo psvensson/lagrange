@@ -69,12 +69,13 @@ function reportPublishFailure(error) {
 }
 // ------------------------------------------------------------------------
 
-const SELF_HOSTED_RUNNER_MARKER = '[ci:self-hosted]';
 const ARG_SEPARATOR = ' ';
 const GIT_COMMAND = 'git';
 const RUNNER_GITHUB = 'github';
-const RUNNER_SELF_HOSTED = 'self-hosted';
-const INVALID_RUNNER_ERROR = 'publish: --runner must be github|self-hosted';
+// Retired with the commit-message route it served (preserved-branches-run-
+// their-cone): ci.yml runs every event GitHub-hosted and selects no other runner.
+const RETIRED_RUNNER_ERROR = 'publish: --runner is retired: ci.yml runs every ' +
+  'event on a GitHub-hosted runner and has no route to any other';
 const FAST_FORWARD_ERROR = 'publish: HEAD is not a fast-forward of origin/main';
 const RECEIPT_DIRECTORY = 'publish-receipts';
 // Where the publisher's clean temporary checkouts live (gitignored).
@@ -97,8 +98,6 @@ const HEAD_TO_MAIN_REFSPEC = 'HEAD:refs/heads/main';
 const RUNNER_ARGUMENT = '--runner';
 const FIXES_RED_ARGUMENT = '--fixes-red';
 const RED_REPAIR_REFUSED_PREFIX = 'publish: repairing a red shared branch is ';
-const ROUTING_REFUSED_PREFIX = 'publish: routing this push to ';
-const ROUTING_REFUSED_SUFFIX = '. It requires ';
 const PUSH_REFUSED_PREFIX = 'publish: pushing the gated head is ';
 // The whole corpus is a fact about the commit, so a gate run that proved it
 // leaves a durable receipt - but only AFTER the push, when the commit is on
@@ -216,33 +215,7 @@ function remoteMainSha(run, root) {
   return line ? line.split(/\s+/u)[0] : ZERO_SHA;
 }
 
-// Which runner a push routes to is this module's business; whether routing
-// away from the default is authorized is not. The marker in the reviewed head
-// and the caller's explicit request are the two halves of that authority, and
-// the authority requires both.
-function resolvePublishRunner(headMessage, runner) {
-  if (runner && runner !== RUNNER_GITHUB && runner !== RUNNER_SELF_HOSTED) {
-    throw new Error(INVALID_RUNNER_ERROR);
-  }
-  const marked = headMessage.includes(SELF_HOSTED_RUNNER_MARKER);
-  const requested = runner === RUNNER_SELF_HOSTED;
-  if (!marked && !requested) return RUNNER_GITHUB;
-  const decision = authorizeAction({
-    action: ACTION.ROUTE_SELF_HOSTED_RUNNER,
-    signal: {action: ACTION.ROUTE_SELF_HOSTED_RUNNER, requested},
-    context: {headCarriesMarker: marked},
-  });
-  if (!isAuthorized(decision)) {
-    throw new Error(`${ROUTING_REFUSED_PREFIX}${RUNNER_SELF_HOSTED} is ` +
-      `${decision.outcome}: ${decision.because}${ROUTING_REFUSED_SUFFIX}` +
-      `${decision.requires}`);
-  }
-  return RUNNER_SELF_HOSTED;
-}
-
-export function validatePublishRequest({headMessage, runner, fixesRed, reason,
-  remoteSha}) {
-  const routedRunner = resolvePublishRunner(headMessage, runner);
+export function validatePublishRequest({fixesRed, reason, remoteSha}) {
   // Whether a red-branch repair is authorized is not the publisher's decision.
   // It presents the operator's signal and the context it already knows, and
   // acts on the answer.
@@ -257,7 +230,7 @@ export function validatePublishRequest({headMessage, runner, fixesRed, reason,
         `${decision.because}${RED_REPAIR_REFUSED_SUFFIX}${decision.requires}`);
     }
   }
-  return routedRunner;
+  return RUNNER_GITHUB;
 }
 
 // Paths a remote-only commit may touch for the publisher to rebase over it
@@ -326,7 +299,7 @@ function ensureFastForward(run, root, remoteSha, head) {
 
 function ciRunUrl(run, root, head) {
   const result = checked(run, 'gh', [
-    'run', 'list', '--workflow', 'ci.yml', '--commit', head, '--limit', '1',
+    'run', 'list', '--workflow', 'ci.yml', '--branch', MAIN_BRANCH, '--commit', head, '--limit', '1',
     '--json', 'url', '--jq', '.[0].url',
   ], {cwd: root, allowFailure: true});
   return result.status === 0 ? String(result.stdout || '').trim() : '';
@@ -1157,13 +1130,10 @@ export function publishExactHead(root, args = {}, options = {}) {
   const run = options.run || spawnSync;
   publishStage(PUBLISH_STAGE_LABEL.RESOLVE_HEAD);
   let head = git(run, root, [REV_PARSE_COMMAND, HEAD_REF]);
-  const headMessage = git(run, root, ['log', '-1', '--format=%B', head]);
   let remoteBefore = remoteMainSha(run, root);
   publishStage(PUBLISH_STAGE_LABEL.VALIDATE_REQUEST +
     head.slice(0, PUBLISH_SHORT_SHA_LENGTH));
   const runner = validatePublishRequest({
-    headMessage,
-    runner: args.runner || null,
     fixesRed: args.fixesRed || null,
     reason: args.reason || null,
     remoteSha: remoteBefore,
@@ -1242,7 +1212,7 @@ function parseArgs(argv) {
   };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === RUNNER_ARGUMENT) parsed.runner = valueAfter(index++, token);
+    if (token === RUNNER_ARGUMENT) throw new Error(RETIRED_RUNNER_ERROR);
     else if (token === FIXES_RED_ARGUMENT) {
       parsed.fixesRed = valueAfter(index++, token);
     } else if (token === REASON_ARGUMENT) parsed.reason = valueAfter(index++, token);

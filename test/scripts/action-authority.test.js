@@ -128,14 +128,9 @@ test('unavailable never permits an action', () => {
 });
 
 test('publication consumes the authority and interprets no signals', () => {
-  // Behavioural, not textual: with a routing request the reviewed head does not
-  // carry, the publisher must refuse rather than decide for itself.
+  // Behavioural, not textual: with a red-branch signal naming another head,
+  // the publisher must refuse rather than decide for itself.
   assert.throws(() => validatePublishRequest({
-    headMessage: 'an ordinary reviewed commit', runner: 'self-hosted',
-    fixesRed: null, reason: null, remoteSha: HEAD_SHA,
-  }), /is refused/u, 'the publisher routed without the authority');
-  assert.throws(() => validatePublishRequest({
-    headMessage: 'an ordinary reviewed commit', runner: null,
     fixesRed: OTHER_SHA, reason: 'a reason', remoteSha: HEAD_SHA,
   }), /is refused/u, 'the publisher judged a red-branch signal itself');
   // And it no longer reads the record store behind the authority's back.

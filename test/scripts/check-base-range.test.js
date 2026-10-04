@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {parse} from 'yaml';
 
 import {
   changedRecords,
@@ -180,4 +181,73 @@ test('an unreachable base is reported, never silently narrowed', () => {
   const missing = '0'.repeat(40);
   assert.equal(changedRecords({root: repo, base: missing, head: shas.d}), null,
     'an undiffable range returns null so the caller fails closed');
+});
+
+// preserved-branches-run-their-cone: ci.yml's own range step, run as written
+// in a checkout shaped like the job's (every branch fetched, the pushed commit
+// detached). A branch push declares no base, so the proof measures from the
+// publication merge-base: every commit since main, never only the tip (a new
+// branch's `before` is the zero SHA, which fell back to HEAD^).
+const CI_RANGE_STEP = parse(fs.readFileSync('.github/workflows/ci.yml', UTF8))
+  .jobs.gate.steps.find((step) => step.name === 'Resolve the proof range');
+const ZERO_SHA = '0'.repeat(40);
+
+function buildPushedBranchClone() {
+  const upstream = fs.mkdtempSync(path.join(os.tmpdir(), 'check-base-push-up-'));
+  const commit = (name) => {
+    fs.mkdirSync(path.join(upstream, 'src'), {recursive: true});
+    fs.writeFileSync(path.join(upstream, 'src', `${name}.js`),
+      `export const ${name} = 1;\n`, UTF8);
+    git(upstream, ['add', '.']);
+    git(upstream, ['commit', '--quiet', '-m', name]);
+    return git(upstream, ['rev-parse', 'HEAD']).trim();
+  };
+  git(upstream, ['init', '--quiet', '--initial-branch=main']);
+  git(upstream, ['config', 'user.email', 'fixture@example.invalid']);
+  git(upstream, ['config', 'user.name', 'fixture']);
+  const fork = commit('fork');
+  git(upstream, ['checkout', '--quiet', '-b', 'quest/x']);
+  const first = commit('first');
+  const tip = commit('tip');
+  git(upstream, ['checkout', '--quiet', 'main']);
+  commit('later');
+  const clone = fs.mkdtempSync(path.join(os.tmpdir(), 'check-base-push-'));
+  git(clone, ['clone', '--quiet', upstream, '.']);
+  git(clone, ['checkout', '--quiet', '--detach', tip]);
+  return {clone, fork, first, tip};
+}
+
+function declaredByRangeStep(clone, event) {
+  const githubEnv = path.join(clone, '.git', 'github-env');
+  fs.writeFileSync(githubEnv, '', UTF8);
+  execFileSync('bash', ['-c', CI_RANGE_STEP.run], {cwd: clone, stdio: 'pipe',
+    env: {...gitProcessEnvironment(), PUSH_BEFORE_SHA: '', PR_BASE_SHA: '',
+      ...event, GITHUB_ENV: githubEnv}});
+  return Object.fromEntries(fs.readFileSync(githubEnv, UTF8).split('\n')
+    .filter(Boolean).map((line) => line.split('=')));
+}
+
+test('a branch push proves every commit since its merge-base with main, through ci.yml\'s range step', () => {
+  const {clone, fork, first, tip} = buildPushedBranchClone();
+  const declared = declaredByRangeStep(clone, {EVENT_NAME: 'push',
+    REF: 'refs/heads/quest/x', PUSH_BEFORE_SHA: ZERO_SHA});
+  assert.deepEqual(declared, {}, 'a branch push declares no base');
+  const range = resolvedCheckRange(null, declared, clone);
+  assert.deepEqual(range, {base: fork, source: RANGE_SOURCE.PUBLICATION});
+  assert.deepEqual(semanticPaths(changedRecords({root: clone, base: range.base})).sort(),
+    ['src/first.js', 'src/tip.js'],
+    'both branch commits, and nothing main gained after the fork');
+  // Main and pull requests declare their base exactly as before.
+  assert.deepEqual(declaredByRangeStep(clone, {EVENT_NAME: 'push',
+    REF: 'refs/heads/main', PUSH_BEFORE_SHA: first}), {[CHECK_BASE_ENV]: first});
+  assert.deepEqual(declaredByRangeStep(clone, {EVENT_NAME: 'pull_request',
+    REF: 'refs/pull/7/merge', PR_BASE_SHA: fork}), {[CHECK_BASE_ENV]: fork});
+  assert.deepEqual(declaredByRangeStep(clone, {EVENT_NAME: 'push',
+    REF: 'refs/heads/main', PUSH_BEFORE_SHA: ZERO_SHA}), {[CHECK_BASE_ENV]: first},
+  'main keeps its HEAD^ fallback for an unusable before');
+  // Without origin/main there is no merge-base: the step fails, never
+  // leaving the proof to measure the working tree alone.
+  git(clone, ['update-ref', '-d', 'refs/remotes/origin/main']);
+  assert.throws(() => declaredByRangeStep(clone, {EVENT_NAME: 'push',
+    REF: 'refs/heads/quest/x', PUSH_BEFORE_SHA: tip}));
 });

@@ -76,37 +76,15 @@ tap.test('publish fails fast when data/ is absent and names the links', (t) => {
   t.end();
 });
 
-tap.test('publish validates runner and red-main attribution without mutation', (t) => {
+tap.test('publish validates red-main attribution without mutation', (t) => {
   t.equal(validatePublishRequest({
-    headMessage: 'plain commit', runner: null, fixesRed: null,
-    reason: null, remoteSha: 'a'.repeat(40),
-  }), 'github', 'GitHub-hosted is the default push runner');
-  t.throws(() => validatePublishRequest({
-    headMessage: 'plain commit', runner: 'self-hosted', fixesRed: null,
-    reason: null, remoteSha: 'a'.repeat(40),
-  }), /the reviewed head carries no marker for that runner/u,
-  'the authority refuses routing the reviewed head does not carry');
-  t.equal(validatePublishRequest({
-    headMessage: 'local gate [ci:self-hosted]', runner: 'self-hosted',
     fixesRed: null, reason: null, remoteSha: 'a'.repeat(40),
-  }), 'self-hosted', 'the marker enables the explicit self-hosted route');
+  }), 'github', 'every publication runs GitHub-hosted');
   t.throws(() => validatePublishRequest({
-    headMessage: 'local gate [ci:self-hosted]', runner: null, fixesRed: null,
-    reason: null, remoteSha: 'a'.repeat(40),
-  }), /routing there was not asked for/u,
-  'the authority refuses a marked head nobody asked to route');
-  t.throws(() => validatePublishRequest({
-    headMessage: 'local gate [ci:self-hosted]', runner: 'github', fixesRed: null,
-    reason: null, remoteSha: 'a'.repeat(40),
-  }), /routing there was not asked for/u,
-  'and refuses when the caller asks for a different runner than the marker');
-  t.throws(() => validatePublishRequest({
-    headMessage: 'plain commit', runner: null, fixesRed: 'a'.repeat(40),
-    reason: 'fix', remoteSha: 'b'.repeat(40),
+    fixesRed: 'a'.repeat(40), reason: 'fix', remoteSha: 'b'.repeat(40),
   }), /names a head the branch is not red at/u,
   'the authority refuses a repair attributed to the wrong head');
-  t.throws(() => parsePublishArgs(['--runner']), /requires a value/u);
-  t.throws(() => parsePublishArgs(['--reason', '--runner', 'github']),
+  t.throws(() => parsePublishArgs(['--reason', '--fixes-red', 'a'.repeat(40)]),
     /requires a value/u);
   t.end();
 });

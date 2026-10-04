@@ -1,5 +1,5 @@
-# GitHub Actions CI - the required pull-request and main-branch gate, and
-# (on main only, never gating) the repository's structural analysis.
+# GitHub Actions CI - the required pull-request and main-branch gate, the cone of
+# quest/land/review branch pushes, and (main only) the structural analysis.
 #
 # The workflow supplies IDENTITY AND ENVIRONMENT; repository code decides what
 # must be proved. That is the whole design:
@@ -14,10 +14,9 @@
 # question eventually disagree. The taxonomy is exhaustive and fails closed; a
 # YAML case statement cannot be either.
 #
-# Runner selection for pushes: GitHub-hosted by default; '[ci:self-hosted]' in
-# the head commit message routes that push to the maintainer's box. Pull
-# requests always run GitHub-hosted regardless of any marker, because fork code
-# on a public repo must never reach a self-hosted runner.
+# Every event runs GitHub-hosted: a pull request runs its own copy of this file,
+# so no expression here could keep fork code off another runner. `npm run
+# check` proves a cone, never the corpus, which no hosted runner runs.
 #
 # The statistical rolling-restart convergence gate is deliberately not run
 # here: its pass rate is variance-bounded and is promoted only through the
@@ -27,7 +26,7 @@ run-name: "change-gate: ${{ github.event.head_commit.message || github.ref_name 
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'quest/**', 'land/**', 'review/**']
   pull_request:
     branches: [main]
   workflow_dispatch: {}
@@ -42,12 +41,13 @@ on:
 # outright and clobber declarations - that is exactly how
 # critical-replica-placement-causal-trace (300s declared, ~150s) died at
 # 120s on main 8fe278fe5.
-# One proof per ref in flight. A superseded pull-request push has nothing to
-# prove, so it is cancelled; a push to main is never cancelled, because its
-# run is the exact-sha proof the publisher and the red-main guard read.
+# One proof per ref in flight. A superseded pull-request or branch push is
+# cancelled; a push to main never is: its run is the exact-sha proof the
+# publisher and the red-main guard read. A branch with an open pull request
+# runs twice (two refs; only an API call could tell, so that is accepted).
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   TAP_TIMEOUT_FLOOR: '120'
@@ -67,11 +67,7 @@ permissions:
 jobs:
   gate:
     name: gate
-    # Expression rather than a preceding job: routing needs only the head
-    # commit message, which is already on the event, so a whole extra job and
-    # checkout would buy nothing. `github.event.head_commit` exists for push
-    # events only, which is exactly the restriction we want.
-    runs-on: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[ci:self-hosted]')) && 'self-hosted' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - name: Checkout
@@ -82,33 +78,37 @@ jobs:
           # base.sha..head.sha, and diffing a merge commit would attribute
           # base-branch commits to this change.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          # Full history: the proof range reaches back to the base SHA, and
-          # solver historical-artifact tests read older commits via git show,
-          # which a shallow clone cannot serve.
+          # Full history and every branch (origin/main included): the proof
+          # range reaches back to its base, and solver historical-artifact
+          # tests read older commits, which a shallow clone cannot serve.
           fetch-depth: 0
 
       - name: Resolve the proof range
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
 
-          # A pull request proves base..head, so every commit on the branch
-          # participates - not merely the tip. A push proves the range the
-          # remote did not have, which is `before`..HEAD.
+          # A pull request proves base..head; a push to main `before`..HEAD. Any
+          # other ref declares no base, so the proof measures from its merge-base
+          # with origin/main (scripts/checks/changed-paths.js), not its tip.
           if [ "$EVENT_NAME" = "pull_request" ]; then
             base="$PR_BASE_SHA"
-          else
+          elif [ "$REF" = "refs/heads/main" ]; then
             base="$PUSH_BEFORE_SHA"
+          else
+            git rev-parse -q --verify "origin/main^{commit}" >/dev/null ||
+              { echo "::error::no origin/main, so no merge-base to prove from"; exit 1; }
+            exit 0
           fi
 
-          # A new branch reports the zero SHA, and a force-push or an expired
-          # object can leave `before` unreachable. Fall back to the single
-          # preceding commit and SAY SO, rather than resolving to an empty base
-          # that would quietly prove the working tree alone.
+          # An empty or zero `before` (a dispatch), or one a force-push left
+          # unreachable, falls back to HEAD^ and SAYS SO - never to an empty
+          # base that would quietly prove the working tree alone.
           if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] ||
             ! git cat-file -e "$base^{commit}" 2>/dev/null; then
             echo "proof range: base '$base' unavailable, falling back to HEAD^"
@@ -233,7 +233,7 @@ jobs:
       # inventory runs first: the analyses read its generated inputs; the last
       # line holds the nightly workflow's token to one inert data file.
       - name: Whole-repository structural analysis
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main'
         # Its own bound, because continue-on-error absorbs a failing step but
         # not a job timeout: analysis that overran would otherwise kill the
         # required run and block every later push.
@@ -246,7 +246,7 @@ jobs:
           node scripts/checks/formation-health.js --bot-commits
 
       - name: Upload health evidence
-        if: always() && github.event_name != 'pull_request'
+        if: always() && github.ref == 'refs/heads/main'
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
