@@ -4,6 +4,7 @@ name: a1-v13-attempt
 # retry after isolated Map witness
 # retry after full isolated intrinsic witnesses
 # retry after TAP-safe intrinsic witness repair
+# retry after delegated parser capture evidence
 on:
   push:
     branches:
