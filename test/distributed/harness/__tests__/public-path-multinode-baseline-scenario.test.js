@@ -338,6 +338,26 @@ describe('public-path-multinode-baseline scenario', () => {
       assert.equal(refused.pgClosed, 1);
     });
 
+  it('replays INSTALL on the catalog owner\'s transient idempotency-lookup ' +
+    'failure, never on a terminal one', async () => {
+    const state = greenState();
+    state.pgFailures[INSTALL_SQL] = [
+      new Error('authoritative operation lookup failed'),
+      new Error('authoritative operation lookup failed'),
+    ];
+    await run(buildStubCluster(state));
+    assert.deepEqual(arrayMap(state.pgStatements, (entry) => entry.sql),
+      [INSTALL_SQL, INSTALL_SQL, INSTALL_SQL, CREATE_BINDING_SQL]);
+
+    const terminal = greenState();
+    terminal.pgFailures[INSTALL_SQL] = [
+      new Error('installation intent cannot be changed by replay'),
+    ];
+    await assert.rejects(run(buildStubCluster(terminal)),
+      /cannot be changed by replay/u);
+    assert.equal(terminal.pgStatements.length, 1);
+  });
+
   it('fails when the runtime kind is native_js', async () => {
     const state = greenState();
     state.runtimeKind = 'native_js';

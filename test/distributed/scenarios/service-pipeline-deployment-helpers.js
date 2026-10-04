@@ -26,6 +26,9 @@ import {
 import {
   ServiceLocalOciLayoutBuilder,
 } from '../../../src/service/service-local-oci-layout-builder.js';
+import {
+  SERVICE_INSTALL_CATALOG_MESSAGE,
+} from '../../../src/control-plane/owners/service-install-catalog-contract.js';
 import {SCENARIO_ARTIFACTS} from '../harness/constants.js';
 import {
   classifyPublicOutcome,
@@ -53,6 +56,17 @@ const ONE = 1;
 // INSTALL SERVICE carries the deploy's idempotency key, so replaying it is
 // safe; CREATE BINDING / CONFIGURE SERVICE ACCESS are never retried here.
 const IDEMPOTENT_LIFECYCLE_STATEMENT = /^\s*INSTALL\b/iu;
+// INSTALL's idempotency lookup reads service_installations through the
+// authoritative control-plane gateway; while the formation tail is still
+// settling that read can fail, and the catalog owner answers with this typed
+// message before any write. The replay is the same idempotent INSTALL.
+const INSTALL_RETRY = Object.freeze({
+  DELAY_MS: 2000,
+  MAX_ATTEMPTS: 30,
+  TRANSIENT_MESSAGES: Object.freeze([
+    SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_OPERATION_LOOKUP_FAILED,
+  ]),
+});
 const LIFECYCLE_LISTENER = Object.freeze({
   POLL_MS: 1000,
   TIMEOUT_MS: 120_000,
@@ -124,27 +138,41 @@ function resultRows(result) {
 }
 
 /**
- * Retry an idempotent lifecycle statement only on the interim retry-safe
- * outcome class (deferred, a retry-after hint, connection refused before
- * dispatch); every other outcome is the deploy's answer.
+ * The retry delay for a failed idempotent lifecycle statement, or null when
+ * the outcome is the deploy's answer. Retried: the interim retry-safe class
+ * (deferred, a retry-after hint, connection refused before dispatch) and the
+ * catalog owner's typed transient idempotency-lookup failure.
+ * @return {number|null}
+ */
+function idempotentRetryDelayMs(error) {
+  const policy = PUBLIC_SEAM_INTERIM_RETRY_POLICY;
+  const described = error?.publicOutcome || describePublicError(error, policy);
+  if (classifyPublicOutcome(described, policy) ===
+      PUBLIC_SEAM_OUTCOME_CLASS.RETRYABLE) {
+    return described.retryAfterMs ?? policy.delayMs;
+  }
+  return INSTALL_RETRY.TRANSIENT_MESSAGES.some((message) =>
+    described.message.includes(message)) ? INSTALL_RETRY.DELAY_MS : null;
+}
+
+/**
+ * Run a lifecycle statement; only the idempotent INSTALL is replayed, and
+ * only on a retryable outcome, within a bounded number of attempts.
  * @return {Promise<*>}
  */
 async function queryWithIdempotentRetry(rawClient, statement, parameters,
   sleep) {
-  const policy = PUBLIC_SEAM_INTERIM_RETRY_POLICY;
   const retryable = IDEMPOTENT_LIFECYCLE_STATEMENT.test(statement);
   for (let attempt = ONE; ; attempt += ONE) {
     try {
       return await rawClient.query(statement, parameters);
     } catch (error) {
-      const described = error?.publicOutcome ||
-        describePublicError(error, policy);
-      if (!retryable || attempt >= policy.maxAttempts ||
-          classifyPublicOutcome(described, policy) !==
-            PUBLIC_SEAM_OUTCOME_CLASS.RETRYABLE) {
+      const delayMs = retryable && attempt < INSTALL_RETRY.MAX_ATTEMPTS ?
+        idempotentRetryDelayMs(error) : null;
+      if (delayMs === null) {
         throw error;
       }
-      await sleep(described.retryAfterMs ?? policy.delayMs);
+      await sleep(delayMs);
     }
   }
 }
