@@ -69,6 +69,11 @@ const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   // replica that does not lead refuses one typed and retryable, naming the
   // leader it knows, instead of letting the crate forward it.
   NOT_LEADER: 'membership-change-not-leader',
+  // A change whose configuration would hold no voter (a sole voter removing
+  // or demoting itself): raft-rs takes the proposal and commits it, then
+  // refuses to apply it ("removed all voters"), so the leader's port refuses
+  // it before the core is handed it. Terminal: no later state admits it.
+  REMOVES_LAST_VOTER: 'membership-change-removes-last-voter',
 });
 
 // What probePeerProgress(peerAddress) answers: the peer's matched index

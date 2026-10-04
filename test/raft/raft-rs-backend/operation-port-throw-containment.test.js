@@ -21,6 +21,8 @@ import Database from 'better-sqlite3';
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
 import {
   RAFT_EVENT,
+  RAFT_MEMBERSHIP_CHANGE_REFUSAL,
+  RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
@@ -30,8 +32,14 @@ import * as runtimeConstants from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf} from
   '../../../src/raft/raft-rs-runtime-tuning.js';
+import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
+import {RaftRsPeerIdentityRegistry} from
+  '../../../src/raft/raft-rs-peer-identity.js';
+import {RAFT_RS_CONF_CHANGE_TYPE} from
+  '../../../src/raft/raft-rs-ready-loop-constants.js';
 
 import {answerOf, countEscapes} from './process-escape-counter.js';
+import {loadRaftRsCore, restoreRaftRsGroup} from './raw-raft-rs-test-core.js';
 import {genesisStamp} from
   '../../../src/raft/raft-committed-membership-stamp.js';
 
@@ -55,8 +63,7 @@ function sleep(ms) {
 
 // A lone replica's port, from the request PartitionService hands its
 // backend (the contract owner's field names).
-function lonePort(groupId, {deferElection}) {
-  const db = new Database(IN_MEMORY);
+function lonePort(groupId, {deferElection, db = new Database(IN_MEMORY)}) {
   const replicaId = `${groupId}-r1`;
   const port = createRaftRsOperationPort({
     [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: groupId,
@@ -77,6 +84,8 @@ function lonePort(groupId, {deferElection}) {
   });
   return {
     port,
+    db,
+    replicaId,
     dispose: () => {
       port.close();
       db.close();
@@ -158,6 +167,132 @@ test('F-ah (b): a throw inside a port operation the caller asked for is ' +
       `after its window the group campaigns again (${
         JSON.stringify(campaigned)})`);
     assert.equal(port.readStatus().role, RAFT_ROLE.LEADER, 'and leads');
+    assert.deepEqual(escapes.escaped, [], 'nothing escaped');
+  } finally {
+    dispose();
+    escapes.stop();
+  }
+});
+
+// Formation-3 on d3cb83d15 (managed split, source dissolution): the sole
+// voter of a dissolving partition proposed its own RemoveNode (its own
+// retiring row, peer-cache reconciliation). raft-rs takes that proposal and
+// commits it, then refuses to apply it ("removed all voters"); the runtime
+// owner lost the refusal's typed answer (resolveCommittedEntryConfState
+// returned the bare outcome where applyEntries reads {ok, result}), so the
+// Ready's continuation read `.outcome` of undefined and the port contained a
+// TypeError: the group held as an unexpected throw, and - the entry being
+// committed and durable - held again on every reconstruction.
+
+test('a sole voter\'s own RemoveNode is refused typed at the leader\'s ' +
+  'port: nothing is proposed and the group keeps leading and committing',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  const escapes = countEscapes();
+  const {port, replicaId, dispose} = lonePort('last-voter-admission',
+    {deferElection: true});
+  try {
+    assert.equal((await port.campaign()).outcome,
+      RAFT_OPERATION_OUTCOME.CORE_OK, 'setup: the lone replica leads');
+    const before = port.readStatus();
+    const answer = await port.proposeConfChange({
+      type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity: replicaId,
+    });
+    assert.deepEqual({...answer}, {
+      outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      reason: RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LAST_VOTER,
+      phase: runtimeConstants.RUNTIME_PHASE.ADMISSION,
+      retryable: false,
+      recoveryRequired: false,
+    }, `the removal is refused terminal and typed (${JSON.stringify(answer)})`);
+    const after = port.readStatus();
+    assert.equal(after.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      `the group is not held (${JSON.stringify(after)})`);
+    assert.equal(after.role, RAFT_ROLE.LEADER, 'it still leads');
+    assert.equal(after.commitIndex, before.commitIndex,
+      'nothing was handed to the core');
+    assert.deepEqual([...after.confState.voters], [...before.confState.voters],
+      'its configuration is unchanged');
+    const proposed = await port.propose({kind: 'after-refusal'});
+    assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      `a later write commits (${JSON.stringify(proposed)})`);
+    assert.ok(port.readStatus().commitIndex > before.commitIndex,
+      'and advances the commit index');
+    assert.deepEqual(escapes.escaped, [], 'nothing escaped');
+  } finally {
+    dispose();
+    escapes.stop();
+  }
+});
+
+// The committed self-removal a group already holds (a record an earlier
+// build wrote): proposed and committed straight through the core, below the
+// port's admission, and left unapplied in the port's own durable record.
+function commitSelfRemovalBelowThePort(db, groupId, replicaId) {
+  const store = new RaftRsDurableStore(db);
+  const peerId = new RaftRsPeerIdentityRegistry(db).raftPeerIdOf(replicaId);
+  const core = loadRaftRsCore();
+  const handle = restoreRaftRsGroup({core, store, groupId, peerId});
+  const drainUnapplied = () => {
+    while (core.has_ready(handle)) {
+      store.persistReady(groupId, core.take_ready(handle));
+      core.persist_ready(handle);
+      const light = core.advance_append(handle);
+      if (light.commitIndex !== undefined) {
+        store.putCommitIndex(groupId, light.commitIndex);
+      }
+      core.advance_apply(handle);
+    }
+  };
+  try {
+    core.campaign(handle);
+    drainUnapplied();
+    core.propose_conf_change_v2(handle, {transition: 0, changes: [{
+      changeType: RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE, nodeId: peerId}]});
+    drainUnapplied();
+    return store.readDurableProgress(groupId);
+  } finally {
+    core.free(handle);
+  }
+}
+
+test('a committed configuration change the core refuses to apply holds ' +
+  'its group as a typed application failure, never an unexpected throw',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  const escapes = countEscapes();
+  const groupId = 'last-voter-committed';
+  const first = lonePort(groupId, {deferElection: true});
+  assert.equal((await first.port.campaign()).outcome,
+    RAFT_OPERATION_OUTCOME.CORE_OK, 'setup: the lone replica leads');
+  first.port.close();
+  const progress = commitSelfRemovalBelowThePort(first.db, groupId,
+    first.replicaId);
+  assert.ok(BigInt(progress.commitIndex) > BigInt(progress.appliedIndex),
+    `setup: the removal is committed and unapplied (${
+      JSON.stringify(progress)})`);
+  const {port, dispose} = lonePort(groupId,
+    {deferElection: true, db: first.db});
+  try {
+    const answers = [answerOf(() => port.tick())];
+    await sleep(recoveryRetryWindowMsOf(TIMING) + WINDOW_MARGIN_MS);
+    answers.push(answerOf(() => port.tick()));
+    for (const [index, answer] of answers.entries()) {
+      assert.equal(answer.threw, null, `turn ${index} answers, never throws`);
+      const held = await answer.value;
+      assert.equal(held.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+        `turn ${index}: a typed host failure (${JSON.stringify(held)})`);
+      assert.equal(held.recoveryRequired, true,
+        `turn ${index}: the group is held`);
+      // The failing turn answers the failure itself; a held group's later
+      // turn answers its recovery record, which carries the failure.
+      const failure = held.failure ?? held;
+      assert.equal(failure.phase, runtimeConstants.RUNTIME_PHASE.APPLICATION,
+        `turn ${index}: the committed entry's application failed (${
+          JSON.stringify(failure)})`);
+      assert.match(String(failure.reason), /removed all voters/,
+        `turn ${index}: the core's own refusal is its reason`);
+      assert.equal(failure.detail?.coreOperation, 'apply_conf_change',
+        `turn ${index}: naming the core call that refused`);
+    }
     assert.deepEqual(escapes.escaped, [], 'nothing escaped');
   } finally {
     dispose();

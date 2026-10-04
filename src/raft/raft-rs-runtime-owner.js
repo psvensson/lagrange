@@ -766,28 +766,45 @@ function thenMaybe(value, continuation) {
     value.then(continuation) : continuation(value);
 }
 
+// The configuration a committed entry leaves the core holding, in the core
+// call's own shape on every path: {ok: true, value, decoded?} once a
+// conf-change entry is applied (or the configuration of any other entry is
+// read), {ok: false, result} naming the core call that failed.
 function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
   if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) {
     const decoded = invokeCoreAt(
       group, expectedGeneration,
       'decode_conf_change_entry', entry.entryType, entry.data);
     if (!decoded.ok) {
-      return decoded.result;
+      return decoded;
     }
     const applied = invokeCoreAt(
       group, expectedGeneration, 'apply_conf_change', decoded.value);
     if (!applied.ok) {
-      return applied.result;
+      return applied;
     }
     const set = invokeCoreAt(
       group, expectedGeneration, 'set_conf_state', applied.value);
     if (!set.ok) {
-      return set.result;
+      return set;
     }
     return {...applied, decoded: decoded.value};
   }
   return invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
+}
+
+// A committed entry the core refused to resolve (raft-rs refusing to apply a
+// committed configuration change: "removed all voters") cannot be applied,
+// and the Ready that carried it was taken: the group's own application
+// failure, held and reconstructed from its durable record like a failed
+// application callback. A core failure (the runtime is replaced) or a stale
+// continuation is answered as it is.
+function unresolvedCommittedEntry(group, failed) {
+  return failed.outcome === CORE_REFUSED ?
+    groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
+      {message: failed.reason, detail: {coreOperation: failed.phase}}) :
+    failed;
 }
 
 function applyEntries(group, expectedGeneration, entries, index = 0) {
@@ -798,7 +815,7 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
   const resolvedConfState = resolveCommittedEntryConfState(
     group, expectedGeneration, entry);
   if (!resolvedConfState.ok) {
-    return resolvedConfState.result;
+    return unresolvedCommittedEntry(group, resolvedConfState.result);
   }
   const admitted = admitsReplica(group.gate, resolvedConfState.decoded,
     group.peerId, BigInt(entry.index));

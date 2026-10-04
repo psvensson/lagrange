@@ -19,6 +19,12 @@
 //     (CONF_CHANGE_PENDING);
 //   - a joint configuration and a change that is not the leave - deferred
 //     typed.
+// One refusal the crate does not make at proposal: a change that leaves no
+// voter (a sole voter removing or demoting itself). `step_leader` takes it
+// and the entry commits; `apply_conf_change` then refuses it ("removed all
+// voters", confchange/changer.rs:181), and a committed entry the core will
+// never apply holds its group on every replay. It is refused here, terminal
+// (REMOVES_LAST_VOTER), and nothing is handed to the core.
 // Excluded: an empty change (the leave) outside a joint configuration. No
 // producer reaches the port with one: the port's normaliser builds exactly
 // one step for every membership operation it accepts.
@@ -40,6 +46,34 @@ import {
   RUNTIME_PHASE,
   RUNTIME_REASON,
 } from './raft-rs-runtime-owner-constants.js';
+import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
+
+/**
+ * Whether the change would leave the incoming configuration without a voter:
+ * its steps folded over the core's voters (AddNode adds one, RemoveNode and
+ * AddLearnerNode take one out), as raft-rs's changer folds them before it
+ * refuses the result ("removed all voters"). The leave (no steps) changes no
+ * incoming voter.
+ * @param {Object} confState - The core's configuration.
+ * @param {Object} change - The normalized ConfChangeV2 ({changes}).
+ * @return {boolean}
+ */
+function leavesNoVoter(confState, change) {
+  const steps = change?.changes || [];
+  if (steps.length === 0) {
+    return false;
+  }
+  const voters = new Set((confState?.voters || []).map(String));
+  for (const {changeType, nodeId} of steps) {
+    if (changeType === RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE) {
+      voters.add(String(nodeId));
+    } else if (changeType === RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE ||
+        changeType === RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE) {
+      voters.delete(String(nodeId));
+    }
+  }
+  return voters.size === 0;
+}
 
 /**
  * Whether the core holds an unapplied configuration change.
@@ -54,16 +88,18 @@ function hasPendingConfChange(status) {
  * The answer to a conf-change proposal the core must not be handed, or null
  * when the leader's core takes it. A replica that does not lead answers
  * NOT_LEADER (the crate would forward it where no answer comes back); the
- * leader defers what it would drop. In a joint configuration the one change
- * the core takes is the leave (a change with no steps); any other waits.
+ * leader refuses a change that leaves no voter and defers what it would drop.
+ * In a joint configuration the one change the core takes is the leave (a
+ * change with no steps); any other waits.
  * @param {Object} observed
  * @param {Object} observed.status - The core's status.
  * @param {Object} observed.confState - The core's configuration.
  * @param {Object} observed.change - The normalized ConfChangeV2 ({changes}).
  * @param {Function} observed.leaderReplicaIdOf - (lead) => the leader's
  *   replica identity, or null.
- * @return {Object|null} Frozen CORE_REFUSED NOT_LEADER or HOST_FAILURE
- *   deferral (both retryable, the group usable), or null.
+ * @return {Object|null} Frozen CORE_REFUSED NOT_LEADER (retryable),
+ *   CORE_REFUSED REMOVES_LAST_VOTER (terminal) or HOST_FAILURE deferral
+ *   (retryable), the group usable in each; or null.
  */
 function confChangeProposalRefusal({status, confState, change,
   leaderReplicaIdOf}) {
@@ -75,6 +111,15 @@ function confChangeProposalRefusal({status, confState, change,
       retryable: true,
       recoveryRequired: false,
       leaderReplicaId: leaderReplicaIdOf(status.lead),
+    });
+  }
+  if (leavesNoVoter(confState, change)) {
+    return deepFreeze({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      reason: RAFT_MEMBERSHIP_CHANGE_REFUSAL.REMOVES_LAST_VOTER,
+      phase: RUNTIME_PHASE.ADMISSION,
+      retryable: false,
+      recoveryRequired: false,
     });
   }
   const joint = (confState?.votersOutgoing || []).length > 0;
