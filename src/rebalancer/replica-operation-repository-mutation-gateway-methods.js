@@ -3,6 +3,7 @@ import {
 } from '../query/query-execution-budget.js';
 
 import {isReroutableWriteError} from '../constants/errors.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {isReroutableWriteFailureCode} from
   '../partition/partition-write-kernel.js';
 
@@ -12,6 +13,10 @@ const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_PREFIX =
   'control-plane:write';
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_SEPARATOR = ':';
+const OPERATION_PERSIST_RETRY_WAIT = Object.freeze({
+  wait: 'OPERATION_PERSIST_RETRY_TIMEOUT_MS',
+  awaited: 'replica_operations mutation committed by the control plane',
+});
 
 function assignReplicaOperationRepositoryMutationGatewayMethods(
   ReplicaOperationRepository,
@@ -77,6 +82,9 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           options.timeoutBudget,
         );
         if (remainingMs <= 0) {
+          this.reportOperationMutationRetrySpent(result, {
+            elapsedMs, remainingMs, retryAttempt, options,
+          });
           return result;
         }
         if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
@@ -94,6 +102,29 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         );
         await this.waitForOperationPersistRetry(waitMs);
       }
+    }
+
+    // The persist-retry bound (the local timeout, or the caller's tighter
+    // timeout budget) is spent with the mutation still failing retryably:
+    // one wait_bound_spent ERROR; the caller still gets the last failure.
+    reportOperationMutationRetrySpent(result, spent) {
+      const budgeted = Boolean(spent.options?.timeoutBudget);
+      reportWaitBoundSpent(this.logger, {
+        ...OPERATION_PERSIST_RETRY_WAIT,
+        boundMs: spent.elapsedMs + spent.remainingMs,
+        elapsedMs: spent.elapsedMs,
+        lastObserved: {
+          errorCode: getControlPlaneErrorCode(result) || null,
+          error: this.getOperationPersistErrorMessage(result) || null,
+          retryAttempt: spent.retryAttempt,
+          callerBudgetBound: budgeted,
+          localBoundMs: OPERATION_PERSIST_RETRY_TIMEOUT_MS,
+        },
+        scope: {
+          nodeId: this.nodeId || null,
+          ownerId: spent.options?.ownerId || null,
+        },
+      });
     }
 
     bindPriorMutationDeliveryAttemptResult(failureResult) {
@@ -204,6 +235,9 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           options.timeoutBudget,
         );
         if (remainingMs <= 0) {
+          this.reportOperationMutationRetrySpent(scanResult, {
+            elapsedMs, remainingMs, retryAttempt, options,
+          });
           return scanResult;
         }
         if (this.shouldRotateOperationMutationSessionOnRetry(scanResult, options)) {

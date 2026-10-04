@@ -1,4 +1,5 @@
 import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
@@ -73,6 +74,46 @@ async function reconcilePartitionReplaceTargetStatus(
     REPLACE_TARGET_REMOVED_BEFORE_ACTIVE :
     REPLACE_TARGET_DEAD_BEFORE_INTENT);
   return true;
+}
+
+const OPERATION_STEP_TIMEOUT_WAIT = Object.freeze({
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+});
+
+/**
+ * An operation's step timeout or the enclosing rebalance budget is spent:
+ * one wait_bound_spent ERROR per spend. Re-fires per timeout check for an
+ * exempt REPLACE (its budget is a diagnostic only), so the operation is the
+ * subject and an unchanged observation folds.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {Object} spent - {stepTimeout, elapsed, budgetExhausted,
+ *   stepExceeded, timeoutClassification, exemptReplace}
+ * @return {void}
+ */
+function reportOperationStepTimeoutSpent(owner, operation, spent) {
+  reportWaitBoundSpent(owner.logger, {
+    ...OPERATION_STEP_TIMEOUT_WAIT,
+    boundMs: spent.stepTimeout,
+    elapsedMs: spent.elapsed,
+    lastObserved: {
+      type: operation.type || null,
+      workflowStep: operation.workflowStep || null,
+      status: operation.status || null,
+      targetNodeId: operation.targetNodeId || null,
+      stepExceeded: spent.stepExceeded,
+      budgetExhausted: spent.budgetExhausted,
+      exemptReplace: spent.exemptReplace === true,
+      timeoutClassification: spent.timeoutClassification || null,
+    },
+    scope: {
+      nodeId: owner.nodeId || null,
+      partitionId: operation.partitionId || null,
+      operationId: operation.operationId || null,
+    },
+    subject: operation.operationId || null,
+  });
 }
 
 class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
@@ -699,6 +740,10 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       // S9 / D2: the budget is a diagnostic for a REPLACE at ACTIVE or
       // STOPPING; it never changes the operation's state.
       recordReplaceBudgetDiagnostic(this, operation);
+      reportOperationStepTimeoutSpent(this, operation, {
+        stepTimeout, elapsed, budgetExhausted, stepExceeded,
+        exemptReplace: true,
+      });
       return;
     }
     if (stepExceeded || budgetExhausted) {
@@ -714,12 +759,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
           now: () => now,
         });
 
-      this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TIMED_OUT, {
-        operationId: operation.operationId,
-        workflowStep: operation.workflowStep,
-        elapsed,
-        timeout: stepTimeout,
-        budgetExhausted,
+      reportOperationStepTimeoutSpent(this, operation, {
+        stepTimeout, elapsed, budgetExhausted, stepExceeded,
         timeoutClassification,
       });
 

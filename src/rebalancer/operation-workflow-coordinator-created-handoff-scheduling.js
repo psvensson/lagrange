@@ -8,6 +8,7 @@ import {
 } from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from
   './operation-workflow-owner-shared.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   CONTROL_PLANE_OPERATION_HANDOFF_MODE,
@@ -54,6 +55,54 @@ const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_STEPS_BY_ENTITY_TYPE =
       ],
     ]),
   );
+
+const COORDINATOR_HANDOFF_RETRY_WAIT = Object.freeze({
+  wait: 'COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT',
+  awaited: 'coordinator-created operation handed off to its remote owner',
+});
+
+/**
+ * Log one coordinator-created handoff retry stop. A stop because the step
+ * timeout and operation budget are spent is a spent wait (one
+ * wait_bound_spent ERROR); any other stop (terminal, ineligible, degenerate
+ * snapshot) keeps its warn.
+ * @param {Object} owner
+ * @param {Object} operation - The operation (or retained snapshot) observed.
+ * @param {Object} logFields - The stop's diagnostic fields.
+ * @param {boolean} timedOut - True when the stop is the spent budget.
+ * @return {void}
+ */
+function logCoordinatorHandoffRetryStopped(
+  owner, operation, logFields, timedOut) {
+  if (timedOut === true) {
+    reportCoordinatorHandoffRetrySpent(owner, operation, logFields);
+    return;
+  }
+  owner.logger.warn(
+    REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_STOPPED,
+    logFields,
+  );
+}
+
+// The bound is the step timeout (isOperationStepTimedOut), anchored on the
+// step-entry timestamp; the operation budget, when it applied, is in
+// lastObserved as operationBudgetDeadlineMs.
+function reportCoordinatorHandoffRetrySpent(owner, operation, logFields) {
+  const {operationId, partitionId, ...observed} = logFields;
+  const snapshot = operation ?? {};
+  reportWaitBoundSpent(owner.logger, {
+    ...COORDINATOR_HANDOFF_RETRY_WAIT,
+    boundMs: owner.getTimeoutForStep?.(snapshot.workflowStep, snapshot),
+    startedAtMs: owner.resolveOperationStepEnteredAtMs?.(snapshot) ??
+      snapshot.updatedAt ?? snapshot.updatedAtMs,
+    lastObserved: {
+      ...observed,
+      type: snapshot.type ?? null,
+      status: snapshot.status ?? null,
+    },
+    scope: {nodeId: owner.nodeId ?? null, partitionId, operationId},
+  });
+}
 
 function cloneOperationSnapshot(operation) {
   if (!operation || typeof operation !== 'object') {
@@ -299,6 +348,7 @@ function resolveSnapshotHandoffRetryStop(
   if (handoffTimeoutDecision.shouldStop) {
     return {
       stop: true,
+      timedOut: true,
       workflowStep: handoffTimeoutDecision.workflowStep,
       operationBudgetDeadlineMs:
         handoffTimeoutDecision.operationBudgetDeadlineMs,
@@ -363,8 +413,9 @@ function retryCoordinatorCreatedRemoteHandoffFromSnapshot(
     options,
   );
   if (stopDecision.stop) {
-    owner.logger.warn(
-      REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_STOPPED,
+    logCoordinatorHandoffRetryStopped(
+      owner,
+      operationSnapshot,
       buildSnapshotHandoffRetryLogFields(
         owner,
         operationId,
@@ -372,6 +423,7 @@ function retryCoordinatorCreatedRemoteHandoffFromSnapshot(
         options,
         stopDecision,
       ),
+      stopDecision.timedOut,
     );
     owner.clearCreatedOperationHandoffRetry(operationId);
     return false;
@@ -450,8 +502,9 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
             options,
           );
         if (handoffTimeoutDecision.shouldStop) {
-          owner.logger.warn(
-            REBALANCE_COORDINATOR_LOG_MSG.COORDINATOR_HANDOFF_RETRY_STOPPED,
+          logCoordinatorHandoffRetryStopped(
+            owner,
+            currentOperation,
             {
               operationId,
               partitionId: currentOperation?.partitionId || null,
@@ -464,6 +517,7 @@ function scheduleCoordinatorCreatedRemoteHandoffFollowUp(
               operationBudgetDeadlineMs:
                 handoffTimeoutDecision.operationBudgetDeadlineMs,
             },
+            true,
           );
           owner.clearCreatedOperationHandoffRetry(operationId);
           return false;

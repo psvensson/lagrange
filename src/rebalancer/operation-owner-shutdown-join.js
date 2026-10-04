@@ -23,12 +23,19 @@
  * operation-workflow-owner-execution-lane.js).
  */
 
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
 const OPERATION_SHUTDOWN_JOIN_RESULT = Object.freeze({
   JOINED: 'joined',
   TIMED_OUT: 'timed_out',
 });
 
 const OPERATION_SHUTDOWN_JOIN_DEFAULT_TIMEOUT_MS = 5_000; // ends-on: every in-flight owner-lane execution settles
+
+const OPERATION_SHUTDOWN_JOIN_WAIT = Object.freeze({
+  wait: 'OPERATION_SHUTDOWN_JOIN_DEFAULT_TIMEOUT_MS',
+  awaited: 'in-flight operation-owner lanes settled at shutdown',
+});
 
 function normalizeShutdownJoinTimeoutMs(timeoutMs) {
   const numeric = Number(timeoutMs);
@@ -52,6 +59,31 @@ function buildShutdownJoinDeadline(nowMs, timeoutMs) {
 }
 
 /**
+ * The shutdown join spent its bound with lanes still in flight: one
+ * wait_bound_spent ERROR naming the lanes the join last observed. A join
+ * whose lanes all settled exactly at the deadline joined: nothing to report.
+ * @param {Object} options - Join options (logger, scope).
+ * @param {Object} spent - {deadlineMs, boundMs, nowMs, pendingLanes,
+ *   settleRounds}.
+ * @return {void}
+ */
+function reportShutdownJoinSpent(options, spent) {
+  if (spent.pendingLanes === 0) {
+    return;
+  }
+  reportWaitBoundSpent(options.logger || null, {
+    ...OPERATION_SHUTDOWN_JOIN_WAIT,
+    boundMs: spent.boundMs,
+    elapsedMs: spent.nowMs - (spent.deadlineMs - spent.boundMs),
+    lastObserved: {
+      pendingLanes: spent.pendingLanes,
+      settleRounds: spent.settleRounds,
+    },
+    scope: options.scope || null,
+  });
+}
+
+/**
  * Boundedly await every currently in-flight owner-lane execution. Lane
  * rejections belong to the lane holders and are swallowed by the join; the
  * join only cares that the lane SETTLED. Re-entrants discovered after one
@@ -62,6 +94,8 @@ function buildShutdownJoinDeadline(nowMs, timeoutMs) {
  *   DurableWorkflowCoordinator single-flight registry).
  * @param {number} [options.timeoutMs] - Bounded join budget.
  * @param {Function} [options.nowFn] - Clock seam (virtual-clock tests).
+ * @param {Object} [options.logger] - Site logger for a spent join bound.
+ * @param {Object} [options.scope] - {nodeId} for a spent join bound.
  * @return {Promise<Object>} Frozen typed join result — never raw null.
  */
 async function joinInFlightOperationOwnerLanes(options = {}) {
@@ -69,7 +103,9 @@ async function joinInFlightOperationOwnerLanes(options = {}) {
   const nowFn =
     typeof options.nowFn === 'function' ? options.nowFn : () => Date.now();
   const deadlineMs = buildShutdownJoinDeadline(nowFn(), options.timeoutMs);
+  const boundMs = normalizeShutdownJoinTimeoutMs(options.timeoutMs);
   let lastObservedInFlightCount = 0;
+  let settleRounds = 0;
   while (true) {
     const executions = snapshotInFlightLaneExecutions(
       inFlightExecutionsByOwnerKey,
@@ -84,6 +120,10 @@ async function joinInFlightOperationOwnerLanes(options = {}) {
     }
     const remainingMs = deadlineMs - nowFn();
     if (remainingMs <= 0) {
+      reportShutdownJoinSpent(options, {
+        deadlineMs, boundMs, nowMs: nowFn(),
+        pendingLanes: executions.length, settleRounds,
+      });
       return Object.freeze({
         result: OPERATION_SHUTDOWN_JOIN_RESULT.TIMED_OUT,
         timedOut: true,
@@ -103,10 +143,15 @@ async function joinInFlightOperationOwnerLanes(options = {}) {
         resolve();
       });
     });
+    settleRounds += 1;
     if (nowFn() >= deadlineMs) {
       const pending = snapshotInFlightLaneExecutions(
         inFlightExecutionsByOwnerKey,
       );
+      reportShutdownJoinSpent(options, {
+        deadlineMs, boundMs, nowMs: nowFn(),
+        pendingLanes: pending.length, settleRounds,
+      });
       return Object.freeze({
         result: pending.length === 0 ?
           OPERATION_SHUTDOWN_JOIN_RESULT.JOINED :

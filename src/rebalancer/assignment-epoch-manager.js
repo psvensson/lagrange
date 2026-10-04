@@ -28,6 +28,7 @@
 
 import {EventEmitter} from 'events';
 import {AssignmentEpoch} from './assignment-epoch.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_EPOCHMISMATCHERROR = 'EpochMismatchError';
 const LOCAL_STR_STALEEPOCHERROR = 'StaleEpochError';
@@ -40,6 +41,10 @@ const LOCAL_STR_EXPECTEDEPOCH_MUST_BE_AN_INTEGER = 'expectedEpoch must be an int
 const LOCAL_STR_EPOCHCHANGE = 'epochChange';
 const LOCAL_STR_PROPOSALRETRY = 'proposalRetry';
 const LOCAL_STR_MAX_RETRIES_EXCEEDED = 'Max retries exceeded';
+const EPOCH_PROPOSAL_RETRY_WAIT = Object.freeze({
+  wait: 'DEFAULT_RETRY_CONFIG.maxRetries',
+  awaited: 'assignment epoch proposal accepted by compare-and-set',
+});
 const LOCAL_STR_EPOCHAPPLIED = 'epochApplied';
 const LOCAL_STR_CDC = 'cdc';
 
@@ -279,6 +284,29 @@ class AssignmentEpochManager extends EventEmitter {
   }
 
   /**
+   * The CAS proposal retries are exhausted: one wait_bound_spent ERROR (the
+   * manager has no logger; the reporter falls back to the LoggingService).
+   * @param {Object} config - The applied retry configuration.
+   * @param {Object} spent - {attempts, startedAtMs, expectedEpoch, result}
+   * @private
+   */
+  _reportProposalRetriesSpent(config, spent) {
+    reportWaitBoundSpent(null, {
+      ...EPOCH_PROPOSAL_RETRY_WAIT,
+      boundMs: null,
+      startedAtMs: spent.startedAtMs,
+      lastObserved: {
+        attempts: spent.attempts,
+        maxRetries: config.maxRetries,
+        expectedEpoch: spent.expectedEpoch,
+        currentEpoch: spent.result?.currentEpoch ?? null,
+        error: spent.result?.error || null,
+      },
+      scope: {nodeId: this._nodeId},
+    });
+  }
+
+  /**
    * Propose a new epoch with retry logic and exponential backoff.
    * Handles CAS failures by fetching the latest epoch and retrying.
    *
@@ -303,6 +331,7 @@ class AssignmentEpochManager extends EventEmitter {
 
     let attempts = 0;
     let currentDelay = config.initialDelayMs;
+    const startedAtMs = Date.now();
 
     while (attempts <= config.maxRetries) {
       attempts++;
@@ -332,6 +361,9 @@ class AssignmentEpochManager extends EventEmitter {
 
       // Check if we've exhausted retries
       if (attempts > config.maxRetries) {
+        this._reportProposalRetriesSpent(config, {
+          attempts, startedAtMs, expectedEpoch, result,
+        });
         return {
           success: false,
           error: result.error,

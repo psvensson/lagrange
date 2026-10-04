@@ -3,9 +3,44 @@ import {
 } from './replica-operation-insert-disposition.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
+const REPLICA_OPERATION_VISIBILITY_WAIT = Object.freeze({
+  wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'persisted replica operation authoritatively visible',
+});
+
+/**
+ * The post-persist visibility confirmation spent its deadline (the result
+ * is DEFERRED or MISSING, unchanged): one wait_bound_spent ERROR naming
+ * what the two reads last saw.
+ * @param {Object} repository
+ * @param {Object} operation - The expected projection.
+ * @param {Object} spent - {startedAtMs, polls, sawVisibilityMismatch,
+ *   deferredOutcome}
+ * @return {void}
+ */
+function reportReplicaOperationVisibilitySpent(repository, operation, spent) {
+  reportWaitBoundSpent(repository.logger, {
+    ...REPLICA_OPERATION_VISIBILITY_WAIT,
+    boundMs: repository.replicaOperationAuthoritativeVisibilityTimeoutMs,
+    elapsedMs: repository.timeSource.now() - spent.startedAtMs,
+    lastObserved: {
+      expectedWorkflowStep: operation?.workflowStep || null,
+      expectedStatus: operation?.status || null,
+      polls: spent.polls,
+      sawVisibilityMismatch: spent.sawVisibilityMismatch,
+      deferredOutcome: Boolean(spent.deferredOutcome),
+    },
+    scope: {
+      nodeId: repository.nodeId || null,
+      partitionId: operation?.partitionId || null,
+      operationId: operation?.operationId || null,
+    },
+  });
+}
 
 function buildNewOperationPersistResult(options, disposition, operation) {
   if (options?.returnDisposition !== true) {
@@ -349,11 +384,14 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
 
     async confirmReplicaOperationVisibility(operation) {
       this.clearAuthoritativeOperationVisibilityOutcome();
+      const startedAtMs = this.timeSource.now();
       const deadlineMs =
-        this.timeSource.now() + this.replicaOperationAuthoritativeVisibilityTimeoutMs;
+        startedAtMs + this.replicaOperationAuthoritativeVisibilityTimeoutMs;
       let deferredOutcome = ABSENT_VISIBILITY_VALUE;
       let sawVisibilityMismatch = false;
+      let polls = 0;
       while (true) {
+        polls += 1;
         const localObservation =
           await this.queryAuthoritativeOperationVisibilityObservation(
             operation.operationId,
@@ -419,6 +457,9 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
           deferredOutcome = authorityObservation.deferredOutcome;
         }
         if (this.timeSource.now() >= deadlineMs) {
+          reportReplicaOperationVisibilitySpent(this, operation, {
+            startedAtMs, polls, sawVisibilityMismatch, deferredOutcome,
+          });
           if (deferredOutcome && sawVisibilityMismatch !== true) {
             this.lastAuthoritativeOperationVisibilityOutcome = {
               ...deferredOutcome,

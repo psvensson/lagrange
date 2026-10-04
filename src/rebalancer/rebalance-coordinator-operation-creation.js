@@ -1,4 +1,5 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
 } from './operation-reservation-attempt-outcome.js';
@@ -35,6 +36,43 @@ const RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX =
   'Storage reservation creation failed for operation ';
 const RESERVATION_INSERT_REJECTED_FALLBACK = 'reservation insert rejected';
 const RUNTIME_TARGET_CLAIM_RETRY_LIMIT = 8;
+const RUNTIME_TARGET_CLAIM_RETRY_WAIT = Object.freeze({
+  wait: 'RUNTIME_TARGET_CLAIM_RETRY_LIMIT',
+  awaited: 'runtime target claim without a conflicting replica id',
+});
+
+/**
+ * The runtime target claim refusal: when it is the spent retry bound (not a
+ * missing claim key or conflict id), one wait_bound_spent ERROR naming the
+ * conflicting replica ids seen; the throw that follows is unchanged.
+ * @param {Object} coordinator
+ * @param {Object} operation
+ * @param {Array<string>} collisionReplicaIds
+ * @param {string|undefined} conflictingReplicaId
+ * @return {void}
+ */
+function reportRuntimeTargetClaimRetrySpent(
+  coordinator, operation, collisionReplicaIds, conflictingReplicaId) {
+  if (collisionReplicaIds.length < RUNTIME_TARGET_CLAIM_RETRY_LIMIT) {
+    return;
+  }
+  reportWaitBoundSpent(coordinator.logger, {
+    ...RUNTIME_TARGET_CLAIM_RETRY_WAIT,
+    boundMs: null,
+    lastObserved: {
+      attempts: collisionReplicaIds.length,
+      attemptLimit: RUNTIME_TARGET_CLAIM_RETRY_LIMIT,
+      collisionReplicaIds: collisionReplicaIds.slice(-RUNTIME_TARGET_CLAIM_RETRY_LIMIT),
+      conflictingReplicaId: conflictingReplicaId || null,
+      targetClaimKey: operation.targetClaimKey || null,
+    },
+    scope: {
+      nodeId: coordinator.nodeId || null,
+      partitionId: operation.partitionId || null,
+      operationId: operation.operationId || null,
+    },
+  });
+}
 const INVALID_RUNTIME_SERVICE_TARGET_IDENTITY =
   'INVALID_RUNTIME_SERVICE_TARGET_IDENTITY';
 
@@ -770,6 +808,8 @@ class RebalanceCoordinatorOperationCreation {
         targetClaimCollisionReplicaIds.length >=
           RUNTIME_TARGET_CLAIM_RETRY_LIMIT
       ) {
+        reportRuntimeTargetClaimRetrySpent(
+          this, operation, targetClaimCollisionReplicaIds, conflictingReplicaId);
         throw new Error(
           `Runtime target claim retry exhausted: ${operation.operationId}`,
         );
