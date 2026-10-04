@@ -118,3 +118,61 @@ the replica's own open/restart path as the fail-closed safety net."
   whose owner also restarted is listed nowhere until either restarts.
 
 Witnesses: `test/node/group-retirement-redrive.test.js` (W4a-W4f).
+
+## Addendum (2026-10-04, re-verification B1-B3): the frozen member set
+
+Owner ruling (binding, fail-closed): absence, timeout, a deleted services or
+nodes row, node eviction or NOT_FOUND is never proof a replica is gone, and
+the workflow never completes on it. A member that never answers stays listed
+with its alarm and the table stays blocked. Its only future exit is an
+explicit durable operator retirement fact (a separate quest; it does not
+exist yet).
+
+- Members (`src/partition/group-retirement-members.js`): at the first
+  dispatch of a retirement step the owner freezes the group's COMMITTED
+  configuration (voters and learners), read from the group's leader through
+  the committed-membership read the creation owner already uses
+  (`readCommittedMembershipStamp` over the node's rebalance coordinator).
+  Services rows are discovery only (decision O1). The set is stored on that
+  group's participant checkpoint (`requiredReplicaIds`, beside
+  `dissolvedReplicaIds`, with the members' addresses `memberNodeIds`)
+  through the coordinator's participant persistence, under the participant
+  fence rule. A member is done only on its own positive answer, recorded
+  durably as it arrives. The step completes only when required is a subset
+  of dissolved. An unreadable or empty configuration is "membership
+  unavailable" (listed, re-run by the group's services/partitions row
+  changes), never "no members". A member with no address is listed. A row
+  only adds an address and never removes one. A record written before the
+  set existed freezes it before anything completes.
+- Re-drive: a services row change (written or deleted) of an unacknowledged
+  member only re-runs the step. The earlier "member row deleted ends the
+  step" semantics are removed.
+- Replica side: a group-retirement REMOVE of a replica this node already
+  removed (its own verified REMOVE or the open-time safety net) answers
+  COMPLETED: the member's own answer, with its cleanup reconcile left as
+  deferred debt. An ordinary REMOVE keeps answering that ERROR.
+- Resume: split recovery restores the claim triple through the decode merge
+  uses (`durableOwnershipClaimOf`). A resume never claims against a live
+  foreign lease. A refused claim re-reads the durable row. A live foreign
+  lease arms one timer at its expiry: logged once when armed, and a WARN
+  spent wait when it fires on a still-retiring record. Otherwise one WARN
+  per record version, and the next record change resumes it. A resume that
+  throws is a WARN.
+
+Consequences stated plainly:
+- An aborted split whose child was never provisioned (no group, unreadable
+  configuration) keeps that child listed as membership-unavailable. Its
+  partition row is never deleted on that.
+- A member that retired and released its row before any set was frozen
+  (records written by earlier code) has no address and no recorded answer,
+  so it stays listed (W4g).
+- A member whose node restarted after it retired answers NOT_FOUND, which
+  is not an answer. If its positive answer was not recorded first, it stays
+  listed.
+
+Witnesses: `test/node/group-retirement-liveness.test.js` (L1-L5 with the
+production recovery, L3 inverted, B1, B2, B2b, B2c, B4, B5),
+`test/node/group-retirement-redrive.test.js` (W4c, W4d, W4g),
+`test/partition/group-retirement-resume-claim.test.js` (B3a, B3b, Mi, Mj,
+Mk, RC, RF), all red on fd424741b except B3a merge, which was already
+correct there.
