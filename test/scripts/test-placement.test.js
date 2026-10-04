@@ -1,3 +1,4 @@
+// probe: re-run this file at base 2b4483f9f on a lab host (scenario-gates verification); comment only.
 // Placement runs one classified plan across the lab machines discovery finds
 // ready, chosen at test time from measured facts (owner direction,
 // 2026-09-18: an ordinary push proves itself locally and in parallel, and no
