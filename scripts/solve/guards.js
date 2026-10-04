@@ -15,6 +15,7 @@ import {
 import {
   IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH, PROOF_CONE_CONTRACTS_PATH,
 } from '../checks/impact-proof-cone-constants.js';
+import {isApproval, questState} from './store.js';
 import {waitForLoadHeadroomSync} from '../checks/wait-for-load-headroom.js';
 import {
   importGraphResolverStateDigest, javascriptSourceDigest,
@@ -159,6 +160,297 @@ function staticQualityProblems(root, paths) {
     .sort();
   if (jsPaths.length === 0) return [];
   return CHECKERS.flatMap((checker) => runChecker(root, checker, jsPaths));
+}
+
+// --- verification record ---------------------------------------------------------
+// A src/ approval is an approval only when it names the verification
+// templates it applied and carries what each demands, at minimum the
+// red-on-revert. v1 enforced a verdict file (solver-verifier-verdict/1:
+// scripts/solve/verifier-verdict.js and review-request.js at 5271defb5^);
+// the v2 cutover recorded verifications as free text and nothing read a
+// template again. The admissible ids are the templates' own front-matter
+// `categories`; a template may declare `evidence: [<field>]` (what its entry
+// must carry) and `trigger: <pattern>` (added src/ lines that make it
+// required). The check is a pure function of the quest log, the change set
+// and a tree reader, so the same predicate judges a working tree (land) and
+// a commit (the main admission): every file it names - witness, evidence,
+// census - is a path in that tree (a quest log line included), never a
+// scratch path outside it. It checks references, not that a revert was
+// really run: the independent verifier stays the control for that.
+
+const TEMPLATE_DIR = 'docs/development/verification-templates';
+const TEMPLATE_SUFFIX = '.md';
+const FRONT_FENCE = '---';
+const FRONT_LIST = /^(categories|evidence):\s*\[([^\]]*)\]\s*$/u;
+const FRONT_TRIGGER = /^trigger:\s*(.+)$/u;
+const TRIGGER_FLAGS = 'iu';
+const FRONT_LIST_SEPARATOR = ',';
+const REVERT_FIELDS = Object.freeze(['reverted', 'what', 'witness', 'assertion', 'evidence']);
+const EVIDENCE_LINE = /^(.+):(\d+)$/u;
+const PARENT_SEGMENT = '..';
+const PATH_SEGMENT_SEPARATOR = '/';
+const ADDED_LINE = '+';
+const ADDED_FILE_HEADER = '+++';
+const PATHSPEC_END = '--';
+const SOURCE_DIFF = Object.freeze(['diff', '--no-color', '--unified=0', 'HEAD', PATHSPEC_END]);
+const RECORD = Object.freeze({
+  PREFIX: 'the approving verification ',
+  NO_TEMPLATE: 'names no verification template (note --verification ... --evidence ' +
+    '<record.json> with {"templates": [{"id", "redOnRevert"}]}); admissible: ',
+  UNKNOWN: 'names unknown verification template ',
+  ADMISSIBLE: '; admissible: ',
+  NO_REVERT: 'carries no red-on-revert {reverted, what, witness, assertion, evidence} ' +
+    'for template ',
+  LACKS: ' lacks ',
+  DEMANDED: ' (its template demands it)',
+  REVERT_OF: 'red-on-revert of ',
+  NOT_SOURCE: ': reverted path is not in the quest\'s src/ change set: ',
+  NO_WITNESS: ': witness is not a file in the tree: ',
+  UNBOUND_WITNESS: ': witness is neither in the quest\'s change set nor in its receipts: ',
+  TRIGGERED_PREFIX: 'does not name template ',
+  TRIGGERED_SUFFIX: ', whose trigger the change\'s added src/ lines match',
+  NO_SAMPLE: 'carries neither a sample of the author\'s census and history pass ' +
+    '(sampled: {census: [rows], history: [rows], found}) nor a locality proof ' +
+    '(local: {proof, census: <tree path>})',
+  LOCAL_CENSUS: 'locality census: ',
+  NO_EVIDENCE: 'names no evidence',
+  MISSING_EVIDENCE: 'evidence is not a file in the tree (cite a tree path or a quest ' +
+    'log line, path:line): ',
+  NO_LINE: 'evidence has no such line: ',
+  UNNAMED: 'evidence does not name the assertion ',
+  NOT_JSON: 'is not a JSON object: ',
+  NO_FILE: 'verification record not found: ',
+  FILE_PREFIX: 'verification record ',
+});
+
+function nonEmptyText(value) {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function isRecordObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function nonEmptyList(value) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+// A repository-relative path that stays inside the tree, or null.
+function treePath(value) {
+  if (!nonEmptyText(value) || path.isAbsolute(value)) return null;
+  const normalized = path.posix.normalize(value);
+  return normalized.split(PATH_SEGMENT_SEPARATOR).includes(PARENT_SEGMENT) ? null : normalized;
+}
+
+/**
+ * The tree reader `land` judges with: the working tree under `root`. The main
+ * admission supplies the same interface over a commit.
+ * @param {string} root
+ * @return {{read: function(string): ?string, list: function(string): string[]}}
+ */
+function workingTreeReader(root) {
+  return {
+    read: (relative) => {
+      const file = treePath(relative) && path.join(root, treePath(relative));
+      return file && fs.existsSync(file) && fs.statSync(file).isFile() ?
+        fs.readFileSync(file, TEXT_ENCODING) : null;
+    },
+    list: (relative) => {
+      const directory = path.join(root, relative);
+      return fs.existsSync(directory) ? fs.readdirSync(directory).sort() : [];
+    },
+  };
+}
+
+/**
+ * The change set `land` judges: its paths and the lines it adds under src/
+ * (tracked changes against HEAD, plus whole untracked files).
+ * @param {string} root
+ * @param {string[]} paths
+ * @return {{paths: string[], addedSourceLines: string[]}}
+ */
+function workingChangeSet(root, paths) {
+  const sourcePaths = paths.filter(isSourcePath);
+  if (sourcePaths.length === 0) return {paths, addedSourceLines: []};
+  const added = lines(git(root, [...SOURCE_DIFF, ...sourcePaths]))
+    .filter((line) => line.startsWith(ADDED_LINE) && !line.startsWith(ADDED_FILE_HEADER));
+  const untracked = lines(git(root, [...GIT_ARGUMENTS.UNTRACKED, PATHSPEC_END, ...sourcePaths]))
+    .flatMap((file) => fs.readFileSync(path.join(root, file), TEXT_ENCODING)
+      .split(LINE_SEPARATOR));
+  return {paths, addedSourceLines: [...added, ...untracked]};
+}
+
+function frontMatterLines(content) {
+  const all = content.split(LINE_SEPARATOR);
+  if (all[0]?.trim() !== FRONT_FENCE) return [];
+  const end = all.findIndex((line, index) => index > 0 && line.trim() === FRONT_FENCE);
+  return end === -1 ? [] : all.slice(1, end);
+}
+
+function templateDeclaration(content) {
+  const declared = {categories: [], evidence: [], trigger: null};
+  for (const line of frontMatterLines(content)) {
+    const list = FRONT_LIST.exec(line);
+    if (list) {
+      declared[list[1]] = list[2].split(FRONT_LIST_SEPARATOR)
+        .map((value) => value.trim()).filter(Boolean);
+    }
+    const trigger = FRONT_TRIGGER.exec(line);
+    if (trigger) declared.trigger = new RegExp(trigger[1].trim(), TRIGGER_FLAGS);
+  }
+  return declared;
+}
+
+// The admissible verification templates, read from the template files in the
+// tree: each front-matter category is an id. There is no second list.
+function verificationTemplates(tree) {
+  const catalog = new Map();
+  for (const name of tree.list(TEMPLATE_DIR).filter((file) => file.endsWith(TEMPLATE_SUFFIX))) {
+    const content = tree.read(`${TEMPLATE_DIR}/${name}`);
+    if (content === null) continue;
+    const declared = templateDeclaration(content);
+    for (const id of declared.categories) {
+      catalog.set(id, {evidence: declared.evidence, trigger: declared.trigger});
+    }
+  }
+  return catalog;
+}
+
+function admissibleList(catalog) {
+  return [...catalog.keys()].join(LIST_SEPARATOR);
+}
+
+// A tree path, or path:line, whose content - the cited line when one is
+// cited - names the assertion when one is given: exit status alone is not a
+// red-on-revert (harness-fidelity item 1).
+function evidenceProblem(tree, reference, assertion) {
+  if (!nonEmptyText(reference)) return RECORD.NO_EVIDENCE;
+  const cited = EVIDENCE_LINE.exec(reference);
+  const content = tree.read(cited ? cited[1] : reference);
+  if (content === null) return `${RECORD.MISSING_EVIDENCE}${reference}`;
+  const scope = cited ? content.split(LINE_SEPARATOR)[Number(cited[2]) - 1] : content;
+  if (scope === undefined) return `${RECORD.NO_LINE}${reference}`;
+  return assertion && !scope.includes(assertion) ?
+    `${RECORD.UNNAMED}"${assertion}": ${reference}` : null;
+}
+
+function revertProblems(context, id, revert) {
+  if (!isRecordObject(revert)) return [`${RECORD.NO_REVERT}${id}`];
+  const label = `${RECORD.REVERT_OF}${id}`;
+  const missing = REVERT_FIELDS.filter((field) => !nonEmptyText(revert[field]));
+  if (missing.length > 0) return [`${label}${RECORD.LACKS}${missing.join(LIST_SEPARATOR)}`];
+  const problems = [];
+  if (!context.sourcePaths.includes(revert.reverted)) {
+    problems.push(`${label}${RECORD.NOT_SOURCE}${revert.reverted}`);
+  }
+  if (context.tree.read(revert.witness) === null) {
+    problems.push(`${label}${RECORD.NO_WITNESS}${revert.witness}`);
+  } else if (!context.changed.has(revert.witness) && !context.receipts.has(revert.witness)) {
+    problems.push(`${label}${RECORD.UNBOUND_WITNESS}${revert.witness}`);
+  }
+  const evidence = evidenceProblem(context.tree, revert.evidence, revert.assertion);
+  if (evidence) problems.push(`${label}: ${evidence}`);
+  return problems;
+}
+
+function templateEntryProblems(context, entry) {
+  const id = isRecordObject(entry) ? entry.id : entry;
+  const template = context.catalog.get(id);
+  if (!template) {
+    return [`${RECORD.UNKNOWN}${id}${RECORD.ADMISSIBLE}${admissibleList(context.catalog)}`];
+  }
+  return [...template.evidence.filter((field) => !nonEmptyText(entry[field]))
+    .map((field) => `template ${id}${RECORD.LACKS}${field}${RECORD.DEMANDED}`),
+  ...revertProblems(context, id, entry.redOnRevert)];
+}
+
+function triggeredProblems(context, named, addedSourceLines) {
+  const added = addedSourceLines.join(LINE_SEPARATOR);
+  return [...context.catalog]
+    .filter(([id, template]) => template.trigger && !named.has(id) &&
+      template.trigger.test(added))
+    .map(([id]) => `${RECORD.TRIGGERED_PREFIX}${id}${RECORD.TRIGGERED_SUFFIX}`);
+}
+
+function sampleProblems(tree, record) {
+  const sampled = record.sampled;
+  if (isRecordObject(sampled) && nonEmptyList(sampled.census) &&
+    nonEmptyList(sampled.history) && nonEmptyText(sampled.found)) return [];
+  const local = record.local;
+  if (!isRecordObject(local) || !nonEmptyText(local.proof)) return [RECORD.NO_SAMPLE];
+  const census = evidenceProblem(tree, local.census, null);
+  return census ? [`${RECORD.LOCAL_CENSUS}${census}`] : [];
+}
+
+// The witness files the quest's sealed receipts name (seal doneWhen args.file).
+function receiptWitnesses(state, tree) {
+  const content = tree.read(state.seal?.seal?.doneWhen?.args?.file);
+  const parsed = content === null ? null : JSON.parse(content);
+  const receipts = Array.isArray(parsed?.receipts) ? parsed.receipts : [];
+  return new Set(receipts.map((receipt) => receipt?.testFile).filter(nonEmptyText));
+}
+
+/**
+ * What the current approval of a src/ change lacks in its record: the named
+ * templates (each admissible, each with its demanded fields and a
+ * red-on-revert bound to this change and tree), every triggered template, and
+ * the census sample or locality proof. Empty when the change touches no src/
+ * path or the current verdict is not an approval (verificationProblems owns
+ * those). Pure over its inputs: land passes the working tree, the main
+ * admission a commit.
+ * @param {Array<Object>} logEntries the quest's log
+ * @param {{paths: string[], addedSourceLines: string[]}} changeSet
+ * @param {{read: Function, list: Function}} tree
+ * @return {string[]}
+ */
+function verificationRecordProblems(logEntries, changeSet, tree) {
+  const state = questState(logEntries);
+  const last = state.lastVerification;
+  if (!requiresVerification(changeSet.paths) || !state.verificationIsCurrent ||
+    !isApproval(last)) return [];
+  const catalog = verificationTemplates(tree);
+  const record = isRecordObject(last.record) ? last.record : {};
+  if (!nonEmptyList(record.templates)) {
+    return [`${RECORD.PREFIX}${RECORD.NO_TEMPLATE}${admissibleList(catalog)}`];
+  }
+  const context = {tree, catalog, sourcePaths: changeSet.paths.filter(isSourcePath),
+    changed: new Set(changeSet.paths), receipts: receiptWitnesses(state, tree)};
+  const named = new Set(record.templates.map((entry) => entry?.id));
+  return [...record.templates.flatMap((entry) => templateEntryProblems(context, entry)),
+    ...triggeredProblems(context, named, changeSet.addedSourceLines),
+    ...sampleProblems(tree, record)]
+    .map((problem) => `${RECORD.PREFIX}${problem}`);
+}
+
+/**
+ * Read the record `note --verification ... --evidence <file>` embeds in the
+ * entry: a JSON object whose named templates are all admissible now (an
+ * unknown id is refused here, before anyone lands on it; land checks the rest
+ * against the change it lands). The record file itself may live anywhere.
+ * @param {string} root
+ * @param {string} file
+ * @return {{record: ?Object, problems: string[]}}
+ */
+function readVerificationRecord(root, file) {
+  const absolute = path.resolve(root, String(file));
+  if (!fs.existsSync(absolute)) return {record: null, problems: [`${RECORD.NO_FILE}${file}`]};
+  let record;
+  try {
+    record = JSON.parse(fs.readFileSync(absolute, TEXT_ENCODING));
+  } catch (error) {
+    return {record: null,
+      problems: [`${RECORD.FILE_PREFIX}${file} ${RECORD.NOT_JSON}${error.message}`]};
+  }
+  if (!isRecordObject(record)) {
+    return {record: null,
+      problems: [`${RECORD.FILE_PREFIX}${file} ${RECORD.NOT_JSON}${typeof record}`]};
+  }
+  const catalog = verificationTemplates(workingTreeReader(root));
+  const unknown = (Array.isArray(record.templates) ? record.templates : [])
+    .map((entry) => (isRecordObject(entry) ? entry.id : entry))
+    .filter((id) => !catalog.has(id));
+  return {record, problems: unknown.map((id) =>
+    `${RECORD.UNKNOWN}${id}${RECORD.ADMISSIBLE}${admissibleList(catalog)}`)};
 }
 
 // --- coupled pairs (ported from the v1 terminal audit) -----------------------
@@ -351,6 +643,7 @@ function canonicalImportGraphProblem(root, timeout = importGraphVerifyTimeout(),
 
 export {
   SOLVE_PREFIX, canonicalImportGraphProblem, changedPaths, coupledPairProblems,
-  epicScopeProblems, git, headSha, isSourcePath, requiresVerification,
-  stageablePaths, staticQualityProblems,
+  epicScopeProblems, git, headSha, isSourcePath, readVerificationRecord,
+  requiresVerification, stageablePaths, staticQualityProblems,
+  verificationRecordProblems, workingChangeSet, workingTreeReader,
 };

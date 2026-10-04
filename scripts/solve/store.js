@@ -139,6 +139,11 @@ function verdictOf(entry) {
     LEGACY_VERIFICATION_KINDS[entry.kind] || null;
 }
 
+// Whether a verification-classified entry approves (a legacy v1 kind too).
+function isApproval(entry) {
+  return Boolean(entry) && verdictOf(entry) === VERDICT.APPROVE;
+}
+
 function terminalStatusOf(entry) {
   if (entry.type === ENTRY_TYPE.TERMINAL) return entry.status;
   const legacy = LEGACY_TERMINAL_STATUS[entry.type];
@@ -312,7 +317,7 @@ function isOpenEpic(epic) {
 }
 
 export {
-  appendEntry, classifyEntry, epicFile, evidenceDir, isOpenEpic,
+  appendEntry, classifyEntry, epicFile, evidenceDir, isApproval, isOpenEpic,
   isQuestLogPath, listEpics,
   listQuestIds, logFile, parseFrontMatter, questDir, questExists, questFile,
   questState, readEpic, readLog, readQuest, terminalStatusOf, verdictOf,

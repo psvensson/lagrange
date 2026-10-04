@@ -28,6 +28,7 @@ quests:
   - lane-dispatch-lpt-order
   - land-retry-parity
   - wait-definite-negative
+  - verification-binds-and-classes
   - static-test-hygiene
   - lane-parallelism-measurement
   - fleet-capability-discovery
@@ -41,6 +42,7 @@ authorizes:
   - docs
   - data
   - solve/epics
+  - solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger*
   - README.md
   - RELEASE.md
   - CHANGELOG.md

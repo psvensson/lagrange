@@ -1,5 +1,7 @@
 ---
 categories: [sweep-timer]
+evidence: [whatChanged]
+trigger: timeout|deadline|setinterval|waitfor
 ---
 
 # Verification Template: Sweep / Timer / Periodic Enforcement
@@ -23,3 +25,7 @@ detectors. Each item requires an evidence path.
 5. **Sweep starvation.** What happens when the sweep's own reads/writes go
    through the subsystem being enforced (circularity — see
    formation-circularity.md)?
+6. **A spent bound is a failure.** A wait or sweep that reaches its bound
+   logs one error naming what was awaited and the last observed state (R04),
+   never a normal exit; when a later attempt succeeds, `whatChanged` names
+   what differed (retry-loops item 8).
