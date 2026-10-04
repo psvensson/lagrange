@@ -115,7 +115,7 @@ one owner per concern:
 
 A conflict on **any** participant has two explicit owned transitions. First, the
 participant refuses the reservation and reports
-`locking_read_reservation_conflict`. Second, the
+`typed_locking_read_reservation_conflict`. Second, the
 `DistributedTransactionCoordinator` owns the terminal conflict-abort transition:
 it rolls back the whole transaction, waits for rollback/release acknowledgement
 from every already-enlisted participant, and only then reports
@@ -145,18 +145,18 @@ held by earlier participants before the terminal abort is observable.
 | Transition | Owner identifier | Action | Outcome identifier |
 | --- | --- | --- | --- |
 | acquire | `partition_transaction_participant` | create durable replicated reservation | `reservation_acquired` |
-| same-transaction-reacquire | `partition_transaction_participant` | idempotently reuse the existing transaction reservation | `reservation_already_owned` |
-| conflict | `partition_transaction_participant` | refuse without waiting and report the owning-transaction conflict | `typed_locking_read_reservation_conflict` |
-| conflict-abort | `DistributedTransactionCoordinator` | roll back the whole transaction, confirm release acknowledgements, then report terminal abort | `transaction_aborted` |
-| timeout | `DistributedTransactionCoordinator` | roll back the transaction and release every participant reservation | `typed_transaction_timeout` |
-| cancellation | `DistributedTransactionCoordinator` | roll back the transaction and release every participant reservation | `typed_transaction_cancelled` |
-| commit | `DistributedTransactionCoordinator` | commit, then release participant reservations | `committed_and_released` |
-| rollback | `DistributedTransactionCoordinator` | roll back, then release participant reservations | `rolled_back_and_released` |
-| crash | `partition_transaction_participant` | retain durable unresolved reservation state for recovery | `unresolved_reservation_preserved` |
-| recovery | `DistributedTransactionCoordinator` | replay the terminal decision or rollback and reconcile reservations | `transaction_resolved_and_reservations_reconciled` |
+| same-transaction-reacquire | `partition_transaction_participant` | idempotent reacquire existing reservation | `reservation_already_owned` |
+| conflict | `partition_transaction_participant` | refuse without waiting and report owner conflict | `typed_locking_read_reservation_conflict` |
+| conflict-abort | `DistributedTransactionCoordinator` | on participant conflict rollback whole transaction wait for release acknowledgements then report terminal abort | `transaction_aborted` |
+| timeout | `DistributedTransactionCoordinator` | rollback transaction and release all participant reservations | `typed_transaction_timeout` |
+| cancellation | `DistributedTransactionCoordinator` | rollback transaction and release all participant reservations | `typed_transaction_cancelled` |
+| commit | `DistributedTransactionCoordinator` | commit transaction then release participant reservations | `committed_and_released` |
+| rollback | `DistributedTransactionCoordinator` | rollback transaction then release participant reservations | `rolled_back_and_released` |
+| crash | `partition_transaction_participant` | retain durable reservation state for transaction recovery | `unresolved_reservation_preserved` |
+| recovery | `DistributedTransactionCoordinator` | replay terminal decision or rollback then reconcile participant reservations | `transaction_resolved_and_reservations_reconciled` |
 
 The participant-level contention outcome remains
-`locking_read_reservation_conflict`; `transaction_aborted` is the later
+`typed_locking_read_reservation_conflict`; `transaction_aborted` is the later
 coordinator-owned terminal outcome after whole-transaction rollback and release
 confirmation.
 
