@@ -1,0 +1,1020 @@
+{
+ "provenance": "Lab five-node formation run 3 of candidate 3626bdf43 (2026-10-04), scenario public-path-multinode-baseline. Rows copied from that run's playback snapshots.ndjson: the account_activity partitions rows and the services rows of those partitions, consecutive identical readbacks collapsed (the timestamp is the first snapshot of each distinct shape). Node placement: the harness assignment distributeNodes(5, 4 providers, nodesPerHost 2) = [0,1,2,3,0] by node index; the node index is read from the host-network per-node port block (8080 + 10 x index).",
+ "nodeHosts": [
+  {
+   "nodeId": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+   "nodeIndex": 0,
+   "providerIndex": 0,
+   "hostLabel": "192.168.86.32"
+  },
+  {
+   "nodeId": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+   "nodeIndex": 1,
+   "providerIndex": 1,
+   "hostLabel": "192.168.86.27"
+  },
+  {
+   "nodeId": "1c32ef60-d91d-4d96-9da9-2437638306be",
+   "nodeIndex": 2,
+   "providerIndex": 2,
+   "hostLabel": "192.168.86.34"
+  },
+  {
+   "nodeId": "83ce877c-a395-4176-900f-a03213468e8f",
+   "nodeIndex": 3,
+   "providerIndex": 3,
+   "hostLabel": "192.168.86.41"
+  },
+  {
+   "nodeId": "ee398aca-df0a-4501-9458-2652af5d4649",
+   "nodeIndex": 4,
+   "providerIndex": 0,
+   "hostLabel": "192.168.86.32"
+  }
+ ],
+ "snapshots": [
+  {
+   "timestamp": 1791115215464,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "normal"
+    }
+   ],
+   "services": []
+  },
+  {
+   "timestamp": 1791115218912,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "normal"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": null
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115219442,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "normal"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "creating",
+     "raft_role": null
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": null
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115221152,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "normal"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "creating",
+     "raft_role": null
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115221875,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "normal"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": null
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115222526,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "state": "normal"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": null
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115223168,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "state": "normal"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115259915,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "state": "normal"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": "91.0",
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": "91.0",
+     "partition_key_end": null,
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115260655,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "state": "normal"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": "91.0",
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": "91.0",
+     "partition_key_end": null,
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r1",
+     "status": "pending",
+     "raft_role": null
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115262143,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "state": "normal"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": "91.0",
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": "91.0",
+     "partition_key_end": null,
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r1",
+     "status": "syncing",
+     "raft_role": null
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r2",
+     "status": "active",
+     "raft_role": null
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115263184,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "state": "normal"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": "91.0",
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": "91.0",
+     "partition_key_end": null,
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r1",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r2",
+     "status": "active",
+     "raft_role": "follower"
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115265258,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "state": "normal"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": "91.0",
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "state": "NORMAL"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": "91.0",
+     "partition_key_end": null,
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r1",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r2",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right-r1",
+     "status": "pending",
+     "raft_role": null
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115266263,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "state": "normal"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": "91.0",
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "state": "NORMAL"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": "91.0",
+     "partition_key_end": null,
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": null,
+     "state": "NORMAL"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r1",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r2",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right-r1",
+     "status": "active",
+     "raft_role": null
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right-r2",
+     "status": "active",
+     "raft_role": null
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115267695,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": null,
+     "partition_version": 1,
+     "replica_count": 3,
+     "leader_node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "state": "normal"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": "91.0",
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "state": "NORMAL"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": "91.0",
+     "partition_key_end": null,
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "state": "NORMAL"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r1",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r2",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right-r1",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right-r2",
+     "status": "active",
+     "raft_role": "follower"
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115268496,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": "91.0",
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "state": "NORMAL"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": "91.0",
+     "partition_key_end": null,
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "state": "NORMAL"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "removing",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "removing",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:fadb8205-8f27-428a-8078-4e33b1a7383a",
+     "status": "removing",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r1",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r2",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right-r1",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right-r2",
+     "status": "active",
+     "raft_role": "follower"
+    }
+   ]
+  },
+  {
+   "timestamp": 1791115269187,
+   "partitions": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": null,
+     "partition_key_end": "91.0",
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "state": "NORMAL"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "table_id": "tbl-1131696435c9442209315735c03861f6",
+     "table_name": "account_activity",
+     "partition_key_start": "91.0",
+     "partition_key_end": null,
+     "partition_version": 2,
+     "replica_count": 3,
+     "leader_node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "state": "NORMAL"
+    }
+   ],
+   "services": [
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "1c32ef60-d91d-4d96-9da9-2437638306be",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:1c32ef60-d91d-4d96-9da9-2437638306be",
+     "status": "removing",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6-p1",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "schema-job-1131696435c9442209315735c03861f6:replica:64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "status": "removing",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r1",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_2bf8ec05_left-r2",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "node_id": "64c60838-77da-4c3d-bb20-b2dee0936ade",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right-r1",
+     "status": "active",
+     "raft_role": "follower"
+    },
+    {
+     "partition_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right",
+     "node_id": "ee398aca-df0a-4501-9458-2652af5d4649",
+     "service_type": "partition",
+     "replica_id": "tbl-1131696435c9442209315735c03861f6_p_c2457c99_right-r2",
+     "status": "active",
+     "raft_role": "follower"
+    }
+   ]
+  }
+ ]
+}

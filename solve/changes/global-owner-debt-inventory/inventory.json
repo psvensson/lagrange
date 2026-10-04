@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2631109,
-        "sha256": "7c42089fa77989e4e8afbeb41eaba0d4bda1e7ffd496c2558a8e84b9aad4309d"
+        "bytes": 2631624,
+        "sha256": "ebef477194d494673443fc413f284dbbc96ba3e9db23412aa65c6193e4a85a63"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "6f7a2994f6e5d3b545aa8f9d782b07ceb2a414f10e3916752871ab9ac2791778"
+    "inputDigest": "d9064bcff682a263ecc654ef1231f9653fe9bcea1f1bd7b1b8e962b60704e5c6"
   },
   "reconciliation": {
     "complexity": {
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2631109,
-        "sha256": "7c42089fa77989e4e8afbeb41eaba0d4bda1e7ffd496c2558a8e84b9aad4309d"
+        "bytes": 2631624,
+        "sha256": "ebef477194d494673443fc413f284dbbc96ba3e9db23412aa65c6193e4a85a63"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "1b41efb2c865aa8b4de55a0d33bee325fe8374cf5fbfab71574e9e06569d03c9",
+      "sourceDigest": "e486e5ccdd1edbba8f371f8c039434f810867935ae3dd674630d3e3102a7cfb8",
       "moduleCount": 5023,
-      "edgeCount": 24647,
+      "edgeCount": 24654,
       "unresolvedCount": 36
     }
   },
@@ -220,7 +220,7 @@
       "cycleGroups": 0,
       "lintExclusions": 10,
       "importIn": 347,
-      "importOut": 592,
+      "importOut": 593,
       "score": 2912.1,
       "topPaths": [
         "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
@@ -388,7 +388,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 71,
-      "importOut": 134,
+      "importOut": 136,
       "score": 561.4,
       "topPaths": [
         "test/distributed/scenarios/postgres-baseline-comparison-discovery-readiness.js",

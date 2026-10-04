@@ -209,8 +209,14 @@ function assertWasmFidelity({manifest, buildDigest, runtimeKindRows}) {
 }
 
 // Red-on-revert gate: the data must genuinely span >=2 partitions whose
-// leaders live on >=2 distinct hosts.
-function assertPartitionSpread(partitionRows) {
+// leaders live on >=2 distinct HOSTS. `hostOf` is the harness's node ->
+// host authority (scenario-ground-truth buildNodeHostIndex); a leader
+// whose host is unknown fails closed, and a node id is never a host.
+function assertPartitionSpread(partitionRows, hostOf) {
+  if (typeof hostOf !== 'function') {
+    throw new Error(
+      'partition spread violated: no node -> host authority supplied');
+  }
   const partitions = partitionRows
     .map((row) => ({
       leaderNodeId: row?.leader_node_id,
@@ -220,17 +226,23 @@ function assertPartitionSpread(partitionRows) {
       typeof entry.partitionId === 'string' &&
       entry.partitionId.length > ZERO,
     );
+  const leaderNodeIds = partitions
+    .map((entry) => entry.leaderNodeId)
+    .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > ZERO);
+  const unknownHostLeaders =
+    leaderNodeIds.filter((nodeId) => !hostOf(nodeId));
   const distinctHosts = new Set(
-    partitions
-      .map((entry) => entry.leaderNodeId)
-      .filter((nodeId) =>
-        typeof nodeId === 'string' && nodeId.length > ZERO,
-      ),
-  );
+    leaderNodeIds.map((nodeId) => hostOf(nodeId)).filter(Boolean));
   if (partitions.length < MIN_PARTITION_COUNT) {
     throw new Error(
       'partition spread violated: ' +
       `${partitions.length} partition(s), need >= ${MIN_PARTITION_COUNT}`,
+    );
+  }
+  if (unknownHostLeaders.length > ZERO) {
+    throw new Error(
+      'partition spread violated: no host identity for leader node(s) ' +
+      unknownHostLeaders.join(', '),
     );
   }
   if (distinctHosts.size < MIN_DISTINCT_PARTITION_HOSTS) {
