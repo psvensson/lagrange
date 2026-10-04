@@ -6,7 +6,7 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 417575,
-        "sha256": "9992e96deda9192d90b26ae5bcba6367fb9adef647be70636585d3a08750754f"
+        "sha256": "8859c55bf9bd8573c0dd46e7732dbb83ad312ba90758929612088a8c8e15953b"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2628608,
-        "sha256": "2a4a687e9f37e7bcb555865d1eb98d8549d21559111cd609aa49e414a09ad75a"
+        "bytes": 2628677,
+        "sha256": "c1ad1c052a6a676fe986e8f922b27a6fed98a75e9b97adc4483b062bb49257a1"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "9afd3922a4b09bc141ffaebb575be08f6dc12ca4ae3280266c3a70dca4cba56b"
+        "sha256": "fc7b31597d6705f5343981b488be56d2bcdea20182eba172476e5e54a857600d"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "8095d36c7ea842e788a1cd1aa110a0523628b2b03cd0dcd1744debb4b7053d94"
+        "sha256": "7dc8aa738af2a855e8f669c04dc1abf55ffc8bd1cc0a7c5d25ac884285e93201"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "982ee20fc2c827ff72392aedf46e0b3b32a40c6008d53e68bffdbe320b406ab5"
+    "inputDigest": "3430508d2a39b41fee93769091d80d2fb9a6e19fe5537dbbe3282cc9f6964d94"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 417575,
-        "sha256": "9992e96deda9192d90b26ae5bcba6367fb9adef647be70636585d3a08750754f"
+        "sha256": "8859c55bf9bd8573c0dd46e7732dbb83ad312ba90758929612088a8c8e15953b"
       },
       "declaredCount": 1767,
       "observedCount": 1767,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "9afd3922a4b09bc141ffaebb575be08f6dc12ca4ae3280266c3a70dca4cba56b"
+          "sha256": "fc7b31597d6705f5343981b488be56d2bcdea20182eba172476e5e54a857600d"
         },
         "cloneGroups": 49,
         "duplicatedLines": 1559,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "8095d36c7ea842e788a1cd1aa110a0523628b2b03cd0dcd1744debb4b7053d94"
+          "sha256": "7dc8aa738af2a855e8f669c04dc1abf55ffc8bd1cc0a7c5d25ac884285e93201"
         },
         "cloneGroups": 715,
         "duplicatedLines": 27221,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2628608,
-        "sha256": "2a4a687e9f37e7bcb555865d1eb98d8549d21559111cd609aa49e414a09ad75a"
+        "bytes": 2628677,
+        "sha256": "c1ad1c052a6a676fe986e8f922b27a6fed98a75e9b97adc4483b062bb49257a1"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "d3449978f458a98e17e6d0e0c71867d20fdaaf268fa5d6d3f8aea5926453fee0",
+      "sourceDigest": "e532126320d841c19b1a58aa3203c4ba571a6e5e7482bb07ca0d57c8c50a19db",
       "moduleCount": 5015,
-      "edgeCount": 24625,
+      "edgeCount": 24626,
       "unresolvedCount": 36
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2521,
     "assignedSignalCount": 2521,
     "uniqueAssignmentCount": 2521,
-    "digest": "f93a1f605c32704c075402f31c79f59547a166cef7ef5265d7280e06aeb93786"
+    "digest": "c92893bf9e6a6c787e7848076d8e9edfb2e9441a7e50d6470668a1a8f7347af7"
   },
   "signalCounts": {
     "cognitive": 153,
@@ -275,8 +275,8 @@
       "cloneTouches": 5,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 693,
-      "importOut": 421,
+      "importIn": 694,
+      "importOut": 422,
       "score": 1128.5,
       "topPaths": [
         "src/control-plane/control-plane-kernel-ingress.js",

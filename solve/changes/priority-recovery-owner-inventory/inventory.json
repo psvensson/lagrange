@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "e791d2471ca7ea3581556d9c64a8739b0fffa828e7687eb6799ccf126f0d32a7"
+    "sourceSha256": "f3088dbbef242321c792927dc1a8da1aa8a513c5fe4ba56a3a0683084d3ffdee"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,9 +19,9 @@
   "metrics": {
     "moduleCount": 68,
     "publicExportCount": 747,
-    "importEdgeCount": 313,
-    "crossLayerEdgeCount": 95,
-    "layerDirectionViolationCount": 47,
+    "importEdgeCount": 314,
+    "crossLayerEdgeCount": 96,
+    "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
     "duplicateAuthoritySignalCount": 4,
     "confirmedDuplicateAuthorityCount": 0,
@@ -2546,6 +2546,16 @@
       "from": "src/control-plane/priority-recovery-observation-gate-resolution.js",
       "specifier": "./publication-recovery-gate.js",
       "to": "src/control-plane/publication-recovery-gate.js",
+      "targetModule": true,
+      "sourceLayer": "raw_observation",
+      "targetLayer": "owner_decision",
+      "crossLayer": true,
+      "conformsToLayerDirection": false
+    },
+    {
+      "from": "src/control-plane/priority-recovery-observation-gate-resolution.js",
+      "specifier": "./publication-recovery-priority-spread.js",
+      "to": "src/control-plane/publication-recovery-priority-spread.js",
       "targetModule": true,
       "sourceLayer": "raw_observation",
       "targetLayer": "owner_decision",

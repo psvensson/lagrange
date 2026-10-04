@@ -136,6 +136,7 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
     resolveObservationPriorityRecoveryBlockedPartitionIds(
       priorityPartitionSummary,
       priorityRecoveryCurrentSummary,
+      resolvedPriorityRecoveryClosureWitness,
     );
   const hasRequiredAckNodeEvidence =
     Array.isArray(publicationConvergenceGate?.requiredAckNodeIds) &&

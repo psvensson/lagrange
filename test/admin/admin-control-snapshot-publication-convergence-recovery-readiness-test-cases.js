@@ -719,8 +719,11 @@ test('AdminControlSnapshot rebuilds publication gates from the one shared spread
     );
     t.match(
       blocker.controlPlaneDiagnostics.priorityRecoveryObservation,
-      {prioritySpreadPending: true},
-      'no census gap + PENDING witness: the observation shows the blocker too',
+      {
+        prioritySpreadPending: true,
+        priorityRecoveryBlockedPartitionCount: 1,
+      },
+      'no census gap + PENDING witness: the observation shows the blocker too and counts the witness blocker',
     );
 
     const spread = await buildAdminSpreadAuthoritySnapshot({

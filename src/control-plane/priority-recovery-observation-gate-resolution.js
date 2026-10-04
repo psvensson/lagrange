@@ -1,4 +1,5 @@
 import {buildPublicationRecoveryGateSnapshot} from './publication-recovery-gate.js';
+import {isPriorityRecoveryClosureWitnessPending} from './publication-recovery-priority-spread.js';
 import {LOCAL_EMPTY_LIST, LOCAL_STR_EMPTY, PRIORITY_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD, PRIORITY_RECOVERY_OBSERVATION_GATE_FIELD, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityPartitionSummary} from './priority-recovery-observation-normalization.js';
 
 function resolveProjectionDiagnostics(publicationConvergence = null) {
@@ -188,17 +189,26 @@ function resolveObservationPriorityPartitionSummary(
   );
 }
 
+// The partitions the observation reports blocked: the decision snapshots'
+// unresolved set, else the census gap. A PENDING closure witness may only add
+// a blocker (owner decision 2026-10-04), so its blocked partitions are always
+// counted - the observation never says pending with nothing blocked.
 function resolveObservationPriorityRecoveryBlockedPartitionIds(
   priorityPartitionSummary = null,
   decisionSnapshotSummary = null,
+  priorityRecoveryClosureWitness = null,
 ) {
+  const witnessBlockedPartitionIds =
+    isPriorityRecoveryClosureWitnessPending(priorityRecoveryClosureWitness) ?
+      normalizeDistinctStringArray(
+        priorityRecoveryClosureWitness.blockedPartitionIds,
+      ) :
+      LOCAL_EMPTY_LIST;
   const decisionBlockedPartitionIds = normalizeDistinctStringArray(
     decisionSnapshotSummary?.blockedPartitionIds,
   );
-  if (decisionBlockedPartitionIds.length > 0) {
-    return decisionBlockedPartitionIds;
-  }
-  const convergenceBlockedPartitionIds = Object.freeze(
+  const ownBlockedPartitionIds = decisionBlockedPartitionIds.length > 0 ?
+    decisionBlockedPartitionIds :
     normalizeDistinctStringArray([
       ...normalizeDistinctStringArray(priorityPartitionSummary?.missingPartitionIds),
       ...(Array.isArray(priorityPartitionSummary?.blockedPartitions) ?
@@ -206,11 +216,11 @@ function resolveObservationPriorityRecoveryBlockedPartitionIds(
           (entry) => entry?.partitionId,
         ) :
         []),
-    ]),
-  );
-  return convergenceBlockedPartitionIds.length > 0 ?
-    convergenceBlockedPartitionIds :
-    decisionBlockedPartitionIds;
+    ]);
+  return Object.freeze(normalizeDistinctStringArray([
+    ...ownBlockedPartitionIds,
+    ...witnessBlockedPartitionIds,
+  ]));
 }
 
 function resolveObservationActiveGateContext(options = {}) {
