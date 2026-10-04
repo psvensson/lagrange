@@ -33,6 +33,7 @@ quests:
   - fleet-capability-discovery
   - test-placement
   - lab-readiness-by-dependency-graph
+  - src-changes-land-through-the-solver
 authorizes:
   - scripts
   - test
@@ -45,6 +46,7 @@ authorizes:
   - RELEASE.md
   - CHANGELOG.md
   - CLAUDE.md
+  - AGENTS.md
   - package.json
   - package-lock.json
   - src/raft
@@ -636,6 +638,37 @@ Keep and seal a `doneWhen` or close: `developer-velocity-maintainability-and-pro
 `lagrange-devops-onboarding`, `pilot-readiness-and-public-proof` (the outside-user
 proof belongs here — seal it, do not duplicate it). Each disposition is a
 `decision` finding in `epic-board-curation`.
+
+## Follow-up quests (owner decisions 2026-10-04, recorded only)
+
+Named here and started after PR #73 merges; neither is implemented yet.
+
+- **gate-authority-landing-required** - "the proof must ensure a proposed gate
+  cannot self-authorize its own weakening." The gate-authority set
+  (`scripts/solve/guards.js` and its import closure, `.githooks/pre-push`,
+  `test/manifests/pre-push-stages.json`, and the production-surface definition
+  `PRODUCTION_SURFACE` in `guards.js`) is landing-required: a change to it
+  reaches main only as a landing with its own independent verification, judged
+  by the gate code already on the remote main, never by the proposed code.
+  Done when witnesses show a push that weakens the gate and relies on the
+  weakened gate is refused, in one push and across two (the weakening pushed
+  first and alone is itself refused as an unlanded gate-authority change).
+- **stale-branch-authority-drift** - materially stale integration branches
+  need explicit current-owner authorization; "define the semantic trigger as
+  authority drift rather than age alone." A merge drifts when the governing
+  quest is closed or its approval predates commits the merge brings; when the
+  gate or rule set, the production-surface definition or the governing epic
+  changed on main since the branch's approvals; or when it brings
+  production-surface commits no landing covers. Such a merge is admitted only
+  with an exact-SHA owner authorization naming the merge sha, the governing
+  quest and the receipt, decided through `scripts/action-authority.js` - which
+  today registers no merge action and writes no record, so the quest registers
+  the action and gives it a record owner, and the admission checks it. For
+  PR #73: "If #73 qualifies, admit it with a minimal exact-SHA authorization
+  record under existing governance rather than making it invent its own
+  authorization machinery." Done when witnesses show a drifted merge without
+  that authorization refused, one authorized for its exact sha admitted, one
+  authorized for another sha refused, and an undrifted merge needing none.
 
 ## Guardrails
 
