@@ -471,7 +471,7 @@ test('split snapshot batching owns internal numeric array appends',
     const dispatch = {value: null};
     let interceptedRouteWrites = 0;
     const routeOwnedValues = new Set([
-      'v12-left-sentinel',
+      'v12-right-sentinel',
       rows[0],
       '?',
       '(?)',
@@ -480,6 +480,7 @@ test('split snapshot batching owns internal numeric array appends',
     const priorIndexDescriptor =
       Object.getOwnPropertyDescriptor(Array.prototype, '0');
 
+    let observedRouteError = null;
     try {
       Reflect.defineProperty(Array.prototype, '0', {
         configurable: true,
@@ -491,20 +492,24 @@ test('split snapshot batching owns internal numeric array appends',
         },
       });
 
-      await routeSplitSnapshotBatch(
-        rows,
-        columns,
-        metadata,
-        {
-          tableName: TABLE_NAME,
-          queryExecutor: {
-            async executeOnPartition(partitionId, sql, params) {
-              dispatch.value = {partitionId, sql, params};
-              return {success: true};
+      try {
+        await routeSplitSnapshotBatch(
+          rows,
+          columns,
+          metadata,
+          {
+            tableName: TABLE_NAME,
+            queryExecutor: {
+              async executeOnPartition(partitionId, sql, params) {
+                dispatch.value = {partitionId, sql, params};
+                return {success: true};
+              },
             },
           },
-        },
-      );
+        );
+      } catch (error) {
+        observedRouteError = error;
+      }
     } finally {
       if (priorIndexDescriptor) {
         Reflect.defineProperty(
@@ -522,8 +527,9 @@ test('split snapshot batching owns internal numeric array appends',
       0,
       'inherited numeric setters never observe snapshot-route owned appends',
     );
+    t.equal(observedRouteError, null, 'snapshot routing remains successful');
     t.same(dispatch.value, {
-      partitionId: 'v12-left-sentinel',
+      partitionId: 'v12-right-sentinel',
       sql: 'INSERT OR REPLACE INTO users (id) VALUES (?)',
       params: ['v12-route-key'],
     });
