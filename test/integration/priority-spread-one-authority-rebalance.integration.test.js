@@ -80,9 +80,9 @@ function replicaRow(index, nodeId, status, role) {
   };
 }
 
-function otherPriorityRows() {
+function otherPriorityRows(nodeIds) {
   return OTHER_TABLES.flatMap((tableId) =>
-    ['node-a', 'node-b', 'node-c'].map((nodeId, index) => ({
+    nodeIds.slice(0, 3).map((nodeId, index) => ({
       service_id: `${tableId}-p1-r${index + 1}`,
       partition_id: `${tableId}-p1`,
       service_type: 'partition',
@@ -116,21 +116,21 @@ function deriveJoinerSummary(world, clock) {
   const publishedRow = {
     publication_epoch: 8,
     status: 'PUBLISHED',
-    published_active_node_ids: NODES,
-    required_ack_node_ids: NODES,
-    acknowledged_node_ids: NODES,
+    published_active_node_ids: world.nodes,
+    required_ack_node_ids: world.nodes,
+    acknowledged_node_ids: world.nodes,
   };
   return deriveMembershipPublicationCandidate({
     publisherNodeId: 'node-c',
     latestPublicationRow: publishedRow,
     latestPublishedPublicationRow: publishedRow,
-    nodeRows: NODES.map((nodeId) => ({
+    nodeRows: world.nodes.map((nodeId) => ({
       node_id: nodeId,
       status: 'active',
       connection_state: 'ready',
       ready_lease_expires_at: clock.now() + 60 * STEP_MS,
     })),
-    readinessEntries: NODES.map((nodeId) => ({
+    readinessEntries: world.nodes.map((nodeId) => ({
       nodeId,
       dimensions: {
         clusterMemberHealthy: true,
@@ -140,7 +140,7 @@ function deriveJoinerSummary(world, clock) {
         serveEligible: true,
       },
     })),
-    nodeEndpointRows: NODES.map((nodeId) => ({
+    nodeEndpointRows: world.nodes.map((nodeId) => ({
       endpoint_id: `${nodeId}-ws`,
       node_id: nodeId,
       transport_type: 'ws',
@@ -153,7 +153,7 @@ function deriveJoinerSummary(world, clock) {
         table_id: partitionId.replace(/-p1$/, ''),
         replica_count: TARGET_REPLICA_COUNT,
       })),
-    serviceRows: [...world.replicas, ...otherPriorityRows()],
+    serviceRows: [...world.replicas, ...otherPriorityRows(world.nodes)],
     replicaOperationRows: world.operations,
     nowMs: clock.now(),
   }).priorityPartitionSummary;
@@ -173,8 +173,8 @@ function evaluateStep(world, clock) {
     partitionId: PARTITION,
     priorityPartitionSummary: summary,
     admission: {
-      effectiveEligibleNodeIds: NODES,
-      effectiveEligibleNodeCount: NODES.length,
+      effectiveEligibleNodeIds: world.nodes,
+      effectiveEligibleNodeCount: world.nodes.length,
       ineligibleNodes: [],
     },
     operationContexts: world.operations.map((row) =>
@@ -224,7 +224,7 @@ function evaluateStep(world, clock) {
           replicaId: row.replica_id,
         },
         priorityPartitionSummary: summary,
-        effectiveEligibleNodeIds: NODES,
+        effectiveEligibleNodeIds: world.nodes,
         nowMs: clock.now(),
       })));
   const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
@@ -232,15 +232,15 @@ function evaluateStep(world, clock) {
     publicationConvergence: {
       publicationEpoch: 8,
       publicationStatus: 'PUBLISHED',
-      publishedActiveNodeIds: NODES,
+      publishedActiveNodeIds: world.nodes,
       pendingAckNodeIds: [],
       priorityPartitionSummary: summary,
-      recoveryActiveNodeIds: NODES,
+      recoveryActiveNodeIds: world.nodes,
     },
     readinessByNodeId: {},
     workflowAdmissionsByWorkflowId: {},
     replicaOperationRows: world.operations,
-    serviceRows: [...world.replicas, ...otherPriorityRows()],
+    serviceRows: [...world.replicas, ...otherPriorityRows(world.nodes)],
   });
   return {
     summary,
@@ -262,6 +262,7 @@ test('formation sequence over the real owners: no refusal, one open operation, f
   async (t) => {
     const clock = createClock(1_000_000);
     const world = {
+      nodes: NODES,
       replicas: [
         replicaRow(1, 'node-a', 'active', 'leader'),
         replicaRow(2, 'node-a', 'active', 'follower'),
@@ -346,4 +347,71 @@ test('formation sequence over the real owners: no refusal, one open operation, f
       0,
       'zero would_exceed_target_replica_count across the whole sequence',
     );
+  });
+
+// The budget walk over the same real owners for the small-cluster shapes the
+// verification names (owner decision 2026-10-04): every step admitted, never
+// would_exceed, at most one unresolved operation.
+function walkWorld(nodes, replicas, operation) {
+  return {nodes, replicas, operations: operation ? [operation] : []};
+}
+
+test('budget walk over the real owners: 2-node, 3-node with one down, REPLACE in flight',
+  async (t) => {
+    const clock = createClock(2_000_000);
+    const replace = (index, sourceNodeId, targetNodeId) => ({
+      ...addOperation('op-replace', index, targetNodeId, 'syncing',
+        'SYNCING', clock),
+      type: 'REPLACE',
+      source_node_id: sourceNodeId,
+    });
+    const shapes = [
+      {
+        label: '2-node cluster: seed A + joiner B, r4 learner on B',
+        world: walkWorld(['node-a', 'node-b'], [
+          replicaRow(1, 'node-a', 'active', 'leader'),
+          replicaRow(2, 'node-a', 'active', 'follower'),
+          replicaRow(3, 'node-a', 'active', 'follower'),
+          replicaRow(4, 'node-b', 'syncing', 'learner'),
+        ], addOperation('op-r4', 4, 'node-b', 'syncing', 'SYNCING', clock)),
+        budget: 2,
+      },
+      {
+        label: '3-node cluster, C down: replacement learner on A for r3',
+        world: walkWorld(['node-a', 'node-b'], [
+          replicaRow(1, 'node-a', 'active', 'leader'),
+          replicaRow(2, 'node-b', 'active', 'follower'),
+          replicaRow(3, 'node-b', 'active', 'follower'),
+          replicaRow(4, 'node-a', 'syncing', 'learner'),
+        ], replace(4, 'node-c', 'node-a')),
+        budget: 0,
+      },
+      {
+        label: 'REPLACE in flight on a spread 5-node cluster (C -> D)',
+        world: walkWorld(NODES, [
+          replicaRow(1, 'node-a', 'active', 'leader'),
+          replicaRow(2, 'node-b', 'active', 'follower'),
+          replicaRow(3, 'node-c', 'active', 'follower'),
+          replicaRow(4, 'node-d', 'syncing', 'learner'),
+        ], replace(4, 'node-c', 'node-d')),
+        budget: 0,
+      },
+    ];
+    for (const shape of shapes) {
+      clock.advance(STEP_MS);
+      const step = evaluateStep(shape.world, clock);
+      t.equal(step.completion.temporaryOverflowVoterBudget, shape.budget,
+        `${shape.label}: budget`);
+      t.equal(step.check.refusalReason, 'not_refused',
+        `${shape.label}: admitted (cap ${step.check.maxAllowedVotersAfterPromotion})`);
+      t.not(step.check.refusalReason, WOULD_EXCEED,
+        `${shape.label}: never would_exceed_target_replica_count`);
+      // No second priority operation: either the open one holds planning
+      // (census gap) or the census needs none (spread already).
+      t.ok(
+        step.planningBlockedByOpenOperation === true ||
+          step.summary.satisfied === true,
+        `${shape.label}: at most one unresolved operation`,
+      );
+    }
   });

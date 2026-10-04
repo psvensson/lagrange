@@ -1617,3 +1617,75 @@ test('budget walk: every interleaving of the formation sequence and the ' +
         `after ${check.votersAfterPromotion})`);
   }
 });
+
+// V4 condition 2 (one-spread-authority verification): the promoting learner's
+// OWN node outside the eligible set its guard's census is computed over, so
+// requiredDistinctNodeCount = min(3, |eligible|) is computed without it.
+//
+// What the guard does: it follows the census. Without its node the census
+// can read "spread" (3-node cluster: eligible {A,B}, required 2, holders A,B,
+// gap 0, budget 0) and the promotion above target is refused.
+//
+// Why this is not a mis-read of spread (reachability, from the code):
+// - The learner exists only because the planner chose its node as an ADD
+//   target from the published eligible cohort, so the node was eligible when
+//   the operation was planned.
+// - The node's own view of itself is never staler than another node's: its
+//   heartbeat installs the authoritative NODES row it just published, and
+//   since V3a the READY promotion (CRITICAL) and the lease renewals (the
+//   10 s maintenance write, CRITICAL, inside the 15 s lease) are never
+//   deferred behind published convergence. A publication ack deferral cannot
+//   exclude it either: only nodes outside the published baseline are
+//   ack-deferred, and an ADD target is inside it.
+// - So the node leaves its own eligible set only when it is genuinely not
+//   eligible (lease lapsed, readiness not promotable). Then the census is
+//   right: a voter on an ineligible node is not a holder, and promoting it
+//   only adds a voter above target. The refusal is not latched - the guard
+//   rechecks every second and on every published-epoch change - and the
+//   first evaluation after the node is eligible again admits it.
+// - With five nodes the shape cannot occur: two other eligible nodes keep
+//   required at 3, so the gap (and the budget) stay.
+test('V4-2: a learner outside its own eligible set follows the census and is admitted on its return', () => {
+  const formationRows = [
+    walkServiceRow(1, 'node-a', A, LEADER_ROLE),
+    walkServiceRow(2, 'node-a', A, FOLLOWER_ROLE),
+    walkServiceRow(3, 'node-a', A, FOLLOWER_ROLE),
+    walkServiceRow(4, 'node-b', A, FOLLOWER_ROLE),
+    walkServiceRow(5, 'node-c', S, LEARNER_ROLE),
+  ];
+  const operationRecords =
+    [walkAddRecord('op-r5', 5, 'node-c', S, 'SYNCING')];
+
+  const outside = evaluateWalkStep({
+    replicaRows: formationRows,
+    eligibleNodeIds: ['node-a', 'node-b'],
+    operationRecords,
+  });
+  assert.equal(outside.census.requiredDistinctNodeCount, 2,
+    'the census is computed without the learner node');
+  assert.equal(outside.census.satisfied, true);
+  assert.equal(outside.completion.temporaryOverflowVoterBudget, 0);
+  assert.equal(outside.check.refusalReason, 'would_exceed_target_replica_count',
+    'a learner on an ineligible node is not promoted above target');
+
+  const returned = evaluateWalkStep({
+    replicaRows: formationRows,
+    eligibleNodeIds: ['node-a', 'node-b', 'node-c'],
+    operationRecords,
+  });
+  assert.equal(returned.census.requiredDistinctNodeCount, 3);
+  assert.equal(returned.census.satisfied, false);
+  assert.equal(returned.completion.temporaryOverflowVoterBudget, 2);
+  assert.equal(returned.check.refusalReason, 'not_refused',
+    'the first evaluation with the node eligible again admits it');
+
+  const fiveNodes = evaluateWalkStep({
+    replicaRows: formationRows,
+    eligibleNodeIds: ['node-a', 'node-b', 'node-d', 'node-e'],
+    operationRecords,
+  });
+  assert.equal(fiveNodes.census.requiredDistinctNodeCount, 3,
+    'five nodes: the learner node out of the set leaves required at 3');
+  assert.equal(fiveNodes.census.satisfied, false);
+  assert.equal(fiveNodes.check.refusalReason, 'not_refused');
+});

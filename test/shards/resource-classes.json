@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2178,
+    "ordinary": 2179,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-9ddc6011",
+  "censusSize": 2196,
+  "digest": "fnv1a32-78246721",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -576,6 +576,7 @@
     "test/control-plane/priority-recovery-target-service-index.test.js": "ordinary",
     "test/control-plane/priority-recovery-tracked-summary-selection.test.js": "ordinary",
     "test/control-plane/priority-services-row-publication-census-contract.test.js": "ordinary",
+    "test/control-plane/priority-spread-pending-heartbeat-admission.test.js": "ordinary",
     "test/control-plane/projection-contract-source-allowlist.test.js": "ordinary",
     "test/control-plane/projection-freshness-guard.test.js": "ordinary",
     "test/control-plane/projection-planning-identity-memoization.test.js": "ordinary",

@@ -223,6 +223,8 @@ class HeartbeatServicePublicationMethods {
     const endpointRow = this.buildEndpointRow(existingEp, now);
     if (
       shouldUpsertEndpointRow(endpointRow, now, {
+        bootIncarnation: this.bootIncarnation,
+        observedEndpointRow: existingEp,
         buildEndpointUpsertSignature: (row) => this.buildEndpointUpsertSignature(row),
         endpointRefreshIntervalMs: this.endpointRefreshIntervalMs,
         lastEndpointUpsertAt: this.lastEndpointUpsertAt,

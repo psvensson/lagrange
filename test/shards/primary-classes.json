@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1916,
+    "unit": 1917,
     "integration": 79,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-44767bf1",
+  "censusSize": 2196,
+  "digest": "fnv1a32-3e111435",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -577,6 +577,7 @@
     "test/control-plane/priority-recovery-target-service-index.test.js": "unit",
     "test/control-plane/priority-recovery-tracked-summary-selection.test.js": "unit",
     "test/control-plane/priority-services-row-publication-census-contract.test.js": "unit",
+    "test/control-plane/priority-spread-pending-heartbeat-admission.test.js": "unit",
     "test/control-plane/projection-contract-source-allowlist.test.js": "unit",
     "test/control-plane/projection-freshness-guard.test.js": "unit",
     "test/control-plane/projection-planning-identity-memoization.test.js": "unit",

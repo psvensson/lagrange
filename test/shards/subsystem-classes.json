@@ -7,7 +7,7 @@
     "bootstrap-membership": 280,
     "cdc-metadata": 58,
     "cli-tooling": 96,
-    "control-plane": 205,
+    "control-plane": 206,
     "convergence-topology": 83,
     "distributed-harness": 169,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2195,
-  "digest": "fnv1a32-ce1c5a61",
+  "censusSize": 2196,
+  "digest": "fnv1a32-dd7efb85",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c9fa0d71",
+  "observationDigest": "fnv1a32-c52dcbd3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -596,6 +596,7 @@
     "test/control-plane/priority-recovery-target-service-index.test.js": "control-plane",
     "test/control-plane/priority-recovery-tracked-summary-selection.test.js": "control-plane",
     "test/control-plane/priority-services-row-publication-census-contract.test.js": "control-plane",
+    "test/control-plane/priority-spread-pending-heartbeat-admission.test.js": "control-plane",
     "test/control-plane/projection-contract-source-allowlist.test.js": "control-plane",
     "test/control-plane/projection-freshness-guard.test.js": "control-plane",
     "test/control-plane/projection-planning-identity-memoization.test.js": "control-plane",
@@ -3894,6 +3895,14 @@
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/priority-recovery-snapshot-observation.js",
         "test/control-plane/priority-recovery-snapshot-supplemental-serial-wait-fixture-constants.js"
+      ]
+    },
+    "test/control-plane/priority-spread-pending-heartbeat-admission.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js"
       ]
     },
     "test/control-plane/projection-planning-identity-memoization.test.js": {
