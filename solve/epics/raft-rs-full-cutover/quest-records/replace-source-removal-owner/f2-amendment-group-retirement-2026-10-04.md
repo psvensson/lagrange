@@ -87,3 +87,34 @@ Witnesses: `test/node/group-retirement-as-a-unit.test.js` (W1-W5, W7),
 3626bdf43. Ordinary REMOVE unchanged: `replica-removal-consensus-exit.test.js`,
 `replica-removal-leader-source.test.js`, and a recorded trace differential
 against 3626bdf43.
+
+## Addendum (2026-10-04, later): the lost REMOVE
+
+Lead decision on the item recorded above as open: "the WORKFLOW OWNER owns
+completion of its own durable step - one owner, no second mechanism - with
+the replica's own open/restart path as the fail-closed safety net."
+
+- Owner side (`src/partition/group-retirement-redrive.js`): a dissolution or
+  aborted teardown delivers to every member in one pass; when some did not
+  acknowledge, the progress is recorded on the failed acknowledgement and the
+  step is re-run by events - its own failed outcome (once, at once), a
+  nodes-row change showing a ready heartbeat for a node hosting an
+  unacknowledged member, and the finished source re-delivering its final
+  acknowledgement on leader activation (owner restart or ownership change;
+  the DISSOLUTION_FAILED -> CLEANUP_COMPLETED edge that was designed but had
+  no producer, and a duplicate of the persisted status after an owner died
+  mid-dispatch). A bounded backoff is only the fallback for a node no event
+  reports ready, and each fallback run is a WARN naming the workflow, group
+  and unacknowledged replicas. A superseded owner (evidence refused for
+  workflow or fence) stops. The partition row is deleted and completion
+  reported only after every member acknowledged.
+- Replica side: a replica registered on open/restart reads its table's
+  durable record authoritatively and, when the record retires its group,
+  takes the same verified group-retirement REMOVE path. An absent or
+  unreadable record is never evidence.
+- Still open: an aborted child/target teardown has no durable step state, so
+  its re-drive lives only in the owner process; after an owner restart it is
+  resumed only by the replicas' own restart net. A lone un-notified survivor
+  whose owner also restarted is listed nowhere until either restarts.
+
+Witnesses: `test/node/group-retirement-redrive.test.js` (W4a-W4f).
