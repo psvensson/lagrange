@@ -4,8 +4,16 @@ import fs from 'node:fs';
 const POLICY_PATH =
   'solve/specs/release-0-3-queryable-core/locking-read-wait-policy.json';
 const ARCHITECTURE_PATH = 'architecture/postgres-locking-reads.md';
-const policy = JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8'));
-const architecture = fs.readFileSync(ARCHITECTURE_PATH, 'utf8');
+const TEXT_ENCODING = 'utf8';
+const EMPTY_STRING = '';
+const MARKDOWN_CODE = '`';
+const MARKDOWN_CELL = '|';
+const NAME_SEPARATOR = '_';
+const PROSE_SEPARATOR = '-';
+const NEWLINE = '\\n';
+const MINIMUM_TRANSITION_CELL_COUNT = 4;
+const policy = JSON.parse(fs.readFileSync(POLICY_PATH, TEXT_ENCODING));
+const architecture = fs.readFileSync(ARCHITECTURE_PATH, TEXT_ENCODING);
 const expectedState = Object.freeze({
   localExpiry: 'forbidden',
   reservationPersistence: 'durable_replicated_until_transaction_resolution',
@@ -32,23 +40,23 @@ const transitionNames = Object.freeze([
 ]);
 
 function architectureRow(name) {
-  const proseName = name.replaceAll('_', '-');
+  const proseName = name.replaceAll(NAME_SEPARATOR, PROSE_SEPARATOR);
   const prefix = `| ${proseName} |`;
-  const line = architecture.split('\n').find((candidate) =>
+  const line = architecture.split(NEWLINE).find((candidate) =>
     candidate.startsWith(prefix),
   );
   if (!line) return null;
-  const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
-  if (cells.length !== 4) return null;
+  const cells = line.split(MARKDOWN_CELL).slice(1, -1).map((cell) => cell.trim());
+  if (cells.length !== MINIMUM_TRANSITION_CELL_COUNT) return null;
   return {
-    owner: cells[1].replaceAll('`', ''),
+    owner: cells[1].replaceAll(MARKDOWN_CODE, EMPTY_STRING),
     action: cells[2],
-    outcome: cells[3].replaceAll('`', ''),
+    outcome: cells[3].replaceAll(MARKDOWN_CODE, EMPTY_STRING),
   };
 }
 
 function proseAction(action) {
-  return action.replaceAll('_', ' ');
+  return action.replaceAll(NAME_SEPARATOR, ' ');
 }
 
 let metric = 0;
@@ -75,7 +83,7 @@ for (const name of transitionNames) {
   // The architecture action is intentionally readable prose. Require it to
   // carry every semantic token from the machine action rather than merely
   // finding an unrelated action elsewhere in the document.
-  const prose = proseRow.action.toLowerCase().replaceAll('-', ' ');
+  const prose = proseRow.action.toLowerCase().replaceAll(PROSE_SEPARATOR, ' ');
   const machineAction = proseAction(policyRow.action).toLowerCase();
   metric += prose === machineAction ? 0 : 1;
 }
