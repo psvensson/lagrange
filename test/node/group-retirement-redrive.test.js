@@ -156,11 +156,14 @@ test('W4b an unreachable node is re-driven by its ready-heartbeat event, ' +
   'a structured WARN names the workflow, group and member');
   t.equal(world.scheduler.pending().length, 1,
     'only the bounded fallback is armed');
-  // A row that is not a ready heartbeat re-drives nothing.
+  // A row that is not a ready heartbeat (the node departed) is a re-check
+  // event: one more attempt, still unacknowledged, never proof it is gone.
   world.emitNodeRow({...readyNodeRow(`${away}-node`),
     ready_lease_expires_at: 0});
   await settleTurns(world);
-  t.equal(deliveriesTo(world, away).length, 2, 'a not-ready row is no event');
+  t.equal(deliveriesTo(world, away).length, 3,
+    'a departed-node row re-checks once');
+  t.same(world.exitsOf(away), [], 'and retires nothing');
   world.dropDeliveryTo.delete(away);
   world.emitNodeRow(readyNodeRow(`${away}-node`));
   t.equal(await driveUntilRemoved(world, world.members), true,

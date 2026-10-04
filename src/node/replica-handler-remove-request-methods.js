@@ -8,6 +8,8 @@ import {OperationType} from '../rebalancer/replica-operation-progress.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   GROUP_RETIREMENT_REASON,
+  GROUP_RETIREMENT_REFUSAL,
+  RECORD_EVIDENCE_STATE,
   groupRetirementEvidenceFromRecord,
   verifyGroupRetirement,
 } from '../partition/group-retirement-evidence.js';
@@ -16,6 +18,7 @@ const DISSOLVE_OPERATION_SEGMENT = ':dissolve:';
 import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
+  REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
 import {
   REPLICA_HANDLER_LEADER_HANDOFF_STATE,
@@ -79,8 +82,47 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           this.inProgressOperations.has(operationId)) {
         return null;
       }
+      return this.verifyGroupRetirementForReplica(replica, evidence,
+        request?.[ReplicaOperationField.PARTITION_ID]);
+    }
+    /**
+     * The evidence's table is its record's address: it must be this
+     * replica's own table whenever the replica knows it; then the record
+     * decides.
+     * @param {Object} replica - getLocalReplica's answer.
+     * @param {Object} evidence - The REMOVE's evidence.
+     * @param {string} partitionId - The partition the REMOVE names.
+     * @return {Promise<Object>} The frozen decision.
+     * @private
+     */
+    verifyGroupRetirementForReplica(replica, evidence, partitionId) {
+      const ownTableId = this.resolveReplicaTableId(replica);
+      if (ownTableId !== null && evidence?.tableId !== ownTableId) {
+        return Promise.resolve(Object.freeze({retire: false,
+          refusal: GROUP_RETIREMENT_REFUSAL.TABLE_MISMATCH}));
+      }
       return verifyGroupRetirement(this.getControlPlaneSystemTableGateway(),
-        evidence, request?.[ReplicaOperationField.PARTITION_ID]);
+        evidence, partitionId);
+    }
+    /**
+     * A replica's own table: its partition service's, else its partition
+     * row's; null when neither is known.
+     * @param {Object} replica - getLocalReplica's answer.
+     * @return {string|null}
+     * @private
+     */
+    resolveReplicaTableId(replica) {
+      const fromService = replica?.service?.tableId;
+      if (typeof fromService === REPLICA_HANDLER_TYPEOF.STRING &&
+          fromService.length > 0) {
+        return fromService;
+      }
+      const partitionRow = replica?.partitionId ?
+        this.systemTableCache?.get?.(SYSTEM_TABLE_NAME.PARTITIONS,
+          replica.partitionId) : null;
+      const fromRow = partitionRow?.table_id;
+      return typeof fromRow === REPLICA_HANDLER_TYPEOF.STRING &&
+        fromRow.length > 0 ? fromRow : null;
     }
     /**
      * The safety net for a member that missed its REMOVE (owner decision
@@ -98,19 +140,22 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
      */
     async retireIfOpenedIntoRetiredGroup(replicaId) {
       const replica = this.getLocalReplica(replicaId);
-      const tableId = replica?.service?.tableId;
-      const hint = typeof tableId === 'string' ?
+      const tableId = this.resolveReplicaTableId(replica);
+      const hint = tableId !== null ?
         this.systemTableCache?.get?.(SYSTEM_TABLE_NAME.TABLES, tableId) :
         null;
-      if (!replica?.partitionId || (hint && !hint.partition_transition_state)) {
+      if (!replica?.partitionId || tableId === null ||
+          (hint && !hint.partition_transition_state)) {
         return null;
       }
-      const evidence = await groupRetirementEvidenceFromRecord(
+      const outcome = await groupRetirementEvidenceFromRecord(
         this.getControlPlaneSystemTableGateway(), tableId,
         replica.partitionId);
-      if (!evidence) {
+      this.reportOpenRecordState(replicaId, replica.partitionId, outcome);
+      if (outcome.state !== RECORD_EVIDENCE_STATE.RETIRE) {
         return null;
       }
+      const evidence = outcome.evidence;
       this.logger.info(REPLICA_HANDLER_LOG_MSG.OPENED_INTO_RETIRED_GROUP, {
         replicaId, partitionId: replica.partitionId, kind: evidence.kind,
         workflowId: evidence.workflowId, nodeId: this.nodeId});
@@ -125,6 +170,27 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         [ReplicaOperationField.REASON]: GROUP_RETIREMENT_REASON,
         [ReplicaOperationField.GROUP_RETIREMENT]: evidence,
       });
+    }
+    /**
+     * One WARN when a replica opened without being able to read its group's
+     * retirement record (it stays un-retired, and may campaign in a dead
+     * group), then again only when that state changes.
+     * @param {string} replicaId
+     * @param {string} partitionId
+     * @param {Object} outcome - groupRetirementEvidenceFromRecord's answer.
+     * @return {void}
+     * @private
+     */
+    reportOpenRecordState(replicaId, partitionId, outcome) {
+      this.openRecordStateByReplica ??= new Map();
+      const previous = this.openRecordStateByReplica.get(replicaId);
+      this.openRecordStateByReplica.set(replicaId, outcome.state);
+      if (outcome.state === RECORD_EVIDENCE_STATE.UNAVAILABLE &&
+          previous !== outcome.state) {
+        this.logger.warn(
+          REPLICA_HANDLER_LOG_MSG.OPEN_RETIREMENT_RECORD_UNAVAILABLE,
+          {replicaId, partitionId, nodeId: this.nodeId});
+      }
     }
     /**
      * The typed answer to a REMOVE whose group-retirement evidence the

@@ -32,7 +32,7 @@ const TOPOLOGY_BOUND_METHOD_SPECS = Object.freeze([
   {property: 'listTablePartitionRows', fallback: () => []},
   {property: 'listPartitionServiceRows', fallback: () => []},
   {property: 'deliverReplicaRemoval', fallback: async () => null},
-  {property: 'observeNodeRows', fallback: () => null},
+  {property: 'observeSystemRows', fallback: () => null},
 ]);
 
 /**

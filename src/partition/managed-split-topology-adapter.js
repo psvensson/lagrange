@@ -1,5 +1,5 @@
 import {TABLES} from '../constants/index.js';
-import {observeSystemNodeRows} from './group-retirement-redrive.js';
+import {observeSystemRows} from './group-retirement-redrive.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
@@ -162,13 +162,14 @@ class ManagedSplitTopologyAdapter {
   }
 
   /**
-   * Observe every nodes-row change (the workflow owner's node-ready event
-   * for a group-retirement re-drive).
-   * @param {Function} listener - (row) => void.
+   * Observe nodes-, services- and tables-row changes (the workflow owner's
+   * group-retirement events: node ready/departed, member row deleted,
+   * retiring record).
+   * @param {Function} listener - (tableName, operation, row) => void.
    * @return {Function|null} Unsubscribe.
    */
-  observeNodeRows(listener) {
-    return observeSystemNodeRows(getRuntimeView(this.sqlQueryEngine),
+  observeSystemRows(listener) {
+    return observeSystemRows(getRuntimeView(this.sqlQueryEngine),
       listener);
   }
 

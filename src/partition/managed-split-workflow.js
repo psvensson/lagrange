@@ -1,6 +1,10 @@
 import {createGroupRetirementRedrive} from
   './group-retirement-redrive.js';
 import {
+  WORKFLOW_FAMILY,
+  attachGroupRetirementResume,
+} from './group-retirement-resume.js';
+import {
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
 } from '../query/query-constants.js';
@@ -138,6 +142,17 @@ class ManagedSplitWorkflow {
         timeoutPolicy: this.executionTimeoutPolicy,
         now: this.now,
       });
+    // The owner resumes, from the durable record, any whole-group
+    // retirement step nobody drives (owner start, record changes).
+    attachGroupRetirementResume(this, {
+      family: WORKFLOW_FAMILY.SPLIT,
+      claim: (workflowId) => this.claimSplitWorkflowOwnership(workflowId),
+      finalize: (workflowId) =>
+        this.finalizeSplitDissolutionIfReady(workflowId),
+      teardown: (workflowId, workflow) =>
+        this.teardownAbortedSplitChildren(workflowId, workflow),
+      scheduler: options.groupRetirementScheduler,
+    });
   }
 
   /**

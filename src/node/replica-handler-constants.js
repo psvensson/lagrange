@@ -83,6 +83,10 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   OPENED_INTO_RETIRED_GROUP:
     'Replica opened into a group its durable workflow record retired; ' +
     'retiring it as a unit',
+  OPEN_RETIREMENT_RECORD_UNAVAILABLE:
+    'Replica opened without reading its group\'s retirement record; it ' +
+    'stays un-retired until the record is readable or its workflow owner ' +
+    're-drives it',
   REMOVE_GROUP_RETIREMENT_REFUSED:
     'Replica removal refused: its group-retirement evidence does not match ' +
     'the durable workflow record',

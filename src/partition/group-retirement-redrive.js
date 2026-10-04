@@ -11,6 +11,15 @@
  *                   (a REMOVE lost in transit is re-delivered);
  *   NODE_READY      a nodes-row change showing a ready heartbeat for a node
  *                   that hosts an unacknowledged member re-runs it;
+ *   NODE_DEPARTED   that node's row deleted (node removed) or rewritten
+ *                   not-ready re-runs it (a re-check, never proof the member
+ *                   is gone);
+ *   MEMBER_ROW_DELETED an unacknowledged member's services row deleted
+ *                   (its node's own cleanup) re-runs it: the member is no
+ *                   longer part of the group's durable membership list;
+ *   OWNERSHIP       the owner's resume of the durable record on ownership
+ *                   acquisition (owner start, a `tables` record change,
+ *                   group-retirement-resume.js);
  *   RESUME          the durable record re-delivered to this owner (the
  *                   finished source re-delivers its acknowledgement on
  *                   leader activation: owner restart, ownership change) runs
@@ -18,8 +27,14 @@
  *   FALLBACK        a bounded exponential backoff, only for a node that no
  *                   event reports ready; every fallback run logs a WARN
  *                   naming the workflow, the group and the unacknowledged
- *                   replicas, and when the bound is spent an ERROR - it never
- *                   ends anything silently.
+ *                   replicas, and when the bound is spent one ERROR per
+ *                   entry - it never ends anything silently, and an
+ *                   exhausted entry stays re-drivable by every event above;
+ *   STALLED         a re-run that neither completed nor re-reported (it
+ *                   returned early) arms the fallback with a WARN.
+ * Acknowledgement is a positive answer only (initiated, in progress,
+ * completed): NOT_FOUND is not one - a node can answer it before its
+ * replicas are registered at startup.
  * Canonical output: the step re-run; `unacknowledged()` - every tracked
  * workflow, group and unacknowledged replica (a lone un-notified survivor is
  * listed here, never silent).
@@ -35,6 +50,8 @@ import {GROUP_RETIREMENT_REFUSAL} from './group-retirement-evidence.js';
 const REDRIVE_TRIGGER = Object.freeze({
   FAILED_ACK: 'failed-ack',
   NODE_READY: 'node-ready',
+  NODE_DEPARTED: 'node-departed',
+  MEMBER_ROW_DELETED: 'member-row-deleted',
   FALLBACK: 'fallback-backoff',
 });
 
@@ -47,6 +64,8 @@ const REDRIVE_LOG_MSG = Object.freeze({
     'node-ready event or a durable resume',
   SUPERSEDED: 'Group retirement re-drive stopped: this owner\'s evidence ' +
     'was refused as superseded',
+  STALLED: 'Group retirement re-run returned without completing or ' +
+    'reporting; the fallback is armed',
 });
 
 const REDRIVE_DEFAULT = Object.freeze({
@@ -56,11 +75,13 @@ const REDRIVE_DEFAULT = Object.freeze({
 });
 
 const NODES_TABLE = 'nodes';
+const SERVICES_TABLE = 'services';
+const TABLES_TABLE = 'tables';
+const DELETE_OPERATION = 'DELETE';
 const ACCEPTED_REMOVAL_STATUSES = Object.freeze(new Set([
   ReplicaOperationResponseStatus.INITIATED,
   ReplicaOperationResponseStatus.IN_PROGRESS,
   ReplicaOperationResponseStatus.COMPLETED,
-  ReplicaOperationResponseStatus.NOT_FOUND,
 ]));
 // A refusal saying this owner's evidence is not the record's: a newer owner
 // (fence) or another workflow holds the record.
@@ -71,6 +92,12 @@ const SUPERSEDED_REFUSALS = Object.freeze(new Set([
 const INCOMPLETE_ERROR = 'Group retirement incomplete: unacknowledged ' +
   'replicas ';
 const REPLICA_ID_SEPARATOR = ',';
+
+function fieldsOf(entry) {
+  return {workflowId: entry.workflowId, partitionId: entry.partitionId,
+    unacknowledgedReplicaIds: entry.unacknowledged.map((member) =>
+      member.replicaId)};
+}
 
 function rowField(row, snake, camel) {
   return String(row?.[snake] ?? row?.[camel] ?? '');
@@ -136,15 +163,15 @@ class GroupRetirementRedrive {
   /**
    * @param {Object} options
    * @param {Object} options.logger
-   * @param {Function} [options.observeNodeRows] - (listener(row)) =>
-   *   unsubscribe; delivers every nodes-row change.
+   * @param {Function} [options.observeSystemRows] - (listener(tableName,
+   *   operation, row)) => unsubscribe; delivers system-row changes.
    * @param {Function} [options.isNodeRowReady] - (row) => boolean.
    * @param {Object} [options.scheduler] - {setTimeout, clearTimeout}.
    */
-  constructor({logger, observeNodeRows = null, isNodeRowReady = () => false,
-    scheduler = globalThis}) {
+  constructor({logger, observeSystemRows = null,
+    isNodeRowReady = () => false, scheduler = globalThis}) {
     this.logger = logger;
-    this.observeNodeRows = observeNodeRows;
+    this.observeSystemRows = observeSystemRows;
     this.isNodeRowReady = isNodeRowReady;
     this.scheduler = scheduler;
     this.entries = new Map();
@@ -204,7 +231,8 @@ class GroupRetirementRedrive {
       return;
     }
     const entry = this.entries.get(key) ||
-      {workflowId, partitionId, attempts: 0, timer: null};
+      {key, workflowId, partitionId, attempts: 0, timer: null,
+        exhausted: false};
     entry.unacknowledged = unacknowledged;
     entry.redrive = redrive;
     entry.attempts += 1;
@@ -256,21 +284,38 @@ class GroupRetirementRedrive {
     this.scheduler.clearTimeout(entry.timer);
     entry.timer = null;
     entry.lastTrigger = trigger;
+    const reported = entry.attempts;
     Promise.resolve().then(() => entry.redrive(trigger)).catch((error) => {
       this.logger.warn(REDRIVE_LOG_MSG.INCOMPLETE, {
         workflowId: entry.workflowId, partitionId: entry.partitionId,
         trigger, error: error?.message || String(error)});
-    });
+    }).then(() => this.armIfStalled(entry, reported));
+  }
+
+  /**
+   * A re-run that neither settled nor re-reported returned early: the entry
+   * would otherwise wait silently for events only.
+   * @private
+   */
+  armIfStalled(entry, reported) {
+    if (this.entries.get(entry.key) !== entry || entry.attempts !== reported ||
+        entry.timer) {
+      return;
+    }
+    entry.attempts += 1;
+    this.logger.warn(REDRIVE_LOG_MSG.STALLED, fieldsOf(entry));
+    this.armFallback(entry);
   }
 
   /** @private */
   armFallback(entry) {
     const fallbackRuns = entry.attempts - 1;
     if (fallbackRuns > REDRIVE_DEFAULT.FALLBACK_ATTEMPTS) {
-      this.logger.error(REDRIVE_LOG_MSG.EXHAUSTED, {
-        workflowId: entry.workflowId, partitionId: entry.partitionId,
-        unacknowledgedReplicaIds: entry.unacknowledged.map((member) =>
-          member.replicaId)});
+      // Once per entry; it stays tracked and re-drivable by every event.
+      if (!entry.exhausted) {
+        entry.exhausted = true;
+        this.logger.error(REDRIVE_LOG_MSG.EXHAUSTED, fieldsOf(entry));
+      }
       return;
     }
     const delayMs = Math.min(REDRIVE_DEFAULT.BACKOFF_MAX_MS,
@@ -287,38 +332,76 @@ class GroupRetirementRedrive {
     entry.timer?.unref?.();
   }
 
+  /**
+   * Whether this owner is running or tracking a step of the workflow.
+   * @param {string} workflowId
+   * @return {boolean}
+   */
+  isDriving(workflowId) {
+    return [...this.inFlight.keys(), ...[...this.entries.values()].map(
+      (entry) => entry.workflowId)].some((key) => key === workflowId ||
+      key.startsWith(`${workflowId}:`));
+  }
+
   /** @private */
   subscribeNodeRows() {
-    if (this.unsubscribe || typeof this.observeNodeRows !== 'function') {
+    if (this.unsubscribe || typeof this.observeSystemRows !== 'function') {
       return;
     }
-    this.unsubscribe = this.observeNodeRows((row) => {
-      if (!this.isNodeRowReady(row)) {
-        return;
+    this.unsubscribe = this.observeSystemRows((tableName, operation, row) =>
+      this.onSystemRow(tableName, operation, row)) || null;
+  }
+
+  /** @private */
+  onSystemRow(tableName, operation, row) {
+    const trigger = this.triggerOf(tableName, operation, row);
+    if (!trigger) {
+      return;
+    }
+    const matches = tableName === NODES_TABLE ?
+      (member) => member.nodeId === String(row?.node_id || '') :
+      (member) => member.replicaId ===
+        String(row?.replica_id ?? row?.service_id ?? '');
+    for (const entry of [...this.entries.values()]) {
+      if (entry.unacknowledged.some(matches)) {
+        this.run(entry, trigger);
       }
-      const nodeId = String(row?.node_id || '');
-      for (const entry of this.entries.values()) {
-        if (entry.unacknowledged.some((member) => member.nodeId === nodeId)) {
-          this.run(entry, REDRIVE_TRIGGER.NODE_READY);
-        }
+    }
+  }
+
+  /** @private */
+  triggerOf(tableName, operation, row) {
+    if (tableName === NODES_TABLE) {
+      if (operation === DELETE_OPERATION) {
+        return REDRIVE_TRIGGER.NODE_DEPARTED;
       }
-    }) || null;
+      return this.isNodeRowReady(row) ? REDRIVE_TRIGGER.NODE_READY :
+        REDRIVE_TRIGGER.NODE_DEPARTED;
+    }
+    if (tableName === SERVICES_TABLE && operation === DELETE_OPERATION) {
+      return REDRIVE_TRIGGER.MEMBER_ROW_DELETED;
+    }
+    return null;
   }
 }
 
+const OBSERVED_TABLES = Object.freeze(new Set([NODES_TABLE, SERVICES_TABLE,
+  TABLES_TABLE]));
+
 /**
- * Deliver every nodes-row change of a system-table cache to `listener`.
+ * Deliver every nodes-, services- and tables-row change of a system-table
+ * cache to `listener`.
  * @param {Object|null} cache - The runtime's system-table cache.
- * @param {Function} listener - (row) => void.
+ * @param {Function} listener - (tableName, operation, row) => void.
  * @return {Function|null} Unsubscribe, or null when there is no cache.
  */
-function observeSystemNodeRows(cache, listener) {
+function observeSystemRows(cache, listener) {
   if (typeof cache?.onCacheChange !== 'function') {
     return null;
   }
-  const onChange = (tableName, _operation, row) => {
-    if (tableName === NODES_TABLE) {
-      listener(row);
+  const onChange = (tableName, operation, row) => {
+    if (OBSERVED_TABLES.has(tableName)) {
+      listener(tableName, operation, row);
     }
   };
   cache.onCacheChange(onChange);
@@ -337,7 +420,7 @@ function observeSystemNodeRows(cache, listener) {
 function createGroupRetirementRedrive(workflow, options) {
   return options.groupRetirementRedrive || new GroupRetirementRedrive({
     logger: workflow.logger,
-    observeNodeRows: (listener) => workflow.observeNodeRows(listener),
+    observeSystemRows: (listener) => workflow.observeSystemRows(listener),
     isNodeRowReady: (row) => wasNodeRecordReadyWhenWritten(row),
     scheduler: options.groupRetirementScheduler || globalThis,
   });
@@ -346,5 +429,5 @@ function createGroupRetirementRedrive(workflow, options) {
 export {
   createGroupRetirementRedrive,
   dispatchGroupRetirementRemovals,
-  observeSystemNodeRows,
+  observeSystemRows,
 };

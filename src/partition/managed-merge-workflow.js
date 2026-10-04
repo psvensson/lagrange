@@ -1,6 +1,10 @@
 import {createGroupRetirementRedrive} from
   './group-retirement-redrive.js';
 import {
+  WORKFLOW_FAMILY,
+  attachGroupRetirementResume,
+} from './group-retirement-resume.js';
+import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
@@ -219,6 +223,17 @@ class ManagedMergeWorkflow {
         now: this.now,
       });
     this.mergeOwnerLaneTailByOwnerKey = new Map();
+    // The owner resumes, from the durable record, any whole-group
+    // retirement step nobody drives (owner start, record changes).
+    attachGroupRetirementResume(this, {
+      family: WORKFLOW_FAMILY.MERGE,
+      claim: (workflowId) => this.claimMergeWorkflowOwnership(workflowId),
+      finalize: (workflowId) =>
+        this.finalizeMergeDissolutionIfReady(workflowId),
+      teardown: (workflowId, workflow) =>
+        this.teardownAbortedMergeTarget(workflowId, workflow),
+      scheduler: options.groupRetirementScheduler,
+    });
   }
 
   /**

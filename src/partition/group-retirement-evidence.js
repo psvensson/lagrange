@@ -60,9 +60,35 @@ const GROUP_RETIREMENT_REFUSAL = Object.freeze({
   GROUP_NOT_NAMED: 'group-retirement-group-not-named',
   EPOCH_MISMATCH: 'group-retirement-epoch-mismatch',
   SOURCE_MIRROR_ACTIVE: 'group-retirement-source-mirror-active',
+  RECORD_MALFORMED: 'group-retirement-record-malformed',
+  TABLE_MISMATCH: 'group-retirement-table-mismatch',
+});
+
+// What the replica's own open/restart read of its record concluded.
+const RECORD_EVIDENCE_STATE = Object.freeze({
+  RETIRE: 'retire',
+  NOT_RETIRED: 'not-retired',
+  UNAVAILABLE: 'unavailable',
 });
 
 const RECORD_SQL = 'SELECT * FROM tables WHERE table_id = ?';
+
+const WORKFLOW_FAMILY = Object.freeze({SPLIT: 'split', MERGE: 'merge'});
+const RETIRING_KINDS_BY_FAMILY = Object.freeze({
+  [WORKFLOW_FAMILY.SPLIT]: Object.freeze([
+    GROUP_RETIREMENT_KIND.SPLIT_SOURCE,
+    GROUP_RETIREMENT_KIND.SPLIT_ABORTED_CHILD,
+  ]),
+  [WORKFLOW_FAMILY.MERGE]: Object.freeze([
+    GROUP_RETIREMENT_KIND.MERGE_SOURCE,
+    GROUP_RETIREMENT_KIND.MERGE_ABORTED_TARGET,
+  ]),
+});
+const ABORTED_KINDS = Object.freeze(new Set([
+  GROUP_RETIREMENT_KIND.SPLIT_ABORTED_CHILD,
+  GROUP_RETIREMENT_KIND.MERGE_ABORTED_TARGET,
+]));
+const NOT_RETIRING = Object.freeze({retiring: false});
 const STRING_TYPE = 'string';
 
 function sourceParticipantOf(metadata, participantKey) {
@@ -173,14 +199,23 @@ function parseTransitionMetadata(rawMetadata) {
   }
 }
 
+// A partition epoch is a positive safe integer as stored; anything else (a
+// null that a Number() decode would read as 0, a string) is a malformed
+// record, never an epoch.
+function isPartitionEpoch(value) {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+function areRecordEpochsWellFormed(tablesRow, metadata) {
+  return isPartitionEpoch(tablesRow?.active_partition_version) &&
+    isPartitionEpoch(metadata?.[
+      PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]);
+}
+
 function epochOutcomeOf(rule, tablesRow, metadata) {
-  const activeVersion = Number(tablesRow?.active_partition_version);
-  const targetVersion = Number(metadata?.[
-    PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]);
-  if (!Number.isSafeInteger(targetVersion)) {
-    return false;
-  }
-  return (activeVersion === targetVersion) === rule.epochPromoted;
+  return (tablesRow.active_partition_version === metadata[
+    PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]) ===
+    rule.epochPromoted;
 }
 
 // The record checks, in order: the first that fails is the typed refusal.
@@ -198,6 +233,9 @@ const RECORD_CHECKS = Object.freeze([
   [(evidence, rule, row, metadata, partitionId) =>
     rule.names(metadata, partitionId),
   GROUP_RETIREMENT_REFUSAL.GROUP_NOT_NAMED],
+  [(evidence, rule, row, metadata) =>
+    areRecordEpochsWellFormed(row, metadata),
+  GROUP_RETIREMENT_REFUSAL.RECORD_MALFORMED],
   [(evidence, rule, row, metadata) => epochOutcomeOf(rule, row, metadata),
     GROUP_RETIREMENT_REFUSAL.EPOCH_MISMATCH],
   [(evidence, rule, row, metadata, partitionId) =>
@@ -317,18 +355,22 @@ async function verifyGroupRetirement(gateway, evidence, partitionId) {
  * @param {Object} gateway - The control-plane system-table gateway.
  * @param {string} tableId - The replica's table.
  * @param {string} partitionId - The replica's partition.
- * @return {Promise<Object|null>} Frozen evidence, or null.
+ * @return {Promise<Object>} Frozen {state: RECORD_EVIDENCE_STATE, evidence
+ *   (RETIRE only)}.
  */
 async function groupRetirementEvidenceFromRecord(gateway, tableId,
   partitionId) {
   if (typeof tableId !== STRING_TYPE || tableId.length === 0) {
-    return null;
+    return Object.freeze({state: RECORD_EVIDENCE_STATE.UNAVAILABLE});
   }
   const record = await readGroupRetirementRecord(gateway, tableId);
+  if (!record.available) {
+    return Object.freeze({state: RECORD_EVIDENCE_STATE.UNAVAILABLE});
+  }
   const metadata = parseTransitionMetadata(
     record.tablesRow?.partition_transition_metadata);
-  if (!record.available || !metadata) {
-    return null;
+  if (!metadata) {
+    return Object.freeze({state: RECORD_EVIDENCE_STATE.NOT_RETIRED});
   }
   const workflow = {
     workflowId: metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID],
@@ -339,15 +381,73 @@ async function groupRetirementEvidenceFromRecord(gateway, tableId,
   const kind = Object.values(GROUP_RETIREMENT_KIND).find((candidate) =>
     decideGroupRetirement(buildGroupRetirementEvidence({kind: candidate,
       workflow}), {partitionId, tablesRow: record.tablesRow}).retire === true);
-  return kind ? buildGroupRetirementEvidence({kind, workflow}) : null;
+  return Object.freeze(kind ? {state: RECORD_EVIDENCE_STATE.RETIRE,
+    evidence: buildGroupRetirementEvidence({kind, workflow})} :
+    {state: RECORD_EVIDENCE_STATE.NOT_RETIRED});
+}
+
+/**
+ * Whether one durable `tables` record holds a whole-group retirement its
+ * workflow owner has not finished (the owner's resume on ownership
+ * acquisition): a split or merge whose cutover is active and whose
+ * source(s) finished mirroring, or an aborted split or merge (FAILED, its
+ * target epoch never promoted) whose never-authoritative targets may still
+ * hold replicas.
+ * @param {Object|null} tablesRow
+ * @return {Object} Frozen {retiring: false} | {retiring: true, family
+ *   ('split'|'merge'), aborted, workflowId, retiringPartitionIds}.
+ */
+function retiringWorkflowOf(tablesRow) {
+  const metadata = parseTransitionMetadata(
+    tablesRow?.partition_transition_metadata);
+  const workflowId = String(
+    metadata?.[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || '');
+  if (!metadata || !workflowId ||
+      !areRecordEpochsWellFormed(tablesRow, metadata)) {
+    return NOT_RETIRING;
+  }
+  const family = workflowFamilyOf(metadata);
+  const workflow = {workflowId, tableId: String(tablesRow.table_id || ''),
+    fenceToken: metadata[
+      PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN]};
+  const retiring = recordPartitionIdsOf(metadata, family)
+    .map((partitionId) => ({partitionId, kind: RETIRING_KINDS_BY_FAMILY[
+      family].find((kind) => decideGroupRetirement(
+      buildGroupRetirementEvidence({kind, workflow}),
+      {partitionId, tablesRow}).retire === true)}))
+    .filter((entry) => entry.kind);
+  return retiring.length === 0 ? NOT_RETIRING : Object.freeze({
+    retiring: true, family, workflowId,
+    aborted: retiring.some((entry) => ABORTED_KINDS.has(entry.kind)),
+    retiringPartitionIds: Object.freeze(retiring.map((entry) =>
+      entry.partitionId))});
+}
+
+function workflowFamilyOf(metadata) {
+  return Object.hasOwn(metadata,
+    PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_IDS) ?
+    WORKFLOW_FAMILY.MERGE : WORKFLOW_FAMILY.SPLIT;
+}
+
+// Every partition a split or merge record names, sources then targets.
+function recordPartitionIdsOf(metadata, family) {
+  const sources = family === WORKFLOW_FAMILY.SPLIT ?
+    [String(metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID] ||
+      '')] :
+    listOf(metadata, PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_IDS);
+  return [...sources, ...listOf(metadata,
+    PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS)];
 }
 
 export {
   GROUP_RETIREMENT_KIND,
   GROUP_RETIREMENT_REASON,
   GROUP_RETIREMENT_REFUSAL,
+  RECORD_EVIDENCE_STATE,
+  WORKFLOW_FAMILY,
   buildGroupRetirementEvidence,
   groupRetirementEvidenceFromRecord,
   retiringSourceStatus,
+  retiringWorkflowOf,
   verifyGroupRetirement,
 };
