@@ -12,6 +12,7 @@ import {inboundStepRefusal} from './raft-rs-local-log-guard.js';
 import {recordInboundStepRefusal} from './raft-rs-peer-delivery.js';
 import {whenPersistenceAdmitted} from './raft-rs-persistence-admission.js';
 import {
+  NO_LEADER,
   RUNTIME_FAULT_REPORT,
   RUNTIME_PHASE,
   RUNTIME_REASON,
@@ -57,6 +58,20 @@ function enterReseedHold(group, refused) {
   return group.reseedHold;
 }
 
+// What the guard reads of the receiving group, as the runtime last observed
+// it after a stepped envelope's Ready (the core is not entered for it).
+function guardInputs(group) {
+  const status = group.lastStatus ?? {};
+  return {
+    gateOpen: group.gateOpen === true,
+    lastIndex: group.persistedLastIndex,
+    commit: status.commit,
+    term: BigInt(status.term ?? 0),
+    leaderKnown: (status.lead ?? NO_LEADER) !== NO_LEADER,
+    confState: group.statusObservation?.confState ?? null,
+  };
+}
+
 /**
  * Ask the local-log guard about one delivered envelope before it is stepped.
  * @param {Object} group - The runtime group.
@@ -67,11 +82,7 @@ function enterReseedHold(group, refused) {
  */
 function refuseInboundStep(group, envelope, runtimeGeneration) {
   const message = envelope.message;
-  const refused = inboundStepRefusal(message, {
-    gateOpen: group.gateOpen === true,
-    lastIndex: group.persistedLastIndex,
-    commit: group.lastStatus?.commit,
-  });
+  const refused = inboundStepRefusal(message, guardInputs(group));
   if (refused === null) {
     return null;
   }

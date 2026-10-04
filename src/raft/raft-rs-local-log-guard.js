@@ -12,10 +12,20 @@
 //     (crate raft_log.rs commit_to). A correct leader never sends it: its
 //     heartbeat commit is min(matched, committed), matched is acknowledged
 //     only after this replica persisted the entries, and committed entries
-//     are never truncated. It therefore proves this replica lost history the
-//     leader holds it to have: the group is held for a reseed (O4), never
-//     dropped and stepped on (a dropped heartbeat never resets the election
-//     timer, so the amnesic replica would campaign the leader away);
+//     are never truncated. Sent by a member of this replica's own
+//     configuration at a term not below its own, it therefore proves this
+//     replica lost history the leader holds it to have: the group is held for
+//     a reseed (O4), never dropped and stepped on (a dropped heartbeat never
+//     resets the election timer, so the amnesic replica would campaign the
+//     leader away). Sent by anyone else - a raft id outside the configuration
+//     the core holds (voters, outgoing voters, learners, next learners) or a
+//     term below this replica's, which raft-rs itself ignores - it proves
+//     nothing about this replica and is refused, never held (M5: unadmitted
+//     traffic has no lasting effect). An amnesic incarnation opened empty
+//     holds exactly the configuration it was opened with (the GENESIS
+//     founders, or a join's committed voters plus itself) and term 0, so its
+//     legitimate leader - a founder, or the leader that answered the join -
+//     satisfies both conditions;
 //   - an append carrying an entry at or below this replica's commit index
 //     while its own index is not below it (crate raft_log.rs maybe_append's
 //     committed-conflict fatal). A correct leader sends entries contiguous
@@ -37,6 +47,21 @@
 //     MsgTransferLeader is never refused here: a transfer named at a
 //     follower is forwarded to the leader as exactly that peer message.
 //
+//   - a vote or pre-vote request at a term above this replica's from a raft
+//     id outside its configuration, while this replica leads or follows a
+//     leader: the disruptive-server rule of Raft (Ongaro, section 4.2.3:
+//     a server that believes a current leader exists disregards a
+//     RequestVote) applied only to senders this replica's configuration does
+//     not name. raft-rs runs without check_quorum and pre_vote, so it has no
+//     such lease and steps any higher-term request down to its term. The
+//     refusal ends when this replica's own election timer clears its leader
+//     (it then campaigns, follows no one, and the request is stepped), so a
+//     legitimately added voter this replica has not yet applied is never
+//     locked out (the membership-transition race, witnessed by
+//     local-log-guard-sender-admissibility A5). Appends and heartbeats from
+//     outside the configuration are stepped: a new leader the receiver has
+//     not yet applied sends exactly those (binding direction section 6).
+//
 // A held group never reaches this guard: the runtime owner answers every
 // delivery and operation of a held group with its hold, votes included, and
 // the core is not entered for it again. A vote request to a gated replica
@@ -53,6 +78,10 @@ import {RAFT_RS_LOCAL_LOG_REFUSAL} from
   './raft-rs-runtime-owner-constants.js';
 
 const ZERO = 0n;
+const CONFIGURATION_PARTS = Object.freeze([
+  'voters', 'votersOutgoing', 'learners', 'learnersNext']);
+const VOTE_REQUESTS = new Set([
+  RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE, RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE]);
 
 function positionOf(value) {
   return value === undefined ? ZERO : BigInt(value);
@@ -75,11 +104,37 @@ function appendBelowLocalCommit(message, committed) {
     positionOf(entries[0].index) <= committed;
 }
 
+// Whether the configuration the core holds names the sender (as voter,
+// outgoing voter, learner or next learner).
+function namesSender(confState, sender) {
+  return CONFIGURATION_PARTS.some((part) =>
+    (confState?.[part] || []).some((id) => String(id) === sender));
+}
+
+// A heartbeat whose commit lies beyond the persisted log: held only when a
+// member at a term not below this replica's sent it.
+function commitBeyondLocalLog(message, local) {
+  if (positionOf(message.commit) <= local.lastIndex) {
+    return null;
+  }
+  return positionOf(message.term) >= local.term &&
+    namesSender(local.confState, String(message.from)) ?
+    refusal(RAFT_RS_LOCAL_LOG_REFUSAL.PEER_COMMIT_BEYOND_LOCAL_LOG, true) :
+    refusal(RAFT_RS_LOCAL_LOG_REFUSAL.UNADMITTED_COMMIT_BEYOND_LOCAL_LOG);
+}
+
+// The sender admissibility decided before any position check, so a sender
+// that may not move this replica can never hold it either.
+function senderRefusal(message, local) {
+  return VOTE_REQUESTS.has(message.msgType) && local.leaderKnown &&
+    positionOf(message.term) > local.term &&
+    !namesSender(local.confState, String(message.from)) ?
+    refusal(RAFT_RS_LOCAL_LOG_REFUSAL.VOTE_REQUEST_OUTSIDE_CONFIGURATION) :
+    null;
+}
+
 const POSITION_CHECKS = Object.freeze({
-  [RAFT_RS_MESSAGE_TYPE.HEARTBEAT]: (message, local) =>
-    positionOf(message.commit) > local.lastIndex ?
-      refusal(RAFT_RS_LOCAL_LOG_REFUSAL.PEER_COMMIT_BEYOND_LOCAL_LOG, true) :
-      null,
+  [RAFT_RS_MESSAGE_TYPE.HEARTBEAT]: commitBeyondLocalLog,
   [RAFT_RS_MESSAGE_TYPE.APPEND]: (message, local) =>
     appendBelowLocalCommit(message, positionOf(local.commit)) ?
       refusal(RAFT_RS_LOCAL_LOG_REFUSAL.APPEND_BELOW_LOCAL_COMMIT) : null,
@@ -95,10 +150,14 @@ const POSITION_CHECKS = Object.freeze({
 /**
  * Whether a delivered message may be stepped into this group's core.
  * @param {Object} message - The raft message on an admitted envelope.
- * @param {Object} local - The receiving group's own positions, read without
+ * @param {Object} local - The receiving group's own state, read without
  *   entering the core: {gateOpen, lastIndex (bigint, the persisted
  *   last index: the last entry or the snapshot written), commit (the
- *   core's commit index as last observed, a decimal string)}.
+ *   core's commit index as last observed, a decimal string), term (bigint,
+ *   the core's term as last observed), leaderKnown (whether it leads or
+ *   follows a leader as last observed), confState (the configuration the
+ *   core held as last observed)}. The runtime observes them after every
+ *   stepped envelope's Ready, so they are the core's own as of this turn.
  * @return {Object|null} null to step it, or {reason, holds}: the typed
  *   refusal, and whether it proves this replica's own history lost (the
  *   group is then held for a reseed).
@@ -107,6 +166,10 @@ function inboundStepRefusal(message, local) {
   const type = message.msgType;
   if (!local.gateOpen && type === RAFT_RS_MESSAGE_TYPE.TIMEOUT_NOW) {
     return refusal(PARTICIPATION_GATE.GATE_CLOSED);
+  }
+  const sender = senderRefusal(message, local);
+  if (sender !== null) {
+    return sender;
   }
   const check = POSITION_CHECKS[type];
   return check === undefined ? null : check(message, local);

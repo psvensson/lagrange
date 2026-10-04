@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1920,
+    "unit": 1921,
     "integration": 77,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2197,
-  "digest": "fnv1a32-a2008c34",
+  "censusSize": 2198,
+  "digest": "fnv1a32-5390bb59",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1439,6 +1439,7 @@
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "unit",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "unit",
     "test/raft/raft-rs-backend/local-log-guard-refusals.test.js": "unit",
+    "test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js": "unit",
     "test/raft/raft-rs-backend/membership-changed-event.test.js": "unit",
     "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js": "unit",
     "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "unit",

@@ -172,6 +172,16 @@ const RUNTIME_REASON = Object.freeze({
 // producer each one implies).
 const RAFT_RS_LOCAL_LOG_REFUSAL = Object.freeze({
   PEER_COMMIT_BEYOND_LOCAL_LOG: 'peer-commit-beyond-local-log',
+  // The same heartbeat from a raft id outside this replica's configuration
+  // or at a term below its own: it proves nothing about this replica, so it
+  // is refused and never holds it (M5).
+  UNADMITTED_COMMIT_BEYOND_LOCAL_LOG:
+    'unadmitted-sender-commit-beyond-local-log',
+  // A higher-term vote or pre-vote request from a raft id outside this
+  // replica's configuration while it leads or follows a leader (Raft's
+  // disruptive-server rule, restricted to non-members).
+  VOTE_REQUEST_OUTSIDE_CONFIGURATION:
+    'vote-request-from-outside-configuration',
   APPEND_BELOW_LOCAL_COMMIT: 'append-entries-below-local-commit',
   EMPTY_FORWARDED_PROPOSAL: 'empty-forwarded-proposal',
   APPEND_RESPONSE_BEYOND_LOCAL_LOG: 'append-response-beyond-local-log',
