@@ -3,7 +3,10 @@ import {NodeJoiningPublicationActivation} from './node-joining-publication-activ
 import {
   buildStartupRuntimeHandoffSnapshot,
 } from './shared/startup-sql-runtime-handoff.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
 
 const JOIN_HTTP_POST_WAIT = Object.freeze({
   wait: 'httpTimeoutMs',
@@ -337,7 +340,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       this.config.httpTimeoutMs;
     // AbortController is a global in Node.js 22+
     const controller = new globalThis.AbortController();
-    const httpPostStartedAtMs = this.now();
+    const httpPostStartedAtMs = readWaitClock(this);
     const observed = {url, phase: JOIN_HTTP_POST_WAIT.PHASE_AWAITING_HEADERS};
     const timeoutId = setTimeout(
       () => controller.abort(),

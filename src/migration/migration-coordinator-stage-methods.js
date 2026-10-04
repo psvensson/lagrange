@@ -1,4 +1,7 @@
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const MIGRATION_CUTOVER_RETRY_WAIT = Object.freeze({
@@ -233,7 +236,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
       const refreshedMigrationRow = await this.getMigrationById(migrationId);
       const partitionRows = await this.getPartitionMigrationRows(migrationId);
       let lastError = null;
-      const retryStartedAtMs = this.now();
+      const retryStartedAtMs = readWaitClock(this);
       for (let attempt = LOCAL_NUM_ZERO; attempt <= MIGRATION_DEFAULT.MAX_RETRY_COUNT; attempt++) {
         try {
           await this.executeCutoverTransaction(refreshedMigrationRow, partitionRows);
@@ -354,7 +357,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
       }
 
       let lastError = null;
-      const retryStartedAtMs = this.now();
+      const retryStartedAtMs = readWaitClock(this);
       for (let attempt = LOCAL_NUM_ZERO; attempt <= MIGRATION_DEFAULT.MAX_RETRY_COUNT; attempt++) {
         const childBudget = this.migrationTimeoutPolicy.allocateOrThrow({
           timeoutBudget: options.timeoutBudget || null,

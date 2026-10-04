@@ -162,6 +162,18 @@ class WaitBoundSpentReporter {
 const DEFAULT_REPORTER = new WaitBoundSpentReporter();
 
 /**
+ * Read a wait's clock from its owner: the owner's injected `now()` when it
+ * has one, else the wall clock. A site reads its start and its elapsed time
+ * through this so that wiring the reporter never adds a hard dependency on
+ * an owner clock to the wait's normal path.
+ * @param {Object} owner - The wait's owner (may lack `now`).
+ * @return {number} Milliseconds.
+ */
+function readWaitClock(owner) {
+  return typeof owner?.now === 'function' ? owner.now() : Date.now();
+}
+
+/**
  * Report a spent wait through the process-wide reporter.
  * @param {Object} logger - Site logger with error(message, context).
  * @param {Object} spent - See WaitBoundSpentReporter#report.
@@ -176,5 +188,6 @@ export {
   WAIT_BOUND_SPENT_OUTCOME,
   WAIT_LAST_OBSERVED,
   WaitBoundSpentReporter,
+  readWaitClock,
   reportWaitBoundSpent,
 };

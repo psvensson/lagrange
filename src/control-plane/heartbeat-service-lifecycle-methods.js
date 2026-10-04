@@ -26,7 +26,10 @@ import {
   isNodeTerminalTransitionCompleted,
   isNodeTerminalTransitionRefused,
 } from './node-terminal-transition-fence.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
 
 // Phase 4 (4.1c): the membership-publication reconcile is only ever triggered on
 // recovering nodes, never on the stable leader — so when those nodes defer to the
@@ -240,7 +243,7 @@ class HeartbeatServiceLifecycleMethods {
     }
     let timeoutHandle = null;
     let settled = false;
-    const startedAtMs = this.now();
+    const startedAtMs = readWaitClock(this);
     return new Promise((resolve, reject) => {
       const finalize = (callback, value) => {
         if (settled) {

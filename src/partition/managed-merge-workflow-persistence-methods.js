@@ -20,7 +20,10 @@ import {
   isRetryableManagedSplitExecutionFailure,
   resolveRetryableManagedSplitExecutionDecisionType,
 } from './managed-split-retry-policy.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const MERGE_SAME_OWNER_RESYNC_WAIT = Object.freeze({
@@ -476,7 +479,7 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @private
    */
   async runMergeOwnerLaneStepWithSameOwnerResync(stepOptions, attempts = 2) {
-    const startedAtMs = this.now();
+    const startedAtMs = readWaitClock(this);
     let lastError = null;
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {

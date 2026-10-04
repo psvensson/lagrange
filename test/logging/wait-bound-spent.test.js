@@ -11,6 +11,7 @@ import {
   WAIT_BOUND_SPENT_OUTCOME,
   WAIT_LAST_OBSERVED,
   WaitBoundSpentReporter,
+  readWaitClock,
 } from '../../src/logging/wait-bound-spent.js';
 
 
@@ -103,5 +104,14 @@ test('the reporter never throws', (t) => {
     wait: 'W', awaited: 'x', boundMs: 1, elapsedMs: 1,
   }), WAIT_BOUND_SPENT_OUTCOME.REPORTER_FAILED);
   t.equal(reporter.reporterFailures, 1);
+  t.end();
+});
+
+test('a wait clock read never requires an owner clock', (t) => {
+  t.equal(readWaitClock({now: () => 42}), 42, 'the injected clock wins');
+  const before = Date.now();
+  const read = readWaitClock({});
+  t.ok(read >= before && read <= Date.now(), 'no owner clock: wall clock');
+  t.ok(Number.isFinite(readWaitClock(null)), 'no owner at all');
   t.end();
 });

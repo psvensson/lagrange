@@ -56,7 +56,7 @@ class JoinReadinessEvaluatorConvergenceMethods {
     const result = await waitForStartupConvergence({
       timeoutMs,
       now: this.now,
-      logger: this.delegates.getLogger(),
+      logger: this.delegates.getLogger?.() ?? null,
       spentWait: JOIN_CANONICAL_READINESS_WAIT,
       scope: {nodeId: this.nodeId},
       describeLastObserved: (_result, _context, error) =>

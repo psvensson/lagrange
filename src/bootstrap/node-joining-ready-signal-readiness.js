@@ -21,7 +21,10 @@ import {
 } from '../control-plane/startup-authority-placement-eligibility.js';
 import {TABLES} from '../constants/index.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
 
 const {
   CDC_REESTABLISHMENT,
@@ -473,7 +476,7 @@ class NodeJoiningReadySignalReadiness
       Math.max(1, Math.floor(this.config.readySignalRetryDelayMs)) :
       JOINING_DEFAULT.readySignalRetryDelayMs;
     let lastError = null;
-    const readySignalStartedAtMs = this.now();
+    const readySignalStartedAtMs = readWaitClock(this);
     const waitLogMessage = JOINING_LOG_MSG.READY_SIGNAL_RETRYING;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       this.recordInfrastructureJoinReadySignalProgress({
@@ -514,7 +517,7 @@ class NodeJoiningReadySignalReadiness
     reportWaitBoundSpent(this.logger, {
       ...READY_SIGNAL_SPENT_WAIT.HEARTBEAT,
       boundMs: null,
-      elapsedMs: this.now() - readySignalStartedAtMs,
+      elapsedMs: readWaitClock(this) - readySignalStartedAtMs,
       lastObserved: {
         attempts: maxAttempts,
         lastError: lastError?.message || STRING.UNKNOWN,

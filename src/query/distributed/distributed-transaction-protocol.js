@@ -15,7 +15,10 @@ import {
   TIMEOUT_ERROR_MESSAGES,
   TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
-import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../../logging/wait-bound-spent.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const TRANSACTION_BUDGET_WAIT = Object.freeze({
@@ -595,7 +598,7 @@ const distributedTransactionProtocolMethods = {
     options = {},
   ) {
     let attempt = 0;
-    const startedAtMs = this.now();
+    const startedAtMs = readWaitClock(this);
     const skipBudgetEnforcement = options.skipBudgetEnforcement === true;
     while (true) {
       if (

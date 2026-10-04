@@ -596,9 +596,9 @@ class SeedCacheHydrationPhase {
       timeoutMs,
       // A wait this node takes, on this node's clock.
       now: resolveHostedNodeClock(d),
-      logger: d.getLogger(),
+      logger: d.getLogger?.() ?? null,
       spentWait: SEED_SYSTEM_LEADERS_IN_CACHE_WAIT,
-      scope: {nodeId: d.getNodeId()},
+      scope: {nodeId: d.getNodeId?.() ?? null},
       describeLastObserved: (readiness, context) => ({
         timeoutKind: context.timeoutKind,
         attempts: context.attempt,
