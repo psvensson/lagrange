@@ -1,0 +1,22 @@
+{
+  "schema": "solve-quest/2",
+  "id": "locking-read-wait-policy-seal-v3",
+  "statement": "The Phase 0.3 locking-read policy has one exact machine/prose transition contract: every transition's owner, action semantics and outcome are mirrored in its architecture row; contention and abort identifiers are canonical and identical to typedOutcomes; localExpiry, reservationPersistence and multiParticipantConflict are explicitly verified; and the design-only proof fails closed if its comparison base is unavailable.",
+  "epic": "release-0-3-queryable-core",
+  "verificationTemplates": ["harness-fidelity", "concurrency-serialization", "recovery-replay"],
+  "doneWhen": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/locking-read-wait-policy-seal-v3.js",
+      "target": 0
+    }
+  },
+  "constraints": [
+    {"id":"supersedes-v2-review","statement":"Supersedes locking-read-wait-policy-seal-v2 after independent PR #91 review rejected its incomplete mirror probe, inconsistent contention identifier, and fail-open shallow path guard. Preserve the accepted fail-fast/no-wait/DTC-participant ownership design."},
+    {"id":"exact-transition-mirror","statement":"Every acquire/conflict/conflict_abort/timeout/cancellation/commit/rollback/crash/recovery row has one owner, action semantics and outcome verified against the corresponding architecture table row."},
+    {"id":"canonical-outcomes","statement":"The conflict transition outcome equals typedOutcomes.contention exactly; conflict_abort equals typedOutcomes.abort exactly."},
+    {"id":"state-fields","statement":"localExpiry, reservationPersistence and multiParticipantConflict are verified exact values, not prose-only claims."},
+    {"id":"fail-closed-path-proof","statement":"The design-only changed-path guard uses a fetched comparison base and any git diff failure fails the job; no masking with || true around the diff command."},
+    {"id":"design-only","statement":"No transaction, SQL execution, PG wire, Raft, lifecycle, membership or formation production behavior changes in B1."}
+  ]
+}
