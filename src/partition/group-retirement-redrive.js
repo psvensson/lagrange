@@ -344,8 +344,6 @@ function createGroupRetirementRedrive(workflow, options) {
 }
 
 export {
-  GroupRetirementRedrive,
-  REDRIVE_LOG_MSG,
   createGroupRetirementRedrive,
   dispatchGroupRetirementRemovals,
   observeSystemNodeRows,
