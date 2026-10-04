@@ -664,9 +664,9 @@ describe('WasmServiceLifecycle', () => {
           successorStart);
       });
 
-      it('a failing start overlapped by a stop leaves a successor\'s port ' +
-        'and diagnostic alone', async () => {
-        const allocator = new PortAllocator();
+      // A lifecycle whose first created replica fails its open (its durable
+      // path lies under a regular file); later replicas open normally.
+      const failingFirstOpenLifecycle = (allocator) => {
         const blocker = path.join(scratchDirectory, 'blocker');
         fs.writeFileSync(blocker, 'not a directory');
         const directories = DataDirectoryManager.getInstance();
@@ -680,8 +680,16 @@ describe('WasmServiceLifecycle', () => {
             ensureWasmServiceDirExists: (serviceId) =>
               directories.ensureWasmServiceDirExists(serviceId),
           }});
-        lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+        const failing = lifecycle.createReplica(makeServiceDef(),
+          makeReplicaConfig());
         failOpen = false;
+        return {lifecycle, failing};
+      };
+
+      it('a failing start overlapped by a stop leaves a successor\'s port ' +
+        'and diagnostic alone', async () => {
+        const allocator = new PortAllocator();
+        const {lifecycle} = failingFirstOpenLifecycle(allocator);
         const failingStart = lifecycle.startReplica('svc-1');
         const stopping = lifecycle.stopReplica('svc-1');
         const successor = lifecycle.createReplica(makeServiceDef(),
@@ -692,6 +700,35 @@ describe('WasmServiceLifecycle', () => {
         assert.equal(refused.started, false, 'the failing open is refused');
         assertSuccessorOwnsServiceId(lifecycle, allocator, successor,
           successorStart);
+      });
+
+      it('a failed start releases its port when the successor that ' +
+        'replaced it never started', async () => {
+        const allocator = new PortAllocator();
+        const {lifecycle, failing} = failingFirstOpenLifecycle(allocator);
+        // Hold the failed start inside its await until a successor (created,
+        // not started) has replaced the failed replica in the map.
+        let admitRefusal = null;
+        const gate = new Promise((resolve) => {
+          admitRefusal = resolve;
+        });
+        const initialize = failing.initialize.bind(failing);
+        failing.initialize = async () => {
+          try {
+            return await initialize();
+          } finally {
+            await gate;
+          }
+        };
+        const failingStart = lifecycle.startReplica('svc-1');
+        await new Promise((resolve) => setImmediate(resolve));
+        const successor = lifecycle.createReplica(makeServiceDef(),
+          makeReplicaConfig());
+        admitRefusal();
+        assert.equal((await failingStart).started, false);
+        assert.equal(lifecycle.getReplica('svc-1'), successor);
+        assert.equal(allocator.allocatedPorts.has('svc-1'), false,
+          'no replica holds the port the failed start allocated');
       });
 
       it('a refused start leaves no diagnostic once its stop removed the ' +

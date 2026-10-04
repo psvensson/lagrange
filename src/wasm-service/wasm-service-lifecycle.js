@@ -53,6 +53,11 @@ const START_DIAGNOSTIC_CODE = Object.freeze({
  */
 const REPLICA_LIFECYCLE_STATE = WASM_SERVICE_REPLICA_STATE;
 // A replica whose stop began: it never starts again (single-use instance).
+// A replica whose start allocated the serviceId's port.
+const PORT_HOLDING_REPLICA_STATES = new Set([
+  WASM_SERVICE_REPLICA_STATE.STARTING,
+  WASM_SERVICE_REPLICA_STATE.READY,
+]);
 const RETIRED_REPLICA_STATES = new Set([
   WASM_SERVICE_REPLICA_STATE.STOPPING,
   WASM_SERVICE_REPLICA_STATE.STOPPED,
@@ -264,13 +269,13 @@ class WasmServiceLifecycle {
 
     // A replica whose stop began is refused typed by its own initialize
     // (REPLICA_RETIRED); a successor is a new replica. Everything after the
-    // await is keyed by serviceId, so it acts only while this replica still
-    // holds the entry: once a stop removed it or a successor replaced it,
-    // the port and the start diagnostic are theirs.
+    // await is keyed by serviceId: the start diagnostic is recorded only
+    // while this replica still holds the entry, and the serviceId's port is
+    // released unless a starting or ready successor now holds it.
     try {
       await replica.initialize();
     } catch (cause) {
-      if (this.activeReplicas.get(serviceId) === replica) {
+      if (!this.successorHoldsPort(serviceId, replica)) {
         this.portAllocator.release(serviceId);
       }
       return this.refuseStart(serviceId, startOptions, {
@@ -302,6 +307,21 @@ class WasmServiceLifecycle {
       [START_RESULT_FIELD.ENDPOINT]: endpoint,
       [START_RESULT_FIELD.DIAGNOSTIC]: null,
     };
+  }
+
+  /**
+   * Whether a replica other than `replica` holds the serviceId's port: the
+   * allocation is per serviceId, and a starting or ready successor
+   * allocated it before its own initialization.
+   * @param {string} serviceId
+   * @param {WasmServiceReplica} replica
+   * @return {boolean}
+   * @private
+   */
+  successorHoldsPort(serviceId, replica) {
+    const current = this.activeReplicas.get(serviceId);
+    return Boolean(current) && current !== replica &&
+      PORT_HOLDING_REPLICA_STATES.has(current.lifecycleState);
   }
 
   /**
