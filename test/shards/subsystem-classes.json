@@ -12,7 +12,7 @@
     "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 256,
+    "placement-rebalance": 254,
     "query-sql": 164,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -22,13 +22,13 @@
     "storage-raft": 99,
     "test-infrastructure": 139,
     "transactions": 15,
-    "transport-messaging": 85,
+    "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2194,
-  "digest": "fnv1a32-0d7a2820",
+  "censusSize": 2193,
+  "digest": "fnv1a32-b33161b0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c9fa0d71",
+  "observationDigest": "fnv1a32-80634a1b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -975,7 +975,7 @@
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "cdc-metadata",
     "test/integration/cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
-    "test/integration/concurrent-move-replica-assignment.integration.test.js": "placement-rebalance",
+    "test/integration/concurrent-join-message-group-assignment.integration.test.js": "transport-messaging",
     "test/integration/control-plane-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/convergence-control-snapshot.integration.test.js": "control-plane",
     "test/integration/create-table-partition-provisioning.integration.test.js": "storage-partition",
@@ -998,7 +998,6 @@
     "test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js": "services-runtime",
     "test/integration/minimal-deployment-call-cell-production-wiring.integration.test.js": "services-runtime",
     "test/integration/minimal-deployment-runtime-access-policy-live-validation.integration.test.js": "services-runtime",
-    "test/integration/move-replica-handoff.integration.test.js": "placement-rebalance",
     "test/integration/multi-node-cluster.integration.test.js": "distributed-harness",
     "test/integration/multi-node-raft-replication.integration.test.js": "storage-raft",
     "test/integration/node-join-convergence-slo.integration.test.js": "bootstrap-membership",
@@ -2652,6 +2651,13 @@
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js",
         "test/integration/helpers/cluster-test-helpers.js"
+      ]
+    },
+    "test/bootstrap/join-message-group-phase.test.js": {
+      "files": [
+        "src/node/replica-state-machine.js",
+        "test/bootstrap/node-joining-service-test-support.js",
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/bootstrap/join-resume-replica-lifecycle-owner.test.js": {
@@ -6459,7 +6465,7 @@
         "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
-    "test/integration/concurrent-move-replica-assignment.integration.test.js": {
+    "test/integration/concurrent-join-message-group-assignment.integration.test.js": {
       "files": [
         "src/bootstrap/bootstrap-api-constants.js",
         "src/bootstrap/bootstrap-constants.js",
@@ -6705,11 +6711,6 @@
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasm-component-driver.js"
-      ]
-    },
-    "test/integration/move-replica-handoff.integration.test.js": {
-      "files": [
-        "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
     "test/integration/multi-node-cluster.integration.test.js": {

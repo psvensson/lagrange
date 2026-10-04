@@ -190,6 +190,20 @@ Prefer using the same operation port and runtime owner as partitions, with a
 message-group-specific application callback and explicitly owned local durable
 storage.
 
+Open obligation (owner decision 2026-10-04, identity-reuse safety fix): a
+message-group replica is no longer moved to a joiner (MOVE_REPLICA re-opened a
+committed raft identity on an empty log with no conf change: vote amnesia, a
+trapped core, two leaders in one term). Every joiner hosts its own group and
+mg-1 stays entirely on the seed. That is an availability regression accepted
+ONLY as an interim state: mg-1 is not replicated off the seed, and its leader
+runs the rebalancing scheduler, so seed loss leaves mg-1 without quorum. The
+next quest inside this epic is a fresh-identity ADD and promotion path for
+message groups (a new raft id as a learner, caught up, promoted through a
+committed conf change), never a revival of an identity-keeping move. The seed
+side's now-unreachable MOVE reservation/handoff machinery
+(`src/bootstrap/owners/move-replica-*`, its bootstrap-api and register-service
+handoff wiring) is deleted with that quest or before it.
+
 ### Generic/worker/WASM replica helpers
 
 `RaftGroup`, `RaftReplicaBase`, worker partition/message-group services, and

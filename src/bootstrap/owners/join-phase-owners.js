@@ -14,7 +14,6 @@ const JOIN_PHASE_OWNER = Object.freeze({
   CONTACT_SEED: 'contactSeed',
   CONNECT_WEBSOCKET: 'connectWebSocket',
   CREATE_SELF_HOSTED_MESSAGE_GROUP: 'createSelfHostedMessageGroup',
-  JOIN_EXISTING_MESSAGE_GROUP: 'joinExistingMessageGroup',
   WAIT_FOR_LEADERSHIP: 'waitForLeadership',
   QUERY_SYSTEM_STATE: 'querySystemState',
 });
@@ -24,8 +23,6 @@ const PHASE_OWNER_FIELD = Object.freeze({
   [JOIN_PHASE_OWNER.CONNECT_WEBSOCKET]: 'connectWebSocketPhase',
   [JOIN_PHASE_OWNER.CREATE_SELF_HOSTED_MESSAGE_GROUP]:
     'createMessageGroupPhase',
-  [JOIN_PHASE_OWNER.JOIN_EXISTING_MESSAGE_GROUP]:
-    'joinMessageGroupRuntimeOwner',
   [JOIN_PHASE_OWNER.WAIT_FOR_LEADERSHIP]: 'waitForLeadershipPhase',
   [JOIN_PHASE_OWNER.QUERY_SYSTEM_STATE]: 'querySystemStatePhase',
 });
@@ -35,8 +32,6 @@ const PHASE_METHOD = Object.freeze({
   [JOIN_PHASE_OWNER.CONNECT_WEBSOCKET]: 'phaseConnectWebSocket',
   [JOIN_PHASE_OWNER.CREATE_SELF_HOSTED_MESSAGE_GROUP]:
     'phaseCreateSelfHostedMessageGroup',
-  [JOIN_PHASE_OWNER.JOIN_EXISTING_MESSAGE_GROUP]:
-    'phaseJoinExistingMessageGroup',
   [JOIN_PHASE_OWNER.WAIT_FOR_LEADERSHIP]: 'phaseWaitForLeadership',
   [JOIN_PHASE_OWNER.QUERY_SYSTEM_STATE]: 'phaseQuerySystemState',
 });

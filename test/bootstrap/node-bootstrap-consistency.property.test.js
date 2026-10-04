@@ -205,14 +205,12 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       t.equal(bootstrapResponse.seedNodeId, seedNodeId, 'should have seed node ID');
 
       // Requirement 7.4: Seed node determines message group assignment
-      // Requirement 7.5: Seed node assigns to existing or creates new message group
+      // Requirement 7.5: the joiner hosts its own message group (a
+      // message-group identity is never moved to it).
       const assignment = bootstrapResponse.messageGroupAssignment;
       t.ok(assignment, 'should have message group assignment');
-      t.ok(
-        assignment.strategy === AssignmentStrategy.CREATE_SELF_HOSTED ||
-        assignment.strategy === AssignmentStrategy.MOVE_REPLICA,
-        'should have valid assignment strategy',
-      );
+      t.equal(assignment.strategy, AssignmentStrategy.CREATE_SELF_HOSTED,
+        'should have valid assignment strategy');
 
       // Verify system table snapshots are included
       t.ok(

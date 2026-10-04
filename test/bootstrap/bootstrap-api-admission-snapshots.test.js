@@ -305,10 +305,12 @@ test('BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED', async (t) =>
   await api.shutdown();
 });
 
-test('BootstrapAPI - bootstrap with MOVE_REPLICA strategy', async (t) => {
+// W8 (identity-reuse safety fix, A3): with the seed's mg-1 all on the seed
+// the joiner hosts its own group. This test once pinned the MOVE of an mg-1
+// replica to the joiner.
+test('BootstrapAPI - bootstrap never moves a seed message-group replica', async (t) => {
   initializeTestEnvironment();
 
-  // System table cache with message group services for MOVE_REPLICA assignment
   // The system cache (fed by CDC) is the single source of truth
   const mockSystemTableCache = {
     data: {
@@ -385,17 +387,13 @@ test('BootstrapAPI - bootstrap with MOVE_REPLICA strategy', async (t) => {
   t.ok(body.messageGroupAssignment, 'should have message group assignment');
   t.equal(
     body.messageGroupAssignment.strategy,
-    BootstrapStrategy.MOVE_REPLICA,
-    'should use MOVE_REPLICA strategy when movable replicas exist',
+    BootstrapStrategy.CREATE_SELF_HOSTED,
+    'the joiner hosts its own group',
   );
-  t.equal(body.messageGroupAssignment.groupId, 'mg-1', 'should target existing group');
-  t.equal(
-    body.messageGroupAssignment.sourceNodeId,
-    'seed-node-1',
-    'should identify source node',
-  );
-  t.ok(body.messageGroupAssignment.replicaToMove, 'should identify replica to move');
-  t.ok(body.messageGroupAssignment.replicaAddresses, 'should have replica addresses');
+  t.not(body.messageGroupAssignment.groupId, 'mg-1',
+    'the joiner does not join the seed group');
+  t.notOk(body.messageGroupAssignment.sourceNodeId, 'no source node');
+  t.notOk(body.messageGroupAssignment.replicaToMove, 'no replica is moved');
 
   await api.shutdown();
 });
@@ -796,21 +794,15 @@ test(
       'message group topology should come from authoritative local services rows',
     );
 
+    // W8: whatever the topology, a new node hosts its own group (this
+    // once asserted a MOVE of one of the seed's two remaining replicas).
     const assignment = api.determineMessageGroupAssignment('new-node-1');
     t.equal(
       assignment.strategy,
-      BootstrapStrategy.MOVE_REPLICA,
-      'assignment should still use MOVE_REPLICA when one source node has two replicas',
+      BootstrapStrategy.CREATE_SELF_HOSTED,
+      'a new node hosts its own group',
     );
-    t.not(
-      assignment.replicaToMove,
-      'mg-1-r1',
-      'assignment must not reserve a replica that authoritative services rows already show as moved',
-    );
-    t.ok(
-      ['mg-1-r2', 'mg-1-r3'].includes(assignment.replicaToMove),
-      'assignment should choose one of the replicas still owned by the seed',
-    );
+    t.notOk(assignment.replicaToMove, 'no replica is moved');
 
     await api.shutdown();
   },

@@ -21,8 +21,6 @@ const CUTOVER_GUARD_METHOD = Object.freeze({
   BOOTSTRAP_PARTITIONS: 'async phasePartitions() {',
   JOIN_SELF_HOSTED:
     'async phaseCreateSelfHostedMessageGroup(assignment) {',
-  JOIN_EXISTING:
-    'async phaseJoinExistingMessageGroup(assignment) {',
   ADMIN_HANDLE_MESSAGE: 'handleMessage(clientInfo, data) {',
   ADMIN_HANDLE_DISPATCHABLE: 'async handleDispatchableAdminMessage(clientInfo, message) {',
 });
@@ -137,24 +135,16 @@ describe('Unified service lifecycle hard-cutover guardrails', () => {
     const selfHostedSource = readFile(
       CUTOVER_GUARD_FILE.CREATE_MESSAGE_GROUP_PHASE,
     );
-    const joinExistingSource = readFile(
+    const joinRuntimeSource = readFile(
       CUTOVER_GUARD_FILE.JOIN_MESSAGE_GROUP_RUNTIME_OWNER,
     );
     const selfHostedBody = extractMethodBody(
       selfHostedSource,
       CUTOVER_GUARD_METHOD.JOIN_SELF_HOSTED,
     );
-    const joinExistingBody = extractMethodBody(
-      joinExistingSource,
-      CUTOVER_GUARD_METHOD.JOIN_EXISTING,
-    );
 
     assert.equal(
       selfHostedBody.includes(CUTOVER_GUARD_PATTERN.NEW_MESSAGE_GROUP_SERVICE),
-      false,
-    );
-    assert.equal(
-      joinExistingBody.includes(CUTOVER_GUARD_PATTERN.NEW_MESSAGE_GROUP_SERVICE),
       false,
     );
     assert.equal(
@@ -166,21 +156,20 @@ describe('Unified service lifecycle hard-cutover guardrails', () => {
       true,
     );
     assert.equal(
-      joinExistingBody.includes(CUTOVER_GUARD_PATTERN.QUEUE_JOIN_REPLICA),
-      true,
-    );
-    assert.equal(
-      joinExistingBody.includes(CUTOVER_GUARD_PATTERN.TRIGGER_JOIN_RECONCILER),
-      true,
-    );
-    assert.equal(
       selfHostedBody.includes(CUTOVER_GUARD_PATTERN.START_ELECTION),
       false,
     );
-    assert.equal(
-      joinExistingBody.includes(CUTOVER_GUARD_PATTERN.START_ELECTION),
-      false,
-    );
+    // The self-hosted phase is the only join entrypoint that starts a
+    // message-group replica: the runtime owner that once started a moved
+    // one (identity-reuse safety fix, A3) starts none.
+    for (const pattern of [
+      CUTOVER_GUARD_PATTERN.NEW_MESSAGE_GROUP_SERVICE,
+      CUTOVER_GUARD_PATTERN.QUEUE_JOIN_REPLICA,
+      CUTOVER_GUARD_PATTERN.TRIGGER_JOIN_RECONCILER,
+      CUTOVER_GUARD_PATTERN.START_ELECTION,
+    ]) {
+      assert.equal(joinRuntimeSource.includes(pattern), false, pattern);
+    }
   });
 
   it('keeps admin ingress on one dispatchable translation path', () => {

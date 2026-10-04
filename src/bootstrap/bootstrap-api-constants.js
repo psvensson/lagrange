@@ -104,8 +104,6 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
   CACHE_UNAVAILABLE_GROUPS: 'System table cache not available for message group lookup',
   CACHE_UNAVAILABLE_PARTITIONS: 'System table cache not available for partition leader lookup',
   JOIN_ASSIGNMENT: `${BOOTSTRAP_LOG_PREFIX.JOIN_DEBUG} Determining message group assignment`,
-  JOIN_MOVABLE_REPLICA:
-    `${BOOTSTRAP_LOG_PREFIX.JOIN_DEBUG} Found movable replica - using MOVE_REPLICA strategy`,
   LEADERS_NOT_READY: 'Bootstrap blocked - missing raft group leaders',
   UPDATE_NODE_STATUS_UNSUPPORTED:
     'updateNodeStatus is not supported - use CDC integration service',

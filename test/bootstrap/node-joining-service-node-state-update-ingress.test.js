@@ -137,7 +137,7 @@ test('NodeJoiningService - resolves control plane target from kernel bootstrap i
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         replicaToMove: 'mg-1-r1',
         peerAddresses: [
@@ -177,7 +177,7 @@ test('NodeJoiningService - uses kernel bootstrap ingress when no local target ex
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         replicaToMove: 'mg-1-r1',
         peerAddresses: [
@@ -211,7 +211,7 @@ test('NodeJoiningService - does not self-target move-replica heartbeats ' +
   service.bootstrapResponse = {
     seedNodeId: 'seed-node-1',
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       replicaToMove: 'mg-1-r1',
       peerAddresses: [
@@ -353,7 +353,7 @@ test('NodeJoiningService - prefers local kernel ingress for NODE_STATE_UPDATE',
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         replicaToMove: 'mg-1-r1',
         peerAddresses: [
@@ -430,7 +430,7 @@ test('NodeJoiningService - resolves ordered control-plane target candidates ' +
   service.bootstrapResponse = {
     seedNodeId: 'seed-node-1',
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       replicaToMove: 'mg-1-r1',
       peerAddresses: [
@@ -484,7 +484,7 @@ test('NodeJoiningService - NODE_STATE_UPDATE prefers local non-leader ingress ' 
   service.bootstrapResponse = {
     seedNodeId: 'seed-node-1',
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       replicaToMove: 'mg-1-r2',
       peerAddresses: [
@@ -541,7 +541,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE prefers remote ' +
   service.bootstrapResponse = {
     seedNodeId: 'seed-node-1',
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       replicaToMove: 'mg-1-r2',
       peerAddresses: [
@@ -595,7 +595,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
   service.bootstrapResponse = {
     seedNodeId: 'seed-node-1',
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       replicaToMove: 'mg-1-r2',
       peerAddresses: [
@@ -651,7 +651,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
   service.bootstrapResponse = {
     seedNodeId: 'seed-node-1',
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       replicaToMove: 'mg-1-r2',
       peerAddresses: [
@@ -718,7 +718,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE keeps local ' +
   service.bootstrapResponse = {
     seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
     messageGroupAssignment: {
-      strategy: AssignmentStrategy.MOVE_REPLICA,
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
       groupId: 'mg-1',
       replicaToMove: 'mg-1-r2',
       peerAddresses: [
@@ -929,7 +929,7 @@ test('NodeJoiningService - excludes disconnected control-plane ingress candidate
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           'seed-node-1/message-group/mg-1-r3',
@@ -978,7 +978,7 @@ test('NodeJoiningService - retries NODE_STATE_UPDATE on stale control-plane targ
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
       },
     };
@@ -1073,7 +1073,7 @@ test('NodeJoiningService - reuses confirmed control-plane ingress after stale-ta
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
         peerAddresses: [
           'stale-node/message-group/mg-1-r9',
@@ -1140,7 +1140,7 @@ test('NodeJoiningService - retries CONNECTED NODE_STATE_UPDATE once on the same 
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
       },
     };
@@ -1199,7 +1199,7 @@ test('NodeJoiningService - retries heartbeat-recovery NODE_STATE_UPDATE on alter
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
       },
     };
@@ -1295,7 +1295,7 @@ test('NodeJoiningService - retries heartbeat-recovery NODE_STATE_UPDATE on stale
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       messageGroupAssignment: {
-        strategy: AssignmentStrategy.MOVE_REPLICA,
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
         groupId: 'mg-1',
       },
     };

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2177,
+    "ordinary": 2176,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2194,
-  "digest": "fnv1a32-1396ce19",
+  "censusSize": 2193,
+  "digest": "fnv1a32-ce024d99",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -955,7 +955,7 @@
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "ordinary",
     "test/integration/cdc-propagation.integration.test.js": "ordinary",
     "test/integration/cdc-subscription-catchup.integration.test.js": "ordinary",
-    "test/integration/concurrent-move-replica-assignment.integration.test.js": "ordinary",
+    "test/integration/concurrent-join-message-group-assignment.integration.test.js": "ordinary",
     "test/integration/control-plane-rebalance.integration.test.js": "ordinary",
     "test/integration/convergence-control-snapshot.integration.test.js": "ordinary",
     "test/integration/create-table-partition-provisioning.integration.test.js": "ordinary",
@@ -978,7 +978,6 @@
     "test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js": "ordinary",
     "test/integration/minimal-deployment-call-cell-production-wiring.integration.test.js": "ordinary",
     "test/integration/minimal-deployment-runtime-access-policy-live-validation.integration.test.js": "ordinary",
-    "test/integration/move-replica-handoff.integration.test.js": "ordinary",
     "test/integration/multi-node-cluster.integration.test.js": "ordinary",
     "test/integration/multi-node-raft-replication.integration.test.js": "ordinary",
     "test/integration/node-join-convergence-slo.integration.test.js": "ordinary",
