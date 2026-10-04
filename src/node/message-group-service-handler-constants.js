@@ -17,17 +17,9 @@ const MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS = Object.freeze({
 const MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG = Object.freeze({
   INITIALIZING: 'Initializing MessageGroupServiceHandler',
   MESSAGE_RECEIVED: 'MessageGroupServiceHandler received message',
-  CREATE_REQUEST: 'Handling CREATE_REPLICA for message group',
-  CREATE_MISSING_FIELDS:
-    'CREATE_REPLICA missing required fields for message group',
-  CREATE_ALREADY_ACTIVE:
-    'Message-group replica already exists in active state',
-  CREATE_IN_PROGRESS:
-    'Message-group replica creation already in progress',
-  CREATE_TOPOLOGY_INVALID:
-    'CREATE_REPLICA rejected due to incomplete message-group topology',
+  CREATE_REFUSED:
+    'CREATE_REPLICA refused: message-group membership change unsupported until the fresh-identity ADD path exists',
   OPERATION_IN_PROGRESS: 'Operation already in progress',
-  ASYNC_CREATE_FAILED: 'Async message-group replica creation failed',
   CREATE_COMPLETED: 'Message-group replica creation completed',
   CREATE_FAILED: 'Message-group replica creation failed',
   REMOVE_REQUEST: 'Handling REMOVE_REPLICA for message group',
@@ -55,8 +47,6 @@ const MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG = Object.freeze({
 
 const MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
   UNKNOWN_MESSAGE_TYPE: (type) => `Unknown message type: ${type}`,
-  CREATE_REQUIRED_FIELDS:
-    'CREATE_REPLICA requires operationId, groupId/entityId, and replicaId',
   REMOVE_REQUIRED_FIELDS:
     'REMOVE_REPLICA requires operationId, groupId/entityId, and replicaId',
   CREATE_REQUIRED:
@@ -69,8 +59,6 @@ const MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
     'MessageGroupServiceHandler requires cdcIntegrationService',
   CACHE_REQUIRED:
     'MessageGroupServiceHandler requires systemTableCache',
-  CREATE_TOPOLOGY_REQUIRED: (groupId, replicaId) =>
-    `CREATE_REPLICA for ${groupId} requires canonical peer topology for ${replicaId}`,
 });
 
 const MESSAGE_GROUP_SERVICE_HANDLER_WORKFLOW = Object.freeze({

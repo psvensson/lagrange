@@ -1334,9 +1334,10 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         ),
       };
 
+      // A user partition: message-group planning is parked (C3 refusal).
       const rebalancer = createTestRebalancer({
-        entityId: 'mg-node-1',
-        entityType: EntityType.MESSAGE_GROUP,
+        entityId: 'user_orders-p1',
+        entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
           {node_id: 'node-1', status: NodeStatus.ACTIVE},
