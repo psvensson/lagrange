@@ -14,3 +14,4 @@ import './cluster-snapshot-replay-owner-handoff-test-cases.js';
 import './cluster-active-gate-progress-witness-test-cases.js';
 import './cluster-load-readiness-priority-recovery-test-cases.js';
 import './cluster-reachability-admin-proof-gate-test-cases.js';
+// verify-osa-a10 narrow probe (base)
