@@ -311,11 +311,24 @@ test('W4g a record with no frozen set whose leader already retired: ' +
   'listed as membership-unavailable while no leader answers');
   t.same(world.terminals, [], 'nothing completed on an unread membership');
   t.same(world.partitionRowDeletes, [], 'the partition row is kept');
-  // The survivors elect; the new leader's partitions-row update is the
-  // event that re-runs it.
-  await settleTurns(world);
+  // The survivors elect (drained to, in bounded rounds: a slower host needs
+  // more turns); the new leader's partitions-row publication is the event
+  // that re-runs it.
+  const survivorLeader = () => world.members.slice(1).find((replicaId) => {
+    try {
+      return world.cluster.coreStatus(replicaId).lead ===
+        world.cluster.raftPeerIdOf(replicaId);
+    } catch {
+      return false;
+    }
+  }) ?? null;
+  for (let round = 0; round < 400 && survivorLeader() === null; round += 1) {
+    await settleTurns(world, 1);
+  }
+  t.ok(survivorLeader(), 'setup: the survivors elected a leader');
   world.emitSystemRow('partitions', 'UPDATE',
-    {partition_id: world.partitionId});
+    {partition_id: world.partitionId,
+      leader_node_id: `${survivorLeader()}-node`});
   await driveUntilRemoved(world, world.members.slice(1));
   for (const replicaId of world.members.slice(1)) {
     assertMemberRetired(t, world, replicaId, 'W4g');
