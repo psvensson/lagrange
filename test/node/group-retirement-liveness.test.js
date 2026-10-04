@@ -206,6 +206,26 @@ test('L1b the previous owner\'s lease is still live: one re-scan at its ' +
   'the lease-expiry resume is a WARN naming its trigger');
 });
 
+test('L1c a running owner resumes on the record change that makes it ' +
+  'retiring', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'live-l1c', voters: 3});
+  const shape = install(world);
+  // The cutover epoch is not promoted yet: nothing retires at owner start.
+  const promoted = world.tablesRows.get(TABLE_ID);
+  world.setTablesRow({...promoted, active_partition_version: 1});
+  const owner = await openOwner(world, shape, {resume: true});
+  await settle(world, 3);
+  t.same(world.deliveries, [], 'setup: nothing driven at owner start');
+  // The record changes (the cutover's epoch promotion lands in the view).
+  world.setTablesRow(promoted);
+  t.equal(await driveUntilRemoved(world, world.members), true,
+    'the record change resumed the dissolution');
+  t.ok(logsOf(owner, 'warn', /resumed from the durable record/u)
+    .some((line) => line.fields?.trigger === 'record-changed'),
+  'triggered by the record change');
+  t.not(recordState(world), shape.state, 'the record left cutover-active');
+});
+
 test('L3 a departed node re-checks; the member\'s deleted services row ' +
   'ends the step; exhaustion is one ERROR and stays re-drivable',
 async (t) => {
