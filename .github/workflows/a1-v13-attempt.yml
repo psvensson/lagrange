@@ -34,7 +34,7 @@ jobs:
       - name: Prove v13 closure
         run: node scripts/checks/partition-key-ordering-owner-completion-v13.js
       - name: Focused routing tests
-        run: npx tap --no-check-coverage --timeout=120 test/partition/partition-split-routing.test.js
+        run: npx tap --timeout=120 test/partition/partition-split-routing.test.js
       - name: Candidate static guards
         run: |
           node node_modules/eslint/bin/eslint.js --no-warn-ignored src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
