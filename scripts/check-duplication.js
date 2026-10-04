@@ -205,8 +205,10 @@ const RATCHET_TARGETS = [
     // keeps-evidence, checker hint); the lower value here supersedes it.
     // 2026-10-04: tightened 717/27288 -> 713/27072 on the checker's hint
     // after the message-group MOVE_REPLICA tests were deleted.
-    baselineCloneGroupCount: 713,
-    baselineDuplicatedLineCount: 27072,
+    // 2026-10-04: tightened 713/27072 -> 708/26760 on the checker's hint
+    // (shared convergence stub policy targets in assertions-test-helpers).
+    baselineCloneGroupCount: 708,
+    baselineDuplicatedLineCount: 26760,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
