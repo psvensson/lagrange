@@ -128,16 +128,22 @@ function isRefusedRun(data, scenario) {
 
 // Why the latest sample measured nothing: a refused run names its refusal
 // (not run, with the topology reason), never "no report for the scenario".
+function refusalOf(entry) {
+  return entry?.refusal || entry?.current?.refusal || null;
+}
+
+function refusalReasonOf(entry) {
+  return refusalOf(entry)?.reason || entry?.verdictReason ||
+    entry?.current?.verdictReason || null;
+}
+
 function nonMeasuringReasonOf(data, scenario) {
-  if (isRefusedRun(data, scenario)) {
-    const entry = scenarioEntry(data, scenario);
-    const refusal = entry?.refusal || entry?.current?.refusal;
-    const refusalReason = refusal?.reason || entry?.verdictReason ||
-      entry?.current?.verdictReason;
-    return refusalReason ? `${REASON.REFUSED_NOT_RUN}: ${refusalReason}` :
-      REASON.REFUSED_NOT_RUN;
+  if (!isRefusedRun(data, scenario)) {
+    return verdictReasonOf(data, scenario) || REASON.NO_REPORTS;
   }
-  return verdictReasonOf(data, scenario) || REASON.NO_REPORTS;
+  const refusalReason = refusalReasonOf(scenarioEntry(data, scenario));
+  return refusalReason ? `${REASON.REFUSED_NOT_RUN}: ${refusalReason}` :
+    REASON.REFUSED_NOT_RUN;
 }
 
 function isNonMeasuringRun(data, scenario) {
