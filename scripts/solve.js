@@ -21,7 +21,7 @@ import {fileURLToPath} from 'node:url';
 
 import {ENTRY_TYPE, QUEST_STATUS} from './solve/schema.js';
 import {
-  SolveError, board, evidenceAdd, evidenceDelete, land, note, probe, start,
+  SolveError, admit, board, evidenceAdd, evidenceDelete, land, note, probe, start,
 } from './solve/commands.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,7 +35,7 @@ const LINE_SEPARATOR = '\n';
 const EVIDENCE_ADD = 'add';
 const EVIDENCE_DELETE = 'delete';
 const AUTHORIZE_ASSET_FLAG = 'authorize-asset';
-const USAGE = 'usage: solve <start|note|probe|land|evidence|board> [--id <quest>] [--json]';
+const USAGE = 'usage: solve <start|note|probe|land|admit|evidence|board> [--id <quest>] [--json]';
 const NOTE_USAGE = 'note needs one of --finding, --attempt, --verification, --blocked, ' +
   '--exhausted, --superseded';
 const EVIDENCE_USAGE = 'usage: solve evidence add <file> --id <quest> ' +
@@ -105,6 +105,10 @@ function cmdLand(root, {flags}) {
   return land(root, {id: flags.id, log: (text) => process.stderr.write(text)});
 }
 
+function cmdAdmit(root, {flags}) {
+  return admit(root, {base: flags.base, head: flags.head});
+}
+
 function cmdEvidence(root, {flags, positional}) {
   if (!positional[1]) throw new SolveError(EVIDENCE_USAGE);
   if (positional[0] === EVIDENCE_DELETE) {
@@ -126,6 +130,7 @@ const COMMANDS = {
   'note': cmdNote,
   'probe': cmdProbe,
   'land': cmdLand,
+  'admit': cmdAdmit,
   'evidence': cmdEvidence,
   'board': cmdBoard,
 };

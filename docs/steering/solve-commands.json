@@ -13,8 +13,12 @@
     "usage": "node scripts/solve.js probe --id <quest> | --epic <epic> [--json]"
   },
   "land": {
-    "summary": "Land a sealed quest: the probe must be green; a standing rejection blocks; src/ changes need a current approving verification; the altitude budget, the epic's authorizes scope, the coupled-pair guard and the changed-path static checkers must pass; then owner inventories and generated test metadata refresh, the canonical import graph verifies, npm test runs, the change commits with LAGRANGE_SOLVER_LANDING=1, and a terminal solved entry is written. Never pushes.",
+    "summary": "Land a sealed quest: the probe must be green; a standing rejection blocks; src/ changes need a current approving verification; the altitude budget, the epic's authorizes scope, the coupled-pair guard, the changed-path static checkers and the quest's own record (its closed shape as if closed, every quest log append-only) must pass; then owner inventories and generated test metadata refresh, the canonical import graph verifies, npm test runs, the change commits with LAGRANGE_SOLVER_LANDING=1, and a terminal solved entry binding the commit's exact src/ change is written. Never pushes.",
     "usage": "node scripts/solve.js land --id <quest> [--json]"
+  },
+  "admit": {
+    "summary": "Judge, read-only, what a push brings to main: every commit in base..head that changes a path under src/ must be a solver landing (its own tree appends a terminal solved entry binding exactly that src/ change, in a sealed log with a current approving verification), or be brought by a merge with an exact-SHA corpus-full-v1 or release-full-v1 receipt for the merge commit and a Quest: trailer naming a sealed, verified quest. Refuses naming each commit, its src/ paths and why; the pre-push hook runs it for every push that updates main.",
+    "usage": "node scripts/solve.js admit --base <remote main sha> --head <pushed main sha> [--json]"
   },
   "evidence": {
     "summary": "Upload a file to the solve-evidence pre-release, verify it by re-download and re-hash, and record an evidence finding with the sha256 reference and URL; nothing is recorded on a mismatch.",

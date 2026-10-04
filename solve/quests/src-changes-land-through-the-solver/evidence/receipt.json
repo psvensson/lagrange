@@ -1,0 +1,103 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "src-changes-land-through-the-solver",
+  "status": "pass",
+  "testFileDigests": {
+    "test/solve/commands.test.js": "159b86769cdb6fe89db6f61ae155411fa63cf48f3c548c9c2123d13a7d453fca",
+    "test/scripts/pre-push-hook-control-flow.test.js": "6dd5a71d59f7ee48e2daf61aeffbe0491efdb2985fabbb8ab122356c50029c80"
+  },
+  "generatedAt": "2026-10-04T08:14:22.785Z",
+  "receipts": [
+    {
+      "id": "direct-src-commit-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a direct commit that changes src/, naming the commit and its path$\" test/solve/commands.test.js",
+      "detail": "a direct commit changing src/ is refused by the real solve CLI, named with its subject and src/ path",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "forged-landing-signals-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses typed landing trailers and hand-written terminal entries$\" test/solve/commands.test.js",
+      "detail": "typed Quest/Epic/Sealed-At trailers, an unbound typed terminal entry, a real binding over other bytes, and a replay of the landed change with no new terminal entry are each refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "landing-log-without-approval-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a correctly bound terminal entry whose log records no current approval$\" test/solve/commands.test.js",
+      "detail": "a correctly bound landing commit whose log lacks the approving verification is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "real-landing-admitted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits a real solver landing of a src/ change$\" test/solve/commands.test.js",
+      "detail": "a commit made by the real land of a sealed, verified quest changing src/ is admitted as a solver landing",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "non-src-direct-commit-admitted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits direct commits that touch only docs, tests and scripts$\" test/solve/commands.test.js",
+      "detail": "a direct commit of docs, tests and scripts is admitted",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "long-lived-merge-admission",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits a long-lived branch merge only under its exact-SHA receipt and governing quest$\" test/solve/commands.test.js",
+      "detail": "a merge bringing direct src/ commits is refused without a receipt, with a receipt for the branch tip only, and with a receipt but no governing quest; with an exact-SHA receipt for the merge and a Quest: trailer naming a sealed verified quest it and its brought commits are admitted",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "merge-of-landings-and-hand-resolved-merge",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits a clean merge of solver landings and refuses a merge that resolves src/ itself$\" test/solve/commands.test.js",
+      "detail": "a clean merge of landings needs no receipt; a merge whose src/ differs from every parent is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "src-path-shapes-judged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit judges a rename into or out of src/, a deletion and a symlink as src/ changes$\" test/solve/commands.test.js",
+      "detail": "renames into and out of src/, a deletion and a file replaced by a symlink are refused; a symlink outside src/ is not a src/ change",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "ancestry-cut-off",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit judges only what the push brings: commits on the remote main are not judged$\" test/solve/commands.test.js",
+      "detail": "a direct src/ commit at or before the base is not judged; the same commit inside the range is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "main-push-runs-the-admission-first",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a main push is judged by the solver-landing admission before any other content stage$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "the real hook runs admit over exactly the remote and local main shas first among content stages, also beside another ref, and a refusal stops the push there",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "non-main-push-not-admitted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a push that does not update main never runs the solver-landing admission$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "a branch push, preserved or proved on request, never runs the admission",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "land-refuses-unrequired-quest-file",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^land refuses a quest holding a file its sealed claim does not require, before any proof$\" test/solve/commands.test.js",
+      "detail": "land refuses naming the unrequired evidence file before the proof, index untouched, quest open; the twin lands and closes clean",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "land-refuses-rewritten-quest-log",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^land refuses to commit a rewritten quest log$\" test/solve/commands.test.js",
+      "detail": "land refuses a committed quest log rewritten in the working tree",
+      "testFile": "test/solve/commands.test.js"
+    }
+  ]
+}

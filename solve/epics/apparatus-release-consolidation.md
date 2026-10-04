@@ -33,6 +33,7 @@ quests:
   - fleet-capability-discovery
   - test-placement
   - lab-readiness-by-dependency-graph
+  - src-changes-land-through-the-solver
 authorizes:
   - scripts
   - test
@@ -45,6 +46,7 @@ authorizes:
   - RELEASE.md
   - CHANGELOG.md
   - CLAUDE.md
+  - AGENTS.md
   - package.json
   - package-lock.json
   - src/raft

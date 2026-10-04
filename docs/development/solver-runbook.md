@@ -20,9 +20,11 @@ node scripts/solve.js probe --id <id>       # measures doneWhen, changes nothing
 node scripts/solve.js land  --id <id>       # guards, tests, commits; never pushes
 ```
 
-Two more exist: `evidence add <path> --quest <id>` uploads a file too large for
-git and records it only after re-download and re-hash, and `board` lists open
-epics and quests. There are no others; anything else you have seen written down
+Three more exist: `evidence add <path> --quest <id>` uploads a file too large for
+git and records it only after re-download and re-hash, `board` lists open
+epics and quests, and `admit --base <sha> --head <sha>` judges, read-only,
+whether every `src/` change in that range is a solver landing (the main push
+gate runs it). There are no others; anything else you have seen written down
 is a retired v1 operation.
 
 `note` takes exactly one of `--finding`, `--attempt`, `--verification`,
@@ -71,7 +73,9 @@ Completion" and must-not #16 stated it. It applies to ad-hoc work as much as to
 a quest, so it needs a home that ad-hoc work reaches.
 
 When a unit of work is complete and coherent - a quest terminal, a bug fix, a
-docs or tooling change, anything you would report as done - commit it. Do not
+docs or tooling change, anything you would report as done - commit it. A
+change under `src/` is committed only by `land`, however small: the main push
+gate refuses a direct one, naming the commit and its paths. Do not
 leave finished work sitting uncommitted waiting to be asked. Committing
 completed work is durably authorised; a never-before-authorised push or publish
 is not, and stays an authority boundary under R16.

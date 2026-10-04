@@ -15,18 +15,20 @@ import {
 import {
   CERTIFICATION_ONLY_PROBES, CLASS_FIX, ENTRY_TYPE, EPIC_PROOF, EPIC_STATUS,
   FINDING_KIND, NEXT_OWNER, QUEST_SCHEMA, QUEST_STATUS, TERMINAL_STATUSES,
-  VERDICT, entryProblems, epicProblems, questProblems, text,
+  entryProblems, epicProblems, questProblems, text,
 } from './schema.js';
 import {
   appendEntry, evidenceDir, isOpenEpic, listEpics, listQuestIds, logFile, questDir,
-  questExists, questState, readEpic, readLog, readQuest, verdictOf, writeQuest,
+  questExists, questState, readEpic, readLog, readQuest, writeQuest,
 } from './store.js';
 import {measure} from './probes.js';
 import {
   SOLVE_PREFIX, canonicalImportGraphProblem, changedPaths, coupledPairProblems,
-  epicScopeProblems, git, headSha, requiresVerification, stageablePaths,
-  staticQualityProblems,
+  epicScopeProblems, git, headSha, mainAdmission, stageablePaths, stagedSourceChange,
+  staticQualityProblems, verificationProblems,
 } from './guards.js';
+import {compositionOffences} from '../checks/check-closed-quest-shape.js';
+import {workingTreeOffences} from '../checks/check-quest-log-append-only.js';
 import {
   EVIDENCE_REF_PREFIX, deleteSharedEvidenceAsset, uploadAndVerify,
 } from './evidence-store.js';
@@ -88,26 +90,17 @@ const GIT_UNSTAGE = Object.freeze(['reset', '--quiet', '--']);
 const MESSAGE = Object.freeze({
   ID_REQUIRED: '--id <quest> is required',
   SOLVED_BY_LAND: 'solved is recorded by land, never by note',
-  REJECTION_STANDS: 'the newest verification is a rejection and no attempt is newer than it',
-  VERIFICATION_MISSING: 'src/ changes need a verification entry (verifier subagent:<id>)',
-  VERIFICATION_STALE: 'src/ changes need a verification entry newer than the last attempt',
-  VERIFICATION_NOT_APPROVED: 'src/ changes need an approving verification',
   LAND_REFUSED: 'land refused:',
   PRE_COMMIT_REFUSED:
     'land: the commit-time checks refused the staged tree before any test ran:',
   PROBE_IMMUTABLE: 'the probe is immutable after start (supersede the quest to change it)',
   PROBLEM_BULLET: '- ',
+  ADMIT_RANGE_REQUIRED: 'admit needs --base <remote main sha> --head <pushed main sha>',
+  ADMIT_REFUSED: 'admit: refusing src/ changes that are not solver landings in ',
+  ADMIT_REMEDY: 'A change under src/ reaches main only through `solve land` ' +
+    '(docs/steering/workflow-guidelines/solver-quests.md).',
 });
-// Whether the newest verification stands as a verdict on the current tree.
-const VERDICT_STATE = Object.freeze({
-  NONE: 'none', STALE: 'stale', APPROVED: 'approved', REJECTED: 'rejected',
-});
-const VERIFICATION_PROBLEMS = Object.freeze({
-  [VERDICT_STATE.NONE]: MESSAGE.VERIFICATION_MISSING,
-  [VERDICT_STATE.STALE]: MESSAGE.VERIFICATION_STALE,
-  [VERDICT_STATE.REJECTED]: MESSAGE.VERIFICATION_NOT_APPROVED,
-  [VERDICT_STATE.APPROVED]: null,
-});
+const PATH_LIST_SEPARATOR = ', ';
 
 class SolveError extends Error {}
 
@@ -290,20 +283,16 @@ function probe(root, options) {
 
 // --- land ----------------------------------------------------------------------
 
-function verdictState(state) {
-  const last = state.lastVerification;
-  if (!last) return VERDICT_STATE.NONE;
-  if (!state.verificationIsCurrent) return VERDICT_STATE.STALE;
-  return verdictOf(last) === VERDICT.APPROVE ? VERDICT_STATE.APPROVED : VERDICT_STATE.REJECTED;
-}
-
-function verificationProblems(state, paths) {
-  const verdict = verdictState(state);
-  const problems = [];
-  if (verdict === VERDICT_STATE.REJECTED) problems.push(MESSAGE.REJECTION_STANDS);
-  const required = requiresVerification(paths) ? VERIFICATION_PROBLEMS[verdict] : null;
-  if (required) problems.push(required);
-  return problems;
+// The landing quest's own record, judged as it will stand once the terminal
+// entry closes it: every other guard looks only outside the quest directory,
+// so a quest carrying a file its sealed claim does not require landed green
+// and left the landed commit red on the closed-quest shape (6929b84de,
+// repaired by 5768db879). Every quest log the landing would commit must also
+// keep its committed bytes: the append-only audit judges commits, and the
+// change proof runs before the terminal entry exists.
+function landingRecordProblems(root, quest) {
+  return [...compositionOffences(root, quest.id), ...workingTreeOffences(root)]
+    .map((offence) => `${offence.path}: ${offence.reason}`);
 }
 
 function altitudeProblems(state) {
@@ -472,13 +461,17 @@ function land(root, options) {
   problems.push(...epicScopeProblems(quest, epic, paths));
   problems.push(...coupledPairProblems(root, paths));
   problems.push(...staticQualityProblems(root, paths));
+  problems.push(...landingRecordProblems(root, quest));
   if (problems.length > 0) {
     refuse(`${MESSAGE.LAND_REFUSED}${LINE_SEPARATOR}${MESSAGE.PROBLEM_BULLET}` +
       problems.join(`${LINE_SEPARATOR}${MESSAGE.PROBLEM_BULLET}`));
   }
   proveLanding(root, quest, paths, options);
   // The terminal entry rides in the landing commit; a refused commit takes
-  // the entry back out so the quest stays open and land can be retried.
+  // the entry back out so the quest stays open and land can be retried. It
+  // binds the exact src/ change the commit makes (from the index the proof
+  // ran on), which is how the main push gate tells a landing from a direct
+  // commit carrying typed trailers.
   const logPath = logFile(root, quest.id);
   const logBefore = fs.readFileSync(logPath);
   const terminal = appendEntry(root, quest.id, {
@@ -488,6 +481,7 @@ function land(root, options) {
       `target=${measured.target}; ${paths.length} paths`,
     probe: measured,
     ...changeSetRecord(paths),
+    source: stagedSourceChange(root),
   });
   let commit;
   try {
@@ -498,6 +492,30 @@ function land(root, options) {
     refuse(`land: the commit was refused, the quest stays open: ${error.message}`);
   }
   return {id: quest.id, commit, paths, probe: measured, terminal};
+}
+
+// --- admit -------------------------------------------------------------------------
+
+/**
+ * Judge what a push brings to main: every commit in base..head that changes
+ * src/ must be a solver landing, or be brought by a merge admitted by its
+ * exact-SHA receipt and governing quest. Read-only; refuses naming each
+ * offending commit, its src/ paths and why.
+ * @param {string} root
+ * @param {{base: string, head: string, resolve?: Function}} options
+ * @return {Object}
+ */
+function admit(root, options) {
+  if (!text(options.base) || !text(options.head)) refuse(MESSAGE.ADMIT_RANGE_REQUIRED);
+  const result = mainAdmission(root, options);
+  if (result.refused.length === 0) return result;
+  refuse([`${MESSAGE.ADMIT_REFUSED}${options.base}..${options.head}:`,
+    ...result.refused.map((entry) => `${MESSAGE.PROBLEM_BULLET}${entry.commit} ` +
+      `${entry.subject}${LINE_SEPARATOR}    ${entry.reason}${LINE_SEPARATOR}    src/ paths ` +
+      `(${entry.pathCount}): ${entry.paths.join(PATH_LIST_SEPARATOR)}` +
+      (entry.pathCount > entry.paths.length ?
+        ` (+${entry.pathCount - entry.paths.length} more)` : '')),
+    MESSAGE.ADMIT_REMEDY].join(LINE_SEPARATOR));
 }
 
 // --- evidence add ----------------------------------------------------------------
@@ -572,6 +590,6 @@ function board(root) {
 
 export {
   ALTITUDE_BUDGET, LANDING_MARKER_ENV, LANDING_MARKER_VALUE, NEXT_OWNER,
-  SolveError, board, evidenceAdd, evidenceDelete, land, landChangeProofEnvironment,
+  SolveError, admit, board, evidenceAdd, evidenceDelete, land, landChangeProofEnvironment,
   note, probe, runChangeProof, start,
 };

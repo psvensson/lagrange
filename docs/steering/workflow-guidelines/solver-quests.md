@@ -13,9 +13,24 @@ the CLI offers, and nothing here restates it.
 
 ## Choosing the unit
 
-Work likely to need more than one measured attempt, or that changes an owner
-boundary, is a quest (R15). A single-sitting change with an obvious proof is
-committed directly, and its commit message names the witness.
+Every change under `src/` is a quest and reaches the shared branch only as its
+landing (R15), however small: a direct source commit naming one witness once
+carried a regression its own change cone would have caught. Work likely to
+need more than one measured attempt, or that changes an owner boundary, is a
+quest too. Documentation, tests, scripts and generated metadata may be
+committed directly, and the commit message names the witness.
+
+The main push gate holds this. Every commit a push brings to `main` over the
+remote `main` that changes a path under `src/` (a rename, deletion or type
+change included) must be a landing: its own tree appends to a quest log the
+terminal entry `land` writes, binding exactly that commit's `src/` change, in a
+log recording the seal and a current approving verification. Message trailers
+prove nothing. A long-lived branch enters as a merge, admitted with every
+commit only it brings when an exact-commit whole-corpus or release receipt
+names the merge commit itself and the merge names its governing quest
+(`Quest:` trailer) whose log at the merge records a current approving
+verification. Commits already on `main` are never judged. `solve admit` runs
+the same judgement on any range.
 
 ## What a quest is
 

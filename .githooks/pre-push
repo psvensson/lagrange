@@ -80,6 +80,7 @@ SAW_REF=0
 PUSHED_SHA=""
 PUSHED_REF=""
 MAIN_REMOTE_SHA=""
+MAIN_LOCAL_SHA=""
 ALL_PROVEN_TAG_REFS=1
 ALL_NON_MAIN_BRANCH_REFS=1
 ZERO_SHA="0000000000000000000000000000000000000000"
@@ -96,6 +97,7 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
   if [ "${remote_ref}" = "refs/heads/main" ]; then
     PUSHING_MAIN=1
     MAIN_REMOTE_SHA="${remote_sha}"
+    MAIN_LOCAL_SHA="${local_sha}"
   fi
   case "${remote_ref}" in
     refs/heads/*)
@@ -284,6 +286,19 @@ if [ -n "${PUSHED_SHA}" ] && [ "${PUSHED_SHA}" != "${ZERO_SHA}" ]; then
   fi
 fi
 echo "pre-push: proving ${GATE_HEAD} (ref ${PUSHED_REF:-${LAGRANGE_GATE_PUSHED_REF:-HEAD}}) against main base ${MAIN_REMOTE_SHA:-<publication merge-base>}"
+
+# Owner decision 2026-10-04: a change under src/ reaches main only as a solver
+# landing. Before anything expensive, every commit this push brings to main
+# (the pushed main sha over the remote main sha - nothing already on main is
+# judged) that changes src/ must be a landing whose terminal entry binds
+# exactly that change, or be brought by a merge admitted by its exact-SHA
+# receipt and governing quest; the refusal names each commit and path. Git
+# plumbing only. A push that does not update main never gets here.
+if [ "${PUSHING_MAIN}" = "1" ] && [ -n "${MAIN_LOCAL_SHA}" ] && [ "${MAIN_LOCAL_SHA}" != "${ZERO_SHA}" ] \
+  && [ -n "${MAIN_REMOTE_SHA}" ] && [ "${MAIN_REMOTE_SHA}" != "${ZERO_SHA}" ]; then
+  stage "solver-landing-admission" "every src/ change entering main is a solver landing"
+  node scripts/solve.js admit --base "${MAIN_REMOTE_SHA}" --head "${MAIN_LOCAL_SHA}" > /dev/null
+fi
 
 stage "unused-files" "unused-files check"
 npm run -s test:unused:push
