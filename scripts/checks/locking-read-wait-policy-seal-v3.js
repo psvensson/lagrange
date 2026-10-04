@@ -76,9 +76,8 @@ for (const name of transitionNames) {
   // carry every semantic token from the machine action rather than merely
   // finding an unrelated action elsewhere in the document.
   const prose = proseRow.action.toLowerCase().replaceAll('-', ' ');
-  const tokens = proseAction(policyRow.action).toLowerCase().split(' ')
-    .filter((token) => token.length > 3);
-  metric += tokens.every((token) => prose.includes(token)) ? 0 : 1;
+  const machineAction = proseAction(policyRow.action).toLowerCase();
+  metric += prose === machineAction ? 0 : 1;
 }
 
 process.stdout.write(`${metric}\n`);
