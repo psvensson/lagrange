@@ -46,7 +46,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // its first importer; superseded by the lower value here.)
 // 2026-10-04: tightened 1424 -> 1423 per checker hint after the
 // one-spread-authority deletion.
-const BASELINE_UNUSED_EXPORT_COUNT = 1423;
+// 2026-10-04: tightened 1423 -> 1422 per checker hint: the observation's
+// blocked-partition resolver became the first importer of the shared
+// isPriorityRecoveryClosureWitnessPending rule.
+const BASELINE_UNUSED_EXPORT_COUNT = 1422;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
