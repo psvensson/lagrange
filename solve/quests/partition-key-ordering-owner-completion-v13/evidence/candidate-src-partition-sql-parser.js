@@ -35,7 +35,6 @@ const stringSubstring = Function.call.bind(String.prototype.substring);
 const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
 const stringTrim = Function.call.bind(String.prototype.trim);
 const CONJUNCTIVE_AND_PATTERN = /\s+AND\s+/gi;
-const LEADING_TRAILING_PARENS_PATTERN = /^(?:\(+)|(?:\)+)$/gu;
 const EQUALITY_COLUMN_PATTERN = /^(\w+)\s*=/u;
 
 function splitConjunctiveParts(value) {
