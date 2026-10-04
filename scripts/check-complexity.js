@@ -77,7 +77,9 @@ const TARGET_THRESHOLD = 12;
 // lifecycle components no longer branch on a missing incarnation).
 // 2026-10-03: tightened 1795 -> 1773 on the checker's hint after the
 // origin/main ec63fbb00 merge and the native-append inference deletion.
-const BASELINE_COUNT = 1773;
+// 2026-10-04: tightened 1773 -> 1770 on the checker's hint after the
+// origin/main d60c30921 merge (zero-Liferaft closeout tree).
+const BASELINE_COUNT = 1770;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
