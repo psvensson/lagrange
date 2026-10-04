@@ -37,7 +37,7 @@ async (t) => {
     ]),
     deliverReplicaRemoval: async (request) => {
       removedReplicas.push(request.message);
-      return {status: 'initiated'};
+      return {status: 'completed'};
     },
     splitCompletionListener: (payload) => {
       completionPayloads.push(payload);

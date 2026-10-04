@@ -20,6 +20,7 @@ import {
 import {
   applyManagedSplitWorkflowPersistenceMethods,
 } from './managed-split-workflow-persistence-methods.js';
+import {targetProvisioningMarks} from './target-provisioning-mark.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
@@ -83,6 +84,9 @@ class ManagedSplitWorkflowProvisioningMethods {
         partitionId: String(rightPartitionId),
         keyRange: rightRange,
       },
+      // Reused child ids keep the prior record's own provisioning marks.
+      targetProvisioning: targetProvisioningMarks(targetPartitionIds,
+        {minted: false, priorMetadata: existingTransition.metadata}),
     };
   }
 
@@ -137,12 +141,19 @@ class ManagedSplitWorkflowProvisioningMethods {
     if (!splitPlan) {
       return {};
     }
+    const targetPartitionIds = [
+      splitPlan.leftPartition.partitionId,
+      splitPlan.rightPartition.partitionId,
+    ];
     return {
       [PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY]: splitPlan.medianKey,
-      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]: [
-        splitPlan.leftPartition.partitionId,
-        splitPlan.rightPartition.partitionId,
-      ],
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]:
+        targetPartitionIds,
+      // A planner's plan minted its child ids now: no create was ever sent
+      // under them. A persisted plan carries its own marks.
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PROVISIONING]:
+        splitPlan.targetProvisioning ??
+          targetProvisioningMarks(targetPartitionIds, {minted: true}),
     };
   }
 

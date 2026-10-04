@@ -674,9 +674,12 @@ async (t) => {
     insertCalls,
     deleteCalls,
     cdcIntegrationService,
-    // One replica row per partition (the merged target included): a target
-    // whose members cannot be read is never deleted (fail-closed), so the
-    // teardown this guard asserts needs a member to retire.
+    // One replica row per partition (the merged target included): this
+    // merge PROVISIONED its target (its durable mark is 'dispatched'), so
+    // the target has members to retire - a provisioned target whose members
+    // cannot be read is never deleted (fail-closed). A target aborted
+    // before its first create is retired on its 'none' mark instead
+    // (group-retirement-provisioning-mark.test.js).
     listPartitionServiceRows: (partitionId) => [{
       partition_id: partitionId,
       replica_id: `${partitionId}-r1`,
@@ -776,7 +779,7 @@ test('merge dissolution - a failed dissolution is re-attemptable: a ' +
         return {status: 'error', error: 'hosting node unreachable'};
       }
       replicaRemovalCalls.push(request);
-      return {status: 'initiated'};
+      return {status: 'completed'};
     },
   });
   const ladder = [
@@ -834,9 +837,12 @@ test('merge abort - an abort racing a retry execute() still lands: the ' +
     'retry window is refused, durable FAILED persists (no wedge), and a ' +
     'settled retry is viable (R2 guard)', async (t) => {
   const fixture = await startMergedFixture(t, {
-    // One replica row per partition (the merged target included): a target
-    // whose members cannot be read is never deleted (fail-closed), so the
-    // teardown this guard asserts needs a member to retire.
+    // One replica row per partition (the merged target included): this
+    // merge PROVISIONED its target (its durable mark is 'dispatched'), so
+    // the target has members to retire - a provisioned target whose members
+    // cannot be read is never deleted (fail-closed). A target aborted
+    // before its first create is retired on its 'none' mark instead
+    // (group-retirement-provisioning-mark.test.js).
     listPartitionServiceRows: (partitionId) => [{
       partition_id: partitionId,
       replica_id: `${partitionId}-r1`,

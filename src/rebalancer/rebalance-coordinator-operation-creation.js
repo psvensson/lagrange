@@ -383,6 +383,7 @@ class RebalanceCoordinatorOperationCreation {
    */
   async createOperationInternal(move, creationContext = {}) {
     this.assertMembershipPublicationEpoch(move);
+    this.assertGroupNotRetiring(move);
 
     const normalizedMoveType = this.normalizeMoveType(move?.type);
     const shouldEmitOperationCreated = move?.emitOperationCreated !== false;

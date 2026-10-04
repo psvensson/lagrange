@@ -130,7 +130,7 @@ test('abort-dissolution-acks-fenced: the post-abort owner-recorded ' +
     ]),
     deliverReplicaRemoval: async (request) => {
       removedReplicas.push(request.message);
-      return {status: 'initiated'};
+      return {status: 'completed'};
     },
   });
   const fenceToken = await registerClaimedWorkflow(workflow);

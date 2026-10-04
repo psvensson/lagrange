@@ -94,6 +94,8 @@ class ManagedMergeWorkflowStateMethods {
         [...(options.siblingPartitionIds || [])],
       [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]:
         [options.targetPartitionId],
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PROVISIONING]:
+        {...(options.targetProvisioning || {})},
       [PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT]:
         JSON.parse(JSON.stringify({
           ...options.topologySnapshot,

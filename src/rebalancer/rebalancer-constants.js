@@ -449,6 +449,9 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   DEFERRED_RETRY_PENDING: 'deferred_retry_pending',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
   NODE_NOT_READY: 'node_not_ready',
+  // The partition's group is being retired as a unit by its durable
+  // workflow record: its member set is frozen, no membership change.
+  GROUP_RETIRING: 'group_retiring',
 });
 
 /**

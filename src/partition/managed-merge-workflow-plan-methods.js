@@ -16,6 +16,7 @@ import {
   buildPartitionDescriptorEpochDecision,
   isPartitionDescriptorEpochAccepted,
 } from './partition-descriptor-epoch-contract.js';
+import {targetProvisioningMarks} from './target-provisioning-mark.js';
 
 const LOCAL_STR_COMMA = ',';
 const LOCAL_STR_NORMAL_PARTITION_STATE = 'NORMAL';
@@ -365,7 +366,7 @@ class ManagedMergeWorkflowPlanMethods {
    * a persisted in-flight transition's ranges).
    * @param {Object} options - {tableId, sourcePartitionIds,
    *   targetVersion, existingTransition, leftRange, rightRange}.
-   * @return {Object} {mergedPartitionId, workflowId}.
+   * @return {Object} {mergedPartitionId, workflowId, targetProvisioning}.
    * @private
    */
   resolveMergeRegistrationIdentities(options) {
@@ -386,7 +387,14 @@ class ManagedMergeWorkflowPlanMethods {
       leftRange: options.leftRange,
       rightRange: options.rightRange,
     });
-    return {mergedPartitionId, workflowId};
+    // A target id reused from the prior record keeps that record's mark; a
+    // fresh one was never provisioned.
+    const priorMetadata = options.existingTransition?.metadata || {};
+    const targetProvisioning = targetProvisioningMarks([mergedPartitionId], {
+      minted: mergedPartitionId !==
+        this.resolveMergeTargetPartitionId(priorMetadata),
+      priorMetadata});
+    return {mergedPartitionId, workflowId, targetProvisioning};
   }
 }
 

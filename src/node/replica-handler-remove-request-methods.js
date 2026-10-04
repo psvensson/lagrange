@@ -1,3 +1,4 @@
+import {LIFECYCLE_STATE} from '../raft/raft-rs-replica-lifecycle-owner.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
@@ -246,6 +247,77 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       );
     }
     /**
+     * A group-retirement REMOVE of a replica this node no longer tracks (it
+     * restarted after retiring it, before its answer was recorded) or is
+     * still removing (its row cleanup running after the retirement): the
+     * member's own durable fact - its raft-rs lifecycle row for EXACTLY this
+     * replica identity and group, retired with the group-retired reason -
+     * answers COMPLETED. Never from absence: no database, no row, another
+     * state or another reason (a reseed hold) answers nothing here.
+     * @param {Object} request - REMOVE_REPLICA request.
+     * @return {Object|null} COMPLETED response, or null.
+     * @private
+     */
+    answerDurablyRetiredGroupMember(request) {
+      const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
+      const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
+      // No file, no row or an unreadable database is no fact: the member
+      // stays listed.
+      const lifecycle = this.readReplicaDurableLifecycle(partitionId,
+        replicaId);
+      if (lifecycle.state !== LIFECYCLE_STATE.RETIRED ||
+          lifecycle.reason !== GROUP_RETIREMENT_REASON) {
+        return null;
+      }
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED, {
+        replicaId, partitionId, nodeId: this.nodeId,
+        durableLifecycle: lifecycle.state});
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.COMPLETED,
+        {replicaId, nodeId: this.nodeId, durablyRetired: true},
+      );
+    }
+    /**
+     * A group-retirement REMOVE's answer from the member's durable
+     * lifecycle row (answerDurablyRetiredGroupMember), or null - always null
+     * for an ordinary REMOVE.
+     * @param {Object} request - REMOVE_REPLICA request.
+     * @return {Object|null}
+     * @private
+     */
+    groupMemberDurableAnswer(request) {
+      return request?.[ReplicaOperationField.GROUP_RETIREMENT] ?
+        this.answerDurablyRetiredGroupMember(request) : null;
+    }
+    /**
+     * @param {string} replicaId
+     * @return {Object} NOT_FOUND response.
+     * @private
+     */
+    answerRemoveNotFound(replicaId) {
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_NOT_FOUND, {
+        replicaId,
+        nodeId: this.nodeId,
+      });
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.NOT_FOUND, {replicaId,
+          nodeId: this.nodeId});
+    }
+    /**
+     * @param {string} replicaId
+     * @return {Object} IN_PROGRESS response.
+     * @private
+     */
+    answerRemoveInProgress(replicaId) {
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_IN_PROGRESS, {
+        replicaId,
+        nodeId: this.nodeId,
+      });
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.IN_PROGRESS, {replicaId,
+          nodeId: this.nodeId});
+    }
+    /**
      * @param {Object} request
      * @param {Object|null} [groupRetirement] - The verified group-retirement
      *   decision, or null for an ordinary REMOVE.
@@ -327,17 +399,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       // Check if replica exists
       const replica = this.getLocalReplica(replicaId);
       if (!replica) {
-        this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_NOT_FOUND, {
-          replicaId,
-          nodeId: this.nodeId,
-        });
-        return this.buildReplicaOperationResponse(
-          ReplicaOperationResponseStatus.NOT_FOUND,
-          {
-            replicaId,
-            nodeId: this.nodeId,
-          },
-        );
+        return this.groupMemberDurableAnswer(request) ??
+          this.answerRemoveNotFound(replicaId);
       }
       // Cross-check partition identity before any status write or shutdown:
       // a mismatched request must never shut down the wrong replica, corrupt
@@ -375,17 +438,10 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
           this.startRemoveReplicaAsync(request, groupRetirement);
         }
-        this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_IN_PROGRESS, {
-          replicaId,
-          nodeId: this.nodeId,
-        });
-        return this.buildReplicaOperationResponse(
-          ReplicaOperationResponseStatus.IN_PROGRESS,
-          {
-            replicaId,
-            nodeId: this.nodeId,
-          },
-        );
+        // Its durable retirement already recorded, a group member answers
+        // COMPLETED while its row cleanup finishes (it never serves again).
+        return this.groupMemberDurableAnswer(request) ??
+          this.answerRemoveInProgress(replicaId);
       }
       // Check idempotency - already removed. Cleanup reconcile is only safe
       // when the request targets the replica's recorded partition; a

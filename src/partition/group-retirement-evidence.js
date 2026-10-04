@@ -423,6 +423,28 @@ function retiringWorkflowOf(tablesRow) {
       entry.partitionId))});
 }
 
+/**
+ * Whether one group is being retired as a unit according to the durable
+ * record as this node's view holds it (the partitions row names its table,
+ * the table's `tables` row its workflow): the fence every membership change
+ * of the group checks (a member added after the frozen set would never be
+ * retired). A group whose record the view does not hold is not retiring.
+ * @param {Object|null} cache - The system-table cache (get).
+ * @param {string} partitionId - The group.
+ * @return {boolean}
+ */
+function isGroupRetiringInView(cache, partitionId) {
+  const group = String(partitionId || '');
+  if (!group || typeof cache?.get !== 'function') {
+    return false;
+  }
+  const tableId = cache.get(TABLES.PARTITIONS, group)?.table_id;
+  const tablesRow = tableId ? cache.get(TABLES.TABLES, tableId) : null;
+  const retiring = retiringWorkflowOf(tablesRow);
+  return retiring.retiring === true &&
+    retiring.retiringPartitionIds.includes(group);
+}
+
 function workflowFamilyOf(metadata) {
   return Object.hasOwn(metadata,
     PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_IDS) ?
@@ -447,6 +469,7 @@ export {
   WORKFLOW_FAMILY,
   buildGroupRetirementEvidence,
   groupRetirementEvidenceFromRecord,
+  isGroupRetiringInView,
   retiringSourceStatus,
   retiringWorkflowOf,
   verifyGroupRetirement,

@@ -56,6 +56,7 @@ import {
   TOPOLOGY_BOUND_METHOD_SPECS,
   bindTopologyMethod,
 } from './managed-merge-workflow-topology-bindings.js';
+import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -320,7 +321,7 @@ class ManagedMergeWorkflow {
       tableInfo,
       existingTransition,
     );
-    const {mergedPartitionId, workflowId} =
+    const {mergedPartitionId, workflowId, targetProvisioning} =
       this.resolveMergeRegistrationIdentities({
         tableId,
         sourcePartitionIds,
@@ -400,6 +401,7 @@ class ManagedMergeWorkflow {
         sourcePartitionIds,
         siblingPartitionIds,
         mergedPartitionId,
+        targetProvisioning,
         tableId,
         tableName,
         tableInfo,
@@ -442,6 +444,7 @@ class ManagedMergeWorkflow {
         sourcePartitionIds,
         siblingPartitionIds: input.siblingPartitionIds,
         targetPartitionId: input.mergedPartitionId,
+        targetProvisioning: input.targetProvisioning,
         primaryKeyColumn: input.primaryKeyColumn,
         targetVersion: input.targetVersion,
         requiredReplicaCount: input.mergeBootstrapReplicaCount,
@@ -677,6 +680,8 @@ class ManagedMergeWorkflow {
       input.mergedPartitionId,
       input.executionTimeoutBudget,
     );
+    await markTargetProvisioningDispatched(this, input.workflowId,
+      transitionMetadata, input.mergedPartitionId);
     await this.provisionInitialTablePartition({
       tableId: input.tableId,
       tableName: input.tableName,

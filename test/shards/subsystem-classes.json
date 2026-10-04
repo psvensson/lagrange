@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 283,
+    "bootstrap-membership": 284,
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 205,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 147,
+    "storage-partition": 148,
     "storage-raft": 99,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2200,
-  "digest": "fnv1a32-f9eb0ad1",
+  "censusSize": 2202,
+  "digest": "fnv1a32-ff75a15d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-157cd270",
+  "observationDigest": "fnv1a32-334aeca1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1091,6 +1091,7 @@
     "test/node/failure-repair-intent-contract.test.js": "bootstrap-membership",
     "test/node/fault-recovery-behavior.property.test.js": "bootstrap-membership",
     "test/node/group-retirement-as-a-unit.test.js": "bootstrap-membership",
+    "test/node/group-retirement-fences.test.js": "bootstrap-membership",
     "test/node/group-retirement-liveness.test.js": "bootstrap-membership",
     "test/node/group-retirement-redrive.test.js": "bootstrap-membership",
     "test/node/idempotent-operations.property.test.js": "bootstrap-membership",
@@ -1175,6 +1176,7 @@
     "test/partition/durable-voter-visibility-role-write.test.js": "storage-partition",
     "test/partition/extracted-module-api-equivalence.property.test.js": "storage-partition",
     "test/partition/group-retirement-epoch-decode.test.js": "storage-partition",
+    "test/partition/group-retirement-provisioning-mark.test.js": "storage-partition",
     "test/partition/group-retirement-resume-claim.test.js": "storage-partition",
     "test/partition/key-range-manager.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
@@ -7102,8 +7104,38 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/workflow/durable-workflow-coordinator.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/group-retirement-fences.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/partition/group-retirement-members.js",
+        "src/partition/managed-merge-workflow-dissolution-methods.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-split-workflow-dissolution-methods.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/split-ack-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/index.js",
+        "src/rebalancer/rebalancer-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
@@ -7127,6 +7159,7 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -7152,6 +7185,7 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/replica-operation-constants.js",
@@ -7507,6 +7541,11 @@
       ]
     },
     "test/partition/group-retirement-epoch-decode.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/group-retirement-provisioning-mark.test.js": {
       "files": [
         "src/partition/partition-constants.js"
       ]

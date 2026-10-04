@@ -134,11 +134,14 @@ test('W4a a lost REMOVE is re-dispatched to that member only, on the ' +
   await owner.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
   t.equal(await driveUntilRemoved(world, world.members), true,
     'every member completed its removal');
-  t.same(world.deliveries.map(({replicaId, lost: dropped}) =>
+  // A member is done only on COMPLETED: the first pass reaches all three
+  // (the lost one's REMOVE dropped), then the failed acknowledgement and the
+  // members' row events re-dispatch to the members not yet done.
+  t.same(world.deliveries.slice(0, 3).map(({replicaId, lost: dropped}) =>
     [replicaId, dropped === true]),
-  [[first, false], [lost, true], [last, false], [lost, false]],
-  'one pass to all, then the failed acknowledgement re-dispatched to the ' +
-    'unacknowledged member only');
+  [[first, false], [lost, true], [last, false]], 'one pass to all');
+  t.ok(deliveriesTo(world, lost).slice(1).some((delivery) => !delivery.lost),
+    'the lost REMOVE was re-dispatched and delivered');
   for (const replicaId of world.members) {
     assertMemberRetired(t, world, replicaId, 'W4a');
   }
@@ -160,8 +163,9 @@ test('W4b an unreachable node is re-driven by its ready-heartbeat event, ' +
   world.dropDeliveryTo.add(away);
   await owner.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
   await settleTurns(world);
-  t.equal(deliveriesTo(world, away).length, 2,
-    'two failed attempts (the pass and the failed-ack re-dispatch)');
+  t.ok(deliveriesTo(world, away).length >= 2 &&
+    deliveriesTo(world, away).every((delivery) => delivery.lost),
+  'failed attempts only (the pass and the failed-ack re-dispatch)');
   t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
     entry.unacknowledgedReplicaIds), [[away]],
   'the unacknowledged member is listed (observable, never silent)');
@@ -172,10 +176,11 @@ test('W4b an unreachable node is re-driven by its ready-heartbeat event, ' +
     'only the bounded fallback is armed');
   // A row that is not a ready heartbeat (the node departed) is a re-check
   // event: one more attempt, still unacknowledged, never proof it is gone.
+  const beforeDeparted = deliveriesTo(world, away).length;
   world.emitNodeRow({...readyNodeRow(`${away}-node`),
     ready_lease_expires_at: 0});
   await settleTurns(world);
-  t.equal(deliveriesTo(world, away).length, 3,
+  t.equal(deliveriesTo(world, away).length, beforeDeparted + 1,
     'a departed-node row re-checks once');
   t.same(world.exitsOf(away), [], 'and retires nothing');
   world.dropDeliveryTo.delete(away);
@@ -255,7 +260,12 @@ test('W4d an owner restart mid-dissolution resumes from the durable record',
     world.dropDeliveryTo.add(second).add(third);
     await firstOwner.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
     await driveUntilRemoved(world, [first]);
+    await settleTurns(world);
+    t.same(JSON.parse(world.tablesRows.get(TABLE_ID)
+      .partition_transition_metadata).participants[SOURCE_KEY].checkpoint
+      ?.dissolvedReplicaIds, [first], 'setup: first\'s answer is recorded');
     firstOwner.kill();
+    const askedBeforeRestart = deliveriesTo(world, first).length;
     world.dropDeliveryTo.clear();
     t.same(world.terminals, [], 'setup: the split has not completed');
     // The restarted owner recovers the workflow from the record (PRODUCTION
@@ -271,7 +281,7 @@ test('W4d an owner restart mid-dissolution resumes from the durable record',
     for (const replicaId of world.members) {
       assertMemberRetired(t, world, replicaId, 'W4d');
     }
-    t.equal(deliveriesTo(world, first).length, 1,
+    t.equal(deliveriesTo(world, first).length, askedBeforeRestart,
       'the recorded answer is not asked again');
     t.same(world.terminals, [WORKFLOW_ID], 'the split completed');
     assertNoBackstopOrConfChange(t, world, 'W4d');
@@ -356,8 +366,8 @@ async (t) => {
   t.equal(await driveUntilRemoved(world, [away]), true,
     'the restarted member completed its own removal');
   assertMemberRetired(t, world, away, 'W4e');
-  t.equal(deliveriesTo(world, away).length, 2,
-    'no owner re-dispatch reached it (both deliveries were lost)');
+  t.ok(deliveriesTo(world, away).every((delivery) => delivery.lost),
+    'no owner re-dispatch reached it (every delivery was lost)');
   t.same(world.consensusWaits, [], 'no consensus-exit wait armed');
   t.same(world.proposals, [], 'no conf change proposed');
 });

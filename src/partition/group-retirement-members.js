@@ -14,21 +14,30 @@
  * member, never removed by a row's absence); each member's own answer to its
  * REMOVE.
  * Canonical output: the frozen required set (REQUIRED_REPLICA_IDS), its
- * members' addresses (MEMBER_NODE_IDS) and the positively answered set
- * (DISSOLVED_REPLICA_IDS), all persisted on that
+ * members' addresses (MEMBER_NODE_IDS) and the set that answered COMPLETED
+ * (DISSOLVED_REPLICA_IDS) - or, for a target whose durable provisioning mark
+ * (target-provisioning-mark.js) says no create was ever sent, the empty set
+ * frozen with NEVER_PROVISIONED - all persisted on that
  * participant's checkpoint through the coordinator's participant
  * persistence (the path every acknowledgement takes); completion is
  * required ⊆ dissolved and nothing else.
  * Prohibited: an empty or unreadable configuration is "membership
- * unavailable", never "no members"; a member with no address is listed,
+ * unavailable", never "no members" (only the durable never-provisioned mark
+ * is); a member with no address is listed,
  * never skipped; no answer other than a positive one marks a member done.
  */
 import {readCommittedMembershipStamp} from
   '../rebalancer/committed-membership-bootstrap-read.js';
 import {ReplicaOperationResponseStatus} from
   '../rebalancer/replica-operation-constants.js';
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
+  '../raft/raft-committed-membership-constants.js';
 import {GROUP_RETIREMENT_REFUSAL} from './group-retirement-evidence.js';
 import {SPLIT_ACK_CHECKPOINT_FIELD} from './split-ack-constants.js';
+import {
+  TARGET_PROVISIONING,
+  targetProvisioningOf,
+} from './target-provisioning-mark.js';
 
 // The checkpoint fields on a retiring group's participant record (the merge
 // checkpoint enum names the same strings).
@@ -36,6 +45,7 @@ const GROUP_MEMBER_CHECKPOINT_FIELD = Object.freeze({
   REQUIRED_REPLICA_IDS: SPLIT_ACK_CHECKPOINT_FIELD.REQUIRED_REPLICA_IDS,
   MEMBER_NODE_IDS: SPLIT_ACK_CHECKPOINT_FIELD.MEMBER_NODE_IDS,
   DISSOLVED_REPLICA_IDS: SPLIT_ACK_CHECKPOINT_FIELD.DISSOLVED_REPLICA_IDS,
+  NEVER_PROVISIONED: SPLIT_ACK_CHECKPOINT_FIELD.NEVER_PROVISIONED,
 });
 
 // Why a required member is still listed, owner side (the handler's typed
@@ -44,11 +54,17 @@ const GROUP_MEMBER_REFUSAL = Object.freeze({
   MEMBERSHIP_UNAVAILABLE: 'group-retirement-membership-unavailable',
   MEMBER_UNADDRESSABLE: 'group-retirement-member-unaddressable',
   PROGRESS_UNRECORDED: 'group-retirement-progress-unrecorded',
+  REMOVAL_IN_PROGRESS: 'group-retirement-removal-in-progress',
 });
-
-const ACCEPTED_REMOVAL_STATUSES = Object.freeze(new Set([
+const IN_PROGRESS_STATUSES = Object.freeze(new Set([
   ReplicaOperationResponseStatus.INITIATED,
   ReplicaOperationResponseStatus.IN_PROGRESS,
+]));
+
+// A member is done only when it answers its replica durably retired:
+// INITIATED rests on memory until its REMOVING row is durable, and both it
+// and IN_PROGRESS keep the member listed and re-driven by its row events.
+const ACCEPTED_REMOVAL_STATUSES = Object.freeze(new Set([
   ReplicaOperationResponseStatus.COMPLETED,
 ]));
 // A refusal saying this owner's evidence is not the record's: a newer owner
@@ -100,8 +116,12 @@ function memberIdsOfCommittedStamp(stamp) {
  * @return {Promise<string[]>} Throws the read's typed refusal.
  */
 async function readCommittedGroupMemberIds(reader, partitionId) {
+  // The retirement read: refused while a configuration change is pending
+  // or the configuration is joint (a member added after the freeze would
+  // never be retired); the step re-runs on the group's row events.
   return memberIdsOfCommittedStamp(
-    await readCommittedMembershipStamp(reader, partitionId));
+    await readCommittedMembershipStamp(reader, partitionId,
+      {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT}));
 }
 
 function incompleteRetirementError(unacknowledged, acknowledged,
@@ -179,10 +199,18 @@ function recordedProgress(owner, group, fields) {
  */
 async function frozenMembersOf(owner, group, partitionId) {
   const {participant} = group;
+  if (participant.checkpoint?.[
+    GROUP_MEMBER_CHECKPOINT_FIELD.NEVER_PROVISIONED] === true) {
+    return [];
+  }
   const frozen = idsOf(participant.checkpoint,
     GROUP_MEMBER_CHECKPOINT_FIELD.REQUIRED_REPLICA_IDS);
   if (frozen.length > 0) {
     return frozen;
+  }
+  if (targetProvisioningOf(group.workflow.metadata, partitionId) ===
+      TARGET_PROVISIONING.NONE) {
+    return freezeNeverProvisioned(owner, group, partitionId);
   }
   const members = await Promise.resolve()
     .then(() => owner.readCommittedGroupMembers(partitionId))
@@ -201,12 +229,31 @@ async function frozenMembersOf(owner, group, partitionId) {
   return required;
 }
 
+/**
+ * A target whose durable mark says no create was ever sent has no member:
+ * its empty set is frozen with the never-provisioned mark (durable before
+ * the caller deletes its row), never inferred from an unreadable group.
+ * @private
+ */
+async function freezeNeverProvisioned(owner, group, partitionId) {
+  if (!await recordedProgress(owner, group, {
+    [GROUP_MEMBER_CHECKPOINT_FIELD.REQUIRED_REPLICA_IDS]: [],
+    [GROUP_MEMBER_CHECKPOINT_FIELD.NEVER_PROVISIONED]: true})) {
+    throw membershipUnavailableError(partitionId);
+  }
+  return [];
+}
+
 // Why a member that was asked (or could not be) is still listed.
 function refusalOf(nodeId, positive, answer) {
   if (!nodeId) {
     return GROUP_MEMBER_REFUSAL.MEMBER_UNADDRESSABLE;
   }
-  return positive ? GROUP_MEMBER_REFUSAL.PROGRESS_UNRECORDED :
+  if (positive) {
+    return GROUP_MEMBER_REFUSAL.PROGRESS_UNRECORDED;
+  }
+  return IN_PROGRESS_STATUSES.has(String(answer?.status || '')) ?
+    GROUP_MEMBER_REFUSAL.REMOVAL_IN_PROGRESS :
     answer?.groupRetirementRefusal ?? null;
 }
 

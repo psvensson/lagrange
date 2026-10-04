@@ -20,10 +20,12 @@
  *   expiry (the ownership protocol's own bound), logged once when armed and
  *   as a spent wait (WARN: what was awaited, the last observed owner and
  *   lease) when it fires on a still-retiring record;
- *   a refused claim with no live foreign lease on the re-read row - one
- *   WARN per record version naming the workflow, the record state and the
- *   claim result; the next durable record change resumes it (no timer, never
- *   a zero-delay retry);
+ *   a refused claim with no live foreign lease on the re-read row (the
+ *   claim's witness was stale: e.g. a driver whose lease lapsed wrote
+ *   progress) - ONE immediate re-claim with the refreshed witness, at most
+ *   once per record version; if that is refused too, one WARN per record
+ *   version naming the workflow, the record state and the claim result, and
+ *   the next durable record change resumes it (no timer, never a loop);
  *   this owner already resuming or driving the workflow - nothing.
  * Prohibited: a missing row is never treated as completion; nothing here
  * decides retirement (group-retirement-evidence.js does) or completes a
@@ -78,6 +80,7 @@ function attachGroupRetirementResume(owner, spec) {
   const leaseWaits = new Map();
   const resuming = new Set();
   const refusedVersions = new Map();
+  const reclaimedVersions = new Map();
   let resume = null;
   // A resume that threw (a claim or recovery write failed) is never silent;
   // the next record change resumes it.
@@ -109,7 +112,7 @@ function attachGroupRetirementResume(owner, spec) {
     leaseWaits.set(workflowId, timer);
   };
   const refusedClaim = (workflowId, claim, workflow, tablesRow) => {
-    const version = String(tablesRow?.partition_transition_metadata ?? '');
+    const version = recordVersionOf(tablesRow);
     if (refusedVersions.get(workflowId) === version) {
       return;
     }
@@ -119,6 +122,14 @@ function attachGroupRetirementResume(owner, spec) {
       recordState: tablesRow?.partition_transition_state ?? null,
       ownerId: workflow?.workflowOwnerId ?? null,
       leaseExpiresAt: workflow?.leaseExpiresAt ?? null});
+  };
+  const claimed = async (workflowId) => {
+    const claim = await spec.claim(workflowId);
+    if (claim?.accepted === true) {
+      scheduler.clearTimeout(leaseWaits.get(workflowId));
+      leaseWaits.delete(workflowId);
+    }
+    return claim;
   };
   // Whether this owner holds (or just claimed) the workflow; otherwise the
   // wait it took (a foreign lease's expiry, or the next record change).
@@ -132,18 +143,31 @@ function attachGroupRetirementResume(owner, spec) {
     }
     // The claim itself refuses a live foreign lease without writing
     // (ACTIVE_OWNER); every refusal then re-reads the durable row.
-    const claim = await spec.claim(workflowId);
+    let claim = await claimed(workflowId);
     if (claim?.accepted === true) {
-      scheduler.clearTimeout(leaseWaits.get(workflowId));
-      leaseWaits.delete(workflowId);
       return true;
     }
     // A refused claim proves the in-memory workflow stale: re-read the
     // durable row before deciding what to wait for.
-    const durable = owner.recoverWorkflowState(workflowId);
+    let durable = owner.recoverWorkflowState(workflowId);
     if (holdsLiveForeignLease(owner, durable)) {
       awaitForeignLease(workflowId, durable, tablesRow);
       return false;
+    }
+    // No live lease holds it: re-claim once with the refreshed witness (at
+    // most once per record version - a lost race leaves a newer version).
+    const version = recordVersionOf(currentRecord(owner, tablesRow));
+    if (reclaimedVersions.get(workflowId) !== version) {
+      reclaimedVersions.set(workflowId, version);
+      claim = await claimed(workflowId);
+      if (claim?.accepted === true) {
+        return true;
+      }
+      durable = owner.recoverWorkflowState(workflowId);
+      if (holdsLiveForeignLease(owner, durable)) {
+        awaitForeignLease(workflowId, durable, tablesRow);
+        return false;
+      }
     }
     refusedClaim(workflowId, claim, durable, currentRecord(owner, tablesRow));
     return false;
@@ -203,6 +227,12 @@ function holdsLiveForeignLease(owner, workflow) {
   return Boolean(workflow?.workflowOwnerId) &&
     workflow.workflowOwnerId !== owner.workflowOwnerId &&
     Number.isFinite(expiresAt) && expiresAt > owner.now();
+}
+
+// One durable record version: its serialized transition metadata (every
+// write of the record changes it).
+function recordVersionOf(tablesRow) {
+  return String(tablesRow?.partition_transition_metadata ?? '');
 }
 
 function currentRecord(owner, tablesRow) {

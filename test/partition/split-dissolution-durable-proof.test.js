@@ -27,7 +27,7 @@ function buildDissolutionWorkflow(options = {}) {
     listPartitionServiceRows: (partitionId) => ([
       {replica_id: `${partitionId}-r1`, node_id: 'node-a'},
     ]),
-    deliverReplicaRemoval: async () => ({status: 'initiated'}),
+    deliverReplicaRemoval: async () => ({status: 'completed'}),
     ...options,
   });
 }

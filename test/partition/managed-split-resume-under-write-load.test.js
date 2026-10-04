@@ -403,7 +403,7 @@ async function driveCutoverWithDeniedRightLeader(options) {
     ]),
     deliverReplicaRemoval: async (request) => {
       removedReplicas.push(request.message);
-      return {status: 'initiated'};
+      return {status: 'completed'};
     },
     cdcIntegrationService: {
       async updateSystemTableRow(tableName, whereClause, data) {
@@ -553,7 +553,7 @@ async function driveHealthySplit() {
     ]),
     deliverReplicaRemoval: async (request) => {
       events.push({remove: request.message.partitionId});
-      return {status: 'initiated'};
+      return {status: 'completed'};
     },
     cdcIntegrationService: {
       async updateSystemTableRow(tableName, whereClause, data) {
@@ -640,7 +640,11 @@ const HEALTHY_SEQUENCE = Object.freeze([
   {state: PARTITION_TRANSITION_STATE.SPLIT_PREPARING},
   {insert: PLAN_ONE.leftPartitionId},
   {insert: PLAN_ONE.rightPartitionId},
+  // Each child's provisioning mark made durable 'dispatched' before its
+  // first create (target-provisioning-mark.js).
+  {state: PARTITION_TRANSITION_STATE.SPLIT_PREPARING},
   {provision: PLAN_ONE.leftPartitionId},
+  {state: PARTITION_TRANSITION_STATE.SPLIT_PREPARING},
   {provision: PLAN_ONE.rightPartitionId},
   {state: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING},
   {level: 'info', msg: 'Prepared managed partition split',

@@ -50,6 +50,7 @@ import {
   buildSplitWorkflowOwnerId,
   ManagedSplitWorkflowOwnershipMethods,
 } from './managed-split-workflow-ownership-methods.js';
+import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_MANAGED_SPLIT = 'managed_split';
@@ -549,6 +550,8 @@ class ManagedSplitWorkflow {
         ),
       ]);
 
+      await markTargetProvisioningDispatched(this, workflowId,
+        transitionMetadata, splitPlan.leftPartition.partitionId);
       await this.provisionInitialTablePartition({
         tableId,
         tableName,
@@ -570,6 +573,8 @@ class ManagedSplitWorkflow {
         routingReadinessDimension:
           SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
+      await markTargetProvisioningDispatched(this, workflowId,
+        transitionMetadata, splitPlan.rightPartition.partitionId);
       await this.provisionInitialTablePartition({
         tableId,
         tableName,

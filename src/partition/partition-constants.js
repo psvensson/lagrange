@@ -280,6 +280,9 @@ const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
   SPLIT_KEY: 'splitKey',
   TARGET_PARTITION_IDS: 'targetPartitionIds',
   TARGET_PARTITION_VERSION: 'targetPartitionVersion',
+  // Per target partition id, whether a replica create may have been sent
+  // for it (target-provisioning-mark.js): carried with the target ids.
+  TARGET_PROVISIONING: 'targetProvisioning',
   CUTOVER_APPLIED_AT: 'cutoverAppliedAt',
   PARTICIPANTS: 'participants',
   SOURCE_CHECKPOINT: 'sourceCheckpoint',

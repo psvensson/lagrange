@@ -428,6 +428,52 @@ test('RC a refused claim with no live foreign lease: one WARN per record ' +
   t.equal(owner.steps, 1, 'the next record change resumed it');
 });
 
+test('P6 the driver\'s lease lapsed, it wrote progress, the others were ' +
+  'refused on stale witnesses, then it died: one immediate re-claim with the ' +
+  'refreshed witness drives it - no timer, bounded claim writes',
+async (t) => {
+  const store = createStore();
+  const clock = {now: NOW};
+  const scheduler = createScheduler();
+  const a = openOwner(store, 'merge', 'nA', {clock, scheduler});
+  installRecord(store, 'merge');
+  hydrate(store);
+  await turns();
+  t.equal(a.steps, 1, 'setup: A claimed and drives');
+  const b = openOwner(store, 'merge', 'nB', {clock, scheduler});
+  const c = openOwner(store, 'merge', 'nC', {clock, scheduler});
+  hydrate(store);
+  await turns();
+  t.equal(b.steps + c.steps, 0, 'setup: A\'s live lease holds B and C');
+  // A never renews during the retirement: its lease lapses, then it records
+  // a member's answer (the claim fields untouched), and dies.
+  clock.now = storedClaim(store).leaseExpiresAt + 1000;
+  const writesBefore = store.writes.length;
+  const row = store.rows.get(TABLE_ID);
+  const metadata = JSON.parse(row.partition_transition_metadata);
+  const key = Object.keys(metadata.participants)[0];
+  metadata.participants[key] = {...metadata.participants[key], checkpoint: {
+    requiredReplicaIds: ['r1', 'r2'], dissolvedReplicaIds: ['r1']}};
+  row.partition_transition_metadata = JSON.stringify(metadata);
+  a.dead = true;
+  store.emit({...row});
+  await turns();
+  t.equal(b.steps + c.steps, 1,
+    'exactly one of B and C re-claimed on the refreshed witness and drives');
+  const claim = storedClaim(store);
+  t.ok([b, c].some((owner) => owner.workflowOwnerId === claim.ownerId),
+    'the record names it the owner, on a new fence');
+  t.equal(claim.fence, 5, 'the fence advanced once');
+  t.ok(store.writes.length - writesBefore <= 4,
+    `bounded claim writes (${store.writes.length - writesBefore})`);
+  // Further changes of the same record version claim nothing more.
+  hydrate(store);
+  await turns();
+  t.equal(b.steps + c.steps, 1, 'no second driver');
+  t.same(leaseTimers(scheduler).filter((timer) =>
+    timer.ms > LEASE_MS + 1), [], 'no timer beyond the new owner\'s lease');
+});
+
 test('RF a resume that throws is one WARN, never silent', async (t) => {
   const store = createStore();
   const clock = {now: NOW};

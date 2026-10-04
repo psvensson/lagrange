@@ -52,6 +52,8 @@ import {claimWorkflowOwnershipCore} from
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {readDurableReplicaLifecycle} from
+  '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
 import {durableAppliedState} from
@@ -157,15 +159,23 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
   };
   const upsert = cache.upsert;
   const remove = cache.delete;
+  // Every services-row change also reaches the owners' system-row
+  // listeners, as the runtime's cache change events do.
   cache.upsert = (tableName, row) => {
     const stored = upsert(tableName, row);
-    if (tableName === SERVICES) react(CDC_OPERATION.UPDATE, stored);
+    if (tableName === SERVICES) {
+      react(CDC_OPERATION.UPDATE, stored);
+      world.emitSystemRow(SERVICES, CDC_OPERATION.UPDATE, stored);
+    }
     return stored;
   };
   cache.delete = (tableName, key) => {
     const previous = tableName === SERVICES ? cache.get(tableName, key) : null;
     const deleted = remove(tableName, key);
-    if (deleted && previous) react(CDC_OPERATION.DELETE, previous);
+    if (deleted && previous) {
+      react(CDC_OPERATION.DELETE, previous);
+      world.emitSystemRow(SERVICES, CDC_OPERATION.DELETE, previous);
+    }
     return deleted;
   };
   for (const replicaId of members) {
@@ -173,6 +183,12 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
       partitionId, nodeId: `${replicaId}-node`, cache,
       rowOf: (status) => serviceRow(partitionId, replicaId, status)});
     const {handler} = source;
+    // The replica's database is the cluster's own file (the member's durable
+    // lifecycle row lives there): the PRODUCTION read of that file.
+    handler.readReplicaDurableLifecycle = (groupId, id) =>
+      readDurableReplicaLifecycle(groupId === partitionId &&
+        members.includes(id) ? cluster.replica(id).dbFile : '/nonexistent',
+      groupId, id);
     const proto = Object.getPrototypeOf(handler);
     handler.awaitReplicaRemovalConsensusExit = function(...args) {
       world.consensusWaits.push(replicaId);

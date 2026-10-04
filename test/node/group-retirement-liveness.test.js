@@ -28,9 +28,9 @@
  * from, and - for a restarted owner - the PRODUCTION recovery of its
  * family; injected owner clock).
  * A merge's sibling source is recorded already dissolved, and an aborted
- * split's sibling child has no group in this world: its membership is
- * unreadable, so it stays listed as membership-unavailable (never "no
- * members").
+ * split's sibling child was never provisioned - its durable provisioning
+ * mark says so (target-provisioning-mark.js) - so it is retired with an
+ * empty member set on that fact, never on its unreadable membership.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -69,9 +69,12 @@ const SHAPE = Object.freeze({
     state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE, active: 2,
     participants: [{participantKey: SOURCE_KEY,
       status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED}]}),
+  // The aborted split's sibling child was never provisioned: its durable
+  // mark says so (target-provisioning-mark.js); this world's child was.
   'split:true': (p) => ({
     names: {sourcePartitionId: `${p}-src`,
-      targetPartitionIds: [p, `${p}-sib`]},
+      targetPartitionIds: [p, `${p}-sib`],
+      targetProvisioning: {[p]: 'dispatched', [`${p}-sib`]: 'none'}},
     state: PARTITION_TRANSITION_STATE.FAILED, active: 1, participants: []}),
   'merge:false': (p) => ({
     names: {sourcePartitionIds: [p, `${p}-sib`],
@@ -84,7 +87,7 @@ const SHAPE = Object.freeze({
         status: MERGE_ACK_STATUS.SOURCE_DISSOLVED}]}),
   'merge:true': (p) => ({
     names: {sourcePartitionIds: [`${p}-a`, `${p}-b`],
-      targetPartitionIds: [p]},
+      targetPartitionIds: [p], targetProvisioning: {[p]: 'dispatched'}},
     state: PARTITION_TRANSITION_STATE.FAILED, active: 1, participants: []}),
 });
 
@@ -129,6 +132,19 @@ function drive(owner, shape) {
 async function settle(world, rounds = 10) {
   await driveUntilRemoved(world, [], rounds);
   await nextTurns();
+}
+
+// Drive the world one round at a time until the awaited state holds (a
+// bound in rounds, never in wall time): an outcome that depends on how many
+// turns a slower host needs is drained to, not sampled at a fixed count.
+async function drainUntil(world, holds, maxRounds = 400) {
+  for (let round = 0; round < maxRounds; round += 1) {
+    if (holds()) {
+      return true;
+    }
+    await settle(world, 1);
+  }
+  return holds();
 }
 
 function recordState(world) {
@@ -350,11 +366,16 @@ for (const [label, family, aborted] of [
     t.same(owner.groupRetirementRedrive.unacknowledged().filter((entry) =>
       entry.partitionId === world.partitionId), [],
     'nothing of this group left unacknowledged');
-    if (family === 'split') {
-      t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
-        [entry.partitionId, entry.membershipUnavailable]),
-      [[`${world.partitionId}-sib`, true]],
-      'the sibling child with no readable group stays listed, unavailable');
+    if (family === 'split' && aborted) {
+      t.ok(world.partitionRowDeletes.includes(`${world.partitionId}-sib`),
+        'the never-provisioned sibling child\'s row is deleted on its ' +
+        'durable never-provisioned mark');
+      t.same(JSON.parse(world.tablesRows.get(TABLE_ID)
+        .partition_transition_metadata).participants['right-child']
+        ?.checkpoint, {requiredReplicaIds: [], neverProvisioned: true},
+      'its empty member set is frozen with the never-provisioned mark');
+      t.same(owner.groupRetirementRedrive.unacknowledged(), [],
+        'nothing is left listed');
     }
     t.equal(world.scheduler.fired, 0, 'no fallback fired');
     assertQuiet(t, world, label);
@@ -525,7 +546,12 @@ test('B2 a resume against an empty services view sends nothing and ' +
   for (const id of world.members) world.cache.delete('services', id);
   const owner = await openOwner(world, shape, {resume: true,
     recover: true});
-  await settle(world, 5);
+  const frozenOnRecord = () => JSON.parse(world.tablesRows.get(TABLE_ID)
+    .partition_transition_metadata).participants[SOURCE_KEY]
+    .checkpoint?.requiredReplicaIds;
+  t.ok(await drainUntil(world, () => Array.isArray(frozenOnRecord()) &&
+    owner.groupRetirementRedrive.unacknowledged().length > 0),
+  'the resume froze the set and listed the members');
   t.equal(world.deliveries.length, 0, 'no REMOVE without an address');
   t.same(world.terminals, [], 'no completion');
   t.same(world.partitionRowDeletes, [], 'the partition row is kept');
@@ -533,10 +559,7 @@ test('B2 a resume against an empty services view sends nothing and ' +
   t.same(owner.groupRetirementRedrive.unacknowledged().map((entry) =>
     [...entry.unacknowledgedReplicaIds].sort()), [[...world.members].sort()],
   'every frozen member is listed, none dropped as "no members"');
-  const frozen = JSON.parse(world.tablesRows.get(TABLE_ID)
-    .partition_transition_metadata).participants[SOURCE_KEY]
-    .checkpoint?.requiredReplicaIds;
-  t.same(frozen, [...world.members].sort(),
+  t.same(frozenOnRecord(), [...world.members].sort(),
     'the committed configuration is frozen on the durable record');
   for (const row of rows) {
     world.cache.upsert('services', row);
@@ -554,7 +577,9 @@ test('B2b an unreadable committed configuration is membership-unavailable, ' +
   world.membershipReadAvailable = false;
   const owner = await openOwner(world, shape, {resume: true,
     recover: true});
-  await settle(world, 5);
+  t.ok(await drainUntil(world, () =>
+    owner.groupRetirementRedrive.unacknowledged().length > 0),
+  'the resume ran and listed the group');
   t.equal(world.deliveries.length, 0, 'nothing sent');
   t.same(world.terminals, [], 'no completion');
   t.same(world.partitionRowDeletes, [], 'the partition row is kept');
@@ -611,22 +636,51 @@ test('B4 an answer whose durable record failed is not progress: the member ' +
   const dissolved = () => JSON.parse(world.tablesRows.get(TABLE_ID)
     .partition_transition_metadata).participants[SOURCE_KEY]
     .checkpoint?.dissolvedReplicaIds ?? [];
-  await owner.groupRetirementRedrive.exclusive('hold', async () => {
-    await owner.dissolveSplitSourcePartition(WORKFLOW_ID);
-  });
-  t.ok(unrecorded, 'setup: one answer\'s record write failed');
-  t.notOk(dissolved().includes(unrecorded), 'it is not on the record');
-  t.notOk(owner.resolveWorkflowState(WORKFLOW_ID).participants
-    .get(SOURCE_KEY).checkpoint.dissolvedReplicaIds.includes(unrecorded),
-  'nor in memory');
-  t.same(world.terminals, [], 'no completion');
+  let atFailure = null;
+  const failing = coordinator.persistParticipant;
+  coordinator.persistParticipant = async (participant) => {
+    try {
+      return await failing(participant);
+    } catch (error) {
+      if (atFailure === null && unrecorded !== null) {
+        atFailure = {onRecord: dissolved().includes(unrecorded),
+          terminals: [...world.terminals],
+          asked: world.deliveries.filter((d) => d.replicaId === unrecorded)
+            .length};
+        // The owner's handling of the failed write replaces the checkpoint
+        // it optimistically set; observe it then.
+        const optimistic = participant.checkpoint;
+        const observe = (hops) => {
+          if (participant.checkpoint !== optimistic || hops === 0) {
+            atFailure.inMemory = (participant.checkpoint
+              ?.dissolvedReplicaIds ?? []).includes(unrecorded);
+            return;
+          }
+          queueMicrotask(() => observe(hops - 1));
+        };
+        queueMicrotask(() => observe(100));
+      }
+      throw error;
+    }
+  };
+  await drive(owner, shape);
   t.equal(await driveUntilRemoved(world, world.members), true,
     'every member retired');
   await settle(world, 5);
+  t.ok(unrecorded && atFailure, 'setup: one answer\'s record write failed');
+  t.equal(atFailure?.onRecord, false, 'it is not on the record');
+  t.equal(atFailure?.inMemory, false, 'nor in memory');
+  t.same(atFailure?.terminals, [], 'no completion');
+  // A spent event stream leaves the bounded fallback to ask again.
+  for (let run = 0; run < 3 && world.terminals.length === 0; run += 1) {
+    world.scheduler.fireAll();
+    await settle(world, 5);
+  }
   t.same(world.terminals, [WORKFLOW_ID],
     'completed once every answer was recorded');
-  t.ok(world.deliveries.filter((d) => d.replicaId === unrecorded).length >= 2,
-    'the member whose answer was not recorded was asked again');
+  t.ok(world.deliveries.filter((d) => d.replicaId === unrecorded).length >
+    atFailure?.asked, 'the member whose answer was not recorded was asked ' +
+    'again');
 });
 
 test('B5 an owner whose fence is older than the participant record\'s ' +

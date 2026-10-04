@@ -21,9 +21,15 @@
  *                   address; a deleted row is never proof the member is gone
  *                   (owner ruling 2026-10-04) - the member stays required
  *                   and listed;
- *   GROUP_ROW_CHANGED for a step whose membership could not be read, any
- *                   services or partitions row of its group (a hydrating
- *                   view, a new leader) re-runs it;
+ *   GROUP_LEADER    for a step whose membership could not be read (no
+ *                   leader answered, or a configuration change was
+ *                   pending), the group gaining a leader - its leader's
+ *                   services row written with the leader role, or its
+ *                   partitions row's leader_node_id written (the canonical
+ *                   leader publication) - re-runs it;
+ *   GROUP_ROW_CHANGED for such a step, any other services or partitions
+ *                   row of its group (a hydrating view, a member's row
+ *                   after a configuration change applied) re-runs it;
  *   OWNERSHIP       the owner's resume of the durable record on ownership
  *                   acquisition (owner start, a `tables` record change,
  *                   group-retirement-resume.js);
@@ -32,16 +38,19 @@
  *                   leader activation: owner restart, ownership change) runs
  *                   the step through the workflow's own ack path;
  *   FALLBACK        a bounded exponential backoff, only for a node that no
- *                   event reports ready; every fallback run logs a WARN
+ *                   event reports ready (only its own runs spend its bound;
+ *                   an event-triggered re-run re-arms it at the current
+ *                   delay); every fallback run logs a WARN
  *                   naming the workflow, the group and the unacknowledged
  *                   replicas, and when the bound is spent one ERROR per
  *                   entry - it never ends anything silently, and an
  *                   exhausted entry stays re-drivable by every event above;
  *   STALLED         a re-run that neither completed nor re-reported (it
  *                   returned early) arms the fallback with a WARN.
- * Acknowledgement is a positive answer only (initiated, in progress,
- * completed): NOT_FOUND is not one - a node can answer it before its
- * replicas are registered at startup.
+ * Acknowledgement is the member's COMPLETED answer only (its replica durably
+ * retired; initiated and in-progress keep it listed, re-driven by its row
+ * events): NOT_FOUND is not one - a node can answer it before its replicas
+ * are registered at startup.
  * Canonical output: the step re-run; `unacknowledged()` - every tracked
  * workflow, group and unacknowledged replica, or the group's membership
  * marked unavailable (a lone un-notified survivor is listed here, never
@@ -53,6 +62,7 @@
  */
 
 import {wasNodeRecordReadyWhenWritten} from '../node/node-readiness-policy.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 
 const REDRIVE_TRIGGER = Object.freeze({
   FAILED_ACK: 'failed-ack',
@@ -60,6 +70,7 @@ const REDRIVE_TRIGGER = Object.freeze({
   NODE_DEPARTED: 'node-departed',
   MEMBER_ROW_CHANGED: 'member-row-changed',
   GROUP_ROW_CHANGED: 'group-row-changed',
+  GROUP_LEADER: 'group-leader',
   FALLBACK: 'fallback-backoff',
 });
 
@@ -173,8 +184,8 @@ class GroupRetirementRedrive {
       return;
     }
     const entry = this.entries.get(key) ||
-      {key, workflowId, partitionId, attempts: 0, timer: null,
-        exhausted: false};
+      {key, workflowId, partitionId, attempts: 0, fallbackRuns: 0,
+        timer: null, exhausted: false};
     entry.unacknowledged = unacknowledged;
     entry.membershipUnavailable = membershipUnavailable;
     entry.redrive = redrive;
@@ -250,8 +261,11 @@ class GroupRetirementRedrive {
 
   /** @private */
   armFallback(entry) {
-    const fallbackRuns = entry.attempts - 1;
-    if (fallbackRuns > REDRIVE_DEFAULT.FALLBACK_ATTEMPTS) {
+    // Only the fallback's own runs spend its bound: a re-run an event
+    // triggered re-arms it at the current backoff, so a stream of row events
+    // never exhausts the timer left for a node no event reports ready.
+    const fallbackRuns = entry.fallbackRuns;
+    if (fallbackRuns >= REDRIVE_DEFAULT.FALLBACK_ATTEMPTS) {
       // Once per entry; it stays tracked and re-drivable by every event.
       if (!entry.exhausted) {
         entry.exhausted = true;
@@ -260,9 +274,10 @@ class GroupRetirementRedrive {
       return;
     }
     const delayMs = Math.min(REDRIVE_DEFAULT.BACKOFF_MAX_MS,
-      REDRIVE_DEFAULT.BACKOFF_BASE_MS * (2 ** (fallbackRuns - 1)));
+      REDRIVE_DEFAULT.BACKOFF_BASE_MS * (2 ** fallbackRuns));
     this.scheduler.clearTimeout(entry.timer);
     entry.timer = this.scheduler.setTimeout(() => {
+      entry.fallbackRuns += 1;
       this.logger.warn(REDRIVE_LOG_MSG.FALLBACK, {...fieldsOf(entry),
         delayMs});
       this.run(entry, REDRIVE_TRIGGER.FALLBACK);
@@ -312,12 +327,25 @@ class GroupRetirementRedrive {
       return this.isNodeRowReady(row) ? REDRIVE_TRIGGER.NODE_READY :
         REDRIVE_TRIGGER.NODE_DEPARTED;
     }
+    if (announcesLeader(tableName, row)) {
+      return REDRIVE_TRIGGER.GROUP_LEADER;
+    }
     if (tableName === SERVICES_TABLE) {
       return REDRIVE_TRIGGER.MEMBER_ROW_CHANGED;
     }
     return tableName === PARTITIONS_TABLE ?
       REDRIVE_TRIGGER.GROUP_ROW_CHANGED : null;
   }
+}
+
+// Whether a row announces its group's leader: the leader's own services row,
+// or the partitions row's canonical leader publication.
+function announcesLeader(tableName, row) {
+  if (tableName === SERVICES_TABLE) {
+    return String(row?.raft_role || '') === RAFT_ROLE.LEADER;
+  }
+  return tableName === PARTITIONS_TABLE &&
+    String(row?.leader_node_id || '').length > 0;
 }
 
 // Whether one system-row change concerns an entry: the node or services row

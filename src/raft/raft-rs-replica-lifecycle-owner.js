@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import Database from 'better-sqlite3';
 import {
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
@@ -225,8 +227,56 @@ async function retireReplicaLifecycle({runtime, groupId, replicaIdentity,
   return owner.retire(reason);
 }
 
+// What a read of a replica database's lifecycle row found when it holds no
+// such row, or could not be read: neither is a lifecycle state.
+const DURABLE_LIFECYCLE_READ = Object.freeze({
+  ABSENT: Object.freeze({state: 'absent', reason: 'lifecycle-row-absent'}),
+  UNREADABLE: Object.freeze({state: 'unreadable',
+    reason: 'lifecycle-database-unreadable'}),
+});
+
+function lifecycleRowOf(db, groupId, replicaIdentity) {
+  const table = db.prepare(`
+    SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?
+  `).get(LIFECYCLE_TABLE);
+  const row = table === undefined ? undefined : db.prepare(`
+    SELECT state, reason FROM ${LIFECYCLE_TABLE}
+    WHERE group_id = ? AND replica_identity = ?
+  `).get(String(groupId), String(replicaIdentity));
+  return row === undefined ? DURABLE_LIFECYCLE_READ.ABSENT :
+    Object.freeze({state: row.state, reason: String(row.reason ?? '')});
+}
+
+/**
+ * The durable lifecycle row of exactly one (group, replica identity), read
+ * read-only from a replica database file without opening a runtime or
+ * creating anything: {state, reason}. A missing file or row is ABSENT, a
+ * database that cannot be read is UNREADABLE - never a lifecycle state.
+ * @param {string} dbPath - The replica's database file.
+ * @param {string} groupId
+ * @param {string} replicaIdentity
+ * @return {Object} Frozen {state, reason}.
+ */
+function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
+  try {
+    if (!fs.existsSync(dbPath)) {
+      return DURABLE_LIFECYCLE_READ.ABSENT;
+    }
+    const db = new Database(dbPath, {readonly: true, fileMustExist: true});
+    try {
+      return lifecycleRowOf(db, groupId, replicaIdentity);
+    } finally {
+      db.close();
+    }
+  } catch (_error) {
+    return DURABLE_LIFECYCLE_READ.UNREADABLE;
+  }
+}
+
 export {
+  LIFECYCLE_STATE,
   RaftRsReplicaLifecycleOwner,
+  readDurableReplicaLifecycle,
   registerRuntimeLifecycle,
   retireReplicaLifecycle,
   unregisterRuntimeLifecycle,

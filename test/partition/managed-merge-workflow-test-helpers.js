@@ -322,7 +322,7 @@ function buildMergeWorkflow(options = {}) {
       'deliverReplicaRemoval',
       async (request) => {
         replicaRemovalCalls.push(request);
-        return {status: 'initiated'};
+        return {status: 'completed'};
       },
     ),
     mergeStorageThresholdBytes: opt('mergeStorageThresholdBytes', undefined),
