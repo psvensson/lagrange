@@ -27,8 +27,8 @@
  *    voter-ready" row, which double-counted a target the census already holds);
  *  - the kept remove-dispatch grace is narrowed by the census's holder
  *    identity: no credit when the source's only counted replica is the one
- *    being replaced, and no double count of an already-counted target at a
- *    gap of two or more;
+ *    being replaced, and no double count of an already-counted target at
+ *    any open gap;
  *  - the strict `plannerReady === true` path stays satisfied regardless.
  */
 
@@ -39,14 +39,17 @@ import {
 } from '../../src/control-plane/priority-recovery-snapshot-ingress.js';
 import {buildPriorityRecoveryReplicaOperationContext} from '../../src/control-plane/priority-recovery-snapshot-rebalancer.js';
 import {
+  buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryDecisionSnapshots,
   buildPriorityRecoveryOperationAssessment,
+  buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
   shouldPriorityRecoveryOperationBlockPlanning,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 import {
   buildDerivedPriorityPartitionSummary,
 } from '../../src/control-plane/membership-publication-priority-partition-summary.js';
+import {OperationWorkflowRecoveryTimeout} from '../../src/rebalancer/operation-workflow-recovery-timeout.js';
 
 const ELIGIBLE = ['nodeB'];
 // Mirrors PRIORITY_RECOVERY_REPLACE_REMOVE_DISPATCH_SPREAD_STALL_BUDGET_MS (60s).
@@ -365,6 +368,52 @@ test('narrowed grace: at a gap of two an already-counted target is not counted a
   t.end();
 });
 
+// Verifier A4 (2026-10-05): the double count also arises at a CURRENT gap of
+// one (original gap two) - {A:3, T:1} with REPLACE A->T and T already a voter
+// the census counts. Seen live for replica_operations-p1 (runs 2 and 3). The
+// census is the one authority: an already-counted target is never counted again.
+test('narrowed grace: at a gap of one an already-counted target is not counted again', (t) => {
+  const countedVoterTarget = dispatchPhaseOpUnverified({
+    sourceNodeId: 'nodeA',
+    targetNodeId: 'nodeB',
+    targetVisibilityState: 'active_operational',
+  });
+  t.equal(
+    isPriorityRecoverySpreadSatisfyingOperationContext(countedVoterTarget, {
+      eligibleTargetNodeIds: ['nodeA', 'nodeB'],
+      readyReplicaCountByNodeId: {nodeA: 3, nodeB: 1},
+      spreadGap: 1,
+    }),
+    false,
+    '{A:3, B:1} REPLACE A->B: the counted target B earns no credit',
+  );
+  const completion = buildPriorityRecoverySpreadCompletion({
+    activeOperationContexts: [countedVoterTarget],
+    eligibleTargetNodeIds: ['nodeA', 'nodeB'],
+    readyReplicaCountByNodeId: {nodeA: 3, nodeB: 1},
+    plannerSpreadGap: 1,
+  });
+  t.equal(completion.satisfied, false, 'the census gap of one stays open');
+  t.same(completion.satisfyingOperationIds, [], 'no satisfying operation');
+  t.equal(
+    isPriorityRecoverySpreadSatisfyingOperationContext(
+      dispatchPhaseOpUnverified({
+        sourceNodeId: 'nodeA',
+        targetNodeId: 'nodeC',
+        targetVisibilityState: 'non_active',
+      }),
+      {
+        eligibleTargetNodeIds: ['nodeA', 'nodeC'],
+        readyReplicaCountByNodeId: {nodeA: 2, nodeB: 1},
+        spreadGap: 1,
+      },
+    ),
+    true,
+    'R1: {A:2, B:1} REPLACE A->C with C not yet counted keeps the grace',
+  );
+  t.end();
+});
+
 test('narrowed grace: a progressing un-voter-ready REPLACE target keeps its grace', (t) => {
   const progressing = dispatchPhaseOpUnverified({
     sourceNodeId: 'nodeD',
@@ -615,6 +664,98 @@ test('H5b classification: a completed ADD with a census gap LEFT requests a foll
     decisionSnapshots.unresolvedSemanticStateIds.includes('blocked_unclassified'),
     'the gap stays unresolved for the follow-up owner',
   );
+  t.end();
+});
+
+// Verifier A4 consequence: without the credit, a PROGRESSING REPLACE onto an
+// already-counted target must stay the owner's in-flight operation - not a
+// stalled one to re-drive, cancel or time out, and not room for a second one.
+// The owner reads it through its own record contexts (steps_history), so the
+// state is recovering_in_flight; the drain holds it (in_flight, never stale by
+// step age at ACTIVE); planning stays blocked behind it. Its source removal is
+// admitted by the published-spread floor ({A:3,B:1} -> {A:2,B:1} keeps two
+// holders: priority-remove-safety-spread-nonregression.test.js, first case).
+test('a progressing REPLACE onto an already-counted target stays the owner\'s in-flight operation', (t) => {
+  const census = buildDerivedPriorityPartitionSummary({
+    serviceRows: formationRows({withR4Op: false, withR5: false}).serviceRows,
+    partitionRows: formationRows().partitionRows,
+    readinessByNodeId: {},
+    projectedServingNodeIds: FORMATION_NODES,
+    locallyEligibleNodeIds: FORMATION_NODES,
+    publishedActiveNodeIds: FORMATION_NODES,
+  });
+  const replace = {
+    operationId: 'op-replace-a-b',
+    type: 'REPLACE',
+    partitionId: FORMATION_PARTITION,
+    entityType: 'partition',
+    entityId: FORMATION_PARTITION,
+    replicaId: `${FORMATION_PARTITION}-r4`,
+    sourceNodeId: 'node-a',
+    targetNodeId: 'node-b',
+    status: 'active',
+    workflowStep: 'ACTIVE',
+    createdAt: 1000,
+    updatedAt: 2500,
+    stepsHistory: [
+      {step: 'PENDING', timestamp: 1000},
+      {step: 'CREATING', timestamp: 1500},
+      {step: 'SYNCING', timestamp: 2000},
+      {step: 'ACTIVE', timestamp: 2500},
+    ],
+  };
+  const drain = Object.create(OperationWorkflowRecoveryTimeout.prototype);
+  for (const nowMs of [3000, CLOSURE_NOW_MS * 10]) {
+    const context = buildPriorityRecoveryOperationContextFromRecord(replace, {
+      nowMs,
+    });
+    const snapshot = buildPriorityRecoveryDecisionSnapshot({
+      partitionId: FORMATION_PARTITION,
+      capturedAt: nowMs,
+      publicationConvergence: {
+        publicationEpoch: 8,
+        publicationStatus: 'PUBLISHED',
+        publishedActiveNodeIds: FORMATION_NODES,
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: census,
+        recoveryActiveNodeIds: FORMATION_NODES,
+      },
+      operationContexts: [context],
+      operationId: replace.operationId,
+      operationContext: context,
+    });
+    const at = `step age ${nowMs - 2500} ms`;
+    t.same(snapshot.spreadCompletion.satisfyingOperationIds, [],
+      `${at}: the counted target earns no credit`);
+    t.equal(snapshot.semanticState, 'recovering_in_flight',
+      `${at}: in flight, not operation_stalled`);
+    t.same(snapshot.blockerReasons, [], `${at}: no stall blocker reason`);
+    t.equal(snapshot.actuation.owner, 'operation_workflow_owner',
+      `${at}: the operation's own owner keeps it`);
+    t.equal(snapshot.progress.nextRequiredAction, 'wait_for_operation_progress',
+      `${at}: the owner waits on progress, no new operation is required`);
+    t.equal(
+      drain.resolvePriorityRecoveryOperationDrainState(
+        snapshot.completion,
+        {state: 'not_required'},
+        {remoteOwnerUnavailable: false},
+        replace,
+      ),
+      'in_flight',
+      `${at}: the drain holds it (no settle, no stale fail)`,
+    );
+  }
+  const {snapshot: openGap} = runFormationShape({withR4Op: false, withR5: false});
+  t.equal(openGap.spreadCompletion.satisfied, false,
+    'the census gap of one stays open while the REPLACE runs');
+  const assessment = buildPriorityRecoveryOperationAssessment({
+    operation: replace,
+    priorityPartitionSummary: census,
+    effectiveEligibleNodeIds: FORMATION_NODES,
+    nowMs: 3000,
+  });
+  t.equal(shouldPriorityRecoveryOperationBlockPlanning(assessment), true,
+    'the unresolved REPLACE blocks planning: no second operation opens');
   t.end();
 });
 

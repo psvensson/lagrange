@@ -101,9 +101,10 @@ function readPriorityRecoveryCensusHolderCount(
 // REPLACE only if completing it can add a distinct holder: the source node's
 // census holding must survive the removal (a source whose ONLY counted
 // replica is the one being replaced turns {S} into {T} and can never close
-// the gap), and, at a gap of two or more, a target the census already counts
-// is not counted again. Without holder identity (a summary written before the
-// census published it) the grace is unchanged.
+// the gap), and, at any open gap, a target the census already counts is not
+// counted again ({A:3, T:1} with REPLACE A->T reads a gap of one, not
+// satisfied; verifier A4 2026-10-05). Without holder identity (a summary
+// written before the census published it) the grace is unchanged.
 // The source node's census holding is lost when the replaced replica is its
 // only counted one.
 function isPriorityRecoveryReplaceSourceHoldingLost(operationContext, holders) {
@@ -113,14 +114,14 @@ function isPriorityRecoveryReplaceSourceHoldingLost(operationContext, holders) {
     readPriorityRecoveryCensusHolderCount(holders, sourceNodeId) === 1;
 }
 
-function isPriorityRecoveryReplaceTargetCountedAtWideGap(
+function isPriorityRecoveryReplaceTargetAlreadyCounted(
   operationContext,
   holders,
   spreadGap,
 ) {
   const normalizedSpreadGap = normalizePriorityRecoveryInteger(spreadGap);
   return Number.isFinite(normalizedSpreadGap) &&
-    normalizedSpreadGap >= 2 &&
+    normalizedSpreadGap >= 1 &&
     readPriorityRecoveryCensusHolderCount(
       holders,
       String(operationContext?.targetNodeId || '').trim(),
@@ -138,7 +139,7 @@ function canPriorityRecoveryReplaceAddCensusHolder(
       null;
   return holders === null || (
     !isPriorityRecoveryReplaceSourceHoldingLost(operationContext, holders) &&
-    !isPriorityRecoveryReplaceTargetCountedAtWideGap(
+    !isPriorityRecoveryReplaceTargetAlreadyCounted(
       operationContext,
       holders,
       options.spreadGap,
