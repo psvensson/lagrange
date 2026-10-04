@@ -682,6 +682,11 @@ export function registerPublicationEvidenceReplayPostAckPublicationPendingTests(
       replaySummary.replayedPublication.closureWitness.state,
       REPLAY_TEST_140646Z_CLOSURE_PENDING,
     );
+    assert.equal(
+      replaySummary.replayedPublication.closureWitness.prioritySpreadPending,
+      true,
+      'a current PENDING witness (no field of its own) still reads as pending',
+    );
     assert.deepEqual(
       replaySummary.replayedPublication.closureWitness.blockedPartitionIds,
       REPLAY_TEST_140646Z_CLOSURE_BLOCKED_PARTITION_IDS,

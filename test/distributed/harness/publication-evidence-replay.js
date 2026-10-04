@@ -277,10 +277,16 @@ function summarizePriorityRecoveryClosureWitness(closureWitness = null) {
           PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.STATE
         ],
       ) || null,
+    // A current witness carries no prioritySpreadPending of its own (owner
+    // decision 2026-10-04): its PENDING state is the blocker it adds. An old
+    // artifact's explicit field still reads as before.
     [PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PRIORITY_SPREAD_PENDING]:
       closureWitnessRecord[
         PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PRIORITY_SPREAD_PENDING
-      ] === true,
+      ] === true ||
+      closureWitnessRecord[
+        PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.STATE
+      ] === PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING,
     [PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PUBLICATION_REFRESH_REQUIRED]:
       closureWitnessRecord[
         PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PUBLICATION_REFRESH_REQUIRED

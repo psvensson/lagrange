@@ -203,10 +203,11 @@ const RATCHET_TARGETS = [
     // after the SQLite callback-facade round-trip property was retired.
     // origin/main 2026-10-03 tightened 765/29388 -> 765/29385 (failed-gate-
     // keeps-evidence, checker hint); the lower value here supersedes it.
-    // 2026-10-04: tightened 717/27288 -> 716/27260 on the checker's hint
-    // after the one-spread-authority deletion (shared replay assertion).
-    baselineCloneGroupCount: 716,
-    baselineDuplicatedLineCount: 27260,
+    // 2026-10-04: tightened 717/27288 -> 715/27221 on the checker's hint
+    // after the one-spread-authority deletion (shared replay assertion, the
+    // three-case admin spread-authority fixture).
+    baselineCloneGroupCount: 715,
+    baselineDuplicatedLineCount: 27221,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

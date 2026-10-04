@@ -562,134 +562,187 @@ test('AdminControlSnapshot exports publication convergence gate from live priori
     );
   });
 
-test('AdminControlSnapshot refreshes stale readiness publication gates from the shared closure witness',
-  async (t) => {
-    const snapshot = new AdminControlSnapshot({
-      nodeId: 'node-1',
-      nowFn: () => 1000,
-      systemTableCache: {
-        getAll() {
-          return [];
-        },
+// SUPERSEDED (owner decision 2026-10-04, "delete the second authority").
+// Before: a closure_satisfied_stale_publication witness (CL-003, a refreshed
+// "satisfied" summary) over a census gap made the admin gate ready, the
+// summary satisfied, spread not pending, and published CL-003 with zero
+// blocked partitions. Now: the witness may only ADD a blocker and never
+// produces a summary. The protected property is kept - the admin snapshot's
+// publication gate and priority-recovery observation are rebuilt from the
+// SHARED owner (the one rule, census gap OR witness PENDING), never copied
+// from the stale per-node readiness gate (whose flags say pending in every
+// case below).
+const ADMIN_SPREAD_PARTITION_ID = 'replica_operations-p1';
+const ADMIN_SPREAD_GAP_SUMMARY = Object.freeze({
+  satisfied: false,
+  requiredDistinctNodeCount: 3,
+  readyEligibleNodeCount: 3,
+  totalPriorityPartitionCount: 1,
+  missingPartitionIds: [ADMIN_SPREAD_PARTITION_ID],
+  blockedPartitions: [{
+    partitionId: ADMIN_SPREAD_PARTITION_ID,
+    requiredDistinctNodeCount: 3,
+    readyDistinctNodeCount: 2,
+    spreadGap: 1,
+  }],
+  blockedPartitionCount: 1,
+  largestSpreadGap: 1,
+  totalSpreadGap: 1,
+});
+const ADMIN_SPREAD_SATISFIED_SUMMARY = Object.freeze({
+  satisfied: true,
+  requiredDistinctNodeCount: 3,
+  readyEligibleNodeCount: 3,
+  totalPriorityPartitionCount: 1,
+  missingPartitionIds: [],
+  blockedPartitions: [],
+  blockedPartitionCount: 0,
+  largestSpreadGap: 0,
+  totalSpreadGap: 0,
+});
+
+function buildAdminSpreadAuthoritySnapshot({censusSummary, closureWitness}) {
+  const snapshot = new AdminControlSnapshot({
+    nodeId: 'node-1',
+    nowFn: () => 1000,
+    systemTableCache: {
+      getAll() {
+        return [];
       },
-      controlPlaneReadinessService: {
-        async getAllNodeReadiness() {
-          return [{
-            nodeId: 'node-1',
-            dimensions: {
-              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
-            },
-            membershipPublication: {
-              publicationEpoch: 12,
-              status: 'PUBLISHED',
-              publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
-              requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
-              acknowledgedNodeIds: ['node-1', 'node-2', 'node-3'],
-              priorityPartitionSummary: {
-                satisfied: false,
-                missingPartitionIds: ['replica_operations-p1'],
-                blockedPartitions: [{
-                  partitionId: 'replica_operations-p1',
-                  requiredDistinctNodeCount: 3,
-                  readyDistinctNodeCount: 2,
-                  spreadGap: 1,
-                }],
-              },
-            },
-            priorityControlPlaneRecovery: {
+    },
+    controlPlaneReadinessService: {
+      async getAllNodeReadiness() {
+        return [{
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+          membershipPublication: {
+            publicationEpoch: 12,
+            status: 'PUBLISHED',
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
+            acknowledgedNodeIds: ['node-1', 'node-2', 'node-3'],
+            priorityPartitionSummary: censusSummary,
+          },
+          // The stale per-node gate: its flags say pending in every case;
+          // only its summary is the census the publication carries.
+          priorityControlPlaneRecovery: {
+            active: true,
+            reasonCodes: ['priority_partitions_not_spread'],
+            publicationRecoveryGate: {
+              state: 'priority_spread_pending',
+              ready: false,
               active: true,
+              publicationEpoch: 12,
+              publicationStatus: 'PUBLISHED',
+              recoveryProtocolState: 'priority_spread_pending',
               reasonCodes: ['priority_partitions_not_spread'],
-              publicationRecoveryGate: {
-                state: 'priority_spread_pending',
-                ready: false,
-                active: true,
-                publicationEpoch: 12,
-                publicationStatus: 'PUBLISHED',
-                recoveryProtocolState: 'priority_spread_pending',
-                reasonCodes: ['priority_partitions_not_spread'],
-                priorityPartitionSummary: {
-                  satisfied: false,
-                  missingPartitionIds: ['replica_operations-p1'],
-                  blockedPartitions: [{
-                    partitionId: 'replica_operations-p1',
-                    requiredDistinctNodeCount: 3,
-                    readyDistinctNodeCount: 2,
-                    spreadGap: 1,
-                  }],
-                },
-                pendingAckNodeIds: [],
-                missingPublishedNodeIds: [],
-                prioritySpreadPending: true,
-                publicationPending: false,
-                ackPending: false,
-              },
+              priorityPartitionSummary: censusSummary,
+              pendingAckNodeIds: [],
+              missingPublishedNodeIds: [],
+              prioritySpreadPending: true,
+              publicationPending: false,
+              ackPending: false,
             },
-          }];
-        },
+          },
+        }];
       },
-    });
-    snapshot.buildPriorityRecoveryDecisionSnapshots = () => ({
-      closureWitness: {
-        state: 'closure_satisfied_stale_publication',
-        prioritySpreadPending: false,
-        publicationRefreshRequired: true,
-        closureRecordId: 'CL-003',
-        closureWitnessClass:
-          'publication_converged_priority_spread_pending',
-        refreshedPriorityPartitionSummary: {
-          satisfied: true,
-          requiredDistinctNodeCount: 3,
-          readyEligibleNodeCount: 3,
-          totalPriorityPartitionCount: 1,
-          missingPartitionIds: [],
-          blockedPartitions: [],
-          blockedPartitionCount: 0,
-          largestSpreadGap: 0,
-          totalSpreadGap: 0,
-        },
-      },
-      priorityPartitionSummary: {
-        satisfied: true,
-        requiredDistinctNodeCount: 3,
-        readyEligibleNodeCount: 3,
-        totalPriorityPartitionCount: 1,
-        missingPartitionIds: [],
-        blockedPartitions: [],
-        blockedPartitionCount: 0,
-        largestSpreadGap: 0,
-        totalSpreadGap: 0,
-      },
-      partitionIdsBySemanticState: {},
-      snapshots: [],
-    });
+    },
+  });
+  snapshot.buildPriorityRecoveryDecisionSnapshots = () => ({
+    closureWitness,
+    priorityPartitionSummary: censusSummary,
+    partitionIdsBySemanticState: {},
+    snapshots: [],
+  });
+  return snapshot.buildLocalControlSnapshot();
+}
 
-    const result = await snapshot.buildLocalControlSnapshot();
+test('AdminControlSnapshot rebuilds publication gates from the one shared spread rule, never from stale per-node gates',
+  async (t) => {
+    const nonPendingWitness = {
+      state: 'closure_satisfied_fresh',
+      blockedPartitionIds: [],
+      blockedPartitionCount: 0,
+      unresolvedSemanticStateIds: [],
+      satisfiedPartitionIds: [ADMIN_SPREAD_PARTITION_ID],
+      decisionPartitionIds: [ADMIN_SPREAD_PARTITION_ID],
+      publicationEpoch: 12,
+    };
+    const pendingWitness = {
+      ...nonPendingWitness,
+      state: 'closure_pending',
+      blockedPartitionIds: [ADMIN_SPREAD_PARTITION_ID],
+      blockedPartitionCount: 1,
+      satisfiedPartitionIds: [],
+    };
 
+    const gap = await buildAdminSpreadAuthoritySnapshot({
+      censusSummary: ADMIN_SPREAD_GAP_SUMMARY,
+      closureWitness: nonPendingWitness,
+    });
     t.match(
-      result.controlPlaneDiagnostics.publicationConvergenceGate,
+      gap.controlPlaneDiagnostics.publicationConvergenceGate,
+      {
+        ready: false,
+        prioritySpreadPending: true,
+        priorityPartitionSummary: {
+          satisfied: false,
+          missingPartitionIds: [ADMIN_SPREAD_PARTITION_ID],
+        },
+      },
+      'census gap + non-pending witness: the gate is not ready and the summary stays unsatisfied',
+    );
+    t.match(
+      gap.controlPlaneDiagnostics.priorityRecoveryObservation,
+      {
+        prioritySpreadPending: true,
+        priorityRecoveryBlockedPartitionCount: 1,
+      },
+      'census gap + non-pending witness: the observation counts the census blocker',
+    );
+    t.notOk(
+      'refreshedPriorityPartitionSummary' in
+        (gap.controlPlaneDiagnostics.publicationConvergenceGate || {}),
+      'the gate never carries a witness-produced summary',
+    );
+
+    const blocker = await buildAdminSpreadAuthoritySnapshot({
+      censusSummary: ADMIN_SPREAD_SATISFIED_SUMMARY,
+      closureWitness: pendingWitness,
+    });
+    t.match(
+      blocker.controlPlaneDiagnostics.publicationConvergenceGate,
+      {ready: false, prioritySpreadPending: true},
+      'no census gap + PENDING witness: the gate shows the witness blocker',
+    );
+    t.match(
+      blocker.controlPlaneDiagnostics.priorityRecoveryObservation,
+      {prioritySpreadPending: true},
+      'no census gap + PENDING witness: the observation shows the blocker too',
+    );
+
+    const spread = await buildAdminSpreadAuthoritySnapshot({
+      censusSummary: ADMIN_SPREAD_SATISFIED_SUMMARY,
+      closureWitness: nonPendingWitness,
+    });
+    t.match(
+      spread.controlPlaneDiagnostics.publicationConvergenceGate,
       {
         ready: true,
         prioritySpreadPending: false,
-        closureRecordId: 'CL-003',
-        closureWitnessClass: 'publication_converged_priority_spread_pending',
-        priorityPartitionSummary: {
-          satisfied: true,
-          missingPartitionIds: [],
-          blockedPartitions: [],
-        },
+        priorityPartitionSummary: {satisfied: true, blockedPartitions: []},
       },
-      'control snapshot should rebuild the convergence gate from the shared closure witness instead of stale per-node readiness state',
+      'no census gap + non-pending witness: ready, although the stale per-node gate says pending',
     );
     t.match(
-      result.controlPlaneDiagnostics.priorityRecoveryObservation,
+      spread.controlPlaneDiagnostics.priorityRecoveryObservation,
       {
         prioritySpreadPending: false,
-        closureRecordId: 'CL-003',
-        closureWitnessClass: 'publication_converged_priority_spread_pending',
         priorityRecoveryBlockedPartitionCount: 0,
-        priorityRecoveryUnresolvedPartitionCount: 0,
       },
-      'control snapshot should expose the same closure witness in the top-level observation snapshot',
+      'no census gap + non-pending witness: the observation is spread',
     );
   });
 
