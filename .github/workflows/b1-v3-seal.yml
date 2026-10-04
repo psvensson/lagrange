@@ -1,0 +1,36 @@
+name: b1-v3-seal
+on:
+  push:
+    branches:
+      - quest/0-3-locking-read-wait-policy-seal
+    paths:
+      - .github/workflows/b1-v3-seal.yml
+permissions:
+  contents: write
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Seal B1-v3 before candidate repair
+        run: node scripts/solve.js start --id locking-read-wait-policy-seal-v3
+      - name: Commit immutable seal and remove bootstrap workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add solve/quests/locking-read-wait-policy-seal-v3/quest.json solve/quests/locking-read-wait-policy-seal-v3/log.ndjson
+          git rm .github/workflows/b1-v3-seal.yml
+          git commit -m "0.3 B1: seal v3 exact policy predicate"
+          git push origin HEAD:quest/0-3-locking-read-wait-policy-seal
