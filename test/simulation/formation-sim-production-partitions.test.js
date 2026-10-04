@@ -13,7 +13,8 @@
 // clock was deterministic and the scenario still ended at two different
 // virtual instants, because consensus draws its election timing from
 // Math.random(). Randomness is a SECOND substrate, and the deterministic
-// owner guard does not cover it.
+// owner guard does not cover it. On rs-raft the core draws that timing from
+// the platform RNG, which no seed reaches; C-3 states what is still exact.
 import assert from 'node:assert/strict';
 import {after, before, test} from 'node:test';
 
@@ -27,8 +28,10 @@ import {
 } from './formation-sim-production-node-environment.js';
 import {reserveSimulatedBootIncarnation} from
   './formation-sim-boot-incarnation.js';
+import {transcriptCausalOrder} from './formation-sim-host-transcript.js';
 import {
-  createProductionSeedSimHost, runSeedPartitionsScenario,
+  createProductionSeedSimHost, networkTranscriptStructure,
+  runSeedPartitionsScenario,
 } from './formation-sim-production-seed-host.js';
 
 const NODE_ID = 'node-0';
@@ -39,9 +42,11 @@ const EXPECTED_PARTITIONS = 45;
 const REPLICAS_PER_PARTITION = 3;
 const EXPECTED_REPLICAS = EXPECTED_PARTITIONS * REPLICAS_PER_PARTITION;
 const PARTITION_HORIZON_MS = 120000;
-const ARTIFACTS = Object.freeze([
-  'hostTranscript', 'networkTranscript', 'strictReport', 'provenanceSnapshot',
-]);
+// Exact across runs: what production offers. The host transcript is compared
+// in causal order without its instants (transcriptCausalOrder) and the
+// network transcript modulo consensus timing (networkTranscriptStructure);
+// both state the normalisation and why it exists: owner decision O2.
+const EXACT_ARTIFACTS = Object.freeze(['strictReport', 'provenanceSnapshot']);
 
 before(() => {
   ConfigurationManager.resetInstance();
@@ -155,19 +160,38 @@ test('C-3. the composed formation is deterministic and strict stays clean',
   async () => {
     // This is the gate that caught Math.random: every clock was deterministic
     // and the scenario still ended at two different virtual instants.
+    //
+    // On rs-raft that substrate is not reachable (owner decision O2, closed
+    // 2026-10-04: the binding is not seeded): the core randomizes its own
+    // election timeouts. So the gate asserts exactly what production offers -
+    // the strict report and the provenance snapshot exact, the host
+    // transcript's boundaries in the same causal order, the network
+    // transcript structurally equal modulo consensus timing - and no longer
+    // asserts at which virtual instant anything happens (the exact
+    // hostTranscript, networkTranscript and nowMs).
+    const assertRepeats = (run, first, label) => {
+      for (const artifact of EXACT_ARTIFACTS) {
+        assert.equal(run[artifact], first[artifact],
+          `${artifact} is exact ${label}`);
+      }
+      assert.equal(transcriptCausalOrder(run.hostTranscript),
+        transcriptCausalOrder(first.hostTranscript),
+        `hostTranscript has the same boundaries in the same causal order ${label}`);
+      assert.equal(networkTranscriptStructure(run.networkTranscript),
+        networkTranscriptStructure(first.networkTranscript),
+        `networkTranscript is structurally equal modulo consensus timing ${label}`);
+      assert.equal(run.pendingEventCount, 0,
+        `and 135 live replicas leave nothing armed after production teardown ${label}`);
+    };
     const first = await runSeedPartitionsScenario();
     assert.equal(first.strictReport,
       'mode=strict violations=0 substitutions=0 eligible=true ledger=0',
       'the whole partition chain reached no ambient seam');
+    assert.equal(first.pendingEventCount, 0,
+      'and 135 live replicas leave nothing armed after production teardown');
 
     for (let attempt = 2; attempt <= 3; attempt += 1) {
-      const again = await runSeedPartitionsScenario();
-      for (const artifact of ARTIFACTS) {
-        assert.equal(again[artifact], first[artifact],
-          `${artifact} is exact on run ${attempt}`);
-      }
-      assert.equal(again.nowMs, first.nowMs,
-        'and the formation ends at the same virtual instant');
+      assertRepeats(await runSeedPartitionsScenario(), first, `on run ${attempt}`);
     }
 
     const loaded = await runSeedPartitionsScenario({
@@ -177,11 +201,5 @@ test('C-3. the composed formation is deterministic and strict stays clean',
         return total;
       },
     });
-    for (const artifact of ARTIFACTS) {
-      assert.equal(loaded[artifact], first[artifact],
-        `${artifact} is exact under host load`);
-    }
-
-    assert.equal(first.pendingEventCount, 0,
-      'and 135 live replicas leave nothing armed after production teardown');
+    assertRepeats(loaded, first, 'under host load');
   });

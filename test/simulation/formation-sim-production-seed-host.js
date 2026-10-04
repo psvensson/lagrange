@@ -922,8 +922,9 @@ async function runSeedScenarioInRoot({
 // crypto.getRandomValues inside the binding and the port does not thread the
 // substrate's randomSource, so election expiries - and every tick they shift -
 // land at different virtual instants run to run. Production offers no
-// repeatable consensus schedule to assert. When O2 is funded (a seeded core),
-// the witnesses compare networkTranscript exactly again and this goes.
+// repeatable consensus schedule to assert, and O2 was closed on 2026-10-04
+// without seeding (the owner rejected carrying a fork of the consensus
+// crate), so this normalisation is the comparison, not a stopgap.
 const NETWORK_TIMER_EVENT_PREFIX = 'fired:adapter-timer:';
 
 function networkTranscriptStructure(networkTranscript) {

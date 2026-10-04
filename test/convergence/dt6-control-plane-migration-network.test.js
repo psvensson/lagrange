@@ -27,6 +27,7 @@ import {
 // the publish path (readPublicationPlanningSnapshot). We do NOT materialise a published epoch;
 // the publish internals downstream of the gate are exercised by their own tests. The signal here
 // is WHICH node acts as the publication owner over time, and that it tracks real raft leadership.
+// That signal is also all the determinism witness compares (see ownerHandoff below).
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const CONSENSUS_PARTITION_ID = 'control-plane-migration-p1';
@@ -157,16 +158,36 @@ t.test('Phase C: heal resolves to a single stable owner (old leader steps down, 
     t.same(stillActing, [m.leaderB], 'exactly one node is still acting as owner after heal');
   });
 
-t.test('the whole-system handoff is deterministic and seed-determined', async (t) => {
+// Which nodes acted as the publication owner in each settled phase: the handoff's structure,
+// without the tick counts the core's election timing moves. The first ticks after heal are left
+// out: whether the old leader passes its gate once more before it hears the higher term is
+// election timing too.
+function ownerHandoff(m) {
+  const actedBetween = (from, to) => IDS.filter((id) => (to[id] - (from?.[id] ?? 0)) > 0);
+  return {
+    leaderA: m.leaderA,
+    leaderB: m.leaderB,
+    election: actedBetween(null, m.afterElection),
+    partition: actedBetween(m.afterElection, m.afterPartition),
+    healed: actedBetween(m.healMid, m.healEnd),
+  };
+}
+
+// DETERMINISM IS NARROWED TO THE HANDOFF (owner decision O2, closed 2026-10-04: the raft-rs
+// binding is not seeded), the same shape as dt6-publication-failback-pct-search's Phase J
+// narrowing. raft-rs draws each randomized election timeout from the platform RNG, which no seed
+// can choose, so the virtual instant a node becomes candidate - and with it every owner-gate tick
+// count - varies run to run. A replayed seed must reach the same leaders and the same owner in
+// every phase; this test does NOT claim identical gate-pass counts.
+t.test('the whole-system handoff is seed-determined (same leaders and owners per phase; ' +
+  'gate-pass counts not claimed)', async (t) => {
   const a = await runControlPlaneMigration(5);
   const b = await runControlPlaneMigration(5);
-  t.same(
-    {leaderA: a.leaderA, leaderB: a.leaderB, afterElection: a.afterElection,
-      afterPartition: a.afterPartition, healEnd: a.healEnd},
-    {leaderA: b.leaderA, leaderB: b.leaderB, afterElection: b.afterElection,
-      afterPartition: b.afterPartition, healEnd: b.healEnd},
-    'same seed -> identical leadership, migration, and owner-gate handoff',
-  );
+  t.same(ownerHandoff(b), ownerHandoff(a),
+    'same seed -> same leaders and the same owner in election, partition and after heal');
+  t.same(ownerHandoff(a).partition,
+    IDS.filter((id) => id === a.leaderA || id === a.leaderB),
+    'the replayed seed shows the dual-owner window: both leaders act while partitioned');
 
   // Across seeds the owner gate always follows real raft leadership: exactly the elected leader
   // owns after election, and exactly the migrated leader is the sole stable owner after heal.

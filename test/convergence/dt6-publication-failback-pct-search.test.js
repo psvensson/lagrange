@@ -47,7 +47,8 @@ import {
 //
 // DETERMINISM IS NARROWED TO THE SEMANTIC OUTCOME (owner decision, the consensus cutover quest
 // Phase J): raft-rs draws its randomized election timeout from the platform RNG, which no seed can
-// choose (open decision O2; R17 release-blocking finding under the R5 hardening owner). The seed fixes
+// choose (owner decision O2, closed 2026-10-04: the binding is not seeded and no fork of the
+// consensus crate is carried, so exact replay is not a property to restore). The seed fixes
 // every owned timing input (each replica's election window, the PCT priorities), so a replayed seed
 // must reach the same terminal leaders, versions and verdicts with zero divergence - but this test
 // does NOT claim exact schedule replay: event counts such as the reorder count may differ by the few
