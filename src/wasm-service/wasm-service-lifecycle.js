@@ -52,6 +52,11 @@ const START_DIAGNOSTIC_CODE = Object.freeze({
  * @enum {string}
  */
 const REPLICA_LIFECYCLE_STATE = WASM_SERVICE_REPLICA_STATE;
+// A replica whose stop began: it never starts again (single-use instance).
+const RETIRED_REPLICA_STATES = new Set([
+  WASM_SERVICE_REPLICA_STATE.STOPPING,
+  WASM_SERVICE_REPLICA_STATE.STOPPED,
+]);
 
 /**
  * A typed lifecycle refusal.
@@ -239,6 +244,15 @@ class WasmServiceLifecycle {
       return this.refuseStart(serviceId, startOptions, refusal);
     }
 
+    // A replica whose stop began is retired: refused before any port is
+    // allocated for it, so no allocate/release pair can outlive it.
+    if (RETIRED_REPLICA_STATES.has(replica.lifecycleState)) {
+      return this.refuseStart(serviceId, startOptions, {
+        code: WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_RETIRED,
+        error: WASM_SERVICE_ERROR_MSG.REPLICA_RETIRED,
+      }, replica);
+    }
+
     this.clearStartDiagnostic(serviceId);
 
     const port = this.portAllocator.allocate(serviceId);
@@ -249,15 +263,20 @@ class WasmServiceLifecycle {
     });
 
     // A replica whose stop began is refused typed by its own initialize
-    // (REPLICA_RETIRED); a successor is a new replica.
+    // (REPLICA_RETIRED); a successor is a new replica. Everything after the
+    // await is keyed by serviceId, so it acts only while this replica still
+    // holds the entry: once a stop removed it or a successor replaced it,
+    // the port and the start diagnostic are theirs.
     try {
       await replica.initialize();
     } catch (cause) {
-      this.portAllocator.release(serviceId);
+      if (this.activeReplicas.get(serviceId) === replica) {
+        this.portAllocator.release(serviceId);
+      }
       return this.refuseStart(serviceId, startOptions, {
         code: cause.code || START_DIAGNOSTIC_CODE.CONSENSUS_START_REFUSED,
         error: cause.message,
-      });
+      }, replica);
     }
     if (!replica.initialized) {
       // Its stop began while this start awaited: the stop released the
@@ -265,7 +284,7 @@ class WasmServiceLifecycle {
       return this.refuseStart(serviceId, startOptions, {
         code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
         error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
-      });
+      }, replica);
     }
 
     const endpoint = this.registerEndpoint(serviceId, startOptions, port);
@@ -309,15 +328,24 @@ class WasmServiceLifecycle {
   }
 
   /**
-   * Record and report a refused start.
+   * Record and report a refused start. A start refused for a particular
+   * replica records its diagnostic only while that replica holds the
+   * serviceId's entry; a removed or replaced replica's refusal is reported
+   * to its caller and logged, never recorded over the entry's owner.
    * @param {string} serviceId
    * @param {Object} startOptions
    * @param {{code: string, error: string}} refusal
+   * @param {WasmServiceReplica|null} [replica] The replica the start ran for.
    * @return {{started: boolean, error: string, diagnostic: Object}}
    * @private
    */
-  refuseStart(serviceId, startOptions, refusal) {
-    const diagnostic = this.recordStartDiagnostic(serviceId, {
+  refuseStart(serviceId, startOptions, refusal, replica = null) {
+    const ownsEntry = replica === null ||
+      this.activeReplicas.get(serviceId) === replica;
+    const record = ownsEntry ?
+      (entry) => this.recordStartDiagnostic(serviceId, entry) :
+      (entry) => entry;
+    const diagnostic = record({
       [START_DIAGNOSTIC_FIELD.CODE]: refusal.code,
       [START_DIAGNOSTIC_FIELD.SERVICE_ID]: serviceId,
       [START_DIAGNOSTIC_FIELD.HANDLER_FUNCTION_ID]:

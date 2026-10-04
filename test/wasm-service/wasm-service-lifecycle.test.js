@@ -627,6 +627,105 @@ describe('WasmServiceLifecycle', () => {
           assert.equal(replica.db, null);
         });
 
+      // A refused start's after-await effects are keyed by serviceId. Once
+      // a stop removed the replica or a successor replaced it, the port and
+      // the start diagnostic belong to them (verification
+      // cutover-repairs-review-2, RA4).
+      const assertSuccessorOwnsServiceId = (lifecycle, allocator, successor,
+        successorStart) => {
+        assert.equal(successorStart.started, true, 'the successor starts');
+        assert.equal(lifecycle.getReplica('svc-1'), successor);
+        assert.equal(successor.initialized, true);
+        assert.equal(allocator.allocatedPorts.get('svc-1'), successorStart.port,
+          'the successor keeps its port');
+        assert.equal(allocator.isAvailable(successorStart.port), false,
+          'the successor\'s port is not free for another service');
+        assert.equal(lifecycle.getStartDiagnostic('svc-1'), null,
+          'the live successor carries no refusal of its predecessor');
+      };
+
+      it('a start refused on a stopping replica leaves a successor\'s port ' +
+        'and diagnostic alone', async () => {
+        const allocator = new PortAllocator();
+        const lifecycle = makeLifecycle({messageRouter: router,
+          portAllocator: allocator});
+        lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+        const stopping = lifecycle.stopReplica('svc-1');
+        const retiredStart = lifecycle.startReplica('svc-1');
+        const successor = lifecycle.createReplica(makeServiceDef(),
+          makeReplicaConfig());
+        const successorStart = await lifecycle.startReplica('svc-1');
+        const refused = await retiredStart;
+        await stopping;
+        assert.equal(refused.started, false);
+        assert.equal(refused.diagnostic.code,
+          WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_RETIRED);
+        assertSuccessorOwnsServiceId(lifecycle, allocator, successor,
+          successorStart);
+      });
+
+      it('a failing start overlapped by a stop leaves a successor\'s port ' +
+        'and diagnostic alone', async () => {
+        const allocator = new PortAllocator();
+        const blocker = path.join(scratchDirectory, 'blocker');
+        fs.writeFileSync(blocker, 'not a directory');
+        const directories = DataDirectoryManager.getInstance();
+        let failOpen = true;
+        const lifecycle = makeLifecycle({messageRouter: router,
+          portAllocator: allocator,
+          dataDirectoryManager: {
+            getWasmServiceDbPath: (serviceId, replicaId) => (failOpen ?
+              path.join(blocker, `${replicaId}.db`) :
+              directories.getWasmServiceDbPath(serviceId, replicaId)),
+            ensureWasmServiceDirExists: (serviceId) =>
+              directories.ensureWasmServiceDirExists(serviceId),
+          }});
+        lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+        failOpen = false;
+        const failingStart = lifecycle.startReplica('svc-1');
+        const stopping = lifecycle.stopReplica('svc-1');
+        const successor = lifecycle.createReplica(makeServiceDef(),
+          makeReplicaConfig());
+        const successorStart = await lifecycle.startReplica('svc-1');
+        const refused = await failingStart;
+        await stopping;
+        assert.equal(refused.started, false, 'the failing open is refused');
+        assertSuccessorOwnsServiceId(lifecycle, allocator, successor,
+          successorStart);
+      });
+
+      it('a refused start leaves no diagnostic once its stop removed the ' +
+        'replica', async () => {
+        const allocator = new PortAllocator();
+        const lifecycle = makeLifecycle({messageRouter: router,
+          portAllocator: allocator});
+        const replica = lifecycle.createReplica(makeServiceDef(),
+          makeReplicaConfig());
+        // Hold the start inside its await until the stop has removed the
+        // replica: the refusal then arrives after the entry is gone.
+        let admitInitialize = null;
+        const gate = new Promise((resolve) => {
+          admitInitialize = resolve;
+        });
+        const initialize = replica.initialize.bind(replica);
+        replica.initialize = async () => {
+          await gate;
+          return initialize();
+        };
+        const starting = lifecycle.startReplica('svc-1');
+        assert.deepEqual(await lifecycle.stopReplica('svc-1'),
+          {stopped: true});
+        assert.equal(lifecycle.getReplica('svc-1'), null);
+        admitInitialize();
+        const refused = await starting;
+        assert.equal(refused.started, false);
+        assert.equal(refused.diagnostic.code,
+          WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_RETIRED);
+        assert.equal(lifecycle.getStartDiagnostic('svc-1'), null,
+          'no diagnostic outlives the entry it described');
+        assert.equal(allocator.allocatedPorts.has('svc-1'), false);
+      });
+
       it('a replica is never created over a live one for its serviceId',
         async () => {
           const lifecycle = makeLifecycle({messageRouter: router});

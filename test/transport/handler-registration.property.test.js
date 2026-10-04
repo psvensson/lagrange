@@ -126,6 +126,33 @@ describe('Replica handler registration on the MessageRouter API', () => {
     );
   });
 
+  // Restored from the deleted message-router-ipc test (verification
+  // cutover-repairs-review-2, RA6): a never-registered address.
+  it('reports a never-registered address as unregistered, and unregistering ' +
+    'it is a no-op', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uuid(),
+        fc.uuid(),
+        async (nodeId, replicaId) => {
+          const testRouter = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId,
+            inProcess: true,
+          });
+          const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
+          const handlerCount = testRouter.handlers.size;
+
+          assert.strictEqual(testRouter.isRegistered(address), false);
+          assert.doesNotThrow(() => testRouter.unregister(address));
+          assert.strictEqual(testRouter.isRegistered(address), false);
+          assert.strictEqual(testRouter.handlers.size, handlerCount);
+        },
+      ),
+      {numRuns: 10},
+    );
+  });
+
   it('should support multiple workers with independent handlers', async () => {
     await fc.assert(
       fc.asyncProperty(
