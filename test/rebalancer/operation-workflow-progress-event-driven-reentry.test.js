@@ -2628,7 +2628,10 @@ test(
 // target ACTIVE. An available owner completes its own ADD. Without the
 // operation-fact arm a dead-owner ADD (orphan adoption skips priority
 // partitions) would wait for its step timeout.
-async function runIntermediateAddDrain(t, {ownerUnavailable, locallyOwned}) {
+async function runIntermediateAddDrain(
+  t,
+  {ownerUnavailable, locallyOwned, authoritativeTargetRow = null},
+) {
   const deliveries = [];
   const deferredTimers = [];
   const completedOperationIds = [];
@@ -2694,10 +2697,23 @@ async function runIntermediateAddDrain(t, {ownerUnavailable, locallyOwned}) {
     owner.isPriorityRecoveryDrainOwnerUnavailable = () => ownerUnavailable;
     owner.repository.getObservedReplicaStatusFromCache =
       () => ReplicaStatus.ACTIVE;
-    owner.getReconciledReplicaStatus = async (...args) => {
-      authoritativeReads.push(args);
-      return ReplicaStatus.ACTIVE;
-    };
+    if (authoritativeTargetRow) {
+      // The real status read (authoritative row -> lifecycle normalization).
+      owner.repository.readAuthoritativeReplicaRowForObservation =
+        async (...args) => {
+          authoritativeReads.push(args.slice(0, 3));
+          return {
+            observedRow: authoritativeTargetRow,
+            authoritativeReadAttempted: true,
+            authoritativeReadFailed: false,
+          };
+        };
+    } else {
+      owner.getReconciledReplicaStatus = async (...args) => {
+        authoritativeReads.push(args);
+        return ReplicaStatus.ACTIVE;
+      };
+    }
     const drainSnapshot =
       await owner.buildPriorityRecoveryOperationDrainSnapshot(operation);
     const settled =
@@ -2761,4 +2777,43 @@ test('(l) an available owner keeps its intermediate ADD: the drain does ' +
       'from the observed ACTIVE target');
   t.same(local.completedOperationIds, []);
   t.same(local.failedOperationIds, []);
+});
+
+// Verifier A3/(e) residual: the operation-fact arm reads the target's
+// authoritative row through the repository's lifecycle normalization, which
+// counts an ACTIVE row as ACTIVE only with a voter raft role. A transient
+// ACTIVE learner (or role-less) row reads SYNCING, so a dead-owner ADD is not
+// settled before its target is a voter; the voter row settles it.
+test('(l) the operation-fact arm settles a dead-owner ADD only on a VOTER ' +
+  'ACTIVE target row', async (t) => {
+  const targetRow = (raftRole) => ({
+    service_id: TEST_REPLICA_OPERATIONS_REPLICA_ID,
+    replica_id: TEST_REPLICA_OPERATIONS_REPLICA_ID,
+    service_type: 'partition',
+    partition_id: TEST_REPLICA_OPERATIONS_PARTITION_ID,
+    node_id: TEST_REPLICA_OPERATIONS_TARGET_NODE_ID,
+    status: ReplicaStatus.ACTIVE,
+    raft_role: raftRole,
+    address: 'node-target:1',
+  });
+  for (const raftRole of ['learner', null]) {
+    const early = await runIntermediateAddDrain(t, {
+      ownerUnavailable: true,
+      locallyOwned: false,
+      authoritativeTargetRow: targetRow(raftRole),
+    });
+    t.not(early.drainSnapshot.state, 'add_target_active_owner_unavailable',
+      `ACTIVE/${raftRole} is not a settled target`);
+    t.same(early.completedOperationIds, [], `ACTIVE/${raftRole}: not completed`);
+    t.same(early.failedOperationIds, [], `ACTIVE/${raftRole}: not failed`);
+    t.equal(early.authoritativeReads.length, 1, 'the authoritative row decided');
+  }
+  const voter = await runIntermediateAddDrain(t, {
+    ownerUnavailable: true,
+    locallyOwned: false,
+    authoritativeTargetRow: targetRow('follower'),
+  });
+  t.equal(voter.drainSnapshot.state, 'add_target_active_owner_unavailable');
+  t.same(voter.completedOperationIds, [TEST_REPLICA_OPERATIONS_OPERATION_ID],
+    'the voter target settles it');
 });
