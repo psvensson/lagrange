@@ -6,6 +6,7 @@ import {
 } from '../../src/partition/partition-constants.js';
 import {
   replaySplitEntry,
+  resolveSplitSnapshotBatchRowLimit,
   routeSplitSnapshotBatch,
 } from '../../src/partition/partition-split-routing.js';
 
@@ -18,6 +19,7 @@ const STALE_VERSION = 2;
 const LEFT_PARTITION_ID = 'users-left';
 const RIGHT_PARTITION_ID = 'users-right';
 const INSERT_SQL = 'INSERT INTO users (id, name) VALUES (?, ?)';
+const SNAPSHOT_MAX_ROWS_PER_CALL = 64;
 
 function createMetadata(targetVersion) {
   return {
@@ -45,6 +47,80 @@ function createDescriptorEvidence(tableDescriptor, partitionVersion) {
     requireTargetDescriptors: true,
   };
 }
+
+test('split routing rejects Proxy and accessor metadata before traps', async (t) => {
+  let proxyTrapCalls = 0;
+  const proxyMetadata = new Proxy(createMetadata(PENDING_VERSION), {
+    get() {
+      proxyTrapCalls += 1;
+      throw new Error('proxy get trap executed');
+    },
+    getOwnPropertyDescriptor() {
+      proxyTrapCalls += 1;
+      throw new Error('proxy descriptor trap executed');
+    },
+  });
+  const queryExecutor = {
+    async executeOnPartition() {
+      t.fail('unsafe metadata must reject before route dispatch');
+      return {success: true};
+    },
+  };
+
+  await t.rejects(
+    replaySplitEntry(
+      {
+        sql: INSERT_SQL,
+        params: ['a', 'Ada'],
+        data: {[PRIMARY_KEY_COLUMN]: 'a'},
+      },
+      proxyMetadata,
+      {tableName: TABLE_NAME, queryExecutor},
+    ),
+    /proxi(?:es|y)/iu,
+  );
+  t.equal(proxyTrapCalls, 0, 'replay rejects Proxy metadata before traps');
+
+  await t.rejects(
+    routeSplitSnapshotBatch(
+      [{id: 'a', name: 'Ada'}],
+      ['id', 'name'],
+      proxyMetadata,
+      {tableName: TABLE_NAME, queryExecutor},
+    ),
+    /proxi(?:es|y)/iu,
+  );
+  t.equal(proxyTrapCalls, 0, 'snapshot routing rejects Proxy metadata before traps');
+
+  let primaryKeyGetterCalls = 0;
+  const accessorMetadata = createMetadata(PENDING_VERSION);
+  Object.defineProperty(accessorMetadata, 'primaryKeyColumn', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      primaryKeyGetterCalls += 1;
+      return PRIMARY_KEY_COLUMN;
+    },
+  });
+
+  await t.rejects(
+    replaySplitEntry(
+      {
+        sql: INSERT_SQL,
+        params: ['a', 'Ada'],
+        data: {[PRIMARY_KEY_COLUMN]: 'a'},
+      },
+      accessorMetadata,
+      {tableName: TABLE_NAME, queryExecutor},
+    ),
+    /primaryKeyColumn/iu,
+  );
+  t.equal(
+    primaryKeyGetterCalls,
+    0,
+    'primaryKeyColumn accessors are not live routing authority',
+  );
+});
 
 test('split routing rejects stale mirrored writes by descriptor epoch',
   async (t) => {
@@ -163,6 +239,332 @@ test('split snapshot batching groups ordered upserts by fenced child',
         deliveryOptions: {splitMirrorOrigin: 'snapshot'},
       },
     ]);
+  });
+
+test('split snapshot batching ignores hostile row iterator',
+  async (t) => {
+    const routed = [];
+    const rows = [
+      {id: 'a', name: 'Ada'},
+      {id: 'z', name: 'Zoe'},
+      {id: 'b', name: 'Bob'},
+    ];
+    Object.defineProperty(rows, Symbol.iterator, {
+      configurable: true,
+      value() {
+        throw new Error('snapshot rows iterator executed');
+      },
+    });
+
+    await routeSplitSnapshotBatch(
+      rows,
+      ['id', 'name'],
+      createMetadata(PENDING_VERSION),
+      {
+        tableName: TABLE_NAME,
+        queryExecutor: {
+          async executeOnPartition(partitionId, _sql, params) {
+            routed[routed.length] = {partitionId, params};
+            return {success: true};
+          },
+        },
+      },
+    );
+
+    t.same(routed, [
+      {partitionId: LEFT_PARTITION_ID, params: ['a', 'Ada', 'b', 'Bob']},
+      {partitionId: RIGHT_PARTITION_ID, params: ['z', 'Zoe']},
+    ]);
+  });
+
+test('split snapshot batching rejects Proxy and sparse row arrays before traps',
+  async (t) => {
+    let arrayTrapCalls = 0;
+    const proxyRows = new Proxy([{id: 'a', name: 'Ada'}], {
+      get() {
+        arrayTrapCalls += 1;
+        throw new Error('row-array get trap executed');
+      },
+      getOwnPropertyDescriptor() {
+        arrayTrapCalls += 1;
+        throw new Error('row-array descriptor trap executed');
+      },
+    });
+    const queryExecutor = {
+      async executeOnPartition() {
+        t.fail('invalid snapshot rows must reject before dispatch');
+        return {success: true};
+      },
+    };
+
+    await t.rejects(
+      routeSplitSnapshotBatch(
+        proxyRows,
+        ['id', 'name'],
+        createMetadata(PENDING_VERSION),
+        {tableName: TABLE_NAME, queryExecutor},
+      ),
+      /route mirrored partition split write/iu,
+    );
+    t.equal(arrayTrapCalls, 0, 'Proxy row array rejects before traps');
+
+    const sparseRows = new Array(2);
+    sparseRows[0] = {id: 'a', name: 'Ada'};
+    await t.rejects(
+      routeSplitSnapshotBatch(
+        sparseRows,
+        ['id', 'name'],
+        createMetadata(PENDING_VERSION),
+        {tableName: TABLE_NAME, queryExecutor},
+      ),
+      /route mirrored partition split write/iu,
+    );
+  });
+
+test('split snapshot batching rejects Proxy row records before traps',
+  async (t) => {
+    let rowTrapCalls = 0;
+    const proxyRow = new Proxy({id: 'a', name: 'Ada'}, {
+      ownKeys() {
+        rowTrapCalls += 1;
+        throw new Error('row ownKeys trap executed');
+      },
+      getOwnPropertyDescriptor() {
+        rowTrapCalls += 1;
+        throw new Error('row descriptor trap executed');
+      },
+    });
+    await t.rejects(
+      routeSplitSnapshotBatch(
+        [proxyRow],
+        ['id', 'name'],
+        createMetadata(PENDING_VERSION),
+        {
+          tableName: TABLE_NAME,
+          queryExecutor: {
+            async executeOnPartition() {
+              t.fail('Proxy row must reject before dispatch');
+              return {success: true};
+            },
+          },
+        },
+      ),
+      /route mirrored partition split write/iu,
+    );
+    t.equal(rowTrapCalls, 0, 'Proxy row rejects before record traps');
+  });
+
+test('split snapshot batching captures Map constructor after module load',
+  async (t) => {
+    const OriginalMap = globalThis.Map;
+    const routed = [];
+    let observedError = null;
+    class PoisonMap extends OriginalMap {
+      constructor() {
+        super();
+        OriginalMap.prototype.set.call(
+          this,
+          LEFT_PARTITION_ID,
+          [{id: 'poison'}],
+        );
+      }
+    }
+
+    try {
+      globalThis.Map = PoisonMap;
+      await routeSplitSnapshotBatch(
+        [{id: 'a'}],
+        ['id'],
+        createMetadata(PENDING_VERSION),
+        {
+          tableName: TABLE_NAME,
+          queryExecutor: {
+            async executeOnPartition(partitionId, _sql, params) {
+              routed[routed.length] = {partitionId, params};
+              return {success: true};
+            },
+          },
+        },
+      );
+    } catch (error) {
+      observedError = error;
+    } finally {
+      globalThis.Map = OriginalMap;
+    }
+
+    t.equal(observedError, null, 'post-load Map replacement is ignored');
+    t.same(routed, [
+      {partitionId: LEFT_PARTITION_ID, params: ['a']},
+    ]);
+  });
+
+test('split snapshot batching rejects dimensions outside route and bind budgets',
+  async (t) => {
+    const dispatches = [];
+    const queryExecutor = {
+      async executeOnPartition(partitionId, _sql, params) {
+        dispatches[dispatches.length] = {partitionId, params};
+        return {success: true};
+      },
+    };
+    const overWideColumns = Array.from(
+      {length: 32_767},
+      (_value, index) => `column_${index}`,
+    );
+    const overTallRows = Array.from(
+      {length: 65},
+      (_value, index) => ({id: `a_${index}`}),
+    );
+
+    for (const [rows, columns] of [
+      [[{id: 'a'}], []],
+      [[{id: 'a'}], overWideColumns],
+      [overTallRows, ['id']],
+    ]) {
+      await t.rejects(
+        routeSplitSnapshotBatch(
+          rows,
+          columns,
+          createMetadata(PENDING_VERSION),
+          {tableName: TABLE_NAME, queryExecutor},
+        ),
+        /route mirrored partition split write/iu,
+      );
+    }
+    t.equal(dispatches.length, 0, 'invalid dimensions reject before dispatch');
+    t.throws(
+      () => resolveSplitSnapshotBatchRowLimit([], 1),
+      /route mirrored partition split write/iu,
+    );
+    t.throws(
+      () => resolveSplitSnapshotBatchRowLimit(overWideColumns, 1),
+      /route mirrored partition split write/iu,
+    );
+    t.equal(
+      resolveSplitSnapshotBatchRowLimit(
+        ['id'],
+        SNAPSHOT_MAX_ROWS_PER_CALL,
+      ),
+      SNAPSHOT_MAX_ROWS_PER_CALL,
+    );
+    t.equal(
+      resolveSplitSnapshotBatchRowLimit(
+        Array.from({length: 512}, (_value, index) => `column_${index}`),
+        SNAPSHOT_MAX_ROWS_PER_CALL,
+      ),
+      63,
+      'wide tables retain per-SQL batching below the source-row cap',
+    );
+  });
+
+test('split snapshot batching owns internal numeric array appends',
+  async (t) => {
+    const rows = [{id: 'v12-route-key'}];
+    const columns = ['id'];
+    const metadata = {
+      primaryKeyColumn: PRIMARY_KEY_COLUMN,
+      splitKey: 'm',
+      targetPartitionIds: ['v12-left-sentinel', 'v12-right-sentinel'],
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]:
+        PENDING_VERSION,
+    };
+    const dispatch = {value: null};
+    let interceptedRouteWrites = 0;
+    const routeOwnedValues = new Set([
+      'v12-right-sentinel',
+      rows[0],
+      '?',
+      '(?)',
+      'v12-route-key',
+    ]);
+    const priorIndexDescriptor =
+      Object.getOwnPropertyDescriptor(Array.prototype, '0');
+
+    let observedRouteError = null;
+    try {
+      Reflect.defineProperty(Array.prototype, '0', {
+        configurable: true,
+        enumerable: false,
+        set(value) {
+          if (routeOwnedValues.has(value)) {
+            interceptedRouteWrites += 1;
+          }
+        },
+      });
+
+      try {
+        await routeSplitSnapshotBatch(
+          rows,
+          columns,
+          metadata,
+          {
+            tableName: TABLE_NAME,
+            queryExecutor: {
+              async executeOnPartition(partitionId, sql, params) {
+                dispatch.value = {partitionId, sql, params};
+                return {success: true};
+              },
+            },
+          },
+        );
+      } catch (error) {
+        observedRouteError = error;
+      }
+    } finally {
+      if (priorIndexDescriptor) {
+        Reflect.defineProperty(
+          Array.prototype,
+          '0',
+          priorIndexDescriptor,
+        );
+      } else {
+        Reflect.deleteProperty(Array.prototype, '0');
+      }
+    }
+
+    t.equal(
+      interceptedRouteWrites,
+      0,
+      'inherited numeric setters never observe snapshot-route owned appends',
+    );
+    t.equal(observedRouteError, null, 'snapshot routing remains successful');
+    t.same(dispatch.value, {
+      partitionId: 'v12-right-sentinel',
+      sql: 'INSERT OR REPLACE INTO users (id) VALUES (?)',
+      params: ['v12-route-key'],
+    });
+  });
+
+test('split snapshot batching captures Object.defineProperty for appends',
+  async (t) => {
+    const OriginalDefineProperty = Object.defineProperty;
+    const dispatch = {value: null};
+    try {
+      Object.defineProperty = () => {
+        throw new Error('mutated Object.defineProperty executed');
+      };
+      await routeSplitSnapshotBatch(
+        [{id: 'a'}],
+        ['id'],
+        createMetadata(PENDING_VERSION),
+        {
+          tableName: TABLE_NAME,
+          queryExecutor: {
+            async executeOnPartition(partitionId, _sql, params) {
+              dispatch.value = {partitionId, params};
+              return {success: true};
+            },
+          },
+        },
+      );
+    } finally {
+      Object.defineProperty = OriginalDefineProperty;
+    }
+
+    t.same(dispatch.value, {
+      partitionId: LEFT_PARTITION_ID,
+      params: ['a'],
+    });
   });
 
 test('split snapshot batching refreshes epoch evidence before each child',
