@@ -1,4 +1,5 @@
 name: a1-v13-attempt
+# retry with parser-owner intrinsic capture
 # retry after isolated Map witness
 # retry after full isolated intrinsic witnesses
 # retry after TAP-safe intrinsic witness repair
@@ -45,24 +46,35 @@ jobs:
           cp "$v11/candidate-test-routing-key-comparator.test.js" test/partition/routing-key-comparator.test.js
           cp "$v11/candidate-test-merge-auto-execution.test.js" test/partition/merge-auto-execution.test.js
           cp solve/quests/partition-key-ordering-owner-completion-v13/evidence/candidate-src-partition-split-routing.js src/partition/partition-split-routing.js
+          cp solve/quests/partition-key-ordering-owner-completion-v13/evidence/candidate-src-partition-sql-parser.js src/partition/partition-sql-parser.js
           cp solve/quests/partition-key-ordering-owner-completion-v13/evidence/candidate-test-partition-split-routing.test.js test/partition/partition-split-routing.test.js
       - name: Prove v13 closure
         run: node scripts/checks/partition-key-ordering-owner-completion-v13.js
       - name: Focused routing tests
         run: npx tap --timeout=120 test/partition/partition-split-routing.test.js
       - name: Candidate static guards
+        shell: bash
         run: |
-          node node_modules/eslint/bin/eslint.js --no-warn-ignored src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
-          node scripts/check-guideline-literals.js src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
-          node scripts/check-guideline-decision-boundaries.js src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
-          node scripts/check-guideline-ambient-intrinsics.js src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
-          node scripts/check-guideline-silent-catch.js src/partition/partition-split-routing.js test/partition/partition-split-routing.test.js scripts/checks/partition-key-ordering-owner-completion-v13.js
+          set -euo pipefail
+          paths=(
+            src/partition/partition-split-routing.js
+            src/partition/partition-sql-parser.js
+            test/partition/partition-split-routing.test.js
+            scripts/checks/partition-key-ordering-owner-completion-v13.js
+          )
+          node node_modules/eslint/bin/eslint.js --no-warn-ignored "${paths[@]}"
+          node scripts/check-guideline-literals.js "${paths[@]}"
+          node scripts/check-guideline-decision-boundaries.js "${paths[@]}"
+          node scripts/check-guideline-ambient-intrinsics.js "${paths[@]}"
+          node scripts/check-guideline-silent-catch.js "${paths[@]}"
+          git diff --check
       - name: Record content-bound attempt
         shell: bash
         run: |
           set -euo pipefail
           candidate_hashes="$(sha256sum \
             src/partition/partition-split-routing.js \
+            src/partition/partition-sql-parser.js \
             test/partition/partition-split-routing.test.js | tr '\n' ';')"
           node scripts/solve.js note \
             --id partition-key-ordering-owner-completion-v13 \
@@ -71,7 +83,7 @@ jobs:
             --evidence "github-actions:${GITHUB_RUN_ID}"
           node scripts/solve.js note \
             --id partition-key-ordering-owner-completion-v13 \
-            --attempt "A1-v13 captures remaining mutable split-routing intrinsics and adds isolated live hostile Map.prototype/Object/String/Array/Number witnesses; closure, focused routing tests and static guards green in GitHub Actions run ${GITHUB_RUN_ID}."
+            --attempt "A1-v13 captures remaining mutable split-routing and parser-owner intrinsics (including Math and parameterized INSERT parsing) and adds isolated live hostile Map/Object/String/Array/Number/RegExp witnesses; closure, focused routing tests and static guards green in GitHub Actions run ${GITHUB_RUN_ID}."
           git restore \
             src/partition/partition-constants.js \
             src/utils/strict-own-data.js \
@@ -83,6 +95,7 @@ jobs:
             src/partition/partition-split-merge-manager-evaluation-methods.js \
             src/partition/partition-split-merge-manager-transition-methods.js \
             src/partition/partition-split-routing.js \
+            src/partition/partition-sql-parser.js \
             test/partition/routing-key-comparator.test.js \
             test/partition/merge-auto-execution.test.js \
             test/partition/partition-split-routing.test.js
