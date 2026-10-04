@@ -19,16 +19,16 @@
     "services-runtime": 144,
     "solver-tooling": 7,
     "storage-partition": 144,
-    "storage-raft": 102,
+    "storage-raft": 103,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2196,
-  "digest": "fnv1a32-6613428d",
+  "censusSize": 2197,
+  "digest": "fnv1a32-a05695d9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b630bb54",
+  "observationDigest": "fnv1a32-7492cab1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1454,6 +1454,7 @@
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-refusals.test.js": "storage-raft",
@@ -8385,6 +8386,16 @@
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },
+    "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
@@ -8431,9 +8442,9 @@
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
         "src/config/configuration-manager.js",
-        "src/message-group/constants.js",
         "src/message-group/message-group-committed-command-admission.js",
         "src/message-group/message-group-service.js",
+        "src/raft/raft-committed-membership-constants.js",
         "test/test-helpers/boot-incarnation-fixture.js"
       ],
       "directories": [

@@ -16,6 +16,11 @@ const RAFT_OPERATION_PORT_REQUEST = Object.freeze({
   // the durable record alone (DURABLE_RECORD, a rejoin). Absent is refused
   // (owner decision O1).
   BOOTSTRAP_MEMBERSHIP: 'bootstrapMembership',
+  // The replica joins a group that already exists. Under a GENESIS stamp
+  // with no durable record that is a replica whose history is somewhere
+  // else: it is refused DURABLE_RECORD_MISSING before the core is entered
+  // (owner decision O4), never opened as a founder of an empty log.
+  JOINING_EXISTING_GROUP: 'joiningExistingGroup',
   // The replica's own durable storage handle. rs-raft keeps a hard state, an
   // applied position, a configuration state and a snapshot beside its
   // entries, so it needs the storage itself, inside whose transactions the

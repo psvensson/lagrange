@@ -170,6 +170,8 @@ function createRaftRsOperationPort(request) {
     membership: request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP],
     registry,
     peerId,
+    joiningExistingGroup:
+      request[RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP],
   });
   const lifecycle = new RaftRsReplicaLifecycleOwner({
     db: database, groupId, peerId, replicaIdentity,

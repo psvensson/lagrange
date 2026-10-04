@@ -98,6 +98,10 @@ function messageGroupConsensusRequest(service) {
     // replica with one reopens from that record alone.
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
       genesisStamp(service.replicaIds),
+    // A replica that joins an existing group under that stamp holds no
+    // founder's history: with no record it is refused (O4).
+    [RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP]:
+      service.isJoiningExistingGroup === true,
     [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: service.db,
     [RAFT_OPERATION_PORT_REQUEST.TIMING]: service.raftTimingConfig,
     [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(service),

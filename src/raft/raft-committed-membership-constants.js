@@ -69,8 +69,9 @@ const COMMITTED_MEMBERSHIP_READ_PURPOSE = Object.freeze({
 //                         holds a record is restored from it instead);
 //   DURABLE_RECORD_MISSING
 //                         a replica that must restore (a rejoin, or a
-//                         COMMITTED stamp that already names it a voter)
-//                         holds no durable record;
+//                         COMMITTED stamp that already names it a voter, or
+//                         a GENESIS stamp on a replica joining an existing
+//                         group) holds no durable record;
 //   RESEED_REQUIRED       a replica's own history is proven lost while it
 //                         runs (a peer holds it to a commit beyond its
 //                         persisted log): held durably, never reopened,
