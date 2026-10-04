@@ -98,11 +98,13 @@ const AUTHORITATIVE_READINESS_REPAIR = Object.freeze({
   COOLDOWN_MS: 5000,
   FAILURE_COOLDOWN_MS: 30000,
   NO_CHANGE_COOLDOWN_MS: 15000,
+  // ends-on: the authoritative control-plane query answers
   QUERY_TIMEOUT_MS: 1500,
   STALE_HEARTBEAT_MAX_AGE_MS: 10000,
 });
 const MEMBERSHIP_PUBLICATION_PLANNING = Object.freeze({
   ACTIVE_STALE_GRACE_MS: DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
+  // ends-on: n/a dead (stored as membershipPublicationPlanningSnapshotRefreshTimeoutMs, which nothing reads)
   REFRESH_TIMEOUT_MS: TIME_MS.SECOND,
 });
 const MEMBERSHIP_PUBLICATION_PLANNING_SOURCE = Object.freeze({

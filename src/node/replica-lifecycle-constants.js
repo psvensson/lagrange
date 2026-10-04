@@ -128,7 +128,9 @@ const REPLICA_LIFECYCLE_EVENT = Object.freeze({
 });
 
 const REPLICA_LIFECYCLE_DEFAULT = Object.freeze({
+  // ends-on: n/a dead (assigned to this.operationTimeoutMs, which nothing reads)
   OPERATION_TIMEOUT_MS: TIME_MS.MINUTE / 2,
+  // ends-on: n/a dead (assigned to the manager's syncTimeoutMs, which nothing reads)
   SYNC_TIMEOUT_MS: TIME_MS.MINUTE,
   EXPIRED_OPERATION_MAX_AGE_MS: TIME_MS.MINUTE * NUM.FIVE,
   UNKNOWN_NODE_ID: STRING.UNKNOWN,

@@ -8,6 +8,7 @@ const SNAPSHOT_RECORDER_DEFAULT = Object.freeze({
   MAX_BYTES_PER_SNAPSHOT: 1048576,
   MAX_FRAMES_PER_SESSION: 512,
   MAX_HOST_CALLS_PER_SESSION: 1024,
+  // ends-on: the snapshot capture operation completes (unreachable: SnapshotRecorder is never instantiated in src/)
   CAPTURE_TIMEOUT_MS: 250,
   HEADER_SIZE_BYTES: 13,
 });

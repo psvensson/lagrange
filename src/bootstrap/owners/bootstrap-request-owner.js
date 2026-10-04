@@ -72,28 +72,33 @@ function resolveBootstrapRequestSpentBound(options) {
 /**
  * Report a spent bootstrap-request bound (client attempt deadline or the
  * seed execution budget). The subject is the joiner node, so a joiner
- * retrying into the same spent stage folds into one line.
- * @param {Object} logger
+ * retrying into the same spent stage folds into one line. lastObserved is
+ * the deferral payload the replaced WARN carried (seed, reason code,
+ * retry-after, both budgets), gathered inside the reporter's guard.
+ * @param {Object} owner - The bootstrap request owner.
  * @param {Object} spentWait - One BOOTSTRAP_REQUEST_SPENT_WAIT entry.
  * @param {Object} options - The deferral options.
- * @param {number} observedAtMs
+ * @param {Object} deferral - {observedAtMs, reasonCode}.
  */
 function reportBootstrapRequestDeadlineSpent(
-  logger,
+  owner,
   spentWait,
   options,
-  observedAtMs,
+  deferral,
 ) {
   const bound = resolveBootstrapRequestSpentBound(options);
-  reportWaitBoundSpent(logger, {
+  reportWaitBoundSpent(owner.getLogger(), {
     ...spentWait,
     boundMs: bound.boundMs,
-    elapsedMs: observedAtMs - bound.startedAtMs,
-    lastObserved: {
-      deferStage: options.deferStage,
-      clientAttemptDeadlineState: options.clientAttemptDeadline?.state,
-      executionBudgetConfiguredMs: options.timeoutBudget?.configuredBudgetMs,
-    },
+    elapsedMs: deferral.observedAtMs - bound.startedAtMs,
+    lastObserved: () => owner.buildBootstrapRequestDeferredLogPayload({
+      ...options,
+      // Attached non-enumerable, so a spread alone would drop it.
+      timeoutBudget: options.timeoutBudget,
+      observedAtMs: deferral.observedAtMs,
+      reasonCode: deferral.reasonCode,
+      retryAfterMs: owner.getBootstrapAdmissionRetryAfterMs(),
+    }),
     scope: {
       joinerNodeId: options.nodeId,
       joinerNodeAddress: options.nodeAddress,
@@ -519,6 +524,13 @@ class BootstrapRequestOwner {
   }
 
   logBootstrapRequestDeferred(options = {}) {
+    this.getLogger().warn(
+      BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_REQUEST_DEFERRED,
+      this.buildBootstrapRequestDeferredLogPayload(options),
+    );
+  }
+
+  buildBootstrapRequestDeferredLogPayload(options = {}) {
     const clientAttemptDeadline =
       options.clientAttemptDeadline &&
       typeof options.clientAttemptDeadline === 'object' ?
@@ -555,10 +567,7 @@ class BootstrapRequestOwner {
       logPayload.requestExecutionConfiguredBudgetMs =
         timeoutBudget.configuredBudgetMs;
     }
-    this.getLogger().warn(
-      BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_REQUEST_DEFERRED,
-      logPayload,
-    );
+    return logPayload;
   }
 
   buildBootstrapRequestExecutionBudgetDeferredResponse(
@@ -572,10 +581,10 @@ class BootstrapRequestOwner {
       BOOTSTRAP_API_PROBE_REASON
         .BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED;
     reportBootstrapRequestDeadlineSpent(
-      this.getLogger(),
+      this,
       BOOTSTRAP_REQUEST_SPENT_WAIT.EXECUTION_BUDGET,
       options,
-      observedAt,
+      {observedAtMs: observedAt, reasonCode},
     );
     const startupAuthority =
       this.getStartupAuthoritySnapshotForBootstrapResponse(observedAt);
@@ -599,10 +608,10 @@ class BootstrapRequestOwner {
     const reasonCode =
       BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED;
     reportBootstrapRequestDeadlineSpent(
-      this.getLogger(),
+      this,
       BOOTSTRAP_REQUEST_SPENT_WAIT.CLIENT_ATTEMPT_DEADLINE,
       options,
-      observedAt,
+      {observedAtMs: observedAt, reasonCode},
     );
     const startupAuthority =
       this.getStartupAuthoritySnapshotForBootstrapResponse(observedAt);

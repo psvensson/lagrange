@@ -349,9 +349,12 @@ class ServiceRegistrationVisibilityOwner {
         serviceId: expectedService[COLUMN.SERVICE_ID],
         nodeId: expectedService[COLUMN.NODE_ID],
       },
+      // The replaced WARN's timeoutDiagnostics, whole (the gate builds the
+      // timeout error, which fills them, before it describes the spend).
       describeLastObserved: (_result, context) => ({
         timeoutKind: context.timeoutKind,
         attempts: context.attempt,
+        ...timeoutDiagnostics,
         lastVisibilityCheck: timeoutDiagnostics?.lastVisibilityCheck || null,
       }),
       subscriptions: [

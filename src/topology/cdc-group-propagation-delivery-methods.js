@@ -123,6 +123,7 @@ class CDCGroupPropagationDeliveryMethods {
         attempt: maxAttempts,
         maxAttempts,
         failureCount: deliveryFailures.length,
+        eventCount: deliveryLabel.eventCount,
       });
       const retryTargets = this.convertFailuresToRetryTargets(deliveryFailures);
       this.scheduleDeferredDeliveryEvents(

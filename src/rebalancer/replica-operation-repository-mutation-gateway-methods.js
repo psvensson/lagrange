@@ -113,13 +113,13 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         ...OPERATION_PERSIST_RETRY_WAIT,
         boundMs: spent.elapsedMs + spent.remainingMs,
         elapsedMs: spent.elapsedMs,
-        lastObserved: {
+        lastObserved: () => ({
           errorCode: getControlPlaneErrorCode(result) || null,
           error: this.getOperationPersistErrorMessage(result) || null,
           retryAttempt: spent.retryAttempt,
           callerBudgetBound: budgeted,
           localBoundMs: OPERATION_PERSIST_RETRY_TIMEOUT_MS,
-        },
+        }),
         scope: {
           nodeId: this.nodeId || null,
           ownerId: spent.options?.ownerId || null,

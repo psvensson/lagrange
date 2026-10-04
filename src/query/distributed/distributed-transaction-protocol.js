@@ -164,13 +164,13 @@ function reportTransactionBudgetSpent(owner, tx, stage) {
     boundMs: tx.timeoutBudget?.configuredBudgetMs ??
       owner.transactionBudgetMs,
     elapsedMs: Number.isFinite(tx.createdAt) ? nowMs - tx.createdAt : null,
-    lastObserved: {
+    lastObserved: () => ({
       stage,
       status: tx.status,
       commitMode: tx.commitMode,
       remainingBudgetMs: owner.getRemainingTransactionBudgetMs(tx),
       participantStatuses: countParticipantStatuses(tx),
-    },
+    }),
     scope: {transactionId: tx.transactionId, sessionId: tx.sessionId},
   });
 }
@@ -188,13 +188,13 @@ function reportParticipantRetriesSpent(owner, spent) {
     ...PARTICIPANT_RETRY_WAIT,
     boundMs: null,
     elapsedMs: owner.now() - spent.startedAtMs,
-    lastObserved: {
+    lastObserved: () => ({
       stage: spent.stage,
       maxRetries: owner.participantRetryMaxRetries,
       attempts: spent.attempt + 1,
       lastError: spent.error?.message || String(spent.error),
       lastErrorCode: spent.error?.errorCode || spent.error?.code || null,
-    },
+    }),
     scope: {
       transactionId: spent.tx.transactionId,
       partitionId: spent.partitionId,

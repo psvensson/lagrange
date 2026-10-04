@@ -214,6 +214,7 @@ const JOIN_PLAN_SEGMENT = Object.freeze({
 });
 
 const BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT = Object.freeze({
+  // ends-on: a leader is observed for the system partitions
   TIMEOUT_CAP_MS: 5000,
   INITIAL_DELAY_MS: 10,
   MAX_DELAY_MS: 100,

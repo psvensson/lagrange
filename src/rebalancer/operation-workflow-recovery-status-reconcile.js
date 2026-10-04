@@ -82,14 +82,15 @@ const OPERATION_STEP_TIMEOUT_WAIT = Object.freeze({
 });
 
 /**
- * An operation's step timeout or the enclosing rebalance budget is spent:
- * one wait_bound_spent ERROR per spend. Re-fires per timeout check for an
- * exempt REPLACE (its budget is a diagnostic only), so the operation is the
- * subject and an unchanged observation folds.
+ * An operation's step timeout or the enclosing rebalance budget is spent
+ * and the operation is failed for it: one wait_bound_spent ERROR per spend,
+ * the operation as the subject. A time-exempt REPLACE never reaches here:
+ * its budget is a diagnostic only (recordReplaceBudgetDiagnostic), not a
+ * bound, so its expiry is not a spent wait.
  * @param {Object} owner
  * @param {Object} operation
  * @param {Object} spent - {stepTimeout, elapsed, budgetExhausted,
- *   stepExceeded, timeoutClassification, exemptReplace}
+ *   stepExceeded, timeoutClassification}
  * @return {void}
  */
 function reportOperationStepTimeoutSpent(owner, operation, spent) {
@@ -104,7 +105,6 @@ function reportOperationStepTimeoutSpent(owner, operation, spent) {
       targetNodeId: operation.targetNodeId || null,
       stepExceeded: spent.stepExceeded,
       budgetExhausted: spent.budgetExhausted,
-      exemptReplace: spent.exemptReplace === true,
       timeoutClassification: spent.timeoutClassification || null,
     },
     scope: {
@@ -740,10 +740,6 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       // S9 / D2: the budget is a diagnostic for a REPLACE at ACTIVE or
       // STOPPING; it never changes the operation's state.
       recordReplaceBudgetDiagnostic(this, operation);
-      reportOperationStepTimeoutSpent(this, operation, {
-        stepTimeout, elapsed, budgetExhausted, stepExceeded,
-        exemptReplace: true,
-      });
       return;
     }
     if (stepExceeded || budgetExhausted) {

@@ -39,16 +39,24 @@
  * a reset would add a call to every wait's normal path. Without `subject`
  * every occurrence is one line. The subject memory is bounded.
  *
- * Sink: a report whose wait lies on the logs-table write path itself passes
- * `sink: WAIT_BOUND_SPENT_SINK.CONSOLE_ONLY` and is written through the
- * logging service's console-only sink, never back into the logs table that
- * just failed to take a write.
+ * Sink: a report whose wait lies on the logs-table write path itself is
+ * written through the logging service's console-only sink, never back into
+ * the logs table that just failed to take a write (with the logs partition
+ * down, each failed log write would otherwise queue new log writes). The
+ * reporter recognises such a report by its scope naming the logs table
+ * (`tableName`/`tableId`) or a logs-table partition (`partitionId`); a site
+ * that is part of the logs sink itself passes
+ * `sink: WAIT_BOUND_SPENT_SINK.CONSOLE_ONLY`.
  *
  * Visibility only: the reporter never throws and never changes what the
  * caller does after its bound is spent.
  */
 
 import {LoggingService} from './logging-service.js';
+import {
+  resolvePartitionTableId,
+} from '../bootstrap/system-partition-classification.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 
 const WAIT_BOUND_SPENT_EVENT = 'wait_bound_spent';
 const WAIT_BOUND_SPENT_MESSAGE = 'Wait bound spent';
@@ -179,6 +187,27 @@ function resolveLogger(logger) {
 }
 
 /**
+ * Whether a resolved scope names the logs table or one of its partitions.
+ * @param {Object} scope - A resolved scope.
+ * @return {boolean}
+ */
+function isLogsTableScope(scope) {
+  if (scope.tableName === SYSTEM_TABLE_NAME.LOGS ||
+      scope.tableId === SYSTEM_TABLE_NAME.LOGS) {
+    return true;
+  }
+  return typeof scope.partitionId === 'string' &&
+    resolvePartitionTableId({partitionId: scope.partitionId}) ===
+      SYSTEM_TABLE_NAME.LOGS;
+}
+
+function resolveSink(spent, scope) {
+  return isLogsTableScope(scope) ?
+    WAIT_BOUND_SPENT_SINK.CONSOLE_ONLY :
+    spent.sink;
+}
+
+/**
  * Write one line through the sink the report names.
  * @param {Object} logger - Site logger.
  * @param {string} [sink] - A WAIT_BOUND_SPENT_SINK value, or none.
@@ -229,14 +258,15 @@ class WaitBoundSpentReporter {
       if (repeats === WAIT_BOUND_SPENT_OUTCOME.FOLDED) {
         return WAIT_BOUND_SPENT_OUTCOME.FOLDED;
       }
-      emit(logger, spent.sink, {
+      const scope = resolveScope(observe(spent.scope));
+      emit(logger, resolveSink(spent, scope), {
         event: WAIT_BOUND_SPENT_EVENT,
         wait: String(spent.wait),
         awaited: String(spent.awaited),
         boundMs: spent.boundMs,
         elapsedMs: resolveElapsedMs(spent, this._now),
         lastObserved: lastObserved.value,
-        scope: boundObservation(resolveScope(observe(spent.scope))).value,
+        scope: boundObservation(scope).value,
         repeats,
       });
       return WAIT_BOUND_SPENT_OUTCOME.LOGGED;

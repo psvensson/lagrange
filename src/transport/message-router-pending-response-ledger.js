@@ -37,13 +37,13 @@ function reportPendingResponseSpent(router, messageId, pending, timeoutMs) {
     ...PENDING_RESPONSE_WAIT,
     boundMs: timeoutMs,
     elapsedMs: router.timeSource.now() - pending.armedAtMs,
-    lastObserved: {
+    lastObserved: () => ({
       targetConnectionState:
         router.nodeConnections?.get?.(pending.targetNodeId)?.state ?? null,
       deliverySource: pending.deliverySource,
       responseContext: pending.responseContext,
       pendingResponses: router.pendingResponses.size,
-    },
+    }),
     scope: {
       nodeId: router.nodeId ?? null,
       targetNodeId: pending.targetNodeId,

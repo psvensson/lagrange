@@ -183,11 +183,11 @@ function reportSchemaProvisioningDeadlineSpent(
     ...SCHEMA_PROVISIONING_DEADLINE_WAIT,
     boundMs: timeoutBudget.configuredBudgetMs,
     elapsedMs,
-    lastObserved: {
+    lastObserved: () => ({
       phase,
       workflowStatus: workflow.status,
       scheduledRetry: owner.retryTimersByWorkflowId.has(workflow.workflowId),
-    },
+    }),
     scope: {workflowId: workflow.workflowId, ownerId: owner.ownerId},
   });
 }

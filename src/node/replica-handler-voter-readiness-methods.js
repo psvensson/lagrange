@@ -29,6 +29,28 @@ const VOTER_READY_ACTIVATION_WAIT = Object.freeze({
 });
 
 /**
+ * The role, services-row status and address the handler last observed for
+ * the replica.
+ * @param {Object} handler - The ReplicaHandler.
+ * @param {Object} spent - {replicaId, polls}.
+ * @return {Object} The observation.
+ */
+function observeVoterReadyActivation(handler, spent) {
+  const serviceRow = handler.systemTableCache?.get?.(
+    SYSTEM_TABLE_NAME.SERVICES,
+    spent.replicaId,
+  ) ?? null;
+  return {
+    trackedRaftRole: handler.getTrackedReplicaRole?.(spent.replicaId) ?? null,
+    serviceRowPresent: serviceRow !== null,
+    serviceRowStatus: serviceRow?.status ?? null,
+    serviceRowRaftRole: serviceRow?.raft_role ?? null,
+    serviceRowHasAddress: Boolean(serviceRow?.address),
+    polls: spent.polls,
+  };
+}
+
+/**
  * The voter-ready activation wait spent its bound: one wait_bound_spent
  * ERROR with the role, services-row status and address the handler last
  * observed for the replica.
@@ -37,22 +59,13 @@ const VOTER_READY_ACTIVATION_WAIT = Object.freeze({
  * @return {void}
  */
 function reportVoterReadyActivationSpent(handler, spent) {
-  const serviceRow = handler.systemTableCache?.get?.(
-    SYSTEM_TABLE_NAME.SERVICES,
-    spent.replicaId,
-  ) ?? null;
   reportWaitBoundSpent(handler.logger, {
     ...VOTER_READY_ACTIVATION_WAIT,
     boundMs: handler.syncTimeoutMs,
     elapsedMs: Date.now() - spent.startedAtMs,
-    lastObserved: {
-      trackedRaftRole: handler.getTrackedReplicaRole?.(spent.replicaId) ?? null,
-      serviceRowPresent: serviceRow !== null,
-      serviceRowStatus: serviceRow?.status ?? null,
-      serviceRowRaftRole: serviceRow?.raft_role ?? null,
-      serviceRowHasAddress: Boolean(serviceRow?.address),
-      polls: spent.polls,
-    },
+    // Observer: the cache and role reads run inside the reporter's guard,
+    // so a failing read never replaces the voter-ready timeout error.
+    lastObserved: () => observeVoterReadyActivation(handler, spent),
     scope: {
       nodeId: handler.nodeId,
       partitionId: spent.partitionId,

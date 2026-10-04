@@ -56,8 +56,9 @@ test('a spent function-query timeout logs one wait_bound_spent ERROR and ' +
   t.same(context.lastObserved, {
     engineResultPending: true,
     paramCount: 1,
-    sql: 'SELECT * FROM t WHERE id = ?',
-  });
+    statementKind: 'SELECT',
+    sqlChars: 'SELECT * FROM t WHERE id = ?'.length,
+  }, 'the statement by kind and size, never its text');
 });
 
 test('a function query answered inside its bound logs no wait_bound_spent',

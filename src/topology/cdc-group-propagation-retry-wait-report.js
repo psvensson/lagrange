@@ -20,14 +20,16 @@ const CDC_PROPAGATION_RETRY_WAIT = Object.freeze({
 
 /**
  * A CDC propagation retry budget ran out: one wait_bound_spent ERROR with
- * the wave's table, operation, attempts and remaining failures.
+ * the wave's table, operation, attempts, remaining failures, event count
+ * (foreground) and whether the background retry spent it.
  * @param {Object} service - The CDC group propagation service.
  * @param {Object} waitName - A CDC_PROPAGATION_RETRY_WAIT entry.
  * @param {Object} spent - {tableName, operation, attempt, maxAttempts,
- *   failureCount}.
+ *   failureCount, eventCount?}.
  * @return {void}
  */
 function reportCdcPropagationRetrySpent(service, waitName, spent) {
+  const background = waitName === CDC_PROPAGATION_RETRY_WAIT.BACKGROUND;
   reportWaitBoundSpent(service.logger, {
     ...waitName,
     boundMs: null,
@@ -38,6 +40,8 @@ function reportCdcPropagationRetrySpent(service, waitName, spent) {
       attempt: spent.attempt,
       maxAttempts: spent.maxAttempts,
       failureCount: spent.failureCount,
+      eventCount: spent.eventCount ?? null,
+      background,
     },
     scope: {nodeId: service.nodeId ?? null},
   });

@@ -135,6 +135,25 @@ function summarizeStartupConvergenceObservation(
  */
 function reportStartupConvergenceSpent(options, spent) {
   const spentWait = options.spentWait || STARTUP_CONVERGENCE_WAIT;
+  reportWaitBoundSpent(options.logger || null, {
+    wait: spentWait.wait,
+    awaited: spentWait.awaited,
+    boundMs: spent.timeoutContext.timeoutMs,
+    elapsedMs: spent.timeoutContext.elapsedMs,
+    // Observer: the caller's describe function runs inside the reporter's
+    // guard, so a throwing description never replaces the timeout error.
+    lastObserved: () => describeStartupConvergenceSpent(options, spent),
+    scope: options.scope,
+  });
+}
+
+/**
+ * The caller's description of its last observation, else the gate's own.
+ * @param {Object} options - The gate options.
+ * @param {Object} spent - {lastResult, timeoutContext, lastSignal, error}.
+ * @return {Object} The observation.
+ */
+function describeStartupConvergenceSpent(options, spent) {
   const described = typeof options.describeLastObserved === 'function' ?
     options.describeLastObserved(
       spent.lastResult,
@@ -142,18 +161,11 @@ function reportStartupConvergenceSpent(options, spent) {
       spent.error,
     ) :
     null;
-  reportWaitBoundSpent(options.logger || null, {
-    wait: spentWait.wait,
-    awaited: spentWait.awaited,
-    boundMs: spent.timeoutContext.timeoutMs,
-    elapsedMs: spent.timeoutContext.elapsedMs,
-    lastObserved: described || summarizeStartupConvergenceObservation(
-      spent.lastResult,
-      spent.timeoutContext,
-      spent.lastSignal,
-    ),
-    scope: options.scope,
-  });
+  return described || summarizeStartupConvergenceObservation(
+    spent.lastResult,
+    spent.timeoutContext,
+    spent.lastSignal,
+  );
 }
 
 async function waitForStartupConvergence(options = {}) {

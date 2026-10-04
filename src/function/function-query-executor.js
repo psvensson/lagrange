@@ -22,6 +22,17 @@ const FUNCTION_QUERY_WAIT = Object.freeze({
   awaited: 'SQL engine result for one function query',
 });
 
+const STATEMENT_KIND_PATTERN = /^\s*([A-Za-z]+)/;
+
+/**
+ * The leading keyword of a statement (SELECT, INSERT, ...), never its text.
+ * @param {string} sql - The statement.
+ * @return {string|null} The upper-cased keyword, or null.
+ */
+function describeStatementKind(sql) {
+  return STATEMENT_KIND_PATTERN.exec(String(sql))?.[1]?.toUpperCase() ?? null;
+}
+
 /**
  * Report a spent function-query timeout and mark the rejection error so
  * the generic failure log does not repeat it.
@@ -35,11 +46,14 @@ function reportFunctionQueryTimeoutSpent(executor, spent) {
     ...FUNCTION_QUERY_WAIT,
     boundMs: spent.timeoutMs,
     elapsedMs: Date.now() - spent.startedAtMs,
-    lastObserved: {
+    // Identifiers, counts and sizes only: the statement kind and the text's
+    // length, never the SQL text (it can carry literal values) or params.
+    lastObserved: () => ({
       engineResultPending: true,
       paramCount: spent.paramCount,
-      sql: spent.sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
-    },
+      statementKind: describeStatementKind(spent.sql),
+      sqlChars: spent.sql.length,
+    }),
   });
   spent.error.waitBoundSpentReported = true;
   return spent.error;

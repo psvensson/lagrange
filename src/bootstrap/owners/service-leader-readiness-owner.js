@@ -240,7 +240,7 @@ class ServiceLeaderReadinessOwner {
         liveLeaderTableCount: 0,
         lastDelayMs: delay,
       },
-      scope: {nodeId: this.getSeedNodeId()},
+      scope: () => ({nodeId: this.getSeedNodeId()}),
     });
   }
 

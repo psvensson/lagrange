@@ -32,12 +32,12 @@ function reportControlPlaneWriteSpent(resultOrError, spent) {
     ...(options.spentWait || RETRYABLE_CONTROL_PLANE_WRITE_WAIT),
     boundMs: spent.timeoutMs,
     elapsedMs: spent.elapsedMs,
-    lastObserved: {
+    lastObserved: () => ({
       attempts: spent.attempt,
       lastErrorCode: resultOrError?.code ?? resultOrError?.errorCode ?? null,
       lastError: resultOrError?.message ?? resultOrError?.error ?? null,
       retryAfterMs: getControlPlaneRetryAfterMs(resultOrError),
-    },
+    }),
     scope: options.scope,
   });
 }

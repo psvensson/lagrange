@@ -498,11 +498,11 @@ class ManagedMergeWorkflowPersistenceMethods {
       ...MERGE_SAME_OWNER_RESYNC_WAIT,
       boundMs: null,
       elapsedMs: this.now() - startedAtMs,
-      lastObserved: {
+      lastObserved: () => ({
         attempts,
         stepName: stepOptions.stepName ?? null,
         lastError: lastError?.message || String(lastError),
-      },
+      }),
       scope: {workflowId: stepOptions.workflowId ?? null},
     });
     throw lastError;

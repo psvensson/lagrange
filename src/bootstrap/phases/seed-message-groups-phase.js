@@ -365,21 +365,37 @@ class SeedMessageGroupsPhase {
    *   lastDelayMs}.
    */
   reportMessageGroupLeadershipSpent(logger, spent) {
+    // Observers: the replica reads run inside the reporter's guard, so a
+    // failing read never replaces the leadership timeout error.
+    reportWaitBoundSpent(logger, {
+      ...SEED_MESSAGE_GROUP_LEADERSHIP_WAIT,
+      boundMs: spent.timeoutMs,
+      elapsedMs: spent.elapsedMs,
+      lastObserved: () => ({
+        replicas: this.observeMessageGroupReplicas(spent.replicaIds),
+        lastDelayMs: spent.lastDelayMs,
+      }),
+      scope: () => ({
+        nodeId: this.delegates.getNodeId(),
+        groupId: spent.groupId,
+      }),
+    });
+  }
+
+  /**
+   * Each replica's presence and leader as this node last sees them.
+   * @param {Array<string>} replicaIds
+   * @return {Array<Object>} {replicaId, present, leaderId} per replica.
+   */
+  observeMessageGroupReplicas(replicaIds) {
     const services = this.delegates.getMessageGroupServices();
-    const replicas = spent.replicaIds.map((replicaId) => {
+    return replicaIds.map((replicaId) => {
       const service = services.get(replicaId);
       return {
         replicaId,
         present: Boolean(service),
         leaderId: service?.getLeaderId?.() ?? null,
       };
-    });
-    reportWaitBoundSpent(logger, {
-      ...SEED_MESSAGE_GROUP_LEADERSHIP_WAIT,
-      boundMs: spent.timeoutMs,
-      elapsedMs: spent.elapsedMs,
-      lastObserved: {replicas, lastDelayMs: spent.lastDelayMs},
-      scope: {nodeId: this.delegates.getNodeId(), groupId: spent.groupId},
     });
   }
 

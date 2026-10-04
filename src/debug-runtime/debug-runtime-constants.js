@@ -29,6 +29,7 @@ const WASM_RUNTIME_ADAPTER_STATE = Object.freeze({
 });
 
 const WASM_RUNTIME_DEFAULT = Object.freeze({
+  // ends-on: the wasm handler returns or the execution is cancelled
   EXECUTION_TIMEOUT_MS: 30000,
 });
 

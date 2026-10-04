@@ -50,6 +50,7 @@ const VIOLATION_KIND = Object.freeze({
   WAIT_CONSTANT_UNDECLARED: 'wait_constant_end_event_undeclared',
   WAIT_CONSTANT_TIMER_ONLY: 'wait_constant_timer_only',
   WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND: 'wait_constant_unknown_non_wait_kind',
+  WAIT_CONSTANT_EVENT_UNNAMED: 'wait_constant_end_event_unnamed',
   WAIT_CONSTANT_DECLARED: 'wait_constant_declared',
 });
 
@@ -476,22 +477,33 @@ function checkLocalRetryLoop(node, functionName, filePath, violations) {
 
 // Named waits declare their ending event (owner rule, 2026-10-04: "a spent
 // wait is a failure"; every fully spent timeout so far hid a true bug). A
-// named wait constant in src/ carries `// ends-on: <event>` on its
-// declaration line or in the comment lines directly above it. `ends-on:
-// timer` (the timer is the only exit) is refused; a constant that is not a
-// wait declares `ends-on: n/a <kind>` with a kind from NON_WAIT_KIND. The set
-// of constants is derived from the source by WAIT_CONSTANT_NAME_PATTERN.
-const WAIT_CONSTANT_NAME_PATTERN =
-  /^(?:[A-Z0-9]+_)*(?:TIMEOUT|BACKSTOP|DEADLINE)(?:_[A-Z0-9]+)*_MS$/u;
+// named wait in src/ carries `// ends-on: <event>` on its line or in the
+// comment lines directly above it. Named waits are declarators (const, let,
+// var) and object-literal members (plain, Object.freeze, nested) whose name
+// matches WAIT_NAME_PATTERN: an `_MS` declarator always, a member or a
+// name without `_MS` when it holds a bound (isBoundShapedValue). The event
+// names at least EVENT_MIN_WORDS words; one naming the timer (`timer`,
+// `the timer`, `Timer`, ...) is refused; a bound that is not a wait declares
+// `ends-on: n/a <kind>` with a kind from NON_WAIT_KIND. Only timer-only waits
+// may be baselined, one-way (the test ceiling-guards the shared baseline).
+// Browser code (src/admin/static/*.html) is out of scope: the audit parses
+// .js modules, and a page's fetch timeout is not a server wait.
+const WAIT_NAME_PATTERN =
+  /^(?:[A-Z0-9]+_)*(?:TIMEOUT|BACKSTOP|DEADLINE)(?:(?:_[A-Z0-9]+)*_MS)?$/u;
+const MS_NAME_SUFFIX = '_MS';
 const ENDS_ON_PATTERN = /\/\/\s*ends-on:\s*(.*)$/u;
 const LINE_COMMENT_PREFIX = '//';
-const ENDS_ON_TIMER_ONLY = 'timer';
-const NON_WAIT_PREFIX = 'n/a ';
-const CONST_DECLARATION_KIND = 'const';
+const TIMER_EVENT_PATTERN =
+  /^(?:(?:the|its|a|an|their|this|that)\s+)?timer\b/iu;
+const NON_WAIT_PATTERN = /^n\/a(?:\s+(\S+))?/iu;
+const EVENT_WORD_PATTERN = /[a-z]/iu;
+const EVENT_MIN_WORDS = 3;
 const EXPORT_NAMED_DECLARATION = 'ExportNamedDeclaration';
 const END_EVENT_UNDECLARED = Object.freeze({declared: false});
 const SOURCE_ROOT_PREFIX = 'src/';
 const SOURCE_ROOT_SEGMENT = '/src/';
+const MEMBER_PATH_SEPARATOR = '.';
+const UNNAMED_OBJECT = '<object>';
 const NON_WAIT_KIND = Object.freeze(new Set([
   // a floor or cap applied to another wait's bound
   'clamp',
@@ -505,7 +517,28 @@ const NON_WAIT_KIND = Object.freeze(new Set([
   'ttl',
   // a delay that is expected to elapse
   'delay',
+  // a budget that is the designed normal exit of a best-effort step
+  'timebox',
+  // a named bound with no consumer: nothing waits on it
+  'dead',
+  // the name matches the wait pattern but the value is not a time
+  'misnamed',
 ]));
+const NODE_TYPE_BINARY = 'BinaryExpression';
+const NODE_TYPE_TEMPLATE = 'TemplateLiteral';
+const NODE_TYPE_CALL = 'CallExpression';
+// A value of these node types is never a bound (a nested object's members
+// are visited themselves).
+const NON_BOUND_VALUE_TYPE = Object.freeze(new Set([
+  'ArrayExpression',
+  'ArrowFunctionExpression',
+  'ClassExpression',
+  'FunctionExpression',
+  LOCAL_STR_OBJECTEXPRESSION,
+  NODE_TYPE_TEMPLATE,
+]));
+const OBJECT_FREEZE_CALLEE = 'Object.freeze';
+const NUMBER_TYPE = 'number';
 const WAIT_CONSTANT_RULE_REFERENCE =
   `${RULES_MD}R07. A semantic outcome is a named state ` +
   '(a named wait declares the event that ends it before its bound)';
@@ -518,7 +551,16 @@ const WAIT_CONSTANT_REASON = Object.freeze({
   [VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND]:
     'ends-on: n/a must name an enumerated non-wait kind ' +
     `(${[...NON_WAIT_KIND].join(LOCAL_STR_COMMA_SPACE)})`,
+  [VIOLATION_KIND.WAIT_CONSTANT_EVENT_UNNAMED]:
+    `ends-on must name the ending event in at least ${EVENT_MIN_WORDS} words`,
 });
+// The kinds the shared baseline can never admit: only a timer-only wait has
+// a one-way baseline.
+const UNBASELINABLE_WAIT_KIND = Object.freeze(new Set([
+  VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED,
+  VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND,
+  VIOLATION_KIND.WAIT_CONSTANT_EVENT_UNNAMED,
+]));
 
 function isSourceRootPath(filePath) {
   const normalized = filePath.split('\\').join('/');
@@ -545,49 +587,167 @@ function readEndsOnDeclaration(sourceLines, statementNode) {
   return END_EVENT_UNDECLARED;
 }
 
+function countEventWords(value) {
+  return value.split(/\s+/u)
+    .filter((word) => EVENT_WORD_PATTERN.test(word))
+    .length;
+}
+
 function classifyEndsOnDeclaration(declaration) {
   if (!declaration.declared || declaration.value.length === 0) {
     return VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED;
   }
-  if (declaration.value === ENDS_ON_TIMER_ONLY) {
+  if (TIMER_EVENT_PATTERN.test(declaration.value)) {
     return VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY;
   }
-  if (declaration.value.startsWith(NON_WAIT_PREFIX) &&
-      !NON_WAIT_KIND.has(declaration.value.slice(NON_WAIT_PREFIX.length).trim())) {
-    return VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND;
+  const nonWait = NON_WAIT_PATTERN.exec(declaration.value);
+  if (nonWait) {
+    return NON_WAIT_KIND.has(nonWait[1]?.toLowerCase()) ?
+      VIOLATION_KIND.WAIT_CONSTANT_DECLARED :
+      VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND;
+  }
+  if (countEventWords(declaration.value) < EVENT_MIN_WORDS) {
+    return VIOLATION_KIND.WAIT_CONSTANT_EVENT_UNNAMED;
   }
   return VIOLATION_KIND.WAIT_CONSTANT_DECLARED;
 }
 
-function isNamedWaitDeclarator(node, parent) {
-  return node.type === LOCAL_STR_VARIABLEDECLARATOR &&
-    parent?.kind === CONST_DECLARATION_KIND &&
-    node.id?.type === LOCAL_STR_IDENTIFIER &&
-    WAIT_CONSTANT_NAME_PATTERN.test(node.id.name);
+function isWaitName(name) {
+  return typeof name === LOCAL_STR_STRING && WAIT_NAME_PATTERN.test(name);
+}
+
+function isStringShapedValue(node) {
+  if (node?.type === LOCAL_STR_LITERAL) {
+    return typeof node.value === LOCAL_STR_STRING;
+  }
+  if (node?.type === NODE_TYPE_BINARY) {
+    return isStringShapedValue(node.left) || isStringShapedValue(node.right);
+  }
+  return node?.type === NODE_TYPE_TEMPLATE;
 }
 
 /**
- * Every named wait constant (`const X_(TIMEOUT|BACKSTOP|DEADLINE)..._MS`) in
- * a source file with its ends-on declaration, derived from the AST.
+ * Whether a value holds a bound: a number, an arithmetic or conditional
+ * expression, a call, or a reference to something that is not itself a
+ * governed wait name (an alias such as `CONFIG_KEY.X_TIMEOUT_MS` or a
+ * shorthand `X_TIMEOUT_MS` is governed where it is defined).
+ * @param {Object|null} node - The value node.
+ * @return {boolean} True when the value is a bound.
+ */
+function isBoundShapedValue(node) {
+  if (!node || NON_BOUND_VALUE_TYPE.has(node.type)) {
+    return false;
+  }
+  if (node.type === LOCAL_STR_LITERAL) {
+    return typeof node.value === NUMBER_TYPE;
+  }
+  if (node.type === LOCAL_STR_IDENTIFIER ||
+      node.type === LOCAL_STR_MEMBEREXPRESSION) {
+    const reference = extractTargetName(node) || '';
+    return !isWaitName(reference.split(MEMBER_PATH_SEPARATOR).pop());
+  }
+  if (node.type === NODE_TYPE_CALL) {
+    return extractTargetName(node.callee) !== OBJECT_FREEZE_CALLEE;
+  }
+  return !isStringShapedValue(node);
+}
+
+function readPropertyKeyName(property) {
+  if (property.computed === true) {
+    return null;
+  }
+  if (property.key?.type === LOCAL_STR_IDENTIFIER) {
+    return property.key.name;
+  }
+  return typeof property.key?.value === LOCAL_STR_STRING ?
+    property.key.value :
+    null;
+}
+
+function isNamedWaitDeclarator(node) {
+  if (node.type !== LOCAL_STR_VARIABLEDECLARATOR ||
+      node.id?.type !== LOCAL_STR_IDENTIFIER ||
+      !isWaitName(node.id.name)) {
+    return false;
+  }
+  return node.id.name.endsWith(MS_NAME_SUFFIX) || isBoundShapedValue(node.init);
+}
+
+function isNamedWaitMember(node) {
+  return node.type === LOCAL_STR_PROPERTY &&
+    node.shorthand !== true &&
+    isWaitName(readPropertyKeyName(node)) &&
+    isBoundShapedValue(node.value);
+}
+
+// OBJECT.NESTED.MEMBER, named from the enclosing declarator and keys.
+function buildMemberPath(node, ancestors) {
+  const segments = [readPropertyKeyName(node)];
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const ancestor = ancestors[index];
+    if (ancestor.type === LOCAL_STR_PROPERTY) {
+      segments.unshift(readPropertyKeyName(ancestor) || UNNAMED_OBJECT);
+    } else if (ancestor.type === LOCAL_STR_VARIABLEDECLARATOR) {
+      segments.unshift(extractTargetName(ancestor.id) || UNNAMED_OBJECT);
+      return segments.join(MEMBER_PATH_SEPARATOR);
+    } else if (isFunctionLikeNode(ancestor)) {
+      break;
+    }
+  }
+  segments.unshift(UNNAMED_OBJECT);
+  return segments.join(MEMBER_PATH_SEPARATOR);
+}
+
+function describeDeclaratorWait(node, parent, ancestors) {
+  const exportWrapper = ancestors[ancestors.length - 2];
+  return {
+    name: node.id.name,
+    member: false,
+    statementNode: exportWrapper?.type === EXPORT_NAMED_DECLARATION ?
+      exportWrapper :
+      parent,
+  };
+}
+
+function describeMemberWait(node, parent, ancestors) {
+  return {
+    name: buildMemberPath(node, ancestors),
+    member: true,
+    statementNode: node,
+  };
+}
+
+// Each named-wait shape: how it is recognized and how it is described.
+const NAMED_WAIT_SHAPE = Object.freeze([
+  Object.freeze({matches: isNamedWaitDeclarator, describe: describeDeclaratorWait}),
+  Object.freeze({matches: isNamedWaitMember, describe: describeMemberWait}),
+]);
+
+function resolveNamedWait(node, parent, ancestors) {
+  const shape = NAMED_WAIT_SHAPE.find((candidate) => candidate.matches(node));
+  return shape ? shape.describe(node, parent, ancestors) : null;
+}
+
+/**
+ * Every named wait (declarator or object member) in a source file with its
+ * ends-on declaration, derived from the AST.
  * @param {string} source - File text.
  * @param {string} filePath - Path reported on each constant.
- * @return {Array<Object>} {filePath, name, line, declaration, kind}.
+ * @return {Array<Object>} {filePath, name, member, line, declaration, kind}.
  */
 function collectNamedWaitConstants(source, filePath) {
   const sourceLines = source.split('\n');
   const constants = [];
   walkAst(parseSourceFile(source), (node, parent, ancestors) => {
-    if (!isNamedWaitDeclarator(node, parent)) {
+    const wait = resolveNamedWait(node, parent, ancestors);
+    if (!wait) {
       return;
     }
-    const exportWrapper = ancestors[ancestors.length - 2];
-    const statementNode = exportWrapper?.type === EXPORT_NAMED_DECLARATION ?
-      exportWrapper :
-      parent;
-    const declaration = readEndsOnDeclaration(sourceLines, statementNode);
+    const declaration = readEndsOnDeclaration(sourceLines, wait.statementNode);
     constants.push({
       filePath,
-      name: node.id.name,
+      name: wait.name,
+      member: wait.member,
       line: node.loc.start.line,
       declaration,
       kind: classifyEndsOnDeclaration(declaration),
@@ -685,6 +845,12 @@ function buildDecisionBoundaryViolationIdentity(violation) {
   ]);
 }
 
+// An undeclared wait (or an unknown kind, or an unnamed event) entered into
+// the shared baseline is not an allowance: only timer-only waits are.
+function withoutUnbaselinableWaitAllowances(allowances) {
+  return new Map([...allowances].filter(([identity]) =>
+    !UNBASELINABLE_WAIT_KIND.has(JSON.parse(identity)[2])));
+}
 
 async function collectDecisionBoundaryViolationsWithBaseline(
   pathsToScan,
@@ -699,7 +865,7 @@ async function collectDecisionBoundaryViolationsWithBaseline(
   ]);
   return applyCountBaseline(
     report,
-    baseline,
+    withoutUnbaselinableWaitAllowances(baseline),
     buildDecisionBoundaryViolationIdentity,
   );
 }
@@ -751,4 +917,5 @@ export {
   collectDecisionBoundaryViolations,
   collectDecisionBoundaryViolationsWithBaseline,
   collectDecisionBoundaryViolationsFromSource,
+  withoutUnbaselinableWaitAllowances,
 };

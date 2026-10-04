@@ -35,6 +35,10 @@ const MESSAGE_RETRY_EXHAUSTED_WAIT = Object.freeze({
   awaited: 'an acknowledged delivery within the retry attempt budget',
 });
 
+// Bound on the attempt records (and tried targets) one exhaustion line
+// carries; the reporter also caps the serialized size of the observation.
+const MESSAGE_RETRY_REPORTED_ATTEMPTS = 16;
+
 /**
  * The attempt budget ran out: one wait_bound_spent ERROR naming the last
  * target, the last failure and how many targets were tried. The bound is
@@ -51,13 +55,22 @@ function reportMessageRetryExhausted(handler, diagnostics, maxAttempts) {
     ...MESSAGE_RETRY_EXHAUSTED_WAIT,
     boundMs: null,
     elapsedMs: Number.isFinite(firstAttemptAt) ? now - firstAttemptAt : null,
-    lastObserved: {
+    // Observer: the attempt history (target, status, error per attempt) and
+    // the targets tried, as the replaced WARN carried them; the newest
+    // MESSAGE_RETRY_REPORTED_ATTEMPTS attempts, with the omitted count.
+    lastObserved: () => ({
       maxAttempts,
       totalAttempts: diagnostics.totalAttempts,
       lastTarget: diagnostics.lastTarget ?? null,
       triedTargetCount: diagnostics.triedTargets.length,
+      triedTargets: diagnostics.triedTargets.slice(
+        -MESSAGE_RETRY_REPORTED_ATTEMPTS),
       lastError: diagnostics.lastError,
-    },
+      attemptHistory: diagnostics.attemptHistory.slice(
+        -MESSAGE_RETRY_REPORTED_ATTEMPTS),
+      attemptHistoryOmitted: Math.max(0, diagnostics.attemptHistory.length -
+        MESSAGE_RETRY_REPORTED_ATTEMPTS),
+    }),
     scope: {
       retryId: diagnostics.retryId,
       messageId: diagnostics.messageId ?? null,

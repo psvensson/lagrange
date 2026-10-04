@@ -64,6 +64,7 @@ function reportLatencyMeasurementSpent(service, targetNodeId, spent) {
 }
 
 const LATENCY_MEASUREMENT_CONFIG_MIN = Object.freeze({
+  // ends-on: n/a clamp
   PING_TIMEOUT_MS: 1,
   RECALC_INTERVAL_MS: NUM.THOUSAND,
   SMOOTHING_ALPHA: 0.01,

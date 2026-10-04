@@ -214,6 +214,8 @@ test('Property 1 Bug Condition A: scheduleBackgroundRetry SHALL NOT ' +
             'when attempt >= max, but no exhaustion log ' +
             'was emitted',
           );
+          assert.equal(exhaustionLog.context.lastObserved.background, true,
+            'the exhaustion line says the background retry spent it');
         } finally {
           service.stop();
           forceCleanupTimers(service);

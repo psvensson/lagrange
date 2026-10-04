@@ -56,6 +56,7 @@ const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_STEPS_BY_ENTITY_TYPE =
     ]),
   );
 
+const COORDINATOR_HANDOFF_RETRY_CLEARED_OUTCOME = 'handoff_retry_cleared';
 const COORDINATOR_HANDOFF_RETRY_WAIT = Object.freeze({
   wait: 'COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT',
   awaited: 'coordinator-created operation handed off to its remote owner',
@@ -101,6 +102,58 @@ function reportCoordinatorHandoffRetrySpent(owner, operation, logFields) {
       status: snapshot.status ?? null,
     },
     scope: {nodeId: owner.nodeId ?? null, partitionId, operationId},
+  });
+}
+
+// The step bound and its anchor, read on the expiry branch only; a read
+// that fails leaves the field unmeasured rather than reaching the caller.
+function readHandoffStepBound(owner, snapshot) {
+  try {
+    return {
+      boundMs: owner.getTimeoutForStep?.(snapshot.workflowStep, snapshot),
+      startedAtMs: owner.resolveOperationStepEnteredAtMs?.(snapshot) ??
+        snapshot.updatedAt ?? snapshot.updatedAtMs,
+    };
+  } catch (_readError) {
+    return {boundMs: null, startedAtMs: undefined};
+  }
+}
+
+/**
+ * Report a coordinator-created handoff stopped because its step timeout is
+ * spent, from the arm path (owner-handoff-state) or the remote-owner wake
+ * path (owner-ports). Both can observe the same expiry of one operation,
+ * and the wake path re-observes it on every stale-progress pass, so the
+ * report is folded per operation (subject) over an observation that names
+ * the decision only, never the site: one line per operation and state per
+ * fold window, repeats counted.
+ * @param {Object} owner
+ * @param {Object} operation - The operation the decision was built for.
+ * @param {Object} decision - buildCoordinatorCreatedRemoteHandoffTimeoutDecision.
+ * @return {void}
+ */
+function reportCoordinatorHandoffStepTimeoutStop(owner, operation, decision) {
+  const snapshot = operation ?? {};
+  const bound = readHandoffStepBound(owner, snapshot);
+  reportWaitBoundSpent(owner.logger, {
+    ...COORDINATOR_HANDOFF_RETRY_WAIT,
+    boundMs: bound.boundMs,
+    startedAtMs: bound.startedAtMs,
+    lastObserved: () => ({
+      workflowStep: decision?.workflowStep ?? null,
+      stepTimedOut: decision?.stepTimedOut === true,
+      operationBudgetActive: decision?.operationBudgetActive === true,
+      operationBudgetDeadlineMs: decision?.operationBudgetDeadlineMs ?? null,
+      type: snapshot.type ?? null,
+      status: snapshot.status ?? null,
+      outcome: COORDINATOR_HANDOFF_RETRY_CLEARED_OUTCOME,
+    }),
+    scope: () => ({
+      nodeId: owner.nodeId ?? null,
+      partitionId: snapshot.partitionId ?? null,
+      operationId: snapshot.operationId ?? null,
+    }),
+    subject: snapshot.operationId ?? null,
   });
 }
 
@@ -566,6 +619,7 @@ export {
   canContinueCoordinatorCreatedRemoteHandoff,
   cloneOperationSnapshot,
   isCoordinatorCreatedOperationLocallyOwned,
+  reportCoordinatorHandoffStepTimeoutStop,
   resolveCoordinatorCreatedOperationOwnerNodeId,
   resolveCoordinatorCreatedHandoffDiagnosticDestination,
   resolveExecutorOutcomeRemoteOwnerHandoffMode,

@@ -54,7 +54,7 @@ import {buildPublicationActiveGateMembershipConvergence} from
 // membership reconcile on the partition leader. Each drive is timeout-bounded so a
 // slow/doomed reconcile can never wedge the in-flight guard.
 const OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS = 5000;
-const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000; // ends-on: reconcileActiveGateMembershipPublication resolves
+const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000; // ends-on: the reconcileActiveGateMembershipPublication() drive resolves
 const OWNER_MEMBERSHIP_DRIVER_ERROR_MSG =
   'Owner-driven membership reconcile error';
 const OWNER_MEMBERSHIP_DRIVER_RAN_MSG =

@@ -365,10 +365,10 @@ class NodeJoiningOperationLedgerFormationReadiness
       ...OPERATION_LEDGER_FORMATION_BARRIER_WAIT,
       boundMs: spent.timeoutMs,
       elapsedMs: snapshot.now - spent.startedAt,
-      lastObserved: {
+      lastObserved: () => ({
         state: spent.state,
         ...buildOperationLedgerFormationBarrierLogFields(snapshot),
-      },
+      }),
       scope: {nodeId: this.nodeId, partitionId: snapshot.partitionId},
     });
     const error = new Error(

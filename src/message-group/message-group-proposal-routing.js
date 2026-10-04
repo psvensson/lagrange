@@ -40,12 +40,14 @@ function reportProposalDeadlineSpent(service, command, attempt, timeoutMs) {
     ...PROPOSAL_DEADLINE_WAIT,
     boundMs: timeoutMs,
     elapsedMs: timeoutMs,
-    lastObserved: {
+    // Observer: the leadership reads run inside the reporter's guard, so a
+    // throwing read can never stop the timer callback from rejecting.
+    lastObserved: () => ({
       attempt,
       commandType: command?.type ?? null,
       isCurrentRaftLeader: service.isCurrentRaftLeader?.() ?? null,
       raftRole: service.getRole?.() ?? null,
-    },
+    }),
     scope: {
       groupId: service.groupId ?? null,
       replicaId: service.replicaId ?? null,

@@ -10,9 +10,9 @@ const {
 } = QUERY_EXECUTOR_SHARED;
 
 const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = 1; // ends-on: n/a clamp
-const READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: the cold read candidate answers the delivery (1 ms: it is deferred unless already connected)
+const READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: timer (1 ms by design: a not-connected read candidate's delivery is cut so the next candidate is tried)
   READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
-const RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: the cold recovery candidate answers the delivery (1 ms: it is deferred unless already connected)
+const RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: timer (1 ms by design: a not-connected recovery candidate's delivery is cut so the next candidate is tried)
   READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
 const RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE = 'connected';
 const RECOVERY_CANDIDATE_CONNECTING_CONNECTION_STATE = 'connecting';
@@ -54,7 +54,7 @@ function createPartitionSpentReporter(context) {
       awaited: waitIdentity.awaited,
       boundMs,
       elapsedMs: executorNow(context.executor) - context.startedAtMs,
-      lastObserved: {...(observe ? observe() : null), ...extra},
+      lastObserved: () => ({...(observe ? observe() : null), ...extra}),
       scope: {
         partitionId: context.partitionId,
         forRead: context.forRead,

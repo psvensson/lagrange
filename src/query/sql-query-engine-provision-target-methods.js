@@ -219,6 +219,13 @@ class SQLQueryEngineProvisionTargetMethods {
             maximumProvisionableReplicaCount:
               lastAdmissionProbe?.maximumProvisionableReplicaCount ?? null,
             failOnTimeout,
+            // The replaced timeout line's payload, after the summary (a
+            // truncated observation keeps its leading fields in its preview).
+            maxWaitMs: waitTimeoutMs,
+            requestedMaxWaitMs: maxWaitMs,
+            allowAdaptiveAdmissionConvergenceWait,
+            timeoutDiagnostics: lastDiagnostics,
+            admissionProbe: lastAdmissionProbe,
           }),
         },
       );

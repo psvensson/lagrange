@@ -9,6 +9,7 @@ import {
   classifyFilePath,
   collectDecisionBoundaryViolationsFromSource,
   collectNamedWaitConstants,
+  withoutUnbaselinableWaitAllowances,
 } from '../../scripts/check-guideline-decision-boundaries.js';
 import {applyCountBaseline} from '../../scripts/guideline-check-shared.js';
 
@@ -320,7 +321,7 @@ test('a declared wait or an enumerated non-wait kind passes', async (t) => {
     'const B_TIMEOUT_MIN_MS = 1; // ends-on: n/a clamp',
     'const C_TIMEOUT_LOOKBACK_MS = 1; // ends-on: n/a lookback',
     'const NOT_A_WAIT_MS = 1;',
-    'const TIMEOUTS = {X_TIMEOUT_MS: 1};',
+    'const TIMEOUTS = {X_TIMEOUT_MS: \'config.xTimeoutMs\'};',
   ].join('\n')), [
     ['A_DEADLINE_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
   ], 'only the undeclared one fails; non-matching names are not governed');
@@ -333,11 +334,93 @@ test('a declared wait or an enumerated non-wait kind passes', async (t) => {
     'the rule governs src/ only');
 });
 
-async function loadTimerOnlyBaseline() {
+test('object-member bounds are governed like named constants', async (t) => {
+  t.same(waitKinds([
+    'export const REPLICA_HANDLER_DEFAULT = Object.freeze({',
+    '  // ends-on: the voter reports ready',
+    '  SYNC_TIMEOUT_MS: TIME_MS.MINUTE,',
+    '  REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS: TIME_MS.SECOND * 30,',
+    '  NESTED: {',
+    '    MOVE_TIMEOUT_MS: 5000, // ends-on: the move operation completes',
+    '    STEP_DEADLINE_MS: 5000,',
+    '  },',
+    '});',
+    'const PLAIN = {',
+    '  QUERY_TIMEOUT_MS: 30000,',
+    '  PING_TIMEOUT_MS: 1, // ends-on: n/a clamp',
+    '};',
+  ].join('\n')), [
+    ['REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS',
+      VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['REPLICA_HANDLER_DEFAULT.NESTED.STEP_DEADLINE_MS',
+      VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['PLAIN.QUERY_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ], 'Object.freeze, plain and nested members; the comment above or on the ' +
+    'member line declares it');
+  t.same(waitKinds([
+    'const NAMES = Object.freeze({',
+    '  QUERY_TIMEOUT_MS: \'query.timeoutMs\',',
+    '  TIMEOUT: \'timeout\',',
+    '  ALIAS_TIMEOUT_MS: OTHER_DEFAULT.RPC_TIMEOUT_MS,',
+    '  OTHER_TIMEOUT_MS,',
+    '  CACHE_WAIT_TIMEOUT: (key) => `wait ${key}`,',
+    '  SHARD_DEADLINE: \'passed before \' + \'admission\',',
+    '});',
+  ].join('\n')), [],
+  'key names, codes, aliases of a governed name and message builders are ' +
+    'not bounds');
+});
+
+test('the declaration holes are closed', async (t) => {
+  t.same(waitKinds('const A_TIMEOUT_MS = 1; // ends-on: n/a\n'), [
+    ['A_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND],
+  ], 'a bare n/a names no kind');
+  for (const timer of ['Timer', 'the timer', 'its timer', 'THE TIMER fires']) {
+    t.same(waitKinds(`const A_TIMEOUT_MS = 1; // ends-on: ${timer}\n`), [
+      ['A_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY],
+    ], `"${timer}" is the timer`);
+  }
+  for (const vague of ['x', 'reply arrives', '. . .']) {
+    t.same(waitKinds(`const A_TIMEOUT_MS = 1; // ends-on: ${vague}\n`), [
+      ['A_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_EVENT_UNNAMED],
+    ], `"${vague}" names no event`);
+  }
+  t.same(waitKinds('let LET_TIMEOUT_MS = 1;\nvar VAR_DEADLINE_MS = 1;\n'), [
+    ['LET_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['VAR_DEADLINE_MS', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ], 'let and var declarations are governed');
+  t.same(waitKinds([
+    'const CONNECT_TIMEOUT = 5000;',
+    'const EXIT_BACKSTOP = TIME_MS.SECOND * 30;',
+    'const CAUSE_TIMEOUT = \'timeout\';',
+    'const ERROR_TIMEOUT = OTHER_CAUSE_TIMEOUT;',
+    'const MEMBERS = {RPC_TIMEOUT: 5000};',
+  ].join('\n')), [
+    ['CONNECT_TIMEOUT', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['EXIT_BACKSTOP', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+    ['MEMBERS.RPC_TIMEOUT', VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED],
+  ], 'a *_TIMEOUT name without _MS is governed when it holds a bound');
+});
+
+test('the timebox, dead and misnamed non-wait kinds pass; skip is not one',
+  async (t) => {
+    t.same(waitKinds([
+      '// ends-on: n/a timebox (the designed exit of a best-effort step)',
+      'const STEP_TIMEOUT_MS = 3000;',
+      'const UNUSED_TIMEOUT_MS = 1; // ends-on: n/a dead',
+      'const N_TIMEOUT_MS = 1; // ends-on: N/A clamp',
+      'const L = {SQL_QUERY_TIMEOUT_MS: 100}; // ends-on: n/a misnamed',
+    ].join('\n')), []);
+    t.same(waitKinds('const S_TIMEOUT_MS = 1; // ends-on: n/a skip\n'), [
+      ['S_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND],
+    ], 'skip is not a non-wait kind: a 1 ms delivery is still a wait');
+  });
+
+async function loadWaitBaselineEntries() {
   const baseline = JSON.parse(
     await fs.readFile(DECISION_BASELINE_FILE_URL, 'utf8'));
   return baseline.violations.filter((violation) =>
-    violation.kind === VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY);
+    violation.kind.startsWith('wait_constant'));
 }
 
 test('timer-only constants pass only through the baseline', async (t) => {
@@ -359,13 +442,39 @@ test('timer-only constants pass only through the baseline', async (t) => {
     ['NEW_TIMEOUT_MS'], 'an unbaselined timer-only wait still fails');
 });
 
+test('the shared baseline admits only timer-only waits', async (t) => {
+  const violations = collectDecisionBoundaryViolationsFromSource(
+    'const OLD_TIMEOUT_MS = 5; // ends-on: timer\n' +
+    'const UNDECLARED_TIMEOUT_MS = 5;\n' +
+    'const KIND_TIMEOUT_MS = 5; // ends-on: n/a\n' +
+    'const VAGUE_TIMEOUT_MS = 5; // ends-on: x\n',
+    WAIT_RULE_FILE,
+  );
+  const allowances = new Map(violations.map((violation) =>
+    [buildDecisionBoundaryViolationIdentity(violation), 1]));
+  const report = applyCountBaseline(
+    {totalViolationCount: violations.length, violations},
+    withoutUnbaselinableWaitAllowances(allowances),
+    buildDecisionBoundaryViolationIdentity,
+  );
+  t.same(report.violations.map((violation) => violation.functionName),
+    ['UNDECLARED_TIMEOUT_MS', 'KIND_TIMEOUT_MS', 'VAGUE_TIMEOUT_MS'],
+    'an undeclared, unknown-kind or unnamed-event entry is no allowance');
+});
+
 // One-way: the baseline may only shrink. Lower this ceiling when an entry is
-// removed; never raise it.
-const TIMER_ONLY_BASELINE_CEILING = 0;
+// removed; never raise it. Only timer-only waits may enter the shared
+// decision-boundary baseline: an undeclared wait, an unknown non-wait kind or
+// an unnamed event can never be baselined.
+const TIMER_ONLY_BASELINE_CEILING = 2;
 
 test('the timer-only baseline cannot grow and holds no stale entry',
   async (t) => {
-    const entries = await loadTimerOnlyBaseline();
+    const entries = await loadWaitBaselineEntries();
+    t.same(entries
+      .filter((entry) => entry.kind !== VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY)
+      .map((entry) => `${entry.filePath}:${entry.functionName}`), [],
+    'only timer-only waits are baselined');
     t.ok(entries.length <= TIMER_ONLY_BASELINE_CEILING,
       `timer-only baseline ${entries.length} <= ${TIMER_ONLY_BASELINE_CEILING}`);
     for (const entry of entries) {
@@ -395,10 +504,11 @@ async function listSourceFiles(directory) {
 
 test('the governed set is derived from src/, and every member is declared',
   async (t) => {
-    const textScan = /\bconst\s+((?:[A-Z0-9]+_)*(?:TIMEOUT|BACKSTOP|DEADLINE)(?:_[A-Z0-9]+)*_MS)\s*=/gu;
+    const textScan = /\b(?:const|let|var)\s+((?:[A-Z0-9]+_)*(?:TIMEOUT|BACKSTOP|DEADLINE)(?:_[A-Z0-9]+)*_MS)\b/gu;
     const fromText = new Set();
     const fromAudit = new Set();
     const undeclared = [];
+    let memberCount = 0;
     for (const filePath of await listSourceFiles('src')) {
       const source = await fs.readFile(filePath, 'utf8');
       for (const match of source.matchAll(textScan)) {
@@ -408,15 +518,19 @@ test('the governed set is derived from src/, and every member is declared',
         continue;
       }
       for (const constant of collectNamedWaitConstants(source, filePath)) {
-        fromAudit.add(`${filePath}:${constant.name}`);
-        if (constant.kind === VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED ||
-            constant.kind ===
-              VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND) {
+        if (constant.member) {
+          memberCount += 1;
+        } else if (constant.name.endsWith('_MS')) {
+          fromAudit.add(`${filePath}:${constant.name}`);
+        }
+        if (constant.kind !== VIOLATION_KIND.WAIT_CONSTANT_DECLARED &&
+            constant.kind !== VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY) {
           undeclared.push(`${filePath}:${constant.name}`);
         }
       }
     }
     t.ok(fromAudit.size > 0, `the audit derives ${fromAudit.size} constants`);
+    t.ok(memberCount > 50, `the audit derives ${memberCount} object members`);
     t.same([...fromAudit].sort(), [...fromText].sort(),
       'the audit set equals an independent text scan of src/');
     t.same(undeclared, [], 'every named wait in src/ declares its end');

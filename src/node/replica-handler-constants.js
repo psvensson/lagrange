@@ -16,11 +16,14 @@ const REPLICA_HANDLER_SUBSYSTEM = 'replica-handler';
 const REPLICA_HANDLER_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   DATA_DIR: STORAGE_DEFAULT.DATA_DIR,
+  // ends-on: the local replica becomes voter-ready, or its partition metadata resolves
   SYNC_TIMEOUT_MS: TIME_MS.MINUTE,
+  // ends-on: the replica status write is accepted
   STATUS_WRITE_RETRY_TIMEOUT_MS: TIME_MS.SECOND * NUM.THIRTY,
   // The bound on a retiring replica's wait for its own removal to apply
   // (owner ruling F2): inside the replica state machine's one-minute REMOVING
   // timeout, so the removal still completes as REMOVED.
+  // ends-on: the applied configuration no longer names the retiring replica, or its group is unavailable
   REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS: TIME_MS.SECOND * NUM.THIRTY,
 });
 

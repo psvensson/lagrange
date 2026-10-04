@@ -366,6 +366,7 @@ const JOINING_HTTP = Object.freeze({
 });
 
 const CDC_REESTABLISHMENT = Object.freeze({
+  // ends-on: the CDC subscriptions become active
   TIMEOUT_MS: 30000,
   RETRY_DELAY_MS: 1000,
   MAX_RETRIES: 10,

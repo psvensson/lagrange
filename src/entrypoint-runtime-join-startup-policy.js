@@ -38,12 +38,12 @@ function reportJoinReattemptsSpent(options, joinAttempt) {
   reportWaitBoundSpent(options.logger, {
     ...JOIN_REATTEMPT_WAIT,
     boundMs: null,
-    lastObserved: {
+    lastObserved: () => ({
       attempts: joinAttempt + LOCAL_NUM_ONE,
       maxAttempts: options.reattemptPolicy.maxAttempts,
       phase: options.joinResult.phase ?? null,
       lastError: options.joinResult.error ?? null,
-    },
+    }),
     scope: {nodeId: options.nodeId},
   });
 }

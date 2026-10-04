@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417228,
-        "sha256": "5e0e0d6e4951bab08262156fd91c98cc9d337c882abcd95537f6570d4d14f3be"
+        "bytes": 417243,
+        "sha256": "c3919ec7c1ed5f260fcc573f8dd6fb4e0386f2daa49186e9eda6ba57944d8a98"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 35285,
-        "sha256": "6076a65cbfd68a6c2a5851c427ee8b3043db6e35844e1c950142223030830011"
+        "bytes": 35287,
+        "sha256": "d857e4d42d57e499cd3e027bb79b64d180d8730fc0251258695f0e977b1f2e77"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2646201,
-        "sha256": "b4394a37ab1ac4fcc6a31a6eb72b7d0453c12b795e95813dfd2afa7db8bd8781"
+        "bytes": 2652418,
+        "sha256": "74007f62dc4c5c24abfb0eef409aa81763608dfae7204c00d06ecbb007b8c2fa"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "f21cea88b992169a7ccaf42b0c06921a5cd3321c3c562afa9c6adb391c9d1b39"
+        "sha256": "d90350be4cbdec67b253293e2dd12d15c01f567722a8540e7a7a452a4ba7014a"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "0f7170b8699b74cb757e13c303d8daa31e5eb1c76d362dbef0949f29ccc51098"
+        "sha256": "661dd1b30f38f6453725492d247f6cae39038f35388f84064edcc769bcd272f8"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "b12ff95231d446f33316a579c6237a4b8b5da2c50f986adc0e347b9c5b9fe8bf"
+    "inputDigest": "6bb40715c845a6b86f0c0352788c90ebe5b8d1509088cd7c0435f6c7a9a1e663"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417228,
-        "sha256": "5e0e0d6e4951bab08262156fd91c98cc9d337c882abcd95537f6570d4d14f3be"
+        "bytes": 417243,
+        "sha256": "c3919ec7c1ed5f260fcc573f8dd6fb4e0386f2daa49186e9eda6ba57944d8a98"
       },
       "declaredCount": 1765,
       "observedCount": 1765,
@@ -78,8 +78,8 @@
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 35285,
-        "sha256": "6076a65cbfd68a6c2a5851c427ee8b3043db6e35844e1c950142223030830011"
+        "bytes": 35287,
+        "sha256": "d857e4d42d57e499cd3e027bb79b64d180d8730fc0251258695f0e977b1f2e77"
       },
       "declaredCount": 153,
       "observedCount": 153,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "f21cea88b992169a7ccaf42b0c06921a5cd3321c3c562afa9c6adb391c9d1b39"
+          "sha256": "d90350be4cbdec67b253293e2dd12d15c01f567722a8540e7a7a452a4ba7014a"
         },
         "cloneGroups": 48,
         "duplicatedLines": 1512,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "0f7170b8699b74cb757e13c303d8daa31e5eb1c76d362dbef0949f29ccc51098"
+          "sha256": "661dd1b30f38f6453725492d247f6cae39038f35388f84064edcc769bcd272f8"
         },
         "cloneGroups": 713,
         "duplicatedLines": 27072,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2646201,
-        "sha256": "b4394a37ab1ac4fcc6a31a6eb72b7d0453c12b795e95813dfd2afa7db8bd8781"
+        "bytes": 2652418,
+        "sha256": "74007f62dc4c5c24abfb0eef409aa81763608dfae7204c00d06ecbb007b8c2fa"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "fe0a14d57dbd9220305c529e43662cb50af3c189425a7a1c61652242298a5e2d",
-      "moduleCount": 5048,
-      "edgeCount": 24816,
+      "sourceDigest": "9dfcda3833de7b7a4c30eac964b75593c624db36482ddd5309001f576b647750",
+      "moduleCount": 5058,
+      "edgeCount": 24879,
       "unresolvedCount": 36
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2517,
     "assignedSignalCount": 2517,
     "uniqueAssignmentCount": 2517,
-    "digest": "034039023600462ad14284282f121d29799a3d0b19b8fb79604339e69e76fd7f"
+    "digest": "f0b64d2cab55f95834ac15cf3616bc2e26d8f8ae6b5fb56697ddc3e60a52800e"
   },
   "signalCounts": {
     "cognitive": 153,
@@ -276,7 +276,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 686,
-      "importOut": 424,
+      "importOut": 423,
       "score": 1136.5,
       "topPaths": [
         "src/control-plane/control-plane-kernel-ingress.js",
@@ -331,8 +331,8 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 330,
-      "importOut": 461,
+      "importIn": 332,
+      "importOut": 458,
       "score": 638.4,
       "topPaths": [
         "src/bootstrap/node-joining-backfill-merge-and-status.js",
@@ -359,7 +359,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 298,
+      "importIn": 300,
       "importOut": 311,
       "score": 636.8,
       "topPaths": [
@@ -891,8 +891,8 @@
       "cloneTouches": 1,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 100,
-      "importOut": 83,
+      "importIn": 102,
+      "importOut": 84,
       "score": 115.9,
       "topPaths": [
         "src/cdc/cdc-integration-service-authoritative-read-flow.js",
@@ -947,7 +947,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 36,
+      "importIn": 38,
       "importOut": 46,
       "score": 112,
       "topPaths": [
@@ -1031,7 +1031,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 12,
+      "importIn": 13,
       "importOut": 93,
       "score": 84,
       "topPaths": [
@@ -1171,8 +1171,8 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 19,
-      "importOut": 51,
+      "importIn": 20,
+      "importOut": 52,
       "score": 64,
       "topPaths": [
         "src/control-plane/membership-publication-coordinator-reconcile.js",
@@ -1226,8 +1226,8 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 635,
-      "importOut": 43,
+      "importIn": 640,
+      "importOut": 44,
       "score": 56,
       "topPaths": [
         "src/logging/logs-table-service.js",
@@ -1504,8 +1504,8 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 72,
-      "importOut": 55,
+      "importIn": 74,
+      "importOut": 57,
       "score": 44,
       "topPaths": [
         "src/rebalancer/operation-workflow-owner-handoff-state.js",
@@ -1533,7 +1533,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 10,
-      "importOut": 22,
+      "importOut": 23,
       "score": 43.9,
       "topPaths": [
         "src/cdc/cdc-routed-mutation-readiness.js",
@@ -2501,7 +2501,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 8,
-      "importOut": 17,
+      "importOut": 16,
       "score": 8,
       "topPaths": [
         "src/config/dynamic-config-service.js",
@@ -3393,9 +3393,9 @@
           "test/control-plane/membership-publication-epoch-status-probe.test.js",
           "test/control-plane/membership-publication-first-epoch-members.test.js",
           "test/control-plane/membership-publication-leader-driven-gate.test.js",
+          "test/control-plane/membership-publication-persist-wait-bound-spent.test.js",
           "test/control-plane/membership-swim-coordinator-divergence.test.js",
-          "test/control-plane/owner-membership-driver.test.js",
-          "test/control-plane/publications-catchup-leader-pinned-read.test.js"
+          "test/control-plane/owner-membership-driver.test.js"
         ],
         "ownerAreas": [
           "scripts/run-owner-complexity-membership-publication-owner-membership-publication-coordination-scenarios.js",

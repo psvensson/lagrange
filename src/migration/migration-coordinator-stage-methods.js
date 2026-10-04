@@ -269,11 +269,11 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
       reportMigrationRetrySpent(this, MIGRATION_CUTOVER_RETRY_WAIT, {
         boundMs: null,
         elapsedMs: this.now() - retryStartedAtMs,
-        lastObserved: {
+        lastObserved: () => ({
           attempts: MIGRATION_DEFAULT.MAX_RETRY_COUNT + LOCAL_NUM_ONE,
           lastError: lastError?.message || null,
           partitionCount: partitionRows.length,
-        },
+        }),
         scope: {migrationId},
       });
       await this.transitionMigrationStage(

@@ -76,10 +76,10 @@ function reportHeartbeatAttemptSpent(service, attempt) {
     ...HEARTBEAT_ATTEMPT_WAIT,
     boundMs: service.heartbeatAttemptTimeoutMs,
     elapsedMs: service.now() - attempt.startedAtMs,
-    lastObserved: {
+    lastObserved: () => ({
       attemptStage: attempt.stage,
       ...buildHeartbeatPublicationObservation(service),
-    },
+    }),
     scope: {
       nodeId: service.nodeId,
       attemptId: attempt.id,
@@ -94,13 +94,13 @@ function reportNodeStateReporterSpent(service, payload, boundMs, startedAtMs) {
     ...NODE_STATE_REPORTER_WAIT,
     boundMs,
     elapsedMs: service.now() - startedAtMs,
-    lastObserved: {
+    lastObserved: () => ({
       reporterSettled: false,
       requestedState: payload?.state ?? null,
       publicationMode: payload?.publicationMode ?? null,
       requireDurableCompletion: payload?.requireDurableCompletion === true,
       ...buildHeartbeatPublicationObservation(service),
-    },
+    }),
     scope: {nodeId: service.nodeId},
     subject: service.nodeId,
   });

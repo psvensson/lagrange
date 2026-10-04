@@ -57,25 +57,24 @@ function reportReconnectAttemptsSpent(router, connectionInfo) {
 }
 
 /**
- * The keepalive spent pingMaxMissed pong bounds in a row: one
- * wait_bound_spent ERROR per node, saying whether recent inbound traffic
- * kept the connection (alive but slow) or the socket was severed.
+ * The keepalive spent pingMaxMissed pong bounds in a row and no recent
+ * inbound traffic answered for the node, so the socket is severed: one
+ * wait_bound_spent ERROR per node. A keepalive answered alive by recent
+ * inbound traffic is not a spent wait (it logs at INFO and keeps the
+ * connection), so it never reaches here.
  * @param {Object} router - The message router.
  * @param {Object} connectionInfo - The connection record.
- * @param {Object} livenessEvidence - Recent-inbound evidence.
  * @return {void}
  */
-function reportKeepalivePongSpent(router, connectionInfo, livenessEvidence) {
+function reportKeepalivePongSpent(router, connectionInfo) {
   reportWaitBoundSpent(router.logger, {
     ...KEEPALIVE_PONG_WAIT,
     boundMs: router.pingTimeoutMs * router.pingMaxMissed,
     elapsedMs: null,
     lastObserved: {
       missedPings: connectionInfo.missedPings,
-      answeredAliveByRecentInbound: livenessEvidence.recent,
-      lastInboundAgoMs: livenessEvidence.recent ?
-        livenessEvidence.lastInboundAgoMs : null,
-      severed: !livenessEvidence.recent,
+      answeredAliveByRecentInbound: false,
+      severed: true,
     },
     scope: {
       nodeId: router.nodeId ?? null,
@@ -386,11 +385,18 @@ class MessageRouterConnectionCloseReconnect {
       livenessWindowMs,
       this.timeSource.now(),
     );
-    reportKeepalivePongSpent(this, connectionInfo, livenessEvidence);
     if (livenessEvidence.recent) {
+      this.logger.info(ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE, {
+        nodeId: connectionInfo.nodeId,
+        connectionId: connectionInfo.connectionId,
+        missedPings: connectionInfo.missedPings,
+        lastInboundAgoMs: livenessEvidence.lastInboundAgoMs,
+        livenessWindowMs,
+      });
       connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
       return;
     }
+    reportKeepalivePongSpent(this, connectionInfo);
     connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
     const staleWs = connectionInfo.ws;
     if (

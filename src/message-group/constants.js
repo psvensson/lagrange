@@ -98,6 +98,7 @@ const MESSAGE_GROUP_SERVICE_DEFAULT = Object.freeze({
   // A replica's consensus state is durable; an in-memory database would
   // lose its term, vote and configuration on restart, so it is refused.
   MEMORY_DB_PATH: ':memory:',
+  // ends-on: n/a clamp (the ceiling the per-attempt CDC propose timeout is derived from)
   DELIVERY_TIMEOUT_MS: TIME_MS.SECOND * NUM.FIVE,
   RETRY_MAX_ATTEMPTS: NUM.THREE,
   RETRY_INITIAL_DELAY_MS: NUM.HUNDRED,

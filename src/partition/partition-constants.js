@@ -630,6 +630,7 @@ const SPLIT_MERGE_DEFAULT = Object.freeze({
 });
 
 const PENDING_REQUEST_DEFAULT = Object.freeze({
+  // ends-on: the tracked request is acknowledged (unreachable: track() has no live caller)
   REQUEST_TIMEOUT_MS: 30000,
   CLEANUP_INTERVAL_MS: 60000,
   STALE_REQUEST_BUFFER_MS: 5000,

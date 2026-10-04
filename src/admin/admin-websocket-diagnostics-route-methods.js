@@ -144,10 +144,10 @@ function resolveSpentControlSnapshotRetry(
     awaited: CONTROL_SNAPSHOT_RETRY_WAIT.awaited,
     boundMs: budget.configuredBudgetMs,
     elapsedMs: now() - budget.startedAtMs,
-    lastObserved: {
+    lastObserved: () => ({
       attempts,
       lastOutcome: describeControlSnapshotRetryOutcome(resultOrError),
-    },
+    }),
     scope: {nodeId: owner.nodeId ?? null},
   });
   return resolveControlSnapshotTerminalResult(

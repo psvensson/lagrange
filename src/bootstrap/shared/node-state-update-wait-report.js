@@ -26,13 +26,13 @@ function reportNodeStateUpdateDeliverySpent(logger, nodeId, error, failure) {
       failure.deliveryTimeoutBudgetMs :
       null,
     elapsedMs: failure.elapsedMs,
-    lastObserved: {
+    lastObserved: () => ({
       attempts: failure.attempts,
       sameTargetRetryCount: failure.sameTargetRetryCount,
       lastTargetAddress: failure.targetAddress,
       lastErrorCode: error?.code ?? null,
       lastError: error.message,
-    },
+    }),
     scope: {
       nodeId,
       state: failure.state,

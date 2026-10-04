@@ -518,11 +518,11 @@ class NodeJoiningReadySignalReadiness
       ...READY_SIGNAL_SPENT_WAIT.HEARTBEAT,
       boundMs: null,
       elapsedMs: readWaitClock(this) - readySignalStartedAtMs,
-      lastObserved: {
+      lastObserved: () => ({
         attempts: maxAttempts,
         lastError: lastError?.message || STRING.UNKNOWN,
         lastFailureCode: this.resolveInfrastructureJoinFailureCode(lastError),
-      },
+      }),
       scope: {nodeId: this.nodeId},
     });
     throw lastError;
@@ -564,11 +564,11 @@ class NodeJoiningReadySignalReadiness
       ...READY_SIGNAL_SPENT_WAIT.CDC_SUBSCRIPTIONS,
       boundMs: timeoutMs,
       elapsedMs: this.now() - startMs,
-      lastObserved: {
+      lastObserved: () => ({
         cdcSubscriptionsActive: this.cdcSubscriptionsActive,
         subscriptionStatus: this.getCdcSubscriptionStatus?.() ?? null,
         pollMs,
-      },
+      }),
       scope: {nodeId: this.nodeId},
     });
   }

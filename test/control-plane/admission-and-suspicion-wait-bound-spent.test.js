@@ -1,8 +1,9 @@
 /**
- * Spent-wait witnesses for two control-plane bounded waits:
+ * Spent-wait witnesses for two control-plane waits:
  * - PressureGovernor admission: a parked waiter whose deadline passes while
- *   pressure still defers it logs one wait_bound_spent ERROR and still
- *   resolves with the DEFER decision.
+ *   pressure still defers it resolves with the DEFER decision and logs NO
+ *   wait_bound_spent: the deadline is a backpressure hint (the caller's own
+ *   retry loop is the bound), not a spent wait.
  * - SWIM suspicion: a suspect whose suspicion window closes without a
  *   refutation logs one wait_bound_spent ERROR and still becomes DEAD.
  * Normal completion (capacity returns / refutation arrives) logs none.
@@ -35,8 +36,8 @@ function createGovernor(summaryRef, clock, logger) {
   });
 }
 
-test('admission deadline expiry logs one wait_bound_spent ERROR and still ' +
-  'resolves the waiter with DEFER', async (t) => {
+test('admission deadline expiry is a backpressure hint: it resolves the ' +
+  'waiter with DEFER and logs no wait_bound_spent', async (t) => {
   const capture = captureLogger();
   const clock = {nowMs: 100};
   const summaryRef = {backpressured: true, maxPendingUtilization: 1};
@@ -52,17 +53,8 @@ test('admission deadline expiry logs one wait_bound_spent ERROR and still ' +
   t.equal(decision.action, PRESSURE_GOVERNOR_ACTION.DEFER,
     'expiry still resolves DEFER (unchanged)');
   t.equal(governor.admissionWaiters.length, 0, 'queue cleared (unchanged)');
-
-  const spent = capture.spent();
-  t.equal(spent.length, 1, 'exactly one wait_bound_spent ERROR');
-  const context = spent[0].context;
-  t.equal(context.wait, 'PRESSURE_ADMISSION_MAX_WAIT_MS');
-  t.equal(context.boundMs, 2000);
-  t.equal(context.elapsedMs, 2000, 'elapsed measured with the injected clock');
-  t.equal(context.lastObserved.workClass, PRESSURE_WORK_CLASS.BACKGROUND);
-  t.equal(context.lastObserved.lastAction, PRESSURE_GOVERNOR_ACTION.DEFER);
-  t.equal(context.lastObserved.backpressured, true);
-  t.equal(context.lastObserved.sensorThrew, false);
+  t.equal(capture.spent().length, 0, 'no wait_bound_spent on expiry');
+  t.equal(capture.errors().length, 0, 'no ERROR on expiry');
   governor.dispose();
 });
 

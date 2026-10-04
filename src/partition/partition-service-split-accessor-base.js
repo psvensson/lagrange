@@ -110,7 +110,10 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
             coalescingKey: `partitions:size:${this.partitionId}`,
           },
         ),
-      partitionSizeRetryOptions(this.timeSource),
+      partitionSizeRetryOptions(this.timeSource, {
+        logger: this.logger,
+        scope: {partitionId: this.partitionId, tableName: TABLES.PARTITIONS},
+      }),
     );
     if (result?.success === false) {
       throw new Error(

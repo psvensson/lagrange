@@ -513,7 +513,7 @@ class SeedPartitionsPhase {
         missingLeaders: missing,
         lastDelayMs: delay,
       },
-      scope: {nodeId: d.getNodeId()},
+      scope: () => ({nodeId: d.getNodeId()}),
     });
 
     const error = new Error(

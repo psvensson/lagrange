@@ -11,6 +11,7 @@ import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
+import {PROPOSAL_QUEUE_PROPOSAL_STATE} from './proposal-queue-constants.js';
 
 const {
   CDC_LIFECYCLE_LOG_MSG,
@@ -36,6 +37,23 @@ const COMMIT_DEADLINE_WAIT = Object.freeze({
   wait: 'PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS',
   awaited: 'consensus commit of one admitted partition write',
 });
+const KNOWN_PROPOSAL_STATES = new Set(
+  Object.values(PROPOSAL_QUEUE_PROPOSAL_STATE));
+const UNRECOGNIZED_PROPOSAL_STATE = 'unrecognized_proposal_state';
+
+// What the queue knew of a released write, log-safe: its proposal state
+// name; anything else by type and serialized size, never by value (no row
+// data in an ERROR line).
+function describeReleasedProposal(proposal) {
+  if (proposal == null || KNOWN_PROPOSAL_STATES.has(proposal)) {
+    return proposal ?? null;
+  }
+  return {
+    state: UNRECOGNIZED_PROPOSAL_STATE,
+    type: typeof proposal?.type === 'string' ? proposal.type : typeof proposal,
+    serializedChars: JSON.stringify(proposal)?.length ?? null,
+  };
+}
 
 /**
  * Report a spent commit deadline for one pending write.
@@ -49,12 +67,13 @@ function reportCommitDeadlineSpent(service, pending, deadline) {
     ...COMMIT_DEADLINE_WAIT,
     boundMs: deadline.timeoutMs,
     elapsedMs: service.timeSource.now() - deadline.startedAtMs,
-    lastObserved: {
-      proposal: pending.proposal ?? null,
+    // Observer: a throw here can never skip the queue's release.
+    lastObserved: () => ({
+      proposal: describeReleasedProposal(pending.proposal),
       logIndex: pending.logIndex,
       role: service.role ?? null,
       pendingCommitCount: service.proposalQueue?.size ?? null,
-    },
+    }),
     scope: {partitionId: service.partitionId, entryId: pending.entryId},
   });
 }

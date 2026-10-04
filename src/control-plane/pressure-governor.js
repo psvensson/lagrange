@@ -1,5 +1,4 @@
 import {METRICS_LOG_TAG} from '../constants/index.js';
-import {reportAdmissionWaitSpent} from './pressure-admission-wait-report.js';
 const PRESSURE_GOVERNOR_LITERAL = Object.freeze({
   DEFAULT: 'default',
   NONE: 'none',
@@ -680,7 +679,6 @@ class PressureGovernor {
     if (queuedForClass >= PRESSURE_ADMISSION_QUEUE_LIMIT[workClass]) {
       return Promise.resolve(deferDecision);
     }
-    const enqueuedAtMs = this.now();
     return new Promise((resolve) => {
       this.admissionWaiters.push({
         workClass,
@@ -688,8 +686,7 @@ class PressureGovernor {
         seq: this.admissionWaiterSeq++,
         request,
         deferDecision,
-        enqueuedAtMs,
-        deadlineAtMs: enqueuedAtMs + PRESSURE_ADMISSION_MAX_WAIT_MS[workClass],
+        deadlineAtMs: this.now() + PRESSURE_ADMISSION_MAX_WAIT_MS[workClass],
         resolve,
       });
       this.scheduleAdmissionPoll();
@@ -737,9 +734,6 @@ class PressureGovernor {
         waiter.resolve(decision);
         resolved.add(waiter);
       } else if (nowMs >= waiter.deadlineAtMs) {
-        reportAdmissionWaitSpent(this, waiter, decision, {
-          nowMs, boundMs: PRESSURE_ADMISSION_MAX_WAIT_MS[waiter.workClass],
-        });
         waiter.resolve(decision || waiter.deferDecision);
         resolved.add(waiter);
       }

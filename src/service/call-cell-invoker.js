@@ -285,11 +285,11 @@ class CallCellInvoker {
             boundMs: activationDeadline - activationStartedAtMs,
             startedAtMs: activationStartedAtMs,
             lastObserved: {lastErrorCode: error.code, publishedActivationLease},
-            scope: {
+            scope: () => ({
               hostNodeId,
               partitionId: request.shard.partitionId,
               invocationId: request.invocationId,
-            },
+            }),
           });
           throw error;
         }

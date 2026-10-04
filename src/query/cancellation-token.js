@@ -123,11 +123,11 @@ class CancellationToken {
         ...TOKEN_TIMEOUT_WAIT,
         boundMs: ms,
         elapsedMs: Date.now() - startedAtMs,
-        lastObserved: {
+        lastObserved: () => ({
           childCancelled: child.isCancelled(),
           parentCancelled: this._cancelled,
           parentChildTokenCount: this._children.length,
-        },
+        }),
       });
       child.cancel(ERR.TIMEOUT_EXCEEDED);
     }, ms);

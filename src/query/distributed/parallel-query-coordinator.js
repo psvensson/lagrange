@@ -54,14 +54,14 @@ function reportChunkTimeoutSpent(coordinator, spent) {
     ...CHUNK_TIMEOUT_WAIT,
     boundMs: spent.timeoutMs,
     elapsedMs: Date.now() - spent.startedAtMs,
-    lastObserved: {
+    lastObserved: () => ({
       chunkPartitionCount: spent.partitionIds.length,
       settledPartitionCount: settledPartitionIds.length,
       pendingPartitionIds: spent.partitionIds
         .filter((partitionId) => !settledPartitionIds.includes(partitionId))
         .slice(0, CHUNK_TIMEOUT_PENDING_SAMPLE),
       speculativeExecutions: spent.metrics?.speculativeExecutions ?? null,
-    },
+    }),
     scope: {queryId: spent.metrics?.queryId ?? null},
   });
 }

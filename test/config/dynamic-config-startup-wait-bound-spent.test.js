@@ -6,9 +6,10 @@ import {createDynamicConfigStartupWiring} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 
 // Witness: the startup dynamic-config reads and the adaptive-controller
-// initialization are bounded; a spent bound logs one ERROR wait_bound_spent
-// per awaited key/step (naming it), startup still proceeds on defaults, and a
-// read that completes logs none.
+// initialization are startup time-boxes with a designed fallback (defaults
+// now, CDC applies the stored values later): an expired box is not a spent
+// wait. It logs its base WARN (INITIAL_APPLY_FAILED per key), never a
+// wait_bound_spent ERROR, and startup still proceeds on defaults.
 
 function createSqlQueryEngine(neverResolve) {
   return {
@@ -22,18 +23,24 @@ function createSqlQueryEngine(neverResolve) {
 }
 
 /**
- * Run the wiring with console.error captured (an uninitialized
- * LoggingService makes the wiring log through console).
+ * Run the wiring with console.error / console.warn captured (an
+ * uninitialized LoggingService makes the wiring log through console).
  * @param {Object} options
- * @return {Promise<{wiring: Object, spent: Array<Object>}>}
+ * @return {Promise<{wiring: Object, spent: Array<Object>,
+ *   warns: Array<Object>}>}
  */
 async function runWiringCapturingSpent(options) {
   const errors = [];
+  const warns = [];
   // The wiring's bound timers are unref'd; keep the loop alive meanwhile.
   const keepAlive = setInterval(() => {}, 1000);
   const originalError = console.error;
+  const originalWarn = console.warn;
   console.error = (message, context) => {
     errors.push({message, context});
+  };
+  console.warn = (message, context) => {
+    warns.push({message, context});
   };
   try {
     const wiring = await createDynamicConfigStartupWiring({
@@ -45,11 +52,13 @@ async function runWiringCapturingSpent(options) {
     });
     return {
       wiring,
+      warns,
       spent: errors.filter((entry) =>
         entry.context?.event === 'wait_bound_spent'),
     };
   } finally {
     console.error = originalError;
+    console.warn = originalWarn;
     clearInterval(keepAlive);
   }
 }
@@ -61,39 +70,29 @@ test('setup dynamic config wait-bound witnesses', async (t) => {
   t.pass('configuration initialized, logging service left uninitialized');
 });
 
-test('stalled startup config reads: one wait_bound_spent per awaited key, startup proceeds',
-  async (t) => {
-    const {wiring, spent} = await runWiringCapturingSpent({
-      sqlQueryEngine: createSqlQueryEngine(true),
-    });
-    t.ok(wiring, 'post-expiry behaviour unchanged: wiring still resolves');
-    const reads = spent.filter((entry) =>
-      entry.context.wait === 'DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS');
-    t.ok(reads.length > 0, 'stalled reads report their spent bound');
-    const keys = reads.map((entry) => entry.context.lastObserved.key);
-    t.equal(new Set(keys).size, keys.length,
-      'exactly one wait_bound_spent per awaited key');
-    for (const entry of reads) {
-      t.equal(entry.context.boundMs, 20, 'reports the applied bound');
-      t.equal(typeof entry.context.lastObserved.key, 'string',
-        'lastObserved names the awaited key');
-      t.equal(entry.context.lastObserved.promiseSettled, false,
-        'lastObserved records the read had not settled');
-    }
-    wiring.shutdown();
+test('stalled startup config reads are a time-box: base WARN per key, no ' +
+  'wait_bound_spent, startup proceeds', async (t) => {
+  const {wiring, spent, warns} = await runWiringCapturingSpent({
+    sqlQueryEngine: createSqlQueryEngine(true),
   });
+  t.ok(wiring, 'post-expiry behaviour unchanged: wiring still resolves');
+  t.equal(spent.length, 0, 'no wait_bound_spent for an expired time-box');
+  const applyFailed = warns.filter((entry) => String(entry.message)
+    .includes('Failed to apply initial dynamic config setting'));
+  t.ok(applyFailed.length > 0, 'each stalled read logs its base WARN');
+  for (const entry of applyFailed) {
+    t.equal(typeof entry.context?.key, 'string', 'the WARN names the key');
+    t.match(entry.context?.error, /Timed out|timed out/,
+      'the WARN carries the time-box error');
+  }
+  wiring.shutdown();
+});
 
 test('completed startup config reads log no wait_bound_spent', async (t) => {
   const {wiring, spent} = await runWiringCapturingSpent({
     sqlQueryEngine: createSqlQueryEngine(false),
   });
   t.ok(wiring, 'wiring resolves');
-  t.equal(
-    spent.filter((entry) =>
-      entry.context.wait === 'DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS')
-      .length,
-    0,
-    'no spent read when every read completes',
-  );
+  t.equal(spent.length, 0, 'no wait_bound_spent when every read completes');
   wiring.shutdown();
 });

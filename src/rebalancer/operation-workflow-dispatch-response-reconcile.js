@@ -70,11 +70,11 @@ function reportReplicaOperationDispatchSpent(
     ...REPLICA_OPERATION_DISPATCH_WAIT,
     boundMs,
     elapsedMs: Date.now() - startedAtMs,
-    lastObserved: pickDispatchFields(operation, DISPATCH_OBSERVED_FIELDS),
-    scope: {
+    lastObserved: () => pickDispatchFields(operation, DISPATCH_OBSERVED_FIELDS),
+    scope: () => ({
       nodeId: owner.nodeId ?? null,
       ...pickDispatchFields(operation, DISPATCH_SCOPE_FIELDS),
-    },
+    }),
   });
 }
 

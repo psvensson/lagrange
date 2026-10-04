@@ -783,6 +783,44 @@ test('PartitionService answers a queued write released on demotion ' +
   await partition.shutdown();
 });
 
+test('PartitionService: a write still deferred by the port when its ' +
+  'deferral budget is spent names its partition in the wait_bound_spent ' +
+  'ERROR and is answered deferRetry', async (t) => {
+  const replicaIds = ['deferral-spent-r1', 'deferral-spent-r2',
+    'deferral-spent-r3'];
+  const partition = createPartition('deferral-spent', replicaIds);
+  await partition.initialize();
+  partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+  partition.controllablePort.setProposeHandler(async () => ({
+    outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+    reason: RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN,
+    retryable: true,
+    recoveryRequired: false,
+  }));
+  const spent = [];
+  const logError = partition.logger.error.bind(partition.logger);
+  partition.logger.error = (message, fields) => {
+    if (fields?.event === 'wait_bound_spent') {
+      spent.push(fields);
+    }
+    return logError(message, fields);
+  };
+  const result = await partition.applyWrite({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
+    params: ['row-deferred', 'deferred'],
+    entryId: 'deferred-entry',
+  });
+  t.equal(result?.deferRetry, true, 'the write is answered deferRetry');
+  t.equal(spent.length, 1, 'exactly one wait_bound_spent ERROR');
+  t.equal(spent[0]?.wait,
+    'PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_DEFER_BUDGET_MS');
+  t.same(spent[0]?.scope,
+    {partitionId: 'deferral-spent', entryId: 'deferred-entry'},
+    'scope names the partition and the entry');
+  await partition.shutdown();
+});
+
 test('PartitionService rejects multi-replica leader writes when Raft is not leader',
   async (t) => {
     const replicaIds = [

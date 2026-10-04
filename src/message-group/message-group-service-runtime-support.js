@@ -85,6 +85,7 @@ const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
   COOLDOWN_MS: 1000,
   FAILURE_COOLDOWN_MS: 5000,
   NO_CHANGE_COOLDOWN_MS: 2000,
+  // ends-on: the authoritative control-plane read returns its rows
   QUERY_TIMEOUT_MS: 1500,
 });
 const CDC_FORWARD_MAX_RELAY_DEPTH = 2;

@@ -11,10 +11,13 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   SIZE_UPDATE_INTERVAL_MS: TIME_MS.MINUTE,
   MANAGED_SPLIT_WRITE_ACTIVITY_DEBOUNCE_MS: TIME_MS.SECOND * NUM.FIVE,
   MERGE_CUTOVER_WAIT_INTERVAL_MS: 200,
+  // ends-on: the merge cutover becomes visible locally, or the merge is aborted
   MERGE_CUTOVER_WAIT_TIMEOUT_MS: TIME_MS.MINUTE * NUM.TWO,
+  // ends-on: the partition size write is accepted
   SIZE_PERSIST_RETRY_TIMEOUT_MS: TIME_MS.SECOND,
   SIZE_PERSIST_RETRY_BASE_DELAY_MS: 50,
   SIZE_PERSIST_RETRY_MAX_DELAY_MS: 250,
+  // ends-on: the proposed write is committed and applied
   PENDING_REQUEST_TIMEOUT_MS: TIME_MS.SECOND * 30,
   // Interim split/merge mirror delta queue bound: the durable replay
   // source is the Raft log, so the in-memory queue only ever holds
@@ -695,8 +698,11 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
 const PARTITION_SERVICE_VALUE = Object.freeze({
   ONE_HUNDRED: NUM.HUNDRED,
   TEN: NUM.TEN,
+  // ends-on: the delivery is acknowledged (unreachable: deliverWithAck has no caller in src/)
   DEFAULT_TIMEOUT_MS: TIME_MS.SECOND * 30,
+  // ends-on: n/a dead (no consumer in src/)
   PENDING_REQUEST_SHUTDOWN_TIMEOUT_MS: TIME_MS.SECOND * 30,
+  // ends-on: n/a misnamed (a 100-character SQL log truncation length, not a time)
   DEFAULT_QUERY_TIMEOUT_MS: NUM.HUNDRED,
   SIZE_BYTES_DIVISOR: NUM.BYTES_PER_MIB,
   SIZE_MB_PRECISION: 2,

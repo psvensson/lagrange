@@ -22,34 +22,6 @@ import {
 import {
   SEED_CONTACT_SESSION_ABSENT,
 } from './seed-contact-candidate-policy.js';
-import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
-
-const SEED_CONTACT_SPENT_WAIT = Object.freeze({
-  RETRY_WINDOW: Object.freeze({
-    wait: 'joinRetryPolicy.retryTimeoutMs',
-    awaited: 'bootstrap admission from a seed-contact candidate',
-  }),
-  EVIDENCE_RETRY_BUDGET: Object.freeze({
-    wait: 'seedContactEvidenceWindow.budget',
-    awaited: 'bootstrap admission after retained retryable seed evidence',
-  }),
-});
-
-/**
- * Project the last failed seed-contact attempt for a spent-wait report.
- * @param {Object|string} lastFailure - The failure or the absent marker.
- * @return {Object}
- */
-function describeLastSeedContactFailure(lastFailure) {
-  if (lastFailure === SEED_CONTACT_SESSION_ABSENT) {
-    return {lastError: null};
-  }
-  return {
-    lastError: lastFailure.errorMessage,
-    lastCode: lastFailure.classification?.code,
-    lastStatusCode: lastFailure.classification?.statusCode,
-  };
-}
 
 class SeedContactFailureOwner {
   constructor(options = {}) {
@@ -68,33 +40,7 @@ class SeedContactFailureOwner {
     this.throwTerminalFailure(context, attempt, failure);
   }
 
-  /**
-   * Report the spent seed-contact bound: the time window when it is spent,
-   * otherwise the retained-evidence retry budget.
-   * @param {Object} context - The seed-contact context.
-   */
-  reportSeedContactSpent(context) {
-    const elapsedMs = context.now() - context.startTime;
-    const spentWait = elapsedMs >= context.retryTimeoutMs ?
-      SEED_CONTACT_SPENT_WAIT.RETRY_WINDOW :
-      SEED_CONTACT_SPENT_WAIT.EVIDENCE_RETRY_BUDGET;
-    reportWaitBoundSpent(context.logger, {
-      ...spentWait,
-      boundMs: context.retryTimeoutMs,
-      elapsedMs,
-      lastObserved: {
-        attempts: context.attempt,
-        candidateCount: context.seedContactCandidates?.length,
-        ...describeLastSeedContactFailure(context.lastAttemptFailure),
-        lastBootstrapErrorCode: context.lastBootstrapError?.code,
-        evidenceRetryBudget: context.evidenceWindow?.budget,
-      },
-      scope: {nodeId: this.nodeId},
-    });
-  }
-
   throwSurfacedFailure(context, failure) {
-    this.reportSeedContactSpent(context);
     const message = JOINING_ERROR_MSG.contactSeedFailed(
       failure.error.message,
     );
@@ -218,7 +164,6 @@ class SeedContactFailureOwner {
   }
 
   throwBudgetExhaustion(context) {
-    this.reportSeedContactSpent(context);
     const lastFailure = context.lastAttemptFailure;
     const hasLastFailure =
       lastFailure !== SEED_CONTACT_SESSION_ABSENT;

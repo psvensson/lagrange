@@ -59,13 +59,13 @@ function reportRuntimeTargetClaimRetrySpent(
   reportWaitBoundSpent(coordinator.logger, {
     ...RUNTIME_TARGET_CLAIM_RETRY_WAIT,
     boundMs: null,
-    lastObserved: {
+    lastObserved: () => ({
       attempts: collisionReplicaIds.length,
       attemptLimit: RUNTIME_TARGET_CLAIM_RETRY_LIMIT,
       collisionReplicaIds: collisionReplicaIds.slice(-RUNTIME_TARGET_CLAIM_RETRY_LIMIT),
       conflictingReplicaId: conflictingReplicaId || null,
       targetClaimKey: operation.targetClaimKey || null,
-    },
+    }),
     scope: {
       nodeId: coordinator.nodeId || null,
       partitionId: operation.partitionId || null,

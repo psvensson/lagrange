@@ -58,11 +58,11 @@ function logReplicaRemovalConsensusExit(handler, exit, context) {
     ...REMOVAL_CONSENSUS_EXIT_WAIT,
     boundMs: REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS,
     elapsedMs: Date.now() - startedAtMs,
-    lastObserved: {
+    lastObserved: () => ({
       exitReason: exit.reason,
       trackedRaftRole: handler.getTrackedReplicaRole?.(replicaId) ?? null,
       lifecycleState: handler.getTrackedReplicaLifecycleState(replicaId),
-    },
+    }),
     scope: {nodeId: handler.nodeId, operationId, partitionId, replicaId},
   });
 }

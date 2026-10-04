@@ -58,6 +58,15 @@ test('an exhausted attempt budget is one wait_bound_spent ERROR with the ' +
     lastTarget: 'group-a/replica-1',
     lastError: 'peer unreachable',
   });
+  t.same(context.lastObserved.triedTargets, ['group-a/replica-1'],
+    'the targets tried are carried, as the replaced WARN carried them');
+  t.equal(context.lastObserved.attemptHistory.length, 3,
+    'the attempt history is carried');
+  t.match(context.lastObserved.attemptHistory[2], {
+    attempt: 2, target: 'group-a/replica-1', status: 'error',
+    error: 'peer unreachable',
+  }, 'each attempt names its target, status and error');
+  t.equal(context.lastObserved.attemptHistoryOmitted, 0);
   t.ok(context.elapsedMs >= 20, 'elapsed is measured on the injected clock');
   t.notOk(capture.lines.some((line) => line.level === 'warn'),
     'the old WARN line is replaced, not doubled');
