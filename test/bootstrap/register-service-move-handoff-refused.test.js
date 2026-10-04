@@ -1,5 +1,5 @@
 // The legacy MOVE_REPLICA handoff at POST /register-service is refused
-// unconditionally (zero-Liferaft cutover, owner decision 2026-10-04): a
+// unconditionally (raft-rs full cutover, owner decision 2026-10-04): a
 // joiner never moves a message-group replica any more, but the seed-side
 // consumer stayed wire-reachable, and a pre-upgrade non-terminal
 // MOVE_ASSIGNMENT reservation is force-renewed when its lease expired - an

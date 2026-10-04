@@ -182,7 +182,7 @@ const BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE = Object.freeze({
   ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE:
     'ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE',
   REPLICA_OWNER_CONFLICT: 'REPLICA_OWNER_CONFLICT',
-  // Owner decision 2026-10-04 (zero-Liferaft cutover): every MOVE_REPLICA
+  // Owner decision 2026-10-04 (raft-rs full cutover): every MOVE_REPLICA
   // handoff at /register-service is refused, unconditionally and before the
   // assignment reservation is read (its expired lease would otherwise be
   // force-renewed for a pre-upgrade joiner).

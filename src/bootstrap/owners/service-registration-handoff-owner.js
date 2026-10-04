@@ -455,7 +455,7 @@ class ServiceRegistrationHandoffOwner {
 
   /**
    * The MOVE_REPLICA handoff is refused, unconditionally (owner decision
-   * 2026-10-04, zero-Liferaft cutover): a message-group replica is never
+   * 2026-10-04, raft-rs full cutover): a message-group replica is never
    * moved onto another node - the joiner self-hosts its own group - and a
    * handoff completed for an old-version joiner would re-open a seed
    * replica's identity on an empty log. Answered before the assignment
