@@ -666,63 +666,99 @@ test('split snapshot batching stays within SQLite bind limits for wide tables',
   });
 
 
-test('split routing captures mutable intrinsics after module load', async (t) => {
-  const originals = {
-    hasOwnProperty: Object.prototype.hasOwnProperty,
-    trim: String.prototype.trim,
-    toUpperCase: String.prototype.toUpperCase,
-    startsWith: String.prototype.startsWith,
-    includes: String.prototype.includes,
-    arrayIsArray: Array.isArray,
-    numberIsInteger: Number.isInteger,
-  };
-  let hostileCalls = 0;
-  const hostile = () => {
-    hostileCalls += 1;
-    throw new Error('post-load mutable intrinsic executed');
-  };
-  const dispatches = [];
-  let resolvedRowLimit = null;
-  try {
-    Object.prototype.hasOwnProperty = hostile;
-    String.prototype.trim = hostile;
-    String.prototype.toUpperCase = hostile;
-    String.prototype.startsWith = hostile;
-    String.prototype.includes = hostile;
-    Array.isArray = hostile;
-    Number.isInteger = hostile;
+test('split routing captures mutable intrinsics after module load in isolated runtime',
+  (t) => {
+    const routingModuleUrl =
+      new URL('../../src/partition/partition-split-routing.js', import.meta.url).href;
+    const constantsModuleUrl =
+      new URL('../../src/partition/partition-constants.js', import.meta.url).href;
+    const childSource = `
+      import {
+        resolveSplitSnapshotBatchRowLimit,
+        routeSplitSnapshotBatch,
+      } from ${JSON.stringify(routingModuleUrl)};
+      import {
+        PARTITION_TRANSITION_METADATA_FIELD,
+      } from ${JSON.stringify(constantsModuleUrl)};
 
-    await routeSplitSnapshotBatch(
-      [{id: 'a'}],
-      ['id'],
-      createMetadata(PENDING_VERSION),
-      {
-        tableName: TABLE_NAME,
-        queryExecutor: {
-          async executeOnPartition(partitionId, _sql, params) {
-            dispatches[dispatches.length] = {partitionId, params};
-            return {success: true};
+      const originals = {
+        hasOwnProperty: Object.prototype.hasOwnProperty,
+        trim: String.prototype.trim,
+        toUpperCase: String.prototype.toUpperCase,
+        startsWith: String.prototype.startsWith,
+        includes: String.prototype.includes,
+        arrayIsArray: Array.isArray,
+        numberIsInteger: Number.isInteger,
+        mathFloor: Math.floor,
+        mathMin: Math.min,
+      };
+      const hostileCalls = Object.create(null);
+      const hostile = (name) => () => {
+        hostileCalls[name] = (hostileCalls[name] || 0) + 1;
+        throw new Error('post-load mutable intrinsic executed: ' + name);
+      };
+      const dispatches = [];
+      let rowLimit = null;
+      try {
+        Object.prototype.hasOwnProperty = hostile('hasOwnProperty');
+        String.prototype.trim = hostile('trim');
+        String.prototype.toUpperCase = hostile('toUpperCase');
+        String.prototype.startsWith = hostile('startsWith');
+        String.prototype.includes = hostile('includes');
+        Array.isArray = hostile('arrayIsArray');
+        Number.isInteger = hostile('numberIsInteger');
+        Math.floor = hostile('mathFloor');
+        Math.min = hostile('mathMin');
+
+        await routeSplitSnapshotBatch(
+          [{id: 'a'}],
+          ['id'],
+          {
+            primaryKeyColumn: 'id',
+            splitKey: 'm',
+            targetPartitionIds: ['users-left', 'users-right'],
+            [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 4,
           },
-        },
-      },
+          {
+            tableName: 'users',
+            queryExecutor: {
+              async executeOnPartition(partitionId, _sql, params) {
+                dispatches.push({partitionId, params});
+                return {success: true};
+              },
+            },
+          },
+        );
+        rowLimit = resolveSplitSnapshotBatchRowLimit(['id'], 64);
+      } finally {
+        Object.prototype.hasOwnProperty = originals.hasOwnProperty;
+        String.prototype.trim = originals.trim;
+        String.prototype.toUpperCase = originals.toUpperCase;
+        String.prototype.startsWith = originals.startsWith;
+        String.prototype.includes = originals.includes;
+        Array.isArray = originals.arrayIsArray;
+        Number.isInteger = originals.numberIsInteger;
+        Math.floor = originals.mathFloor;
+        Math.min = originals.mathMin;
+      }
+      process.stdout.write(JSON.stringify({hostileCalls, dispatches, rowLimit}));
+    `;
+    const child = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', childSource],
+      {cwd: process.cwd(), encoding: 'utf8'},
     );
-    resolvedRowLimit =
-      resolveSplitSnapshotBatchRowLimit(['id'], SNAPSHOT_MAX_ROWS_PER_CALL);
-  } finally {
-    Object.prototype.hasOwnProperty = originals.hasOwnProperty;
-    String.prototype.trim = originals.trim;
-    String.prototype.toUpperCase = originals.toUpperCase;
-    String.prototype.startsWith = originals.startsWith;
-    String.prototype.includes = originals.includes;
-    Array.isArray = originals.arrayIsArray;
-    Number.isInteger = originals.numberIsInteger;
-  }
-  t.equal(hostileCalls, 0, 'post-load intrinsic replacements are never called');
-  t.equal(resolvedRowLimit, SNAPSHOT_MAX_ROWS_PER_CALL);
-  t.same(dispatches, [
-    {partitionId: LEFT_PARTITION_ID, params: ['a']},
-  ]);
-});
+    t.equal(child.status, 0,
+      child.stderr || 'isolated mutable-intrinsic witness exits cleanly');
+    const result = JSON.parse(child.stdout);
+    t.same(result.hostileCalls, {},
+      'post-load routing intrinsic replacements are never called');
+    t.same(result.dispatches, [
+      {partitionId: LEFT_PARTITION_ID, params: ['a']},
+    ]);
+    t.equal(result.rowLimit, SNAPSHOT_MAX_ROWS_PER_CALL);
+    t.end();
+  });
 
 test('split snapshot batching captures Map prototype methods in an isolated runtime',
   (t) => {
@@ -792,53 +828,90 @@ test('split snapshot batching captures Map prototype methods in an isolated runt
     t.end();
   });
 
-test('split replay captures SQL string and own-property intrinsics', async (t) => {
-  const originals = {
-    hasOwnProperty: Object.prototype.hasOwnProperty,
-    trim: String.prototype.trim,
-    toUpperCase: String.prototype.toUpperCase,
-    startsWith: String.prototype.startsWith,
-    includes: String.prototype.includes,
-    arrayIsArray: Array.isArray,
-  };
-  let hostileCalls = 0;
-  const hostile = () => {
-    hostileCalls += 1;
-    throw new Error('post-load SQL intrinsic executed');
-  };
-  const routed = [];
-  try {
-    Object.prototype.hasOwnProperty = hostile;
-    String.prototype.trim = hostile;
-    String.prototype.toUpperCase = hostile;
-    String.prototype.startsWith = hostile;
-    String.prototype.includes = hostile;
-    Array.isArray = hostile;
-    await replaySplitEntry(
-      {
-        type: PARTITION_SERVICE_OPERATION.QUERY,
-        sql: ' INSERT INTO users (id) VALUES (?)',
-        params: ['a'],
-      },
-      createMetadata(PENDING_VERSION),
-      {
-        tableName: TABLE_NAME,
-        queryExecutor: {
-          async executeOnPartition(partitionId, _sql, params) {
-            routed[routed.length] = {partitionId, params};
-            return {success: true};
+test('split replay captures SQL string and own-property intrinsics in isolated runtime',
+  (t) => {
+    const routingModuleUrl =
+      new URL('../../src/partition/partition-split-routing.js', import.meta.url).href;
+    const constantsModuleUrl =
+      new URL('../../src/partition/partition-constants.js', import.meta.url).href;
+    const serviceConstantsModuleUrl =
+      new URL('../../src/partition/partition-service-constants.js', import.meta.url).href;
+    const childSource = `
+      import {
+        replaySplitEntry,
+      } from ${JSON.stringify(routingModuleUrl)};
+      import {
+        PARTITION_TRANSITION_METADATA_FIELD,
+      } from ${JSON.stringify(constantsModuleUrl)};
+      import {
+        PARTITION_SERVICE_OPERATION,
+      } from ${JSON.stringify(serviceConstantsModuleUrl)};
+
+      const originals = {
+        hasOwnProperty: Object.prototype.hasOwnProperty,
+        trim: String.prototype.trim,
+        toUpperCase: String.prototype.toUpperCase,
+        startsWith: String.prototype.startsWith,
+        includes: String.prototype.includes,
+        arrayIsArray: Array.isArray,
+      };
+      const hostileCalls = Object.create(null);
+      const hostile = (name) => () => {
+        hostileCalls[name] = (hostileCalls[name] || 0) + 1;
+        throw new Error('post-load SQL intrinsic executed: ' + name);
+      };
+      const routed = [];
+      try {
+        Object.prototype.hasOwnProperty = hostile('hasOwnProperty');
+        String.prototype.trim = hostile('trim');
+        String.prototype.toUpperCase = hostile('toUpperCase');
+        String.prototype.startsWith = hostile('startsWith');
+        String.prototype.includes = hostile('includes');
+        Array.isArray = hostile('arrayIsArray');
+        await replaySplitEntry(
+          {
+            type: PARTITION_SERVICE_OPERATION.QUERY,
+            sql: ' INSERT INTO users (id) VALUES (?)',
+            params: ['a'],
           },
-        },
-      },
+          {
+            primaryKeyColumn: 'id',
+            splitKey: 'm',
+            targetPartitionIds: ['users-left', 'users-right'],
+            [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 4,
+          },
+          {
+            tableName: 'users',
+            queryExecutor: {
+              async executeOnPartition(partitionId, _sql, params) {
+                routed.push({partitionId, params});
+                return {success: true};
+              },
+            },
+          },
+        );
+      } finally {
+        Object.prototype.hasOwnProperty = originals.hasOwnProperty;
+        String.prototype.trim = originals.trim;
+        String.prototype.toUpperCase = originals.toUpperCase;
+        String.prototype.startsWith = originals.startsWith;
+        String.prototype.includes = originals.includes;
+        Array.isArray = originals.arrayIsArray;
+      }
+      process.stdout.write(JSON.stringify({hostileCalls, routed}));
+    `;
+    const child = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', childSource],
+      {cwd: process.cwd(), encoding: 'utf8'},
     );
-  } finally {
-    Object.prototype.hasOwnProperty = originals.hasOwnProperty;
-    String.prototype.trim = originals.trim;
-    String.prototype.toUpperCase = originals.toUpperCase;
-    String.prototype.startsWith = originals.startsWith;
-    String.prototype.includes = originals.includes;
-    Array.isArray = originals.arrayIsArray;
-  }
-  t.equal(hostileCalls, 0, 'SQL routing ignores post-load intrinsic replacement');
-  t.same(routed, [{partitionId: LEFT_PARTITION_ID, params: ['a']}]);
-});
+    t.equal(child.status, 0,
+      child.stderr || 'isolated SQL-intrinsic witness exits cleanly');
+    const result = JSON.parse(child.stdout);
+    t.same(result.hostileCalls, {},
+      'post-load SQL intrinsic replacements are never called');
+    t.same(result.routed, [
+      {partitionId: LEFT_PARTITION_ID, params: ['a']},
+    ]);
+    t.end();
+  });
