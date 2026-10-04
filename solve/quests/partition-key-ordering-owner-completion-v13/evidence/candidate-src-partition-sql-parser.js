@@ -20,12 +20,46 @@ const CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES = new Set([
   SYSTEM_TABLE_NAME.NODES,
   SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
 ]);
-const PARAMETERIZED_INSERT_COLUMNS_PATTERN =
-  /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i;
-const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayPush = Function.call.bind(Array.prototype.push);
+const numberFrom = Number;
+const numberIsNaN = Number.isNaN;
+const objectHasOwn = Function.call.bind(Object.prototype.hasOwnProperty);
+const objectKeys = Object.keys;
 const regExpExec = Function.call.bind(RegExp.prototype.exec);
+const setHas = Function.call.bind(Set.prototype.has);
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const stringSlice = Function.call.bind(String.prototype.slice);
 const stringSplit = Function.call.bind(String.prototype.split);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringSubstring = Function.call.bind(String.prototype.substring);
+const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
 const stringTrim = Function.call.bind(String.prototype.trim);
+const CONJUNCTIVE_AND_PATTERN = /\s+AND\s+/gi;
+const LEADING_TRAILING_PARENS_PATTERN = /^(?:\(+)|(?:\)+)$/gu;
+const EQUALITY_COLUMN_PATTERN = /^(\w+)\s*=/u;
+
+function splitConjunctiveParts(value) {
+  const parts = [];
+  let start = 0;
+  CONJUNCTIVE_AND_PATTERN.lastIndex = 0;
+  let match = regExpExec(CONJUNCTIVE_AND_PATTERN, value);
+  while (match) {
+    arrayPush(parts, stringSlice(value, start, match.index));
+    start = match.index + match[0].length;
+    match = regExpExec(CONJUNCTIVE_AND_PATTERN, value);
+  }
+  arrayPush(parts, stringSlice(value, start));
+  CONJUNCTIVE_AND_PATTERN.lastIndex = 0;
+  return parts;
+}
+
+function stripOuterParens(value) {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === '(') start += 1;
+  while (end > start && value[end - 1] === ')') end -= 1;
+  return stringSlice(value, start, end);
+}
 
 /**
  * Extract column names from a simple conjunctive WHERE clause.
@@ -38,14 +72,14 @@ export function extractConjunctiveWhereColumns(whereContent) {
     return [];
   }
 
-  return whereContent.trim().split(/\s+AND\s+/i)
-    .map((part) => {
-      const cleanPart = part.trim()
-        .replace(/^\(+|\)+$/g, STRING.EMPTY);
-      const match = cleanPart.match(/^(\w+)\s*=/);
-      return match ? match[1] : null;
-    })
-    .filter(Boolean);
+  const parts = splitConjunctiveParts(stringTrim(whereContent));
+  const columns = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const cleanPart = stripOuterParens(stringTrim(parts[index]));
+    const match = regExpExec(EQUALITY_COLUMN_PATTERN, cleanPart);
+    if (match) arrayPush(columns, match[1]);
+  }
+  return columns;
 }
 
 /**
@@ -54,7 +88,7 @@ export function extractConjunctiveWhereColumns(whereContent) {
  * @return {boolean}
  */
 function shouldEmitCdcRowFetchInfoLog(tableName) {
-  return !CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES.has(tableName);
+  return !setHas(CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES, tableName);
 }
 
 // Route the CDC row-fetch info diagnostics through the shared throttle so a
@@ -72,19 +106,19 @@ function admitCdcFetch(message, tableName) {
  * @return {*} Parsed value.
  */
 export function parseValue(val) {
-  if (val.toUpperCase() === PARTITION_SERVICE_SQL_FRAGMENT.NULL_VALUE) {
+  if (stringToUpperCase(val) === PARTITION_SERVICE_SQL_FRAGMENT.NULL_VALUE) {
     return null;
   }
   // Remove quotes
-  if ((val.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE) &&
-    val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE)) ||
-      (val.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE) &&
-      val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE))) {
-    return val.slice(1, -1);
+  if ((stringStartsWith(val, PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE) &&
+    stringEndsWith(val, PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE)) ||
+      (stringStartsWith(val, PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE) &&
+      stringEndsWith(val, PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE))) {
+    return stringSlice(val, 1, -1);
   }
   // Try to parse as number
-  const num = Number(val);
-  if (!isNaN(num)) {
+  const num = numberFrom(val);
+  if (!numberIsNaN(num)) {
     return num;
   }
   return val;
@@ -120,7 +154,7 @@ export function parseValuesFromSQL(valuesStr) {
         quoteChar = null;
       }
     } else if (!inQuote && char === PARTITION_SERVICE_SQL_FRAGMENT.COMMA) {
-      values.push(parseValue(current.trim()));
+      arrayPush(values, parseValue(stringTrim(current)));
       current = STRING.EMPTY;
     } else {
       current += char;
@@ -128,8 +162,8 @@ export function parseValuesFromSQL(valuesStr) {
   }
 
   // Don't forget the last value
-  if (current.trim()) {
-    values.push(parseValue(current.trim()));
+  if (stringTrim(current)) {
+    arrayPush(values, parseValue(stringTrim(current)));
   }
 
   return values;
@@ -147,14 +181,15 @@ export function parseValuesFromSQL(valuesStr) {
 export function extractInsertDataFromSQL(sql, tableName, db, logger) {
   // Parse INSERT INTO table (col1, col2) VALUES ('val1', 'val2')
   // or INSERT OR REPLACE/IGNORE INTO table (col1, col2) VALUES ('val1', 'val2')
-  const columnsMatch = sql.match(
+  const columnsMatch = regExpExec(
     /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+    sql,
   );
-  const valuesMatch = sql.match(/VALUES\s*\(([^)]+)\)/i);
+  const valuesMatch = regExpExec(/VALUES\s*\(([^)]+)\)/i, sql);
 
   if (!columnsMatch || !valuesMatch) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_INSERT_FAILED, {
-      sql: sql.substring(
+      sql: stringSubstring(sql, 
         0,
         PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
       ),
@@ -162,9 +197,14 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
     return {};
   }
 
-  const columns = columnsMatch[1].split(
+  const rawColumns = stringSplit(
+    columnsMatch[1],
     PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-  ).map((c) => c.trim());
+  );
+  const columns = [];
+  for (let columnIndex = 0; columnIndex < rawColumns.length; columnIndex += 1) {
+    arrayPush(columns, stringTrim(rawColumns[columnIndex]));
+  }
   const valuesStr = valuesMatch[1];
 
   // Parse values - handle quoted strings and numbers
@@ -201,7 +241,7 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
         if (suppressed !== null) {
           logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
             tableName,
-            rowKeys: Object.keys(row),
+            rowKeys: objectKeys(row),
             suppressedSinceLastEmit: suppressed,
           });
         }
@@ -229,7 +269,7 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
  */
 export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
   // Match WHERE clause with optional parentheses: WHERE (col = 'val') or WHERE col = 'val'
-  const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
+  const whereMatch = regExpExec(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i, sql);
   if (whereMatch) {
     const keyColumn = whereMatch[1];
     const keyValue = whereMatch[2];
@@ -261,7 +301,7 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
         if (suppressed !== null) {
           logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
             tableName,
-            rowKeys: Object.keys(row),
+            rowKeys: objectKeys(row),
             suppressedSinceLastEmit: suppressed,
           });
         }
@@ -282,7 +322,7 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
     }
   } else {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
-      sql: sql.substring(
+      sql: stringSubstring(sql, 
         0,
         PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
       ),
@@ -299,14 +339,14 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
  */
 export function extractDeleteDataFromSQL(sql, logger) {
   // Match WHERE clause: WHERE col = 'val'
-  const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
+  const whereMatch = regExpExec(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i, sql);
   if (whereMatch) {
     const keyColumn = whereMatch[1];
     const keyValue = whereMatch[2];
     return {[keyColumn]: keyValue};
   }
   logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_DELETE_WHERE_FAILED, {
-    sql: sql.substring(
+    sql: stringSubstring(sql, 
       0,
       PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
     ),
@@ -334,13 +374,13 @@ export function extractDataFromParameterizedSQL(
     operationType === PARTITION_SERVICE_OPERATION.UPSERT) {
     // Parse INSERT INTO table (col1, col2, ...) VALUES (?, ?, ...)
     const columnsMatch = regExpExec(
-      PARAMETERIZED_INSERT_COLUMNS_PATTERN,
+      /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
       sql,
     );
     if (!columnsMatch) {
       logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
-          sql: sql.substring(
+          sql: stringSubstring(sql, 
             0,
             PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
           ),
@@ -349,13 +389,14 @@ export function extractDataFromParameterizedSQL(
       return {};
     }
 
-    const columns = arrayMap(
-      stringSplit(
-        columnsMatch[1],
-        PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-      ),
-      (column) => stringTrim(column),
+    const rawColumns = stringSplit(
+      columnsMatch[1],
+      PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
     );
+    const columns = [];
+    for (let columnIndex = 0; columnIndex < rawColumns.length; columnIndex += 1) {
+      arrayPush(columns, stringTrim(rawColumns[columnIndex]));
+    }
     if (columns.length !== params.length) {
       logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
         columns: columns.length,
@@ -372,7 +413,7 @@ export function extractDataFromParameterizedSQL(
 
     logger?.debug?.(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_INSERT, {
       tableName,
-      dataKeys: Object.keys(data),
+      dataKeys: objectKeys(data),
     });
 
     return data;
@@ -381,13 +422,13 @@ export function extractDataFromParameterizedSQL(
   if (operationType === PARTITION_SERVICE_OPERATION.UPDATE) {
     // Parse UPDATE table SET col1 = ?, col2 = ? WHERE pk = ?
     // Use [\s\S] so multiline SQL emitted by query builders stays parseable.
-    const setMatch = sql.match(/\bSET\s+([\s\S]+?)\s+\bWHERE\b/i);
-    const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
+    const setMatch = regExpExec(/\bSET\s+([\s\S]+?)\s+\bWHERE\b/i, sql);
+    const whereMatch = regExpExec(/\bWHERE\s+([\s\S]+)$/i, sql);
 
     if (!setMatch) {
       logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
-          sql: sql.substring(
+          sql: stringSubstring(sql, 
             0,
             PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
           ),
@@ -397,12 +438,20 @@ export function extractDataFromParameterizedSQL(
     }
 
     // Extract column names from SET clause
-    const setColumns = setMatch[1].split(
+    const rawSetColumns = stringSplit(
+      setMatch[1],
       PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-    ).map((part) => {
-      const match = part.trim().match(/^(\w+)\s*=/);
-      return match ? match[1] : null;
-    }).filter(Boolean);
+    );
+    const setColumns = [];
+    for (let columnIndex = 0;
+      columnIndex < rawSetColumns.length;
+      columnIndex += 1) {
+      const match = regExpExec(
+        EQUALITY_COLUMN_PATTERN,
+        stringTrim(rawSetColumns[columnIndex]),
+      );
+      if (match) arrayPush(setColumns, match[1]);
+    }
 
     // Extract column names from WHERE clause
     // Handle parentheses around the WHERE clause: WHERE (col = ?)
@@ -410,7 +459,13 @@ export function extractDataFromParameterizedSQL(
       extractConjunctiveWhereColumns(whereMatch[1]) :
       [];
 
-    const allColumns = [...setColumns, ...whereColumns];
+    const allColumns = [];
+    for (let columnIndex = 0; columnIndex < setColumns.length; columnIndex += 1) {
+      arrayPush(allColumns, setColumns[columnIndex]);
+    }
+    for (let columnIndex = 0; columnIndex < whereColumns.length; columnIndex += 1) {
+      arrayPush(allColumns, whereColumns[columnIndex]);
+    }
     if (allColumns.length !== params.length) {
       logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_UPDATE_MISMATCH, {
         columns: allColumns.length,
@@ -423,21 +478,25 @@ export function extractDataFromParameterizedSQL(
     // SET-column values are authoritative; WHERE-only columns backfill keys.
     const data = {};
     let paramIndex = 0;
-    for (const column of setColumns) {
+    for (let columnIndex = 0; columnIndex < setColumns.length; columnIndex += 1) {
+      const column = setColumns[columnIndex];
       data[column] = params[paramIndex];
       paramIndex += 1;
     }
-    for (const column of whereColumns) {
+    for (let columnIndex = 0;
+      columnIndex < whereColumns.length;
+      columnIndex += 1) {
+      const column = whereColumns[columnIndex];
       const value = params[paramIndex];
       paramIndex += 1;
-      if (!Object.prototype.hasOwnProperty.call(data, column)) {
+      if (!objectHasOwn(data, column)) {
         data[column] = value;
       }
     }
 
     logger?.debug?.(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_UPDATE, {
       tableName,
-      dataKeys: Object.keys(data),
+      dataKeys: objectKeys(data),
     });
 
     return data;
@@ -446,11 +505,11 @@ export function extractDataFromParameterizedSQL(
   if (operationType === PARTITION_SERVICE_OPERATION.DELETE) {
     // Parse DELETE FROM table WHERE pk = ? or WHERE (pk = ?)
     // Use [\s\S] for multiline predicates.
-    const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
+    const whereMatch = regExpExec(/\bWHERE\s+([\s\S]+)$/i, sql);
     if (!whereMatch) {
       logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
-          sql: sql.substring(
+          sql: stringSubstring(sql, 
             0,
             PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
           ),
@@ -459,7 +518,7 @@ export function extractDataFromParameterizedSQL(
       return {};
     }
 
-    const whereContent = whereMatch[1].trim();
+    const whereContent = stringTrim(whereMatch[1]);
     const whereColumns = extractConjunctiveWhereColumns(whereContent);
 
     if (whereColumns.length !== params.length) {
@@ -478,7 +537,7 @@ export function extractDataFromParameterizedSQL(
 
     logger?.debug?.(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_DELETE, {
       tableName,
-      dataKeys: Object.keys(data),
+      dataKeys: objectKeys(data),
     });
 
     return data;
