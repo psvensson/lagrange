@@ -597,14 +597,13 @@ test('B4 an answer whose durable record failed is not progress: the member ' +
   const owner = await openOwner(world, shape);
   const coordinator = owner.workflowCoordinator;
   const persist = coordinator.persistParticipant;
-  let writes = 0;
   let unrecorded = null;
-  // The freeze, the address book and two answers land; the last answer's
-  // write of the pass fails.
+  // The write recording the LAST member's answer fails, once (the last of
+  // the pass, so no later write of the pass carries the set forward).
   coordinator.persistParticipant = async (participant) => {
-    writes += 1;
-    if (writes === 5) {
-      unrecorded = participant.checkpoint.dissolvedReplicaIds.at(-1);
+    const answered = participant.checkpoint?.dissolvedReplicaIds ?? [];
+    if (unrecorded === null && answered.length === world.members.length) {
+      unrecorded = answered.at(-1);
       throw new Error('tables write failed');
     }
     return persist(participant);
