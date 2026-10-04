@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-09-13
+last_reviewed: 2026-10-04
 ---
 
 # Rules
@@ -40,11 +40,11 @@ knowledge in its own terms.
 
 ## R04. A symptom is an owner defect
 
-**Invariant.** A local failure is evidence that an owner or a boundary is
-wrong; it is never grounds for a local fallback, adapter or compatibility
-path.
+**Invariant.** A local failure, a wait that reaches its bound included, is
+evidence that an owner or a boundary is wrong; it is never an outcome, a normal
+exit, or grounds for a local fallback, adapter or compatibility path.
 **Owner.** `architecture`
-**On conflict.** Repair the owner the symptom points at.
+**On conflict.** Log one error naming what was awaited and the last observed state; repair that owner.
 
 ## R05. Derived material is not an authority
 

@@ -1,5 +1,7 @@
 ---
 categories: [retry-loops]
+evidence: [whatChanged]
+trigger: [rR]etr(?:y|ies|ying)|RETR(?:Y|IES)|[bB]ackoff|BACKOFF|[rR]edrive|REDRIVE|[rR]equeue|REQUEUE|[rR]earm|REARM
 ---
 
 # Verification Template: Retry / Re-drive / Follow-up Loops
@@ -30,3 +32,8 @@ re-drive lanes. Each item requires an evidence path.
 7. **Reset semantics.** What resets attempt counters — and can a
    success-that-wasn't (transport ACK without processing) reset them
    forever?
+8. **What changed between attempts.** For a retry that fails and later
+   succeeds, name what changed between the failed attempt and the successful
+   one: which state, written by which owner, observed how. "The retry then
+   succeeds" is not an explanation; it hides the owner that was not ready.
+   The verification record carries the answer as `whatChanged` (INDEX).

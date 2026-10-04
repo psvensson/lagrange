@@ -11,6 +11,9 @@ import {CHECK_BASE_ENV} from '../checks/change-selection-constants.js';
 import {
   RETRY_FAILED_ONCE_ENABLED, RETRY_FAILED_ONCE_ENV,
 } from '../run-test-files.js';
+import {
+  readVerificationRecord, verificationRecordProblems, workingChangeSet, workingTreeReader,
+} from './guards.js';
 
 import {
   CERTIFICATION_ONLY_PROBES, CLASS_FIX, ENTRY_TYPE, EPIC_PROOF, EPIC_STATUS,
@@ -234,6 +237,11 @@ function note(root, options) {
   if (entry.type === ENTRY_TYPE.TERMINAL && entry.status === QUEST_STATUS.SOLVED) {
     refuse(MESSAGE.SOLVED_BY_LAND);
   }
+  if (entry.type === ENTRY_TYPE.VERIFICATION && options.evidence !== undefined) {
+    const loaded = readVerificationRecord(root, options.evidence);
+    if (loaded.problems.length > 0) refuse(`note: ${loaded.problems.join(PROBLEM_SEPARATOR)}`);
+    entry.record = loaded.record;
+  }
   if (entry.type === ENTRY_TYPE.ATTEMPT && !state.seal) {
     refuse(`quest ${quest.id} is not sealed; run start first`);
   }
@@ -450,7 +458,7 @@ function commitLanding(root, quest, paths, options) {
  * @return {Object}
  */
 function land(root, options) {
-  const {quest, state} = openState(root, options.id);
+  const {quest, log, state} = openState(root, options.id);
   if (!state.seal) refuse(`quest ${quest.id} is not sealed; run start first`);
   if (state.status === QUEST_STATUS.BLOCKED) {
     refuse(`quest ${quest.id} is blocked (next owner ${state.blocked.nextOwner}): ` +
@@ -468,6 +476,8 @@ function land(root, options) {
   }
   const paths = pathsOutsideQuest(root, quest.id);
   problems.push(...verificationProblems(state, paths));
+  problems.push(...verificationRecordProblems(log, workingChangeSet(root, paths),
+    workingTreeReader(root)));
   problems.push(...altitudeProblems(state));
   problems.push(...epicScopeProblems(quest, epic, paths));
   problems.push(...coupledPairProblems(root, paths));

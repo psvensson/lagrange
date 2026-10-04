@@ -28,7 +28,7 @@
   "censusSize": 2285,
   "digest": "fnv1a32-72594200",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2b11ef3d",
+  "observationDigest": "fnv1a32-2ad3236e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -10908,7 +10908,15 @@
       ]
     },
     "test/scripts/closure-ledger-state.test.js": {
+      "files": [
+        "docs/development/verification-templates/design-note-template.md",
+        "docs/steering/workflow-guidelines/solver-quests.md",
+        "scripts/closure-ledger-state.js",
+        "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger.md"
+      ],
       "directories": [
+        "scripts",
+        "solve/quests",
         "solve/specs/membership-lifecycle-placement-hard-cutover"
       ]
     },
@@ -11251,6 +11259,7 @@
         "test/shards/primary-classes.json"
       ],
       "directories": [
+        "docs/development/verification-templates",
         "scripts",
         "scripts/checks",
         "solve",
@@ -11767,6 +11776,7 @@
     "test/scripts/rule-set-revision.test.js": {
       "files": [
         "AGENTS.md",
+        "README.md",
         "dependency-cruiser.config.cjs",
         "docs/specs/decision-tables/steering-rule-authority-split.json",
         "docs/steering/router.md",
@@ -11796,6 +11806,7 @@
       "directories": [
         "architecture",
         "docs",
+        "docs/development/verification-templates",
         "docs/steering",
         "docs/steering/generated",
         "scripts",
@@ -12485,6 +12496,7 @@
         "test/shards/subsystem-classes.json"
       ],
       "directories": [
+        "docs/development/verification-templates",
         "scripts",
         "scripts/checks",
         "solve",
@@ -12505,6 +12517,7 @@
     },
     "test/solve/guards.test.js": {
       "files": [
+        "README.md",
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
@@ -12524,6 +12537,7 @@
         "test/shards/primary-classes.json"
       ],
       "directories": [
+        "docs/development/verification-templates",
         "scripts",
         "scripts/checks",
         "solve",

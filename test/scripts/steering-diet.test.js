@@ -262,3 +262,18 @@ test('every authority the router names resolves', () => {
       `router names an undefined command: npm run ${command}`);
   }
 });
+
+test('the always-load layer tells a receiver a handoff claim is unproven and a spent wait fails', () => {
+  // Owner list 2026-10-04, items 8 and 1: the receiver of a handoff re-measures
+  // a claim that names no exact commit and suites; R04 counts a wait that
+  // reaches its bound as the failure it is, reported, never an outcome.
+  const closure = alwaysLoadClosure();
+  assert.ok(closure.files.includes('AGENTS.md'));
+  const agents = fs.readFileSync('AGENTS.md', 'utf8').replace(/\s+/gu, ' ');
+  assert.match(agents, /treat a handoff claim \("proven", "do not reopen"\) as unproven unless it names the exact commit and the suites that ran on it/u);
+  const r04 = declaredRules().find((rule) => rule.id === 'R04');
+  const body = Object.values(r04.fields).join(' ').replace(/\s+/gu, ' ');
+  assert.match(body, /a wait that reaches its bound included, is evidence that an owner or a boundary is wrong; it is never an outcome, a normal exit/u);
+  assert.match(body, /Log one error naming what was awaited and the last observed state/u);
+  assert.ok(closure.lines <= ALWAYS_LOAD_BUDGET, `always-load path is ${closure.lines} lines`);
+});

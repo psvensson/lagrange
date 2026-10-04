@@ -28,7 +28,13 @@ is a retired v1 operation.
 `note` takes exactly one of `--finding`, `--attempt`, `--verification`,
 `--blocked`, `--exhausted` or `--superseded`. A verification also takes
 `--verifier subagent:<id>` and `--verdict approve|reject`. Changes under `src/`
-cannot land without an approving verification newer than the last attempt.
+cannot land without an approving verification newer than the last attempt,
+and that approval carries its record (`--evidence <record.json>`: the templates
+applied, each with its red-on-revert, and the census sample; shape and checks
+in [`verification-templates/INDEX.md`](verification-templates/INDEX.md)).
+Bootstrap: closed quests are not re-judged, but a quest in flight when the
+record became required lands only after a verification in the new shape.
+Until the main push admission calls the same check, only `land` applies it.
 
 ## After A Rejection
 
@@ -47,6 +53,7 @@ attempt is newer than it; there is no separate corrective verb.
 | `outside the scope of <epic>` | a staged path is not authorised by the epic; widen the epic explicitly or leave the change out |
 | a verification entry is required | an independent verifier has not approved this tree |
 | `the newest verification is a rejection` | repair and record a newer attempt first |
+| `the approving verification names ...` / `lacks ...` | the approval's record is missing a template, a red-on-revert or a census sample, or a reference in it does not resolve in the tree; the verifier records a new verification with the complete record |
 
 None of these is worked around. Each names the thing to fix.
 

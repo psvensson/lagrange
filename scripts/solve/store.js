@@ -23,6 +23,8 @@ const YAML_KEY_PATTERN = /^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/u;
 const YAML_NESTED_KEY_PATTERN = /^(\s+)([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/u;
 const YAML_NUMBER_PATTERN = /^-?\d+(\.\d+)?$/u;
 const YAML_QUOTED_PATTERN = /^["'](.*)["']$/u;
+const YAML_INLINE_LIST_PATTERN = /^\[(.*)\]$/u;
+const YAML_INLINE_LIST_SEPARATOR = ',';
 const YAML_UNQUOTE_REPLACEMENT = '$1';
 const YAML_SCALARS = Object.freeze(new Map([
   ['', null], ['null', null], ['true', true], ['false', false],
@@ -139,6 +141,11 @@ function verdictOf(entry) {
     LEGACY_VERIFICATION_KINDS[entry.kind] || null;
 }
 
+// Whether a verification-classified entry approves (a legacy v1 kind too).
+function isApproval(entry) {
+  return Boolean(entry) && verdictOf(entry) === VERDICT.APPROVE;
+}
+
 function terminalStatusOf(entry) {
   if (entry.type === ENTRY_TYPE.TERMINAL) return entry.status;
   const legacy = LEGACY_TERMINAL_STATUS[entry.type];
@@ -218,6 +225,11 @@ function parseScalar(raw) {
   const value = raw.trim();
   if (YAML_SCALARS.has(value)) return YAML_SCALARS.get(value);
   if (value === EMPTY_LIST) return [];
+  const inline = YAML_INLINE_LIST_PATTERN.exec(value);
+  if (inline) {
+    return inline[1].split(YAML_INLINE_LIST_SEPARATOR).map((item) => parseScalar(item))
+      .filter((item) => item !== null);
+  }
   if (YAML_NUMBER_PATTERN.test(value)) return Number(value);
   return value.replace(YAML_QUOTED_PATTERN, YAML_UNQUOTE_REPLACEMENT);
 }
@@ -312,7 +324,7 @@ function isOpenEpic(epic) {
 }
 
 export {
-  appendEntry, classifyEntry, epicFile, evidenceDir, isOpenEpic,
+  appendEntry, classifyEntry, epicFile, evidenceDir, isApproval, isOpenEpic,
   isQuestLogPath, listEpics,
   listQuestIds, logFile, parseFrontMatter, questDir, questExists, questFile,
   questState, readEpic, readLog, readQuest, terminalStatusOf, verdictOf,
