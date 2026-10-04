@@ -74,6 +74,163 @@ info 7, warn 45, error 15. Where a site already logged the expiry with
 equivalent content, that line was replaced by the reporter, so no expiry
 logs twice.
 
+## Residual follow-up (verifier residuals on a3db6b353)
+
+This section supersedes the rows it names in the tables below. Those rows
+are kept as first recorded, so the history stays readable.
+
+**Totals after the follow-up:**
+- 174 bounded waits.
+- 132 wired.
+- 5 deferred to merge.
+- 37 not wired.
+
+**How the totals moved:**
+- 12 wired rows were reclassified as scheduling (not a bounded wait).
+- 6 rows were added: leader-publication, handoff x2, ready-drain cap, persistence stall at runtime owner :361, and publication ack.
+- 6 core-path CDC rows were wired.
+- The logs sink's own retry budget was wired.
+- persist.js:157 was wired.
+
+### Reporter (src/logging/wait-bound-spent.js)
+- `lastObserved` and `scope` may be observer functions. The reporter evaluates them inside its own guard. A throwing observer becomes `{state:'observation_failed', error}`.
+- The flood rule folds a (wait, subject, state) only within `WAIT_BOUND_SPENT_FOLD_WINDOW_MS` (60 s). After that, a later incident for an unchanged subject is visible again, with `repeats`.
+- An observation is never dropped:
+  - A circular or BigInt observation becomes `{state:'unserializable', keys}`.
+  - An observation over `WAIT_BOUND_SPENT_MAX_OBSERVED_CHARS` (4096) becomes `{state:'truncated', serializedChars, preview}`.
+- A report whose scope names the logs table goes through `LoggingService.logConsoleOnly` and never back into the logs table. The scope names it through `tableName`/`tableId` `logs`, or through a logs-table `partitionId` resolved by `resolvePartitionTableId`. The logs sink's own waits pass `sink: CONSOLE_ONLY`.
+- Residual: two waits on a logs write path do not carry the table, so their reports for a logs write can still persist:
+  - the transport pending-response deadline (its `responseContext` is opaque);
+  - the pending-request ACK tracker.
+  - Each is bounded by `maxPendingWrites` and class-C shedding.
+
+### Rows reclassified as scheduling (unwired; the base log line is restored)
+| Site | Reclassification |
+| --- | --- |
+| src/entrypoint-runtime-shutdown-lifecycle.js:268 `SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS` | Time-box. A best-effort shutdown step is boxed at 3 s and its expiry is the designed exit path. The base WARN is restored. Declared `ends-on: n/a timebox`. |
+| src/bootstrap/owners/bootstrap-readiness-snapshot-evaluator.js:115 `READINESS_PROBE_ASYNC_TIMEOUT_MS` | Probe fallback. Async diagnostics are time-boxed for the HTTP probe, and the sync snapshot is the designed answer. The base DEBUG is restored. |
+| src/control-plane/pressure-governor.js:767 `PRESSURE_ADMISSION_MAX_WAIT_MS` | Backpressure hint. Expiry resolves the plain DEFER, and the bound belongs to the caller's retry loop. The base logged nothing, and nothing is logged now. pressure-admission-wait-report.js is deleted. |
+| src/bootstrap/phases/wait-for-leadership-phase.js:142, seed-contact-failure-owner.js:97 and :221, create-message-group-phase.js:558/593, query-system-state-phase.js:612, connect-websocket-phase.js:461 | Resume iteration. Each is one iteration of the join resume loop and throws a retryable error that the loop resumes. The spent wait is the loop's budget, already reported once at node-joining-admission-readiness.js:700/:724 (`retryableJoinResumePolicy.maxElapsedMs/maxAttempts`). The base lines are restored, and join-registration-wait-report.js is deleted. wait-for-leadership-phase.js:200 stays wired. |
+| src/config/dynamic-config-startup-wiring.js:114 (x2: initial read 300 ms, controller init) | Startup time-box. Defaults apply now and CDC applies the stored values later. The base WARNs are restored. |
+| src/rebalancer/operation-workflow-recovery-status-reconcile.js:743 (exempt REPLACE) | Not a bound. The budget of a time-exempt REPLACE is diagnostic only (`recordReplaceBudgetDiagnostic`) and never changes state. The failing-timeout row :762 stays wired. |
+
+**Branches narrowed (rows stay wired):**
+- message-router-peer-liveness.js ping: the alive-by-inbound branch is back to INFO `PING_TIMEOUT_SATISFIED_BY_INBOUND`. Only the dead branches (connection replaced, no recent inbound) report.
+- message-router-connection-close-reconnect.js keepalive: the alive branch is back to INFO. Only the sever branch reports, with a stable `lastObserved` (the volatile `lastInboundAgoMs` is removed).
+- rpc-client.js:132 is kept and folds on `subject = "<target> <requestType>"`.
+- The four `runRetryableControlPlaneWrite` callers now pass logger, scope and wait:
+  - system-metadata-owner-base `controlPlaneWriteRetryTimeoutMs`, with scope {ownerName, tableName, operation};
+  - replica-handler-status `REPLICA_HANDLER_DEFAULT.STATUS_WRITE_RETRY_TIMEOUT_MS`;
+  - partition size `PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_TIMEOUT_MS`;
+  - raft write commit `PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_DEFER_BUDGET_MS`.
+
+### Rows added or newly wired
+| Site | Kind | Wait | Awaited | Bound | On expiry | Logged before | Wiring | lastObserved |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| src/partition/partition-service-metadata-mutation-helpers.js:400 | retry_exhausted | LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS | durable partitions.leader_node_id publication accepted | 8 scheduled retries (once per episode) | silently_continue (the retry continues at a capped cadence) | error (bespoke; replaced) | wired | typedEvent, leaderNodeId, attempts, nextDelayMs; scope nodeId/partitionId/replicaId |
+| src/rebalancer/operation-workflow-owner-handoff-state.js:608 | timeout | COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT | coordinator-created operation handed off to its remote owner (arm path) | step timeout unless the operation budget is active | silently_continue (clear the retry, answer false) | none | wired (shared reporter in coordinator-created-handoff-scheduling.js:134, subject=operationId) | workflowStep, stepTimedOut, operationBudgetActive, deadline, type, status (observer) |
+| src/rebalancer/operation-workflow-owner-ports.js:805 | timeout | COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT | same (remote-owner wake port) | same | same | none | wired (same reporter and subject: folds with :608) | same |
+| src/raft/raft-rs-runtime-owner.js:922 | retry_exhausted | RAFT_RS_READY_DRAIN_MAX_CYCLES | core has no further Ready | 64 cycles | return_failure_state (hostFailure) | none | deferred_to_merge | cycles, maxCycles |
+| src/raft/raft-rs-runtime-owner.js:361 | deadline | PERSISTENCE_ADMISSION_WAIT.BOUND_MS | store admits durable writes for a taken Ready | 120000 | return_failure_state (READY_PERSISTENCE / USER_TRANSACTION_OPEN) | none | deferred_to_merge (replaces the import-fence row of raft-rs-persistence-admission.js:54, which becomes not_wired:forwarded) | phase, reason |
+| src/control-plane/membership-publication-acknowledgement.js:38 | deadline | publication ack timeout (options.timeoutMs) | every required node acknowledges | options.timeoutMs | return_failure_state (ACK_TIMEOUT) | none | not_wired:dormant (no production producer passes timeoutMs; if one is ever added, wire it in persist.acknowledgePublication) | nothing:dormant |
+| src/cdc/cdc-routed-mutation-readiness.js:422/:441/:505 (were :352/:423), :580/:636 (was :494) | deadline | cdc_routed_mutation_retry_budget | routed system-table mutation accepted within the query execution budget | options.queryTimeoutMs | return_failure_state / throw_typed | none / warn per attempt | wired (one line per write, by latch) | phase, attempt, remainingBudgetMs, requestedDelayMs; scope nodeId/tableName |
+| src/cdc/cdc-routed-mutation-readiness.js:617 (was :528) | retry_exhausted | CDC_DEFAULTS.RETRY_MAX_ATTEMPTS | routed system-table mutation accepted by the engine | 6 | throw_typed | warn per attempt | wired (retryable last error only) | attempts, maxAttempts, errorCode, retryAfterMs; scope nodeId/tableName |
+| src/cdc/cdc-integration-service-authoritative-catchup.js:342 (was :316) | retry_exhausted | CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE | authoritative catch-up read of one system table hydrated | 3 deferred retries | return_failure_state | warn (kept) | wired | attempts, lastFailure, retryAfterMs; scope nodeId/tableName |
+| src/cdc/cdc-integration-service-cache-visibility-wait.js:385 (was :358) | retry_exhausted | authoritative_visibility_repair_attempts | authoritative confirmation of the visibility hole | 2 within the remaining budget | fallthrough_alternative | none | wired (not on shutdown) | attempts, maxAttempts, remainingBudgetMs, visibilityState; scope nodeId/tableName/key |
+| src/control-plane/membership-publication-coordinator-persist.js:186 (was :157) | retry_exhausted | PUBLICATION_WRITE_MAX_ATTEMPTS | durable publication row satisfying the desired state | 3 | silently_continue (returns the unconfirmed row as if persisted; unchanged) | none | wired | attempts, outcome `unconfirmed_row_returned_as_persisted`, status, publicationEpoch, acknowledgedCount |
+| src/logging/logs-table-service-flush-helpers.js:111 | retry_exhausted | LOGS_TABLE_DEFAULT.MAX_RETRIES | one log entry written to the logs table | maxRetries | throw_typed | console.warn by the caller | wired (sink CONSOLE_ONLY: cannot re-enter the logs table) | attempts, retryDelayMs, lastError, lastErrorCode, pendingWrites |
+
+**Classified, not a wait:** src/control-plane/readiness-planning-completion-admission-methods.js:349. This is a synchronous bounded re-capture (`INITIAL_BOOTSTRAP_RECAPTURE_LIMIT=1`): no time passes and no event is awaited. On exhaustion the queued macrotask build owns the record.
+
+### Wire at merge: src/raft/raft-rs-runtime-owner.js (after merging origin/finalize/zero-liferaft-2026-10-02 at 585aaa93a)
+Use the branch's fence-safe seam: `group.reportFault(kind, fields)`, which raft-rs-operation-port.js injects as `reportRaftRsRuntimeFault` (raft-rs-runtime-fault-log.js).
+
+1. **raft-rs-runtime-owner-constants.js:** add these to `RUNTIME_FAULT_REPORT`:
+   - `READY_DRAIN_BOUND_EXCEEDED`
+   - `PERSISTENCE_ADMISSION_BOUND_EXCEEDED`
+   - `INBOUND_DRAIN_ADMISSION_BOUND_EXCEEDED`
+2. **raft-rs-runtime-faults.js:** add and export `reportWaitBoundExceeded(group, kind, fields)`. It forwards to `report`.
+3. **raft-rs-runtime-fault-log.js:**
+   - Import `reportWaitBoundSpent`.
+   - Map the three kinds to `{wait, awaited, boundMs}`:
+     - `RAFT_RS_READY_DRAIN_MAX_CYCLES`
+     - `PERSISTENCE_ADMISSION_WAIT.BOUND_MS`
+     - `PERSISTENCE_ADMISSION_WAIT.BOUND_MS (inbound drain)`
+   - At the top of `reportRaftRsRuntimeFault`, when the kind is mapped, call `reportWaitBoundSpent(undefined, {...spent, elapsedMs, lastObserved: rest, scope: {groupId, replicaIdentity, peerId}})` and return.
+4. **:922** (anchor `if (cycles >= RAFT_RS_READY_DRAIN_MAX_CYCLES) {` in `drainReady`): before `return hostFailure(`, insert `reportWaitBoundExceeded(group, RUNTIME_FAULT_REPORT.READY_DRAIN_BOUND_EXCEEDED, {cycles, maxCycles: RAFT_RS_READY_DRAIN_MAX_CYCLES});`.
+5. **:1423** (anchor `if (group.timers.now() >= group.inboundDrainDeadline) {` in `retryInboundDrainWhenAdmitted`): before `group.inboundDrainDeadline = null;`, insert `reportWaitBoundExceeded(group, RUNTIME_FAULT_REPORT.INBOUND_DRAIN_ADMISSION_BOUND_EXCEEDED, {elapsedMs: group.timers.now() - (group.inboundDrainDeadline - PERSISTENCE_ADMISSION_WAIT.BOUND_MS), queuedInbound: group.inbound.length});`.
+6. **:361** (anchor `exceeded: () => groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE,` in `admissionWaitOutcomes`): make it a block body. It calls `reportWaitBoundExceeded(group, RUNTIME_FAULT_REPORT.PERSISTENCE_ADMISSION_BOUND_EXCEEDED, {phase, reason})` and then returns the unchanged `groupHostFailure(...)`.
+7. **Witnesses:**
+   - a fault-log unit test (each kind gives 1 `wait_bound_spent`; CORE_TRAPPED is unchanged);
+   - persistence-admission.test.js variants with a manual clock past BOUND_MS for the taken Ready and for the inbound drain (same host failure, envelopes still queued, 1 line each);
+   - the ready-drain cap through a core stub whose `has_ready` stays true.
+   - Mutation-check each one.
+   - Re-run restart-from-durable-record.test.js to prove the import fence holds.
+- **membership-publication-coordinator-reconcile.js:787** `OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS`: as before, wire at the one-spread-authority merge.
+- **replica-removal-consensus-exit.js:129:** as before. It stays reported once, at its caller.
+
+### Expected in a healthy five-node formation: none
+A formation's `wait_bound_spent` lines sort mechanically by `wait`. Any `wait` that is not in the findings table below is a regression. These values are wired and must not fire in health:
+- `PING_TIMEOUT_MS` (dead branches only)
+- `PING_TIMEOUT_MS x pingMaxMissed (keepalive)` (sever only)
+- `RPC_DEFAULT.TIMEOUT_MS (or call timeout)`
+- `REBALANCE_OPERATION_STEP_TIMEOUT` (failing timeout, :762)
+- `retryableJoinResumePolicy.maxElapsedMs`
+- `retryableJoinResumePolicy.maxAttempts`
+- `controlPlaneWriteRetryTimeoutMs`
+- `REPLICA_HANDLER_DEFAULT.STATUS_WRITE_RETRY_TIMEOUT_MS`
+- `PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_TIMEOUT_MS`
+- `PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_DEFER_BUDGET_MS`
+- `joinAdmissionWriteRetryTimeoutMs`
+- `leadershipWaitTimeoutMs`
+- `LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS`
+- `COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT`
+- `cdc_routed_mutation_retry_budget`
+- `CDC_DEFAULTS.RETRY_MAX_ATTEMPTS`
+- `CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE`
+- `authoritative_visibility_repair_attempts`
+- `PUBLICATION_WRITE_MAX_ATTEMPTS`
+- `LOGS_TABLE_DEFAULT.MAX_RETRIES`
+- every other wired row of the tables below
+
+**No longer emitted:**
+- `SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS`
+- `READINESS_PROBE_ASYNC_TIMEOUT_MS`
+- `PRESSURE_ADMISSION_MAX_WAIT_MS`
+- `joinRetryPolicy.retryTimeoutMs`
+- `seedContactEvidenceWindow.budget`
+- `JOIN_NODE_REGISTRATION_MAX_ATTEMPTS`
+- `DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS`
+- `DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS`
+- the metadata-ingress `leadershipWaitTimeoutMs` at wait-for-leadership-phase:142
+
+### Known findings (owner)
+These are kept wired, with behaviour unchanged.
+
+| wait | Site (expiry branch) | Owner | Observed rate |
+| --- | --- | --- | --- |
+| `REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS` | replica-handler-voter-readiness-methods.js:234 (60 s voter-ready) | node/replica lifecycle | 0-4/run (judge 14, frozen 9) |
+| `REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS` | replica-handler-remove-execution-methods.js:57 (`removal-commit-backstop-elapsed`) | membership/removal | 2 across all sets |
+| `REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS` | replica-state-machine-timeouts.js:132 | rebalancer/replica state machine | 0-4/run |
+| `CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS` (+ `BACKGROUND_MAX_ATTEMPTS`) | cdc-group-propagation-delivery-methods.js:120/:371/:407/:577 | CDC group propagation | 18 in f3 only |
+| `FUNCTION_DEFAULT.QUERY_TIMEOUT_MS` | function-query-executor.js:167 | query/function | 0-4/run |
+| `table_partition_target_node_wait` | sql-query-engine-select-execution.js:188 (provisioning target-node wait, via provision-target-methods.js:212/245) | query provisioning | 0-4/run |
+| `CACHE_WAIT_TIMEOUT_MS` | cdc-integration-service-cache-visibility-wait.js:198 (fast path before the designed authoritative repair) | CDC | undetermined (unlogged at base) |
+| `swimSuspicionTimeoutMs` | membership-swim-detector.js:379 (suspicion declares DEAD) | control-plane membership (SWIM) | undetermined |
+
+### Findings recorded by this follow-up
+- **persist.js:157 (owner: membership publication).**
+  - `persistPublicationRow` returns the unconfirmed row in the same shape as a confirmed one. This happens when every upsert is answered but no readback within `PUBLICATION_WRITE_MAX_ATTEMPTS` satisfies the desired state.
+  - Callers such as `acknowledgePublication` cannot tell it from a durable row.
+  - It is now visible, as one `wait_bound_spent` with outcome `unconfirmed_row_returned_as_persisted`.
+  - The fix belongs to the owner: a typed unconfirmed answer, or a throw.
+- **rebalance-coordinator-owner-facade.js:115 (owner: rebalancer).** This is a dead call, not a live TypeError.
+  - `waitForReplicaOperationCacheVisibility` delegates unguarded to a repository method that no repository defines (removed in e2797b6c8).
+  - Nothing in src calls the facade method. Only a test stub in call-activation-pin-planning.test.js:158 names it.
+  - It would be a latent TypeError if a caller were added. Delete the facade method and the stub.
+- **R4 premise.** `pending.proposal` at partition-service-cdc-stream-base never carried a write payload: it is the ProposalQueue state string. The site is hardened anyway (state name, or type plus serialized size). The function-query site now reports `statementKind` and `sqlChars` instead of a SQL snippet.
+- **Cold-reconnect 1 ms delivery bounds** (`READ_/RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS`). These are timer-only waits, now in the one-way baseline (2). The skip is already decided from connection state, so the fix is to skip without a delivery. Whether that delivery kicks a reconnect is unverified.
+
 ## Not wired (43) and deferred to merge (4)
 
 | Reason | Count | Sites |
@@ -120,28 +277,54 @@ logs twice.
 
 ## Named wait constants (item 6)
 
-`npm run audit:guidelines` (decision-boundary audit, R07) now refuses any
-`const X_(TIMEOUT|BACKSTOP|DEADLINE)..._MS` in `src/` that lacks a
-`// ends-on: <event>` declaration. It also refuses one that declares
-`ends-on: timer`. A constant that is not a wait declares
-`ends-on: n/a <clamp|margin|lookback|period|ttl|delay>`.
+`npm run audit:guidelines` (decision-boundary audit, R07) refuses any named
+wait in `src/**/*.js` that lacks a `// ends-on: <event>` declaration on its
+line or in the comment lines directly above it. Named waits are declarators
+(`const`, `let`, `var`) and object-literal members (plain, `Object.freeze`,
+nested; named `ROOT.NESTED.KEY`) whose name matches
+`X_(TIMEOUT|BACKSTOP|DEADLINE)[_..._MS]`. Any `_MS` declarator is governed. A
+member, or a name without `_MS`, is governed when it holds a bound: a number,
+arithmetic, a call, or a non-wait-name reference such as `TIME_MS.MINUTE`.
+Config-key strings, reason codes, message builders, shorthand properties and
+aliases of a governed name are not bounds.
 
-- **Count:** 47 constants in `src/**/*.js` (derived from the AST; one more,
-  `REQUEST_TIMEOUT_MS`, is in browser code in
-  `src/admin/static/test-run-dashboard.html` and the audit does not scan it).
-- **Declarations:** 33 name an ending event and 14 are non-wait kinds
-  (clamp 9, margin 3, lookback 1, delay 1).
-- **Timer-only:** none, so the one-way baseline holds zero entries.
-- **Practically timer-only:** the 1 ms cold-candidate delivery bounds
-  `READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS` and
-  `RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS`
-  (query-executor-partition-attempt-budget.js) do declare an ending event
-  (the delivery answer), but at 1 ms they nearly always end on the timer.
-- **Object members are not covered by item 6:** the 30 s consensus-exit
-  backstop (`REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS`) and
-  the 60 s voter-ready bound (`REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS`) are
-  object members, and 105 such members exist. Item 6's scope is the named
-  `const` declarations only.
+- **Declarations:**
+  - An event must name something in at least three words.
+  - `timer`, `the timer`, `Timer` and `its timer` are refused.
+  - A bound that is not a wait declares `ends-on: n/a <kind>`. The kind is one of: clamp, margin, lookback, period, ttl, delay, timebox (a budget that is the designed normal exit of a best-effort step), dead (no consumer) or misnamed (not a time).
+  - A bare `n/a` is refused.
+- **Baseline:** only timer-only waits may be baselined. The audit ignores undeclared, unknown-kind and unnamed-event entries in the shared baseline, and the test refuses them. The timer-only entries are ceiling-guarded one-way.
+- **Browser code:** `src/admin/static/test-run-dashboard.html` `REQUEST_TIMEOUT_MS`, a page fetch timeout, is out of scope.
+
+**Counts:**
+- **Total:** 47 declarators + 59 object members = 106 governed bounds. The earlier "105-120" was a text count that included config-key strings, message builders and aliases.
+- **Declarators:**
+  - 30 name an ending event.
+  - Non-wait: clamp 9, margin 3, lookback 1, delay 1, timebox 1 (`SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS`).
+  - 2 are timer-only (baselined).
+- **Members:**
+  - 42 name an ending event. These include the 30 s consensus-exit backstop (`REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS`) and the 60 s voter-ready bound (`REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS`).
+  - Non-wait: dead 8, clamp 2, period 2, margin 1, lookback 1, delay 1, ttl 1, misnamed 1.
+- **Dead (no consumer):**
+  - ADMIN_DEFAULT.CACHE_DUMP_TIMEOUT_MS
+  - MEMBERSHIP_PUBLICATION_PLANNING.REFRESH_TIMEOUT_MS
+  - NODE_LIFECYCLE_DEFAULT.HEARTBEAT_TIMEOUT_MS
+  - REPLICA_LIFECYCLE_DEFAULT.{OPERATION,SYNC}_TIMEOUT_MS
+  - REBALANCER_DEFAULT.UNIFIED.MOVE_TIMEOUT_MS
+  - TRANSACTION_DEFAULT.TIMEOUT_MS
+  - PARTITION_SERVICE_VALUE.PENDING_REQUEST_SHUTDOWN_TIMEOUT_MS
+- **Misnamed:** PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS is a 100-character SQL log truncation length.
+- **Unreachable consumers** (each is declared with its event):
+  - RUNTIME_INTROSPECTOR_DEFAULT.REQUEST_TIMEOUT_MS
+  - SNAPSHOT_RECORDER_DEFAULT.CAPTURE_TIMEOUT_MS
+  - FUNCTION_DEFAULT.QUERY_TIMEOUT_MS
+  - TRANSPORT_DEFAULT.RPC_TIMEOUT_MS
+  - PENDING_REQUEST_DEFAULT.REQUEST_TIMEOUT_MS
+  - PARTITION_SERVICE_VALUE.DEFAULT_TIMEOUT_MS
+- **Timer-only (baseline, 2, one-way):** `READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS` and `RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS`.
+  - Site: query-executor-partition-attempt-budget.js:13/15, consumed at :257-258.
+  - What they bound: a 1 ms delivery to a candidate that is not connected, cut by design so the next candidate is tried.
+  - The event that should end them: none can be named truthfully. The fix is to skip the candidate without a delivery.
 
 ## Bounded waits (180)
 
