@@ -775,11 +775,26 @@ function chargedSummary(environment, nodeId, mark) {
 // segments it caused. Scheduling decisions are untouched - selection, order
 // and delivery are the network's - only the busyUntil the next selection
 // sees has moved.
+//
+// One step is one SCHEDULING DECISION, not one re-timing. A busy node's
+// overdue events are re-timed forward one per network step (the network's
+// single-core contention gate), and a re-timing runs no production code,
+// moves no clock and charges nothing. Handing each re-timing back to the
+// closure authority cost a full closure round per overdue event - several
+// whole-queue scans and two host turns each - and charging raft-rs protocol
+// turns roughly doubled the queue those scans walk (measured 2026-10-04:
+// ~1.9M re-timings per charged run, ~94% of all steps). So the re-timings
+// run back to back here until the network either delivers (the same event,
+// at the same instant, the closure authority's next step would deliver) or
+// reaches the horizon. Selection, order, instants and charges are unchanged.
 function chargingScheduler(network, chargeDelta) {
   return Object.freeze({
     ...network,
     runStep(options) {
-      const step = network.runStep(options);
+      let step = network.runStep(options);
+      while (!step.delivered && step.event !== null) {
+        step = network.runStep(options);
+      }
       chargeDelta();
       return step;
     },
