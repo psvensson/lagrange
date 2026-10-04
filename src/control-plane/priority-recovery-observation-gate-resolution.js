@@ -76,12 +76,6 @@ function resolvePriorityRecoveryReasonCodes(
   return Object.freeze(normalizeDistinctStringArray(reasonCodes));
 }
 
-function shouldApplyObservationClosureWitness(
-  priorityRecoveryClosureWitness = null,
-) {
-  return priorityRecoveryClosureWitness?.prioritySpreadPending === false;
-}
-
 function resolveObservationPublicationConvergenceGate(
   options = {},
   publicationConvergence = null,
@@ -180,41 +174,17 @@ function resolveObservationPriorityRecoveryClosureWitness(
           null;
 }
 
+// The census summary the observation reports: the publication's durable
+// summary, else the gate's (built from it). A closure witness never supplies
+// or selects a summary (owner decision 2026-10-04).
 function resolveObservationPriorityPartitionSummary(
   publicationConvergence = null,
   publicationConvergenceGate = null,
-  priorityRecoveryClosureWitness = null,
 ) {
-  const publicationSummary = normalizePriorityPartitionSummary(
+  return normalizePriorityPartitionSummary(
     publicationConvergence?.priorityPartitionSummary,
-  );
-  const gateSummary = normalizePriorityPartitionSummary(
+  ) || normalizePriorityPartitionSummary(
     publicationConvergenceGate?.priorityPartitionSummary,
-  );
-  const closureWitnessSummary = normalizePriorityPartitionSummary(
-    priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
-  );
-  return shouldApplyObservationClosureWitness(priorityRecoveryClosureWitness) ?
-    gateSummary || closureWitnessSummary || publicationSummary :
-    publicationSummary || gateSummary || closureWitnessSummary;
-}
-
-function resolveObservationPriorityRecoveryReasonCodes(
-  publicationConvergence = null,
-  publicationConvergenceGate = null,
-  priorityRecoveryClosureWitness = null,
-) {
-  if (shouldApplyObservationClosureWitness(priorityRecoveryClosureWitness)) {
-    return Object.freeze(
-      normalizeDistinctStringArray(
-        publicationConvergenceGate?.reasonCodes ||
-          publicationConvergenceGate?.reasons,
-      ),
-    );
-  }
-  return resolvePriorityRecoveryReasonCodes(
-    publicationConvergence,
-    publicationConvergenceGate,
   );
 }
 
@@ -324,16 +294,17 @@ function hasSelectedMissingPublishedEvidence(evidence) {
     PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE.UNAVAILABLE;
 }
 
+// The closure record fields name a classification an active-gate observer
+// (the distributed harness) recorded on its own progress records; the runtime
+// closure witness carries none since the owner decision of 2026-10-04.
 function resolveObservationClosureField(
   options = {},
   fieldName = LOCAL_STR_EMPTY,
-  priorityRecoveryClosureWitness = null,
   activeGateContext = {},
 ) {
   return typeof options[fieldName] === 'string' ?
     options[fieldName] :
-    priorityRecoveryClosureWitness?.[fieldName] ||
-      activeGateContext.activeGateProgress?.[fieldName] ||
+    activeGateContext.activeGateProgress?.[fieldName] ||
       activeGateContext.activeGateBestProgress?.[fieldName] ||
       activeGateContext.activeGateNoProgress?.[fieldName] ||
       null;
@@ -347,10 +318,8 @@ export {
   resolveObservationPriorityPartitionSummary,
   resolveObservationPriorityRecoveryBlockedPartitionIds,
   resolveObservationPriorityRecoveryClosureWitness,
-  resolveObservationPriorityRecoveryReasonCodes,
   resolveObservationPublicationConvergenceGate,
   resolvePriorityRecoveryReasonCodes,
   resolveProjectionDiagnostics,
   resolveSelectedMissingPublishedEvidence,
-  shouldApplyObservationClosureWitness,
 };

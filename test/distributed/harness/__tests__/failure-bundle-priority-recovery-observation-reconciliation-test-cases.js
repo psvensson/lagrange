@@ -1,3 +1,5 @@
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+
 export function registerFailureBundlePriorityRecoveryObservationReconciliationTests(context) {
   const {
     it,
@@ -589,72 +591,35 @@ export function registerFailureBundlePriorityRecoveryObservationReconciliationTe
         ),
       );
 
+      // SUPERSEDED (owner decision 2026-10-04, "delete the second
+      // authority"). Before: the artifact's old stale-publication closure
+      // witness rebuilt the stale observation as spread (no pending, no
+      // reasons, CL-003, satisfied summary, gate ready, active gate cleared).
+      // The old artifact still rebuilds without error, but the rebuilt
+      // evidence reads the census: the publication summary shows the gap and
+      // the old witness is not PENDING, so spread stays pending.
       assert.equal(
         scenarioBundle.publicationConvergence.prioritySpreadPending,
-        false,
-      );
-      assert.deepEqual(
-        scenarioBundle.publicationConvergence.priorityRecoveryReasonCodes,
-        [],
-      );
-      assert.equal(
-        scenarioBundle.publicationConvergence.closureRecordId,
-        CLOSURE_RECORD_ID,
-      );
-      assert.equal(
-        scenarioBundle.publicationConvergence.closureWitnessClass,
-        CLOSURE_WITNESS_CLASS,
-      );
-      assert.equal(
-        scenarioBundle.publicationConvergence.priorityPartitionSummary
-          .satisfied,
         true,
       );
-      assert.equal(
-        scenarioBundle.publicationConvergence.priorityPartitionSummary
-          .blockedPartitionCount,
-        0,
+      assert.ok(
+        arrayIncludes(
+          scenarioBundle.publicationConvergence.priorityRecoveryReasonCodes,
+          'priority_partitions_not_spread',
+        ),
       );
       assert.equal(
         scenarioBundle.controlPlane.publicationConvergenceGate.ready,
-        true,
+        false,
       );
       assert.equal(
         scenarioBundle.controlPlane.publicationConvergenceGate
           .prioritySpreadPending,
-        false,
-      );
-      assert.equal(
-        scenarioBundle.controlPlane.publicationConvergenceGate.closureRecordId,
-        CLOSURE_RECORD_ID,
-      );
-      assert.equal(
-        scenarioBundle.controlPlane.priorityRecoveryObservation
-          .activeGateProgress.prioritySpreadSatisfied,
         true,
       );
       assert.equal(
-        scenarioBundle.controlPlane.priorityRecoveryObservation
-          .activeGateProgress.priorityRecoveryBlockedPartitionCount,
-        0,
-      );
-      assert.deepEqual(
-        scenarioBundle.controlPlane.priorityRecoveryObservation
-          .activeGateProgress.blockers,
-        ['ready'],
-      );
-      assert.deepEqual(
-        scenarioBundle.publicationConvergence.priorityPartitionSummary
-          .blockedPartitions || [],
-        [],
-      );
-      assert.equal(
         triageSummary.publicationConvergence.prioritySpreadPending,
-        false,
-      );
-      assert.deepEqual(
-        triageSummary.publicationConvergence.priorityRecoveryReasonCodes,
-        [],
+        true,
       );
     },
   );

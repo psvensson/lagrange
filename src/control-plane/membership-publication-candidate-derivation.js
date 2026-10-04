@@ -49,9 +49,6 @@ import {
   normalizePriorityPartitionSummary,
 } from './membership-publication-priority-partition-summary.js';
 import {
-  chooseClosureRefreshedPriorityPartitionSummary,
-} from './priority-partition-summary-source.js';
-import {
   buildMembershipPublicationAckCompletionSnapshot,
   buildMembershipPublicationRecoveryCohortSnapshot,
   buildMembershipPublicationTargetSnapshot,
@@ -678,15 +675,9 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     },
     helperFns,
   );
-  // The final summary choice, made by the owner that also records which of
-  // the two it took, so a downstream decision can name the summary it read
-  // (quest learner-promotion-guard-inputs-observed).
-  const priorityPartitionSummary =
-    chooseClosureRefreshedPriorityPartitionSummary(
-      priorityPartitionSummaryBase,
-      priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
-      helperFns,
-    );
+  // The census is the summary: the closure witness never produces or
+  // selects one (owner decision 2026-10-04, "delete the second authority").
+  const priorityPartitionSummary = priorityPartitionSummaryBase;
   const priorityPartitionSummaryChanged = !arePriorityPartitionSummariesEqual(
     latestPublicationRow?.priorityPartitionSummary,
     priorityPartitionSummary,

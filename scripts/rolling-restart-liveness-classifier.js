@@ -5,6 +5,7 @@ import {
   buildTopologyConvergenceGraph,
   buildTopologyConvergenceGraphFromArtifacts,
 } from '../src/diagnostics/topology-convergence-graph.js';
+import {PRIORITY_RECOVERY_SEMANTIC_STATE} from '../src/control-plane/priority-recovery-diagnostics-constants.js';
 
 const SCHEMA_VERSION_ROLLING_RESTART_LIVENESS_VERDICT_V1 =
   'rolling-restart-liveness-verdict-v1';
@@ -79,8 +80,12 @@ const ACTION_EVENT_RECONCILE_STARTED = 'reconcile_started';
 const ACTION_EVENT_RECONCILE_COMPLETED = 'reconcile_completed';
 const ACTION_EVENT_PUBLICATION_WRITTEN = 'publication_written';
 const ACTION_STATE_EXECUTED = 'executed';
+// The one non-blocking semantic state, read from its owner. Since the owner
+// decision of 2026-10-04 it means the REPLACE remove-dispatch grace or a
+// census-ready partition with an operation still open - never an operation
+// standing in for a census gap - so it stays non-blocking here.
 const SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
-  'spread_satisfied_in_flight';
+  PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT;
 
 const WITNESS_STATE_OBSERVED = 'observed';
 const QUEUE_STATE_OBSERVED = 'observed';

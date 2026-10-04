@@ -859,7 +859,6 @@ test('deriveMembershipPublicationCandidate keeps priority spread blocked when an
     );
     t.match(candidate.priorityRecoveryClosureWitness, {
       state: 'closure_pending',
-      prioritySpreadPending: true,
     }, 'the uncovered REPLACE keeps the closure witness pending');
     t.match(candidate.priorityPartitionSummary, {
       satisfied: false,

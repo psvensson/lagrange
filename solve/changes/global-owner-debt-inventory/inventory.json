@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 418305,
-        "sha256": "6c4618ed6123e07f8af674f858a25354cff4e88f88f93f98ee07b2ca0c5f45f1"
+        "bytes": 417575,
+        "sha256": "6afda7dfa163d0dc14d34489f7cce283d31376ecd30080cf270fac06eb14c41c"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 35283,
-        "sha256": "de3a0d7196e7fa82b39d1b8767232f11939d79d55e2e3132e7628f994e21c2c3"
+        "sha256": "68727e85cce10d527f2acf296b2e81ff1424fc01578915ce9d12f292645b1881"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2626123,
-        "sha256": "ae54a4bbe8407bd9564ff206c3c7843534a50b8643f00fec01610bf1de0f9c26"
+        "bytes": 2627355,
+        "sha256": "fabbdaf311a4e6646b0eedb2cd645c642b42a9db7d40d0556e20713d54685683"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "7f205c2811c976b492c08e5f7fa9a2cff67617d4709f651813e926b304dcb25e"
+        "sha256": "6fb8362517573366159c9cdcfc1bbe714960ad85eada928cbbb57511ebd4ba17"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "dc869a065acc584486e1dfef3344a6be55dcc0cfeea169b490d8bf7be6b6fb8a"
+        "sha256": "ffcc23043ebc65aa301d7d2d186a77d79f7e08548829df65f8e043229c0f9e6d"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,24 +62,24 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "b2cf564d9dea88f939448ba223072d8ce3957851abc11a71efc3a67a8f728509"
+    "inputDigest": "ffff88d5f5e4eeb7732288ddbf8a5873a4e202eff1a1a97067e3e4aa3ead07e8"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 418305,
-        "sha256": "6c4618ed6123e07f8af674f858a25354cff4e88f88f93f98ee07b2ca0c5f45f1"
+        "bytes": 417575,
+        "sha256": "6afda7dfa163d0dc14d34489f7cce283d31376ecd30080cf270fac06eb14c41c"
       },
-      "declaredCount": 1770,
-      "observedCount": 1770,
-      "assignedCount": 1770
+      "declaredCount": 1767,
+      "observedCount": 1767,
+      "assignedCount": 1767
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 35283,
-        "sha256": "de3a0d7196e7fa82b39d1b8767232f11939d79d55e2e3132e7628f994e21c2c3"
+        "sha256": "68727e85cce10d527f2acf296b2e81ff1424fc01578915ce9d12f292645b1881"
       },
       "declaredCount": 153,
       "observedCount": 153,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "7f205c2811c976b492c08e5f7fa9a2cff67617d4709f651813e926b304dcb25e"
+          "sha256": "6fb8362517573366159c9cdcfc1bbe714960ad85eada928cbbb57511ebd4ba17"
         },
         "cloneGroups": 49,
         "duplicatedLines": 1559,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "dc869a065acc584486e1dfef3344a6be55dcc0cfeea169b490d8bf7be6b6fb8a"
+          "sha256": "ffcc23043ebc65aa301d7d2d186a77d79f7e08548829df65f8e043229c0f9e6d"
         },
         "cloneGroups": 716,
         "duplicatedLines": 27260,
@@ -167,29 +167,29 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2626123,
-        "sha256": "ae54a4bbe8407bd9564ff206c3c7843534a50b8643f00fec01610bf1de0f9c26"
+        "bytes": 2627355,
+        "sha256": "fabbdaf311a4e6646b0eedb2cd645c642b42a9db7d40d0556e20713d54685683"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "5c0307d8d40f8e00621dbd04e3be29117255d587433eb844763a2af0c2abdaee",
-      "moduleCount": 5013,
-      "edgeCount": 24600,
+      "sourceDigest": "75728a771e19b8b7b5ba0677aa949aafc6c7db5bd7f1d8930c1d55ae8a5a5e9d",
+      "moduleCount": 5014,
+      "edgeCount": 24611,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2524,
-    "assignedSignalCount": 2524,
-    "uniqueAssignmentCount": 2524,
-    "digest": "000338cbee7cd7ea318387d1d56fa6f22662a1115eda253c05938a5f59c47705"
+    "sourceSignalCount": 2521,
+    "assignedSignalCount": 2521,
+    "uniqueAssignmentCount": 2521,
+    "digest": "98e22349ed9877d6f49dfe1618063ec055eaea014625ed16a727a69e5e88fad4"
   },
   "signalCounts": {
     "cognitive": 153,
-    "complexity": 1770,
+    "complexity": 1767,
     "duplication": 514,
     "fileSize": 48,
     "lintExclusion": 39
@@ -219,8 +219,8 @@
       "cloneTouches": 318,
       "cycleGroups": 0,
       "lintExclusions": 10,
-      "importIn": 347,
-      "importOut": 592,
+      "importIn": 350,
+      "importOut": 593,
       "score": 2912.1,
       "topPaths": [
         "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
@@ -267,17 +267,17 @@
         "src/control-plane"
       ],
       "fileCount": 89,
-      "signalCount": 243,
-      "complexity": 199,
+      "signalCount": 241,
+      "complexity": 197,
       "cognitive": 36,
       "oversizedFiles": 3,
       "duplicatedLines": 165,
       "cloneTouches": 5,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 686,
+      "importIn": 689,
       "importOut": 421,
-      "score": 1136.5,
+      "score": 1128.5,
       "topPaths": [
         "src/control-plane/control-plane-kernel-ingress.js",
         "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
@@ -359,7 +359,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 297,
+      "importIn": 298,
       "importOut": 304,
       "score": 636.8,
       "topPaths": [
@@ -1127,34 +1127,6 @@
       ]
     },
     {
-      "key": "semantic:priority_recovery_owner/priority_recovery_snapshot_projection",
-      "owner": "priority_recovery_owner",
-      "boundary": "priority_recovery_snapshot_projection",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/control-plane"
-      ],
-      "fileCount": 5,
-      "signalCount": 16,
-      "complexity": 15,
-      "cognitive": 1,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 18,
-      "importOut": 43,
-      "score": 68,
-      "topPaths": [
-        "src/control-plane/priority-recovery-snapshot-burndown.js",
-        "src/control-plane/priority-recovery-snapshot-workflow.js",
-        "src/control-plane/priority-recovery-snapshot-active-gate.js",
-        "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-        "src/control-plane/priority-recovery-snapshot-closure.js"
-      ]
-    },
-    {
       "key": "semantic:membership_publication_owner/membership_publication_coordination",
       "owner": "membership_publication_owner",
       "boundary": "membership_publication_coordination",
@@ -1172,13 +1144,41 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 19,
-      "importOut": 51,
+      "importOut": 52,
       "score": 64,
       "topPaths": [
         "src/control-plane/membership-publication-coordinator-reconcile.js",
         "src/control-plane/membership-publication-coordinator-persist.js",
         "src/control-plane/membership-publication-coordinator-reads.js",
         "src/control-plane/membership-publication-coordinator-planning.js"
+      ]
+    },
+    {
+      "key": "semantic:priority_recovery_owner/priority_recovery_snapshot_projection",
+      "owner": "priority_recovery_owner",
+      "boundary": "priority_recovery_snapshot_projection",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/control-plane"
+      ],
+      "fileCount": 5,
+      "signalCount": 15,
+      "complexity": 14,
+      "cognitive": 1,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 18,
+      "importOut": 43,
+      "score": 64,
+      "topPaths": [
+        "src/control-plane/priority-recovery-snapshot-burndown.js",
+        "src/control-plane/priority-recovery-snapshot-workflow.js",
+        "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+        "src/control-plane/priority-recovery-snapshot-active-gate.js",
+        "src/control-plane/priority-recovery-snapshot-closure.js"
       ]
     },
     {
@@ -2676,7 +2676,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 6,
-      "importOut": 7,
+      "importOut": 8,
       "score": 8,
       "topPaths": [
         "src/control-plane/priority-recovery-observation-snapshot.js"
@@ -3181,7 +3181,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 2,
-      "importOut": 3,
+      "importOut": 4,
       "score": 2,
       "topPaths": [
         "scripts/analyze-priority-recovery-residuals.js"
@@ -3335,48 +3335,6 @@
       },
       {
         "lane": "m2",
-        "questId": "owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection",
-        "owner": "priority_recovery_owner",
-        "boundary": "priority_recovery_snapshot_projection",
-        "exactScenarioCommand": "node scripts/run-owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection-scenarios.js",
-        "pathscope": [
-          "scripts/run-owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection-scenarios.js",
-          "solve/quests/owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection.json",
-          "src/control-plane/priority-recovery-snapshot-active-gate.js",
-          "src/control-plane/priority-recovery-snapshot-burndown.js",
-          "src/control-plane/priority-recovery-snapshot-closure.js",
-          "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-          "src/control-plane/priority-recovery-snapshot-workflow.js",
-          "test/control-plane/priority-recovery-op-retire-on-timeline-removed.test.js",
-          "test/control-plane/priority-recovery-spread-stall-unmask.test.js",
-          "test/control-plane/priority-recovery-target-service-index.test.js"
-        ],
-        "ownerAreas": [
-          "scripts/run-owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection-scenarios.js",
-          "solve/quests",
-          "src/control-plane",
-          "test/control-plane"
-        ],
-        "engagementPaths": [
-          "src/control-plane/priority-recovery-snapshot-burndown.js",
-          "src/control-plane/priority-recovery-snapshot-workflow.js",
-          "src/control-plane/priority-recovery-snapshot-active-gate.js",
-          "src/control-plane/priority-recovery-snapshot-rebalancer.js",
-          "src/control-plane/priority-recovery-snapshot-closure.js"
-        ],
-        "engagementTargets": [],
-        "baseline": {
-          "score": 68,
-          "complexity": 15,
-          "cognitive": 1,
-          "oversizedFiles": 0,
-          "duplicatedLines": 0,
-          "lintExclusions": 0
-        },
-        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
-      },
-      {
-        "lane": "m2",
         "questId": "owner-complexity-membership-publication-owner-membership-publication-coordination",
         "owner": "membership_publication_owner",
         "boundary": "membership_publication_coordination",
@@ -3415,6 +3373,48 @@
           "complexity": 11,
           "cognitive": 1,
           "oversizedFiles": 1,
+          "duplicatedLines": 0,
+          "lintExclusions": 0
+        },
+        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
+      },
+      {
+        "lane": "m2",
+        "questId": "owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection",
+        "owner": "priority_recovery_owner",
+        "boundary": "priority_recovery_snapshot_projection",
+        "exactScenarioCommand": "node scripts/run-owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection-scenarios.js",
+        "pathscope": [
+          "scripts/run-owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection-scenarios.js",
+          "solve/quests/owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection.json",
+          "src/control-plane/priority-recovery-snapshot-active-gate.js",
+          "src/control-plane/priority-recovery-snapshot-burndown.js",
+          "src/control-plane/priority-recovery-snapshot-closure.js",
+          "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+          "src/control-plane/priority-recovery-snapshot-workflow.js",
+          "test/control-plane/priority-recovery-op-retire-on-timeline-removed.test.js",
+          "test/control-plane/priority-recovery-spread-stall-unmask.test.js",
+          "test/control-plane/priority-recovery-target-service-index.test.js"
+        ],
+        "ownerAreas": [
+          "scripts/run-owner-complexity-priority-recovery-owner-priority-recovery-snapshot-projection-scenarios.js",
+          "solve/quests",
+          "src/control-plane",
+          "test/control-plane"
+        ],
+        "engagementPaths": [
+          "src/control-plane/priority-recovery-snapshot-burndown.js",
+          "src/control-plane/priority-recovery-snapshot-workflow.js",
+          "src/control-plane/priority-recovery-snapshot-rebalancer.js",
+          "src/control-plane/priority-recovery-snapshot-active-gate.js",
+          "src/control-plane/priority-recovery-snapshot-closure.js"
+        ],
+        "engagementTargets": [],
+        "baseline": {
+          "score": 64,
+          "complexity": 14,
+          "cognitive": 1,
+          "oversizedFiles": 0,
           "duplicatedLines": 0,
           "lintExclusions": 0
         },

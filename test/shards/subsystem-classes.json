@@ -12,7 +12,7 @@
     "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 256,
+    "placement-rebalance": 257,
     "query-sql": 164,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,8 +25,8 @@
     "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2194,
-  "digest": "fnv1a32-0d7a2820",
+  "censusSize": 2195,
+  "digest": "fnv1a32-ce1c5a61",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-c9fa0d71",
   "classes": {
@@ -1007,6 +1007,7 @@
     "test/integration/pgwire-bootstrap.integration.test.js": "pgwire-compat",
     "test/integration/pgwire-rebalance.integration.test.js": "pgwire-compat",
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
+    "test/integration/priority-spread-one-authority-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/public-application-database-multinode.integration.test.js": "query-sql",
     "test/integration/public-application-database-transaction-facade.integration.test.js": "query-sql",
     "test/integration/public-binding-cell-invocation-seam.integration.test.js": "services-runtime",

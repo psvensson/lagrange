@@ -288,8 +288,6 @@ function evaluateLoadPublishedConvergence(
     ready: reasons.length === ZERO,
     reasons: Object.freeze(reasons),
     publicationStatus,
-    closureRecordId: publicationRecoveryGate?.closureRecordId || null,
-    closureWitnessClass: publicationRecoveryGate?.closureWitnessClass || null,
     publicationRecoveryGate,
     recoveryProtocolState,
     priorityRecoveryReasonCodes,

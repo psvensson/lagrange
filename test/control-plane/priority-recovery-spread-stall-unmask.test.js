@@ -41,6 +41,7 @@ import {buildPriorityRecoveryReplicaOperationContext} from '../../src/control-pl
 import {
   buildPriorityRecoveryDecisionSnapshots,
   buildPriorityRecoveryOperationAssessment,
+  buildPriorityRecoveryPartitionAssessment,
   shouldPriorityRecoveryOperationBlockPlanning,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 import {
@@ -613,6 +614,48 @@ test('H5b classification: a completed ADD with a census gap LEFT requests a foll
   t.ok(
     decisionSnapshots.unresolvedSemanticStateIds.includes('blocked_unclassified'),
     'the gap stays unresolved for the follow-up owner',
+  );
+  t.end();
+});
+
+test('narrowed grace reaches every assessment consumer through the census planner entry', (t) => {
+  const replaceFromSoleHolder = dispatchPhaseOpUnverified({
+    partitionId: FORMATION_PARTITION,
+    sourceNodeId: 'node-a',
+    targetNodeId: 'node-b',
+    targetVisibilityState: 'active_operational',
+  });
+  const assess = (readyReplicaCountByNodeId) =>
+    buildPriorityRecoveryPartitionAssessment({
+      partitionId: FORMATION_PARTITION,
+      priorityPartitionSummary: {
+        satisfied: false,
+        requiredDistinctNodeCount: 3,
+        missingPartitionIds: [FORMATION_PARTITION],
+        blockedPartitions: [{
+          partitionId: FORMATION_PARTITION,
+          requiredDistinctNodeCount: 3,
+          readyDistinctNodeCount: 2,
+          spreadGap: 1,
+          ...(readyReplicaCountByNodeId ? {readyReplicaCountByNodeId} : {}),
+        }],
+      },
+      admission: {
+        effectiveEligibleNodeIds: FORMATION_NODES,
+        effectiveEligibleNodeCount: FORMATION_NODES.length,
+        ineligibleNodes: [],
+      },
+      operationContexts: [replaceFromSoleHolder],
+    });
+  t.equal(
+    assess({'node-a': 1, 'node-c': 1}).spreadCompletion.satisfied,
+    false,
+    'with the census holders the sole-holder source gets no credit',
+  );
+  t.equal(
+    assess(null).spreadCompletion.satisfied,
+    true,
+    'a summary without holder identity keeps the unnarrowed grace',
   );
   t.end();
 });

@@ -1,11 +1,13 @@
+import {
+  resolvePrioritySpreadPending,
+} from '../../src/control-plane/publication-recovery-priority-spread.js';
+
 export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTests(context) {
   const {
     buildPriorityRecoveryClosureWitness,
     buildPriorityRecoveryDecisionSnapshots,
     PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
     PRIORITY_RECOVERY_BLOCKER_REASON_RECOVERY_ELIGIBLE_EXCLUDED,
-    PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
-    PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
     PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
     PRIORITY_RECOVERY_EMPTY_COUNT,
     PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
@@ -306,7 +308,16 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
     );
   });
 
-  test('priority recovery closure witness reports stale durable spread once decision snapshots satisfy publication closure',
+  // SUPERSEDED (owner decision 2026-10-04, "delete the second authority").
+  // Before: once every tracked partition was converged or
+  // spread_satisfied_in_flight, the witness reported the stale-publication
+  // state (prioritySpreadPending false, refresh required, CL-003) and
+  // synthesized a satisfied summary that overrode the census gap. Now the
+  // witness has two states and produces no summary: no tracked partition is
+  // unresolved, so it is non-pending - and that says nothing about spread;
+  // the census gap carried by the summary still decides (asserted through the
+  // one rule below).
+  test('priority recovery closure witness never synthesizes a summary or clears a census gap',
     async (t) => {
       const decisionSnapshots = {
         publicationEpoch: 9,
@@ -349,36 +360,44 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
 
       const closureWitness = buildPriorityRecoveryClosureWitness({
         decisionSnapshots,
-        priorityPartitionSummary: decisionSnapshots.priorityPartitionSummary,
       });
 
-      t.match(closureWitness, {
-        state:
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE
-          .SATISFIED_STALE_PUBLICATION,
-        prioritySpreadPending: false,
-        publicationRefreshRequired: true,
-        closureRecordId:
-        PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD,
-        closureWitnessClass:
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
-          .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING,
-      });
+      t.equal(
+        closureWitness.state,
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
+        'no tracked partition is unresolved: the witness is non-pending',
+      );
       t.same(
         closureWitness.blockedPartitionIds,
         [],
-        'closure satisfaction should clear the stale blocked-partition view',
+        'the witness adds no blocker',
       );
-      t.match(closureWitness.refreshedPriorityPartitionSummary, {
-        satisfied: true,
-        requiredDistinctNodeCount: 3,
-        readyEligibleNodeCount: 3,
-        totalPriorityPartitionCount: 1,
-        missingPartitionIds: [],
-        blockedPartitions: [],
-      });
+      t.same(
+        Object.keys(closureWitness).filter((key) =>
+          [
+            'prioritySpreadPending',
+            'publicationRefreshRequired',
+            'refreshedPriorityPartitionSummary',
+            'closureRecordId',
+            'closureWitnessClass',
+            'summarySpreadPending',
+          ].includes(key)),
+        [],
+        'the witness carries no spread answer, summary or closure record',
+      );
+      t.equal(
+        resolvePrioritySpreadPending({
+          priorityPartitionSummary: decisionSnapshots.priorityPartitionSummary,
+          priorityRecoveryClosureWitness: closureWitness,
+        }),
+        true,
+        'the census gap still decides: spread stays pending',
+      );
     });
 
+  // SUPERSEDED state assertion: before, the witness reported the deleted
+  // stale-publication state (prioritySpreadPending false). The protected
+  // property - non-priority stalls never block the priority closure - holds.
   test('priority recovery closure witness ignores unresolved non-priority partitions when priority publication closure is already satisfied',
     async (t) => {
       const nonPriorityPartitionId =
@@ -431,12 +450,10 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
         },
       });
 
-      t.match(closureWitness, {
-        state:
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE
-          .SATISFIED_STALE_PUBLICATION,
-        prioritySpreadPending: false,
-      });
+      t.equal(
+        closureWitness.state,
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
+      );
       t.same(
         closureWitness.blockedPartitionIds,
         [],
@@ -582,10 +599,10 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
         'blocked_unclassified',
         'the partition should stay unresolved until a second distinct target covers the gap',
       );
+      // The witness's PENDING state is the blocker; it no longer carries a
+      // prioritySpreadPending field of its own (owner decision 2026-10-04).
       t.match(decisionSnapshots.closureWitness, {
         state: PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING,
-        prioritySpreadPending: true,
-        refreshedPriorityPartitionSummary: null,
       }, 'publication closure must remain pending while numeric spread is uncovered');
       t.match(
         targetSnapshot.progress,

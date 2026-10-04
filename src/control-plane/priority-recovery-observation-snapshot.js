@@ -15,7 +15,8 @@ import {
 } from './priority-recovery-snapshot.js';
 import {LOCAL_EMPTY_LIST, PRIORITY_RECOVERY_CURRENT_SUMMARY_SCOPE, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityRecoveryInvariantSummary, resolvePendingRequiredAckNodeIds} from './priority-recovery-observation-normalization.js';
 import {buildPriorityRecoveryPartitionWitnesses} from './priority-recovery-observation-partition-witness.js';
-import {hasSelectedMissingPublishedEvidence, resolveObservationActiveGateContext, resolveObservationClosureField, resolveObservationPriorityPartitionSummary, resolveObservationPriorityRecoveryBlockedPartitionIds, resolveObservationPriorityRecoveryClosureWitness, resolveObservationPriorityRecoveryReasonCodes, resolveObservationPublicationConvergenceGate, resolveProjectionDiagnostics, resolveSelectedMissingPublishedEvidence, shouldApplyObservationClosureWitness} from './priority-recovery-observation-gate-resolution.js';
+import {hasSelectedMissingPublishedEvidence, resolveObservationActiveGateContext, resolveObservationClosureField, resolveObservationPriorityPartitionSummary, resolveObservationPriorityRecoveryBlockedPartitionIds, resolveObservationPriorityRecoveryClosureWitness, resolveObservationPublicationConvergenceGate, resolvePriorityRecoveryReasonCodes, resolveProjectionDiagnostics, resolveSelectedMissingPublishedEvidence} from './priority-recovery-observation-gate-resolution.js';
+import {resolvePrioritySpreadPending} from './publication-recovery-priority-spread.js';
 
 const PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD = Object.freeze({
   RECORD_ID: 'closureRecordId',
@@ -64,9 +65,6 @@ function resolveObservationInputClosureWitness(
   }
   return buildPriorityRecoveryClosureWitness({
     decisionSnapshots: trackedDecisionSnapshots,
-    priorityPartitionSummary:
-      options.publicationConvergenceGate?.priorityPartitionSummary ||
-      publicationConvergence?.priorityPartitionSummary,
   });
 }
 
@@ -111,19 +109,26 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
       publicationConvergence,
       publicationConvergenceGate,
     );
-  const applyClosureWitness =
-    shouldApplyObservationClosureWitness(resolvedPriorityRecoveryClosureWitness);
   const priorityPartitionSummary = resolveObservationPriorityPartitionSummary(
     publicationConvergence,
     publicationConvergenceGate,
-    resolvedPriorityRecoveryClosureWitness,
   );
+  const observedPrioritySpreadPending =
+    publicationConvergenceGate?.prioritySpreadPending === true ||
+    resolvePrioritySpreadPending({
+      priorityPartitionSummary,
+      priorityRecoveryClosureWitness: resolvedPriorityRecoveryClosureWitness,
+    });
+  // While spread is pending both sources' reasons stand; once the one spread
+  // rule says it is not, the gate's codes (already filtered by that rule)
+  // replace the publication's stale ones.
   const priorityRecoveryReasonCodes =
-    resolveObservationPriorityRecoveryReasonCodes(
-      publicationConvergence,
-      publicationConvergenceGate,
-      resolvedPriorityRecoveryClosureWitness,
-    );
+    observedPrioritySpreadPending || !publicationConvergenceGate ?
+      resolvePriorityRecoveryReasonCodes(
+        publicationConvergence,
+        publicationConvergenceGate,
+      ) :
+      resolvePriorityRecoveryReasonCodes(null, publicationConvergenceGate);
   const activeGateContext = resolveObservationActiveGateContext(observationOptions);
   const priorityRecoveryUnresolvedPartitionIds =
     priorityRecoveryCurrentSummary.blockedPartitionIds;
@@ -244,12 +249,7 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
   const pressureConditions = buildPriorityRecoveryPressureConditions(
     options.logsTable,
   );
-  const prioritySpreadPending =
-    publicationConvergenceGate?.prioritySpreadPending === true ||
-    (
-      applyClosureWitness !== true &&
-      priorityPartitionSummary?.satisfied === false
-    );
+  const prioritySpreadPending = observedPrioritySpreadPending;
   return Object.freeze({
     publicationEpoch:
       normalizeNonNegativeInteger(
@@ -292,13 +292,11 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
     closureRecordId: resolveObservationClosureField(
       observationOptions,
       PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD.RECORD_ID,
-      resolvedPriorityRecoveryClosureWitness,
       activeGateContext,
     ),
     closureWitnessClass: resolveObservationClosureField(
       observationOptions,
       PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD.WITNESS_CLASS,
-      resolvedPriorityRecoveryClosureWitness,
       activeGateContext,
     ),
     priorityRecoveryClosureState:

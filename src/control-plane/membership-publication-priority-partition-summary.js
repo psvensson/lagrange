@@ -6,10 +6,8 @@ import {
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {
-  addExactNonNegativeInteger,
   appendOwnArrayValue,
   buildStringSet,
-  compareExactValues,
   copyDenseOwnDataArray,
   copyCanonicalDenseOwnDataRecordArray,
   copyExclusionCounts,
@@ -17,7 +15,6 @@ import {
   createNullRecord as objectCreate,
   DATA_PROPERTY_STATE,
   defineOwnDataProperty as objectDefineProperty,
-  exactNonNegativeZero,
   inspectOwnDataProperty,
   MapConstructor,
   mapGet,
@@ -25,12 +22,10 @@ import {
   mapIteratorNext,
   mapSet,
   mapValues,
-  normalizeExclusionReasonCount,
   normalizeExpectedReplicaCount,
   normalizeNonNegativeSafeInteger,
   normalizePrimitiveStringList,
   normalizedPriorityPartitionSummariesEqual,
-  priorityPartitionDiagnosticsEqual,
   readOwnDataProperty,
   readOwnLowerPrimitiveString,
   READY_REPLICA_COUNT_BY_NODE_ID_FIELD,
@@ -295,160 +290,6 @@ function normalizePriorityPartitionSummary(summary, options = {}, _helperFns = {
     missingPartitionIds,
     blockedPartitions: normalizedPartitions,
   };
-}
-
-function buildPriorityPartitionSummaryAdvancement(summary, helperFns = {}) {
-  const normalizedSummary = normalizePriorityPartitionSummary(summary, {}, helperFns);
-  if (normalizedSummary === null) {
-    return null;
-  }
-  let blockedPartitionSpreadGap = exactNonNegativeZero();
-  let blockedPartitionReadyDistinctNodeCount = exactNonNegativeZero();
-  let diagnosticCompletenessRank = 0;
-  for (let index = 0;
-    index < normalizedSummary.blockedPartitions.length;
-    index += 1) {
-    const blockedPartition = normalizedSummary.blockedPartitions[index];
-    blockedPartitionSpreadGap = addExactNonNegativeInteger(
-      blockedPartitionSpreadGap,
-      normalizeNonNegativeSafeInteger(blockedPartition.spreadGap, 0),
-    );
-    blockedPartitionReadyDistinctNodeCount = addExactNonNegativeInteger(
-      blockedPartitionReadyDistinctNodeCount,
-      normalizeNonNegativeSafeInteger(
-        blockedPartition.readyDistinctNodeCount,
-        0,
-      ),
-    );
-    const expectedReplicaCountEntry = readOwnDataProperty(
-      blockedPartition,
-      [EXPECTED_REPLICA_COUNT_FIELD],
-    );
-    if (expectedReplicaCountEntry.found && normalizeExpectedReplicaCount(
-      expectedReplicaCountEntry.value,
-    ) !== null) {
-      diagnosticCompletenessRank += 1;
-    }
-    const exclusionReasonCountsEntry = readOwnDataProperty(
-      blockedPartition,
-      ['exclusionReasonCounts'],
-    );
-    const rowAbsentEntry = exclusionReasonCountsEntry.found ?
-      readOwnDataProperty(exclusionReasonCountsEntry.value, ['row_absent']) :
-      {found: false, value: null};
-    if (rowAbsentEntry.found &&
-      normalizeExclusionReasonCount(rowAbsentEntry.value) > 0) {
-      diagnosticCompletenessRank += 1;
-    }
-  }
-  return {
-    normalizedSummary,
-    satisfiedRank: normalizedSummary.satisfied === true ? 1 : 0,
-    missingPartitionCount: normalizedSummary.missingPartitionIds.length,
-    blockedPartitionCount: normalizedSummary.blockedPartitions.length,
-    blockedPartitionSpreadGap,
-    blockedPartitionReadyDistinctNodeCount,
-    diagnosticCompletenessRank,
-  };
-}
-
-function comparePriorityPartitionSummaryAdvancement(leftSummary, rightSummary, helperFns = {}) {
-  const leftAdvancement = buildPriorityPartitionSummaryAdvancement(leftSummary, helperFns);
-  const rightAdvancement = buildPriorityPartitionSummaryAdvancement(rightSummary, helperFns);
-  if (leftAdvancement === null || rightAdvancement === null) {
-    return 0;
-  }
-  const comparisons = [
-    compareExactValues(leftAdvancement.satisfiedRank, rightAdvancement.satisfiedRank),
-    compareExactValues(
-      rightAdvancement.missingPartitionCount,
-      leftAdvancement.missingPartitionCount,
-    ),
-    compareExactValues(
-      rightAdvancement.blockedPartitionCount,
-      leftAdvancement.blockedPartitionCount,
-    ),
-    compareExactValues(
-      rightAdvancement.blockedPartitionSpreadGap,
-      leftAdvancement.blockedPartitionSpreadGap,
-    ),
-    compareExactValues(
-      leftAdvancement.blockedPartitionReadyDistinctNodeCount,
-      rightAdvancement.blockedPartitionReadyDistinctNodeCount,
-    ),
-    compareExactValues(
-      leftAdvancement.normalizedSummary.readyEligibleNodeCount,
-      rightAdvancement.normalizedSummary.readyEligibleNodeCount,
-    ),
-    compareExactValues(
-      leftAdvancement.diagnosticCompletenessRank,
-      rightAdvancement.diagnosticCompletenessRank,
-    ),
-  ];
-  let decisiveComparison = 0;
-  for (let index = 0; index < comparisons.length; index += 1) {
-    if (comparisons[index] !== 0) {
-      decisiveComparison = comparisons[index];
-      break;
-    }
-  }
-  return decisiveComparison;
-}
-
-// The choice, with the winner named. A caller that must record WHICH of the
-// two summaries a downstream decision was made on reads `chosenFromCandidate`
-// and records it beside the summary (priority-partition-summary-source.js);
-// the label never becomes a field of the summary, because every field of a
-// summary reaches the publication row, the planning memo keys and the
-// equality comparisons that decide reuse.
-function chooseMoreAdvancedPriorityPartitionSummaryWithProvenance(
-  baselineSummary,
-  candidateSummary,
-  helperFns = {},
-) {
-  const normalizedBaselineSummary = normalizePriorityPartitionSummary(
-    baselineSummary,
-    {},
-    helperFns,
-  );
-  const normalizedCandidateSummary = normalizePriorityPartitionSummary(
-    candidateSummary,
-    {},
-    helperFns,
-  );
-  if (normalizedBaselineSummary === null) {
-    return {summary: normalizedCandidateSummary, chosenFromCandidate: true};
-  }
-  if (normalizedCandidateSummary === null) {
-    return {summary: normalizedBaselineSummary, chosenFromCandidate: false};
-  }
-  const advancement = comparePriorityPartitionSummaryAdvancement(
-    normalizedCandidateSummary,
-    normalizedBaselineSummary,
-    helperFns,
-  );
-  if (advancement > 0) {
-    return {summary: normalizedCandidateSummary, chosenFromCandidate: true};
-  }
-  if (advancement < 0 || priorityPartitionDiagnosticsEqual(
-    normalizedCandidateSummary,
-    normalizedBaselineSummary,
-  )) {
-    return {summary: normalizedBaselineSummary, chosenFromCandidate: false};
-  }
-  return {summary: normalizedCandidateSummary, chosenFromCandidate: true};
-}
-
-function chooseMoreAdvancedPriorityPartitionSummary(
-  baselineSummary,
-  candidateSummary,
-  helperFns = {},
-) {
-  return chooseMoreAdvancedPriorityPartitionSummaryWithProvenance(
-    baselineSummary,
-    candidateSummary,
-    helperFns,
-  ).summary;
 }
 
 function arePriorityPartitionSummariesEqual(leftSummary, rightSummary, helperFns = {}) {
@@ -790,8 +631,6 @@ export {
   PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
   arePriorityPartitionSummariesEqual,
   buildDerivedPriorityPartitionSummary,
-  chooseMoreAdvancedPriorityPartitionSummary,
-  chooseMoreAdvancedPriorityPartitionSummaryWithProvenance,
   isPrioritySpreadHolderServiceRow,
   isReadinessPromotable,
   normalizePriorityPartitionSummary,

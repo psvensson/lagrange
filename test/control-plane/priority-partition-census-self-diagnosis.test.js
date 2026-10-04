@@ -7,7 +7,6 @@ import {
 import {
   arePriorityPartitionSummariesEqual,
   buildDerivedPriorityPartitionSummary,
-  chooseMoreAdvancedPriorityPartitionSummary,
   normalizePriorityPartitionSummary,
 } from '../../src/control-plane/membership-publication-priority-partition-summary.js';
 import {
@@ -217,7 +216,7 @@ test('normalization keeps the additive field optional and accepts snake case', (
   t.end();
 });
 
-test('diagnostic enrichment wins semantic ties and current values replace stale ones',
+test('diagnostic enrichment normalizes and is seen by equality',
   (t) => {
     const legacy = semanticSummary(semanticBlock());
     const enriched = semanticSummary(semanticBlock({
@@ -229,35 +228,24 @@ test('diagnostic enrichment wins semantic ties and current values replace stale 
       exclusionReasonCounts: {row_absent: 3},
     }));
 
+    // SUPERSEDED (D9, owner decision 2026-10-04): the three assertions here
+    // pinned the deleted satisfied-first ranking (enrichment wins a semantic
+    // tie; equally complete current values replace stale ones). There is no
+    // ranking now - the fresh census wins whenever derivable - so what
+    // remains is that normalization keeps the enrichment and that equality
+    // sees it, which triggers exactly one durable refresh.
     t.same(
-      chooseMoreAdvancedPriorityPartitionSummary(
-        legacy,
-        enriched,
-        SUMMARY_HELPERS,
-      ),
-      normalizePriorityPartitionSummary(enriched, {}, SUMMARY_HELPERS),
+      normalizePriorityPartitionSummary(enriched, {}, SUMMARY_HELPERS)
+        .blockedPartitions[0].exclusionReasonCounts,
+      {row_absent: 1},
     );
     t.same(
-      chooseMoreAdvancedPriorityPartitionSummary(
-        enriched,
-        legacy,
-        SUMMARY_HELPERS,
-      ),
-      normalizePriorityPartitionSummary(enriched, {}, SUMMARY_HELPERS),
-    );
-    t.same(
-      chooseMoreAdvancedPriorityPartitionSummary(
-        enriched,
-        enrichedWithDifferentTarget,
-        SUMMARY_HELPERS,
-      ),
       normalizePriorityPartitionSummary(
         enrichedWithDifferentTarget,
         {},
         SUMMARY_HELPERS,
-      ),
-      'equally complete current diagnostics replace stale values without ' +
-      'changing semantic advancement ranks',
+      ).blockedPartitions[0].expectedReplicaCount,
+      5,
     );
     t.equal(
       arePriorityPartitionSummariesEqual(legacy, enriched, SUMMARY_HELPERS),
@@ -398,14 +386,14 @@ test('diagnostic normalization ignores pollution, accessors, and toJSON', (t) =>
       configurable: true,
       enumerable: true,
     });
-    const baseline = semanticSummary(semanticBlock({expectedReplicaCount: 3}));
     const candidate = semanticSummary(semanticBlock({
       expectedReplicaCount: 3,
       exclusionReasonCounts: {row_absent: 1},
     }));
-    const selected = chooseMoreAdvancedPriorityPartitionSummary(
-      baseline,
+    // Carrier superseded (D9): normalization, not the deleted ranking.
+    const selected = normalizePriorityPartitionSummary(
       candidate,
+      {},
       SUMMARY_HELPERS,
     );
     t.equal(selected.blockedPartitions[0].exclusionReasonCounts.row_absent, 1);

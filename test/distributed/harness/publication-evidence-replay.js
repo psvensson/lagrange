@@ -9,6 +9,9 @@ import {
 } from
   '../../../src/control-plane/priority-recovery-snapshot.js';
 import {
+  LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
+} from './active-gate-closure-classification.js';
+import {
   PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD,
@@ -310,7 +313,7 @@ function classifyPublicationEvidenceClosureWitness(closureWitness = {}) {
   }
   if (
     closureWitnessState ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION ||
+      LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION ||
     closureWitness[
       PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PUBLICATION_REFRESH_REQUIRED
     ] === true

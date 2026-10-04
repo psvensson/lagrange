@@ -1,3 +1,7 @@
+import {
+  assertReplayedBlockedPartitionsMatch,
+} from './publication-evidence-replay-blocked-partition-assert.js';
+
 export function registerPublicationEvidenceReplayReachabilityRebalancerTests(context) {
   const {
     ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE,
@@ -266,7 +270,8 @@ export function registerPublicationEvidenceReplayReachabilityRebalancerTests(con
       replaySummary.comparison.replayedBlockedPartitionIds,
       REPLAY_TEST_145246Z_REPLAYED_BLOCKED_PARTITION_IDS,
     );
-    assert.deepEqual(
+    assertReplayedBlockedPartitionsMatch(
+      assert,
       replaySummary.replayedPublication.summary.blockedPartitions,
       build145246ZReplayedBlockedPartitions(),
     );

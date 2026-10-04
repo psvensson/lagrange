@@ -599,6 +599,79 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
         'the reconcile writes the refreshed summary');
     });
 
+  // Upgrade/compat witness: a control_plane_publications row written by the
+  // OLD code carries the closure's synthesized summary (satisfied, blocked
+  // [], zeroed aggregate fields, no holder identity). The new code reads it
+  // as an ordinary durable summary; the fresh census wins and the corrected
+  // summary is written on the first reconcile.
+  test('a persisted synthesized satisfied summary is corrected from the census within one reconcile',
+    async (t) => {
+      const synthesizedLegacySummary = {
+        satisfied: true,
+        requiredDistinctNodeCount: 3,
+        readyEligibleNodeCount: 3,
+        totalPriorityPartitionCount: latchPriorityTableIds.length,
+        missingPartitionIds: [],
+        blockedPartitions: [],
+        blockedPartitionCount: 0,
+        largestSpreadGap: 0,
+        totalSpreadGap: 0,
+      };
+      const gapRows = buildLatchServiceRows((tableId) =>
+        tableId === 'schema_operations' ?
+          [['node-1', 'active'], ['node-2', 'active']] :
+          latchNodeIds.map((nodeId) => [nodeId, 'active']));
+      const candidate = deriveMembershipPublicationCandidate({
+        publisherNodeId: 'node-1',
+        latestPublicationRow: {
+          publication_epoch: 12,
+          status: 'PUBLISHED',
+          published_active_node_ids: latchNodeIds,
+          required_ack_node_ids: latchNodeIds,
+          acknowledged_node_ids: latchNodeIds,
+          priority_partition_summary: synthesizedLegacySummary,
+        },
+        priorityPartitionSummary: synthesizedLegacySummary,
+        nodeRows: latchNodeIds.map((nodeId) => ({
+          node_id: nodeId,
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 5000,
+        })),
+        readinessEntries: latchNodeIds.map((nodeId) => ({
+          nodeId,
+          dimensions: {
+            clusterMemberHealthy: true,
+            controlPlanePublished: true,
+            controlPlaneWritable: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        })),
+        nodeEndpointRows: latchNodeIds.map((nodeId) => ({
+          endpoint_id: `${nodeId}-ws`,
+          node_id: nodeId,
+          transport_type: 'ws',
+          status: 'active',
+          address: `ws://${nodeId}:8082`,
+        })),
+        serviceRows: gapRows,
+        nowMs: 1000,
+      });
+      t.equal(candidate.priorityPartitionSummary.satisfied, false,
+        'the census gap replaces the persisted synthesized summary');
+      t.same(
+        candidate.priorityPartitionSummary.blockedPartitions.map((entry) => [
+          entry.partitionId,
+          entry.spreadGap,
+          entry.readyReplicaCountByNodeId,
+        ]),
+        [['schema_operations-p1', 1, {'node-1': 1, 'node-2': 1}]],
+      );
+      t.equal(candidate.priorityPartitionSummaryChanged, true,
+        'the corrected summary is written on this reconcile');
+    });
+
   test('deriveClusterMembershipCandidateSync does not count promotable learners toward priority spread quorum from cached readiness',
     async (t) => {
       const priorityTableIds = [

@@ -11,8 +11,6 @@ export function registerPriorityRecoverySnapshotObservationCurrencyActuationPres
     PRIORITY_RECOVERY_ACTUATION_STATE_TERMINAL_COMPLETED,
     PRIORITY_RECOVERY_ACTUATION_STATE_TRANSITION_DEFERRED,
     PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
-    PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
-    PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
     PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
     PRIORITY_RECOVERY_COMPLETION_STATE,
     PRIORITY_RECOVERY_EMPTY_COUNT,
@@ -334,7 +332,15 @@ export function registerPriorityRecoverySnapshotObservationCurrencyActuationPres
       );
     });
 
-  test('priority recovery observation snapshots prefer the closure witness over stale publication spread metadata',
+  // SUPERSEDED (owner decision 2026-10-04, "delete the second authority").
+  // Before: a closure witness reporting the (deleted) stale-publication state
+  // overrode the publication's blocked spread metadata - the observation read
+  // prioritySpreadPending false, CL-003, a synthesized satisfied summary and
+  // no reason codes. Now the observation reports the census answer: with the
+  // publication summary showing the gap, spread stays pending, the summary is
+  // the census one and no closure record is named. The SSIF partition (the
+  // REPLACE grace) is still reported as such.
+  test('priority recovery observation snapshots keep the census gap over a non-pending closure witness',
     async (t) => {
       const OBSERVATION_STALE_REASON_CODE = 'priority_partitions_not_spread';
       const OBSERVATION_RECOVERY_PROTOCOL_STATE = 'priority_spread_pending';
@@ -413,42 +419,25 @@ export function registerPriorityRecoverySnapshotObservationCurrencyActuationPres
 
       t.equal(
         observationSnapshot.prioritySpreadPending,
-        false,
-        'a satisfied closure witness should keep stale spread metadata from reopening the observation gate',
+        true,
+        'a non-pending closure witness never clears the census gap',
       );
       t.equal(
         observationSnapshot.priorityRecoveryClosureState,
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION,
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
       );
-      t.equal(
-        observationSnapshot.closureRecordId,
-        PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD,
-      );
-      t.equal(
-        observationSnapshot.closureWitnessClass,
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
-          .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING,
-      );
-      t.same(
-        observationSnapshot.priorityRecoveryReasonCodes,
-        [],
-        'stale publication reason codes should be dropped once the closure witness says spread is satisfied',
-      );
-      t.same(
-        observationSnapshot.publicationConvergenceGateReasons,
-        [],
-        'the synthesized observation gate should stay ready after applying the closure witness',
+      t.equal(observationSnapshot.closureRecordId, null,
+        'the runtime names no closure record');
+      t.ok(
+        observationSnapshot.priorityRecoveryReasonCodes.includes(
+          OBSERVATION_STALE_REASON_CODE,
+        ),
+        'the not-spread reason stays while the census shows the gap',
       );
       t.match(observationSnapshot.priorityPartitionSummary, {
-        satisfied: true,
-        blockedPartitionCount: 0,
-        largestSpreadGap: 0,
-        totalSpreadGap: 0,
+        satisfied: false,
+        blockedPartitionCount: 1,
       });
-      t.same(observationSnapshot.priorityRecoveryBlockedPartitionIds, []);
-      t.equal(observationSnapshot.priorityRecoveryBlockedPartitionCount, 0);
-      t.same(observationSnapshot.priorityRecoveryUnresolvedPartitionIds, []);
-      t.equal(observationSnapshot.priorityRecoveryUnresolvedPartitionCount, 0);
       t.same(
         observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
           .spread_satisfied_in_flight,

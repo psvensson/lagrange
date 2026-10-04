@@ -19,18 +19,11 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   arePriorityPartitionSummariesEqual,
-  chooseMoreAdvancedPriorityPartitionSummary,
-  normalizePriorityPartitionSummary,
 } from '../../src/control-plane/membership-publication-priority-partition-summary.js';
 import {
   normalizeNodeIdList,
   normalizePositiveInteger,
 } from '../../src/control-plane/membership-publication-row-helpers.js';
-import {
-  PRIORITY_PARTITION_SUMMARY_SOURCE,
-  chooseClosureRefreshedPriorityPartitionSummary,
-  readPriorityPartitionSummarySource,
-} from '../../src/control-plane/priority-partition-summary-source.js';
 import {
   PRIORITY_RECOVERY_PLANNING_ANSWER_ORIGIN,
   beginPriorityRecoveryPlanningAnswer,
@@ -246,63 +239,17 @@ function guardOverRealPlanningOwner() {
 
 test('the summary source and the planning answer origin are named by their owners',
   async () => {
-    // ---- which summary was chosen -------------------------------------
-    const derived = semanticSummary(semanticBlock());
-    const closureRefreshed = semanticSummary(semanticBlock({
+    // SUPERSEDED (owner decision 2026-10-04, D7). Before: this named which of
+    // two summaries the derivation chose (derived vs closure_refreshed, with
+    // unrecorded for an unchosen one) and pinned that the recorded choice was
+    // carried by reference to the guard. The closure no longer produces a
+    // summary, so there is no choice to name: the planning projection still
+    // carries the census summary object itself (the by-reference property is
+    // kept), and the guard logs the census as its source.
+    const censusSummary = semanticSummary(semanticBlock({
       expectedReplicaCount: 3,
       exclusionReasonCounts: {row_absent: 1},
     }));
-
-    const refreshedWins = chooseClosureRefreshedPriorityPartitionSummary(
-      derived, closureRefreshed, SUMMARY_HELPERS);
-    assert.equal(
-      readPriorityPartitionSummarySource(refreshedWins),
-      PRIORITY_PARTITION_SUMMARY_SOURCE.CLOSURE_REFRESHED,
-      'the closure-refreshed summary names itself when it wins');
-
-    const derivedWins = chooseClosureRefreshedPriorityPartitionSummary(
-      closureRefreshed, derived, SUMMARY_HELPERS);
-    assert.equal(
-      readPriorityPartitionSummarySource(derivedWins),
-      PRIORITY_PARTITION_SUMMARY_SOURCE.DERIVED,
-      'the derivation names its own summary when the refresh does not win');
-
-    const withoutRefresh = chooseClosureRefreshedPriorityPartitionSummary(
-      derived, undefined, SUMMARY_HELPERS);
-    assert.equal(
-      readPriorityPartitionSummarySource(withoutRefresh),
-      PRIORITY_PARTITION_SUMMARY_SOURCE.DERIVED,
-      'no closure refresh leaves the derived summary as the choice');
-
-    assert.equal(
-      readPriorityPartitionSummarySource(semanticSummary(semanticBlock())),
-      PRIORITY_PARTITION_SUMMARY_SOURCE.UNRECORDED,
-      'a summary nobody chose reads as unrecorded, never as derived');
-    assert.equal(
-      readPriorityPartitionSummarySource(null),
-      PRIORITY_PARTITION_SUMMARY_SOURCE.UNRECORDED);
-
-    // The choice is unchanged and the chosen object carries no new field: the
-    // provenance lives beside the summary, not on it.
-    assert.deepStrictEqual(
-      refreshedWins,
-      normalizePriorityPartitionSummary(
-        closureRefreshed, {}, SUMMARY_HELPERS),
-      'the recorded choice is byte-identical to the unrecorded normal form');
-    assert.deepStrictEqual(
-      refreshedWins,
-      chooseMoreAdvancedPriorityPartitionSummary(
-        derived, closureRefreshed, SUMMARY_HELPERS),
-      'recording changes nothing about which summary is chosen');
-    assert.equal(
-      arePriorityPartitionSummariesEqual(
-        refreshedWins, closureRefreshed, SUMMARY_HELPERS),
-      true,
-      'publication equality still sees the two summaries as equal');
-
-    // The chosen summary reaches a consumer BY REFERENCE, so the recorded
-    // source is still readable off the answer the guard holds: the planning
-    // projection carries the summary object through, it does not rebuild it.
     const projection =
       projectionCarrierOwner().buildTrackedPriorityRecoveryPlanningProjection(
         Object.freeze({
@@ -310,15 +257,15 @@ test('the summary source and the planning answer origin are named by their owner
           publisherNodeId: PUBLISHER_NODE_ID,
           publicationEpoch: 7,
           publicationStatus: 'published',
-          priorityPartitionSummary: refreshedWins,
+          priorityPartitionSummary: censusSummary,
         }),
       );
-    assert.equal(projection.priorityPartitionSummary, refreshedWins,
-      'the projection carries the chosen summary object itself');
+    assert.equal(projection.priorityPartitionSummary, censusSummary,
+      'the projection carries the census summary object itself');
     assert.equal(
-      readPriorityPartitionSummarySource(projection.priorityPartitionSummary),
-      PRIORITY_PARTITION_SUMMARY_SOURCE.CLOSURE_REFRESHED,
-      'so a consumer of the answer reads the source the derivation recorded');
+      arePriorityPartitionSummariesEqual(
+        projection.priorityPartitionSummary, censusSummary, SUMMARY_HELPERS),
+      true);
 
     // ---- where the planning answer came from --------------------------
     assert.deepStrictEqual(

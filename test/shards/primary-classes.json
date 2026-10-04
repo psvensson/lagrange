@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 1916,
-    "integration": 78,
+    "integration": 79,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2194,
-  "digest": "fnv1a32-6e6c68b9",
+  "censusSize": 2195,
+  "digest": "fnv1a32-44767bf1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -988,6 +988,7 @@
     "test/integration/pgwire-bootstrap.integration.test.js": "integration",
     "test/integration/pgwire-rebalance.integration.test.js": "integration",
     "test/integration/preflight-critical-path-hops.integration.test.js": "integration",
+    "test/integration/priority-spread-one-authority-rebalance.integration.test.js": "integration",
     "test/integration/public-application-database-multinode.integration.test.js": "integration",
     "test/integration/public-application-database-transaction-facade.integration.test.js": "integration",
     "test/integration/public-binding-cell-invocation-seam.integration.test.js": "integration",
