@@ -1,4 +1,3 @@
-import {LIFECYCLE_STATE} from '../raft/raft-rs-replica-lifecycle-owner.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
@@ -263,15 +262,12 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
       // No file, no row or an unreadable database is no fact: the member
       // stays listed.
-      const lifecycle = this.readReplicaDurableLifecycle(partitionId,
-        replicaId);
-      if (lifecycle.state !== LIFECYCLE_STATE.RETIRED ||
-          lifecycle.reason !== GROUP_RETIREMENT_REASON) {
+      if (!this.isReplicaDurablyGroupRetired(partitionId, replicaId)) {
         return null;
       }
       this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED, {
         replicaId, partitionId, nodeId: this.nodeId,
-        durableLifecycle: lifecycle.state});
+        durableLifecycle: GROUP_RETIREMENT_REASON});
       return this.buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.COMPLETED,
         {replicaId, nodeId: this.nodeId, durablyRetired: true},

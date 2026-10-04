@@ -8,8 +8,6 @@ import {removeReplicaStorageArtifacts} from
   './replica-storage-artifacts.js';
 import {isCleanupTombstoneRow} from
   './replica-cleanup-tombstone-owner.js';
-import {readDurableReplicaLifecycle} from
-  '../raft/raft-rs-replica-lifecycle-owner.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CLEANUP_STORAGE_AUTHORITY_KIND = 'cleanup_owned';
@@ -255,20 +253,6 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         partitionId,
         `${replicaId}${STORAGE_DEFAULT.DB_EXT}`,
       );
-    }
-    /**
-     * One replica's durable raft-rs lifecycle row, read from the partition
-     * database its port opened (it survives a restart that dropped the
-     * replica from this node's tracking).
-     * @param {string} partitionId - Partition ID (the group).
-     * @param {string} replicaId - Replica ID (its identity).
-     * @return {Object} Frozen {state, reason}
-     *   (readDurableReplicaLifecycle).
-     */
-    readReplicaDurableLifecycle(partitionId, replicaId) {
-      return readDurableReplicaLifecycle(
-        this.getPartitionDbPath(partitionId, replicaId), partitionId,
-        replicaId);
     }
     /**
      * Get local replica by ID.

@@ -387,8 +387,44 @@ async function handleReplicaRemovalFailure(handler, request, service,
   });
 }
 
+// The replica's durable lifecycle row, from the partition database file its
+// port opened.
+function readReplicaLifecycleFile(handler, partitionId, replicaId) {
+  return raftRsLifecycleAdministration.readReplicaLifecycle(
+    handler.getPartitionDbPath(partitionId, replicaId), partitionId,
+    replicaId);
+}
+
 function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
   class ReplicaHandlerRemoveExecutionMethods {
+    /**
+     * One replica's durable raft-rs lifecycle row, read from the partition
+     * database its port opened (it survives a restart that dropped the
+     * replica from this node's tracking).
+     * @param {string} partitionId - The group.
+     * @param {string} replicaId - The replica identity.
+     * @return {Object} Frozen {state, reason}.
+     * @private
+     */
+    readReplicaDurableLifecycle(partitionId, replicaId) {
+      return readReplicaLifecycleFile(this, partitionId, replicaId);
+    }
+
+    /**
+     * Whether the replica's own durable lifecycle row records it retired
+     * with its whole group (reason group-retired), for exactly this
+     * identity and group. Never from absence.
+     * @param {string} partitionId
+     * @param {string} replicaId
+     * @return {boolean}
+     * @private
+     */
+    isReplicaDurablyGroupRetired(partitionId, replicaId) {
+      return raftRsLifecycleAdministration.isRetiredFor(
+        this.readReplicaDurableLifecycle(partitionId, replicaId),
+        GROUP_RETIREMENT_REASON);
+    }
+
     /**
      * Raise the partition-owned transaction admission fence synchronously,
      * before REMOVE_REPLICA returns an accepted status. This gives acceptance
