@@ -4,12 +4,12 @@
   "counts": {
     "unit": 1921,
     "integration": 77,
-    "bootstrap": 193,
+    "bootstrap": 194,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2198,
-  "digest": "fnv1a32-d73282c3",
+  "censusSize": 2199,
+  "digest": "fnv1a32-a095a045",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -234,6 +234,7 @@
     "test/bootstrap/query-state-single-owner.test.js": "bootstrap",
     "test/bootstrap/readiness-handoff-liveness-witness.test.js": "bootstrap",
     "test/bootstrap/register-node-in-cluster.test.js": "bootstrap",
+    "test/bootstrap/register-service-move-handoff-refused.test.js": "bootstrap",
     "test/bootstrap/rejoin-hints.test.js": "bootstrap",
     "test/bootstrap/replica-evidence-conflict.test.js": "bootstrap",
     "test/bootstrap/replica-runtime-attachment-authority.test.js": "bootstrap",

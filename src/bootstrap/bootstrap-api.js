@@ -281,6 +281,8 @@ class BootstrapAPI {
         delegates: {
           getLogger: () => this.logger,
           getSqlQueryEngine: () => this.getSqlQueryEngine(),
+          isMoveReplicaHandoffRequest: (serviceData) =>
+            this.isMoveReplicaHandoffRequest(serviceData),
           validateMoveReplicaAssignmentToken: (serviceData) =>
             this.validateMoveReplicaAssignmentToken(serviceData),
           assertSingleOwnerReplicaRegistration: (serviceData, assignmentContext) =>

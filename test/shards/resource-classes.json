@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2181,
+    "ordinary": 2182,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2198,
-  "digest": "fnv1a32-47d09ec1",
+  "censusSize": 2199,
+  "digest": "fnv1a32-a5ec87c3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -233,6 +233,7 @@
     "test/bootstrap/query-state-single-owner.test.js": "ordinary",
     "test/bootstrap/readiness-handoff-liveness-witness.test.js": "ordinary",
     "test/bootstrap/register-node-in-cluster.test.js": "ordinary",
+    "test/bootstrap/register-service-move-handoff-refused.test.js": "ordinary",
     "test/bootstrap/rejoin-hints.test.js": "ordinary",
     "test/bootstrap/replica-evidence-conflict.test.js": "ordinary",
     "test/bootstrap/replica-runtime-attachment-authority.test.js": "ordinary",

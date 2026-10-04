@@ -152,42 +152,32 @@ function createCdcIntegrationServiceFixture(rows, options = {}) {
   };
 }
 
-function configureSyntheticMoveReplicaRegisterServiceHandoff(
-  api,
-  expectedServiceRow,
-  options = {},
-) {
-  const assignmentId = options.assignmentId || 'assignment-1';
-  const sourceNodeId = options.sourceNodeId || 'seed-node-1';
-
-  api.validateMoveReplicaAssignmentToken = async () => ({assignmentId});
-  api.assertSingleOwnerReplicaRegistration = () => {};
-  api.startMoveReplicaHandoff = async () => ({
-    operationId: assignmentId,
-    replicaId: expectedServiceRow.replica_id,
-    sourceNodeId,
-    targetNodeId: expectedServiceRow.node_id,
-  });
-  api.executeMoveReplicaHandoffPhase = async (
-    _handoffContext,
-    _phase,
-    _workflowStep,
-    _status,
-    work,
-  ) => work();
-  api.verifyMoveReplicaHandoffTarget = async () => {};
-  api.readCurrentRegisteredServiceRow = async () => null;
-  api.removeLocalSourceReplicaForMoveReplica = async () => {};
-  api.completeMoveReplicaHandoff = async () => {};
-  api.restoreRegisteredServiceRowAfterFailedHandoff = async () => {};
-  api.shouldPreserveMoveReplicaHandoffReservation = () => false;
-  api.failMoveReplicaHandoff = async () => {};
-
-  return assignmentId;
+// The MOVE_REPLICA handoff is refused at /register-service (owner decision
+// 2026-10-04, zero-Liferaft cutover). The services-row write and the
+// cache-visibility wait the handoff ran remain in the tree until the MOVE
+// subsystem's deletion (an open epic obligation); until then their
+// witnesses drive them directly and read the answer the handoff returned
+// (a typed error's status, code and details, or success).
+async function driveMoveHandoffRegistrationVisibility(api, serviceData) {
+  const registeredServiceRow =
+    api.buildRegisteredServiceMutationRow(serviceData);
+  try {
+    await api.serviceRegistrationHandoffOwner
+      .writeRegisteredServiceRowWithRetry(
+        serviceData, registeredServiceRow, null);
+    await api.waitForRegisteredServiceCacheVisibility(
+      api.buildExpectedRegisteredServiceData(registeredServiceRow));
+    return {statusCode: 200, body: {success: true}};
+  } catch (error) {
+    return {
+      statusCode: error.statusCode,
+      body: {code: error.errorCode, details: error.details},
+    };
+  }
 }
 
 export {
-  configureSyntheticMoveReplicaRegisterServiceHandoff,
   createCdcIntegrationServiceFixture,
+  driveMoveHandoffRegistrationVisibility,
   initializeTestEnvironment,
 };

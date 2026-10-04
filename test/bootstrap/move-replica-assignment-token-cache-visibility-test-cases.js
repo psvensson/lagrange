@@ -9,13 +9,13 @@ import {
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
-  configureSyntheticMoveReplicaRegisterServiceHandoff,
   createCdcIntegrationServiceFixture,
+  driveMoveHandoffRegistrationVisibility,
   initializeTestEnvironment,
 } from './move-replica-assignment-token-test-helpers.js';
 
 
-test('BootstrapAPI register-service emits retryable cache visibility timeout response',
+test('MOVE handoff registration (refused at register-service; driven directly) emits retryable cache visibility timeout response',
   async (t) => {
     initializeTestEnvironment();
     const rows = {
@@ -63,14 +63,6 @@ test('BootstrapAPI register-service emits retryable cache visibility timeout res
         return {success: true, rows: []};
       },
     });
-    const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
-      api,
-      {
-        service_id: 'mg-2-r1',
-        node_id: '550e8400-e29b-41d4-a716-446655440324',
-        replica_id: 'mg-2-r1',
-      },
-    );
     t.teardown(async () => {
       await api.shutdown();
     });
@@ -85,20 +77,15 @@ test('BootstrapAPI register-service emits retryable cache visibility timeout res
       Date.now = originalDateNow;
     });
 
-    const response = await api.getFastify().inject({
-      method: 'POST',
-      url: '/register-service',
-      payload: {
-        service_id: 'mg-2-r1',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        node_id: '550e8400-e29b-41d4-a716-446655440324',
-        group_id: 'mg-2',
-        replica_id: 'mg-2-r1',
-        assignment_id: assignmentId,
-        raft_role: RAFT_ROLE.FOLLOWER,
-        status: SERVICE_STATUS.ACTIVE,
-        address: '550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1',
-      },
+    const response = await driveMoveHandoffRegistrationVisibility(api, {
+      service_id: 'mg-2-r1',
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: '550e8400-e29b-41d4-a716-446655440324',
+      group_id: 'mg-2',
+      replica_id: 'mg-2-r1',
+      raft_role: RAFT_ROLE.FOLLOWER,
+      status: SERVICE_STATUS.ACTIVE,
+      address: '550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1',
     });
 
     t.equal(
@@ -106,7 +93,7 @@ test('BootstrapAPI register-service emits retryable cache visibility timeout res
       503,
       'register-service cache visibility timeout should be retryable',
     );
-    const responseBody = response.json();
+    const responseBody = response.body;
     t.equal(
       responseBody.code,
       'SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT',
@@ -124,7 +111,7 @@ test('BootstrapAPI register-service emits retryable cache visibility timeout res
     );
   });
 
-test('BootstrapAPI register-service remains retryable when storage is visible but cache is stale',
+test('MOVE handoff registration (refused at register-service; driven directly) remains retryable when storage is visible but cache is stale',
   async (t) => {
     initializeTestEnvironment();
     const rows = {
@@ -182,10 +169,6 @@ test('BootstrapAPI register-service remains retryable when storage is visible bu
       }),
     });
     await api.initialize(0, {listen: false});
-    const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
-      api,
-      expectedServiceRow,
-    );
     api.setSqlQueryEngine({
       async executeQuery(sql) {
         if (sql.includes('INSERT OR REPLACE INTO services')) {
@@ -202,20 +185,15 @@ test('BootstrapAPI register-service remains retryable when storage is visible bu
       await api.shutdown();
     });
 
-    const response = await api.getFastify().inject({
-      method: 'POST',
-      url: '/register-service',
-      payload: {
-        service_id: expectedServiceRow.service_id,
-        service_type: expectedServiceRow.service_type,
-        node_id: expectedServiceRow.node_id,
-        group_id: expectedServiceRow.group_id,
-        replica_id: expectedServiceRow.replica_id,
-        assignment_id: assignmentId,
-        raft_role: expectedServiceRow.raft_role,
-        status: expectedServiceRow.status,
-        address: expectedServiceRow.address,
-      },
+    const response = await driveMoveHandoffRegistrationVisibility(api, {
+      service_id: expectedServiceRow.service_id,
+      service_type: expectedServiceRow.service_type,
+      node_id: expectedServiceRow.node_id,
+      group_id: expectedServiceRow.group_id,
+      replica_id: expectedServiceRow.replica_id,
+      raft_role: expectedServiceRow.raft_role,
+      status: expectedServiceRow.status,
+      address: expectedServiceRow.address,
     });
 
     t.equal(
@@ -223,7 +201,7 @@ test('BootstrapAPI register-service remains retryable when storage is visible bu
       503,
       'register-service should remain retryable until the services cache reflects the row',
     );
-    const responseBody = response.json();
+    const responseBody = response.body;
     t.equal(responseBody.code, 'SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT');
     t.equal(
       responseBody.details?.lastVisibilityCheck?.reason,
@@ -236,7 +214,7 @@ test('BootstrapAPI register-service remains retryable when storage is visible bu
     );
   });
 
-test('BootstrapAPI register-service repairs cache-visible hole from authoritative storage',
+test('MOVE handoff registration (refused at register-service; driven directly) repairs cache-visible hole from authoritative storage',
   async (t) => {
     initializeTestEnvironment();
     const rows = {
@@ -340,10 +318,6 @@ test('BootstrapAPI register-service repairs cache-visible hole from authoritativ
       cdcIntegrationService,
     });
     await api.initialize(0, {listen: false});
-    const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
-      api,
-      expectedServiceRow,
-    );
     api.setSqlQueryEngine({
       async executeQuery(sql) {
         if (sql.includes('INSERT OR REPLACE INTO services')) {
@@ -360,20 +334,15 @@ test('BootstrapAPI register-service repairs cache-visible hole from authoritativ
       await api.shutdown();
     });
 
-    const response = await api.getFastify().inject({
-      method: 'POST',
-      url: '/register-service',
-      payload: {
-        service_id: expectedServiceRow.service_id,
-        service_type: expectedServiceRow.service_type,
-        node_id: expectedServiceRow.node_id,
-        group_id: expectedServiceRow.group_id,
-        replica_id: expectedServiceRow.replica_id,
-        assignment_id: assignmentId,
-        raft_role: expectedServiceRow.raft_role,
-        status: expectedServiceRow.status,
-        address: expectedServiceRow.address,
-      },
+    const response = await driveMoveHandoffRegistrationVisibility(api, {
+      service_id: expectedServiceRow.service_id,
+      service_type: expectedServiceRow.service_type,
+      node_id: expectedServiceRow.node_id,
+      group_id: expectedServiceRow.group_id,
+      replica_id: expectedServiceRow.replica_id,
+      raft_role: expectedServiceRow.raft_role,
+      status: expectedServiceRow.status,
+      address: expectedServiceRow.address,
     });
 
     t.equal(response.statusCode, 200,
@@ -384,7 +353,7 @@ test('BootstrapAPI register-service repairs cache-visible hole from authoritativ
       'register-service should use the canonical authoritative repair helper');
   });
 
-test('BootstrapAPI register-service timeout diagnostics include mismatch fields', async (t) => {
+test('MOVE handoff registration (refused at register-service; driven directly) timeout diagnostics include mismatch fields', async (t) => {
   initializeTestEnvironment();
   const rows = {
     services: [],
@@ -447,14 +416,6 @@ test('BootstrapAPI register-service timeout diagnostics include mismatch fields'
       return {success: true, rows: []};
     },
   });
-  const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
-    api,
-    {
-      service_id: 'mg-2-r1',
-      node_id: '550e8400-e29b-41d4-a716-446655440324',
-      replica_id: 'mg-2-r1',
-    },
-  );
   t.teardown(async () => {
     await api.shutdown();
   });
@@ -469,24 +430,19 @@ test('BootstrapAPI register-service timeout diagnostics include mismatch fields'
     Date.now = originalDateNow;
   });
 
-  const response = await api.getFastify().inject({
-    method: 'POST',
-    url: '/register-service',
-    payload: {
-      service_id: 'mg-2-r1',
-      service_type: SERVICE_TYPE.MESSAGE_GROUP,
-      node_id: '550e8400-e29b-41d4-a716-446655440324',
-      group_id: 'mg-2',
-      replica_id: 'mg-2-r1',
-      assignment_id: assignmentId,
-      raft_role: RAFT_ROLE.FOLLOWER,
-      status: SERVICE_STATUS.ACTIVE,
-      address: '550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1',
-    },
+  const response = await driveMoveHandoffRegistrationVisibility(api, {
+    service_id: 'mg-2-r1',
+    service_type: SERVICE_TYPE.MESSAGE_GROUP,
+    node_id: '550e8400-e29b-41d4-a716-446655440324',
+    group_id: 'mg-2',
+    replica_id: 'mg-2-r1',
+    raft_role: RAFT_ROLE.FOLLOWER,
+    status: SERVICE_STATUS.ACTIVE,
+    address: '550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1',
   });
 
   t.equal(response.statusCode, 503, 'cache mismatch timeout should remain retryable');
-  const responseBody = response.json();
+  const responseBody = response.body;
   t.equal(
     responseBody.details?.lastVisibilityCheck?.reason,
     BOOTSTRAP_API_CACHE_VISIBILITY.REASON_STORAGE_ROW_VISIBLE_CACHE_STALE,
