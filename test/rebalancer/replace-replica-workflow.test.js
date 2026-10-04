@@ -1020,3 +1020,4 @@ test('REPLACE replica workflow', async (t) => {
     TEST_AUTHORITATIVE_OPERATION_READ_DEFERRED,
   });
 });
+// verify-osa-a10 probe (base): selects this file for lab re-runs
