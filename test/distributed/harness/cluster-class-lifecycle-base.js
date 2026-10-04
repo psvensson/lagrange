@@ -941,6 +941,7 @@ class ClusterLifecycleBase {
         role: NODE_ROLES.SEED,
         ip: seedNode.ip,
         containerId: seedNode.containerId,
+        host: seedNode.hostIdentity,
       },
     );
     this._recordPlaybackEvent(
@@ -991,6 +992,7 @@ class ClusterLifecycleBase {
           role: NODE_ROLES.JOINER,
           ip: joinerNode.ip,
           containerId: joinerNode.containerId,
+          host: joinerNode.hostIdentity,
         },
       );
       this._recordPlaybackEvent(
@@ -1658,6 +1660,7 @@ class ClusterLifecycleBase {
         role: NODE_ROLES.JOINER,
         ip: joinerNode.ip,
         containerId: joinerNode.containerId,
+        host: joinerNode.hostIdentity,
       },
     );
     this._recordPlaybackEvent(

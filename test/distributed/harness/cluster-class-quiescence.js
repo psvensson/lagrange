@@ -62,6 +62,9 @@ const {
 import {ClusterLoadOrchestration} from './cluster-class-load-orchestration.js';
 
 const QUIESCENCE_NODE_ID_UNKNOWN = 'unknown';
+const PLAYBACK_SCOPE_SCENARIO = 'scenario';
+const HOST_IDENTITY_PREFIX = 'provider-';
+const LOCAL_DOCKER_HOST_LABEL = 'local-docker';
 const QUIESCENCE_CANONICAL_BLOCKER_NONE = 'none';
 const QUIESCENCE_INSTABILITY_SUMMARY_NONE = 'none';
 const QUIESCENCE_STABLE_WINDOW_EXTENSION_MARGIN_MS = 100;
@@ -1010,6 +1013,24 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
     return null;
   }
 
+  /**
+   * Record a scenario-owned playback event (its step log or a gate
+   * record) into this run's events.ndjson. Only scenario.* types are
+   * accepted: harness lifecycle events stay harness-owned.
+   * @param {string} type PLAYBACK_EVENT_TYPE.SCENARIO_STEP or SCENARIO_GATE.
+   * @param {string} entityId The step or gate name.
+   * @param {Object} details
+   * @return {boolean} Whether the event type was accepted.
+   */
+  recordScenarioEvent(type, entityId, details) {
+    if (type !== PLAYBACK_EVENT_TYPE.SCENARIO_STEP &&
+        type !== PLAYBACK_EVENT_TYPE.SCENARIO_GATE) {
+      return false;
+    }
+    this._recordPlaybackEvent(type, PLAYBACK_SCOPE_SCENARIO, entityId, details);
+    return true;
+  }
+
   // --- Internal helpers ---
 
   _recordPlaybackEvent(type, scope, entityId, details) {
@@ -1201,8 +1222,27 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
     return fallbackProviderIndex;
   }
 
+  // The authority for where a node runs: the Docker provider the harness
+  // placed it on. Two nodes on one provider are one host.
+  _describeProviderHost(providerIdx) {
+    const dockerConfig = this._config?.docker || {};
+    const info = Array.isArray(dockerConfig.hostInfo) ?
+      dockerConfig.hostInfo[providerIdx] :
+      null;
+    const dockerHost = Array.isArray(dockerConfig.hosts) ?
+      dockerConfig.hosts[providerIdx] :
+      null;
+    return Object.freeze({
+      hostId: HOST_IDENTITY_PREFIX + String(providerIdx),
+      label: info?.internalIp || info?.externalIp || dockerHost ||
+        LOCAL_DOCKER_HOST_LABEL,
+      providerIndex: providerIdx,
+    });
+  }
+
   async _startNode(nodeId, role, seedIp, nodeIndex) {
     const providerIdx = this._resolveProviderIndexForNodeIndex(nodeIndex);
+    const hostIdentity = this._describeProviderHost(providerIdx);
     const provider = this._providers[providerIdx];
     const reuseContainers = this._isContainerReuseEnabled();
     const containerName = this._buildContainerName(nodeId, nodeIndex);
@@ -1322,6 +1362,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
             undefined,
             {
               adminQueryTimeoutMs: this._resolveNodeHandleAdminQueryTimeoutMs(),
+              hostIdentity,
             },
           );
         } catch (err) {
@@ -1381,6 +1422,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
       adminPort,
       {
         adminQueryTimeoutMs: this._resolveNodeHandleAdminQueryTimeoutMs(),
+        hostIdentity,
         ...(restPort !== undefined ? {restPort} : {}),
       },
     );

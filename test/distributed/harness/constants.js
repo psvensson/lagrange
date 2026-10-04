@@ -747,6 +747,10 @@ const PLAYBACK_EVENT_TYPE = Object.freeze({
   REPLICA_CREATED: 'replica.created',
   REPLICA_REMOVED: 'replica.removed',
   REPLICA_MOVED: 'replica.moved',
+  // A scenario's own step log (start/end of each named step) and the
+  // structured record every scenario gate emits for pass and fail.
+  SCENARIO_STEP: 'scenario.step',
+  SCENARIO_GATE: 'scenario.gate',
   WARNING: 'capture.warning',
 });
 

@@ -188,6 +188,9 @@ class NodeHandle {
     this.containerId = containerId;
     this.ip = ip;
     this.role = role;
+    // Where the node runs (the harness's provider assignment), or null
+    // when the handle was built without one; gates never infer it.
+    this.hostIdentity = options.hostIdentity || null;
     this._dockerProvider = dockerProvider;
     this._adminApiPort = adminApiPort;
     // REST port override for host-network mode (each node binds a per-node

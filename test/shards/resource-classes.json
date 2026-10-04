@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2180,
+    "ordinary": 2181,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2197,
-  "digest": "fnv1a32-5e2d50b4",
+  "censusSize": 2198,
+  "digest": "fnv1a32-d1e2dc07",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -884,6 +884,7 @@
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-config.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "ordinary",
+    "test/distributed/harness/__tests__/scenario-ground-truth.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-registry.test.js": "ordinary",
     "test/distributed/harness/__tests__/seed-restart-under-load-scenario.test.js": "ordinary",
     "test/distributed/harness/__tests__/seven-node-load-during-partitioning-scenario.test.js": "ordinary",

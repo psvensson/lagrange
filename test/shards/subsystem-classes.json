@@ -9,7 +9,7 @@
     "cli-tooling": 96,
     "control-plane": 205,
     "convergence-topology": 83,
-    "distributed-harness": 169,
+    "distributed-harness": 170,
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 254,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2197,
-  "digest": "fnv1a32-a05695d9",
+  "censusSize": 2198,
+  "digest": "fnv1a32-a3b0964e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7492cab1",
+  "observationDigest": "fnv1a32-d0bb6f86",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -904,6 +904,7 @@
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-config.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/scenario-ground-truth.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-registry.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/seed-restart-under-load-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/seven-node-load-during-partitioning-scenario.test.js": "distributed-harness",
@@ -5963,6 +5964,26 @@
       ],
       "directories": [
         "test/distributed/scenarios"
+      ]
+    },
+    "test/distributed/harness/__tests__/scenario-ground-truth.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/publication-evidence-contract.js",
+        "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "env": [
+        "LAGRANGE_CAPTURE_LOGS",
+        "LAGRANGE_DEBUG_LOGS"
       ]
     },
     "test/distributed/harness/__tests__/scenario-registry.test.js": {
