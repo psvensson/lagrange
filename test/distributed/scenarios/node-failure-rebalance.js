@@ -18,6 +18,10 @@ import {
   countVisibleSatisfiedPriorityRecoveryOperations,
 } from '../harness/post-rebalance-closure-contract.js';
 import {ASSERTIONS_CONVERGENCE_WAIT} from '../harness/assertions-convergence-wait.js';
+import {
+  classifyVoterTargets,
+  readPartitionVoterTargets,
+} from '../harness/convergence-voter-targets.js';
 const {queryReachableClusterSnapshot} = ASSERTIONS_CONVERGENCE_WAIT;
 
 const LOAD_OPS_PER_SEC = 50;
@@ -28,6 +32,13 @@ const CONSISTENCY_CONVERGENCE_TIMEOUT_MS = 60000;
 const CONSISTENCY_SNAPSHOT_TIMEOUT_MS = 30000;
 const ZERO_FAILURES = 0;
 const SURVIVING_VOTER_COUNT = 2;
+// One of three nodes is killed and stays dead: two survivors cannot hold a
+// policy replica count of 3, so the post-kill convergence claim is
+// "every partition led and at most two voters", explicitly tolerating
+// under-replication (the verdict names it; it is never silent).
+const SURVIVOR_UNDER_REPLICATION_REASON =
+  'one of three nodes is killed and never restarted: two survivors cannot ' +
+  'hold a policy replica count of three';
 const IGNORE_STALE_IN_FLIGHT_REPLICA_OPERATIONS = true;
 const SQL_LOG_ID_COLUMN = 'log_id';
 const ACKNOWLEDGED_WRITE_ALIAS = 'ack_id';
@@ -264,6 +275,7 @@ async function run(cluster) {
     settleTimeoutMs: POST_KILL_CONVERGENCE_TIMEOUT_MS,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: SURVIVING_VOTER_COUNT,
+    tolerateUnderReplication: SURVIVOR_UNDER_REPLICATION_REASON,
   });
 
   assert.ok(
@@ -306,6 +318,7 @@ async function run(cluster) {
   // 8. Assert post-rebalance closure contract holds
   const snapshot = await queryReachableClusterSnapshot(survivingNodes, {
     targetVoterCount: SURVIVING_VOTER_COUNT,
+    tolerateUnderReplication: SURVIVOR_UNDER_REPLICATION_REASON,
   });
   const publishedActiveNodeIds = normalizeNodeIdList(
     snapshot.publishedActiveNodeIds,
@@ -344,6 +357,18 @@ async function run(cluster) {
       ) :
       snapshot.inFlightReplicaOperationCount;
 
+  const voterTargetRead = await readPartitionVoterTargets(survivingNodes, {
+    preferNodeId: snapshot.nodeId,
+  });
+  const voterTargetVerdict = classifyVoterTargets({
+    expectedPartitionIds: snapshot.expectedPartitionIds,
+    membershipFreezeActive: latestControlPlaneDiagnostics?.activeNodeViews
+      ?.membershipFreeze?.active === true,
+    toleranceReason: SURVIVOR_UNDER_REPLICATION_REASON,
+    voterCeiling: SURVIVING_VOTER_COUNT,
+    voterCounts: snapshot.voterCounts,
+    voterTargets: voterTargetRead.targets,
+  });
   const isSatisfied = isPostRebalanceCdcProjectionVisibleSatisfied({
     expectedPartitionIds: Array.from(snapshot.expectedPartitionIds),
     leaders: snapshot.leaders,
@@ -358,11 +383,13 @@ async function run(cluster) {
     publishedActiveNodeIds,
     projectedActiveNodeIds,
     controlPlaneDiagnostics: latestControlPlaneDiagnostics,
+    voterTargetVerdict,
   });
 
   assert.ok(
     isSatisfied,
-    'Post-rebalance CDC projection visibility contract must be satisfied',
+    'Post-rebalance CDC projection visibility contract must be satisfied ' +
+    `(voters: ${voterTargetVerdict.state})`,
   );
   console.log('[CLOSURE-VERIFICATION] Post-rebalance closure proven successfully.');
 

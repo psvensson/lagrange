@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2184,
+    "ordinary": 2186,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2201,
-  "digest": "fnv1a32-76320f44",
+  "censusSize": 2203,
+  "digest": "fnv1a32-b8c5dbc2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -809,6 +809,7 @@
     "test/distributed/harness/__tests__/constants.test.js": "ordinary",
     "test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js": "ordinary",
     "test/distributed/harness/__tests__/convergence-budget-calibration.test.js": "ordinary",
+    "test/distributed/harness/__tests__/convergence-voter-targets.test.js": "ordinary",
     "test/distributed/harness/__tests__/determinism-tripwire.test.js": "ordinary",
     "test/distributed/harness/__tests__/deterministic-simulator.test.js": "ordinary",
     "test/distributed/harness/__tests__/disk-full-under-load-scenario.test.js": "ordinary",
@@ -870,6 +871,7 @@
     "test/distributed/harness/__tests__/progress-wait.test.js": "ordinary",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "ordinary",
     "test/distributed/harness/__tests__/public-seam-durability-scenario.test.js": "ordinary",
+    "test/distributed/harness/__tests__/publication-convergence-claim.test.js": "ordinary",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "ordinary",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "ordinary",
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "ordinary",

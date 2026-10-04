@@ -1,3 +1,4 @@
+import {admitsPublicationConvergence} from './publication-convergence-claim.js';
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {isStartupAdminReachabilityTransientError} from
   './startup-readiness-evidence.js';
@@ -66,7 +67,7 @@ const LOAD_PUBLICATION_GATE_PROJECTION_DECISION_TABLE = Object.freeze([
     outcome: LOAD_PUBLICATION_GATE_PROJECTION_OUTCOME_APPLY,
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete === true &&
       evidence.loadPublicationGateWitnessUsable === true &&
       evidence.diagnosticActive !== true &&
@@ -80,7 +81,7 @@ const LOAD_PUBLICATION_GATE_PROJECTION_DECISION_TABLE = Object.freeze([
     outcome: LOAD_PUBLICATION_GATE_PROJECTION_OUTCOME_APPLY,
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete === true &&
       evidence.loadPublicationGateWitnessUsable === true &&
       evidence.diagnosticActive !== true &&
@@ -94,7 +95,7 @@ const LOAD_PUBLICATION_GATE_PROJECTION_DECISION_TABLE = Object.freeze([
     outcome: LOAD_PUBLICATION_GATE_PROJECTION_OUTCOME_APPLY,
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
@@ -111,7 +112,7 @@ const LOAD_PUBLICATION_GATE_PROJECTION_DECISION_TABLE = Object.freeze([
     outcome: LOAD_PUBLICATION_GATE_PROJECTION_OUTCOME_APPLY,
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
@@ -153,7 +154,7 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
         evidence.timeoutShaped === true ||
         evidence.adminProbeTimeoutShaped === true
       ) &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.snapshotWitnessClean === true &&
@@ -169,7 +170,7 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
         evidence.timeoutShaped === true ||
         evidence.adminProbeTimeoutShaped === true
       ) &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
@@ -185,7 +186,7 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
         evidence.timeoutShaped === true ||
         evidence.adminProbeTimeoutShaped === true
       ) &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
@@ -197,7 +198,7 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
       evidence.diagnosticActive !== true &&
       evidence.timeoutShaped === true &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.snapshotWitnessClean === true &&
@@ -210,7 +211,7 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
       evidence.diagnosticActive !== true &&
       evidence.timeoutShaped === true &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete === true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.snapshotWitnessClean === true &&
@@ -225,7 +226,7 @@ const STARTUP_ADMIN_AVAILABILITY_SUPPORT_DECISION_TABLE = Object.freeze([
       evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
       evidence.diagnosticActive !== true &&
       evidence.adminAvailabilityTransient === true &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.selectedSnapshotTimeoutOwnerRecoveryProjectionReady === true &&
@@ -329,10 +330,11 @@ function buildLoadPublicationGateProjectionContext(
     Array.isArray(snapshotCoverage.publicationDisagreementByNodeId) !== true ?
       snapshotCoverage.publicationDisagreementByNodeId :
       {};
-  const publicationGateReady = publicationConvergenceGate?.ready === true;
+  const publicationGateAdmitted =
+    admitsPublicationConvergence(publicationConvergenceGate);
   const loadPublicationGateWitness = normalizeLoadPublicationGateWitness(
     snapshotCoverage,
-    publicationGateReady,
+    publicationGateAdmitted,
   );
   const selectedTimeoutOwnerRecoveryEvidence =
     normalizeSelectedSnapshotTimeoutOwnerRecoveryEvidence(snapshotCoverage);
@@ -349,7 +351,7 @@ function buildLoadPublicationGateProjectionContext(
       [];
   return Object.freeze({
     readinessMode,
-    publicationGateReady,
+    publicationGateAdmitted,
     snapshotCoverageComplete: snapshotCoverage?.completeCoverage === true,
     selectedSnapshotAdminReady:
       snapshotCoverage?.selectedAdminReady === true ||
@@ -386,7 +388,7 @@ function normalizeLoadPublicationGateProjectionEvidence(
     diagnostic.error.length > ZERO;
   return Object.freeze({
     readinessMode: projectionContext.readinessMode,
-    publicationGateReady: projectionContext.publicationGateReady === true,
+    publicationGateAdmitted: projectionContext.publicationGateAdmitted === true,
     snapshotCoverageComplete:
       projectionContext.snapshotCoverageComplete === true,
     selectedSnapshotAdminReady:
@@ -493,7 +495,8 @@ function buildStartupSnapshotProjectionContext(
       [];
   return Object.freeze({
     readinessMode,
-    publicationGateReady: publicationConvergenceGate?.ready === true,
+    publicationGateAdmitted:
+      admitsPublicationConvergence(publicationConvergenceGate),
     snapshotCoverageComplete: snapshotCoverage?.completeCoverage === true,
     selectedSnapshotAdminReady:
       snapshotCoverage?.selectedAdminReady === true ||
@@ -565,7 +568,7 @@ function normalizeStartupSnapshotProjectionEvidence(
     [];
   return Object.freeze({
     readinessMode: projectionContext.readinessMode,
-    publicationGateReady: projectionContext.publicationGateReady === true,
+    publicationGateAdmitted: projectionContext.publicationGateAdmitted === true,
     snapshotCoverageComplete:
       projectionContext.snapshotCoverageComplete === true,
     selectedSnapshotAdminReady:

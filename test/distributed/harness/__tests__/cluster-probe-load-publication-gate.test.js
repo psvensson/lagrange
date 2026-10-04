@@ -803,3 +803,32 @@ test(
     );
   },
 );
+
+test(
+  'Unit: a startup active claim names that it does not claim publication ' +
+    'convergence; an unconverged load gate still fails',
+  async () => {
+    const startup = evaluatePriorityRecoveryCrossServiceInvariants({
+      readinessMode: 'startup',
+      allActive: true,
+      nodeDiagnostics: [],
+      publicationConvergenceGate: {ready: false, reasons: ['pending'],
+        claimState: 'publication_convergence_not_claimed_startup'},
+    });
+    const startupInvariant =
+      selectClusterActiveRequiresConvergenceInvariant(startup);
+    assert.equal(startupInvariant?.passed, true);
+    assert.equal(startupInvariant?.details?.publicationConvergenceClaimState,
+      'publication_convergence_not_claimed_startup');
+    assert.equal(startupInvariant?.details?.publicationConvergenceReady, false);
+    const load = evaluatePriorityRecoveryCrossServiceInvariants({
+      readinessMode: 'load',
+      allActive: true,
+      nodeDiagnostics: [],
+      publicationConvergenceGate: {ready: false, reasons: ['pending'],
+        claimState: 'publication_convergence_claimed_load'},
+    });
+    assert.equal(
+      selectClusterActiveRequiresConvergenceInvariant(load)?.passed, false);
+  },
+);

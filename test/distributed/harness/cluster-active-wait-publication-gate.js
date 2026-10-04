@@ -1,3 +1,4 @@
+import {PUBLICATION_CONVERGENCE_CLAIM_STATE} from './publication-convergence-claim.js';
 import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 import {
   TYPEOF_OBJECT,
@@ -369,8 +370,13 @@ function evaluatePriorityRecoveryCrossServiceInvariants(options = {}) {
     },
   });
 
+  // Startup readiness explicitly does not claim publication convergence
+  // (the gate says so by name); every other active claim requires it.
+  const publicationConvergenceNotClaimed =
+    publicationConvergenceGate.claimState ===
+      PUBLICATION_CONVERGENCE_CLAIM_STATE.NOT_CLAIMED_STARTUP;
   const clusterActiveRequiresConvergencePassed =
-    options.allActive === true ?
+    options.allActive === true && !publicationConvergenceNotClaimed ?
       publicationConvergenceGate.ready === true :
       true;
   invariants.push({
@@ -387,6 +393,8 @@ function evaluatePriorityRecoveryCrossServiceInvariants(options = {}) {
       mode: readinessMode,
       allActive: options.allActive === true,
       publicationConvergenceEvidenceState,
+      publicationConvergenceClaimState:
+        publicationConvergenceGate.claimState ?? null,
       publicationConvergenceReady: publicationConvergenceGate.ready === true,
       publicationConvergenceReasons: gateReasons,
     },
