@@ -13,7 +13,12 @@ import {
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
-import {awaitReplicaConsensusExit} from './replica-removal-consensus-exit.js';
+import {
+  REPLICA_CONSENSUS_EXIT_REASON,
+  awaitReplicaConsensusExit,
+} from './replica-removal-consensus-exit.js';
+import {GROUP_RETIREMENT_REASON} from
+  '../partition/group-retirement-evidence.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_REMOVE_EXECUTION_REASON = Object.freeze({
@@ -171,9 +176,44 @@ async function runRemovalEffectsOrThrow(
   return true;
 }
 
+/**
+ * When the retiring replica leaves consensus. A replica of a group retired
+ * as a unit (a verified group-retirement REMOVE, owner decision 2026-10-04)
+ * leaves at once: its whole group ends at the durable workflow transition,
+ * nobody proposes a conf change for it, and nothing commits in it again.
+ * Every other removal keeps participating until its own removal applies
+ * (ruling F2).
+ * @param {Object} handler
+ * @param {Object} request
+ * @param {Object|null} service
+ * @return {Promise<Object>} Frozen {reason}.
+ */
+function leaveConsensus(handler, request, service) {
+  const {operationId, partitionId, replicaId} = request;
+  if (request.groupRetirement?.retire === true) {
+    const exit = Object.freeze({
+      reason: REPLICA_CONSENSUS_EXIT_REASON.GROUP_RETIRED});
+    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
+      operationId, replicaId, partitionId, nodeId: handler.nodeId,
+      reason: exit.reason, groupRetirementKind: request.groupRetirement.kind,
+    });
+    return Promise.resolve(exit);
+  }
+  return handler.awaitReplicaRemovalConsensusExit(service, {
+    operationId,
+    replicaId,
+    partitionId,
+  });
+}
+
 async function performReplicaRemoval(handler, request, service, lifecycle,
   execution) {
-  const {operationId, partitionId, replicaId, reason} = request;
+  const {operationId, partitionId, replicaId} = request;
+  // A group retired as a unit records its retirement as such - on the
+  // REMOVING row (the row-driven reconcile proposes no conf change for it)
+  // and on the durable lifecycle row.
+  const reason = request.groupRetirement?.retire === true ?
+    GROUP_RETIREMENT_REASON : request.reason;
   handler.throwIfShuttingDown();
   await handler.waitForReplicaServingDrain(service);
   const retiringRow = await handler.publishReplicaRetiringRow({
@@ -182,6 +222,8 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
     partitionId,
     service,
     removalLifecycleSnapshot: lifecycle,
+    triggerReason: request.groupRetirement?.retire === true ?
+      GROUP_RETIREMENT_REASON : null,
   });
   if (retiringRow.deferred) {
     handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
@@ -189,11 +231,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
     return false;
   }
   execution.retiringRowDurable = true;
-  await handler.awaitReplicaRemovalConsensusExit(service, {
-    operationId,
-    replicaId,
-    partitionId,
-  });
+  await leaveConsensus(handler, request, service);
   handler.throwIfShuttingDown();
   const authority = await settleCanonicalLeaderClearOrThrow(
     handler,
@@ -438,7 +476,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * @private
      */
     async publishReplicaRetiringRow({operationId, replicaId, partitionId,
-      service: _service, removalLifecycleSnapshot}) {
+      service: _service, removalLifecycleSnapshot, triggerReason = null}) {
       if (removalLifecycleSnapshot.skipRemovingStatusWrite === true) {
         return {
           skipRemovingStatusWrite: true,
@@ -449,7 +487,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         await this.persistReplicaStatusWithRetry(
           replicaId,
           ReplicaStatus.REMOVING,
-          {partitionId},
+          triggerReason === null ? {partitionId} : {partitionId, triggerReason},
         );
         return {skipRemovingStatusWrite: false,
           deferred: false};
@@ -519,6 +557,21 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         backstopMs: REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS,
         signal: this.removalConsensusExitRelease.signal,
       });
+      if (exit.reason === REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP) {
+        // An alarm, never a normal exit (owner decision 2026-10-04): every
+        // spent timeout so far hid a true bug. The removal proceeds as
+        // before so a missed event never wedges the node.
+        this.logger.error(
+          REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT_BACKSTOP_ALARM, {
+            operationId,
+            replicaId,
+            partitionId,
+            nodeId: this.nodeId,
+            backstopMs:
+              REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS,
+            lastObservation: exit.lastObservation ?? null,
+          });
+      }
       this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
         operationId,
         replicaId,
@@ -633,6 +686,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      */
     async removeReplicaAsync(request) {
       const {operationId, replicaId} = request;
+      // request.groupRetirement: the verified group-retirement decision
+      // (verifyRemoveGroupRetirement), or absent for an ordinary REMOVE.
       const service = this.getTrackedService(replicaId);
       const removalLifecycleSnapshot =
         this.buildReplicaRemovalLifecycleSnapshot(replicaId);

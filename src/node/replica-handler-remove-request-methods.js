@@ -4,6 +4,8 @@ import {
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {verifyGroupRetirement} from
+  '../partition/group-retirement-evidence.js';
 import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
@@ -48,11 +50,68 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       });
     }
     /**
+     * Verify a REMOVE's group-retirement evidence against the durable
+     * workflow record before any removal work starts (owner decision
+     * 2026-10-04: a group retired by a durable cutover exits as a unit).
+     * Nothing to verify for an ordinary REMOVE, or when this request starts
+     * no work (the replica is unknown, already removed, or its removal is
+     * already running).
+     * @param {Object} request - REMOVE_REPLICA request.
+     * @return {Promise<Object|null>} The frozen group-retirement decision,
+     *   or null.
+     * @private
+     */
+    async verifyRemoveGroupRetirement(request) {
+      const evidence = request?.[ReplicaOperationField.GROUP_RETIREMENT];
+      const operationId = request?.[ReplicaOperationField.OPERATION_ID];
+      const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
+      const replica = this.getLocalReplica(replicaId);
+      if (evidence === undefined || evidence === null || !replica ||
+          replica.status === ReplicaStatus.REMOVED ||
+          this.hasInProgressReplicaRemoval(replicaId) ||
+          this.inProgressOperations.has(operationId)) {
+        return null;
+      }
+      return verifyGroupRetirement(this.getControlPlaneSystemTableGateway(),
+        evidence, request?.[ReplicaOperationField.PARTITION_ID]);
+    }
+    /**
+     * The typed answer to a REMOVE whose group-retirement evidence the
+     * durable record refused: nothing was fenced, nothing retires, the
+     * replica keeps serving.
+     * @param {Object} request - REMOVE_REPLICA request.
+     * @param {Object} decision - The refused decision.
+     * @return {Object} ERROR response.
+     * @private
+     */
+    refuseRemoveGroupRetirement(request, decision) {
+      const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_GROUP_RETIREMENT_REFUSED, {
+        operationId: request?.[ReplicaOperationField.OPERATION_ID],
+        partitionId: request?.[ReplicaOperationField.PARTITION_ID],
+        replicaId,
+        refusal: decision.refusal,
+        nodeId: this.nodeId,
+      });
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.ERROR,
+        {
+          error: REPLICA_HANDLER_ERROR_MSG.removeGroupRetirementRefused(
+            replicaId, decision.refusal),
+          groupRetirementRefusal: decision.refusal,
+          replicaId,
+          nodeId: this.nodeId,
+        },
+      );
+    }
+    /**
      * @param {Object} request
+     * @param {Object|null} [groupRetirement] - The verified group-retirement
+     *   decision, or null for an ordinary REMOVE.
      * @return {void}
      * @private
      */
-    startRemoveReplicaAsync(request) {
+    startRemoveReplicaAsync(request, groupRetirement = null) {
       const operationId = request?.[ReplicaOperationField.OPERATION_ID];
       const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
       const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
@@ -71,6 +130,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
                 partitionId,
                 replicaId,
                 reason,
+                groupRetirement,
               }).catch((error) => {
                 this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED, {
                   operationId,
@@ -118,6 +178,10 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
             nodeId: this.nodeId,
           },
         );
+      }
+      const groupRetirement = await this.verifyRemoveGroupRetirement(request);
+      if (groupRetirement !== null && groupRetirement.retire !== true) {
+        return this.refuseRemoveGroupRetirement(request, groupRetirement);
       }
       // Check if replica exists
       const replica = this.getLocalReplica(replicaId);
@@ -168,7 +232,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
         if (!this.hasInProgressReplicaRemoval(replicaId)) {
           this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
-          this.startRemoveReplicaAsync(request);
+          this.startRemoveReplicaAsync(request, groupRetirement);
         }
         this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_IN_PROGRESS, {
           replicaId,
@@ -249,7 +313,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         service: replica.service || this.getTrackedService(replicaId),
       });
       // Start async removal after ACK has returned.
-      this.startRemoveReplicaAsync(request);
+      this.startRemoveReplicaAsync(request, groupRetirement);
       return this.buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.INITIATED,
         {

@@ -20,7 +20,8 @@ const REPLICA_HANDLER_DEFAULT = Object.freeze({
   STATUS_WRITE_RETRY_TIMEOUT_MS: TIME_MS.SECOND * NUM.THIRTY,
   // The bound on a retiring replica's wait for its own removal to apply
   // (owner ruling F2): inside the replica state machine's one-minute REMOVING
-  // timeout, so the removal still completes as REMOVED.
+  // timeout, so the removal still completes as REMOVED. An alarm, never a
+  // normal exit (owner decision 2026-10-04): its firing logs at ERROR.
   REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS: TIME_MS.SECOND * NUM.THIRTY,
 });
 
@@ -76,6 +77,12 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
     'Replica removal deferred: its REMOVING row could not be made durable',
   REMOVE_CONSENSUS_EXIT:
     'Retiring replica left consensus; retiring its port',
+  REMOVE_CONSENSUS_EXIT_BACKSTOP_ALARM:
+    'Consensus exit backstop elapsed: no committed exit event arrived for ' +
+    'a retiring replica',
+  REMOVE_GROUP_RETIREMENT_REFUSED:
+    'Replica removal refused: its group-retirement evidence does not match ' +
+    'the durable workflow record',
   REMOVE_FAILED: 'Replica removal failed',
   REMOVE_STATUS_WRITE_DEFERRED:
     'Replica removal status write deferred after retryable control-plane failure',
@@ -126,6 +133,8 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   CACHE_MISSING_FILTER: 'System table cache missing filter',
   PARTITION_METADATA_MISSING: (partitionId) =>
     `Partition metadata not found for ${partitionId}`,
+  removeGroupRetirementRefused: (replicaId, refusal) =>
+    `Replica ${replicaId} group retirement refused: ${refusal}`,
   REMOVE_PARTITION_MISMATCH: (replicaId, localPartitionId, requestPartitionId) =>
     `Replica ${replicaId} belongs to partition ${localPartitionId}, ` +
     `not requested partition ${requestPartitionId}`,
