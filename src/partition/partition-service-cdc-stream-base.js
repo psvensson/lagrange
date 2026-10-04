@@ -1,5 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceWriteMetricsBase} from './partition-service-write-metrics-base.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   startPartitionSizeCadence, stopPartitionSizeCadence,
 } from './partition-service-size-cadence.js';
@@ -30,6 +31,33 @@ const {
   SYSTEM_TABLE_NAME,
   fs,
 } = PARTITION_SERVICE_SHARED;
+
+const COMMIT_DEADLINE_WAIT = Object.freeze({
+  wait: 'PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS',
+  awaited: 'consensus commit of one admitted partition write',
+});
+
+/**
+ * Report a spent commit deadline for one pending write.
+ * @param {Object} service - Partition service.
+ * @param {Object} pending - {entryId, proposal, logIndex} from the queue.
+ * @param {Object} deadline - {timeoutMs, startedAtMs} on the replica clock.
+ * @private
+ */
+function reportCommitDeadlineSpent(service, pending, deadline) {
+  reportWaitBoundSpent(service.logger, {
+    ...COMMIT_DEADLINE_WAIT,
+    boundMs: deadline.timeoutMs,
+    elapsedMs: service.timeSource.now() - deadline.startedAtMs,
+    lastObserved: {
+      proposal: pending.proposal ?? null,
+      logIndex: pending.logIndex,
+      role: service.role ?? null,
+      pendingCommitCount: service.proposalQueue?.size ?? null,
+    },
+    scope: {partitionId: service.partitionId, entryId: pending.entryId},
+  });
+}
 
 class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
@@ -278,12 +306,15 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     // write still pending at it is released with the write kernel's typed
     // answer: one handed to consensus may still commit, so its outcome is not
     // known here; one never handed to it was not proposed.
+    const startedAtMs = this.timeSource.now();
     const timeoutId = this.timeSource.setTimeout(() => {
-      this.proposalQueue.releaseEntry(entryId, (pending) =>
-        buildReleasedPendingWriteAnswer(pending, this.partitionId, {
+      this.proposalQueue.releaseEntry(entryId, (pending) => {
+        reportCommitDeadlineSpent(this, pending, {timeoutMs, startedAtMs});
+        return buildReleasedPendingWriteAnswer(pending, this.partitionId, {
           cause: PARTITION_WRITE_RELEASE_CAUSE.COMMIT_DEADLINE_EXCEEDED,
           deadlineMs: timeoutMs,
-        }));
+        });
+      });
     }, timeoutMs);
     try {
       this.proposalQueue.enqueue(entryId, buildPendingProposal({

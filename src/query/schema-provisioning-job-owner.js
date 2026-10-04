@@ -5,6 +5,7 @@ import {
   buildOwnerContractOutcome,
 } from '../control-plane/owner-contract-outcome.js';
 import {getRemainingBudgetMs} from '../control-plane/timeout-budget.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {DurableWorkflowCoordinator} from
   '../workflow/durable-workflow-coordinator.js';
 import {
@@ -156,10 +157,46 @@ function resolveOutcomeReasonCodes(workflow, options) {
   return Array.isArray(workflow.reasonCodes) ? workflow.reasonCodes : [];
 }
 
+const SCHEMA_PROVISIONING_DEADLINE_WAIT = Object.freeze({
+  wait: 'schema_provisioning_request_deadline',
+  awaited: 'schema provisioning job outcome within the request budget',
+  armed: 'race_timer_fired',
+  preExpired: 'budget_spent_before_race',
+});
+
+/**
+ * Report the spent request deadline of one schema provisioning request.
+ * @param {Object} owner - SchemaProvisioningJobOwner.
+ * @param {Object} workflow - Prologue workflow.
+ * @param {Object} timeoutBudget - The request budget.
+ * @param {string} phase - Where the deadline was found spent.
+ * @private
+ */
+function reportSchemaProvisioningDeadlineSpent(
+  owner,
+  workflow,
+  timeoutBudget,
+  phase,
+) {
+  const elapsedMs = owner.now() - timeoutBudget.startedAtMs;
+  reportWaitBoundSpent(owner.logger, {
+    ...SCHEMA_PROVISIONING_DEADLINE_WAIT,
+    boundMs: timeoutBudget.configuredBudgetMs,
+    elapsedMs,
+    lastObserved: {
+      phase,
+      workflowStatus: workflow.status,
+      scheduledRetry: owner.retryTimersByWorkflowId.has(workflow.workflowId),
+    },
+    scope: {workflowId: workflow.workflowId, ownerId: owner.ownerId},
+  });
+}
+
 class SchemaProvisioningJobOwner {
   constructor(options = {}) {
     this.repository = options.repository;
     this.now = options.now || (() => Date.now());
+    this.logger = options.logger || null;
     this.ownerId = options.ownerId || `schema-worker-${randomUUID()}`;
     this.leaseMs = options.leaseMs || SCHEMA_PROVISIONING_DEFAULT.LEASE_MS;
     this.retryAfterMs = options.retryAfterMs ||
@@ -459,13 +496,23 @@ class SchemaProvisioningJobOwner {
     if (!timeoutBudget) return execution;
     const remainingMs = getRemainingBudgetMs(timeoutBudget, {now: this.now});
     if (remainingMs <= 1) {
+      reportSchemaProvisioningDeadlineSpent(
+        this, workflow, timeoutBudget,
+        SCHEMA_PROVISIONING_DEADLINE_WAIT.preExpired,
+      );
       return this.buildOutcome(workflow, {provisioningDeadlineExpired: true});
     }
     let timerId;
     const deadline = new Promise((resolve) => {
-      timerId = this.setTimeoutFn(() => resolve(
-        this.buildOutcome(workflow, {provisioningDeadlineExpired: true}),
-      ), Math.max(1, remainingMs - 1));
+      timerId = this.setTimeoutFn(() => {
+        reportSchemaProvisioningDeadlineSpent(
+          this, workflow, timeoutBudget,
+          SCHEMA_PROVISIONING_DEADLINE_WAIT.armed,
+        );
+        resolve(
+          this.buildOutcome(workflow, {provisioningDeadlineExpired: true}),
+        );
+      }, Math.max(1, remainingMs - 1));
     });
     try {
       return await Promise.race([execution, deadline]);

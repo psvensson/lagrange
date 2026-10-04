@@ -393,16 +393,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Learner promotion wake coalesced into the in-flight check',
   LEARNER_PROMOTION_ROW_REASSERTED:
     'Learner promotion re-asserted the durable services row',
-  LEADER_DURABILITY_UNFIT:
-    'Replica local durability is unfit for leadership: writes are not ' +
-    'reaching durable storage (stuck transaction or commit/durable ' +
-    'divergence); shedding leadership if a viable successor exists',
-  LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK:
-    'Durability-unfit leader demoted WITHOUT a provable successor: the ' +
-    'bounded fallback expired with no follower ack inside the viability ' +
-    'window. Holding the seat forever starves the very ack evidence the ' +
-    'viability probe needs (self-sustaining unfit-leader deadlock); ' +
-    'demotion opens the role-gated stuck-transaction heal',
   LEADER_DURABILITY_RECOVERED:
     'Replica local durability recovered; leadership fitness restored',
   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
@@ -512,14 +502,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   BEGINNING_TRANSACTION: 'Beginning transaction',
   PREPARING_TRANSACTION: 'Preparing transaction',
   PREPARED_STATE_RECONSTRUCTED: 'Prepared transaction state reconstructed',
-  PREPARED_STATE_HOLD_TIMEOUT: 'Prepared transaction state hold timeout',
-  ACTIVE_TRANSACTION_HOLD_TIMEOUT:
-    'Active transaction held beyond its legal window; rolled back ' +
-    '(orphaned participant hold — run-23 zombie class)',
-  STUCK_TRANSACTION_HEAL_DEFERRED:
-    'Stuck transaction heal deferred: rolling back on a leader/candidate ' +
-    'would re-mint acked raft indices; waiting for durability-fitness ' +
-    'demotion',
   COMMITTING_TRANSACTION: 'Committing transaction',
   ROLLING_BACK_TRANSACTION: 'Rolling back transaction',
   EXECUTING_QUERY: 'Executing query',

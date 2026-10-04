@@ -15,7 +15,53 @@ import {
   FUNCTION_LOG_MSG,
   FUNCTION_SUBSYSTEM,
 } from './function-constants.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
+const FUNCTION_QUERY_WAIT = Object.freeze({
+  wait: 'FUNCTION_DEFAULT.QUERY_TIMEOUT_MS',
+  awaited: 'SQL engine result for one function query',
+});
+
+/**
+ * Report a spent function-query timeout and mark the rejection error so
+ * the generic failure log does not repeat it.
+ * @param {Object} executor - FunctionQueryExecutor.
+ * @param {Object} spent - {error, sql, paramCount, timeoutMs, startedAtMs}.
+ * @return {Error} The marked timeout error.
+ * @private
+ */
+function reportFunctionQueryTimeoutSpent(executor, spent) {
+  reportWaitBoundSpent(executor.logger, {
+    ...FUNCTION_QUERY_WAIT,
+    boundMs: spent.timeoutMs,
+    elapsedMs: Date.now() - spent.startedAtMs,
+    lastObserved: {
+      engineResultPending: true,
+      paramCount: spent.paramCount,
+      sql: spent.sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
+    },
+  });
+  spent.error.waitBoundSpentReported = true;
+  return spent.error;
+}
+
+/**
+ * Log a function-query failure unless it is the spent timeout already
+ * reported as wait_bound_spent (one ERROR per failure, never two).
+ * @param {Object} executor - FunctionQueryExecutor.
+ * @param {string} sql - The query.
+ * @param {Error} error - The failure.
+ * @private
+ */
+function logUnreportedFunctionQueryFailure(executor, sql, error) {
+  if (error?.waitBoundSpentReported === true) {
+    return;
+  }
+  executor.logger.error(FUNCTION_LOG_MSG.QUERY_EXECUTE_FAILURE, {
+    sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
+    error: error.message,
+  });
+}
 
 /**
  * FunctionQueryExecutor provides programmatic query execution for
@@ -104,10 +150,16 @@ class FunctionQueryExecutor {
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(
-        () => reject(new Error(
-          `${FUNCTION_ERROR_MSG.QUERY_TIMEOUT_PREFIX}${timeout}` +
-          `${FUNCTION_ERROR_MSG.QUERY_TIMEOUT_SUFFIX}`,
-        )),
+        () => reject(reportFunctionQueryTimeoutSpent(this, {
+          error: new Error(
+            `${FUNCTION_ERROR_MSG.QUERY_TIMEOUT_PREFIX}${timeout}` +
+            `${FUNCTION_ERROR_MSG.QUERY_TIMEOUT_SUFFIX}`,
+          ),
+          sql,
+          paramCount: params.length,
+          timeoutMs: timeout,
+          startedAtMs: startTime,
+        })),
         timeout,
       );
     });
@@ -134,10 +186,7 @@ class FunctionQueryExecutor {
         success: true,
       };
     } catch (error) {
-      this.logger.error(FUNCTION_LOG_MSG.QUERY_EXECUTE_FAILURE, {
-        sql: sql.substring(0, FUNCTION_LOG_LIMIT.SQL_SNIPPET_LENGTH),
-        error: error.message,
-      });
+      logUnreportedFunctionQueryFailure(this, sql, error);
       throw error;
     } finally {
       clearTimeout(timeoutId);

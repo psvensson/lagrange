@@ -31,7 +31,40 @@ import {
 } from './parallel-query-coordinator-hedging-methods.js';
 
 
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+
 const QUERY_ID_PREFIX = 'q-';
+const CHUNK_TIMEOUT_WAIT = Object.freeze({
+  wait: 'QUERY_DEFAULTS.COORDINATOR_QUERY_TIMEOUT_MS',
+  awaited: 'every partition result of one fan-out chunk',
+});
+const CHUNK_TIMEOUT_PENDING_SAMPLE = 8;
+
+/**
+ * Report a spent fan-out chunk timeout with the chunk's settle state.
+ * @param {Object} coordinator - ParallelQueryCoordinator.
+ * @param {Object} spent - {partitionIds, metrics, timeoutMs, startedAtMs}.
+ * @private
+ */
+function reportChunkTimeoutSpent(coordinator, spent) {
+  const settledPartitionIds = spent.partitionIds.filter(
+    (partitionId) => spent.metrics?.partitionMetrics?.has?.(partitionId),
+  );
+  reportWaitBoundSpent(coordinator.logger, {
+    ...CHUNK_TIMEOUT_WAIT,
+    boundMs: spent.timeoutMs,
+    elapsedMs: Date.now() - spent.startedAtMs,
+    lastObserved: {
+      chunkPartitionCount: spent.partitionIds.length,
+      settledPartitionCount: settledPartitionIds.length,
+      pendingPartitionIds: spent.partitionIds
+        .filter((partitionId) => !settledPartitionIds.includes(partitionId))
+        .slice(0, CHUNK_TIMEOUT_PENDING_SAMPLE),
+      speculativeExecutions: spent.metrics?.speculativeExecutions ?? null,
+    },
+    scope: {queryId: spent.metrics?.queryId ?? null},
+  });
+}
 const QUERY_CANCELLED_ERROR = 'Query cancelled';
 
 /**
@@ -337,8 +370,15 @@ class ParallelQueryCoordinator {
 
     try {
       // Create timeout promise with clearable timer
+      const chunkStartedAtMs = Date.now();
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
+          reportChunkTimeoutSpent(this, {
+            partitionIds,
+            metrics,
+            timeoutMs: effectiveTimeoutMs,
+            startedAtMs: chunkStartedAtMs,
+          });
           reject(new Error(
             `${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX}` +
             `${effectiveTimeoutMs}${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX}`,

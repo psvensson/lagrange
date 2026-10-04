@@ -9,6 +9,12 @@
 import {
   GUARDRAIL_ERROR_MSG as ERR,
 } from './guardrail-constants.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
+const TOKEN_TIMEOUT_WAIT = Object.freeze({
+  wait: 'CancellationToken.withTimeout',
+  awaited: 'cancellation-scoped work completing before the token timeout',
+});
 
 /**
  * Token for cooperative cancellation. Supports parent-child
@@ -111,7 +117,18 @@ class CancellationToken {
    */
   withTimeout(ms) {
     const child = this.createChild();
+    const startedAtMs = Date.now();
     const timerId = setTimeout(() => {
+      reportWaitBoundSpent(null, {
+        ...TOKEN_TIMEOUT_WAIT,
+        boundMs: ms,
+        elapsedMs: Date.now() - startedAtMs,
+        lastObserved: {
+          childCancelled: child.isCancelled(),
+          parentCancelled: this._cancelled,
+          parentChildTokenCount: this._children.length,
+        },
+      });
       child.cancel(ERR.TIMEOUT_EXCEEDED);
     }, ms);
     child.onCancel(() => clearTimeout(timerId));

@@ -20,8 +20,13 @@ import {
   isRetryableManagedSplitExecutionFailure,
   resolveRetryableManagedSplitExecutionDecisionType,
 } from './managed-split-retry-policy.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_OBJECT = 'object';
+const MERGE_SAME_OWNER_RESYNC_WAIT = Object.freeze({
+  wait: 'runMergeOwnerLaneStepWithSameOwnerResync.attempts',
+  awaited: 'merge owner lane step accepted after same-owner durable re-sync',
+});
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_MERGE_EXECUTION_FAILURE = 'merge_execution_failure';
 const LOCAL_STR_MERGE_EXECUTION_DEFERRED = 'merge_execution_deferred';
@@ -471,6 +476,7 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @private
    */
   async runMergeOwnerLaneStepWithSameOwnerResync(stepOptions, attempts = 2) {
+    const startedAtMs = this.now();
     let lastError = null;
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {
@@ -485,6 +491,17 @@ class ManagedMergeWorkflowPersistenceMethods {
         }
       }
     }
+    reportWaitBoundSpent(this.logger, {
+      ...MERGE_SAME_OWNER_RESYNC_WAIT,
+      boundMs: null,
+      elapsedMs: this.now() - startedAtMs,
+      lastObserved: {
+        attempts,
+        stepName: stepOptions.stepName ?? null,
+        lastError: lastError?.message || String(lastError),
+      },
+      scope: {workflowId: stepOptions.workflowId ?? null},
+    });
     throw lastError;
   }
 
