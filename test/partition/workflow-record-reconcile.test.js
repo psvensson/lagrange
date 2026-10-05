@@ -25,6 +25,8 @@ import {test} from '../../src/test-helpers/tap.js';
 import {QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
 import {claimWorkflowOwnershipCore} from
   '../../src/partition/managed-workflow-ownership-core.js';
+import {refuseRecordChange} from
+  '../../src/partition/managed-workflow-record-store.js';
 import {buildWorkflow} from './managed-split-workflow-test-helpers.js';
 import {
   FIXTURE_LEFT_PARTITION_ID,
@@ -136,14 +138,23 @@ async (t) => {
     metadata: {workflowId, sourcePartitionId: SOURCE,
       targetPartitionVersion: 2, targetPartitionIds: [LEFT, RIGHT]},
     createdAt: 1000, updatedAt: 1000}, store.tablesRow());
+  // Past half its lease term: the change's write renews the lease from the
+  // clock, so every encoding of it carries other bytes.
+  clock.value += Math.ceil(a.workflow.workflowLeaseMs * 0.6);
   store.delayOnce(({writer, sql, params}) => writer === 'A' &&
     /^UPDATE tables/u.test(sql) && params.includes('split_catchup'));
-  const advanced = await a.workflow.advanceSplitPhase(workflowId,
-    'split_catchup');
+  // A change whose own precondition refuses it once applied (the step's
+  // predecessor state): re-applied to its own late-landed write it would
+  // answer a false refusal.
+  const answer = await a.workflow.workflowCoordinator.updateWorkflow(
+    workflowId, (current) => (current.status === 'split_backfilling' ?
+      {...current, status: 'split_catchup'} :
+      refuseRecordChange('state-not-expected'))).then(() => 'landed',
+    (error) => error.recordChangeOutcome ?? error.message);
   t.equal(store.delays.length, 0, 'setup: the submission failed and its ' +
     'entry landed later');
-  t.equal(advanced, true, 'the landed step is reported landed (no false ' +
-    'refusal)');
+  t.equal(answer, 'landed', 'the landed change is reported landed (no ' +
+    'false refusal)');
   t.equal(store.tablesRow().partition_transition_state, 'split_catchup',
     'the record holds it');
   t.equal(store.writes.filter((write) => write.changes > 0 &&

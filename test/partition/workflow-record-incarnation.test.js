@@ -19,6 +19,9 @@
  *     registration's partitions-row inputs are re-validated at its turn
  *     against the compared record (the source is not at the record's active
  *     epoch) and it is refused, though the record's generation matches.
+ *  A4 (split) a partitions view MISSING a sibling row re-derives the same
+ *     short sibling set at the turn; the record's own committed partition
+ *     count refuses it (the sibling would never be carried forward).
  * V6-B phase never backwards past the cutover (both families):
  *  B1 a non-retryable START failure after the acknowledgements drove the
  *     record to its cutover: no FAILED, the phase stays, one typed
@@ -330,6 +333,29 @@ for (const family of Object.keys(FAMILY)) {
       [], 'A wrote nothing');
     t.same(sentByA, [], 'A sent nothing');
   });
+
+  if (family === 'split') {
+    test('V6-A4 split: a registration from a partitions view missing a ' +
+      'sibling is refused by the record\'s committed partition count',
+    async (t) => {
+      const store = spec.store();
+      const clock = {now: 1000};
+      const sentByA = [];
+      const missingSibling = store.partitionIds().filter((id) =>
+        id !== 'users-p3').map((id) => store.partitionRow(id));
+      const a = owner(spec, store, {name: 'A', clock, sent: sentByA,
+        partitions: missingSibling});
+      const answer = await spec.start(a).then((result) => result,
+        (error) => ({threw: error.message}));
+      await turns(100);
+      t.equal(answer.success, false, 'A answered a refusal');
+      t.equal(answer.reason, 'registration-input-moved',
+        'typed: an input of the registration moved');
+      t.same(writesOf(store, 'A', 0).filter((write) => write.changes > 0),
+        [], 'A wrote nothing');
+      t.same(sentByA, [], 'A sent nothing');
+    });
+  }
 
   for (const [label, failure, forbidden] of [
     ['B1 a non-retryable', () => new Error('peer closed'), STATE.FAILED],

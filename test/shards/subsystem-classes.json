@@ -28,7 +28,7 @@
   "censusSize": 2216,
   "digest": "fnv1a32-48b1e479",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8c3dd76d",
+  "observationDigest": "fnv1a32-c553f5cf",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8114,7 +8114,8 @@
     },
     "test/partition/workflow-record-reconcile.test.js": {
       "files": [
-        "src/partition/managed-workflow-ownership-core.js"
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-store.js"
       ]
     },
     "test/partition/workflow-record-same-owner-race.test.js": {

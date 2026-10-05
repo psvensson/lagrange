@@ -416,8 +416,12 @@ test('merge cutover - acks recover the workflow from the durable ' +
 test('merge cutover - 3-partition table: the non-participating sibling ' +
     'is carried into the target epoch and stays routable (D1 guard)',
 async (t) => {
+  // The table row's committed partition count is its three partitions.
   const fixture = await startMergedFixture(t, {
     partitionInfos: createThreePartitionInfos(),
+    durableTableRow: {table_id: 'tbl-users', table_name: 'users',
+      partition_key: 'id', active_partition_version: 1, partition_count: 3,
+      partition_transition_state: null, partition_transition_metadata: null},
   });
   for (const partitionId of [
     FIXTURE_LEFT_PARTITION_ID,
@@ -619,6 +623,9 @@ test('merge terminal - after full completion the transition clears and a ' +
     state: 'NORMAL',
   };
 
+  // The later splits that produced them recorded the table's live
+  // partition count (the merged target and the two new partitions).
+  fixture.durableTableRow.partition_count = 3;
   const secondResult = await fixture.workflow.execute({
     leftPartitionId: secondLeftId,
     rightPartitionId: secondRightId,

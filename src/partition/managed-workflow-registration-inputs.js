@@ -14,7 +14,10 @@
  *    persisted (topologySnapshot.sourcePartitionKeyRanges);
  *  - the sibling set (every same-table partition at the active epoch outside
  *    the workflow, carried forward at cutover) re-derived by the owner's own
- *    resolver against the compared record equals the registered one.
+ *    resolver against the compared record equals the registered one, and
+ *    the sources and siblings together are exactly the record's own
+ *    committed partition_count (a view missing a partition row cannot
+ *    re-derive the same short set unnoticed).
  * Inputs: the owner (getPartitionInfo, resolveActivePartitionVersion, the
  * family's sibling resolver), the registration and the compared row.
  * Output: null (every input holds) or the name of the first input that
@@ -40,6 +43,13 @@ const REGISTRATION_INPUT = Object.freeze({
 function partitionVersionOf(row) {
   const version = Number(row?.partition_version ?? row?.partitionVersion);
   return Number.isInteger(version) && version > 0 ? version : 1;
+}
+
+// The record's committed partition count (the schema default 1 when the
+// row does not spell it out).
+function partitionCountOf(row) {
+  const count = Number(row?.partition_count);
+  return Number.isInteger(count) && count > 0 ? count : 1;
 }
 
 function sameRange(left, right) {
@@ -86,9 +96,11 @@ function registrationInputsRefusalOf(owner, {registration, storedRow,
   sourceIds, deriveSiblings}) {
   const metadata = registration?.metadata || {};
   const activeVersion = owner.resolveActivePartitionVersion(storedRow);
+  const siblings = metadata[FIELD.SIBLING_PARTITION_IDS];
+  const counted = sourceIds.length + (Array.isArray(siblings) ?
+    siblings.length : 0) === partitionCountOf(storedRow);
   return movedSourceOf(owner, metadata, sourceIds, activeVersion) ??
-    (sameIdSet(deriveSiblings(storedRow),
-      metadata[FIELD.SIBLING_PARTITION_IDS]) ? null :
+    (counted && sameIdSet(deriveSiblings(storedRow), siblings) ? null :
       REGISTRATION_INPUT.SIBLINGS);
 }
 

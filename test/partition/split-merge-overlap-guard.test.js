@@ -72,12 +72,14 @@ function parseDurableTransition(tableInfo) {
  * @param {string} tableName - Table name.
  * @return {Object} Durable tables row.
  */
-function createDurableTableRow(tableId, tableName) {
+function createDurableTableRow(tableId, tableName, partitionCount = 1) {
   return {
     table_id: tableId,
     table_name: tableName,
     partition_key: 'id',
     active_partition_version: 1,
+    // The table's committed partition count (its live partitions).
+    partition_count: partitionCount,
     partition_transition_state: null,
     partition_transition_metadata: null,
   };
@@ -168,8 +170,9 @@ test('overlap-refused-at-registration: a split whose source key range ' +
   const usersTableRow = createDurableTableRow(
     FIXTURE_TABLE_ID,
     FIXTURE_TABLE_NAME,
+    Object.keys(createThreePartitionInfos()).length,
   );
-  const ordersTableRow = createDurableTableRow('tbl-orders', 'orders');
+  const ordersTableRow = createDurableTableRow('tbl-orders', 'orders', 2);
   const allTableRows = [usersTableRow, ordersTableRow];
   const partitionById = {
     ...createThreePartitionInfos(),
@@ -252,11 +255,12 @@ test('overlap-refused-at-registration: a split whose source key range ' +
 test('durable-overlap-validation: the refusal is driven by the ' +
   'durable transition rows alone — no process-local handle sees the ' +
   'in-flight transition', async (t) => {
+  const partitionInfos = createThreePartitionInfos();
   const durableTableRow = createDurableTableRow(
     FIXTURE_TABLE_ID,
     FIXTURE_TABLE_NAME,
+    Object.keys(partitionInfos).length,
   );
-  const partitionInfos = createThreePartitionInfos();
   persistForeignInFlightSplit({
     durableTableRow,
     sourcePartitionId: FIXTURE_RIGHT_PARTITION_ID,
@@ -315,11 +319,12 @@ test('durable-overlap-validation: the refusal is driven by the ' +
 test('restart-surviving-guard: a fresh workflow instance over the ' +
   'same durable store still refuses the overlapping registration',
 async (t) => {
+  const partitionInfos = createThreePartitionInfos();
   const durableTableRow = createDurableTableRow(
     FIXTURE_TABLE_ID,
     FIXTURE_TABLE_NAME,
+    Object.keys(partitionInfos).length,
   );
-  const partitionInfos = createThreePartitionInfos();
   persistForeignInFlightSplit({
     durableTableRow,
     sourcePartitionId: FIXTURE_RIGHT_PARTITION_ID,
@@ -439,6 +444,7 @@ test('terminal durable transitions do not block registration ' +
   const usersTableRow = createDurableTableRow(
     FIXTURE_TABLE_ID,
     FIXTURE_TABLE_NAME,
+    Object.keys(createThreePartitionInfos()).length,
   );
   const ordersTableRow = createDurableTableRow('tbl-orders', 'orders');
   const allTableRows = [usersTableRow, ordersTableRow];

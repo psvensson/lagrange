@@ -236,7 +236,7 @@ storedRow)`; production execute always passes it):
 | partition_key (primary key column), table id/name | tables row | generation (CAS); immutable after create |
 | overlap guard (in-flight transitions' ranges) | tables row | generation (CAS) |
 | source partition row(s): existence, partition_version, key range | partitions rows | (a) re-validated at the turn: each source row, read again from the view at the change's turn, exists, is NORMAL, has partition_version = the compared record's active_partition_version and the key range the registration persisted |
-| sibling set (same-table partitions at the active epoch, carried forward at cutover) | partitions rows | (a) re-derived at the turn with the owner's own resolver against the compared record and compared as a set |
+| sibling set (same-table partitions at the active epoch, carried forward at cutover) | partitions rows | (a) re-derived at the turn with the owner's own resolver against the compared record and compared as a set, AND sources + siblings = the compared record's own committed `partition_count` (a view missing a row re-derives the same short set; the count does not) |
 | merged target id / split children ids | the existing transition (tables row) or a fresh mint | generation (CAS) for a reused id; a fresh mint is not a read input |
 | desired RF (source row policy), size bytes, leader, routable / discovered / candidate nodes, topology snapshot (`resolveTopologySnapshot`, awaited) | partitions / services / topology | advisory: not a safety input of the record. Each is re-checked by the step that acts on it (admission probe, child-provisioning precheck, provisioning convergence, cutover readiness); a stale value can only produce a deferral or a refused step, never a write over another record |
 
@@ -321,3 +321,37 @@ in-flight record (attempt 0) whose pre-upgrade fences exceed the generation
 is distinguished from later attempts only by the explicit attempt field
 (acks from upgraded sources, evidence, tombstones), not by the fence order.
 (3) Advisory inputs are by design not covered (table above).
+
+### Tables-row reader/writer census (round 7)
+
+Writers of the transition columns: only the record store (every split/merge
+change, registration and clear) - plus INSERTs at table creation
+(table-creation-service-create-table.js) and seed registration of the system
+tables (seed-registration-phase.js), which leave the transition columns null
+and get the generation from the schema default (0). Other writers of the
+same row that do NOT touch the transition columns and do not advance the
+generation: the migration coordinator (schema_definition, partition_count =
+the live partition count), table-policy-service (table_policies). Neither is
+a registration input except partition_count, which the migration sets to the
+live count (no structural change). Readers of the transition columns: the
+record store and the owners' decoders, routing (sql-query-engine-table-
+routing-methods.js), the epoch contract, group-retirement evidence/resume/
+tombstones (authoritative reads), the source replication state (cache),
+mirror replay cursor, the admin readiness diagnostics (projects state and
+metadata only) - none needs the generation. Row images: the CDC row fetch is
+`SELECT *` (the column rides every cache image); the system-table cache
+stores whole rows. A cache/view row from before the upgrade lacks the field
+and decodes as generation 0 (a CAS on it is refused and re-read). Snapshot
+install of the `tables` partition: a snapshot taken by a node without the
+column lacks it; the epic's upgrade note requires every node upgraded first.
+
+Also found (CDC, not changed here): a compare-and-swap UPDATE's CDC row fetch
+re-selects the row with the UPDATE's own WHERE (partition-cdc-
+parameterized-sql.js), so after any record write whose WHERE names the
+previous metadata/state/generation it logs "No row found for CDC update" and
+emits no row image; the cache learns the record by the catch-up hydration
+instead. Pre-existing for every record write after the registration; with
+the generation in every WHERE (never null, so never dropped from the
+refetch) it now covers the registration too. Owner: the CDC row fetch
+(re-select by the row's primary key, which needs the table schema for user
+tables) - recorded follow-up, not changed in this quest.
