@@ -81,7 +81,9 @@ const TARGET_THRESHOLD = 12;
 // origin/main d60c30921 merge (consensus-cutover closeout tree).
 // 2026-10-05: tightened 1770 -> 1769 on the checker's hint (the
 // group-retired tombstone record's text fields go through one helper).
-const BASELINE_COUNT = 1769;
+// 2026-10-05: tightened 1769 -> 1768 on the checker's hint (the record
+// store's change functions and the split decoder extracted helpers).
+const BASELINE_COUNT = 1768;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
