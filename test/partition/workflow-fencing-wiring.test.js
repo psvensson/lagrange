@@ -92,10 +92,6 @@ test('split source ack carries the workflow fence token ' +
   const claim = await workflow.claimSplitWorkflowOwnership(
     record.workflowId,
   );
-  workflow.ensureCanonicalSplitParticipants(
-    record.workflowId,
-    record.metadata,
-  );
   const fenceToken = claim.workflow.fenceToken;
 
   const ackResult = await workflow.acknowledgeSourceParticipant(
@@ -130,10 +126,6 @@ test('split stale-fenced source ack is rejected with a typed outcome ' +
   await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(
     record.workflowId,
-  );
-  workflow.ensureCanonicalSplitParticipants(
-    record.workflowId,
-    record.metadata,
   );
   const fenceToken = claim.workflow.fenceToken;
 
@@ -192,10 +184,6 @@ test('split out-of-graph source ack transition is rejected typed ' +
   await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(
     record.workflowId,
-  );
-  workflow.ensureCanonicalSplitParticipants(
-    record.workflowId,
-    record.metadata,
   );
 
   // cleanup_completed from the initial (null) state is not a declared

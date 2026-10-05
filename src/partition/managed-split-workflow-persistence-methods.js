@@ -15,10 +15,7 @@ import {
 import {
   stampOwnershipClaimMetadata,
 } from './managed-workflow-ownership-core.js';
-import {
-  updateRecordAdoptingOwnWrite,
-  writeWorkflowRecordOrThrow,
-} from './managed-workflow-record-store.js';
+import {RECORD_CHANGE_KIND} from './managed-workflow-record-store.js';
 import {
   buildPartitionDescriptorEpochDecision,
   isPartitionDescriptorEpochAccepted,
@@ -60,18 +57,17 @@ class ManagedSplitWorkflowPersistenceMethods {
         typeof error.timeoutClassification === 'object' ?
           error.timeoutClassification :
           null;
-      await updateRecordAdoptingOwnWrite(this, workflowId, (current) => ({
-        status: PARTITION_TRANSITION_STATE.FAILED,
-        metadata: {
-          ...(current.metadata || {}),
-          [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
-            classification: LOCAL_STR_SPLIT_EXECUTION_FAILURE,
-            message: error?.message || QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED,
-            failedAt: new Date(this.now()).toISOString(),
-            ...(timeoutClassification ? {timeoutClassification} : {}),
-          },
-        },
-      }));
+      const failure = {
+        classification: LOCAL_STR_SPLIT_EXECUTION_FAILURE,
+        message: error?.message || QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED,
+        failedAt: new Date(this.now()).toISOString(),
+        ...(timeoutClassification ? {timeoutClassification} : {}),
+      };
+      await this.workflowCoordinator.updateWorkflow(workflowId,
+        (current) => ({...current,
+          status: PARTITION_TRANSITION_STATE.FAILED,
+          metadata: {...(current.metadata || {}),
+            [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: failure}}));
     } catch (persistError) {
       this.logger.error(LOCAL_STR_FAILED_TO_PERSIST_MANAGED_SPLIT_WORKFLOW, {
         workflowId,
@@ -81,18 +77,32 @@ class ManagedSplitWorkflowPersistenceMethods {
   }
 
   /**
-   * Persist workflow state through the canonical tables transition row.
-   *
-   * Fail-closed: a missing CDC bridge THROWS (the caller must never
-   * advance in-memory status without a durable row), the epoch-flip
-   * mutation must land exactly one row, and pending visibility is not
-   * accepted for the cutover — an unconverged epoch flip is a failed
-   * epoch flip.
-   * @param {Object} workflow - Workflow state.
-   * @return {Promise<void>}
+   * Encode one change's next workflow for the record store
+   * (managed-workflow-record-store.js): the full transition payload (epoch
+   * fields included) or, for a claim, the metadata alone. The canonical
+   * split participants ride every write. Fail-closed: a transition with no
+   * CDC bridge throws (nothing is written).
+   * @param {Object} workflow - The change's next workflow.
+   * @param {string} kind - RECORD_CHANGE_KIND.
+   * @return {Object} {data, options}.
    * @private
    */
-  async persistWorkflowTransition(workflow) {
+  encodeWorkflowRecord(workflow, kind) {
+    const candidate = this.withCanonicalSplitParticipants(workflow);
+    if (kind === RECORD_CHANGE_KIND.CLAIM) {
+      return {
+        data: {
+          partition_transition_metadata: JSON.stringify(
+            this.buildPersistedTransitionMetadata(candidate)),
+          updated_at: candidate.updatedAt,
+        },
+        // Claim/renew writes are not epoch transitions: they tolerate pending
+        // cache visibility (the compare-and-swap carries the race guarantee).
+        options: this.buildManagedSplitMutationOptions({
+          allowPendingVisibility: true,
+        }),
+      };
+    }
     const cdcIntegrationService = this.getCDCIntegrationService();
     if (!cdcIntegrationService ||
         typeof cdcIntegrationService.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
@@ -100,17 +110,36 @@ class ManagedSplitWorkflowPersistenceMethods {
         QUERY_ERROR_MSG.TABLE_SPLIT_TRANSITION_PERSIST_UNAVAILABLE,
       );
     }
-    // The one record writer: a compare-and-swap on the record as read
-    // (managed-workflow-record-store.js); a refusal throws, typed.
-    await writeWorkflowRecordOrThrow(this, workflow, (candidate) => {
-      const built = this.buildSplitTransitionUpdatePayload(candidate);
-      return {
-        data: built.updatePayload,
-        options: this.buildSplitTransitionMutationOptions(candidate,
-          built.updatePayload, built.serializedMetadata,
-          built.isEpochTransition),
-      };
-    });
+    const built = this.buildSplitTransitionUpdatePayload(candidate);
+    return {
+      data: built.updatePayload,
+      options: this.buildSplitTransitionMutationOptions(candidate,
+        built.updatePayload, built.serializedMetadata,
+        built.isEpochTransition),
+    };
+  }
+
+  /**
+   * Encode the terminal clear for the record store.
+   * @return {Object} {data, options}.
+   * @private
+   */
+  encodeWorkflowRecordClear() {
+    return {
+      data: {
+        partition_transition_state: null,
+        partition_transition_metadata: null,
+        pending_partition_version: null,
+        updated_at: this.now(),
+      },
+      options: this.buildManagedSplitMutationOptions({
+        allowPendingVisibility: false,
+        expectedCacheFields: {
+          partition_transition_state: null,
+          partition_transition_metadata: null,
+        },
+      }),
+    };
   }
 
   /**
@@ -281,23 +310,11 @@ class ManagedSplitWorkflowPersistenceMethods {
    * @private
    */
   async persistTerminalTransitionClear(workflow) {
-    // The completion is the record's last write: a compare-and-swap on the
-    // record this owner last wrote or read.
-    await writeWorkflowRecordOrThrow(this, workflow, () => ({
-      data: {
-        partition_transition_state: null,
-        partition_transition_metadata: null,
-        pending_partition_version: null,
-        updated_at: this.now(),
-      },
-      options: this.buildManagedSplitMutationOptions({
-        allowPendingVisibility: false,
-        expectedCacheFields: {
-          partition_transition_state: null,
-          partition_transition_metadata: null,
-        },
-      }),
-    }));
+    // The completion is the record's last write: a change cleared only
+    // while the record is this owner's at its fence in the state the caller
+    // finished it in.
+    await this.workflowCoordinator.clearWorkflowRecord(workflow.workflowId,
+      new Set([String(workflow.status)]));
     this.logger.info(MANAGED_SPLIT_LOG_MSG.TERMINAL_TRANSITION_CLEARED, {
       workflowId: workflow.workflowId,
       tableId: workflow.tableId,

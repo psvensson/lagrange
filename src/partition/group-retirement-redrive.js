@@ -516,8 +516,8 @@ async function renewHeldWorkflowLease(owner, workflowId) {
   if (claim?.accepted === true) {
     return true;
   }
-  // A refusal that did not relinquish the workflow (the record store keeps
-  // it on an unconfirmed or own-record outcome) is retried, not a loss.
+  // A refusal that did not relinquish the workflow (an unconfirmed outcome:
+  // nothing was decided) is retried, not a loss.
   if (owner.workflowCoordinator.getWorkflowById(workflowId)) {
     throw new Error(RENEWAL_UNCONFIRMED + workflowId);
   }

@@ -428,7 +428,6 @@ async function driveCutoverWithDeniedRightLeader(options) {
   const record = buildBackfillingRecord(workflowId);
   await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(workflowId);
-  workflow.ensureCanonicalSplitParticipants(workflowId, record.metadata);
   const fenceToken = claim.workflow.fenceToken;
   const sourceAck = (status) => ({
     [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
@@ -603,7 +602,6 @@ async function driveHealthySplit() {
     participants: new Map(),
   });
   const claim = await workflow.claimSplitWorkflowOwnership(workflowId);
-  workflow.ensureCanonicalSplitParticipants(workflowId, transition.metadata);
   const sourceAck = (status, checkpoint) => ({
     [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
       SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,

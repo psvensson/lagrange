@@ -134,7 +134,6 @@ const FAMILY = Object.freeze({
       SPLIT_ACK_STATUS.CLEANUP_COMPLETED]],
     finalize: 'finalizeSplitDissolutionIfReady',
     teardown: 'teardownAbortedSplitChildren',
-    ensure: 'ensureCanonicalSplitParticipants',
   },
   merge: {
     Klass: ManagedMergeWorkflow,
@@ -144,7 +143,6 @@ const FAMILY = Object.freeze({
       MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED]),
     finalize: 'finalizeMergeDissolutionIfReady',
     teardown: 'teardownAbortedMergeTarget',
-    ensure: 'ensureCanonicalMergeParticipants',
   },
 });
 
@@ -218,7 +216,6 @@ function installRecord(store, family, {ownerId = 'dead-owner',
       status, fenceToken: 3, acknowledgedAt: 1, createdAt: 1,
       updatedAt: 1}]));
   writer.workflowCoordinator.setWorkflowState(workflow);
-  writer[spec.ensure](WORKFLOW_ID, metadata);
   store.rows.set(TABLE_ID, {table_id: TABLE_ID,
     active_partition_version: aborted ? 1 : 2,
     partition_transition_state: state,

@@ -21,8 +21,9 @@
  *   as a spent wait (WARN: what was awaited, the last observed owner and
  *   lease) when it fires on a still-retiring record;
  *   a refused claim with no live foreign lease on the re-read row (the
- *   claim's witness was stale: e.g. a driver whose lease lapsed wrote
- *   progress) - ONE immediate re-claim with the refreshed witness, at most
+ *   record moved under the claim: e.g. a driver whose lease lapsed wrote
+ *   progress) - ONE immediate re-claim (a change applied to the record at
+ *   its turn), at most
  *   once per record version; if that is refused too, one WARN per record
  *   version naming the workflow, the record state and the claim result, and
  *   the next durable record change resumes it (no timer, never a loop);
@@ -157,8 +158,9 @@ function attachGroupRetirementResume(owner, spec) {
       awaitForeignLease(workflowId, durable, tablesRow);
       return false;
     }
-    // No live lease holds it: re-claim once with the refreshed witness (at
-    // most once per record version - a lost race leaves a newer version).
+    // No live lease holds it: re-claim once (the claim change applied to the
+    // current record; at most once per record version - a lost race leaves a
+    // newer version).
     const version = recordVersionOf(currentRecord(owner, tablesRow));
     if (reclaimedVersions.get(workflowId) !== version) {
       reclaimedVersions.set(workflowId, version);

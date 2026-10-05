@@ -57,7 +57,9 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
     'partition_key, partition_count, active_partition_version, created_at, ' +
     'updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .run(tableId, tableName, '{}', 'id', partitions.length || 1, 1, 1, 1);
-  const store = {db, tableId, writes: [], lostAcks: []};
+  // observers: called after every applied write, at its apply (the record
+  // and the partitions rows are then exactly what that write left).
+  const store = {db, tableId, writes: [], lostAcks: [], observers: []};
   const insertPartition = db.prepare('INSERT INTO partitions ' +
     '(partition_id, table_id, table_name, partition_key_start, ' +
     'partition_key_end, partition_version, replica_count, size_bytes, ' +
@@ -94,6 +96,9 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
         }
         const info = db.prepare(sql).run(...params);
         store.writes.push({writer, sql, params, changes: info.changes});
+        for (const observe of store.observers) {
+          observe({writer, sql, params, changes: info.changes});
+        }
         const lost = store.lostAcks.findIndex((predicate) =>
           predicate({writer, sql, params, changes: info.changes}));
         if (lost >= 0) {

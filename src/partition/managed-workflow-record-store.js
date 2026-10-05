@@ -3,44 +3,54 @@
  * Owner: every write of a split or merge workflow's durable record - the
  * table's `tables` row transition columns (partition_transition_state,
  * partition_transition_metadata and the epoch columns they carry). Owner
- * ruling 2026-10-05: claim before register; every transition, participant,
- * provisioning-mark, lease, abort and completion write compare-and-swaps on
- * the record as previously read; a stale owner can never overwrite a current
- * owner's lease, provisioning state, frozen membership, dissolved set or
- * progress; a refusal re-reads and reconciles, never re-applies stale state.
- * Version: the record AS READ - its exact stored transition metadata bytes
- * and transition state (`recordWitness`, carried by the in-memory workflow
- * state the write is derived from). Every write's WHERE clause names that
- * witness next to the row key; the system-table UPDATE is a SQL statement
- * replicated through the table partition's Raft log and evaluated at APPLY
- * time on every replica (partition-service-entry-apply-base.js runs the
- * statement in log order and resolves the proposer with that apply's
- * `changes`), so exactly one of two writes from the same witness lands and
- * the other matches zero rows. The comparison is on full content (every
- * durable fact of the record is inside those two columns, the epoch columns
- * are functions of them), so a match is equality of every fact.
- * Reconcile on a write that did not land (zero rows, a refused or failed
- * submission): re-read the record (the owner's view; when the view still
- * shows the witness, the authoritative read through the control plane) and
- *   - the record now holds exactly this write: its acknowledgement was lost,
- *     the write landed (accepted);
- *   - the record is this workflow under this owner and fence: this owner's
- *     own earlier write landed (a lost acknowledgement): the in-memory
- *     workflow is rebuilt from the record (owner.resyncWorkflowFromRecord),
- *     the current write is NOT re-applied and the caller's step fails once;
- *   - the record still shows the witness: nothing is known to have moved
- *     (a lagging view) - the write failed, nothing is discarded;
- *   - anything else (another owner, another fence, another workflow, a
- *     cleared or deleted record): this owner lost the workflow - it stops
- *     driving it (its re-drive abandons it), logs ONE WARN naming the
- *     workflow, its fence and the record's owner and fence, and discards its
- *     in-memory copy.
- * Lease: a write by the lease holder whose lease is past half its term
- * renews it in the same compare-and-swap (a dead owner still loses it at
- * expiry: it writes nothing).
- * Prohibited: a write without a witness (fail-closed, nothing is written);
- * an unconditional UPDATE of these columns; treating a refused write as
- * landed without re-reading.
+ * decision 2026-10-05 (option A): writes are functions of the stored
+ * version. The store accepts only "apply this change to the record"; per
+ * workflow, at its turn in a queue, each change is applied to the latest
+ * acknowledged record and compared against exactly that. No caller passes a
+ * pre-built record; there is no rebase.
+ * Input: applyRecordChange(owner, workflowId, change, {tableId, kind}) where
+ * `change(workflow, stored)` is a pure function over the DECODED record
+ * (`workflow`: the owner's decodeWorkflowRecord of it overlaid with this
+ * process's non-durable runtime fields, or null when the record does not
+ * hold this workflow; `stored`: {bytes, exists, workflowId, state, metadata,
+ * claim}) answering the next workflow, RECORD_UNCHANGED (its postcondition
+ * already holds), RECORD_CLEARED (the terminal clear) or
+ * refuseRecordChange(reason). The caller's expectation is a precondition
+ * inside the change, never a record or witness passed in.
+ * The turn: base = the latest record this owner ACKNOWLEDGED for the
+ * workflow (the exact stored metadata bytes and state), or - with no
+ * lineage yet - the row the caller read (a registration) or the owner's
+ * view row (a read, never content);
+ * next = change(decode(base)); encode; UPDATE ... WHERE metadata = base
+ * bytes AND state = base state (proposed through the table partition's Raft
+ * log, evaluated by SQLite at apply time, the proposer answered with that
+ * apply's `changes`). One row: the acknowledged record becomes the written
+ * bytes and the in-memory workflow is rebuilt from them (a projection)
+ * BEFORE the queue releases the next change.
+ * Refusal (zero rows, a refused or failed submission): the AUTHORITATIVE
+ * re-read (owner.readAuthoritativeWorkflowRecord, else the control plane's
+ * owner-RPC leader read) - never the local view, which may lag this owner's
+ * own acknowledged write. It decides:
+ *   - it holds exactly the bytes this change wrote: a lost acknowledgement,
+ *     ACCEPTED;
+ *   - no answer: UNCONFIRMED (nothing decided, nothing adopted);
+ *   - it lags the base (the base's own bytes; this workflow at a lower fence;
+ *     or, while the base is this owner's record under a lease live by this
+ *     owner's clock - no other owner can have replaced it - anything that is
+ *     not this workflow at the base's fence or later): the base stands; the
+ *     same compare-and-swap is retried after a failed submission (bounded),
+ *     else UNCONFIRMED;
+ *   - otherwise it becomes the base (and the projection) and the SAME change
+ *     is applied to it: its precondition decides - REFUSED, SUPERSEDED (the
+ *     record is not this workflow, or the change refused it as another
+ *     owner's: this owner stops driving it, drops its copy, logs ONE WARN),
+ *     ALREADY_APPLIED (RECORD_UNCHANGED), or a new compare-and-swap.
+ *   Bounded: MAX_COMPARE_AND_SWAP_ATTEMPTS per change.
+ * Prohibited: a write whose bytes derive from a record other than the one
+ * compared; adopting the local view on a refusal; an unconditional UPDATE of
+ * these columns; treating a refused write as landed without the
+ * authoritative re-read; any exported entry point that takes record content
+ * (bytes, metadata or a workflow object) to write.
  */
 import {TABLES} from '../constants/index.js';
 import {
@@ -57,40 +67,69 @@ const RECORD_SQL = 'SELECT * FROM tables WHERE table_id = ?';
 const STRING_TYPE = 'string';
 const OBJECT_TYPE = 'object';
 const FUNCTION_TYPE = 'function';
-const LEASE_RENEW_FRACTION = 2;
+const MAX_COMPARE_AND_SWAP_ATTEMPTS = 3;
+const STATE_COLUMN = 'partition_transition_state';
+const READ_BASE_OPTION = 'readBase';
 
-// What one record write came to.
-const RECORD_WRITE_OUTCOME = Object.freeze({
+// What one record change came to.
+const RECORD_CHANGE_OUTCOME = Object.freeze({
+  // Written by this change (or its lost acknowledgement recognised).
   ACCEPTED: 'accepted',
-  // The record holds this write: its acknowledgement was lost.
-  ACCEPTED_LOST_ACK: 'accepted-lost-ack',
-  // This owner's own earlier write is on the record: rebuilt from it.
-  RESYNCED: 'resynced-own-record',
-  // Nothing is known to have moved (the re-read shows the witness).
-  UNCONFIRMED: 'unconfirmed',
-  // Another owner, fence or workflow holds the record, or it is gone.
+  // The change's postcondition already held on the record: nothing written.
+  ALREADY_APPLIED: 'already-applied',
+  // The change's precondition is false on the authoritative record.
+  REFUSED: 'refused',
+  // The record is no longer this owner's workflow.
   SUPERSEDED: 'superseded',
-  // The in-memory state carries no witness: nothing was written.
-  NO_WITNESS: 'no-witness',
+  // Nothing could be decided (no authoritative answer, a lagging read, the
+  // bounded attempts spent): nothing written, nothing adopted.
+  UNCONFIRMED: 'unconfirmed',
 });
 
-const ACCEPTED_OUTCOMES = Object.freeze(new Set([
-  RECORD_WRITE_OUTCOME.ACCEPTED,
-  RECORD_WRITE_OUTCOME.ACCEPTED_LOST_ACK,
+const LANDED_OUTCOMES = Object.freeze(new Set([
+  RECORD_CHANGE_OUTCOME.ACCEPTED,
+  RECORD_CHANGE_OUTCOME.ALREADY_APPLIED,
 ]));
 
-const RECORD_WRITE_LOG_MSG = Object.freeze({
-  SUPERSEDED: 'Workflow record write refused: another owner holds the ' +
-    'record; this owner stops driving the workflow and discards its copy',
-  RESYNCED: 'Workflow record write refused: this owner\'s own earlier ' +
-    'write is on the record; the in-memory workflow was rebuilt from it',
-  NO_WITNESS: 'Workflow record write refused: the in-memory workflow ' +
-    'carries no record witness (fail-closed, nothing written)',
+// How a change's next record is encoded.
+const RECORD_CHANGE_KIND = Object.freeze({
+  // The owner's full transition payload (state, metadata, epoch columns).
+  TRANSITION: 'transition',
+  // The metadata only (a claim or a renewal).
+  CLAIM: 'claim',
 });
 
-const RECORD_WRITE_ERROR_MSG = Object.freeze({
-  REFUSED: 'Workflow record compare-and-swap refused: ',
+const RECORD_UNCHANGED = Symbol('workflow-record-unchanged');
+const RECORD_CLEARED = Symbol('workflow-record-cleared');
+const REFUSAL = Symbol('workflow-record-refusal');
+
+const RECORD_CHANGE_LOG_MSG = Object.freeze({
+  SUPERSEDED: 'Workflow record change refused: another owner holds the ' +
+    'record; this owner stops driving the workflow and discards its copy',
 });
+
+const RECORD_CHANGE_ERROR_MSG = Object.freeze({
+  REFUSED: 'Workflow record change refused: ',
+  NOT_A_CHANGE: 'Workflow record writes take a change function of the ' +
+    'stored record, never a pre-built record: ',
+  UNDECODABLE: 'Workflow record of this workflow does not decode: ',
+});
+
+/**
+ * A change's refusal: its precondition is false on the record it was given.
+ * @param {string} reason
+ * @param {Object} [details]
+ * @param {boolean} [details.superseded] - The record is another owner's.
+ * @return {Object}
+ */
+function refuseRecordChange(reason, details = {}) {
+  return Object.freeze({[REFUSAL]: true, reason: String(reason),
+    superseded: details.superseded === true, details});
+}
+
+function isRefusal(value) {
+  return Boolean(value && value[REFUSAL] === true);
+}
 
 /**
  * The exact stored transition metadata of one `tables` row: the string as
@@ -106,22 +145,22 @@ function storedMetadataOf(raw) {
 }
 
 /**
- * The record as read: the witness every write of the workflow's record
- * compares against (the record's exact transition metadata and state; an
- * absent record or a cleared transition is null/null).
- * @param {Object|null} tablesRow - The table's `tables` row as read.
- * @return {Object} Frozen {metadata, state}.
+ * The compared bytes of one `tables` row as READ (absent: null/null): what a
+ * change's precondition may compare a record against. Never written.
+ * @param {Object|null} row
+ * @return {{metadata: (string|null), state: (string|null)}}
  */
-function recordWitnessOf(tablesRow) {
-  return Object.freeze({
-    metadata: storedMetadataOf(tablesRow?.partition_transition_metadata),
-    state: tablesRow?.partition_transition_state ?? null,
-  });
+function bytesOf(row) {
+  return {
+    metadata: storedMetadataOf(row?.partition_transition_metadata),
+    state: row?.partition_transition_state ?? null,
+  };
 }
 
-function sameWitness(left, right) {
-  return Boolean(left) && Boolean(right) &&
-    left.metadata === right.metadata && left.state === right.state;
+function sameBytes(left, right) {
+  const a = bytesOf(left);
+  const b = bytesOf(right);
+  return a.metadata === b.metadata && a.state === b.state;
 }
 
 function parseMetadata(raw) {
@@ -136,11 +175,44 @@ function parseMetadata(raw) {
   }
 }
 
+/**
+ * The decoded record: which workflow it holds, its state, metadata and
+ * ownership claim.
+ * @param {Object|null} row
+ * @return {Object}
+ */
+function storedRecordOf(row) {
+  const bytes = bytesOf(row);
+  const metadata = parseMetadata(bytes.metadata);
+  return Object.freeze({
+    bytes,
+    exists: Boolean(row),
+    workflowId: metadata ? String(metadata[
+      PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || '') || null : null,
+    state: bytes.state,
+    metadata,
+    claim: durableOwnershipClaimOf(metadata),
+  });
+}
+
+/**
+ * The transition a `tables` row stores, decoded from its exact bytes (the
+ * owners' record decoders start here): {state, metadata} or null when the row
+ * holds no transition.
+ * @param {Object|null} row
+ * @return {{state: string, metadata: Object}|null}
+ */
+function storedTransitionOf(row) {
+  const bytes = bytesOf(row);
+  const metadata = parseMetadata(bytes.metadata);
+  return bytes.state && metadata ? {state: bytes.state, metadata} : null;
+}
+
 function affectedRowsOf(result) {
   return Number(result?.partitionResult?.affectedRows ?? result?.affectedRows);
 }
 
-// The owner's view of the table's record.
+// The owner's view of the table's record (a read; only ever a base).
 function viewRecordOf(owner, tableId) {
   const rows = typeof owner.listTableInfos === FUNCTION_TYPE ?
     owner.listTableInfos() || [] : [];
@@ -148,11 +220,17 @@ function viewRecordOf(owner, tableId) {
     String(tableId)) || null;
 }
 
-// The control plane's authoritative read of the record, or undefined when it
-// did not answer (the view then stands).
+/**
+ * The authoritative read of the record after a refused write: the owner's
+ * own authoritative read when it has one, else the control plane's
+ * owner-RPC read at the table partition's leader. undefined when it did not
+ * answer (nothing is then decided).
+ * @param {Object} owner
+ * @param {string} tableId
+ * @return {Promise<Object|null|undefined>}
+ */
 async function authoritativeRecordOf(owner, tableId) {
   if (typeof owner.readAuthoritativeWorkflowRecord === FUNCTION_TYPE) {
-    // The owner's own authoritative read of the record, when it has one.
     try {
       return await owner.readAuthoritativeWorkflowRecord(tableId) ?? null;
     } catch (_error) {
@@ -180,216 +258,341 @@ async function authoritativeRecordOf(owner, tableId) {
     String(row?.table_id || '') === String(tableId)) || null;
 }
 
-/**
- * Re-read the workflow's record after a write that did not land: the view,
- * and when the view still shows the witness (it may lag the write that beat
- * this one) the authoritative read.
- * @param {Object} owner
- * @param {string} tableId
- * @param {Object} witness - The refused write's witness.
- * @return {Promise<Object>} {row, witness}.
- */
-async function rereadRecord(owner, tableId, witness) {
-  let row = viewRecordOf(owner, tableId);
-  if (sameWitness(recordWitnessOf(row), witness)) {
-    const authoritative = await authoritativeRecordOf(owner, tableId);
-    if (authoritative !== undefined) {
-      row = authoritative;
-    }
-  }
-  return {row, witness: recordWitnessOf(row)};
+// The acknowledged records of this owner, per workflow.
+function lineagesOf(owner) {
+  owner.workflowRecordLineages ??= new Map();
+  return owner.workflowRecordLineages;
 }
 
 /**
- * Whether the re-read record is this workflow under this owner at this
- * owner's fence: every write on it since this owner's claim is this owner's.
+ * Forget this owner's acknowledged record of one workflow (its in-memory
+ * copy was dropped): its next change starts from a read.
  * @param {Object} owner
- * @param {Object} workflow - The refused write's state.
- * @param {Object|null} metadata - The re-read record's metadata.
- * @return {boolean}
+ * @param {string} workflowId
+ * @return {void}
  */
-function isOwnRecord(owner, workflow, metadata) {
-  if (!metadata || String(metadata[
-    PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || '') !==
-      String(workflow.workflowId)) {
-    return false;
+function forgetWorkflowRecord(owner, workflowId) {
+  owner.workflowRecordLineages?.delete(String(workflowId));
+}
+
+// The durable fields of a workflow projection: only ever assigned from a
+// decoded record.
+const DURABLE_FIELDS = Object.freeze(['status', 'metadata', 'participants',
+  'fenceToken', 'workflowOwnerId', 'leaseExpiresAt']);
+
+function durableFieldsOf(decoded) {
+  const fields = {};
+  for (const field of DURABLE_FIELDS) {
+    fields[field] = decoded[field];
   }
-  const claim = durableOwnershipClaimOf(metadata);
-  return claim.workflowOwnerId === owner.workflowOwnerId &&
-    claim.workflowOwnerId === workflow.workflowOwnerId &&
-    Number.isInteger(workflow.fenceToken) &&
-    claim.fenceToken === workflow.fenceToken;
+  return fields;
+}
+
+function runtimeFieldsOf(workflow) {
+  if (!workflow) {
+    return {};
+  }
+  const runtime = {...workflow};
+  for (const field of DURABLE_FIELDS) {
+    delete runtime[field];
+  }
+  return runtime;
+}
+
+/**
+ * The workflow a change is given: the record decoded by the owner, overlaid
+ * on this process's non-durable runtime fields; null when the record does
+ * not hold this workflow.
+ * @param {Object} owner
+ * @param {string} workflowId
+ * @param {Object|null} row
+ * @return {Object|null}
+ */
+function decodedWorkflowOf(owner, workflowId, row) {
+  const stored = storedRecordOf(row);
+  if (!row || stored.workflowId !== workflowId) {
+    return null;
+  }
+  const decoded = owner.decodeWorkflowRecord(workflowId, row);
+  if (!decoded) {
+    return null;
+  }
+  const live = owner.workflowCoordinator.getWorkflowById(workflowId);
+  return {...decoded, ...runtimeFieldsOf(live), ...durableFieldsOf(decoded)};
+}
+
+/**
+ * Rebuild the in-memory workflow as a projection of one record: its durable
+ * fields from the decoded record, its runtime fields from `runtime` (the
+ * change's next workflow) or the live copy.
+ * @param {Object} owner
+ * @param {string} workflowId
+ * @param {Object|null} row
+ * @param {Object|null} runtime
+ * @return {Object|null} The projection.
+ */
+function projectWorkflow(owner, workflowId, row, runtime) {
+  const coordinator = owner.workflowCoordinator;
+  const decoded = row ? owner.decodeWorkflowRecord(workflowId, row) : null;
+  if (!decoded) {
+    // A record of this workflow its own owner cannot decode: fail-closed.
+    throw new Error(RECORD_CHANGE_ERROR_MSG.UNDECODABLE + workflowId);
+  }
+  const live = coordinator.getWorkflowById(workflowId);
+  const next = {...decoded, ...runtimeFieldsOf(live),
+    ...runtimeFieldsOf(runtime), ...durableFieldsOf(decoded)};
+  if (!live) {
+    return coordinator.adoptWorkflowProjection(next);
+  }
+  for (const key of Object.keys(live)) {
+    if (!Object.hasOwn(next, key)) {
+      delete live[key];
+    }
+  }
+  Object.assign(live, next);
+  return live;
 }
 
 /**
  * This owner lost the workflow: stop driving it, log once (per workflow and
- * fence), discard the in-memory copy.
+ * fence), discard the in-memory copy and its lineage.
  * @param {Object} owner
- * @param {Object} workflow - The refused write's state.
- * @param {Object} reread - {row, witness}.
+ * @param {string} workflowId
+ * @param {Object|null} row - The authoritative record.
  * @return {void}
  */
-function relinquishWorkflow(owner, workflow, reread) {
-  const workflowId = String(workflow.workflowId);
+function relinquishWorkflow(owner, workflowId, row) {
+  const live = owner.workflowCoordinator.getWorkflowById(workflowId);
   owner.relinquishedWorkflowFences ??= new Set();
-  const logKey = `${workflowId}\u0000${workflow.fenceToken ?? ''}`;
+  const logKey = `${workflowId}\u0000${live?.fenceToken ?? ''}`;
   if (!owner.relinquishedWorkflowFences.has(logKey)) {
     owner.relinquishedWorkflowFences.add(logKey);
-    owner.logger?.warn?.(RECORD_WRITE_LOG_MSG.SUPERSEDED,
-      relinquishFieldsOf(owner, workflow, reread));
+    owner.logger?.warn?.(RECORD_CHANGE_LOG_MSG.SUPERSEDED,
+      relinquishFieldsOf(owner, workflowId, live, row));
   }
   owner.groupRetirementRedrive?.abandon?.(workflowId);
-  beginWorkflowRecordLineage(owner, workflowId);
-  if (owner.workflowCoordinator?.getWorkflowById?.(workflowId)) {
+  forgetWorkflowRecord(owner, workflowId);
+  if (live) {
     owner.workflowCoordinator.removeWorkflow(workflowId);
   }
 }
 
 // The lost workflow's WARN: this owner's fence and the record's owner/fence.
-function relinquishFieldsOf(owner, workflow, reread) {
-  const metadata = parseMetadata(reread.witness.metadata);
-  const recordClaim = durableOwnershipClaimOf(metadata);
+function relinquishFieldsOf(owner, workflowId, live, row) {
+  const stored = storedRecordOf(row);
   return {
-    workflowId: String(workflow.workflowId),
-    fenceToken: workflow.fenceToken ?? null,
+    workflowId,
+    fenceToken: live?.fenceToken ?? null,
     ownerId: owner.workflowOwnerId,
-    recordWorkflowId: metadata?.[
-      PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] ?? null,
-    recordOwnerId: recordClaim.workflowOwnerId ?? null,
-    recordFenceToken: recordClaim.fenceToken ?? null,
-    recordState: reread.witness.state,
+    recordWorkflowId: stored.workflowId,
+    recordOwnerId: stored.claim.workflowOwnerId ?? null,
+    recordFenceToken: stored.claim.fenceToken ?? null,
+    recordState: stored.state,
   };
 }
 
-// The effect each refused outcome has on this owner's in-memory state.
-const REFUSED_WRITE_EFFECT = Object.freeze({
-  [RECORD_WRITE_OUTCOME.RESYNCED]: (owner, workflow, reread) => {
-    owner.resyncWorkflowFromRecord?.(String(workflow.workflowId), reread.row);
-    owner.logger?.warn?.(RECORD_WRITE_LOG_MSG.RESYNCED, {
-      workflowId: workflow.workflowId, fenceToken: workflow.fenceToken,
-      recordState: reread.witness.state});
-  },
-  [RECORD_WRITE_OUTCOME.SUPERSEDED]: relinquishWorkflow,
-});
-
-/**
- * Classify a write that did not land (see the owner contract).
- * @param {Object} owner
- * @param {Object} workflow - The refused write's state.
- * @param {Object} written - The write's new {metadata, state}.
- * @return {Promise<Object>} {outcome, reread}.
- */
-async function reconcileRefusedWrite(owner, workflow, written) {
-  const witness = workflow.recordWitness;
-  const reread = await rereadRecord(owner, workflow.tableId, witness);
-  const outcome = refusedWriteOutcomeOf(owner, workflow, written, reread);
-  REFUSED_WRITE_EFFECT[outcome]?.(owner, workflow, reread);
-  return {outcome, reread};
-}
-
-// What the re-read record says about a write that did not land: the record
-// holds it (lost acknowledgement), still holds the compared version
-// (nothing known moved), is this owner's own (its earlier write landed), or
-// is another owner's / gone.
-function refusedWriteOutcomeOf(owner, workflow, written, reread) {
-  if (!reread.row) {
-    return RECORD_WRITE_OUTCOME.SUPERSEDED;
-  }
-  const own = isOwnRecord(owner, workflow,
-    parseMetadata(reread.witness.metadata));
-  return sameWitness(reread.witness, written) ?
-    RECORD_WRITE_OUTCOME.ACCEPTED_LOST_ACK :
-    sameWitness(reread.witness, workflow.recordWitness) ?
-      RECORD_WRITE_OUTCOME.UNCONFIRMED :
-      own ? RECORD_WRITE_OUTCOME.RESYNCED : RECORD_WRITE_OUTCOME.SUPERSEDED;
+// Whether a base row is this owner's record of the workflow under a lease
+// that is live by this owner's clock (no other owner can have replaced it).
+function isOwnLiveRecord(owner, workflowId, row) {
+  const stored = storedRecordOf(row);
+  return stored.workflowId === workflowId &&
+    stored.claim.workflowOwnerId === owner.workflowOwnerId &&
+    Number.isFinite(stored.claim.leaseExpiresAt) &&
+    stored.claim.leaseExpiresAt > owner.now();
 }
 
 /**
- * The lease holder's renewal riding its own write: a lease past half its
- * term is extended in the same compare-and-swap. Answers a restore for the
- * case the write does not land.
- * @param {Object} owner
- * @param {Object} workflow - The write's state (mutated).
- * @return {Function} () => restores the previous lease.
- */
-function renewLeaseOnWrite(owner, workflow) {
-  const previous = workflow.leaseExpiresAt;
-  const leaseMs = Number(owner.workflowLeaseMs);
-  if (workflow.workflowOwnerId !== owner.workflowOwnerId ||
-      !Number.isFinite(previous) || !Number.isFinite(leaseMs) ||
-      previous - owner.now() > leaseMs / LEASE_RENEW_FRACTION) {
-    return () => {};
-  }
-  workflow.leaseExpiresAt = owner.now() + leaseMs;
-  return () => {
-    workflow.leaseExpiresAt = previous;
-  };
-}
-
-function witnessKeyOf(witness) {
-  return `${witness?.state ?? ''}\u0000${witness?.metadata ?? ''}`;
-}
-
-// This owner's acknowledged writes of one workflow's record since its
-// in-memory lineage began (registration or a rebuild from a read).
-function writeChainOf(owner, workflowId) {
-  owner.workflowRecordWriteChains ??= new Map();
-  let chain = owner.workflowRecordWriteChains.get(workflowId);
-  if (!chain) {
-    chain = {latest: null, acknowledged: new Set()};
-    owner.workflowRecordWriteChains.set(workflowId, chain);
-  }
-  return chain;
-}
-
-/**
- * Begin a new in-memory lineage of one workflow (its registration, or its
- * rebuild from a record as read): no earlier write of this owner is a base
- * any later write may be rebased from.
+ * Whether the authoritative re-read lags the base (see the owner contract).
  * @param {Object} owner
  * @param {string} workflowId
- * @return {void}
+ * @param {Object|null} reread
+ * @param {Object|null} base
+ * @return {boolean}
  */
-function beginWorkflowRecordLineage(owner, workflowId) {
-  owner.workflowRecordWriteChains?.delete(String(workflowId));
+function rereadLagsBase(owner, workflowId, reread, base) {
+  if (sameBytes(reread, base)) {
+    return true;
+  }
+  const was = storedRecordOf(base);
+  const now = storedRecordOf(reread);
+  const baseFence = was.claim.fenceToken ?? 0;
+  const rereadFence = now.claim.fenceToken ?? 0;
+  if (was.workflowId === workflowId && now.workflowId === workflowId) {
+    return rereadFence < baseFence;
+  }
+  return isOwnLiveRecord(owner, workflowId, base);
+}
+
+// Encode one change's next record into the UPDATE's data and options.
+function encodeChange(owner, next, kind, base) {
+  if (next === RECORD_CLEARED) {
+    return owner.encodeWorkflowRecordClear();
+  }
+  const encoded = owner.encodeWorkflowRecord(next, kind);
+  if (!Object.hasOwn(encoded.data, STATE_COLUMN)) {
+    // A claim leaves the state column alone: the written state is the base's.
+    return {...encoded, writtenState: bytesOf(base).state};
+  }
+  return {...encoded, writtenState: encoded.data.partition_transition_state};
+}
+
+function writtenRowOf(base, encoded, tableId) {
+  return {
+    ...(base || {table_id: tableId}),
+    partition_transition_metadata:
+      encoded.data.partition_transition_metadata ?? null,
+    partition_transition_state: encoded.writtenState ?? null,
+  };
+}
+
+// The compare-and-swap of one encoded change against exactly `base`.
+async function compareAndSwap(owner, tableId, base, encoded) {
+  const compared = bytesOf(base);
+  try {
+    const result = await owner.getControlPlaneSystemTableGateway()
+      .updateSystemTableRow(TABLES.TABLES, {
+        table_id: tableId,
+        partition_transition_metadata: compared.metadata,
+        partition_transition_state: compared.state,
+      }, encoded.data, encoded.options);
+    return {landed: result?.success !== false && affectedRowsOf(result) === 1,
+      submitError: null};
+  } catch (error) {
+    return {landed: false, submitError: error};
+  }
+}
+
+// Apply the change to one base: the change's own answer, decoded.
+function applyChangeTo(owner, workflowId, change, base) {
+  const answer = change(decodedWorkflowOf(owner, workflowId, base),
+    storedRecordOf(base));
+  if (isRefusal(answer)) {
+    return {refusal: answer};
+  }
+  if (answer === RECORD_UNCHANGED) {
+    return {unchanged: true};
+  }
+  if (answer !== RECORD_CLEARED &&
+      (!answer || typeof answer !== OBJECT_TYPE)) {
+    throw new TypeError(RECORD_CHANGE_ERROR_MSG.NOT_A_CHANGE + workflowId);
+  }
+  return {next: answer};
+}
+
+function settled(outcome, extra = {}) {
+  return {outcome, accepted: LANDED_OUTCOMES.has(outcome), ...extra};
+}
+
+// The record a landed change leaves: acknowledged, projected (or cleared).
+function acknowledge(owner, workflowId, written, next) {
+  if (next === RECORD_CLEARED) {
+    forgetWorkflowRecord(owner, workflowId);
+    return null;
+  }
+  lineagesOf(owner).set(workflowId, written);
+  return projectWorkflow(owner, workflowId, written, next);
+}
+
+// A refusal on the authoritative record: SUPERSEDED (relinquish) when the
+// record is not this workflow or the change refused it as another owner's.
+function settleRefusal(owner, workflowId, refusal, base) {
+  const holds = storedRecordOf(base).workflowId === workflowId;
+  if (refusal.superseded || !holds) {
+    relinquishWorkflow(owner, workflowId, base);
+    return settled(RECORD_CHANGE_OUTCOME.SUPERSEDED, {refusal});
+  }
+  return settled(RECORD_CHANGE_OUTCOME.REFUSED, {refusal});
+}
+
+// Adopt an authoritative record that moved past the base: the new base, and
+// the projection when it holds this workflow.
+function adoptAuthoritative(owner, workflowId, reread) {
+  if (storedRecordOf(reread).workflowId === workflowId) {
+    lineagesOf(owner).set(workflowId, reread);
+    projectWorkflow(owner, workflowId, reread, null);
+  }
 }
 
 /**
- * The version a write compares against. Writes of one owner are serialized
- * per workflow; a write derived from an EARLIER acknowledged write of this
- * same owner and lineage (a candidate built before a concurrent participant
- * flush of the same in-memory workflow landed) compares against this
- * owner's latest acknowledged version - only this owner's own acknowledged
- * writes lie between, exactly as if the two had run in order. Any other
- * witness is compared as read: a foreign write, a re-read, a lost
- * acknowledgement are never rebased over.
+ * What the authoritative re-read says about a write that did not land (see
+ * the owner contract): settled (accepted lost acknowledgement, unconfirmed),
+ * or the base the change is applied to next (the same, to retry a failed
+ * submission; the re-read, adopted, when the record moved past the base).
  * @param {Object} owner
- * @param {Object} workflow
- * @return {Object} The witness.
+ * @param {string} workflowId
+ * @param {Object} attempt - {reread, base, written, next, submitError}.
+ * @return {Object} {settled} or {base}.
  */
-function comparedWitnessOf(owner, workflow) {
-  const witness = workflow.recordWitness;
-  const chain = writeChainOf(owner, String(workflow.workflowId));
-  if (chain.latest && !sameWitness(witness, chain.latest) &&
-      chain.acknowledged.has(witnessKeyOf(witness))) {
-    workflow.recordWitness = chain.latest;
+function decideRefusedWrite(owner, workflowId, attempt) {
+  const {reread, base, written, next, submitError} = attempt;
+  if (reread === undefined) {
+    return {settled: settled(RECORD_CHANGE_OUTCOME.UNCONFIRMED,
+      {submitError})};
   }
-  return workflow.recordWitness;
+  if (reread && sameBytes(reread, written)) {
+    // A lost acknowledgement: the record holds exactly this change.
+    return {settled: settled(RECORD_CHANGE_OUTCOME.ACCEPTED, {
+      lostAcknowledgement: true,
+      workflow: acknowledge(owner, workflowId, reread, next)})};
+  }
+  if (rereadLagsBase(owner, workflowId, reread, base)) {
+    return submitError && sameBytes(reread, base) ? {base} :
+      {settled: settled(RECORD_CHANGE_OUTCOME.UNCONFIRMED, {submitError})};
+  }
+  adoptAuthoritative(owner, workflowId, reread);
+  return {base: reread};
 }
 
-function acknowledgeWrite(owner, workflow, written) {
-  workflow.recordWitness = written;
-  const chain = writeChainOf(owner, String(workflow.workflowId));
-  chain.latest = written;
-  chain.acknowledged.add(witnessKeyOf(written));
+/**
+ * One change at its turn (see the owner contract).
+ * @param {Object} owner
+ * @param {string} workflowId
+ * @param {Function} change
+ * @param {Object} options - {tableId, kind}.
+ * @return {Promise<Object>} {outcome, accepted, workflow, refusal}.
+ */
+async function runChange(owner, workflowId, change, options) {
+  const tableId = String(options.tableId);
+  const kind = options.kind || RECORD_CHANGE_KIND.TRANSITION;
+  let base = lineagesOf(owner).get(workflowId) ??
+    (Object.hasOwn(options, READ_BASE_OPTION) ? options.readBase :
+      viewRecordOf(owner, tableId));
+  let submitError = null;
+  for (let attempt = 0; attempt < MAX_COMPARE_AND_SWAP_ATTEMPTS;
+    attempt += 1) {
+    const applied = applyChangeTo(owner, workflowId, change, base);
+    if (applied.refusal) {
+      return settleRefusal(owner, workflowId, applied.refusal, base);
+    }
+    if (applied.unchanged) {
+      return settled(RECORD_CHANGE_OUTCOME.ALREADY_APPLIED, {
+        workflow: owner.workflowCoordinator.getWorkflowById(workflowId)});
+    }
+    const encoded = encodeChange(owner, applied.next, kind, base);
+    const written = writtenRowOf(base, encoded, tableId);
+    const swap = await compareAndSwap(owner, tableId, base, encoded);
+    submitError = swap.submitError;
+    if (swap.landed) {
+      return settled(RECORD_CHANGE_OUTCOME.ACCEPTED, {
+        workflow: acknowledge(owner, workflowId, written, applied.next)});
+    }
+    const reread = await authoritativeRecordOf(owner, tableId);
+    const decided = decideRefusedWrite(owner, workflowId,
+      {reread, base, written, next: applied.next, submitError});
+    if (decided.settled) {
+      return decided.settled;
+    }
+    base = decided.base;
+  }
+  return settled(RECORD_CHANGE_OUTCOME.UNCONFIRMED, {submitError});
 }
 
-// One owner's writes of one workflow's record run one at a time, in order.
-function serializeRecordWrite(owner, workflowId, write) {
-  owner.workflowRecordWriteTails ??= new Map();
-  const tails = owner.workflowRecordWriteTails;
+// One owner's changes of one workflow run one at a time, in order.
+function enqueueChange(owner, workflowId, run) {
+  owner.workflowRecordChangeTails ??= new Map();
+  const tails = owner.workflowRecordChangeTails;
   const previous = tails.get(workflowId) || Promise.resolve();
-  const execution = previous.then(write, write);
+  const execution = previous.then(run, run);
   const tail = execution.then(() => {}, () => {});
   tails.set(workflowId, tail);
   tail.then(() => {
@@ -401,143 +604,81 @@ function serializeRecordWrite(owner, workflowId, write) {
 }
 
 /**
- * Write the workflow's durable record: a compare-and-swap of `data` against
- * the witness the workflow state carries (see the owner contract).
- * @param {Object} owner - The split or merge workflow owner.
- * @param {Object} workflow - The state the write is derived from (its
- *   recordWitness is the compared version; it receives the new one).
- * @param {Function} buildWrite - (workflow) => {data, options}: the
- *   UPDATE's data (it must set partition_transition_metadata, string or
- *   null; a data without partition_transition_state keeps the witness's
- *   state) and the gateway mutation options. Called in this owner's turn,
- *   so a write of the live workflow carries every earlier write's effect.
- * @return {Promise<Object>} {accepted, outcome, result}.
+ * Apply one change to the workflow's durable record (see the owner
+ * contract).
+ * @param {Object} owner - The split or merge workflow owner
+ *   (decodeWorkflowRecord, encodeWorkflowRecord, encodeWorkflowRecordClear,
+ *   workflowCoordinator, getControlPlaneSystemTableGateway, listTableInfos,
+ *   workflowOwnerId, now).
+ * @param {string} workflowId
+ * @param {Function} change - (workflow|null, stored) => next |
+ *   RECORD_UNCHANGED | RECORD_CLEARED | refuseRecordChange(...).
+ * @param {Object} options
+ * @param {string} options.tableId - The table whose record it is.
+ * @param {string} [options.kind] - RECORD_CHANGE_KIND (TRANSITION default).
+ * @param {Object|null} [options.readBase] - With no lineage, the row the
+ *   caller READ (its registration derived from it): the first compared
+ *   base instead of the view. Only ever compared, never written.
+ * @return {Promise<Object>} {outcome, accepted, workflow, refusal}.
  */
-function writeWorkflowRecord(owner, workflow, buildWrite) {
-  if (!workflow?.recordWitness ||
-      typeof workflow.recordWitness !== OBJECT_TYPE) {
-    owner.logger?.warn?.(RECORD_WRITE_LOG_MSG.NO_WITNESS,
-      {workflowId: workflow?.workflowId ?? null});
-    return Promise.resolve(
-      {accepted: false, outcome: RECORD_WRITE_OUTCOME.NO_WITNESS});
+function applyRecordChange(owner, workflowId, change, options) {
+  if (typeof change !== FUNCTION_TYPE) {
+    throw new TypeError(RECORD_CHANGE_ERROR_MSG.NOT_A_CHANGE +
+      String(workflowId));
   }
-  return serializeRecordWrite(owner, String(workflow.workflowId),
-    () => writeRecordNow(owner, workflow, buildWrite));
-}
-
-async function writeRecordNow(owner, workflow, buildWrite) {
-  const witness = comparedWitnessOf(owner, workflow);
-  const restoreLease = renewLeaseOnWrite(owner, workflow);
-  const built = buildWrite(workflow);
-  const data = built.data;
-  // A write that leaves the state column alone (a claim or renewal) keeps
-  // the compared state.
-  const written = recordWitnessOf({
-    partition_transition_metadata: data.partition_transition_metadata,
-    partition_transition_state:
-      Object.hasOwn(data, 'partition_transition_state') ?
-        data.partition_transition_state : witness.state,
-  });
-  let result = null;
-  let submitError = null;
-  try {
-    result = await owner.getControlPlaneSystemTableGateway()
-      .updateSystemTableRow(TABLES.TABLES, {
-        table_id: workflow.tableId,
-        partition_transition_metadata: witness.metadata,
-        partition_transition_state: witness.state,
-      }, data, built.options);
-  } catch (error) {
-    submitError = error;
-  }
-  const outcome = !submitError && result?.success !== false &&
-    affectedRowsOf(result) === 1 ? RECORD_WRITE_OUTCOME.ACCEPTED :
-    (await reconcileRefusedWrite(owner, workflow, written)).outcome;
-  const accepted = ACCEPTED_OUTCOMES.has(outcome);
-  if (accepted) {
-    acknowledgeWrite(owner, workflow, written);
-  } else {
-    restoreLease();
-  }
-  // A submission that failed and moved nothing the re-read can see is the
-  // submission's own failure, answered as such.
-  if (submitError && outcome === RECORD_WRITE_OUTCOME.UNCONFIRMED) {
-    throw submitError;
-  }
-  return {accepted, outcome, result};
+  const id = String(workflowId);
+  return enqueueChange(owner, id,
+    () => runChange(owner, id, change, options));
 }
 
 /**
- * The typed error a write that must land (registration, updates,
- * participant checkpoints, the terminal clear) throws when it did not:
+ * The typed error a change that must land throws when it did not:
  * `superseded` when another owner holds the record (group retirement stops
- * re-driving on it).
- * @param {Object} workflow
- * @param {Object} write - writeWorkflowRecord's answer.
+ * re-driving on it), `unconfirmed` when nothing could be decided.
+ * @param {string} workflowId
+ * @param {Object} write - applyRecordChange's answer.
  * @return {Error}
  */
-function recordWriteRefusedError(workflow, write) {
-  return Object.assign(new Error(RECORD_WRITE_ERROR_MSG.REFUSED +
-    `${workflow?.workflowId} (${write.outcome})`), {
-    recordWriteOutcome: write.outcome,
-    superseded: write.outcome === RECORD_WRITE_OUTCOME.SUPERSEDED,
+function recordChangeRefusedError(workflowId, write) {
+  return Object.assign(new Error(RECORD_CHANGE_ERROR_MSG.REFUSED +
+    `${workflowId} (${write.outcome}` +
+    `${write.refusal ? `: ${write.refusal.reason}` : ''})`), {
+    recordChangeOutcome: write.outcome,
+    refusal: write.refusal ?? null,
+    superseded: write.outcome === RECORD_CHANGE_OUTCOME.SUPERSEDED,
     unacknowledged: [],
     acknowledgedReplicaIds: [],
   });
 }
 
 /**
- * writeWorkflowRecord for a write that must land: throws
- * recordWriteRefusedError when it did not.
+ * applyRecordChange for a change that must land: throws
+ * recordChangeRefusedError when it did not (ACCEPTED and ALREADY_APPLIED
+ * land).
  * @param {Object} owner
- * @param {Object} workflow
- * @param {Function} buildWrite
- * @return {Promise<Object>} The accepted write's answer.
+ * @param {string} workflowId
+ * @param {Function} change
+ * @param {Object} options
+ * @return {Promise<Object>} The landed change's answer.
  */
-async function writeWorkflowRecordOrThrow(owner, workflow, buildWrite) {
-  const write = await writeWorkflowRecord(owner, workflow, buildWrite);
+async function applyRecordChangeOrThrow(owner, workflowId, change, options) {
+  const write = await applyRecordChange(owner, workflowId, change, options);
   if (!write.accepted) {
-    throw recordWriteRefusedError(workflow, write);
+    throw recordChangeRefusedError(workflowId, write);
   }
   return write;
 }
 
-/**
- * One workflow update derived from the CURRENT in-memory workflow; when it
- * is refused because this owner's own earlier write is on the record (the
- * workflow was rebuilt from that record), the update is derived ONCE more
- * from the rebuilt workflow - never re-applied from the refused state.
- * @param {Object} owner - The workflow owner (workflowCoordinator).
- * @param {string} workflowId
- * @param {Function} updatesOf - (workflow) => the updateWorkflow updates.
- * @return {Promise<Object>} The updated workflow.
- */
-async function updateRecordAdoptingOwnWrite(owner, workflowId, updatesOf) {
-  const coordinator = owner.workflowCoordinator;
-  try {
-    return await coordinator.updateWorkflow(workflowId,
-      updatesOf(coordinator.requireWorkflow(workflowId)));
-  } catch (error) {
-    if (error?.recordWriteOutcome !== RECORD_WRITE_OUTCOME.RESYNCED) {
-      throw error;
-    }
-    return coordinator.updateWorkflow(workflowId,
-      updatesOf(coordinator.requireWorkflow(workflowId)));
-  }
-}
-
-// The record store's start-of-workflow surface (registerWorkflowWithClaim).
-const WORKFLOW_RECORD_STORE = Object.freeze({
-  beginWorkflowRecordLineage: (owner, workflowId) =>
-    beginWorkflowRecordLineage(owner, workflowId),
-  recordWitnessOf: (tablesRow) => recordWitnessOf(tablesRow),
-});
-
 export {
-  WORKFLOW_RECORD_STORE,
-  beginWorkflowRecordLineage,
-  recordWitnessOf,
-  updateRecordAdoptingOwnWrite,
-  writeWorkflowRecord,
-  writeWorkflowRecordOrThrow,
+  RECORD_CHANGE_KIND,
+  RECORD_CHANGE_OUTCOME,
+  RECORD_CLEARED,
+  RECORD_UNCHANGED,
+  applyRecordChange,
+  applyRecordChangeOrThrow,
+  bytesOf as recordBytesOf,
+  forgetWorkflowRecord,
+  isRefusal as isRecordRefusal,
+  storedTransitionOf,
+  refuseRecordChange,
 };

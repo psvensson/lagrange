@@ -9,7 +9,6 @@ import {
   claimWorkflowOwnershipCore,
   renewWorkflowOwnershipCore,
 } from './managed-workflow-ownership-core.js';
-import {writeWorkflowRecord} from './managed-workflow-record-store.js';
 import {
   SPLIT_PARTICIPANT_PREFIX,
   isSplitSourceAckTransitionAllowed,
@@ -186,57 +185,6 @@ class ManagedSplitWorkflowOwnershipMethods {
       workflowId,
       ownership: registration.refusal,
     };
-  }
-
-  /**
-   * Durable claim persistence for the ownership machinery: the claim (or
-   * renewal) is a compare-and-swap on the record as read
-   * (managed-workflow-record-store.js) - two nodes claiming from the same
-   * read can never both land, and a claim from a stale read lands nowhere.
-   * @param {Object} workflow - Claim candidate (carries fenceToken,
-   *   workflowOwnerId, leaseExpiresAt and the record witness).
-   * @return {Promise<Object>} {accepted: boolean, workflow}.
-   * @private
-   */
-  async persistSplitWorkflowClaim(workflow) {
-    const write = await writeWorkflowRecord(this, workflow, (candidate) => ({
-      data: {
-        partition_transition_metadata: JSON.stringify(
-          this.buildPersistedTransitionMetadata(candidate)),
-        updated_at: candidate.updatedAt,
-      },
-      // Claim/renew writes are not epoch transitions: they tolerate pending
-      // cache visibility (the compare-and-swap carries the race guarantee).
-      options: this.buildManagedSplitMutationOptions({
-        allowPendingVisibility: true,
-      }),
-    }));
-    return {accepted: write.accepted, workflow};
-  }
-
-  /**
-   * Durable transition persistence for the ownership machinery: a fenced
-   * workflow transition lands with the FULL transition payload (epoch
-   * fields included) as a compare-and-swap on the record as read. The
-   * in-memory assertTransitionFence has already enforced exact
-   * fence/owner/lease; this write is the durable race guard. Returns the
-   * storage-hook shape ({accepted}); the machinery throws STALE_FENCE_TOKEN
-   * on rejection.
-   * @param {Object} workflow - Transition candidate.
-   * @return {Promise<Object>} {accepted: boolean, workflow}.
-   * @private
-   */
-  async persistSplitWorkflowTransitionFence(workflow) {
-    const write = await writeWorkflowRecord(this, workflow, (candidate) => {
-      const built = this.buildSplitTransitionUpdatePayload(candidate);
-      return {
-        data: built.updatePayload,
-        options: this.buildSplitTransitionMutationOptions(candidate,
-          built.updatePayload, built.serializedMetadata,
-          built.isEpochTransition),
-      };
-    });
-    return {accepted: write.accepted, workflow};
   }
 }
 

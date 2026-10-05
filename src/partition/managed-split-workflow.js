@@ -12,7 +12,8 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
-import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
+import {RecordProjectedWorkflowCoordinator} from
+  './managed-workflow-record-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
 import {TimeoutPolicy} from '../workflow/timeout-policy.js';
 import {WorkflowStepRunner} from '../workflow/workflow-step-runner.js';
@@ -53,7 +54,6 @@ import {
 } from './managed-split-workflow-ownership-methods.js';
 import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
 import {registerWorkflowWithClaim} from './managed-workflow-ownership-core.js';
-import {WORKFLOW_RECORD_STORE} from './managed-workflow-record-store.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_MANAGED_SPLIT = 'managed_split';
@@ -112,20 +112,14 @@ class ManagedSplitWorkflow {
       DEFAULT_WORKFLOW_LEASE_MS;
     this.groupRetirementRedrive =
       createGroupRetirementRedrive(this, options);
-    this.workflowCoordinator = options.workflowCoordinator ||
-      new DurableWorkflowCoordinator({
-        persistWorkflow: async (workflow) =>
-          this.persistWorkflowTransition(workflow),
-        persistWorkflowClaim: async (workflow, context) =>
-          this.persistSplitWorkflowClaim(workflow, context),
-        persistWorkflowTransition: async (workflow, context) =>
-          this.persistSplitWorkflowTransitionFence(workflow, context),
-        persistParticipant: async (participant) =>
-          this.persistWorkflowParticipantState(participant),
-        isParticipantTransitionAllowed: (participantKey, from, to) =>
-          this.isSplitParticipantTransitionAllowed(participantKey, from, to),
-        now: this.now,
-      });
+    // The in-memory workflows are projections of their durable records;
+    // every mutation is a change of the record (owner decision 2026-10-05).
+    this.workflowCoordinator = new RecordProjectedWorkflowCoordinator({
+      owner: this,
+      isParticipantTransitionAllowed: (participantKey, from, to) =>
+        this.isSplitParticipantTransitionAllowed(participantKey, from, to),
+      now: this.now,
+    });
     this.executionTimeoutPolicy = options.executionTimeoutPolicy ||
       new TimeoutPolicy({
         operationName: LOCAL_STR_MANAGED_SPLIT,
@@ -380,7 +374,7 @@ class ManagedSplitWorkflow {
       }),
       createdAt: now,
       updatedAt: now,
-    }, tableInfo, WORKFLOW_RECORD_STORE);
+    }, tableInfo);
     if (!registration.workflow) {
       return this.refuseSplitOwnershipAtStart(workflowId, partitionId,
         registration, tableInfo);
@@ -490,22 +484,21 @@ class ManagedSplitWorkflow {
       if (childProvisioningDeferral) {
         return childProvisioningDeferral;
       }
-      const transitionMetadata = {
-        ...workflow.metadata,
+      // A change of the record (its plan delta merged onto the record's own
+      // metadata at the change's turn); the canonical child participants
+      // ride the same write (the encoder materializes them).
+      const planDelta = {
         [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
           compactAdmission,
         [PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT]:
           transitionTopologySnapshot,
         ...this.buildSplitPlanTransitionMetadata(splitPlan),
       };
-      this.ensureCanonicalSplitParticipants(
-        workflowId,
-        transitionMetadata,
-      );
-      await this.workflowCoordinator.updateWorkflow(workflowId, {
-        status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
-        metadata: transitionMetadata,
-      });
+      const prepared = await this.workflowCoordinator.updateWorkflow(
+        workflowId, (current) => ({...current,
+          status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
+          metadata: {...current.metadata, ...planDelta}}));
+      const transitionMetadata = prepared.metadata;
 
       const leftPartitionMetadata = {
         partition_id: splitPlan.leftPartition.partitionId,
@@ -554,7 +547,7 @@ class ManagedSplitWorkflow {
       ]);
 
       await markTargetProvisioningDispatched(this, workflowId,
-        transitionMetadata, splitPlan.leftPartition.partitionId);
+        splitPlan.leftPartition.partitionId);
       await this.provisionInitialTablePartition({
         tableId,
         tableName,
@@ -577,7 +570,7 @@ class ManagedSplitWorkflow {
           SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
       await markTargetProvisioningDispatched(this, workflowId,
-        transitionMetadata, splitPlan.rightPartition.partitionId);
+        splitPlan.rightPartition.partitionId);
       await this.provisionInitialTablePartition({
         tableId,
         tableName,
@@ -600,16 +593,15 @@ class ManagedSplitWorkflow {
           SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
 
-      await this.workflowCoordinator.updateWorkflow(workflowId, {
-        status: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
-        metadata: transitionMetadata,
-      });
+      const backfilling = await this.workflowCoordinator.updateWorkflow(
+        workflowId, (current) => ({...current,
+          status: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING}));
 
       await this.startSplitReplicationOnSourcePartition(
         partitionId,
         tableId,
         tableName,
-        transitionMetadata,
+        backfilling.metadata,
       );
 
       this.logger.info(QUERY_LOG_MSG.TABLE_SPLIT_PREPARED, {

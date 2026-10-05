@@ -8,7 +8,8 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
-import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
+import {RecordProjectedWorkflowCoordinator} from
+  './managed-workflow-record-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
 import {TimeoutPolicy} from '../workflow/timeout-policy.js';
 import {WorkflowStepRunner} from '../workflow/workflow-step-runner.js';
@@ -58,7 +59,6 @@ import {
 } from './managed-merge-workflow-topology-bindings.js';
 import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
 import {registerWorkflowWithClaim} from './managed-workflow-ownership-core.js';
-import {WORKFLOW_RECORD_STORE} from './managed-workflow-record-store.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -114,8 +114,8 @@ function resolvePositiveInteger(value, fallback) {
  * borrows them instead of duplicating the logic.
  */
 const REUSED_SPLIT_STATE_METHOD_NAMES = Object.freeze([
-  'persistWorkflowParticipantState',
   'restoreParticipantsFromMetadata',
+  'canonicalParticipantOf',
   'cloneTransitionValue',
   'compactAdmissionResult',
   'compactIneligibleNodes',
@@ -191,20 +191,14 @@ class ManagedMergeWorkflow {
       DEFAULT_WORKFLOW_LEASE_MS;
     this.groupRetirementRedrive =
       createGroupRetirementRedrive(this, options);
-    this.workflowCoordinator = options.workflowCoordinator ||
-      new DurableWorkflowCoordinator({
-        persistWorkflow: async (workflow) =>
-          this.persistWorkflowTransition(workflow),
-        persistWorkflowClaim: async (workflow, context) =>
-          this.persistMergeWorkflowClaim(workflow, context),
-        persistWorkflowTransition: async (workflow, context) =>
-          this.persistMergeWorkflowTransitionFence(workflow, context),
-        persistParticipant: async (participant) =>
-          this.persistWorkflowParticipantState(participant),
-        isParticipantTransitionAllowed: (participantKey, from, to) =>
-          this.isMergeParticipantTransitionAllowed(participantKey, from, to),
-        now: this.now,
-      });
+    // The in-memory workflows are projections of their durable records;
+    // every mutation is a change of the record (owner decision 2026-10-05).
+    this.workflowCoordinator = new RecordProjectedWorkflowCoordinator({
+      owner: this,
+      isParticipantTransitionAllowed: (participantKey, from, to) =>
+        this.isMergeParticipantTransitionAllowed(participantKey, from, to),
+      now: this.now,
+    });
     this.executionTimeoutPolicy = options.executionTimeoutPolicy ||
       new TimeoutPolicy({
         operationName: LOCAL_STR_MANAGED_MERGE,
@@ -465,7 +459,7 @@ class ManagedMergeWorkflow {
       }),
       createdAt: input.now,
       updatedAt: input.now,
-    }, input.tableInfo, WORKFLOW_RECORD_STORE);
+    }, input.tableInfo);
     if (!registration.workflow) {
       return this.refuseMergeOwnershipAtStart(workflowId, sourcePartitionIds,
         registration, input.tableInfo);
@@ -648,15 +642,14 @@ class ManagedMergeWorkflow {
     const {targetNodeIdsByPartitionId, targetProvisioningAdmission} =
       await this.planMergeTargetProvisioning(input, compactAdmission);
 
-    const transitionMetadata = {
-      ...input.workflow.metadata,
-      [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]: compactAdmission,
-    };
-    this.ensureCanonicalMergeParticipants(input.workflowId, transitionMetadata);
-    await this.workflowCoordinator.updateWorkflow(input.workflowId, {
-      status: PARTITION_TRANSITION_STATE.MERGE_PREPARING,
-      metadata: transitionMetadata,
-    });
+    // A change of the record (the admission merged onto the record's own
+    // metadata at the change's turn; the encoder materializes the canonical
+    // participants in the same write).
+    await this.workflowCoordinator.updateWorkflow(input.workflowId,
+      (current) => ({...current,
+        status: PARTITION_TRANSITION_STATE.MERGE_PREPARING,
+        metadata: {...current.metadata,
+          [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]: compactAdmission}}));
 
     const now = this.now();
     const mergedPartitionMetadata = {
@@ -682,7 +675,7 @@ class ManagedMergeWorkflow {
       input.executionTimeoutBudget,
     );
     await markTargetProvisioningDispatched(this, input.workflowId,
-      transitionMetadata, input.mergedPartitionId);
+      input.mergedPartitionId);
     await this.provisionInitialTablePartition({
       tableId: input.tableId,
       tableName: input.tableName,
@@ -705,16 +698,13 @@ class ManagedMergeWorkflow {
         MERGE_PARTICIPANT_PREFIX.MERGED_TARGET,
       [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.TARGET_PROVISIONED,
       [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
-    });
+    }, {owned: true});
 
-    await this.workflowCoordinator.updateWorkflow(input.workflowId, {
-      status: PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
-      metadata: transitionMetadata,
-    });
-    const persistedTransitionMetadata = this.buildPersistedTransitionMetadata(
-      this.workflowCoordinator.getWorkflowById(input.workflowId) ||
-        input.workflow,
-    );
+    const backfilling = await this.workflowCoordinator.updateWorkflow(
+      input.workflowId, (current) => ({...current,
+        status: PARTITION_TRANSITION_STATE.MERGE_BACKFILLING}));
+    const persistedTransitionMetadata =
+      this.buildPersistedTransitionMetadata(backfilling);
     for (const sourcePartitionId of input.sourcePartitionIds) {
       await this.startMergeReplicationOnSourcePartition(
         sourcePartitionId,

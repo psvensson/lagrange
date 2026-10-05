@@ -27,6 +27,7 @@ import {
 import {claimWorkflowOwnershipCore} from
   '../../src/partition/managed-workflow-ownership-core.js';
 import {buildWorkflow} from './managed-split-workflow-test-helpers.js';
+import {recordParticipant} from './workflow-record-test-support.js';
 import {
   openRecordStore,
   openView,
@@ -85,11 +86,17 @@ async function staleOwnerWorld() {
   clock.now += 2 * LEASE_MS;
   const a = splitOwner(store, openView(store), 'A', clock);
   const prepared = await a.workflow.execute(SOURCE);
-  const live = a.workflow.resolveWorkflowState(workflowId);
-  const source = live.participants.get(SOURCE_KEY);
-  source.checkpoint = {...(source.checkpoint || {}), ...FACTS};
-  await a.workflow.workflowCoordinator.persistParticipantState(workflowId,
-    SOURCE_KEY);
+  a.workflow.resolveWorkflowState(workflowId);
+  // A records the retirement facts on the source participant (a change of
+  // the record by its owner).
+  await a.workflow.workflowCoordinator.updateWorkflow(workflowId,
+    (current) => {
+      const participants = new Map(current.participants);
+      const source = participants.get(SOURCE_KEY);
+      participants.set(SOURCE_KEY, {...source,
+        checkpoint: {...(source.checkpoint || {}), ...FACTS}});
+      return {...current, participants};
+    });
   return {store, clock, a, b, workflowId, prepared};
 }
 
@@ -115,12 +122,12 @@ const STALE_WRITES = Object.freeze([
       new Error('stale abort'))],
   ['phase (B rewrites its deferred phase)', async (world) =>
     world.b.workflow.workflowCoordinator.updateWorkflow(world.workflowId,
-      {status: PARTITION_TRANSITION_STATE.DEFERRED})],
+      (current) => ({...current,
+        status: PARTITION_TRANSITION_STATE.DEFERRED}))],
   ['frozen set, addresses, dissolved set, never-provisioned (B flushes ' +
     'its source participant)', async (world) =>
-    world.b.workflow.workflowCoordinator.upsertParticipant(
-      world.workflowId, {participantKey: SOURCE_KEY,
-        participantId: SOURCE_KEY, status: 'backfill_running',
+    recordParticipant(world.b.workflow, world.workflowId,
+      {participantKey: SOURCE_KEY, status: 'backfill_running',
         checkpoint: {}})],
   ['completion (B clears the record)', async (world) =>
     world.b.workflow.persistTerminalTransitionClear(

@@ -65,26 +65,24 @@ function buildRecoverableWorkflow(options = {}) {
   const persistedWorkflows = [];
   const updateCalls = [];
 
-  const workflowCoordinator = new DurableWorkflowCoordinator({
-    persistWorkflow: async (workflow) => {
-      persistedWorkflows.push(structuredClone(workflow));
-      const cdcService = options.cdcIntegrationService;
-      if (cdcService &&
-          typeof cdcService.updateSystemTableRow === 'function') {
-        const serializedMetadata = JSON.stringify(workflow.metadata);
-        await cdcService.updateSystemTableRow(
-          'tables',
-          {table_id: workflow.tableId},
-          {
-            partition_transition_state: workflow.status,
-            partition_transition_metadata: serializedMetadata,
-            updated_at: workflow.updatedAt,
-          },
-        );
-      }
-    },
-    now: () => FIXTURE_NOW,
-  });
+  // The durable record writes, captured as the workflow states they
+  // persist (the record store writes every change through the CDC seam).
+  const captureRecordWrite = (tableName, data) => {
+    if (tableName !== 'tables' ||
+        typeof data?.partition_transition_metadata !== 'string') {
+      return;
+    }
+    const metadata = JSON.parse(data.partition_transition_metadata);
+    persistedWorkflows.push({
+      workflowId: metadata.workflowId,
+      ownerKey: FIXTURE_PARTITION_ID,
+      tableId: FIXTURE_TABLE_ID,
+      status: data.partition_transition_state ??
+        persistedWorkflows.at(-1)?.status ?? null,
+      metadata,
+      participants: new Map(Object.entries(metadata.participants || {})),
+    });
+  };
 
   const sourceReplicationState = {started: false, metadata: null};
   const transactionCoordinator =
@@ -100,10 +98,10 @@ function buildRecoverableWorkflow(options = {}) {
 
   const workflow = new ManagedSplitWorkflow({
     nodeId: FIXTURE_NODE_ID,
-    workflowCoordinator,
     cdcIntegrationService: options.cdcIntegrationService || {
       async updateSystemTableRow(tableName, whereClause, data, opts) {
         updateCalls.push({tableName, whereClause, data, options: opts});
+        captureRecordWrite(tableName, data);
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow() {
@@ -196,7 +194,7 @@ function buildRecoverableWorkflow(options = {}) {
 
   return {
     workflow,
-    workflowCoordinator,
+    workflowCoordinator: workflow.workflowCoordinator,
     persistedWorkflows,
     updateCalls,
     sourceReplicationState,

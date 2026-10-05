@@ -334,7 +334,7 @@ class ManagedSplitWorkflowDissolutionMethods {
         // participant checkpoint (group-retirement-members.js), kept as is.
         [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
-      });
+      }, {owned: true});
       this.groupRetirementRedrive.settle(workflowId, sourcePartitionId);
       this.logger.info(MANAGED_SPLIT_LOG_MSG.DISSOLUTION_DISPATCHED, {
         workflowId,
@@ -342,24 +342,43 @@ class ManagedSplitWorkflowDissolutionMethods {
         dissolvedReplicaIds,
       });
     } catch (error) {
-      this.logger.error(MANAGED_SPLIT_LOG_MSG.DISSOLUTION_FAILED, {
-        workflowId,
-        sourcePartitionId,
-        error: error?.message || error,
-      });
-      // The progress so far is durable on the participant checkpoint (each
-      // positive answer as it arrived), so a resumed dissolution re-sends
-      // only to the frozen members that have not answered.
+      await this.recordSplitDissolutionFailure(workflowId, sourcePartitionId,
+        fenceToken, error);
+    }
+  }
+
+  /**
+   * A dissolution that did not complete: logged, recorded on the source
+   * participant (the progress so far is durable on its checkpoint - each
+   * positive answer as it arrived - so a resumed dissolution re-sends only to
+   * the frozen members that have not answered) unless this owner was
+   * superseded (the record is another owner's: it records nothing), and
+   * handed to the re-drive (told it was superseded, when it was).
+   * @param {string} workflowId
+   * @param {string} sourcePartitionId
+   * @param {number|null} fenceToken
+   * @param {Error} error
+   * @return {Promise<void>}
+   * @private
+   */
+  async recordSplitDissolutionFailure(workflowId, sourcePartitionId,
+    fenceToken, error) {
+    this.logger.error(MANAGED_SPLIT_LOG_MSG.DISSOLUTION_FAILED, {
+      workflowId,
+      sourcePartitionId,
+      error: error?.message || error,
+    });
+    if (error?.superseded !== true) {
       await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
         [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
           SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
         [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
         [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.DISSOLUTION_FAILED,
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
-      });
-      this.reportIncompleteGroupRetirement(workflowId, sourcePartitionId,
-        error, () => this.finalizeSplitDissolutionIfReady(workflowId));
+      }, {owned: true});
     }
+    this.reportIncompleteGroupRetirement(workflowId, sourcePartitionId,
+      error, () => this.finalizeSplitDissolutionIfReady(workflowId));
   }
 
   /**

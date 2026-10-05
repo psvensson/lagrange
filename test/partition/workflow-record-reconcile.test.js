@@ -9,10 +9,10 @@
  *     provisions both children and reaches backfilling.
  * W4c an owner whose EARLIER write landed while it saw a failure (lost
  *     acknowledgement, its view still showing the old record): nothing is
- *     sent on the unconfirmed flip; its next write is refused, it rebuilds
- *     from the record (its own DISPATCHED mark is never written back to
- *     NONE), and the abort is derived from the adopted record and lands
- *     (no self-deadlock).
+ *     sent on the unconfirmed flip; its next change's compare-and-swap is
+ *     refused, the authoritative re-read is adopted and the SAME change
+ *     (the abort) is applied to it: its own DISPATCHED mark is never
+ *     written back to NONE, and the abort lands (no self-deadlock).
  * W5  a healthy owner driving a retirement longer than its lease renews the
  *     lease (compare-and-swap) and is never superseded; once it is dead its
  *     lease lapses and another owner's claim lands.
@@ -144,8 +144,11 @@ test('W4c an earlier write of this owner landed while it saw a failure: ' +
   const realUpdate = coordinator.updateWorkflow.bind(coordinator);
   let flipped = false;
   coordinator.updateWorkflow = async (workflowId, updates) => {
-    const isLeftFlip = !flipped &&
-      updates?.metadata?.targetProvisioning?.[LEFT] === 'dispatched';
+    // The change is a pure function of the record: applied to the
+    // projection here only to recognise LEFT's flip.
+    const isLeftFlip = !flipped && typeof updates === 'function' &&
+      updates(coordinator.getWorkflowById(workflowId))?.metadata
+        ?.targetProvisioning?.[LEFT] === 'dispatched';
     if (!isLeftFlip) {
       return realUpdate(workflowId, updates);
     }
@@ -165,9 +168,10 @@ test('W4c an earlier write of this owner landed while it saw a failure: ' +
     'setup: the flip landed and its acknowledgement was lost');
   t.ok(first.threw, 'the attempt failed on the unconfirmed flip');
   t.same(provisioned, [], 'nothing was sent on an unconfirmed flip');
-  t.ok(a.log.lines.some((line) => line.level === 'warn' &&
-    /own earlier write is on the record/u.test(line.message)),
-  'the refused abort rebuilt the workflow from the record');
+  t.equal(a.log.lines.filter((line) => line.level === 'warn' &&
+    /another owner holds the record/u.test(line.message)).length, 0,
+  'the refused abort re-read the record and adopted its own landed flip ' +
+    '(never superseded, no rebase)');
   t.equal(store.tablesRow().partition_transition_state, 'failed',
     'the abort was derived from the adopted record and landed');
   t.same(store.metadata().targetProvisioning,

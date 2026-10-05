@@ -5,9 +5,6 @@ import {
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {
-  WORKFLOW_ERROR_MSG,
-} from '../workflow/workflow-constants.js';
-import {
   MANAGED_MERGE_ERROR_MSG,
   MANAGED_MERGE_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
@@ -16,11 +13,7 @@ import {
 import {
   stampOwnershipClaimMetadata,
 } from './managed-workflow-ownership-core.js';
-import {
-  updateRecordAdoptingOwnWrite,
-  writeWorkflowRecord,
-  writeWorkflowRecordOrThrow,
-} from './managed-workflow-record-store.js';
+import {RECORD_CHANGE_KIND} from './managed-workflow-record-store.js';
 import {
   isRetryableManagedSplitExecutionFailure,
   resolveRetryableManagedSplitExecutionDecisionType,
@@ -30,8 +23,6 @@ const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_MERGE_EXECUTION_FAILURE = 'merge_execution_failure';
 const LOCAL_STR_MERGE_EXECUTION_DEFERRED = 'merge_execution_deferred';
-const LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE =
-  'merge_source_execution_failure';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_EPOCH_EFFECT_DETAIL =
   ': expected exactly 1 row update for workflow ';
@@ -96,18 +87,17 @@ class ManagedMergeWorkflowPersistenceMethods {
         typeof error.timeoutClassification === LOCAL_STR_OBJECT ?
           error.timeoutClassification :
           null;
-      await updateRecordAdoptingOwnWrite(this, workflowId, (current) => ({
-        status: PARTITION_TRANSITION_STATE.FAILED,
-        metadata: {
-          ...(current.metadata || {}),
-          [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
-            classification: LOCAL_STR_MERGE_EXECUTION_FAILURE,
-            message: error?.message || MANAGED_MERGE_ERROR_MSG.START_FAILED,
-            failedAt: new Date(this.now()).toISOString(),
-            ...(timeoutClassification ? {timeoutClassification} : {}),
-          },
-        },
-      }));
+      const failure = {
+        classification: LOCAL_STR_MERGE_EXECUTION_FAILURE,
+        message: error?.message || MANAGED_MERGE_ERROR_MSG.START_FAILED,
+        failedAt: new Date(this.now()).toISOString(),
+        ...(timeoutClassification ? {timeoutClassification} : {}),
+      };
+      await this.workflowCoordinator.updateWorkflow(workflowId,
+        (current) => ({...current,
+          status: PARTITION_TRANSITION_STATE.FAILED,
+          metadata: {...(current.metadata || {}),
+            [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: failure}}));
     } catch (persistError) {
       this.logger.error(MANAGED_MERGE_LOG_MSG.PERSIST_FAILURE_FAILED, {
         workflowId,
@@ -142,8 +132,7 @@ class ManagedMergeWorkflowPersistenceMethods {
     );
     const errorMessage = options.error?.message ||
       MANAGED_MERGE_ERROR_MSG.START_FAILED;
-    const deferredMetadata = {
-      ...(workflow?.metadata || {}),
+    const deferredDelta = {
       [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
         options.admission,
       [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
@@ -158,10 +147,9 @@ class ManagedMergeWorkflowPersistenceMethods {
     };
 
     if (workflow) {
-      await this.workflowCoordinator.updateWorkflow(options.workflowId, {
-        status: deferredState,
-        metadata: deferredMetadata,
-      });
+      await this.workflowCoordinator.updateWorkflow(options.workflowId,
+        (current) => ({...current, status: deferredState,
+          metadata: {...current.metadata, ...deferredDelta}}));
     }
 
     return {
@@ -189,17 +177,6 @@ class ManagedMergeWorkflowPersistenceMethods {
       POST_ADMISSION_EXECUTION_FAILURE_OUTCOME.NOT_RETRYABLE;
   }
 
-  /**
-   * Persist workflow state through the canonical tables transition row.
-   *
-   * On MERGE_CUTOVER_ACTIVE the pending partition version is promoted to
-   * active and cleared in the same durable mutation — this is the epoch
-   * cutover that makes the merged target routable and turns the two source
-   * key ranges into stale routes.
-   * @param {Object} workflow - Workflow state.
-   * @return {Promise<void>}
-   * @private
-   */
   /**
    * Build the full tables-row transition mutation payload for one
    * workflow: serialized transition metadata, the pending epoch field,
@@ -242,7 +219,34 @@ class ManagedMergeWorkflowPersistenceMethods {
     };
   }
 
-  async persistWorkflowTransition(workflow) {
+  /**
+   * Encode one change's next workflow for the record store
+   * (managed-workflow-record-store.js): the full transition payload (the
+   * cutover's epoch promotion, FAILED's withdrawal) or, for a claim, the
+   * metadata alone. The canonical merge participants ride every write.
+   * Fail-closed: a transition with no CDC bridge throws (nothing is
+   * written).
+   * @param {Object} workflow - The change's next workflow.
+   * @param {string} kind - RECORD_CHANGE_KIND.
+   * @return {Object} {data, options}.
+   * @private
+   */
+  encodeWorkflowRecord(workflow, kind) {
+    const candidate = this.withCanonicalMergeParticipants(workflow);
+    if (kind === RECORD_CHANGE_KIND.CLAIM) {
+      return {
+        data: {
+          partition_transition_metadata: JSON.stringify(
+            this.buildPersistedTransitionMetadata(candidate)),
+          updated_at: candidate.updatedAt,
+        },
+        // Claim/renew writes are not epoch transitions: they tolerate pending
+        // cache visibility (the compare-and-swap carries the race guarantee).
+        options: this.buildManagedMergeMutationOptions({
+          allowPendingVisibility: true,
+        }),
+      };
+    }
     const cdcIntegrationService = this.getCDCIntegrationService();
     if (!cdcIntegrationService ||
         typeof cdcIntegrationService.updateSystemTableRow !==
@@ -251,24 +255,42 @@ class ManagedMergeWorkflowPersistenceMethods {
         MANAGED_MERGE_ERROR_MSG.TRANSITION_PERSIST_UNAVAILABLE,
       );
     }
-    // The one record writer: a compare-and-swap on the record as read
-    // (managed-workflow-record-store.js); a refusal throws, typed.
-    await writeWorkflowRecordOrThrow(this, workflow, (candidate) => {
-      const {updatePayload, serializedMetadata, isEpochTransition} =
-        this.buildMergeTransitionUpdatePayload(candidate);
-      return {
-        data: updatePayload,
-        options: this.buildManagedMergeMutationOptions({
-          allowPendingVisibility: !isEpochTransition,
-          expectedCacheFields: {
-            pending_partition_version:
-              updatePayload.pending_partition_version,
-            partition_transition_state: candidate.status,
-            partition_transition_metadata: serializedMetadata,
-          },
-        }),
-      };
-    });
+    const {updatePayload, serializedMetadata, isEpochTransition} =
+      this.buildMergeTransitionUpdatePayload(candidate);
+    return {
+      data: updatePayload,
+      options: this.buildManagedMergeMutationOptions({
+        allowPendingVisibility: !isEpochTransition,
+        expectedCacheFields: {
+          pending_partition_version: updatePayload.pending_partition_version,
+          partition_transition_state: candidate.status,
+          partition_transition_metadata: serializedMetadata,
+        },
+      }),
+    };
+  }
+
+  /**
+   * Encode the terminal clear for the record store.
+   * @return {Object} {data, options}.
+   * @private
+   */
+  encodeWorkflowRecordClear() {
+    return {
+      data: {
+        partition_transition_state: null,
+        partition_transition_metadata: null,
+        pending_partition_version: null,
+        updated_at: this.now(),
+      },
+      options: this.buildManagedMergeMutationOptions({
+        allowPendingVisibility: false,
+        expectedCacheFields: {
+          partition_transition_state: null,
+          partition_transition_metadata: null,
+        },
+      }),
+    };
   }
 
   /**
@@ -336,169 +358,6 @@ class ManagedMergeWorkflowPersistenceMethods {
     // tables transition row carries the fencing state without a schema
     // change.
     return stampOwnershipClaimMetadata(metadata, workflow);
-  }
-
-  /**
-   * Durable claim persistence for the ownership machinery (mirrors the
-   * split owner): the claim (or renewal) is a compare-and-swap on the record
-   * as read (managed-workflow-record-store.js).
-   * @param {Object} workflow - Claim candidate.
-   * @return {Promise<Object>} {accepted: boolean, workflow}.
-   * @private
-   */
-  async persistMergeWorkflowClaim(workflow) {
-    const write = await writeWorkflowRecord(this, workflow, (candidate) => ({
-      data: {
-        partition_transition_metadata: JSON.stringify(
-          this.buildPersistedTransitionMetadata(candidate)),
-        updated_at: candidate.updatedAt,
-      },
-      // Claim/renew writes are not epoch transitions: they tolerate pending
-      // cache visibility (the compare-and-swap carries the race guarantee).
-      options: this.buildManagedMergeMutationOptions({
-        allowPendingVisibility: true,
-      }),
-    }));
-    return {accepted: write.accepted, workflow};
-  }
-
-  /**
-   * Durable transition persistence for the ownership machinery (mirrors
-   * the split owner): a fenced workflow transition lands with the FULL
-   * transition payload (epoch fields included) as a compare-and-swap on the
-   * record as read. Returns the storage-hook shape ({accepted}); the
-   * machinery throws STALE_FENCE_TOKEN on rejection.
-   * @param {Object} workflow - Transition candidate.
-   * @return {Promise<Object>} {accepted: boolean, workflow}.
-   * @private
-   */
-  async persistMergeWorkflowTransitionFence(workflow) {
-    const write = await writeWorkflowRecord(this, workflow, (candidate) => {
-      const {updatePayload, serializedMetadata, isEpochTransition} =
-        this.buildMergeTransitionUpdatePayload(candidate);
-      return {
-        data: updatePayload,
-        options: this.buildManagedMergeMutationOptions({
-          allowPendingVisibility: !isEpochTransition,
-          expectedCacheFields: {
-            partition_transition_state: candidate.status,
-            partition_transition_metadata: serializedMetadata,
-          },
-        }),
-      };
-    });
-    return {accepted: write.accepted, workflow};
-  }
-
-  /**
-   * Test whether a step-runner failure is the fenced-transition CAS
-   * rejection the storage-ownership machinery raises when the CAS
-   * witness no longer matches the durable row.
-   * @param {*} error
-   * @return {boolean}
-   * @private
-   */
-  isMergeStaleFenceTransitionError(error) {
-    return error?.message === WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN;
-  }
-
-  /**
-   * Run one serialized owner-lane step, transparently recovering the
-   * SAME-owner durable-write race: a participant acknowledgement flush
-   * can rewrite the durable row while an earlier durable write is still
-   * in flight (the R1 held-cutover shape), leaving the in-memory record
-   * ahead of the row every later CAS witnesses against. On the CAS
-   * rejection the live record is re-synced from the durable row — only
-   * when the row is still owned by THIS owner at the same fence — and
-   * the step is re-executed at the same fence. A foreign claim, or a
-   * rejection after re-sync, rethrows untouched: the fence's
-   * cross-process guarantee is never retried away.
-   * @param {Object} stepOptions - workflowStepRunner.runStep options.
-   * @param {number} [attempts] - Total attempts (initial + one retry).
-   * @return {Promise<*>} The step's own settlement.
-   * @private
-   */
-  async runMergeOwnerLaneStepWithSameOwnerResync(stepOptions, attempts = 2) {
-    let lastError = null;
-    for (let attempt = 0; attempt < attempts; attempt++) {
-      try {
-        return await this.workflowStepRunner.runStep(stepOptions);
-      } catch (error) {
-        lastError = error;
-        if (!this.isMergeStaleFenceTransitionError(error) ||
-            !this.syncLiveMergeWorkflowFromDurable(
-              stepOptions.workflowId,
-            )) {
-          throw error;
-        }
-      }
-    }
-    throw lastError;
-  }
-
-  /**
-   * Persist the fail-safe FAILED transition after the fenced abort step
-   * exhausted its same-owner re-sync retries, CAS-guarding on the CURRENT
-   * durable row's transition payload instead of the divergent in-memory
-   * record. The candidate still carries this owner's fence and owner
-   * identity into the durable mutation, so the guard only ever engages
-   * for this owner's own race — a durable row claimed by another owner
-   * makes the CAS miss and the failure propagates.
-   * @param {string} workflowId
-   * @param {string} ackStatus - The failure MERGE_ACK_STATUS received.
-   * @param {Object} abortOutcomeEnum - The MERGE_ABORT_OUTCOME variants.
-   * @param {ReadonlySet<string>} preCutoverStates - Pre-cutover states
-   *   from which an abort may still persist FAILED.
-   * @return {Promise<string>} An abortOutcomeEnum value.
-   * @private
-   */
-  async persistOwnedMergeAbortFallback(
-    workflowId,
-    ackStatus,
-    abortOutcomeEnum,
-    preCutoverStates,
-  ) {
-    const workflow = this.syncLiveMergeWorkflowFromDurable(workflowId);
-    if (!workflow) {
-      throw new Error(
-        MANAGED_MERGE_ERROR_MSG.OWNED_TRANSITION_PERSIST_REJECTED +
-        ` (${workflowId})`,
-      );
-    }
-    if (workflow.status === PARTITION_TRANSITION_STATE.FAILED) {
-      return abortOutcomeEnum.ALREADY_ABORTED;
-    }
-    if (!preCutoverStates.has(workflow.status)) {
-      this.logger.error(
-        MANAGED_MERGE_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
-        {workflowId, status: workflow.status, ackStatus},
-      );
-      return abortOutcomeEnum.REFUSED_POST_CUTOVER;
-    }
-    const persistence = await this.persistMergeWorkflowTransitionFence(
-      {
-        ...workflow,
-        status: PARTITION_TRANSITION_STATE.FAILED,
-        metadata: {
-          ...(workflow.metadata || {}),
-          [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
-            classification: LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE,
-            message: ackStatus,
-            failedAt: new Date(this.now()).toISOString(),
-            retryable: true,
-          },
-        },
-        updatedAt: this.now(),
-      },
-    );
-    if (persistence?.accepted !== true) {
-      throw new Error(
-        MANAGED_MERGE_ERROR_MSG.OWNED_TRANSITION_PERSIST_REJECTED +
-        ` (${workflowId})`,
-      );
-    }
-    this.syncLiveMergeWorkflowFromDurable(workflowId);
-    return abortOutcomeEnum.ABORTED;
   }
 
   /**
@@ -571,23 +430,11 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @private
    */
   async persistTerminalTransitionClear(workflow) {
-    // The completion is the record's last write: a compare-and-swap on the
-    // record this owner last wrote or read.
-    await writeWorkflowRecordOrThrow(this, workflow, () => ({
-      data: {
-        partition_transition_state: null,
-        partition_transition_metadata: null,
-        pending_partition_version: null,
-        updated_at: this.now(),
-      },
-      options: this.buildManagedMergeMutationOptions({
-        allowPendingVisibility: false,
-        expectedCacheFields: {
-          partition_transition_state: null,
-          partition_transition_metadata: null,
-        },
-      }),
-    }));
+    // The completion is the record's last write: a change cleared only
+    // while the record is this owner's at its fence in the state the caller
+    // finished it in.
+    await this.workflowCoordinator.clearWorkflowRecord(workflow.workflowId,
+      new Set([String(workflow.status)]));
     this.logger.info(MANAGED_MERGE_LOG_MSG.TERMINAL_TRANSITION_CLEARED, {
       workflowId: workflow.workflowId,
       tableId: workflow.tableId,

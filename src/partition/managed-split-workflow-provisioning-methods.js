@@ -214,8 +214,7 @@ class ManagedSplitWorkflowProvisioningMethods {
     );
     const errorMessage = options.error?.message ||
       QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED;
-    const deferredMetadata = {
-      ...(workflow?.metadata || {}),
+    const deferredDelta = {
       [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
         options.admission,
       [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
@@ -230,10 +229,9 @@ class ManagedSplitWorkflowProvisioningMethods {
     };
 
     if (workflow) {
-      await this.workflowCoordinator.updateWorkflow(options.workflowId, {
-        status: deferredState,
-        metadata: deferredMetadata,
-      });
+      await this.workflowCoordinator.updateWorkflow(options.workflowId,
+        (current) => ({...current, status: deferredState,
+          metadata: {...current.metadata, ...deferredDelta}}));
     }
 
     return {

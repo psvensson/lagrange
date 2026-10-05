@@ -1,4 +1,7 @@
-import {registerFromRecordAsRead} from './workflow-record-test-support.js';
+import {
+  recordParticipant,
+  registerFromRecordAsRead,
+} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
@@ -509,7 +512,6 @@ test('persistWorkflowTransition includes participant state in ' +
   const {workflow} = buildWorkflow({updateCalls});
 
   // Register a workflow and add participants via the coordinator.
-  const wfCoordinator = workflow.workflowCoordinator;
   const wfRecord = await registerFromRecordAsRead(workflow, {
     workflowId: 'split-participant-persist',
     ownerKey: 'users-p1',
@@ -527,19 +529,19 @@ test('persistWorkflowTransition includes participant state in ' +
   });
 
   // Add participants through the canonical coordinator path.
-  await wfCoordinator.upsertParticipant(wfRecord.workflowId, {
+  await recordParticipant(workflow, wfRecord.workflowId, {
     participantId: SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD,
     participantKey: SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD,
     status: SPLIT_ACK_STATUS.CHILD_PROVISIONED,
     fenceToken: 1,
   });
-  await wfCoordinator.upsertParticipant(wfRecord.workflowId, {
+  await recordParticipant(workflow, wfRecord.workflowId, {
     participantId: SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD,
     participantKey: SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD,
     status: SPLIT_ACK_STATUS.CHILD_PROVISIONED,
     fenceToken: 1,
   });
-  await wfCoordinator.upsertParticipant(wfRecord.workflowId, {
+  await recordParticipant(workflow, wfRecord.workflowId, {
     participantId: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
     participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
     status: SPLIT_ACK_STATUS.BACKFILL_PROGRESS,
@@ -588,7 +590,6 @@ test('persistWorkflowTransition includes source checkpoint in ' +
   const updateCalls = [];
   const {workflow} = buildWorkflow({updateCalls});
 
-  const wfCoordinator = workflow.workflowCoordinator;
   const wfRecord = await registerFromRecordAsRead(workflow, {
     workflowId: 'split-checkpoint-persist',
     ownerKey: 'users-p1',
@@ -606,7 +607,7 @@ test('persistWorkflowTransition includes source checkpoint in ' +
   });
 
   // Add source-partition participant with checkpoint data.
-  await wfCoordinator.upsertParticipant(wfRecord.workflowId, {
+  await recordParticipant(workflow, wfRecord.workflowId, {
     participantId: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
     participantKey: SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
     status: SPLIT_ACK_STATUS.CATCHUP_READY,

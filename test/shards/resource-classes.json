@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2190,
+    "ordinary": 2193,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2207,
-  "digest": "fnv1a32-b2d6ea8f",
+  "censusSize": 2210,
+  "digest": "fnv1a32-783f10a6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1254,7 +1254,10 @@
     "test/partition/table-partition-structure.property.test.js": "ordinary",
     "test/partition/timeout-cleanup.property.test.js": "ordinary",
     "test/partition/workflow-fencing-wiring.test.js": "ordinary",
+    "test/partition/workflow-record-interleaving.property.test.js": "ordinary",
+    "test/partition/workflow-record-lagging-view.test.js": "ordinary",
     "test/partition/workflow-record-reconcile.test.js": "ordinary",
+    "test/partition/workflow-record-same-owner-race.test.js": "ordinary",
     "test/partition/workflow-record-stale-owner.test.js": "ordinary",
     "test/partition/workflow-record-two-owners.test.js": "ordinary",
     "test/partition/write-path-epoch-fencing.test.js": "ordinary",

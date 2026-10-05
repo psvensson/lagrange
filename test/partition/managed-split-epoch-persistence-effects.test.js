@@ -45,59 +45,61 @@ function buildCutoverWorkflowRecord(workflowId) {
 
 test('split cutover transition refuses to advance in-memory status ' +
   'when the durable epoch flip lands zero rows', async (t) => {
-  // The unfenced persist contract (persistWorkflowTransition) still
-  // guards the non-fenced write path: a zero-row epoch flip throws and
-  // the in-memory status must not advance.
-  const {workflow} = buildWorkflow({
-    cdcIntegrationService: {
-      async updateSystemTableRow() {
-        // Duplicate/coalesced delivery: gateway reports success but the
-        // tables row did not actually change.
-        return {success: true, affectedRows: 0};
-      },
-      async insertSystemTableRow() {
-        return {success: true};
-      },
-    },
-  });
+  // Every record write is a change of the record (managed-workflow-record-
+  // store.js): a zero-row epoch flip with no authoritative answer is
+  // UNCONFIRMED - it throws and the projection does not advance.
+  let zeroRows = false;
+  const {workflow, durableRow} = buildWorkflow({});
+  const cdc = workflow.getCDCIntegrationService();
+  const update = cdc.updateSystemTableRow.bind(cdc);
+  cdc.updateSystemTableRow = async (...args) => (zeroRows ?
+    {success: true, affectedRows: 0} : update(...args));
+  workflow.readAuthoritativeWorkflowRecord = async () => {
+    throw new Error('tables owner unavailable');
+  };
   const record = buildCutoverWorkflowRecord('split-zero-row-cutover');
-
+  await registerFromRecordAsRead(workflow, record);
+  zeroRows = true;
+  const before = durableRow.partition_transition_metadata;
   await t.rejects(
-    workflow.persistWorkflowTransition({
-      ...record,
-      recordWitness: {metadata: null, state: null},
-      status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
-    }),
-    /compare-and-swap refused/,
+    workflow.workflowCoordinator.updateWorkflow(record.workflowId,
+      (current) => ({...current,
+        status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE})),
+    /did not land|refused/,
     'a zero-row epoch flip must throw, not advance the workflow',
   );
+  t.equal(workflow.workflowCoordinator.getWorkflowById(record.workflowId)
+    .status, PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+  'the projection did not advance');
+  t.equal(durableRow.partition_transition_metadata, before,
+    'the record did not move');
 });
 
-test('split fenced cutover refuses when the ownership CAS witness ' +
-  'no longer matches (stale owner)', async (t) => {
-  // The fenced path (persistSplitWorkflowTransitionFence) must reject
-  // when the durable row's persisted metadata moved on — a concurrent
-  // owner claimed and rewrote the row between our read and write.
-  const zeroRowCdc = {
-    async updateSystemTableRow() {
-      return {success: true, affectedRows: 0};
-    },
-    async insertSystemTableRow() {
-      return {success: true};
-    },
-  };
-  const {workflow} = buildWorkflow({cdcIntegrationService: zeroRowCdc});
+test('split fenced cutover refuses when another owner claimed the record ' +
+  '(stale owner)', async (t) => {
+  // A concurrent owner claimed and rewrote the row between this owner's
+  // registration and its transition: the transition's change, applied to
+  // the authoritative record, refuses - it never lands.
+  const {workflow, durableRow} = buildWorkflow({});
+  workflow.readAuthoritativeWorkflowRecord = async () => ({...durableRow});
   const record = buildCutoverWorkflowRecord('split-fenced-stale-cas');
-  const result = await workflow.persistSplitWorkflowTransitionFence(
-    {...record, status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
-    {previousWorkflow: record},
-  );
-  t.equal(
-    result.accepted,
-    false,
-    'a zero-row CAS match means a concurrent claim moved the row: the ' +
-    'stale transition must be rejected, never landed',
-  );
+  await registerFromRecordAsRead(workflow, record);
+  const metadata = JSON.parse(durableRow.partition_transition_metadata);
+  durableRow.partition_transition_metadata = JSON.stringify({...metadata,
+    [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID]: 'owner-other',
+    [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN]:
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN] + 1,
+    [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT]:
+      Number.MAX_SAFE_INTEGER});
+  const claimed = durableRow.partition_transition_metadata;
+  const advanced = await workflow.advanceSplitPhase(record.workflowId,
+    PARTITION_TRANSITION_STATE.SPLIT_CATCHUP).then(() => true,
+    () => false);
+  t.equal(advanced, false, 'the stale owner\'s transition is refused');
+  t.equal(durableRow.partition_transition_metadata, claimed,
+    'the other owner\'s record is untouched');
+  t.equal(durableRow.partition_transition_state,
+    PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING, 'no phase landed');
 });
 
 test('split cutover transition disallows pending visibility on the ' +
@@ -151,15 +153,14 @@ test('split transition persistence fails closed when no CDC bridge is ' +
   await workflow.claimSplitWorkflowOwnership(record.workflowId);
 
   // Simulate a lost CDC bridge AFTER the claim: the durable write
-  // path disappears before the transition. The unfenced persist
-  // contract throws TRANSITION_PERSIST_UNAVAILABLE.
+  // path disappears before the transition. The record's encoder throws
+  // TRANSITION_PERSIST_UNAVAILABLE (nothing is written).
   workflow.getCDCIntegrationService = () => null;
 
   await t.rejects(
-    workflow.persistWorkflowTransition({
-      ...record,
-      status: PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
-    }),
+    workflow.workflowCoordinator.updateWorkflow(record.workflowId,
+      (current) => ({...current,
+        status: PARTITION_TRANSITION_STATE.SPLIT_CATCHUP})),
     {message: QUERY_ERROR_MSG.TABLE_SPLIT_TRANSITION_PERSIST_UNAVAILABLE},
   );
   const current = workflow.workflowCoordinator.getWorkflowById(
@@ -202,33 +203,23 @@ test('split sibling promotion refuses a zero-row partition epoch ' +
 
 test('split terminal transition clear refuses a zero-row tables ' +
   'update', async (t) => {
-  const {workflow} = buildWorkflow({
-    // The record as the owner sees it: still in transition.
-    durableTableRows: [{table_id: 'tbl-users', table_name: 'users',
-      partition_key: 'id', active_partition_version: 2,
-      partition_transition_state: 'split_source_dissolving',
-      partition_transition_metadata: '{}'}],
-    cdcIntegrationService: {
-      async updateSystemTableRow() {
-        return {success: true, affectedRows: 0};
-      },
-      async insertSystemTableRow() {
-        return {success: true};
-      },
-      async deleteSystemTableRow() {
-        return {success: true};
-      },
-    },
-  });
+  let zeroRows = false;
+  const {workflow} = buildWorkflow({});
+  const cdc = workflow.getCDCIntegrationService();
+  const update = cdc.updateSystemTableRow.bind(cdc);
+  cdc.updateSystemTableRow = async (...args) => (zeroRows ?
+    {success: true, affectedRows: 0} : update(...args));
+  workflow.readAuthoritativeWorkflowRecord = async () => {
+    throw new Error('tables owner unavailable');
+  };
+  const record = {...buildCutoverWorkflowRecord('split-terminal-clear'),
+    status: 'split_source_dissolving'};
+  const registered = await registerFromRecordAsRead(workflow, record);
+  zeroRows = true;
 
   await t.rejects(
-    workflow.persistTerminalTransitionClear({
-      workflowId: 'split-terminal-clear',
-      tableId: 'tbl-users',
-      // The record as read (the clear compares against it).
-      recordWitness: {metadata: '{}', state: 'split_source_dissolving'},
-    }),
-    /compare-and-swap refused/,
+    workflow.persistTerminalTransitionClear(registered),
+    /did not land|refused/,
     'a terminal clear that lands zero rows would wedge the table in ' +
     'transition state forever — it must throw',
   );
@@ -294,10 +285,6 @@ test('split cutover sets partition_count to target + sibling count ' +
   await registerFromRecordAsRead(workflow, record);
   const ownershipClaim = await workflow.claimSplitWorkflowOwnership(
     record.workflowId,
-  );
-  workflow.ensureCanonicalSplitParticipants(
-    record.workflowId,
-    record.metadata,
   );
   // The source ack carries the workflow fence epoch it was started
   // under (stamped by PartitionService in production); snapshot_started

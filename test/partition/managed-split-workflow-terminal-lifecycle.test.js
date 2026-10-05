@@ -87,7 +87,6 @@ async (t) => {
   const ownershipClaim = await workflow.claimSplitWorkflowOwnership(
     workflowId,
   );
-  workflow.ensureCanonicalSplitParticipants(workflowId, record.metadata);
   const fenceToken = ownershipClaim.workflow.fenceToken;
   const sourceAck = (status, extra = {}) => ({
     [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:

@@ -1,4 +1,8 @@
 import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
+import {
+  abortChange,
+  refusedStepAs,
+} from './managed-workflow-record-changes.js';
 import {SERVICE_TYPE} from '../constants/index.js';
 import {
   ReplicaOperationField,
@@ -17,7 +21,6 @@ import {retireFrozenGroupMembers} from './group-retirement-members.js';
 import {
   MANAGED_MERGE_LOG_MSG,
   MERGE_ABORT_OUTCOME,
-  PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   PRE_CUTOVER_MERGE_STATES,
 } from './partition-constants.js';
@@ -202,7 +205,7 @@ class ManagedMergeWorkflowDissolutionMethods {
         // participant checkpoint (group-retirement-members.js), kept as is.
         [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.SOURCE_DISSOLVED,
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
-      });
+      }, {owned: true});
       this.groupRetirementRedrive.settle(workflowId, sourcePartitionId);
       this.logger.info(MANAGED_MERGE_LOG_MSG.DISSOLUTION_DISPATCHED, {
         workflowId,
@@ -218,13 +221,17 @@ class ManagedMergeWorkflowDissolutionMethods {
       // The progress so far is durable on the participant checkpoint (each
       // positive answer as it arrived), so a resumed dissolution re-sends
       // only to the frozen members that have not answered.
-      await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
-        [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
-          buildMergeSourceParticipantKey(sourcePartitionId),
-        [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
-        [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.DISSOLUTION_FAILED,
-        [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
-      });
+      // A superseded owner records nothing (the record is another owner's):
+      // its re-drive is told so and stops.
+      if (error?.superseded !== true) {
+        await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
+          [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
+            buildMergeSourceParticipantKey(sourcePartitionId),
+          [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
+          [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.DISSOLUTION_FAILED,
+          [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
+        }, {owned: true});
+      }
       this.reportIncompleteMergeRetirement(workflowId, sourcePartitionId,
         error, () => this.finalizeMergeDissolutionIfReady(workflowId));
     }
@@ -276,13 +283,9 @@ class ManagedMergeWorkflowDissolutionMethods {
    * tear down the never-authoritative target and restore any promoted
    * sibling descriptors.
    *
-   * The abort is fail-safe: when the fenced transition is CAS-rejected by
-   * the same-owner durable-write race even after the durable-row re-sync,
-   * the FAILED mutation is retried with a CAS witness taken from the
-   * durable row itself (still gated on this owner's persisted ownerId at
-   * the same fence — a foreign claim is never retried). A merge that
-   * received a source failure must never be left running pre-cutover
-   * because its own ack flush raced its own in-flight write.
+   * The FAILED write is a change of the record at its turn (owner decision
+   * 2026-10-05): one owner's changes run in order, so its own in-flight
+   * writes can never race it.
    * @param {string} workflowId
    * @param {string} ownerKey
    * @param {string} ackStatus - The failure MERGE_ACK_STATUS received.
@@ -291,30 +294,20 @@ class ManagedMergeWorkflowDissolutionMethods {
    * @private
    */
   async runMergeAbortStep(workflowId, ownerKey, ackStatus, ownerStepLaneSuffix) {
-    let abortOutcome = MERGE_ABORT_OUTCOME.UNRESOLVED;
-    try {
-      abortOutcome = await this.runMergeOwnerLaneStepWithSameOwnerResync({
-        workflowId,
-        ownerKey: ownerKey + ownerStepLaneSuffix,
-        stepName: PARTITION_TRANSITION_STATE.FAILED,
-        execute: async ({workflow: currentWorkflow}) =>
-          this.buildMergeAbortStepResult(
-            workflowId,
-            ackStatus,
-            currentWorkflow,
-          ),
-      });
-    } catch (error) {
-      if (!this.isMergeStaleFenceTransitionError(error)) {
-        throw error;
-      }
-      abortOutcome = await this.persistOwnedMergeAbortFallback(
-        workflowId,
-        ackStatus,
-        MERGE_ABORT_OUTCOME,
-        PRE_CUTOVER_MERGE_STATES,
-      );
-    }
+    // The abort is a change of the record at its turn (owner decision
+    // 2026-10-05): a FAILED record is unchanged, a cutover that landed first
+    // refuses it; no same-owner race exists to re-sync from.
+    const abortOutcome = await this.workflowStepRunner.runStep({
+      workflowId,
+      ownerKey: ownerKey + ownerStepLaneSuffix,
+      stepName: PARTITION_TRANSITION_STATE.FAILED,
+      execute: async ({workflow: currentWorkflow}) =>
+        this.buildMergeAbortStepResult(
+          workflowId,
+          ackStatus,
+          currentWorkflow,
+        ),
+    }).catch(refusedStepAs(MERGE_ABORT_OUTCOME.REFUSED_POST_CUTOVER));
 
     if (abortOutcome !== MERGE_ABORT_OUTCOME.ABORTED) {
       return abortOutcome === MERGE_ABORT_OUTCOME.ALREADY_ABORTED;
@@ -351,18 +344,12 @@ class ManagedMergeWorkflowDissolutionMethods {
       return {result: MERGE_ABORT_OUTCOME.REFUSED_POST_CUTOVER};
     }
     return {
-      updates: {
-        status: PARTITION_TRANSITION_STATE.FAILED,
-        metadata: {
-          ...(currentWorkflow.metadata || {}),
-          [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
-            classification: LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE,
-            message: ackStatus,
-            failedAt: new Date(this.now()).toISOString(),
-            retryable: true,
-          },
-        },
-      },
+      change: abortChange(PRE_CUTOVER_MERGE_STATES, {
+        classification: LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE,
+        message: ackStatus,
+        failedAt: new Date(this.now()).toISOString(),
+        retryable: true,
+      }),
       result: MERGE_ABORT_OUTCOME.ABORTED,
     };
   }

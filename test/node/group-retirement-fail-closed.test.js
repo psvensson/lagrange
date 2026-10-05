@@ -248,53 +248,56 @@ test('B2c a partial services view: the member with no row stays required',
     t.same(world.terminals, [WORKFLOW_ID], 'completed after it answered');
   });
 
+// The answered ids a record write carries for the source participant.
+function answeredOf(data) {
+  return data?.partition_transition_metadata ?
+    JSON.parse(data.partition_transition_metadata).participants?.[SOURCE_KEY]
+      ?.checkpoint?.dissolvedReplicaIds ?? [] : [];
+}
+
 test('B4 an answer whose durable record failed is not progress: the member ' +
   'stays listed and is asked again', async (t) => {
   const world = openGroupWorld(t, {partitionId: 'live-b4', voters: 3});
   const shape = install(world);
   const owner = await openOwner(world, shape);
-  const coordinator = owner.workflowCoordinator;
-  const persist = coordinator.persistParticipant;
-  let unrecorded = null;
-  // The write recording the LAST member's answer fails, once (the last of
-  // the pass, so no later write of the pass carries the set forward).
-  coordinator.persistParticipant = async (participant) => {
-    const answered = participant.checkpoint?.dissolvedReplicaIds ?? [];
-    if (unrecorded === null && answered.length === world.members.length) {
-      unrecorded = answered.at(-1);
-      throw new Error('tables write failed');
-    }
-    return persist(participant);
-  };
   const dissolved = () => JSON.parse(world.tablesRows.get(TABLE_ID)
     .partition_transition_metadata).participants[SOURCE_KEY]
     .checkpoint?.dissolvedReplicaIds ?? [];
+  // The record write recording the LAST member's answer fails - every
+  // attempt of that change (its submission fails; the store's bounded
+  // retries all fail), so it is UNCONFIRMED: nothing is decided.
+  let unrecorded = null;
   let atFailure = null;
-  const failing = coordinator.persistParticipant;
-  coordinator.persistParticipant = async (participant) => {
-    try {
-      return await failing(participant);
-    } catch (error) {
-      if (atFailure === null && unrecorded !== null) {
-        atFailure = {onRecord: dissolved().includes(unrecorded),
-          terminals: [...world.terminals],
-          asked: world.deliveries.filter((d) => d.replicaId === unrecorded)
-            .length};
-        // The owner's handling of the failed write replaces the checkpoint
-        // it optimistically set; observe it then.
-        const optimistic = participant.checkpoint;
-        const observe = (hops) => {
-          if (participant.checkpoint !== optimistic || hops === 0) {
-            atFailure.inMemory = (participant.checkpoint
-              ?.dissolvedReplicaIds ?? []).includes(unrecorded);
-            return;
-          }
-          queueMicrotask(() => observe(hops - 1));
-        };
-        queueMicrotask(() => observe(100));
-      }
-      throw error;
+  const gateway = world.recordGateway;
+  const update = gateway.updateSystemTableRow.bind(gateway);
+  // Every attempt the store makes of that one change fails (its bounded
+  // compare-and-swap attempts), then the world heals.
+  const ATTEMPTS = 3;
+  let failures = 0;
+  const fails = (answered) => failures < ATTEMPTS &&
+    answered.length === world.members.length &&
+    (unrecorded === null || answered.at(-1) === unrecorded);
+  const observe = () => {
+    atFailure.inMemory = (owner.resolveWorkflowState(WORKFLOW_ID)
+      ?.participants.get(SOURCE_KEY)?.checkpoint?.dissolvedReplicaIds ??
+      []).includes(unrecorded);
+  };
+  gateway.updateSystemTableRow = async (tableName, where, data, options) => {
+    const answered = answeredOf(data);
+    if (!fails(answered)) {
+      return update(tableName, where, data, options);
     }
+    unrecorded = answered.at(-1);
+    atFailure ??= {onRecord: dissolved().includes(unrecorded),
+      terminals: [...world.terminals],
+      asked: world.deliveries.filter((d) => d.replicaId === unrecorded)
+        .length};
+    failures += 1;
+    if (failures === ATTEMPTS) {
+      // Observed once the change settled unconfirmed.
+      setImmediate(observe);
+    }
+    throw new Error('tables write failed');
   };
   await drive(owner, shape);
   t.equal(await driveUntilRemoved(world, world.members), true,
@@ -321,8 +324,16 @@ test('B5 an owner whose fence is older than the participant record\'s ' +
   const world = openGroupWorld(t, {partitionId: 'live-b5', voters: 3});
   const shape = install(world);
   const owner = await openOwner(world, shape);
-  owner.resolveWorkflowState(WORKFLOW_ID).participants.get(SOURCE_KEY)
-    .fenceToken = FENCE + 2;
+  // The participant RECORD carries a newer fence than this owner's (a later
+  // owner acknowledged it); the owner's projection is rebuilt from it.
+  const row = world.tablesRows.get(TABLE_ID);
+  const metadata = JSON.parse(row.partition_transition_metadata);
+  metadata.participants[SOURCE_KEY].fenceToken = FENCE + 2;
+  world.tablesRows.set(TABLE_ID, {...row,
+    partition_transition_metadata: JSON.stringify(metadata)});
+  owner.workflowCoordinator.removeWorkflow(WORKFLOW_ID);
+  owner.workflowCoordinator.adoptWorkflowProjection(owner.decodeWorkflowRecord(
+    WORKFLOW_ID, world.tablesRows.get(TABLE_ID)));
   const before = world.tablesRows.get(TABLE_ID).partition_transition_metadata;
   await drive(owner, shape);
   await settle(world, 3);

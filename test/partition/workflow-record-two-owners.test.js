@@ -16,6 +16,9 @@
  *     nothing (its registration is refused), A's mark, fence, owner and lease
  *     are intact, and B's teardown deletes nothing. Split, at B's clock equal
  *     to A's and 61 s ahead; merge the same.
+ * W6  a live foreign lease writes nothing: with a current read, neither a
+ *     registration nor a fresh claim submits any write (the round-5
+ *     surviving mutant V4).
  * W3  two owners execute the same split from the same read: exactly one
  *     registration lands; the loser stops after ONE refused write, holds
  *     nothing in memory, and logs one WARN naming its fence and the record's
@@ -23,6 +26,10 @@
  */
 import {test} from '../../src/test-helpers/tap.js';
 import {QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
+import {
+  claimWorkflowOwnershipCore,
+  registerWorkflowWithClaim,
+} from '../../src/partition/managed-workflow-ownership-core.js';
 import {buildWorkflow} from './managed-split-workflow-test-helpers.js';
 import {
   FIXTURE_LEFT_PARTITION_ID,
@@ -282,4 +289,41 @@ test('W3 two owners racing from the same read: exactly one registration ' +
   t.equal(warns[0]?.fields?.recordFenceToken, 1, 'and its fence');
   await turns(100);
   t.equal(store.tablesWritesBy(loser.name).length, 1, 'no loop: nothing more');
+});
+
+// W6 (the round-5 verifier's surviving mutant V4: "the claim ignores a live
+// foreign lease"): with a CURRENT read of a record whose lease is another
+// owner's and live, neither a registration nor a fresh claim writes
+// anything - the precondition refuses before any compare-and-swap.
+test('W6 a live foreign lease writes nothing: registration and fresh claim ' +
+  'refuse before any write', async (t) => {
+  const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+  const clock = {now: 1000};
+  const a = splitOwner(store, openView(store), 'A', {
+    now: () => clock.now,
+    waitForTablePartitionMetadata: async () => NEVER,
+  });
+  a.workflow.execute(SOURCE).catch(() => {});
+  await turns(200);
+  const held = claimOf(store);
+  t.equal(held.owner, 'owner-A', 'setup: A holds the record');
+  t.ok(held.lease > clock.now, 'setup: A\'s lease is live');
+  const before = store.tablesRow();
+  const b = splitOwner(store, openView(store), 'B', {now: () => clock.now});
+  // B's registration, derived from a CURRENT read (claim before register).
+  const workflowId = store.metadata().workflowId;
+  const registration = await registerWorkflowWithClaim(b.workflow, {
+    workflowId, ownerKey: SOURCE, tableId: 'tbl-users', tableName: 'users',
+    partitionId: SOURCE, status: 'admission_pending',
+    metadata: {...store.metadata()}, createdAt: clock.now,
+    updatedAt: clock.now}, store.tablesRow());
+  t.equal(registration.refusal, 'active_owner',
+    'the registration is refused typed: a live foreign lease');
+  t.equal(registration.workflow, undefined, 'nothing registered');
+  b.workflow.resolveWorkflowState(workflowId);
+  const claim = await claimWorkflowOwnershipCore(b.workflow, workflowId);
+  t.equal(claim.accepted, false, 'the fresh claim is refused');
+  t.equal(claim.result, 'active_owner', 'typed: a live foreign lease');
+  t.equal(store.tablesWritesBy('B').length, 0, 'B submitted no write at all');
+  t.same(store.tablesRow(), before, 'the record is byte-for-byte unchanged');
 });

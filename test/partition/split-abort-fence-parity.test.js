@@ -50,7 +50,6 @@ async function registerClaimedWorkflow(workflow) {
   const ownershipClaim = await workflow.claimSplitWorkflowOwnership(
     WORKFLOW_ID,
   );
-  workflow.ensureCanonicalSplitParticipants(WORKFLOW_ID, record.metadata);
   return ownershipClaim.workflow.fenceToken;
 }
 

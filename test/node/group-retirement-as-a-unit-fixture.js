@@ -27,10 +27,6 @@ import {REPLICA_HANDLER_LOG_MSG} from
   '../../src/node/replica-handler-constants.js';
 import {retireRaftPeerFromAuthoritativeServiceChange} from
   '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
-import {ManagedSplitWorkflowDissolutionMethods} from
-  '../../src/partition/managed-split-workflow-dissolution-methods.js';
-import {ManagedMergeWorkflowDissolutionMethods} from
-  '../../src/partition/managed-merge-workflow-dissolution-methods.js';
 import {ManagedMergeWorkflowStateMethods} from
   '../../src/partition/managed-merge-workflow-state-methods.js';
 import {ManagedSplitWorkflowStateMethods} from
@@ -45,8 +41,12 @@ import {
   buildMergeSourceParticipantKey,
   isMergeSourceAckTransitionAllowed,
 } from '../../src/partition/merge-ack-constants.js';
-import {DurableWorkflowCoordinator} from
-  '../../src/workflow/durable-workflow-coordinator.js';
+import {RecordProjectedWorkflowCoordinator} from
+  '../../src/partition/managed-workflow-record-coordinator.js';
+import {ManagedSplitWorkflow} from
+  '../../src/partition/managed-split-workflow.js';
+import {ManagedMergeWorkflow} from
+  '../../src/partition/managed-merge-workflow.js';
 import {claimWorkflowOwnershipCore} from
   '../../src/partition/managed-workflow-ownership-core.js';
 import {EXECUTOR_OUTCOME_TYPE} from
@@ -278,6 +278,7 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
     world.tablesRows.set(row.table_id, row);
     queueMicrotask(() => world.emitSystemRow('tables', 'UPDATE', row));
   };
+  world.recordGateway = recordGateway(world);
   t.teardown(async () => {
     for (const source of world.sources.values()) {
       await source.dispose();
@@ -343,16 +344,12 @@ function pick(prototype, names) {
 const PRODUCTION_RECOVERY = Object.freeze({
   split: pick(ManagedSplitWorkflowStateMethods.prototype, [
     'resolveWorkflowState', 'recoverWorkflowState',
-    'rebuildSplitWorkflowFromRecord', 'resyncWorkflowFromRecord',
-    'restoreParticipantsFromMetadata', 'cloneTransitionValue']),
+    'rebuildSplitWorkflowFromRecord']),
   merge: {
     ...pick(ManagedMergeWorkflowStateMethods.prototype, [
       'resolveWorkflowState', 'recoverWorkflowState',
       'findDurableMergeTransition', 'rebuildWorkflowFromDurableTransition',
-      'resyncWorkflowFromRecord', 'isMergeWorkflowStateUnavailable',
-      'buildMergeOwnerKey']),
-    ...pick(ManagedSplitWorkflowStateMethods.prototype, [
-      'restoreParticipantsFromMetadata', 'cloneTransitionValue']),
+      'isMergeWorkflowStateUnavailable']),
   },
 });
 
@@ -401,20 +398,52 @@ async function attachOwnerResume(owner, family, scheduler) {
   });
 }
 
-// The record's ownership claim, compare-and-swapped on its fence as
-// persistSplitWorkflowClaim does on the tables row.
-function persistClaimToRecord(world, candidate, {expectedFenceToken}) {
-  const record = world.tablesRows.get(TABLE_ID);
+// The world's control-plane gateway for the workflow record: the record
+// store's compare-and-swap (UPDATE tables ... WHERE table_id AND the compared
+// transition metadata bytes AND state), evaluated on the world's `tables`
+// row as a replica's apply evaluates it.
+function recordGateway(world) {
+  const bytesOf = (row) => ({
+    metadata: row?.partition_transition_metadata ?? null,
+    state: row?.partition_transition_state ?? null,
+  });
+  return {
+    async updateSystemTableRow(tableName, where, data) {
+      await Promise.resolve();
+      const row = world.tablesRows.get(where.table_id);
+      const stored = bytesOf(row);
+      if (tableName !== TABLES || !row ||
+          stored.metadata !== where.partition_transition_metadata ||
+          stored.state !== where.partition_transition_state) {
+        return {success: true, affectedRows: 0};
+      }
+      world.recordWrites = (world.recordWrites ?? 0) + 1;
+      world.setTablesRow({...row, ...data});
+      return {success: true, affectedRows: 1};
+    },
+  };
+}
+
+// The driving owner's durable claim and participants, as its registration
+// and acknowledgements would have written them (test setup of the record).
+function seedOwnedRecord(world, workflow, ownerId) {
+  const record = world.tablesRows.get(workflow.tableId ?? TABLE_ID);
   const metadata = JSON.parse(record.partition_transition_metadata);
-  if (metadata.workflowFenceToken !== expectedFenceToken) {
-    return {accepted: false};
+  metadata.workflowOwnerId = ownerId;
+  metadata.workflowLeaseExpiresAt = 60001;
+  metadata.workflowFenceToken = workflow.fenceToken;
+  metadata.participants = {...(metadata.participants || {})};
+  for (const participant of workflow.participants || []) {
+    metadata.participants[participant.participantKey] = {
+      ...(metadata.participants[participant.participantKey] || {}),
+      ...participant, workflowId: workflow.workflowId,
+      participantId: participant.participantKey,
+      fenceToken: workflow.fenceToken, acknowledgedAt: 1};
   }
-  metadata.workflowFenceToken = candidate.fenceToken;
-  metadata.workflowOwnerId = candidate.workflowOwnerId;
-  metadata.workflowLeaseExpiresAt = candidate.leaseExpiresAt;
-  world.setTablesRow({...record,
+  world.tablesRows.set(record.table_id, {...record,
+    partition_transition_state: workflow.status ??
+      record.partition_transition_state,
     partition_transition_metadata: JSON.stringify(metadata)});
-  return {accepted: true, workflow: candidate};
 }
 
 /**
@@ -428,23 +457,12 @@ function readyNodeRow(nodeId) {
     ready_lease_expires_at: 2000};
 }
 
-// The durable record's participants follow the coordinator's persisted
-// participant state, as persistWorkflowTransition writes them.
-function persistParticipantToRecord(world, participant) {
-  const record = world.tablesRows.get(TABLE_ID);
-  if (!record) return;
-  const metadata = JSON.parse(record.partition_transition_metadata);
-  metadata.participants = {...(metadata.participants || {}),
-    [participant.participantKey]: JSON.parse(JSON.stringify(participant))};
-  world.setTablesRow({...record,
-    partition_transition_metadata: JSON.stringify(metadata)});
-}
-
 /**
  * One workflow owner: the PRODUCTION dissolution/teardown methods and the
- * PRODUCTION source-acknowledgement entry, over a real
- * DurableWorkflowCoordinator (fence, duplicate and graph checks) whose
- * participant persistence writes the world's durable record, and the
+ * PRODUCTION source-acknowledgement entry, over the PRODUCTION record store
+ * and its coordinator (every write a change of the world's durable record,
+ * compare-and-swapped on it; fence, duplicate and graph checks on the
+ * record's participant), and the
  * PRODUCTION group-retirement re-drive (createGroupRetirementRedrive) on
  * the world's node rows and owner clock.
  * @param {Object} world
@@ -460,13 +478,10 @@ async function createWorkflowOwner(world, {family, workflow,
   const split = family === 'split';
   world.ownerCount = (world.ownerCount ?? 0) + 1;
   const owner = Object.create(split ?
-    ManagedSplitWorkflowDissolutionMethods.prototype :
-    ManagedMergeWorkflowDissolutionMethods.prototype);
-  const coordinator = new DurableWorkflowCoordinator({
-    persistParticipant: async (participant) =>
-      persistParticipantToRecord(world, participant),
-    persistWorkflowClaim: async (candidate, context) =>
-      persistClaimToRecord(world, candidate, context),
+    ManagedSplitWorkflow.prototype : ManagedMergeWorkflow.prototype);
+  const ownerId = `owner-${world.ownerCount}`;
+  const coordinator = new RecordProjectedWorkflowCoordinator({
+    owner,
     isParticipantTransitionAllowed: (_key, from, to) => (split ?
       isSplitSourceAckTransitionAllowed :
       isMergeSourceAckTransitionAllowed)(from, to),
@@ -475,14 +490,7 @@ async function createWorkflowOwner(world, {family, workflow,
   if (!recover) {
     // The driving owner holds the record's claim (its row deletes prove it
     // at apply time, managed-workflow-ownership-core.js).
-    await coordinator.registerWorkflow({...workflow,
-      workflowOwnerId: `owner-${world.ownerCount}`, leaseExpiresAt: 60001,
-      ownerKey: workflow.tableId, participants: undefined});
-    for (const participant of workflow.participants || []) {
-      await coordinator.upsertParticipant(workflow.workflowId, {
-        ...participant, participantId: participant.participantKey,
-        fenceToken: workflow.fenceToken, acknowledgedAt: 1});
-    }
+    seedOwnedRecord(world, workflow, ownerId);
   }
   const ownerLog = [];
   const logger = {
@@ -509,8 +517,16 @@ async function createWorkflowOwner(world, {family, workflow,
         world.systemRowListeners.delete(listener);
       }
     },
-    workflowOwnerId: `owner-${world.ownerCount}`,
+    workflowOwnerId: ownerId,
     workflowLeaseMs: 60000,
+    getControlPlaneSystemTableGateway: () => world.recordGateway,
+    getCDCIntegrationService: () => world.recordGateway,
+    readAuthoritativeWorkflowRecord: async (tableId) => {
+      if (!world.authoritativeTablesReadAvailable) {
+        throw new Error('tables owner unavailable');
+      }
+      return world.tablesRows.get(tableId) ?? null;
+    },
     now: () => 1,
     getPartitionInfo: (partitionId) => world.partitionRows.has(partitionId) ?
       {partition_id: partitionId} : null,
@@ -523,10 +539,6 @@ async function createWorkflowOwner(world, {family, workflow,
     parsePartitionTransition,
     isSplitWorkflowStateUnavailable: (state) => !state?.workflowId,
     isMergeWorkflowStateUnavailable: (state) => !state?.workflowId,
-    ensureCanonicalSplitParticipants: ManagedSplitWorkflowStateMethods
-      .prototype.ensureCanonicalSplitParticipants,
-    ensureCanonicalMergeParticipants: ManagedMergeWorkflowStateMethods
-      .prototype.ensureCanonicalMergeParticipants,
     readCommittedGroupMembers: async (partitionId) =>
       (await membersModule())?.readCommittedGroupMemberIds(
         world.membershipReader, partitionId) ?? [],
@@ -544,16 +556,17 @@ async function createWorkflowOwner(world, {family, workflow,
       world.partitionRows.delete(partitionId);
       return {success: true, affectedRows: 1};
     },
-    // The terminal advance and clear are the workflow's own lane steps,
-    // outside this owner: the world records that they were reached.
+    // The terminal advance is the workflow's own lane step (outside this
+    // owner's methods): a change of the record, as the step's is; the world
+    // records that the clear was reached.
     advanceSplitPhase: async (workflowId, status) => {
-      coordinator.getWorkflowById(workflowId).status = status;
+      await coordinator.updateWorkflow(workflowId,
+        (current) => ({...current, status}));
     },
     persistTerminalTransitionClear: async (state) => {
       world.terminals.push(state.workflowId);
-      const record = world.tablesRows.get(TABLE_ID);
-      world.setTablesRow({...record, partition_transition_state: null,
-        partition_transition_metadata: null});
+      await coordinator.clearWorkflowRecord(state.workflowId,
+        new Set([String(state.status)]));
     },
     areAllMergeSourcesAtStatus: (state, statuses) =>
       owner.resolveMergeSourcePartitionIds(state.metadata || {}).every((id) =>
@@ -588,9 +601,9 @@ async function createWorkflowOwner(world, {family, workflow,
     // the durable record by the PRODUCTION recovery of its family.
     Object.assign(owner, PRODUCTION_RECOVERY[family]);
   } else {
-    owner[split ? 'ensureCanonicalSplitParticipants' :
-      'ensureCanonicalMergeParticipants'](workflow.workflowId,
-      workflow.metadata);
+    // The projection of the seeded record (PRODUCTION decode).
+    coordinator.adoptWorkflowProjection(owner.decodeWorkflowRecord(
+      workflow.workflowId, world.tablesRows.get(workflow.tableId ?? TABLE_ID)));
   }
   world.leaseScheduler ??= createFakeScheduler();
   owner.groupRetirementRedrive = await createOwnerRedrive(owner, scheduler,

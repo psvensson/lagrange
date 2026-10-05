@@ -17,14 +17,31 @@
  * never after DISPATCHED; DISPATCHED is durable BEFORE the first create is
  * sent (a failed write sends nothing); a mark never comes from a row.
  */
-import {PARTITION_TRANSITION_METADATA_FIELD} from './partition-constants.js';
+import {
+  PARTITION_TRANSITION_METADATA_FIELD as METADATA_FIELD,
+  PARTITION_TRANSITION_STATE,
+} from './partition-constants.js';
+import {
+  RECORD_UNCHANGED,
+  refuseRecordChange,
+} from './managed-workflow-record-store.js';
+import {SPLIT_ACK_CHECKPOINT_FIELD} from './split-ack-constants.js';
 
 const TARGET_PROVISIONING = Object.freeze({
   NONE: 'none',
   DISPATCHED: 'dispatched',
 });
 const MARKS = Object.freeze(new Set(Object.values(TARGET_PROVISIONING)));
-const FIELD = PARTITION_TRANSITION_METADATA_FIELD.TARGET_PROVISIONING;
+const FIELD = METADATA_FIELD.TARGET_PROVISIONING;
+// The record states in which a target's first create may be sent.
+const PROVISIONING_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
+  PARTITION_TRANSITION_STATE.MERGE_PREPARING,
+]));
+const FROZEN_SET_FIELD = SPLIT_ACK_CHECKPOINT_FIELD.REQUIRED_REPLICA_IDS;
+const MARK_REFUSAL = Object.freeze({
+  NOT_PREPARING: 'target-provisioning-not-preparing',
+});
 
 /**
  * One target's durable provisioning mark, or null when the record has none.
@@ -59,24 +76,44 @@ function targetProvisioningMarks(targetIds, {minted, priorMetadata = null}) {
   return marks;
 }
 
+// Whether a target's group retirement has frozen its member set on the
+// record (its participant's checkpoint carries the set).
+function isRetirementFrozen(record, target) {
+  const participants = record.participants instanceof Map ?
+    [...record.participants.values()] : [];
+  return participants.some((participant) =>
+    String(participant?.partitionId ?? '') === target &&
+    Object.hasOwn(participant?.checkpoint || {}, FROZEN_SET_FIELD));
+}
+
 /**
- * Make DISPATCHED durable for one target before its first create is sent:
- * the workflow's own update (a throw means nothing may be sent), then the
- * caller's metadata carries it so no later write of it rolls the mark back.
+ * Make DISPATCHED durable for one target before its first create is sent: a
+ * change of the record (a throw means nothing may be sent). Applied to the
+ * record at its turn: a target already DISPATCHED is unchanged; a record no
+ * longer preparing (an abort landed first) refuses - no create follows; NONE
+ * (or a missing mark) becomes DISPATCHED; nothing else of the record moves.
  * @param {Object} owner - The workflow owner (workflowCoordinator).
  * @param {string} workflowId
- * @param {Object} metadata - The caller's transition metadata (mutated
- *   after the write landed).
  * @param {string} partitionId - The target about to be provisioned.
- * @return {Promise<void>}
+ * @return {Promise<Object>} The workflow projection.
  */
-async function markTargetProvisioningDispatched(owner, workflowId, metadata,
-  partitionId) {
-  const marks = {...(metadata[FIELD] || {}),
-    [String(partitionId)]: TARGET_PROVISIONING.DISPATCHED};
-  await owner.workflowCoordinator.updateWorkflow(workflowId,
-    {metadata: {...metadata, [FIELD]: marks}});
-  metadata[FIELD] = marks;
+function markTargetProvisioningDispatched(owner, workflowId, partitionId) {
+  const target = String(partitionId);
+  return owner.workflowCoordinator.updateWorkflow(workflowId, (current) => {
+    if (targetProvisioningOf(current.metadata, target) ===
+        TARGET_PROVISIONING.DISPATCHED) {
+      return RECORD_UNCHANGED;
+    }
+    if (!PROVISIONING_STATES.has(String(current.status)) ||
+        isRetirementFrozen(current, target)) {
+      // An abort (or any later phase) landed first, or the target's group
+      // retirement already froze its member set: no create may follow.
+      return refuseRecordChange(MARK_REFUSAL.NOT_PREPARING);
+    }
+    return {...current, metadata: {...current.metadata,
+      [FIELD]: {...(current.metadata?.[FIELD] || {}),
+        [target]: TARGET_PROVISIONING.DISPATCHED}}};
+  });
 }
 
 export {

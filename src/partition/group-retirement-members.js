@@ -18,13 +18,13 @@
  * (DISSOLVED_REPLICA_IDS) - or, for a target whose durable provisioning mark
  * (target-provisioning-mark.js) says no create was ever sent, the empty set
  * frozen with NEVER_PROVISIONED - all persisted on that
- * participant's checkpoint through the coordinator's participant
- * persistence (the path every acknowledgement takes); completion is
- * required ⊆ dissolved and nothing else.
+ * participant's checkpoint by a change of the record (groupCheckpointOf:
+ * the frozen set immutable once written, the answered ids only growing);
+ * completion is required ⊆ dissolved and nothing else.
  * Ownership: a pass starts only after this owner proves, at apply time, that
  * it holds the workflow's record (managed-workflow-ownership-core.js); every
- * checkpoint write is a compare-and-swap on the record as read
- * (managed-workflow-record-store.js).
+ * checkpoint write is a change applied by the record store to the record at
+ * its turn (managed-workflow-record-store.js).
  * Prohibited: an empty or unreadable configuration is "membership
  * unavailable", never "no members" (only the durable never-provisioned mark
  * is); a member with no address is listed,
@@ -38,7 +38,13 @@ import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../raft/raft-committed-membership-constants.js';
 import {GROUP_RETIREMENT_REFUSAL} from './group-retirement-evidence.js';
 import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
+import {
+  RECORD_UNCHANGED,
+  isRecordRefusal,
+  refuseRecordChange,
+} from './managed-workflow-record-store.js';
 import {SPLIT_ACK_CHECKPOINT_FIELD} from './split-ack-constants.js';
+import {PARTITION_TRANSITION_STATE} from './partition-constants.js';
 import {
   TARGET_PROVISIONING,
   targetProvisioningOf,
@@ -60,6 +66,7 @@ const GROUP_MEMBER_REFUSAL = Object.freeze({
   MEMBER_UNADDRESSABLE: 'group-retirement-member-unaddressable',
   PROGRESS_UNRECORDED: 'group-retirement-progress-unrecorded',
   REMOVAL_IN_PROGRESS: 'group-retirement-removal-in-progress',
+  FROZEN_SET_IMMUTABLE: 'group-retirement-frozen-set-immutable',
 });
 const IN_PROGRESS_STATUSES = Object.freeze(new Set([
   ReplicaOperationResponseStatus.INITIATED,
@@ -91,6 +98,11 @@ function idsOf(checkpoint, field) {
   const ids = checkpoint?.[field];
   return Array.isArray(ids) ? ids.map(String).filter((id) => id.length > 0) :
     [];
+}
+
+function participantOf(workflow, participantKey) {
+  return workflow?.participants instanceof Map ?
+    workflow.participants.get(participantKey) ?? null : null;
 }
 
 function rowField(row, snake, camel) {
@@ -148,38 +160,111 @@ function membershipUnavailableError(partitionId) {
     membershipUnavailable: true, acknowledgedReplicaIds: []});
 }
 
+// Whether `fields` would replace a frozen set (or its never-provisioned
+// mark) the checkpoint already holds with a different one.
+function refreezesDifferently(checkpoint, fields) {
+  const field = GROUP_MEMBER_CHECKPOINT_FIELD;
+  return Object.hasOwn(checkpoint, field.REQUIRED_REPLICA_IDS) &&
+    (idsOf(fields, field.REQUIRED_REPLICA_IDS).join(REPLICA_ID_SEPARATOR) !==
+      idsOf(checkpoint, field.REQUIRED_REPLICA_IDS)
+        .join(REPLICA_ID_SEPARATOR) ||
+      Boolean(fields[field.NEVER_PROVISIONED]) !==
+        Boolean(checkpoint[field.NEVER_PROVISIONED]));
+}
+
 /**
- * Persist checkpoint fields on the retiring group's participant through the
- * coordinator's participant persistence, under the participant fence rule
- * every acknowledgement follows (an owner fence older than the
- * participant's is refused as superseded).
+ * The retiring group's checkpoint with `fields` applied to the RECORD's own
+ * checkpoint: the frozen set (required ids, or the never-provisioned empty
+ * set) is immutable once written - a different one refuses; the answered
+ * (dissolved) ids and the address book only grow; never-provisioned is
+ * sticky. RECORD_UNCHANGED when nothing moves.
+ * @param {Object|undefined} previous - The record's checkpoint.
+ * @param {Object} fields
+ * @return {Object|symbol} The checkpoint, a refusal, or RECORD_UNCHANGED.
+ */
+function groupCheckpointOf(previous = {}, fields) {
+  const field = GROUP_MEMBER_CHECKPOINT_FIELD;
+  const next = {...(previous || {})};
+  if (Object.hasOwn(fields, field.REQUIRED_REPLICA_IDS)) {
+    if (refreezesDifferently(next, fields)) {
+      return refuseRecordChange(GROUP_MEMBER_REFUSAL.FROZEN_SET_IMMUTABLE);
+    }
+    next[field.REQUIRED_REPLICA_IDS] = idsOf(fields,
+      field.REQUIRED_REPLICA_IDS);
+  }
+  if (fields[field.NEVER_PROVISIONED] === true) {
+    next[field.NEVER_PROVISIONED] = true;
+  }
+  if (Object.hasOwn(fields, field.DISSOLVED_REPLICA_IDS)) {
+    next[field.DISSOLVED_REPLICA_IDS] = [...new Set([
+      ...idsOf(next, field.DISSOLVED_REPLICA_IDS),
+      ...idsOf(fields, field.DISSOLVED_REPLICA_IDS)])];
+  }
+  if (Object.hasOwn(fields, field.MEMBER_NODE_IDS)) {
+    next[field.MEMBER_NODE_IDS] = {...fields[field.MEMBER_NODE_IDS],
+      ...(next[field.MEMBER_NODE_IDS] || {})};
+  }
+  return JSON.stringify(next) === JSON.stringify(previous || {}) ?
+    RECORD_UNCHANGED : next;
+}
+
+/**
+ * Whether the record proves a target never provisioned: its own mark is NONE
+ * and the record is aborted (FAILED: a create can no longer be sent - the
+ * provisioning mark flips only while the record is preparing).
+ * @param {Object} record - The decoded record.
+ * @param {Object} participant - The target's participant on it.
+ * @return {boolean}
+ */
+function isNeverProvisionedOnRecord(record, participant) {
+  return record.status === PARTITION_TRANSITION_STATE.FAILED &&
+    targetProvisioningOf(record.metadata, participant.partitionId) ===
+      TARGET_PROVISIONING.NONE;
+}
+
+/**
+ * Persist checkpoint fields on the retiring group's participant: a change of
+ * the record (owner decision 2026-10-05) applied to the RECORD's participant
+ * under the participant fence rule every acknowledgement follows (an owner
+ * fence older than the participant's is refused as superseded), the frozen
+ * set immutable and the answered ids only growing (groupCheckpointOf). The
+ * group's workflow and participant are refreshed from the projection after
+ * the change landed.
  * @private
  */
-async function recordProgress(owner, {workflow, participant, participantKey},
-  fields) {
-  const fence = workflow.fenceToken;
-  if (Number.isInteger(participant.fenceToken) &&
-      !(Number.isInteger(fence) && fence >= participant.fenceToken)) {
-    throw Object.assign(new Error(GROUP_MEMBER_ERROR.SUPERSEDED +
-      workflow.workflowId), {unacknowledged: [], superseded: true,
-      acknowledgedReplicaIds: []});
-  }
-  const previous = participant.checkpoint;
-  const previousFence = participant.fenceToken;
-  participant.checkpoint = {...(previous || {}), ...fields};
-  if (Number.isInteger(fence)) {
-    participant.fenceToken = fence;
-  }
-  participant.updatedAt = owner.now();
-  try {
-    await owner.workflowCoordinator.persistParticipantState(
-      workflow.workflowId, participantKey);
-  } catch (error) {
-    // What is not durable is not progress: memory never runs ahead of it.
-    participant.checkpoint = previous;
-    participant.fenceToken = previousFence;
-    throw error;
-  }
+async function recordProgress(owner, group, fields) {
+  const {participantKey} = group;
+  const updated = await owner.workflowCoordinator.updateWorkflow(
+    group.workflow.workflowId, (current) => {
+      const participant = current.participants.get(participantKey);
+      if (!participant) {
+        return refuseRecordChange(GROUP_MEMBER_REFUSAL.MEMBERSHIP_UNAVAILABLE);
+      }
+      const fence = current.fenceToken;
+      if (Number.isInteger(participant.fenceToken) &&
+          !(Number.isInteger(fence) && fence >= participant.fenceToken)) {
+        return refuseRecordChange(GROUP_MEMBER_ERROR.SUPERSEDED +
+          current.workflowId, {superseded: true});
+      }
+      if (fields[GROUP_MEMBER_CHECKPOINT_FIELD.NEVER_PROVISIONED] === true &&
+          !isNeverProvisionedOnRecord(current, participant)) {
+        // The empty set is frozen only on the RECORD's own NONE mark, once
+        // the record is aborted (no create can follow it): a create the
+        // record says may have been sent has members.
+        return refuseRecordChange(GROUP_MEMBER_REFUSAL.MEMBERSHIP_UNAVAILABLE);
+      }
+      const checkpoint = groupCheckpointOf(participant.checkpoint, fields);
+      if (checkpoint === RECORD_UNCHANGED || isRecordRefusal(checkpoint)) {
+        return checkpoint;
+      }
+      const participants = new Map(current.participants);
+      participants.set(participantKey, {...participant, checkpoint,
+        fenceToken: Number.isInteger(fence) ? fence : participant.fenceToken,
+        updatedAt: owner.now()});
+      return {...current, participants};
+    });
+  group.workflow = updated;
+  group.participant = updated.participants.get(participantKey);
 }
 
 // recordProgress, answering whether the write landed: a superseded owner's
@@ -312,18 +397,21 @@ async function addressBookOf(owner, group, required, partitionId) {
 async function retireFrozenGroupMembers(owner, {workflowId, participantKey,
   partitionId, deliver}) {
   const workflow = owner.resolveWorkflowState(workflowId);
-  const participant = workflow?.participants instanceof Map ?
-    workflow.participants.get(participantKey) : null;
-  if (!participant) {
+  if (!participantOf(workflow, participantKey)) {
     throw membershipUnavailableError(partitionId);
   }
   // Only the record's current owner retires a group: proved at apply time
   // (a renewal compare-and-swap) before any record write or REMOVE of this
   // pass; anyone else stops here as superseded.
   await assertWorkflowRecordHeld(owner, workflowId);
-  const group = {workflow, participant, participantKey};
+  // The projection after the renewal (the record's own participant).
+  const group = {workflow, participantKey,
+    participant: participantOf(workflow, participantKey)};
+  if (!group.participant) {
+    throw membershipUnavailableError(partitionId);
+  }
   const required = await frozenMembersOf(owner, group, partitionId);
-  const dissolved = new Set(idsOf(participant.checkpoint,
+  const dissolved = new Set(idsOf(group.participant.checkpoint,
     GROUP_MEMBER_CHECKPOINT_FIELD.DISSOLVED_REPLICA_IDS));
   const nodeIdOf = await addressBookOf(owner, group, required, partitionId);
   const unacknowledged = [];

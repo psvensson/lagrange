@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 151,
+    "storage-partition": 154,
     "storage-raft": 99,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2207,
-  "digest": "fnv1a32-ef0f2172",
+  "censusSize": 2210,
+  "digest": "fnv1a32-294713af",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cdc13297",
+  "observationDigest": "fnv1a32-3e9a8055",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1274,7 +1274,10 @@
     "test/partition/table-partition-structure.property.test.js": "storage-partition",
     "test/partition/timeout-cleanup.property.test.js": "storage-partition",
     "test/partition/workflow-fencing-wiring.test.js": "storage-partition",
+    "test/partition/workflow-record-interleaving.property.test.js": "storage-partition",
+    "test/partition/workflow-record-lagging-view.test.js": "storage-partition",
     "test/partition/workflow-record-reconcile.test.js": "storage-partition",
+    "test/partition/workflow-record-same-owner-race.test.js": "storage-partition",
     "test/partition/workflow-record-stale-owner.test.js": "storage-partition",
     "test/partition/workflow-record-two-owners.test.js": "storage-partition",
     "test/partition/write-path-epoch-fencing.test.js": "storage-partition",
@@ -7095,12 +7098,13 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-handler-constants.js",
-        "src/partition/managed-merge-workflow-dissolution-methods.js",
         "src/partition/managed-merge-workflow-state-methods.js",
-        "src/partition/managed-split-workflow-dissolution-methods.js",
+        "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
         "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-constants.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
@@ -7112,7 +7116,6 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/replica-operation-constants.js",
-        "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
@@ -7122,12 +7125,13 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-removal-consensus-exit.js",
-        "src/partition/managed-merge-workflow-dissolution-methods.js",
         "src/partition/managed-merge-workflow-state-methods.js",
-        "src/partition/managed-split-workflow-dissolution-methods.js",
+        "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
         "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
@@ -7139,7 +7143,6 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/replica-operation-constants.js",
-        "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
@@ -7148,12 +7151,13 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-handler-constants.js",
-        "src/partition/managed-merge-workflow-dissolution-methods.js",
         "src/partition/managed-merge-workflow-state-methods.js",
-        "src/partition/managed-split-workflow-dissolution-methods.js",
+        "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
         "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
@@ -7165,7 +7169,6 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/replica-operation-constants.js",
-        "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
@@ -7175,12 +7178,13 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-handler-constants.js",
         "src/partition/group-retirement-members.js",
-        "src/partition/managed-merge-workflow-dissolution-methods.js",
         "src/partition/managed-merge-workflow-state-methods.js",
-        "src/partition/managed-split-workflow-dissolution-methods.js",
+        "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
         "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-constants.js",
@@ -7194,7 +7198,6 @@
         "src/rebalancer/index.js",
         "src/rebalancer/rebalancer-constants.js",
         "src/rebalancer/replica-operation-constants.js",
-        "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
@@ -7203,12 +7206,13 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-handler-constants.js",
-        "src/partition/managed-merge-workflow-dissolution-methods.js",
         "src/partition/managed-merge-workflow-state-methods.js",
-        "src/partition/managed-split-workflow-dissolution-methods.js",
+        "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
         "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
@@ -7220,7 +7224,6 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/replica-operation-constants.js",
-        "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
@@ -7229,12 +7232,13 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/replica-handler-constants.js",
-        "src/partition/managed-merge-workflow-dissolution-methods.js",
         "src/partition/managed-merge-workflow-state-methods.js",
-        "src/partition/managed-split-workflow-dissolution-methods.js",
+        "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow-execution-gate-methods.js",
         "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
         "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
         "src/partition/partition-service-raft-peer-cache-reconciliation.js",
         "src/partition/split-ack-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
@@ -7246,7 +7250,6 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/executor-outcome-constants.js",
         "src/rebalancer/replica-operation-constants.js",
-        "src/workflow/durable-workflow-coordinator.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
@@ -7621,27 +7624,27 @@
     },
     "test/partition/managed-merge-epoch-persistence-effects.test.js": {
       "files": [
-        "src/partition/managed-workflow-record-store.js"
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/managed-split-epoch-persistence-effects.test.js": {
       "files": [
-        "src/partition/managed-workflow-record-store.js"
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/managed-split-resume-under-write-load.test.js": {
       "files": [
-        "src/partition/managed-workflow-record-store.js"
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/managed-split-workflow-terminal-lifecycle.test.js": {
       "files": [
-        "src/partition/managed-workflow-record-store.js"
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/managed-split-workflow-transition-persistence.test.js": {
       "files": [
-        "src/partition/managed-workflow-record-store.js"
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/partition-admission-redrive-wakes.test.js": {
@@ -7957,7 +7960,7 @@
     },
     "test/partition/split-abort-fence-parity.test.js": {
       "files": [
-        "src/partition/managed-workflow-record-store.js"
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/split-cutover-owner-delegation.test.js": {
@@ -7967,7 +7970,7 @@
     },
     "test/partition/split-dissolution-durable-proof.test.js": {
       "files": [
-        "src/partition/managed-workflow-record-store.js"
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/split-execution-state-reconstruction.test.js": {
@@ -8004,12 +8007,31 @@
     },
     "test/partition/workflow-fencing-wiring.test.js": {
       "files": [
-        "src/partition/managed-workflow-record-store.js"
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/workflow-record-interleaving.property.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/partition-constants.js",
+        "src/partition/target-provisioning-mark.js",
+        "src/workflow/workflow-constants.js"
+      ]
+    },
+    "test/partition/workflow-record-lagging-view.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js"
       ]
     },
     "test/partition/workflow-record-reconcile.test.js": {
       "files": [
         "src/partition/managed-workflow-ownership-core.js"
+      ]
+    },
+    "test/partition/workflow-record-same-owner-race.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/workflow/workflow-constants.js"
       ]
     },
     "test/partition/workflow-record-stale-owner.test.js": {
