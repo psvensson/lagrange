@@ -282,30 +282,20 @@ class PartitionSplitMergeManagerTransitionMethods {
   }
 
   /**
-   * Schedule a reactive evaluation when a deferred managed split becomes due.
-   * @param {string} partitionId - Candidate partition ID.
-   * @param {Object} execution - Managed split execution result.
+   * Arm the manager's one deferred evaluation: the contexts of every
+   * deferral coalesce into one request, due at the earliest due time
+   * (policy clock).
+   * @param {number} dueAtMs - When the evaluation is due.
+   * @param {Object} context - {reasonCode, partitionId|partitionIds}.
    * @return {void}
    * @private
    */
-  scheduleDeferredManagedSplitRetry(partitionId, execution) {
-    if (this.isShutdown) {
-      return;
-    }
-
-    const retryDueAtMs =
-      this.resolveManagedSplitExecutionRetryDueAtMs(execution);
-    if (!Number.isFinite(retryDueAtMs)) {
-      return;
-    }
-    const nowMs = Date.now();
-    const normalizedDueAtMs = Math.max(nowMs, retryDueAtMs);
+  armDeferredEvaluation(dueAtMs, context) {
+    const nowMs = this.now();
+    const normalizedDueAtMs = Math.max(nowMs, dueAtMs);
     this.deferredRetryEvaluation = this.mergeRequestedEvaluationContext(
       this.deferredRetryEvaluation,
-      {
-        reasonCode: SPLIT_MERGE_REASON.MANAGED_SPLIT_RETRY_DUE,
-        partitionId,
-      },
+      context,
     );
     if (this.deferredRetryEvaluationTimer &&
         Number.isFinite(this.deferredRetryEvaluationDueAtMs) &&
@@ -323,6 +313,57 @@ class PartitionSplitMergeManagerTransitionMethods {
       this.flushDeferredRetryEvaluation();
     }, retryDelayMs);
     this.deferredRetryEvaluationTimer.unref?.();
+  }
+
+  /**
+   * Schedule a reactive evaluation when a deferred managed split becomes due.
+   * @param {string} partitionId - Candidate partition ID.
+   * @param {Object} execution - Managed split execution result.
+   * @return {void}
+   * @private
+   */
+  scheduleDeferredManagedSplitRetry(partitionId, execution) {
+    if (this.isShutdown) {
+      return;
+    }
+
+    const retryDueAtMs =
+      this.resolveManagedSplitExecutionRetryDueAtMs(execution);
+    if (!Number.isFinite(retryDueAtMs)) {
+      return;
+    }
+    this.armDeferredEvaluation(retryDueAtMs, {
+      reasonCode: SPLIT_MERGE_REASON.MANAGED_SPLIT_RETRY_DUE,
+      partitionId,
+    });
+  }
+
+  /**
+   * A pair whose rates were read over a span longer than the merge span
+   * limit (sparse, periodic-only calls) is deferred, not merged: arm ONE
+   * follow-up evaluation one window plus one sampling cadence step later,
+   * when the QPM authority's previous sample (this evaluation's call)
+   * anchors a span of about one window. Bounded: one follow-up per pair
+   * between two periodic evaluations.
+   * @param {string} leftId - Left partition ID.
+   * @param {string} rightId - Right partition ID.
+   * @return {boolean} Whether a follow-up was armed.
+   * @private
+   */
+  scheduleMergeTrafficSpanFollowUp(leftId, rightId) {
+    const pairKey = `${leftId}\u0000${rightId}`;
+    if (this.isShutdown || this.mergeTrafficSpanFollowUps.has(pairKey)) {
+      return false;
+    }
+    this.mergeTrafficSpanFollowUps.add(pairKey);
+    this.armDeferredEvaluation(
+      this.now() + this.trafficWindowMs + this.trafficSampleCadenceMs,
+      {
+        reasonCode: SPLIT_MERGE_REASON.MERGE_TRAFFIC_SPAN_FOLLOW_UP,
+        partitionIds: [leftId, rightId],
+      },
+    );
+    return true;
   }
 
   /**

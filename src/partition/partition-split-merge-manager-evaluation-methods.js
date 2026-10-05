@@ -337,6 +337,10 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       }
 
       this.state = operationState.EVALUATING;
+      // Each periodic evaluation re-opens one span follow-up per pair.
+      if (this.lastEvaluationTrigger === periodicEvaluationTrigger) {
+        this.mergeTrafficSpanFollowUps.clear();
+      }
 
       try {
         const results = {
@@ -518,6 +522,10 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           });
           if (decision !== SPLIT_MERGE_MERGE_DECISION.ELIGIBLE) {
             results.mergeIneligible.push({leftId, rightId, reason: decision});
+            if (decision ===
+                SPLIT_MERGE_MERGE_DECISION.TRAFFIC_SPAN_TOO_LONG) {
+              this.scheduleMergeTrafficSpanFollowUp(leftId, rightId);
+            }
             continue;
           }
           results.mergeCandidates.push({leftId, rightId});

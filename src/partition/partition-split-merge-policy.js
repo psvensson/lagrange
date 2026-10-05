@@ -13,6 +13,10 @@
  *  - No signal is not low load: a partition whose QPM is null (less than
  *    one full traffic window observed) is never merge-eligible and never
  *    splits on traffic.
+ *  - Recent span: a merge reads each partition's rate over a span no
+ *    longer than the merge span limit (two windows plus one sampling
+ *    cadence step); a longer span is deferred, never eligible, and the
+ *    manager re-evaluates once the authority has a short span.
  *  - Minimum age: both partitions of a pair must be at least the minimum
  *    merge age old by the DURABLE partitions.created_at, so the decision
  *    survives a manager restart or leader change; an unknown age is not
@@ -73,21 +77,29 @@ function resolvePositiveDurationMs(configured, fallback) {
  * manager (policy) and the metrics provider (measurement) alike: the QPM
  * window (`partition.trafficWindowMs`) and the periodic evaluation
  * interval (`partition.evaluationIntervalMs`, which bounds how sparse the
- * provider's calls can be).
+ * provider's calls can be), plus what derives from them: the provider's
+ * sampling cadence and the longest span a merge may read.
  * @param {{trafficWindowMs: *, evaluationIntervalMs: *}} configured - Raw
  *   configured values.
- * @return {{trafficWindowMs: number, evaluationIntervalMs: number}}
+ * @return {{trafficWindowMs: number, evaluationIntervalMs: number,
+ *   sampleCadenceMs: number, mergeTrafficSpanLimitMs: number}}
  */
 function resolveTrafficMeasurement(configured = {}) {
+  const trafficWindowMs = resolvePositiveDurationMs(
+    configured.trafficWindowMs,
+    SPLIT_MERGE_DEFAULT.TRAFFIC_WINDOW_MS,
+  );
+  const sampleCadenceMs =
+    trafficWindowMs / SPLIT_MERGE_DEFAULT.TRAFFIC_SAMPLES_PER_WINDOW;
   return {
-    trafficWindowMs: resolvePositiveDurationMs(
-      configured.trafficWindowMs,
-      SPLIT_MERGE_DEFAULT.TRAFFIC_WINDOW_MS,
-    ),
+    trafficWindowMs,
     evaluationIntervalMs: resolvePositiveDurationMs(
       configured.evaluationIntervalMs,
       SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS,
     ),
+    sampleCadenceMs,
+    mergeTrafficSpanLimitMs: trafficWindowMs *
+      SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_SPAN_WINDOWS + sampleCadenceMs,
   };
 }
 
@@ -163,16 +175,38 @@ const MERGE_GATES = Object.freeze([
     refuses: (input) => input.trafficKnown !== true,
   }),
   Object.freeze({
+    decision: SPLIT_MERGE_MERGE_DECISION.TRAFFIC_SPAN_TOO_LONG,
+    refuses: (input) => input.trafficSpanMs > input.trafficSpanLimitMs,
+  }),
+  Object.freeze({
     decision: SPLIT_MERGE_MERGE_DECISION.ABOVE_MERGE_THRESHOLD,
     refuses: (input) => input.withinThresholds() !== true,
   }),
 ]);
 
 /**
+ * The longer of the two spans a pair's rates were read over; a span the
+ * metrics source does not state (no `trafficObservedMs`) is not one the
+ * span gate can refuse - the production QPM authority states every span.
+ * @param {Object} leftMetrics - Left partition metrics.
+ * @param {Object} rightMetrics - Right partition metrics.
+ * @return {number} Milliseconds, 0 when neither states a span.
+ */
+function resolvePairTrafficSpanMs(leftMetrics, rightMetrics) {
+  const spanOf = (metrics) => {
+    const spanMs = Number(metrics?.trafficObservedMs);
+    return Number.isFinite(spanMs) ? spanMs : 0;
+  };
+  return Math.max(spanOf(leftMetrics), spanOf(rightMetrics));
+}
+
+/**
  * Decide one adjacent pair: minimum durable age of BOTH partitions, then a
- * full-window traffic signal on both, then the hysteresis thresholds.
+ * full-window traffic signal on both read over a recent span, then the
+ * hysteresis thresholds.
  * @param {Object} input - {nowMs, minimumAgeMs, leftCreatedAtMs,
- *   rightCreatedAtMs, trafficKnown, withinThresholds()}.
+ *   rightCreatedAtMs, trafficKnown, trafficSpanMs, trafficSpanLimitMs,
+ *   withinThresholds()}.
  * @return {string} A SPLIT_MERGE_MERGE_DECISION value.
  */
 function resolveMergeDecision(input) {
@@ -185,6 +219,7 @@ export {
   resolveEffectiveMergeThresholds,
   resolveMergeDecision,
   resolveMergeMinimumAgeMs,
+  resolvePairTrafficSpanMs,
   resolvePartitionCreatedAtMs,
   resolveTrafficMeasurement,
 };

@@ -4,7 +4,7 @@
  * Semantics: `queriesPerMinute` is the average write rate (the local
  * leader's CDC `eventsGenerated` counter) over the most recent span of AT
  * LEAST one traffic window during which this node continuously led the
- * partition: one leadership term, one counter instance, no counter
+ * partition: one leadership tenure, one counter instance, no counter
  * regression. The span runs from the anchor (the newest retained sample at
  * least one window old) to the reading itself, and is reported as
  * `trafficObservedMs`. Until such a span exists the QPM is null (no
@@ -26,23 +26,38 @@
  * average over at least one window"; for a split it can only delay a
  * split on a recent burst (conservative).
  *
+ * Retention bounds the read path too: a sample older than the retention
+ * horizon is never an anchor, whenever the once-per-window sweep runs.
+ *
+ * Continuity is the service's leadership tenure token, compared by
+ * identity: the leadership edge (src/raft/replica-leadership-state.js)
+ * mints a new frozen token per tenure (election, a term observed while
+ * leading) and ends it on demotion and shutdown. Reading it is a property
+ * read: the provider never touches the consensus port (no status read, no
+ * runtime recovery, no inbound drive), so asking costs no port work and
+ * changes no consensus state.
+ *
+ * Durations come from the injected clock (default Date.now; the clock
+ * owner, src/time/time-source.js, has no monotonic source). A clock that
+ * steps back below the newest stored sample restarts the span.
+ *
  * The sampling is lazily driven (no timer of its own): a partition nobody
  * asks about needs no measurement, and a per-partition or node-level tick
  * would add timer load for an answer the next call produces exactly.
  */
 
 import {CDC_PIPELINE_METRIC} from '../constants/index.js';
+import {SPLIT_MERGE_DEFAULT} from './partition-constants.js';
 import {resolveTrafficMeasurement} from './partition-split-merge-policy.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
 const ONE_MINUTE_MS = 60 * 1000;
-// Stored samples per window: the provider's own sampling cadence is
-// window / TRAFFIC_SAMPLES_PER_WINDOW (5 s for the default 60 s window).
-const TRAFFIC_SAMPLES_PER_WINDOW = 12;
 // The ring never holds more than the anchor plus the samples newer than
-// one window, which the cadence spaces at least one step apart.
-const TRAFFIC_SAMPLE_CAPACITY = TRAFFIC_SAMPLES_PER_WINDOW + 1;
+// one window, which the cadence (window / samples per window) spaces at
+// least one step apart.
+const TRAFFIC_SAMPLE_CAPACITY =
+  SPLIT_MERGE_DEFAULT.TRAFFIC_SAMPLES_PER_WINDOW + 1;
 // Retention is never below this many windows.
 const MINIMUM_RETENTION_WINDOWS = 2;
 
@@ -86,62 +101,66 @@ function normalizeCounterValue(value) {
 
 /**
  * Read the leader's counter and the continuity it belongs to: the counter
- * instance and the consensus core's leadership term. A different instance
- * (service restart) or term (leadership lost and regained between two
- * calls) is a new span even when the counter did not regress.
+ * instance and the leadership tenure token. A different instance (service
+ * restart) or tenure (leadership lost and regained, or a new term, between
+ * two calls) is a new span even when the counter did not regress. No
+ * tenure (none minted, or ended) is no traffic signal.
  * @param {Object} partitionService - Local leader partition service.
  * @return {{count: number|null, counterSource: Object|null,
- *   term: number|null}}
+ *   tenure: Object|null}}
  */
 function readLeaderCounter(partitionService) {
   const counterSource = partitionService?.cdcPipelineMetrics || null;
-  if (!counterSource ||
+  const tenure = partitionService?.leadershipTenure || null;
+  if (!tenure || !counterSource ||
       typeof counterSource.getSnapshot !== LOCAL_STR_FUNCTION) {
-    return {count: null, counterSource: null, term: null};
+    return {count: null, counterSource: null, tenure: null};
   }
   const snapshot = counterSource.getSnapshot();
-  const raft = partitionService.raft;
-  const status = typeof raft?.readStatus === LOCAL_STR_FUNCTION ?
-    raft.readStatus() :
-    null;
-  const term = Number(status?.term);
   return {
     count: normalizeCounterValue(
       snapshot?.[CDC_PIPELINE_METRIC.EVENTS_GENERATED],
     ),
     counterSource,
-    term: Number.isFinite(term) ? term : null,
+    tenure,
   };
 }
 
 /**
  * Whether a reading continues the record's span.
- * @param {Object} record - {counterSource, term, samples}.
- * @param {Object} reading - {nowMs, count, counterSource, term}.
+ * @param {Object} record - {counterSource, tenure, samples}.
+ * @param {Object} reading - {nowMs, count, counterSource, tenure}.
  * @return {boolean}
  */
 function continuesSpan(record, reading) {
   const newest = record.samples[record.samples.length - 1];
   return record.counterSource === reading.counterSource &&
-    record.term === reading.term &&
+    record.tenure === reading.tenure &&
     (!newest || (reading.count >= newest.count &&
       reading.nowMs >= newest.atMs));
 }
 
 /**
  * Observe one reading: restart the span on a continuity break, drop every
- * sample older than the anchor, store the reading only on the cadence, and
- * resolve the rate over [anchor, now].
- * @param {Object} record - Mutable {counterSource, term, samples}.
- * @param {Object} reading - {nowMs, count, counterSource, term}.
- * @param {Object} plan - Sampling plan {windowMs, cadenceMs}.
+ * sample older than the retention horizon or the anchor, store the reading
+ * only on the cadence, and resolve the rate over [anchor, now].
+ * @param {Object} record - Mutable {counterSource, tenure, samples}.
+ * @param {Object} reading - {nowMs, count, counterSource, tenure}.
+ * @param {Object} plan - Sampling plan {windowMs, cadenceMs, retentionMs}.
  * @return {{queriesPerMinute: number|null, trafficObservedMs: number}}
  */
 function observeTraffic(record, reading, plan) {
   if (!continuesSpan(record, reading)) {
     record.counterSource = reading.counterSource;
-    record.term = reading.term;
+    record.tenure = reading.tenure;
     record.samples = [];
+  }
+  const retentionHorizonMs = reading.nowMs - plan.retentionMs;
+  const retainedFrom = record.samples.findIndex(
+    (sample) => sample.atMs >= retentionHorizonMs);
+  if (retainedFrom !== 0) {
+    record.samples = retainedFrom < 0 ? [] :
+      record.samples.slice(retainedFrom);
   }
   const samples = record.samples;
   const anchorHorizonMs = reading.nowMs - plan.windowMs;
@@ -196,13 +215,14 @@ function forgetStaleTrafficRecords(records, nowMs, retentionMs) {
  * @return {Object} {windowMs, cadenceMs, retentionMs, evaluationIntervalMs}.
  */
 function resolveSamplingPlan(options) {
-  const {trafficWindowMs, evaluationIntervalMs} = resolveTrafficMeasurement({
-    trafficWindowMs: options.trafficWindowMs,
-    evaluationIntervalMs: options.evaluationIntervalMs,
-  });
+  const {trafficWindowMs, evaluationIntervalMs, sampleCadenceMs} =
+    resolveTrafficMeasurement({
+      trafficWindowMs: options.trafficWindowMs,
+      evaluationIntervalMs: options.evaluationIntervalMs,
+    });
   return {
     windowMs: trafficWindowMs,
-    cadenceMs: trafficWindowMs / TRAFFIC_SAMPLES_PER_WINDOW,
+    cadenceMs: sampleCadenceMs,
     retentionMs: Math.max(
       MINIMUM_RETENTION_WINDOWS * trafficWindowMs,
       evaluationIntervalMs + trafficWindowMs,
@@ -286,7 +306,7 @@ function createManagedSplitMetricsProvider(options = {}) {
     }
     let record = records.get(normalizedPartitionId);
     if (!record) {
-      record = {counterSource: null, term: null, samples: []};
+      record = {counterSource: null, tenure: null, samples: []};
       records.set(normalizedPartitionId, record);
     }
     return {

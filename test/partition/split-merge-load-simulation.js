@@ -22,6 +22,10 @@
  *  - `evaluation: 'periodic-only'`: only the periodic timer
  *    (`partition.evaluationIntervalMs`, 300 s by default) evaluates, as on
  *    a node whose led partitions take no writes.
+ *
+ * In every mode the manager's own deferred evaluation (a merge span
+ * follow-up, a split retry) fires when it comes due on the simulated
+ * clock, through the manager's real flush path.
  */
 
 import {CDC_PIPELINE_METRIC} from '../../src/constants/index.js';
@@ -98,6 +102,8 @@ function createSplitMergeSimulation(options = {}) {
     services.set(`${row.partition_id}-r1`, {
       partitionId: row.partition_id,
       isLeader: true,
+      // The leadership edge's tenure token: one tenure per simulated row.
+      leadershipTenure: Object.freeze({term: 1}),
       getSize: () => row.size_bytes,
       cdcPipelineMetrics: {
         getSnapshot: () => ({
@@ -200,6 +206,30 @@ function createSplitMergeSimulation(options = {}) {
   };
 
   /**
+   * Fire the manager's deferred evaluation once it is due on the
+   * simulated clock: the manager's own flush (which re-requests it
+   * through the debounced request path), then that request's flush, with
+   * the real timers cleared.
+   * @return {Promise<void>}
+   */
+  const fireDueDeferredEvaluation = async () => {
+    if (manager.deferredRetryEvaluation === null ||
+        manager.deferredRetryEvaluationDueAtMs > nowMs) {
+      return;
+    }
+    clearTimeout(manager.deferredRetryEvaluationTimer);
+    manager.flushDeferredRetryEvaluation();
+    clearTimeout(manager.requestedEvaluationTimer);
+    manager.requestedEvaluationTimer = null;
+    manager.requestedEvaluationDueAtMs = null;
+    const request = manager.requestedEvaluation;
+    await manager.flushRequestedEvaluation();
+    if (options.onDeferredEvaluation) {
+      options.onDeferredEvaluation(request, nowMs);
+    }
+  };
+
+  /**
    * Advance the clock second by second; in the reactive mode the
    * write-driven evaluation fires `evaluationsPerSecond` times each second
    * the table takes writes; the periodic evaluation fires on its own
@@ -224,6 +254,7 @@ function createSplitMergeSimulation(options = {}) {
       } else if (periodicDue) {
         await evaluate('periodic_timer');
       }
+      await fireDueDeferredEvaluation();
     }
   };
 

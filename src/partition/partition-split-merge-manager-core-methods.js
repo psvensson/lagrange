@@ -17,6 +17,7 @@ import {
   hasTrafficSignal,
   resolveEffectiveMergeThresholds,
   resolveMergeDecision,
+  resolvePairTrafficSpanMs,
   resolvePartitionCreatedAtMs,
 } from './partition-split-merge-policy.js';
 
@@ -512,7 +513,8 @@ class PartitionSplitMergeManagerCoreMethods {
   /**
    * Decide one adjacent pair: the minimum-age gate on the durable
    * partitions.created_at of BOTH partitions, then a full-window traffic
-   * signal on both, then the hysteresis thresholds.
+   * signal on both read over a span within the merge span limit, then the
+   * hysteresis thresholds.
    * @param {Object} input - {leftId, rightId, leftMetrics, rightMetrics,
    *   policy}.
    * @return {string} A SPLIT_MERGE_MERGE_DECISION value.
@@ -525,6 +527,9 @@ class PartitionSplitMergeManagerCoreMethods {
       rightCreatedAtMs: input.rightMetrics.createdAtMs,
       trafficKnown: hasTrafficSignal(input.leftMetrics) &&
         hasTrafficSignal(input.rightMetrics),
+      trafficSpanMs: resolvePairTrafficSpanMs(
+        input.leftMetrics, input.rightMetrics),
+      trafficSpanLimitMs: this.mergeTrafficSpanLimitMs,
       withinThresholds: () => this.evaluateMergeCriteria(
         input.leftId,
         input.rightId,

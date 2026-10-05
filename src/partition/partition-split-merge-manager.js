@@ -158,6 +158,10 @@ class PartitionSplitMergeManager extends EventEmitter {
     });
     this.evaluationIntervalMs = measurement.evaluationIntervalMs;
     this.trafficWindowMs = measurement.trafficWindowMs;
+    this.trafficSampleCadenceMs = measurement.sampleCadenceMs;
+    this.mergeTrafficSpanLimitMs = measurement.mergeTrafficSpanLimitMs;
+    // Pairs given a span follow-up since the last periodic evaluation.
+    this.mergeTrafficSpanFollowUps = new Set();
     this.mergeMinimumAgeMs = resolveMergeMinimumAgeMs(
       this.getNumericConfig(
         config,

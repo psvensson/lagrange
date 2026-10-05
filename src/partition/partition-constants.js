@@ -389,6 +389,7 @@ const SPLIT_MERGE_REASON = Object.freeze({
   BUSY: 'busy',
   CONTROL_PLANE_BACKPRESSURE: 'control_plane_backpressure',
   MANAGED_SPLIT_RETRY_DUE: 'managed_split_retry_due',
+  MERGE_TRAFFIC_SPAN_FOLLOW_UP: 'merge_traffic_span_follow_up',
   OUTSTANDING_SPLIT_PROPOSAL: 'outstanding_split_proposal',
   INSUFFICIENT_CAPACITY: 'insufficient_capacity',
   CAPACITY_AVAILABLE: 'capacity_available',
@@ -634,6 +635,13 @@ const SPLIT_MERGE_DEFAULT = Object.freeze({
   // stated in. A partition with less than one window of observations has
   // no traffic signal (null, never 0).
   TRAFFIC_WINDOW_MS: 60 * 1000,
+  // The QPM authority stores samples on its own cadence:
+  // window / TRAFFIC_SAMPLES_PER_WINDOW (5 s for the default window).
+  TRAFFIC_SAMPLES_PER_WINDOW: 12,
+  // A merge reads its rate over at most this many windows plus one
+  // sampling cadence step: a longer span (sparse, periodic-only calls) can
+  // average a burst that started near its end down to "idle".
+  MERGE_TRAFFIC_SPAN_WINDOWS: 2,
   // Minimum durable age (partitions.created_at) before a partition may be
   // merged; the effective value is never below two traffic windows.
   MERGE_MINIMUM_PARTITION_AGE_MS: 10 * 60 * 1000,
@@ -653,6 +661,7 @@ const SPLIT_MERGE_MERGE_DECISION = Object.freeze({
   PARTITION_AGE_UNKNOWN: 'partition_age_unknown',
   PARTITION_BELOW_MINIMUM_AGE: 'partition_below_minimum_age',
   TRAFFIC_SIGNAL_UNAVAILABLE: 'traffic_signal_unavailable',
+  TRAFFIC_SPAN_TOO_LONG: 'traffic_span_too_long',
   ABOVE_MERGE_THRESHOLD: 'above_merge_threshold',
 });
 

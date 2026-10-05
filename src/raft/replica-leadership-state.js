@@ -19,10 +19,54 @@ function normalizeReplicaLeaderId(nextLeaderId, options = {}) {
     nextLeaderId;
 }
 
+function resolveReplicaTerm(replica) {
+  return typeof replica.resolveCurrentTermSafe === 'function' ?
+    replica.resolveCurrentTermSafe() :
+    null;
+}
+
+/**
+ * Mint a new leadership tenure: a NEW frozen object per tenure, so a reader
+ * that kept the previous token sees a different one by identity (the
+ * managed-split QPM authority's continuity key: no port read, no state
+ * change). Minted at the leadership edge and on every term this replica
+ * observes while it leads (a re-election the role events did not separate,
+ * e.g. a restored sole voter that campaigns again at a higher term).
+ * @param {Object} replica - Replica state.
+ * @param {number|null} term - The term the tenure belongs to.
+ */
+function mintReplicaLeadershipTenure(replica, term) {
+  replica.leadershipTenure = Object.freeze({
+    term: Number.isFinite(term) ? term : null,
+  });
+}
+
+/**
+ * End the replica's leadership tenure (demotion, shutdown): no token is
+ * no leadership a reader may continue.
+ * @param {Object} replica - Replica state.
+ */
+function endReplicaLeadershipTenure(replica) {
+  replica.leadershipTenure = null;
+}
+
+function renewReplicaLeadershipTenureOnTerm(replica, term) {
+  const observedTerm = Number(term);
+  if (replica.isLeader !== true || !Number.isFinite(observedTerm) ||
+      replica.leadershipTenure?.term === observedTerm) {
+    return;
+  }
+  mintReplicaLeadershipTenure(replica, observedTerm);
+}
+
 function applyReplicaLeadership(replica, role) {
   replica.role = role;
   replica.isLeader = true;
   replica.leaderId = replica.replicaId;
+  // The term is resolved once per leadership edge: the tenure token and
+  // the tenure claim below carry the same value.
+  const term = resolveReplicaTerm(replica);
+  mintReplicaLeadershipTenure(replica, term);
   if (typeof replica.queueRoleUpdate === 'function') {
     replica.queueRoleUpdate(role);
   }
@@ -31,12 +75,7 @@ function applyReplicaLeadership(replica, role) {
     // event so the owner-local canonical leader projection can stamp it
     // (quest local-leadership-tenure-bound-safety-evidence). Replicas that
     // cannot resolve a term simply mint no claim — fail-closed.
-    replica.queueLeaderNodeUpdate(
-      replica.nodeId,
-      typeof replica.resolveCurrentTermSafe === 'function' ?
-        replica.resolveCurrentTermSafe() :
-        null,
-    );
+    replica.queueLeaderNodeUpdate(replica.nodeId, term);
   }
 }
 
@@ -56,6 +95,7 @@ function applyReplicaDemotion(replica, role) {
   replica.role = role;
   replica.isLeader = false;
   replica.leaderId = null;
+  endReplicaLeadershipTenure(replica);
   if (typeof replica.queueRoleUpdate === 'function') {
     replica.queueRoleUpdate(role);
   }
@@ -161,6 +201,7 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
   });
 
   subscribe(events.TERM_CHANGE, (term) => {
+    renewReplicaLeadershipTenureOnTerm(replica, term);
     onTermChange({term});
   });
 }
@@ -168,5 +209,6 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
 export {
   applyReplicaLeadership,
   applyReplicaDemotion,
+  endReplicaLeadershipTenure,
   wireReplicaLifecycleEvents,
 };

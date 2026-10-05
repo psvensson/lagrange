@@ -134,16 +134,24 @@ Evaluation is threshold-driven and fires when **either** dimension is exceeded:
 | `partition.mergeMinimumAgeMs` | 600000 | minimum durable partition age before an automatic merge |
 | `partition.evaluationIntervalMs` | 300000 | how often candidates are evaluated |
 
-Writes also request an evaluation (debounced to one per second), while a
-node whose partitions take no writes evaluates only every
-`partition.evaluationIntervalMs`. The traffic signal is therefore defined
+Writes also request an evaluation (debounced to one per second) on the
+node that coordinates the write when that node also leads a target
+partition. A leader whose writes are coordinated elsewhere evaluates when a
+partition's size changes (checked every `partition.sizeUpdateIntervalMs`,
+60 s by default) and on the periodic timer, and a node whose partitions take
+no writes evaluates only every `partition.evaluationIntervalMs`. The traffic signal is therefore defined
 independently of how often evaluation runs. Queries per minute for a
 partition is **the average write rate (the local leader's CDC write
 counter) over the most recent span of at least one
 `partition.trafficWindowMs` during which this node continuously led the
-partition**: one leadership term, one counter instance, no counter
+partition**: one leadership tenure, one counter instance, no counter
 regression. The span runs from the newest stored sample that is at least one
-window old to the moment of the reading.
+window old (and inside the retention horizon below) to the moment of the
+reading. The tenure is a token the replica's leadership edge mints on every
+election and on every new term it observes while leading, and ends on
+demotion and shutdown. Reading it is a field read: the measurement never
+calls into the consensus port, so it costs no consensus work and cannot
+change consensus state.
 
 The node stores samples on its own fixed cadence (one twelfth of the window,
 5 s by default), whoever asks and however often, and keeps at most 13 per
@@ -157,6 +165,17 @@ two. Samples are kept for the longer of two windows and one evaluation
 interval plus one window. A longer span is still an average over at least
 one window. For a merge that is the stated criterion, so it is safe; for a
 split it can only delay a split on a recent burst.
+
+The write counter is the CDC pipeline's generated-event counter. Tables on
+the default policy count every committed write, whether or not anything
+subscribes. A table whose policy sets `externalCdcAllowed: false` generates
+no CDC events while it has no subscriber, so its counter stays at zero and
+it reads a valid **0 queries per minute** forever: it can never split on
+traffic, and the traffic criterion of a merge always holds for it, so it
+splits and merges on size alone. The merge-under-load scenario's
+configuration opts out this way, so its traffic gate always passes. Counting
+committed writes at the partition apply path instead of the CDC counter is
+recorded as follow-up work.
 
 Until such a span exists, the partition has **no traffic signal** (not zero
 traffic). That is the case after it is created, after a leader change or a
@@ -329,7 +348,16 @@ adjacent pair is merged only when all of these hold, checked in this order:
    windows.
 2. **A traffic signal.** Both partitions have one full window of
    observations (see above); no signal is never read as low load.
-3. **Hysteresis thresholds.** Combined size and combined queries per minute
+3. **A recent span.** Both rates were measured over at most two traffic
+   windows plus one sampling cadence step. On a node that evaluates only
+   every `partition.evaluationIntervalMs` the span is the whole interval,
+   and a burst that started seconds before the evaluation would be averaged
+   down to "idle". Such a pair is deferred, and the manager evaluates once
+   more one window plus one cadence step later, when the span is about one
+   window. This happens at most once per pair per periodic evaluation. An
+   idle pair on such a node therefore merges one window plus one cadence
+   step after the first periodic evaluation past the minimum age.
+4. **Hysteresis thresholds.** Combined size and combined queries per minute
    are at or below the merge thresholds, each clamped to at most half of
    the split threshold of the same dimension, so the merged partition is
    below half its split threshold on both and does not qualify to split on

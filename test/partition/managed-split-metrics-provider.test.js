@@ -2,7 +2,7 @@
  * The managed-split metrics provider is the one QPM authority for automatic
  * split/merge. Contract: QPM is the average write rate over the most recent
  * span of at least one traffic window during which this node continuously
- * led the partition (one leadership term, one counter); the span runs from
+ * led the partition (one leadership tenure, one counter); the span runs from
  * the anchor (the newest retained sample at least one window old) to the
  * reading, and exceeds the window by less than one sampling cadence step
  * plus the longest gap between two consecutive provider calls. Until such
@@ -14,12 +14,41 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {createManagedSplitMetricsProvider} from '../../src/partition/managed-split-metrics-provider.js';
+import {
+  endReplicaLeadershipTenure,
+  wireReplicaLifecycleEvents,
+} from '../../src/raft/replica-leadership-state.js';
 
 const WINDOW_MS = 60_000;
 const CADENCE_MS = WINDOW_MS / 12;
 const EVALUATION_INTERVAL_MS = 300_000;
 const SAMPLE_CAPACITY = 13;
 const ONE_MINUTE_MS = 60_000;
+
+/**
+ * One leadership tenure token, as the leadership edge mints it
+ * (src/raft/replica-leadership-state.js): a NEW frozen object per tenure.
+ * @param {number} term - Term.
+ * @return {Object}
+ */
+function tenure(term) {
+  return Object.freeze({term});
+}
+
+/**
+ * A consensus port whose every property access throws: the QPM authority
+ * must never touch the port (no readStatus, no side effect).
+ */
+const UNTOUCHABLE_RAFT = new Proxy({}, {
+  get(_target, property) {
+    throw new Error(`the QPM authority touched raft.${String(property)}`);
+  },
+  has(_target, property) {
+    throw new Error(`the QPM authority probed raft.${String(property)}`);
+  },
+});
+
+const STEADY_TENURE = tenure(1);
 
 function buildLeaderServices(state) {
   return new Map([
@@ -28,6 +57,8 @@ function buildLeaderServices(state) {
       get isLeader() {
         return state.isLeader !== false;
       },
+      leadershipTenure: STEADY_TENURE,
+      raft: UNTOUCHABLE_RAFT,
       getSize() {
         return 622592;
       },
@@ -186,9 +217,9 @@ test('createManagedSplitMetricsProvider falls back to persisted partition row si
 // --- Measurement invariants I1-I5 (B1/B2 of the 2026-10-05 rejection) ---
 
 /**
- * One led partition whose CDC counter, leadership term and service
- * instance the test drives.
- * @param {Object} state - Mutable {count, term, isLeader, metrics}.
+ * One led partition whose CDC counter, leadership tenure and service
+ * instance the test drives; its consensus port throws on any access.
+ * @param {Object} state - Mutable {count, tenure, isLeader, metrics}.
  * @return {Map} partitionServices.
  */
 function buildTermServices(state) {
@@ -198,7 +229,10 @@ function buildTermServices(state) {
       return state.isLeader !== false;
     },
     getSize: () => 1024,
-    raft: {readStatus: () => ({term: state.term})},
+    raft: UNTOUCHABLE_RAFT,
+    get leadershipTenure() {
+      return state.tenure;
+    },
     get cdcPipelineMetrics() {
       return state.metrics;
     },
@@ -213,7 +247,7 @@ test('B1 witness: called 3x/s for 1 h at 0 QPM then 3000 QPM, the provider ' +
   'reads ~3000 one window (+ cadence) after the step - extra calls never ' +
   'stretch the window into the leadership average', async (t) => {
   for (const callsPerSecond of [1, 3, 20]) {
-    const state = {count: 0, term: 1};
+    const state = {count: 0, tenure: tenure(1)};
     state.metrics = createCounter(state);
     let nowMs = 1_700_000_000_000;
     const provider = createManagedSplitMetricsProvider({
@@ -248,7 +282,7 @@ test('B1 witness: called 3x/s for 1 h at 0 QPM then 3000 QPM, the provider ' +
 test('I3 provider: with ONLY the 300 s periodic evaluation the second ' +
   'periodic call has a signal (span = one evaluation interval) and the ' +
   'signal persists on every later periodic call', async (t) => {
-  const state = {count: 0, term: 1};
+  const state = {count: 0, tenure: tenure(1)};
   state.metrics = createCounter(state);
   let nowMs = 1_700_000_000_000;
   const provider = createManagedSplitMetricsProvider({
@@ -271,10 +305,10 @@ test('I3 provider: with ONLY the 300 s periodic evaluation the second ' +
   }
 });
 
-test('I4: an UNOBSERVED leadership gap (a new term between two calls) and a ' +
+test('I4: an UNOBSERVED leadership gap (a new tenure between two calls) and a ' +
   'restarted counter that overtakes the old value both restart the span',
 async (t) => {
-  const state = {count: 0, term: 3};
+  const state = {count: 0, tenure: tenure(3)};
   state.metrics = createCounter(state);
   let nowMs = 1_700_000_000_000;
   const provider = createManagedSplitMetricsProvider({
@@ -288,16 +322,16 @@ async (t) => {
   state.count = 100;
   t.equal(provider('users-p1', ROW).queriesPerMinute, 50, 'baseline 50 QPM');
   // Leadership lost and regained between two calls: the counter froze
-  // while another node led, the term moved on.
+  // while another node led; the edge minted a new tenure.
   nowMs += 2 * WINDOW_MS;
-  state.term = 5;
+  state.tenure = tenure(5);
   state.count = 110;
   t.equal(provider('users-p1', ROW).queriesPerMinute, null,
-    'a new leadership term is a new span: no signal, not 5 QPM');
+    'a new leadership tenure is a new span: no signal, not 5 QPM');
   nowMs += WINDOW_MS;
   state.count = 170;
   t.equal(provider('users-p1', ROW).queriesPerMinute, 60,
-    'one window into the new term: the new term\'s rate only');
+    'one window into the new tenure: the new tenure\'s rate only');
   // The partition service restarted (new counter instance) and its new
   // counter overtook the old value before the next call.
   nowMs += WINDOW_MS;
@@ -313,13 +347,14 @@ test('I5: partitions no longer asked about are swept after the retention ' +
   let nowMs = 1_700_000_000_000;
   const services = new Map();
   for (let index = 0; index < 50; index += 1) {
-    const state = {count: 0, term: 1};
+    const state = {count: 0, tenure: tenure(1)};
     state.metrics = createCounter(state);
     services.set(`p${index}-r1`, {
       partitionId: `p${index}`,
       isLeader: true,
       getSize: () => 1,
-      raft: {readStatus: () => ({term: 1})},
+      raft: UNTOUCHABLE_RAFT,
+      leadershipTenure: STEADY_TENURE,
       cdcPipelineMetrics: state.metrics,
     });
   }
@@ -362,7 +397,7 @@ function createRandom(seed) {
 /**
  * Build one random world: piecewise-constant true write rates, leadership
  * gaps (the counter freezes while another node leads; regaining is a new
- * term), service restarts (a new counter instance from 0) and a random
+ * tenure), service restarts (a new counter instance from 0) and a random
  * provider call pattern from 0.01 to 20 calls/s.
  * @param {number} seed - Scenario seed.
  * @return {Object} World description.
@@ -424,7 +459,7 @@ function trueWrites(segments, fromMs, toMs) {
 function runRandomWorld(seed) {
   const world = buildRandomWorld(seed);
   const baseMs = 1_700_000_000_000;
-  const state = {count: 0, term: 1, isLeader: true};
+  const state = {count: 0, tenure: tenure(1), isLeader: true};
   state.metrics = createCounter(state);
   let nowMs = baseMs;
   const provider = createManagedSplitMetricsProvider({
@@ -449,7 +484,8 @@ function runRandomWorld(seed) {
     }
     lastAdvanceMs = toMs;
   };
-  for (const callMs of world.calls) {
+  let anchorCallIndex = -1;
+  for (const [callIndex, callMs] of world.calls.entries()) {
     while (breakIndex < world.breaks.length &&
         world.breaks[breakIndex].startMs <= callMs) {
       const event = world.breaks[breakIndex];
@@ -462,7 +498,7 @@ function runRandomWorld(seed) {
         state.isLeader = false;
         advanceCounter(event.endMs);
         state.isLeader = true;
-        state.term += 2;
+        state.tenure = tenure(state.tenure.term + 2);
         continuityStartMs = event.endMs;
       } else {
         break;
@@ -499,12 +535,23 @@ function runRandomWorld(seed) {
       firstCallSinceContinuityMs = callMs;
     }
     previousCallMs = callMs;
+    // The most recent earlier call at least one window old in this
+    // continuity epoch (and no older than its first call).
+    while (anchorCallIndex + 1 < callIndex &&
+        world.calls[anchorCallIndex + 1] <= callMs - WINDOW_MS) {
+      anchorCallIndex += 1;
+    }
     if (reading.queriesPerMinute === null) {
-      const spanAvailable = callMs - firstCallSinceContinuityMs >= WINDOW_MS;
-      if (spanAvailable && maxGapSinceContinuityMs <= retentionMs -
+      const anchorCallMs = anchorCallIndex >= 0 ?
+        world.calls[anchorCallIndex] :
+        null;
+      const spanAvailable = anchorCallMs !== null &&
+        anchorCallMs >= firstCallSinceContinuityMs &&
+        callMs - anchorCallMs >= WINDOW_MS;
+      if (spanAvailable && callMs - anchorCallMs <= retentionMs -
           CADENCE_MS) {
-        failures.push({seed, callMs, why: 'I3/I1 liveness: a span of at ' +
-          'least one window exists but no signal'});
+        failures.push({seed, callMs, why: 'I3/I1 liveness: a call one ' +
+          'window to (retention - cadence) old anchors a span but no signal'});
       }
       continue;
     }
@@ -523,6 +570,10 @@ function runRandomWorld(seed) {
       failures.push({seed, callMs, spanMs, maxGapSinceContinuityMs,
         why: 'I1 span longer than window + cadence + longest call gap ' +
           '(stale or whole-leadership anchor)'});
+    }
+    if (spanMs > retentionMs) {
+      failures.push({seed, callMs, spanMs, why: 'S2 anchor older than the ' +
+        'retention horizon'});
     }
     if (spanStartMs < continuityStartMs) {
       failures.push({seed, callMs, spanStartMs, continuityStartMs,
@@ -569,7 +620,7 @@ test('I1/I2/I4 property: for 240 seeded random worlds (0.01-20 calls/s, ' +
 
 test('I2: the ring holds at most window/cadence + 1 samples per partition ' +
   'whatever the call rate', async (t) => {
-  const state = {count: 0, term: 1};
+  const state = {count: 0, tenure: tenure(1)};
   state.metrics = createCounter(state);
   let nowMs = 1_700_000_000_000;
   const provider = createManagedSplitMetricsProvider({
@@ -589,4 +640,254 @@ test('I2: the ring holds at most window/cadence + 1 samples per partition ' +
   t.equal(provider.describeTrafficSamples().sampleCapacity, SAMPLE_CAPACITY);
   t.ok(maxSamples <= SAMPLE_CAPACITY,
     `143 calls/s for 23 min: at most ${maxSamples} samples`);
+});
+
+// --- B3: continuity from the leadership tenure token, never the port ---
+
+test('B3: the provider never touches the consensus port - a readStatus ' +
+  'counter reads 0 after 50 partitions x 3 calls x 60 evaluations, and a ' +
+  'port that throws on any access is never reached', async (t) => {
+  let readStatusCalls = 0;
+  let nowMs = 1_700_000_000_000;
+  const services = new Map();
+  const counters = [];
+  for (let index = 0; index < 50; index += 1) {
+    const state = {count: 0};
+    counters.push(state);
+    services.set(`p${index}-r1`, {
+      partitionId: `p${index}`,
+      isLeader: true,
+      leadershipTenure: tenure(7),
+      getSize: () => 1,
+      raft: index % 2 === 0 ? UNTOUCHABLE_RAFT : {
+        readStatus() {
+          readStatusCalls += 1;
+          return {term: 7};
+        },
+      },
+      cdcPipelineMetrics: createCounter(state),
+    });
+  }
+  const provider = createManagedSplitMetricsProvider({
+    partitionServices: services,
+    now: () => nowMs,
+    trafficWindowMs: WINDOW_MS,
+    evaluationIntervalMs: EVALUATION_INTERVAL_MS,
+  });
+  let last = null;
+  for (let evaluation = 0; evaluation < 60 + 1; evaluation += 1) {
+    for (const state of counters) {
+      state.count += 10;
+    }
+    for (let index = 0; index < 50; index += 1) {
+      for (let call = 0; call < 3; call += 1) {
+        last = provider(`p${index}`, {partition_id: `p${index}`});
+      }
+    }
+    nowMs += 1000;
+  }
+  t.equal(readStatusCalls, 0, 'no port status read on any provider call');
+  t.equal(last.queriesPerMinute, 600,
+    'the signal is still measured (10 writes/s = 600 QPM)');
+});
+
+test('B3: a leader whose tenure was never minted or has ended has a size ' +
+  'but no traffic signal', async (t) => {
+  const state = {count: 0, tenure: null};
+  state.metrics = createCounter(state);
+  let nowMs = 1_700_000_000_000;
+  const provider = createManagedSplitMetricsProvider({
+    partitionServices: buildTermServices(state),
+    now: () => nowMs,
+    trafficWindowMs: WINDOW_MS,
+    evaluationIntervalMs: EVALUATION_INTERVAL_MS,
+  });
+  for (let second = 0; second < 3 * 60; second += 1) {
+    nowMs += 1000;
+    state.count += 1;
+    const reading = provider('users-p1', ROW);
+    t.equal(reading.queriesPerMinute, null);
+    if (reading.queriesPerMinute !== null) {
+      break;
+    }
+  }
+  t.equal(provider('users-p1', ROW).sizeBytes, 1024, 'the size is live');
+});
+
+/**
+ * A consensus port double that only emits role/term events into the REAL
+ * leadership edge (wireReplicaLifecycleEvents); readStatus answers the
+ * edge's single term read per leadership event.
+ * @param {Object} replica - The replica (partition service double).
+ * @return {Function} emit(eventName, payload).
+ */
+function wireRealLeadershipEdge(replica) {
+  const listeners = new Map();
+  const port = {
+    subscribe(eventName, listener) {
+      const set = listeners.get(eventName) || new Set();
+      set.add(listener);
+      listeners.set(eventName, set);
+    },
+  };
+  wireReplicaLifecycleEvents(replica, {
+    raft: port,
+    events: {LEADER: 'leader', FOLLOWER: 'follower', CANDIDATE: 'candidate',
+      LEADER_CHANGE: 'leader-change', TERM_CHANGE: 'term-change'},
+    roles: {LEADER: 'leader', FOLLOWER: 'follower', CANDIDATE: 'candidate'},
+  });
+  return (eventName, payload) => {
+    for (const listener of listeners.get(eventName) || []) {
+      listener(payload);
+    }
+  };
+}
+
+test('B3 edge: the REAL leadership edge mints a new tenure on election, on ' +
+  'a re-election in a higher term without an observed demotion, and on ' +
+  'demotion + re-promotion; it ends the tenure on demotion and on ' +
+  'shutdown - and the provider restarts its span on each', async (t) => {
+  const counter = {count: 0};
+  const replica = {
+    partitionId: 'users-p1',
+    replicaId: 'users-p1-r1',
+    nodeId: 'node-a',
+    isLeader: false,
+    leadershipTenure: null,
+    currentTerm: 4,
+    resolveCurrentTermSafe() {
+      return this.currentTerm;
+    },
+    getSize: () => 1024,
+    cdcPipelineMetrics: createCounter(counter),
+  };
+  const emit = wireRealLeadershipEdge(replica);
+  let nowMs = 1_700_000_000_000;
+  const provider = createManagedSplitMetricsProvider({
+    partitionServices: new Map([['users-p1-r1', replica]]),
+    now: () => nowMs,
+    trafficWindowMs: WINDOW_MS,
+    evaluationIntervalMs: EVALUATION_INTERVAL_MS,
+  });
+  const read = (writes) => {
+    nowMs += WINDOW_MS;
+    counter.count += writes;
+    return provider('users-p1', ROW).queriesPerMinute;
+  };
+
+  emit('leader');
+  const firstTenure = replica.leadershipTenure;
+  t.same(firstTenure, {term: 4}, 'election mints the tenure of its term');
+  t.ok(Object.isFrozen(firstTenure), 'the token is frozen');
+  t.equal(read(0), null, 'first call of the tenure: no signal');
+  t.equal(read(60), 60, 'one window into the tenure: 60 QPM');
+
+  emit('term-change', 4);
+  t.equal(replica.leadershipTenure, firstTenure,
+    'the term the tenure already holds keeps the same token');
+  t.equal(read(120), 120, 'same tenure: the span continues');
+
+  // Leader -> leader with a term bump and no role event in between (a
+  // restored sole voter that campaigns again at once).
+  replica.currentTerm = 5;
+  emit('term-change', 5);
+  t.not(replica.leadershipTenure, firstTenure,
+    'a higher term observed while leading is a NEW tenure');
+  t.same(replica.leadershipTenure, {term: 5});
+  t.equal(read(30), null, 're-election in a higher term restarts the span');
+  t.equal(read(30), 30, 'one window into the new tenure: its own rate');
+
+  const secondTenure = replica.leadershipTenure;
+  emit('follower');
+  t.equal(replica.leadershipTenure, null, 'demotion ends the tenure');
+  replica.isLeader = true;
+  t.equal(provider('users-p1', ROW).queriesPerMinute, null,
+    'no tenure: no signal even where isLeader still reads true');
+  replica.isLeader = false;
+  // Demotion and re-promotion between two provider calls (unobserved by
+  // the provider), even at the same term.
+  emit('leader');
+  t.not(replica.leadershipTenure, secondTenure,
+    'a re-promotion mints a new token');
+  t.equal(read(60), null, 'demotion + re-promotion restarts the span');
+  t.equal(read(60), 60, 'one window later: a signal again');
+
+  emit('candidate');
+  t.equal(replica.leadershipTenure, null, 'a campaign ends the tenure');
+  emit('leader');
+  emit('leader-change', 'users-p1-r2');
+  t.equal(replica.leadershipTenure, null,
+    'a demotion by leader change ends the tenure');
+
+  emit('leader');
+  endReplicaLeadershipTenure(replica);
+  t.equal(replica.leadershipTenure, null, 'shutdown ends the tenure');
+  t.equal(read(60), null, 'an ended tenure has no signal');
+});
+
+// --- S1: the clock-back guard; S2: retention bounds the anchor ---
+
+test('S1: a clock that steps back below the newest stored sample restarts ' +
+  'the span (never a negative or inflated span)', async (t) => {
+  const state = {count: 0, tenure: tenure(1)};
+  state.metrics = createCounter(state);
+  let nowMs = 1_700_000_000_000;
+  const provider = createManagedSplitMetricsProvider({
+    partitionServices: buildTermServices(state),
+    now: () => nowMs,
+    trafficWindowMs: WINDOW_MS,
+    evaluationIntervalMs: EVALUATION_INTERVAL_MS,
+  });
+  for (let second = 0; second <= 2 * WINDOW_MS / 1000; second += 1) {
+    nowMs += 1000;
+    state.count += 10;
+    provider('users-p1', ROW);
+  }
+  t.equal(provider('users-p1', ROW).queriesPerMinute, 600, 'baseline');
+  // The wall clock steps back two windows.
+  nowMs -= 2 * WINDOW_MS;
+  state.count += 10;
+  const stepped = provider('users-p1', ROW);
+  t.equal(stepped.queriesPerMinute, null,
+    'a backward step below the newest sample restarts the span');
+  t.equal(stepped.trafficObservedMs, 0);
+  nowMs += WINDOW_MS;
+  state.count += 600;
+  t.equal(provider('users-p1', ROW).queriesPerMinute, 600,
+    'one window after the step: the rate over the new span only');
+});
+
+test('S2: a sample older than the retention horizon is never an anchor, ' +
+  'even between two once-per-window sweeps', async (t) => {
+  const retentionMs = EVALUATION_INTERVAL_MS + WINDOW_MS;
+  let nowMs = 1_700_000_000_000;
+  const states = [0, 1].map(() => ({count: 0, tenure: tenure(1)}));
+  const services = new Map(states.map((state, index) => [`p${index}-r1`, {
+    partitionId: `p${index}`,
+    isLeader: true,
+    leadershipTenure: state.tenure,
+    getSize: () => 1,
+    raft: UNTOUCHABLE_RAFT,
+    cdcPipelineMetrics: createCounter(state),
+  }]));
+  const provider = createManagedSplitMetricsProvider({
+    partitionServices: services,
+    now: () => nowMs,
+    trafficWindowMs: WINDOW_MS,
+    evaluationIntervalMs: EVALUATION_INTERVAL_MS,
+  });
+  const startMs = nowMs;
+  provider('p0', {partition_id: 'p0'});
+  // Another partition's call runs the sweep just inside p0's horizon ...
+  nowMs = startMs + retentionMs - 1;
+  provider('p1', {partition_id: 'p1'});
+  t.equal(provider.describeTrafficSamples().partitionCount, 2,
+    'p0 survives the sweep (inside the horizon)');
+  // ... and p0 is asked again less than one window later, past it.
+  nowMs = startMs + retentionMs + WINDOW_MS - 2;
+  states[0].count = 1000;
+  const reading = provider('p0', {partition_id: 'p0'});
+  t.equal(reading.queriesPerMinute, null,
+    'the stale sample is not an anchor: no signal, not a ' +
+    `${retentionMs + WINDOW_MS - 2} ms span`);
 });

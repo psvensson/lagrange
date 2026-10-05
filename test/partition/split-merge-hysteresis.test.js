@@ -56,6 +56,7 @@ const WINDOW_MS = SPLIT_MERGE_DEFAULT.TRAFFIC_WINDOW_MS;
 const LIGHT_QPM = 20;
 const CADENCE_MS = WINDOW_MS / 12;
 const HOUR_S = 3600;
+const AGE_NOW_MS = 1_700_000_000_000;
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -222,27 +223,117 @@ async (t) => {
 
 // --- The measurement is independent of the evaluation cadence (B1/B2) ---
 
+/**
+ * The first periodic evaluation (on the simulated clock's interval grid)
+ * at which a pair split at `splitAtMs` is at least the minimum age old.
+ * @param {Object} sim - Simulation.
+ * @param {number} splitAtMs - Split time.
+ * @return {number}
+ */
+function firstPeriodicPastMinimumAge(sim, splitAtMs) {
+  const intervalMs = sim.manager.evaluationIntervalMs;
+  return Math.ceil((splitAtMs + MIN_AGE_MS) / intervalMs) * intervalMs;
+}
+
 test('W8 (B2): an explicit split of an idle table on a node that evaluates ' +
-  'ONLY on the 300 s periodic timer merges exactly once, at or after the ' +
-  'minimum age, over 4 h', async (t) => {
+  'ONLY on the 300 s periodic timer merges exactly once over 4 h - at the ' +
+  'span follow-up one window + one cadence step after the first periodic ' +
+  'evaluation past the minimum age (that evaluation\'s span is 300 s, ' +
+  'longer than the merge span limit, so it defers instead of merging)',
+async (t) => {
   const log = collectIneligibleReasons();
+  const followUps = [];
   const sim = createSplitMergeSimulation({
     evaluation: EVALUATION_MODE.PERIODIC_ONLY,
     onEvaluation: log.onEvaluation,
+    onDeferredEvaluation: (request, atMs) => followUps.push(atMs),
   });
   const splitAtMs = sim.now();
   await sim.splitRequest(sim.rows[0].partition_id);
   await sim.run(4 * HOUR_S, () => 0);
   t.equal(sim.count('merge'), 1, 'exactly one merge in 4 h');
   const merge = sim.events.find((event) => event.kind === 'merge');
-  t.ok(merge.atMs - splitAtMs >= MIN_AGE_MS,
-    `not before the minimum age (${(merge.atMs - splitAtMs) / 1000} s)`);
-  t.ok(merge.atMs - splitAtMs <= MIN_AGE_MS +
-    sim.manager.evaluationIntervalMs,
-  'at the first periodic evaluation past the minimum age');
+  const periodicMs = firstPeriodicPastMinimumAge(sim, splitAtMs);
+  t.ok(log.reasons.has('traffic_span_too_long'),
+    'the periodic evaluation defers on its long span');
+  t.equal(merge.atMs, periodicMs + WINDOW_MS + CADENCE_MS,
+    `merged at the span follow-up (${(merge.atMs - splitAtMs) / 1000} s ` +
+    'after the split)');
+  t.same(followUps, [periodicMs + WINDOW_MS + CADENCE_MS],
+    'one follow-up evaluation');
   t.notOk(log.reasons.has('above_merge_threshold'),
     'an idle pair is never read as busy');
   sim.manager.shutdown();
+});
+
+test('W11 (S3): an idle split pair on a periodic-only leader is NOT merged ' +
+  'while hot when a 5000 QPM burst starts shortly before the first ' +
+  'eligible periodic evaluation (the 300 s span reads it as idle; the ' +
+  'follow-up reads one recent window)', async (t) => {
+  for (const leadS of [2, 5, 10, 12]) {
+    const sim = createSplitMergeSimulation({
+      evaluation: EVALUATION_MODE.PERIODIC_ONLY,
+    });
+    const startMs = sim.now();
+    await sim.splitRequest(sim.rows[0].partition_id);
+    const burstAtMs = firstPeriodicPastMinimumAge(sim, startMs) -
+      leadS * SECOND_MS;
+    await sim.run(HOUR_S, (elapsedMs) =>
+      (startMs + elapsedMs + SECOND_MS > burstAtMs ? 5000 : 0));
+    t.equal(sim.count('merge'), 0,
+      `burst ${leadS} s before the evaluation: no merge while hot ` +
+      `(${sim.events.map((event) => event.kind).join(',')})`);
+    sim.manager.shutdown();
+  }
+});
+
+test('W12 (S3): the span follow-up is bounded - one per pair per periodic ' +
+  'evaluation, and a follow-up never arms another', async (t) => {
+  const followUps = [];
+  const periodics = [];
+  const sim = createSplitMergeSimulation({
+    evaluation: EVALUATION_MODE.PERIODIC_ONLY,
+    onEvaluation: (results, atMs) => periodics.push(atMs),
+    onDeferredEvaluation: (request, atMs) => followUps.push({request, atMs}),
+  });
+  const splitAtMs = sim.now();
+  await sim.splitRequest(sim.rows[0].partition_id);
+  // 150 + 150 QPM: above the merge threshold, below the split threshold.
+  await sim.run(2 * HOUR_S, () => 300);
+  t.equal(sim.count('merge'), 0, 'a busy pair never merges');
+  const eligiblePeriodics = periodics.filter((atMs) =>
+    atMs - splitAtMs >= MIN_AGE_MS);
+  t.equal(followUps.length, eligiblePeriodics.length,
+    'one follow-up per periodic evaluation past the minimum age ' +
+    `(${followUps.length} for ${eligiblePeriodics.length})`);
+  t.ok(followUps.every(({request}) => request.reasonCodes.includes(
+    SPLIT_MERGE_REASON.MERGE_TRAFFIC_SPAN_FOLLOW_UP)),
+  'every follow-up names its reason');
+  for (const [index, followUp] of followUps.entries()) {
+    t.equal(followUp.atMs, eligiblePeriodics[index] + WINDOW_MS + CADENCE_MS,
+      `follow-up ${index} one window + cadence after its periodic`);
+  }
+  sim.manager.shutdown();
+});
+
+test('S3 gate: a merge whose rates were read over a span longer than the ' +
+  'merge span limit (2 windows + 1 cadence step) is deferred, never ' +
+  'eligible; at the limit it is eligible', async (t) => {
+  const manager = new PartitionSplitMergeManager({now: () => AGE_NOW_MS});
+  t.equal(manager.mergeTrafficSpanLimitMs, 2 * WINDOW_MS + CADENCE_MS);
+  const decide = (spanMs) => manager.evaluateMergeEligibility({
+    leftId: 'l',
+    rightId: 'r',
+    leftMetrics: {sizeBytes: 1, queriesPerMinute: 0,
+      trafficObservedMs: WINDOW_MS, createdAtMs: AGE_NOW_MS - 2 * MIN_AGE_MS},
+    rightMetrics: {sizeBytes: 1, queriesPerMinute: 0,
+      trafficObservedMs: spanMs, createdAtMs: AGE_NOW_MS - 2 * MIN_AGE_MS},
+    policy: {},
+  });
+  t.equal(decide(2 * WINDOW_MS + CADENCE_MS), 'eligible');
+  t.equal(decide(2 * WINDOW_MS + CADENCE_MS + 1), 'traffic_span_too_long');
+  t.equal(decide(300_000), 'traffic_span_too_long');
+  manager.shutdown();
 });
 
 test('W9 (B1): children at 300 QPM for 6 h, then 5000 QPM: a child splits ' +
@@ -283,8 +374,6 @@ test('W10 (B1): a split table whose children then carry 95 + 95 QPM merges ' +
 });
 
 // --- Minimum-age witnesses (mutants M2, M3, M10) ---
-
-const AGE_NOW_MS = 1_700_000_000_000;
 
 function buildAgeManager(rows, executed) {
   return new PartitionSplitMergeManager({
