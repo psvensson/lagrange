@@ -82,6 +82,27 @@ async function waitForControlSnapshotLeaderCoverage(node) {
   }, CONTROL_SNAPSHOT_TIMEOUT_MS, CONTROL_SNAPSHOT_POLL_INTERVAL_MS);
 }
 
+// The convergence wait's refusal as {voterTargetState, message}; both are
+// absent when the wait unexpectedly converged.
+async function convergenceRefusal(node) {
+  try {
+    await waitForConvergence([node], {
+      settleTimeoutMs: 1000,
+      finalAdjudicationDrainTimeoutMs: 0,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 1000,
+      sampleIntervalMs: 50,
+      targetVoterCount: 3,
+    });
+  } catch (error) {
+    return {
+      voterTargetState: error?.diagnostics?.voterTargets?.state,
+      message: String(error?.message || ''),
+    };
+  }
+  return {voterTargetState: undefined, message: ''};
+}
+
 test('Convergence uses local control snapshot when distributed admin SQL reads fail',
   {timeout: 120000}, async (t) => {
     initializeTestEnvironment({
@@ -152,10 +173,11 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
 
       const originalExecuteLocalQuery =
         adminApi.executeLocalQueryEnvelope.bind(adminApi);
+      let partitionsReadFails = true;
       adminApi.executeLocalQueryEnvelope = async (payload, ctx) => {
         const statement = String(payload?.sql || '').toLowerCase();
         if (statement.includes('from services') ||
-          statement.includes('from partitions') ||
+          (partitionsReadFails && statement.includes('from partitions')) ||
           statement.includes('from replica_operations')) {
           return {
             success: false,
@@ -186,6 +208,18 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
         'services query failure should expose participant failure error',
       );
 
+      // With every partitions read failing there is no policy voter target:
+      // convergence is refused, naming the absent evidence, never assumed.
+      const refusal = await convergenceRefusal(convergenceNode);
+      t.equal(refusal.voterTargetState,
+        'voter_target_evidence_absent',
+        'no policy target evidence refuses convergence by name');
+      t.match(refusal.message, /target read: .*participant failures/i,
+        'the refusal names the failed policy target read');
+
+      // The policy read recovers while services/replica_operations SQL still
+      // fails: voters and leaders come from the local control snapshot.
+      partitionsReadFails = false;
       const convergence = await waitForConvergence([convergenceNode], {
         settleTimeoutMs: 3000,
         quietWindowMs: 0,
@@ -198,6 +232,8 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
         true,
         'convergence should succeed using local control snapshots',
       );
+      t.equal(convergence?.voterTargets?.state, 'voters_at_target',
+        'every partition at its policy voter target');
       t.equal(
         Number.isFinite(convergence?.leaderChanges),
         true,

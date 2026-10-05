@@ -1,6 +1,15 @@
 import {
   buildUnexpectedNodeExitFailure,
 } from './harness/unexpected-node-exit.js';
+import {
+  evaluateScenarioTopologyRequirement,
+} from './harness/scenario-host-topology.js';
+import {
+  SCENARIO_OUTCOME,
+  SCENARIO_RESULT_LABEL,
+  buildRefusedScenarioResult,
+  scenarioOutcomeOf,
+} from './harness/scenario-outcome.js';
 
 function createDistributedRunRuntimeBundle(deps = {}) {
   const {
@@ -375,7 +384,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
    *   clusterFactory?: Function|null,
    *   reportMetadata?: Object|null,
    * }} options
-   * @returns {Promise<{report: ReportWriter, hasFailures: boolean}>}
+   * @returns {Promise<{report: ReportWriter, hasFailures: boolean,
+   *   hasRefusals: boolean}>}
    */
   async function runScenarios(config, scenarios, options) {
     const providedStateMachinePressurePreflight =
@@ -419,6 +429,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       },
     });
     let hasFailures = false;
+    let hasRefusals = false;
     const dockerOperationSink = typeof options?.dockerOperationSink === 'function' ?
       options.dockerOperationSink :
       null;
@@ -435,6 +446,30 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         process.stdout.write(
           'Running scenario: ' + scenario.name + '\n',
         );
+      }
+
+      // The scenario's declared topology capability is compared with the
+      // config's host authority BEFORE anything starts: a config that
+      // cannot carry the claim REFUSES the scenario (not run, never a
+      // pass, never a failure), with no cluster, no bundle, no evidence.
+      // A module that fails to load fails THIS scenario only, named; the
+      // run continues with the next one.
+      const topology = await checkScenarioTopology(config, scenario,
+        startedAt, startMs);
+      if (topology.loadFailure !== null) {
+        hasFailures = true;
+        report.addResult(scenario.name, topology.loadFailure);
+        continue;
+      }
+      const refusal = topology.refusal;
+      if (refusal !== null) {
+        hasRefusals = true;
+        if (options.verbose) {
+          process.stdout.write(SCENARIO_RESULT_LABEL[SCENARIO_OUTCOME.REFUSED] +
+            ' ' + scenario.name + ': ' + refusal.error + '\n');
+        }
+        report.addResult(scenario.name, refusal);
+        continue;
       }
 
       let cluster = null;
@@ -741,7 +776,40 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       }
     }
 
-    return {report, hasFailures};
+    return {report, hasFailures, hasRefusals};
+  }
+
+  async function refuseScenarioTopology(config, scenario) {
+    const scenarioModule = await loadScenarioModule(scenario.path);
+    const refusal = evaluateScenarioTopologyRequirement(
+      scenarioModule?.SCENARIO_TOPOLOGY_REQUIREMENT, config);
+    return refusal === null ?
+      null :
+      buildRefusedScenarioResult(refusal, new Date().toISOString());
+  }
+
+  // The topology check, isolated per scenario: a module import error is a
+  // failed result for that scenario (named), never an abort of the run.
+  async function checkScenarioTopology(config, scenario, startedAt, startMs) {
+    try {
+      return {loadFailure: null,
+        refusal: await refuseScenarioTopology(config, scenario)};
+    } catch (error) {
+      return {
+        loadFailure: {
+          passed: false,
+          duration: Date.now() - startMs,
+          startedAt,
+          error: scenario.name + ': scenario module failed to load: ' +
+            String(error?.message || error),
+          stackTrace: error?.stack || null,
+          analysisSummary: null,
+          clusterSize: resolveClusterSize(config),
+          performanceDiagnostics: null,
+        },
+        refusal: null,
+      };
+    }
   }
 
   function shouldPrintLiveLogEntry(entry) {
@@ -1157,7 +1225,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
 
     lines.push(
       'Run: ' + summary.passed + '/' + summary.total +
-      ' passed, ' + summary.failed + ' failed' +
+      ' passed, ' + (summary.failed - (summary.refused || 0)) + ' failed' +
+      (summary.refused ? ', ' + summary.refused + ' refused (not run)' : '') +
       ' (' + (summary.duration / 1000).toFixed(
         SUMMARY_FIXED_DECIMALS_OPS,
       ) + 's)\n',
@@ -1183,8 +1252,12 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       const std = stdScenarios[i];
       const entry = scenarioEntries[i] || null;
       const current = std.current;
-      const result = current.passed ?
-        SUMMARY_RESULT_PASS : SUMMARY_RESULT_FAIL;
+      const outcome = scenarioOutcomeOf(entry || current);
+      const result = outcome === SCENARIO_OUTCOME.PASSED ?
+        SUMMARY_RESULT_PASS :
+        outcome === SCENARIO_OUTCOME.REFUSED ?
+          SCENARIO_RESULT_LABEL[SCENARIO_OUTCOME.REFUSED] :
+          SUMMARY_RESULT_FAIL;
 
       lines.push('\n' + result + ' ' + std.scenario + '\n');
       lines.push(

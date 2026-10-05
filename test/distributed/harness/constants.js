@@ -747,6 +747,10 @@ const PLAYBACK_EVENT_TYPE = Object.freeze({
   REPLICA_CREATED: 'replica.created',
   REPLICA_REMOVED: 'replica.removed',
   REPLICA_MOVED: 'replica.moved',
+  // A scenario's own step log (start/end of each named step) and the
+  // structured record every scenario gate emits for pass and fail.
+  SCENARIO_STEP: 'scenario.step',
+  SCENARIO_GATE: 'scenario.gate',
   WARNING: 'capture.warning',
 });
 
@@ -823,10 +827,15 @@ const CLI = Object.freeze({
 // --- Exit Codes ---
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
+// Nothing failed, but at least one scenario was REFUSED (not run: the
+// config's host topology cannot carry its claim). Never 0: a refused run
+// is not a pass; never 1: it is not a failure (scenario-outcome.js).
+const EXIT_REFUSED = 3;
 
 const EXIT_CODES = Object.freeze({
   SUCCESS: EXIT_SUCCESS,
   FAILURE: EXIT_FAILURE,
+  REFUSED: EXIT_REFUSED,
 });
 
 export {

@@ -207,8 +207,13 @@ const RATCHET_TARGETS = [
     // after the message-group MOVE_REPLICA tests were deleted.
     // 2026-10-04: tightened 713/27072 -> 713/27050 on the checker's hint
     // after the handler's CREATE acceptance cases became refusal cases (C3).
-    baselineCloneGroupCount: 713,
-    baselineDuplicatedLineCount: 27050,
+    // 2026-10-04: tightened 713/27072 -> 708/26760 on the checker's hint
+    // (shared convergence stub policy targets in assertions-test-helpers).
+    // 2026-10-05: merge of quest/scenario-gates-ground-truth keeps the lower
+    // of both sides' tightened values, then tightened 708/26760 -> 708/26738
+    // on the checker's hint for the merged tree.
+    baselineCloneGroupCount: 708,
+    baselineDuplicatedLineCount: 26738,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

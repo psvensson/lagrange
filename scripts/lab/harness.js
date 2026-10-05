@@ -2,11 +2,15 @@ import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {spawn} from 'node:child_process';
 import {LAB_HOLD, holdLabMachine, labHolderText} from './probe.js';
-import {reserveLocalPort, run, waitForDockerPing} from './process.js';
+import {capture, reserveLocalPort, run, waitForDockerPing} from './process.js';
 import {
   DISTRIBUTED_EXECUTION_ENV,
   DISTRIBUTED_EXECUTION_TARGET,
 } from '../../test/distributed/harness/constants.js';
+import {
+  SCENARIO_OUTCOME,
+  outcomeOfRunnerExit,
+} from '../../test/distributed/harness/scenario-outcome.js';
 
 const DEFAULT_BASE_CONFIG = 'test/distributed/config/local-three-node.json';
 const DEFAULT_DOCKER_SOCKET = '/var/run/docker.sock';
@@ -55,7 +59,25 @@ const HARNESS_REFUSAL = Object.freeze({
   BUSY: ' busy, ',
   FAILED: ' could not be held: ',
 });
+// The machine identity the lab fleet itself uses to say "same machine as"
+// (probe.js CAPABILITY_SCRIPT boot_id): the kernel's per-boot id, which no
+// two running machines share - unlike /etc/machine-id, which cloned lab
+// installs share. Observed over the node's own ssh target before a
+// formation, and declared in the config as hostInfo.machineId: the
+// harness's host authority (test/distributed/harness/scenario-host-topology.js).
+const MACHINE_ID_COMMAND = 'cat /proc/sys/kernel/random/boot_id';
+const MACHINE_ID_DEADLINE_MS = 15000;
+const MACHINE_ID_PATTERN = /^[0-9a-f-]{16,64}$/u;
+const MACHINE_OBSERVATION = Object.freeze({
+  OBSERVED: 'observed',
+  UNREACHABLE: 'unreachable',
+  UNREADABLE: 'unreadable',
+});
+const HARNESS_REFUSED_TEXT = 'harness: scenario REFUSED (not run) - the ' +
+  'config\'s host topology cannot carry its claim; see the run report: ';
+
 const ERROR_TEXT = Object.freeze({
+  MACHINE_ID: 'harness: no machine identity for node ',
   NO_HARNESS_NODES: 'No nodes with the harness role were selected',
   TOO_FEW_HOSTS: 'Physical harness runs require at least two Linux Docker hosts; ' +
     'use the existing local Docker config for single-host runs',
@@ -96,7 +118,57 @@ async function stopTunnel(tunnel) {
   if (tunnel.child.exitCode === null) tunnel.child.kill(SIGNAL.KILL);
 }
 
-async function buildRemoteConfig(baseConfigPath, nodes, ports, outputPath, nodesPerHost) {
+// A refused scenario is not a failed one: say so, keep the exit code.
+function nameRefusedRun(error) {
+  if (outcomeOfRunnerExit(error?.exitCode) === SCENARIO_OUTCOME.REFUSED) {
+    error.message = `${HARNESS_REFUSED_TEXT}${error.message}`;
+  }
+  throw error;
+}
+
+function observeBootId(node) {
+  return capture(SSH, [SSH_OPTION, SSH_OPTIONS.BATCH_MODE, node.ssh,
+    MACHINE_ID_COMMAND], {timeoutMs: MACHINE_ID_DEADLINE_MS});
+}
+
+/**
+ * Each harness node's observed machine identity, in node order. A node whose
+ * identity cannot be observed refuses the formation: two providers on one
+ * machine must count once, and missing topology is never a host.
+ * @param {Array<Object>} nodes
+ * @param {Function} [observe] (node) => Promise<string> boot id
+ * @return {Promise<Array<string>>}
+ */
+export async function observeMachineIdentities(nodes, observe = observeBootId) {
+  const identities = [];
+  for (const node of nodes) {
+    const observation = await observeOneMachine(node, observe);
+    if (observation.state !== MACHINE_OBSERVATION.OBSERVED) {
+      throw new Error(`${ERROR_TEXT.MACHINE_ID}${node.name}: ` +
+        observation.detail);
+    }
+    identities.push(`boot:${observation.bootId}`);
+  }
+  return identities;
+}
+
+// One node's observed boot id, or the named reason there is none.
+async function observeOneMachine(node, observe) {
+  let text;
+  try {
+    text = String(await observe(node)).trim();
+  } catch (error) {
+    return {state: MACHINE_OBSERVATION.UNREACHABLE, detail: error.message};
+  }
+  if (!MACHINE_ID_PATTERN.test(text)) {
+    return {state: MACHINE_OBSERVATION.UNREADABLE,
+      detail: `unreadable boot id ${JSON.stringify(text)}`};
+  }
+  return {state: MACHINE_OBSERVATION.OBSERVED, bootId: text};
+}
+
+export async function buildRemoteConfig(baseConfigPath, nodes, ports, outputPath, nodesPerHost,
+  machineIds = null) {
   const base = JSON.parse(await readFile(baseConfigPath, TEXT_ENCODING));
   const size = Number(base.size);
   if (!Number.isSafeInteger(size) || size < MIN_CONFIG_SIZE) {
@@ -109,9 +181,10 @@ async function buildRemoteConfig(baseConfigPath, nodes, ports, outputPath, nodes
     docker: {
       ...(base.docker || {}),
       hosts: ports.map((port) => `tcp://${LOOPBACK_HOST}:${port}`),
-      hostInfo: nodes.map((node) => ({
+      hostInfo: nodes.map((node, index) => ({
         internalIp: node.ip,
         externalIp: node.ip,
+        ...(machineIds ? {machineId: machineIds[index]} : {}),
       })),
       buildOnHosts: true,
     },
@@ -208,6 +281,8 @@ export async function runHarness({
   dryRun = false,
   hold = holdLabMachine,
   environment = process.env,
+  // Injectable boot-id observer; observeMachineIdentities defaults it.
+  observeMachine,
 }) {
   validateHarnessNodes(nodes);
   if (nodes.length < MIN_PHYSICAL_HOSTS) {
@@ -236,6 +311,7 @@ export async function runHarness({
   const holds = await holdHarnessNodes(nodes, scenarioPart, hold);
   const tunnels = [];
   try {
+    const machineIds = await observeMachineIdentities(nodes, observeMachine);
     for (let index = 0; index < nodes.length; index += 1) {
       const tunnel = startTunnel(nodes[index], ports[index]);
       tunnels.push(tunnel);
@@ -244,7 +320,8 @@ export async function runHarness({
         `tunnel ${nodes[index].name} -> ${LOOPBACK_HOST}:${ports[index]} ready\n`,
       );
     }
-    await buildRemoteConfig(absoluteBase, nodes, ports, configPath, nodesPerHost);
+    await buildRemoteConfig(absoluteBase, nodes, ports, configPath, nodesPerHost,
+      machineIds);
     const args = buildHarnessRunnerArgs({
       configPath,
       scenario,
@@ -258,7 +335,8 @@ export async function runHarness({
         .map((node) => node.name)
         .join(HOST_LIST_SEPARATOR),
     };
-    await run(process.execPath, args, {env: childEnvironment});
+    await run(process.execPath, args, {env: childEnvironment})
+      .catch(nameRefusedRun);
   } finally {
     await Promise.all(tunnels.map(stopTunnel));
     await releaseHolds(holds);

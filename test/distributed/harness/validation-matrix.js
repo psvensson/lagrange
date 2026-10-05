@@ -1,3 +1,5 @@
+import {SCENARIO_OUTCOME, scenarioOutcomeOf} from './scenario-outcome.js';
+
 const ZERO = 0;
 const ONE = 1;
 const PERCENTILE_P50 = 0.5;
@@ -317,7 +319,11 @@ const HARNESS_VERDICTS = Object.freeze({
   BLOCK_TOPOLOGY_CONVERGENCE: 'BLOCK_TOPOLOGY_CONVERGENCE',
   BLOCK_PERFORMANCE_REGRESSION: 'BLOCK_PERFORMANCE_REGRESSION',
   BLOCK_PERFORMANCE_INVALID: 'BLOCK_PERFORMANCE_INVALID',
+  // Not run: the config's host topology cannot carry the scenario's claim
+  // (scenario-outcome.js). Never PASS, never certification evidence.
+  REFUSED_NOT_RUN: 'REFUSED_NOT_RUN',
 });
+const REFUSED_DEFAULT_REASON = 'refused_not_run';
 
 const SCENARIO_HARNESS_INVALID_PATTERNS = Object.freeze([
   'readiness probe timed out',
@@ -596,6 +602,12 @@ const SCENARIO_VERDICT_RULES = Object.freeze([
 ]);
 
 function classifyScenarioVerdict(result) {
+  if (scenarioOutcomeOf(result) === SCENARIO_OUTCOME.REFUSED) {
+    return {
+      verdict: HARNESS_VERDICTS.REFUSED_NOT_RUN,
+      reason: result?.refusal?.reason || REFUSED_DEFAULT_REASON,
+    };
+  }
   const evidence = buildScenarioVerdictEvidence(result);
   const rule = SCENARIO_VERDICT_RULES.find((candidate) =>
     candidate.matches(evidence),

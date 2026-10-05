@@ -41,6 +41,7 @@ import {
 import {formatLogEntry} from './harness/log-collector.js';
 import {analyzeMemoryLeakFromPlayback} from './harness/memory-leak-analyzer.js';
 import {buildPerformanceDiagnostics} from './harness/performance-diagnostics.js';
+import {resolveRunExitCode} from './harness/scenario-outcome.js';
 import {writeFailureBundlesForReport} from './harness/failure-bundle.js';
 import {
   formatStateMachinePressurePreflightSummary,
@@ -1266,7 +1267,7 @@ async function main() {
     );
 
     runPhaseTiming.setupEndMs = Date.now();
-    const {report, hasFailures} = await runScenarios(
+    const {report, hasFailures, hasRefusals} = await runScenarios(
       runConfig,
       scenarios,
       {
@@ -1357,6 +1358,12 @@ async function main() {
     const gateFailed =
       benchmarkRegressionGate.status === BENCHMARK_GATE_STATUS.FAILED;
     const hasRunFailures = hasFailures || gateFailed;
+    // Failures win; else any refused (not run) scenario exits REFUSED,
+    // never 0 - no exit-code reader may read a refusal as a pass.
+    const runExitCode = resolveRunExitCode({
+      hasFailures: hasRunFailures,
+      hasRefusals,
+    });
     runStatusContext.milestones.reportWrittenAt = new Date().toISOString();
     await writeRunnerStatus(RUN_STATUS_STATE_REPORT_WRITTEN, {
       summary: reportPreview.summary,
@@ -1364,7 +1371,8 @@ async function main() {
       benchmarkRegressionGate,
       failureBundle: failureBundle.runBundle,
       hasScenarioFailures: hasFailures,
-      exitCode: hasRunFailures ? EXIT_CODES.FAILURE : EXIT_CODES.SUCCESS,
+      hasScenarioRefusals: hasRefusals,
+      exitCode: runExitCode,
     });
     if (args.verbose && gateFailed) {
       process.stderr.write(
@@ -1377,9 +1385,7 @@ async function main() {
       );
     }
 
-    process.exit(
-      hasRunFailures ? EXIT_CODES.FAILURE : EXIT_CODES.SUCCESS,
-    );
+    process.exit(runExitCode);
   } catch (err) {
     // Tear down provisioned GCP infra even on failure so a crashed run never
     // leaks billable VMs; teardown failure must not mask the original error.

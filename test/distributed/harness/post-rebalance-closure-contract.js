@@ -1652,9 +1652,23 @@ function buildPostRebalanceClosureSnapshot(
   };
 }
 
+/**
+ * Whether post-rebalance CDC projection visibility is closed for a
+ * convergence claim. The claim includes the voter verdict
+ * (convergence-voter-targets.js): `voterTargetVerdict` is REQUIRED - an
+ * absent verdict is voter_target_evidence_absent, never satisfied - and an
+ * unsatisfied one (under_target_voters, over_target_voters,
+ * over_ceiling_voters, voter_target_evidence_absent) keeps the contract
+ * open. A caller with no voter claim passes an explicit not-claimed verdict.
+ * @param {Object} options
+ * @return {boolean}
+ */
 function isPostRebalanceCdcProjectionVisibleSatisfied(
   options = POST_REBALANCE_CLOSURE_EMPTY_RECORD,
 ) {
+  if (options?.voterTargetVerdict?.satisfied !== true) {
+    return false;
+  }
   const evidence = collectClosureEvidence(options);
   const cdcProjectionVisible = classifyCdcProjectionVisible(evidence);
   return POST_REBALANCE_CLOSURE_TERMINAL_STATES.includes(

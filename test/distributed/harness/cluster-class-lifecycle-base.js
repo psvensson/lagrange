@@ -10,6 +10,7 @@ import {
   nodeLogHostDir,
   nodeLogHostFile,
   nodeLogContainerFilePath,
+  resetScenarioFullLogs,
   INCARNATION_BOUNDARY_EVENT,
   NODE_LOG_FILE_ENV_VAR,
   NODE_LOG_DIR_CONTAINER,
@@ -891,6 +892,22 @@ class ClusterLifecycleBase {
     this._networkId = net.id;
   }
 
+  // This run owns the scenario's artifact directory from here on: an
+  // earlier run's curated and full node logs must not be read as its
+  // evidence (the directory is shared per scenario, node ids are not), and
+  // must never be destroyed either: they move, with that run's failure
+  // bundle, into the earlier run's archive dir (log-collector.js
+  // archivePreviousScenarioRun owns the layout, the bound and the bundle
+  // path rewrite; resetScenarioFullLogs moves the full logs into it).
+  async _resetScenarioRunArtifacts() {
+    const outputDir = this._config?.outputDir;
+    const scenarioName = this._scenarioName;
+    await this._logCollector.archivePreviousScenarioRun(scenarioName, {
+      archiveFullLogs: (archiveDir) =>
+        resetScenarioFullLogs(outputDir, scenarioName, archiveDir),
+    });
+  }
+
   async start() {
     if (!this._cleanupUnregister) {
       this._cleanupUnregister = registerClusterCleanup(
@@ -899,6 +916,7 @@ class ClusterLifecycleBase {
       );
     }
     await this._prepareReusableClusterLeaseForStart();
+    await this._resetScenarioRunArtifacts();
 
     try {
       await this._playbackRecorder.start({
@@ -941,6 +959,7 @@ class ClusterLifecycleBase {
         role: NODE_ROLES.SEED,
         ip: seedNode.ip,
         containerId: seedNode.containerId,
+        host: seedNode.hostIdentity,
       },
     );
     this._recordPlaybackEvent(
@@ -991,6 +1010,7 @@ class ClusterLifecycleBase {
           role: NODE_ROLES.JOINER,
           ip: joinerNode.ip,
           containerId: joinerNode.containerId,
+          host: joinerNode.hostIdentity,
         },
       );
       this._recordPlaybackEvent(
@@ -1658,6 +1678,7 @@ class ClusterLifecycleBase {
         role: NODE_ROLES.JOINER,
         ip: joinerNode.ip,
         containerId: joinerNode.containerId,
+        host: joinerNode.hostIdentity,
       },
     );
     this._recordPlaybackEvent(

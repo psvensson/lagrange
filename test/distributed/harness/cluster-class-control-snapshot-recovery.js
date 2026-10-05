@@ -2,6 +2,7 @@ import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {CONVERGENCE_DEFAULTS} from './constants.js';
 import {ASSERTIONS_CONVERGENCE_WAIT} from './assertions-convergence-wait.js';
 import {isPostRebalanceCdcProjectionVisibleSatisfied} from './post-rebalance-closure-contract.js';
+import {buildUnclaimedVoterTargetVerdict} from './convergence-voter-targets.js';
 import {
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
@@ -43,6 +44,11 @@ const {
   countAdditionalPostRebalanceReplicaOperationDiscounts,
   countCacheVisibleSatisfiedPriorityRecoveryOperations,
 } = ASSERTIONS_CONVERGENCE_WAIT;
+
+
+const QUIESCENCE_PROBE_VOTER_TARGET_VERDICT = buildUnclaimedVoterTargetVerdict(
+  'control-plane quiescence probe: the CDC flag only discounts in-flight ' +
+  'replica operations; no convergence claim is made here');
 
 function normalizeControlSnapshotRecord(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ?
@@ -93,6 +99,9 @@ function resolveControlSnapshotCdcProjectionVisibleSatisfied({
     ignoreStaleInFlightReplicaOperations:
       options.ignoreStaleInFlightReplicaOperations === true,
     controlPlaneDiagnostics,
+    // This quiescence probe reads the flag only to discount in-flight
+    // operations; it claims nothing about voter counts, and says so.
+    voterTargetVerdict: QUIESCENCE_PROBE_VOTER_TARGET_VERDICT,
   });
 }
 

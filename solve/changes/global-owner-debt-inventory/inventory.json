@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2634155,
-        "sha256": "4a035a92b13da25c06fd3a983d8d389cd4d132f560dc75341bde3f5de1b6da97"
+        "bytes": 2643062,
+        "sha256": "be9240a563ac4325e88c91875edec329f3e98c84abf9da0d81b9f6eda188bca0"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "172efef9acefb6f4b951774b6214dc09498d84073d53d8a31163c47a33753758"
+    "inputDigest": "a3a30533687c5373ef4e98e26b1b77151304aed08a3449e49ea33d586933af8c"
   },
   "reconciliation": {
     "complexity": {
@@ -99,8 +99,8 @@
         "source": 27,
         "test": 21
       },
-      "observedCount": 47,
-      "assignedCount": 47
+      "observedCount": 48,
+      "assignedCount": 48
     },
     "duplication": [
       {
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2634155,
-        "sha256": "4a035a92b13da25c06fd3a983d8d389cd4d132f560dc75341bde3f5de1b6da97"
+        "bytes": 2643062,
+        "sha256": "be9240a563ac4325e88c91875edec329f3e98c84abf9da0d81b9f6eda188bca0"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "936735dd11db2ebc0e0ded11ee8fb9a41adcefa80a40058773dc82f39053d1eb",
-      "moduleCount": 5027,
-      "edgeCount": 24680,
+      "sourceDigest": "2754827dfaef52477a0b7da34a171659945572fd7ec0c08aa88dcfbc7e447c85",
+      "moduleCount": 5040,
+      "edgeCount": 24774,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2518,
-    "assignedSignalCount": 2518,
-    "uniqueAssignmentCount": 2518,
-    "digest": "d642767e45b25d5a440f59e6ee8e10198acd0598fb6442df5f6c2fe92acc8276"
+    "sourceSignalCount": 2519,
+    "assignedSignalCount": 2519,
+    "uniqueAssignmentCount": 2519,
+    "digest": "defd3f0694d17ac5644f5fa166745c260513848ef7b3298e9f14492e04ca3322"
   },
   "signalCounts": {
     "cognitive": 153,
     "complexity": 1765,
     "duplication": 514,
-    "fileSize": 47,
+    "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1289,
+    "filesWithDebt": 1290,
     "rankedBoundaryCount": 114,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 94,
@@ -210,18 +210,18 @@
       "ownerAreas": [
         "test/distributed/harness"
       ],
-      "fileCount": 165,
-      "signalCount": 479,
+      "fileCount": 166,
+      "signalCount": 480,
       "complexity": 396,
       "cognitive": 0,
-      "oversizedFiles": 10,
+      "oversizedFiles": 11,
       "duplicatedLines": 13773,
       "cloneTouches": 318,
       "cycleGroups": 0,
       "lintExclusions": 10,
-      "importIn": 347,
-      "importOut": 592,
-      "score": 2912.1,
+      "importIn": 354,
+      "importOut": 620,
+      "score": 2924.1,
       "topPaths": [
         "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
         "test/distributed/harness/failure-bundle-playback-classification.js",
@@ -387,8 +387,8 @@
       "cloneTouches": 8,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 71,
-      "importOut": 134,
+      "importIn": 72,
+      "importOut": 139,
       "score": 561.4,
       "topPaths": [
         "test/distributed/scenarios/postgres-baseline-comparison-discovery-readiness.js",
@@ -1644,7 +1644,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 1,
-      "importOut": 1,
+      "importOut": 3,
       "score": 32,
       "topPaths": [
         "test/distributed/run-runtime-helpers.js"
@@ -2187,7 +2187,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 3,
-      "importOut": 21,
+      "importOut": 22,
       "score": 12,
       "topPaths": [
         "test/distributed/run.js"
@@ -2477,7 +2477,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 2,
+      "importOut": 3,
       "score": 8,
       "topPaths": [
         "scripts/summarize-harness-runs.js"
@@ -3677,10 +3677,10 @@
           }
         ],
         "baseline": {
-          "score": 2912.1,
+          "score": 2924.1,
           "complexity": 396,
           "cognitive": 0,
-          "oversizedFiles": 10,
+          "oversizedFiles": 11,
           "duplicatedLines": 13773,
           "lintExclusions": 10
         },

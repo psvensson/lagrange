@@ -6,6 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {CHECKS_DIR, PROBE} from './schema.js';
+import {
+  SCENARIO_OUTCOME,
+  scenarioOutcomeOf,
+} from '../../test/distributed/harness/scenario-outcome.js';
 
 const TEXT_ENCODING = 'utf8';
 const REPORT_DIR = 'test-output/reports';
@@ -41,6 +45,7 @@ const REASON = Object.freeze({
   RECEIPT_EMPTY: 'receipt file carries no receipts',
   REQUIRED_MISSING: 'probe args name no required receipts',
   NO_REPORTS: 'no report for the scenario',
+  REFUSED_NOT_RUN: 'refused_not_run',
   ORACLE_MISSING: 'oracle file missing or malformed',
   SCRIPT_OUTSIDE_CHECKS: `script probes live under ${CHECKS_DIR}/`,
   SCRIPT_NO_METRIC: 'script printed no numeric metric line',
@@ -111,12 +116,44 @@ function verdictReasonOf(data, scenario) {
   return scenarioEntry(data, scenario)?.current?.verdictReason || null;
 }
 
+// A REFUSED (not run) scenario - the config's host topology could not
+// carry its claim - is no sample at all: it never extends a pass streak,
+// never produces a pass receipt, and never counts as a measured failure.
+function isRefusedRun(data, scenario) {
+  const entry = scenarioEntry(data, scenario);
+  return entry !== null &&
+    (scenarioOutcomeOf(entry) === SCENARIO_OUTCOME.REFUSED ||
+      scenarioOutcomeOf(entry?.current) === SCENARIO_OUTCOME.REFUSED);
+}
+
+// Why the latest sample measured nothing: a refused run names its refusal
+// (not run, with the topology reason), never "no report for the scenario".
+function refusalOf(entry) {
+  return entry?.refusal || entry?.current?.refusal || null;
+}
+
+function refusalReasonOf(entry) {
+  return refusalOf(entry)?.reason || entry?.verdictReason ||
+    entry?.current?.verdictReason || null;
+}
+
+function nonMeasuringReasonOf(data, scenario) {
+  if (!isRefusedRun(data, scenario)) {
+    return verdictReasonOf(data, scenario) || REASON.NO_REPORTS;
+  }
+  const refusalReason = refusalReasonOf(scenarioEntry(data, scenario));
+  return refusalReason ? `${REASON.REFUSED_NOT_RUN}: ${refusalReason}` :
+    REASON.REFUSED_NOT_RUN;
+}
+
 function isNonMeasuringRun(data, scenario) {
-  return NON_MEASURING_VERDICT_REASONS.includes(verdictReasonOf(data, scenario));
+  return isRefusedRun(data, scenario) ||
+    NON_MEASURING_VERDICT_REASONS.includes(verdictReasonOf(data, scenario));
 }
 
 function scenarioPassed(data, scenario) {
   const entry = scenarioEntry(data, scenario);
+  if (isRefusedRun(data, scenario)) return false;
   if (typeof entry?.passed === 'boolean') return entry.passed;
   if (typeof entry?.current?.passed === 'boolean') return entry.current.passed;
   return data?.summary?.failed === 0;
@@ -215,7 +252,7 @@ function measureScenarioHarness(root, args) {
     passingStreak: recent.filter((run) => scenarioPassed(run.data, scenario)).length,
     verdictReason: verdictReasonOf(latest.data, scenario)};
   if (isNonMeasuringRun(latest.data, scenario) || readMetric(latest.data, kind) === null) {
-    return {...notMeasuring(detail.verdictReason || REASON.NO_REPORTS, evidence),
+    return {...notMeasuring(nonMeasuringReasonOf(latest.data, scenario), evidence),
       invalidSample: true, detail};
   }
   return {
