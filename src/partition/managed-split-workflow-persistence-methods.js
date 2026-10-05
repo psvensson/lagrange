@@ -26,6 +26,7 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_SPLIT_EXECUTION_FAILURE = 'split_execution_failure';
 const LOCAL_STR_FAILED_TO_PERSIST_MANAGED_SPLIT_WORKFLOW = 'Failed to persist managed split workflow failure';
+const LOCAL_STR_PARTITION_KEY_TYPE = 'partition_key_type';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_TABLE_ID = 'table_id';
 const LOCAL_STR_TABLE_NAME = 'table_name';
@@ -496,9 +497,9 @@ class ManagedSplitWorkflowPersistenceMethods {
       existing.partition_key_end ?? existing.partitionKeyEnd ?? null,
     );
     compareField(
-      'partition_key_type',
-      expected.partition_key_type ?? null,
-      existing.partition_key_type ?? existing.partitionKeyType ?? null,
+      LOCAL_STR_PARTITION_KEY_TYPE,
+      expected[LOCAL_STR_PARTITION_KEY_TYPE] ?? null,
+      existing[LOCAL_STR_PARTITION_KEY_TYPE] ?? existing.partitionKeyType ?? null,
     );
     compareField(
       LOCAL_STR_PARTITION_VERSION,
