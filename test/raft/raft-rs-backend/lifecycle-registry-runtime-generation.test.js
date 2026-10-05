@@ -31,6 +31,10 @@ function openGeneration(label) {
     peerId: `peer-${label}`,
     replicaIdentity: REPLICA_ID,
     db: {
+      // The members the lifecycle row's durable commit uses.
+      inTransaction: false,
+      pragma: () => 1,
+      transaction: (work) => work,
       exec() {},
       prepare(sql) {
         return {

@@ -97,6 +97,16 @@ function limitationById(capabilities, id) {
     null;
 }
 
+// The Raft durability claim holds only while the architecture states it and
+// the durable store still raises its persist commit to synchronous FULL.
+function raftDurabilityMatchesStore(capabilities, replication, root) {
+  return capabilities.replication.raftPersistDurability ===
+      EXPECTED_STATUS.RAFT_PERSIST_DURABILITY &&
+    replication.includes(AUDIT_MARKER.RAFT_SYNCED_BEFORE_SENT) &&
+    readText(RAFT_STORE_CONSTANTS_PATH, root)
+      .includes(AUDIT_MARKER.RAFT_SYNC_SOURCE);
+}
+
 function checkCurrentCapabilities(root = REPO_ROOT) {
   const capabilities = readJson(CAPABILITIES_PATH, root);
   const problems = [];
@@ -199,11 +209,7 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
         EXPECTED_STATUS.LEARNER_PROMOTION,
     AUDIT_MARKER.REPLICATION_CONTRADICTION);
   addProblem(problems,
-    capabilities.replication.raftPersistDurability ===
-      EXPECTED_STATUS.RAFT_PERSIST_DURABILITY &&
-      replication.includes(AUDIT_MARKER.RAFT_SYNCED_BEFORE_SENT) &&
-      readText(RAFT_STORE_CONSTANTS_PATH, root)
-        .includes(AUDIT_MARKER.RAFT_SYNC_SOURCE),
+    raftDurabilityMatchesStore(capabilities, replication, root),
     AUDIT_MARKER.RAFT_DURABILITY_CONTRADICTION);
 
   const transportServer = readText(TRANSPORT_SERVER_PATH, root);
