@@ -878,6 +878,21 @@ function isMemberChainTop(node, parent) {
   return !(parent?.type === LOCAL_STR_MEMBEREXPRESSION && parent.object === node);
 }
 
+// A binding name, an object key, a specifier, or part of a member chain
+// (a member property, or an object that the chain top reads through).
+function isNonReadIdentifier(node, parent) {
+  switch (parent?.type) {
+  case LOCAL_STR_VARIABLEDECLARATOR:
+    return parent.id === node;
+  case LOCAL_STR_PROPERTY:
+    return parent.key === node && parent.value !== node;
+  case LOCAL_STR_MEMBEREXPRESSION:
+    return true;
+  default:
+    return SPECIFIER_TYPE.has(parent?.type);
+  }
+}
+
 // The static part of a member chain: `ROOT.A[key].B` reads through `ROOT.A`.
 function readStaticChainPrefix(node) {
   let current = node;
@@ -894,16 +909,9 @@ function readReferencePath(node, parent) {
   if (node.type === LOCAL_STR_MEMBEREXPRESSION) {
     return isMemberChainTop(node, parent) ? readStaticChainPrefix(node) : null;
   }
-  if (node.type !== LOCAL_STR_IDENTIFIER || !isMemberChainTop(node, parent) ||
-      SPECIFIER_TYPE.has(parent?.type)) {
-    return null;
-  }
-  const isBindingName =
-    (parent?.type === LOCAL_STR_VARIABLEDECLARATOR && parent.id === node) ||
-    (parent?.type === LOCAL_STR_PROPERTY && parent.key === node &&
-      parent.value !== node) ||
-    (parent?.type === LOCAL_STR_MEMBEREXPRESSION && parent.property === node);
-  return isBindingName ? null : node.name;
+  return node.type === LOCAL_STR_IDENTIFIER && !isNonReadIdentifier(node, parent) ?
+    node.name :
+    null;
 }
 
 function readLeafReference(node, parent) {
