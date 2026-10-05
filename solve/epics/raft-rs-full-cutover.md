@@ -548,6 +548,23 @@ This epic closes only when:
   never retires another. Until it lands this epic keeps the current behaviour:
   a lingering member stays fail-closed indefinitely, with no timer as its
   exit.
+- `single-unresolved-operation-owner` (owner decision 2026-10-05: the
+  invariant "at most one unresolved operation per partition" is NOT made
+  universal on `replace-in-flight-blocks-planning`; the deliberate
+  two-operation flows go to this one quest). Statement: one owner answers
+  "this partition has an unresolved operation", and every admission asks it;
+  today each lane derives part of the answer. A provisioning cohort is one
+  logical operation. Scope: the serial planner's deficit-transition
+  admissions (FAILED_REPLICA_REMOVE / TRUE_DEFICIT_ADD under
+  `isEligibleDuringDeficitTransition`); the COORDINATION_MISMATCH exemption,
+  replaced by an explicit supersede (fail the mismatched operation, then
+  plan); the missing coordinator lane for a REMOVE beside an unresolved ADD
+  on a priority partition; non-priority cleanup REMOVE while an operation is
+  pending; and the initial-provisioning fan-out
+  (`deferDispatchUntilBootstrapTopology`) as one multi-replica cohort
+  operation. Done when: one predicate
+  owns "unresolved operation exists" and every admission asks it, with a
+  witness per flow.
 
 ### c. Conditions that remain 0.3 release blockers
 

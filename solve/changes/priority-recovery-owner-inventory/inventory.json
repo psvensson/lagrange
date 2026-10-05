@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "8c6979be2d92b7495f108a6ad5dd2b2bf294be645fb8c71d76682a07e8b02ff3"
+    "sourceSha256": "44c2ddf501e1babc219f116ec6188608b0b7c89969d91785c76737e24a92a881"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,7 +18,7 @@
   },
   "metrics": {
     "moduleCount": 68,
-    "publicExportCount": 747,
+    "publicExportCount": 749,
     "importEdgeCount": 314,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
@@ -766,6 +766,7 @@
         "buildPriorityRecoveryOperationAssessment",
         "buildPriorityRecoveryPartitionAssessment",
         "buildPriorityRecoveryRediscoveryState",
+        "doesPriorityRecoveryOperationHoldAddBudget",
         "shouldPriorityRecoveryOperationBlockPlanning",
         "shouldUseAuthoritativePriorityRecoveryRediscovery"
       ],
@@ -773,6 +774,7 @@
         "buildPriorityRecoveryDecisionSnapshots",
         "buildPriorityRecoveryOperationAssessment",
         "buildPriorityRecoveryRediscoveryState",
+        "doesPriorityRecoveryOperationHoldAddBudget",
         "shouldPriorityRecoveryOperationBlockPlanning",
         "shouldUseAuthoritativePriorityRecoveryRediscovery"
       ]
@@ -1184,6 +1186,7 @@
         "buildPriorityRecoveryPublicationContext",
         "buildPriorityRecoveryRediscoveryState",
         "buildTrackedPriorityRecoveryDecisionSnapshots",
+        "doesPriorityRecoveryOperationHoldAddBudget",
         "filterPriorityRecoveryTrackedPartitionIds",
         "hasPriorityRecoverySpreadGap",
         "isPriorityRecoveryEmergencyPartition",

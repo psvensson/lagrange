@@ -52,3 +52,4 @@ export {resolveTrackedPriorityRecoveryAdmissionPlan} from './priority-recovery-s
 export {resolvePriorityRecoveryActiveNodeCohort};
 export {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot-closure.js';
 export {shouldPriorityRecoveryOperationBlockPlanning} from './priority-recovery-snapshot-closure.js';
+export {doesPriorityRecoveryOperationHoldAddBudget} from './priority-recovery-snapshot-closure.js';
