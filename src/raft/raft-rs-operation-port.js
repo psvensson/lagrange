@@ -172,6 +172,7 @@ function createRaftRsOperationPort(request) {
     peerId,
     joiningExistingGroup:
       request[RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP],
+    identityExisted: request[RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED],
   });
   const lifecycle = new RaftRsReplicaLifecycleOwner({
     db: database, groupId, peerId, replicaIdentity,
@@ -255,19 +256,21 @@ function createRaftRsOperationPort(request) {
     protocolTurn(() => dispatcher.execute(command));
   const enqueueStep = (envelope) =>
     protocolTurn(() => dispatcher.enqueueStep(envelope));
-  const stopScheduling = () => {
-    schedulingRequested = false;
+  function clearTickTimer() {
     if (timer !== null) {
       timers.clearInterval(timer);
       timer = null;
     }
+  }
+  const stopScheduling = () => {
+    clearTickTimer();
     return coreOk('scheduling-stopped');
   };
-  // A group whose own history the local-log guard proved lost is held for a
-  // reseed by its lifecycle owner (durable, survives a restart) and its
-  // ticks stop.
+  // A group whose own history was proven lost - by the local-log guard, or
+  // at its opening by the open-time rule - is held for a reseed by its
+  // lifecycle owner (durable, survives a restart) and its ticks stop.
   function holdForReseed() {
-    stopScheduling();
+    clearTickTimer();
     return lifecycle.holdForReseed();
   }
   // The scheduled tick is a contained port operation: it answers typed and

@@ -10,6 +10,8 @@
 
 import {PartitionService} from '../../partition/partition-service.js';
 import {genesisStamp} from '../../raft/raft-committed-membership-stamp.js';
+import {seedReplicaIdentityExisted} from
+  '../seed-startup-storage-admission.js';
 import {assertCritical} from '../../utils/assert.js';
 import {AssignmentEpochManager} from '../../rebalancer/assignment-epoch-manager.js';
 import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
@@ -214,9 +216,10 @@ class SeedPartitionsPhase {
       serviceId,
       UNIFIED_SERVICE_TYPE.PARTITION,
     );
+    const startupAdmission = d.getStartupServicesAdmission?.();
     assertBootstrapPartitionStorageAdmission(
       options,
-      d.getStartupServicesAdmission?.(),
+      startupAdmission,
       d.getNodeId(),
     );
 
@@ -254,6 +257,11 @@ class SeedPartitionsPhase {
         // (verification V1a); a seed that holds a durable record restores
         // from it instead.
         bootstrapMembership: genesisStamp(options.replicaIds),
+        // A founder whose durable services row this seed already holds
+        // opened before: without its raft record it is refused
+        // reseed-required, never re-founded empty (the open-time rule).
+        identityExisted: seedReplicaIdentityExisted(
+          startupAdmission, options.replicaId, d.getNodeId()),
         peerAddresses: options.peerAddresses,
         nodeId: d.getNodeId(),
         transport: d.getTransport(),

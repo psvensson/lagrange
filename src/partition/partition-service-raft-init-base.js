@@ -429,6 +429,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
           this.bootstrapMembership,
       }),
+      [RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED]: this.identityExisted,
       [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: this.db,
       [RAFT_OPERATION_PORT_REQUEST.TIMING]: this.raftTimingConfig,
       [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(this),

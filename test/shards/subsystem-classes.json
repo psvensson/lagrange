@@ -19,16 +19,16 @@
     "services-runtime": 144,
     "solver-tooling": 7,
     "storage-partition": 144,
-    "storage-raft": 106,
+    "storage-raft": 107,
     "test-infrastructure": 140,
     "transactions": 15,
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2203,
-  "digest": "fnv1a32-a2d92629",
+  "censusSize": 2204,
+  "digest": "fnv1a32-f146c92f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-30866168",
+  "observationDigest": "fnv1a32-6e408d3d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1463,6 +1463,7 @@
     "test/raft/raft-rs-backend/membership-changed-event.test.js": "storage-raft",
     "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/open-time-identity-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-boundary.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-lifecycle.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-provenance.test.js": "storage-raft",
@@ -8471,6 +8472,18 @@
         "src/raft/raft-rs-group-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/open-time-identity-refusal.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },

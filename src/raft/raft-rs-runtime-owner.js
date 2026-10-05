@@ -87,11 +87,10 @@ import {
   createdParticipationGate,
   recordAppliedEntry,
   durableRecordIncompatible,
-  durableRecordMissing,
   participationGateClosed,
   participationGateColumns,
   participationObservation,
-  requiresDurableRecord,
+  openingWithoutRecordRefusal,
   restoredParticipationGate,
   settleParticipationGate,
 } from './raft-rs-participation-gate.js';
@@ -470,15 +469,21 @@ function createNodeArguments(group, {restore, record}) {
 
 // The participation gate an opening establishes (O1 gate): restored from the
 // durable record, or created from the bootstrap; a replica that must restore
-// and holds no record is refused before the core is entered (O4).
+// and holds no record is refused before the core is entered (O4), and one
+// whose identity provably existed before is held for a reseed by its
+// lifecycle owner, durably (the open-time rule): it never opens empty.
 function openingParticipationRefusal(group, opening) {
   if (opening.restore) {
     group.gate = restoredParticipationGate(opening.record);
     group.appliedIndex = BigInt(opening.record.appliedIndex);
     return null;
   }
-  if (requiresDurableRecord(group.bootstrap)) {
-    return durableRecordMissing();
+  const refused = openingWithoutRecordRefusal(group.bootstrap);
+  if (refused !== null) {
+    if (refused.reason === RUNTIME_REASON.RESEED_REQUIRED) {
+      group.holdForReseed();
+    }
+    return refused;
   }
   group.gate = createdParticipationGate(group.bootstrap, group.peerId);
   group.appliedIndex = BigInt(RAFT_RS_INITIAL_APPLIED);

@@ -238,33 +238,65 @@ function durableRecordIncompatible() {
 }
 
 /**
- * Whether opening a group with no durable record must be refused: a rejoin
- * (the record is the only source), a COMMITTED stamp whose configuration
- * already names this replica a voter (its earlier incarnation voted; its
- * record is gone), or a GENESIS stamp on a replica that joins a group which
- * already exists (its identity's history is held elsewhere: opened as a
- * founder of an empty log it would vote and lead without it).
- * @param {Object} bootstrap - The port's bootstrap.
- * @return {boolean}
+ * The typed refusal of an opening whose replica identity provably existed
+ * before while its durable record is gone (the owner's open-time rule,
+ * 2026-10-05): the existing reseed-required semantics - non-retryable,
+ * recovery required, and held durably by the replica's lifecycle owner, as
+ * the heartbeat hold holds it - so the identity never opens as a fresh or
+ * genesis replica, never campaigns and never votes.
+ * @return {Object} Frozen CORE_REFUSED outcome.
  */
-function requiresDurableRecord(bootstrap) {
-  return bootstrap.source === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD ||
+function reseedRequiredAtOpen() {
+  return deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    reason: RUNTIME_REASON.RESEED_REQUIRED,
+    phase: RUNTIME_PHASE.DURABLE_RECORD_READ,
+    retryable: false,
+    recoveryRequired: true,
+    detail: {cause: RUNTIME_REASON.DURABLE_RECORD_MISSING},
+  });
+}
+
+/**
+ * The opening admission of a group with no durable record - the one place
+ * an opening without history is decided, for every bootstrap source:
+ *   - the opening host's authoritative row proves this replica identity
+ *     existed before (bootstrap.identityExisted): its history is gone, and
+ *     opened empty it would campaign and vote on an empty log under an
+ *     identity its group still counts. Refused reseed-required and held
+ *     (GENESIS founders and COMMITTED joiners included);
+ *   - a rejoin (the record is the only source), a COMMITTED stamp whose
+ *     configuration already names this replica a voter (its earlier
+ *     incarnation voted; its record is gone), or a GENESIS stamp on a
+ *     replica that joins a group which already exists: refused
+ *     DURABLE_RECORD_MISSING (owner decision O4).
+ * A first opening carries no prior-existence fact (its row is being created
+ * now) and opens.
+ * @param {Object} bootstrap - The port's bootstrap.
+ * @return {Object|null} The typed refusal, or null to open.
+ */
+function openingWithoutRecordRefusal(bootstrap) {
+  if (bootstrap.identityExisted === true) {
+    return reseedRequiredAtOpen();
+  }
+  const missing = bootstrap.source ===
+    BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD ||
     (bootstrap.source === BOOTSTRAP_MEMBERSHIP_SOURCE.COMMITTED &&
       bootstrap.selfCommittedVoter === true) ||
     (bootstrap.source === BOOTSTRAP_MEMBERSHIP_SOURCE.GENESIS &&
       bootstrap.joiningExistingGroup === true);
+  return missing ? durableRecordMissing() : null;
 }
 
 export {
   admitsReplica,
   createdParticipationGate,
   durableRecordIncompatible,
-  durableRecordMissing,
+  openingWithoutRecordRefusal,
   participationGateClosed,
   participationGateColumns,
   participationObservation,
   recordAppliedEntry,
-  requiresDurableRecord,
   restoredParticipationGate,
   settleParticipationGate,
 };

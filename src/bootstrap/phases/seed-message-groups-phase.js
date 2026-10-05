@@ -7,6 +7,8 @@
  */
 
 import {MessageGroupService} from '../../message-group/message-group-service.js';
+import {seedReplicaIdentityExisted} from
+  '../seed-startup-storage-admission.js';
 import {
   registerMessageGroupTransportHandler,
   retireMessageGroupTransportHandler,
@@ -148,6 +150,11 @@ class SeedMessageGroupsPhase {
       transport: d.getMessageRouter(),
       dbPath: d.resolveMessageGroupDbPath(options.groupId, options.replicaId),
       deferElection: Boolean(options.deferElection),
+      // A founder whose durable services row this seed already holds opened
+      // before: without its raft record it is refused reseed-required, never
+      // re-founded empty (the open-time rule).
+      identityExisted: seedReplicaIdentityExisted(
+        d.getStartupServicesAdmission(), options.replicaId, d.getNodeId()),
       // The replica is hosted by this node: this node's clock, and this
       // node's runtime for its node-local cache.
       ...resolveHostedReplicaAuthorities(d),

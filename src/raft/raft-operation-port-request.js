@@ -21,6 +21,12 @@ const RAFT_OPERATION_PORT_REQUEST = Object.freeze({
   // else: it is refused DURABLE_RECORD_MISSING before the core is entered
   // (owner decision O4), never opened as a founder of an empty log.
   JOINING_EXISTING_GROUP: 'joiningExistingGroup',
+  // The opening host's authoritative row proves this replica identity
+  // existed before (an earlier incarnation opened its raft record): without
+  // a durable record the opening is refused reseed-required and held, under
+  // every bootstrap source (the open-time rule, 2026-10-05). Absent is no
+  // such proof - a first opening.
+  IDENTITY_EXISTED: 'identityExisted',
   // The replica's own durable storage handle. rs-raft keeps a hard state, an
   // applied position, a configuration state and a snapshot beside its
   // entries, so it needs the storage itself, inside whose transactions the

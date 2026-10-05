@@ -102,6 +102,10 @@ function messageGroupConsensusRequest(service) {
     // founder's history: with no record it is refused (O4).
     [RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP]:
       service.isJoiningExistingGroup === true,
+    // The seed's durable services row proves this founder opened before
+    // (the open-time rule): without its record it is refused reseed-required.
+    [RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED]:
+      service.identityExisted === true,
     [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: service.db,
     [RAFT_OPERATION_PORT_REQUEST.TIMING]: service.raftTimingConfig,
     [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(service),

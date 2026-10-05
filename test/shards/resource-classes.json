@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2186,
+    "ordinary": 2187,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2203,
-  "digest": "fnv1a32-ee774c07",
+  "censusSize": 2204,
+  "digest": "fnv1a32-6257d1b8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1443,6 +1443,7 @@
     "test/raft/raft-rs-backend/membership-changed-event.test.js": "ordinary",
     "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js": "ordinary",
     "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "ordinary",
+    "test/raft/raft-rs-backend/open-time-identity-refusal.test.js": "ordinary",
     "test/raft/raft-rs-backend/operation-port-boundary.test.js": "ordinary",
     "test/raft/raft-rs-backend/operation-port-lifecycle.test.js": "ordinary",
     "test/raft/raft-rs-backend/operation-port-provenance.test.js": "ordinary",

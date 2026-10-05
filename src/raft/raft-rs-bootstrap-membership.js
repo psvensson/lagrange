@@ -13,6 +13,11 @@
 //   DURABLE_RECORD (a restart or rejoin) - nothing: the runtime owner restores
 //     the record or refuses.
 //
+// Whatever the source, the bootstrap carries `identityExisted`: the opening
+// host's authoritative row proves this replica identity existed before. The
+// participation gate's opening admission refuses such an opening without a
+// durable record (reseed-required, held); a record present restores as ever.
+//
 // Every stamp passes the one stamp validator (validateBootstrapMembershipStamp)
 // here, whoever built it; an absent stamp is refused typed (STAMP_INVALID,
 // defect MISSING) and never read as a genesis (verification V1a): the
@@ -81,21 +86,25 @@ function committedBootstrap(membership, registry, peerId) {
 /**
  * The bootstrap the runtime owner opens a group from when it holds no record.
  * @param {Object} options - {membership, registry, peerId,
- *   joiningExistingGroup}: the request's bootstrap membership (a stamp, or
- *   the durable-record bootstrap), this replica's identity registry, its
- *   raft peer id, and whether it joins a group that already exists.
+ *   joiningExistingGroup, identityExisted}: the request's bootstrap
+ *   membership (a stamp, or the durable-record bootstrap), this replica's
+ *   identity registry, its raft peer id, whether it joins a group that
+ *   already exists, and whether the host's authoritative row proves this
+ *   identity existed before.
  * @return {Object} Frozen {source, voters, learners, bootstrapIndex,
- *   selfCommittedVoter, joiningExistingGroup}.
+ *   selfCommittedVoter, joiningExistingGroup, identityExisted}.
  * @throws {Error} The typed STAMP_INVALID refusal (`consensus`) of an absent
  *   or invalid stamp.
  */
 function bootstrapOfRequest({membership, registry, peerId,
-  joiningExistingGroup}) {
+  joiningExistingGroup, identityExisted}) {
+  const existed = identityExisted === true;
   const durableRecord = validateDurableRecordBootstrap(membership);
   if (durableRecord.valid) {
     return Object.freeze({source: durableRecord.stamp.kind,
       voters: [], learners: [],
-      bootstrapIndex: null, selfCommittedVoter: false});
+      bootstrapIndex: null, selfCommittedVoter: false,
+      identityExisted: existed});
   }
   const validation = validateBootstrapMembershipStamp(membership);
   if (!validation.valid) {
@@ -103,7 +112,8 @@ function bootstrapOfRequest({membership, registry, peerId,
   }
   const canonical = validation.stamp;
   if (canonical.kind === BOOTSTRAP_MEMBERSHIP_SOURCE.COMMITTED) {
-    return Object.freeze(committedBootstrap(canonical, registry, peerId));
+    return Object.freeze({...committedBootstrap(canonical, registry, peerId),
+      identityExisted: existed});
   }
   return Object.freeze({
     source: canonical.kind,
@@ -113,6 +123,7 @@ function bootstrapOfRequest({membership, registry, peerId,
     bootstrapIndex: GENESIS_BOOTSTRAP_INDEX,
     selfCommittedVoter: false,
     joiningExistingGroup: joiningExistingGroup === true,
+    identityExisted: existed,
   });
 }
 
