@@ -29,8 +29,10 @@ import {
 } from '../../test/distributed/harness/validation-matrix.js';
 import {
   CERTIFICATION_NOT_REQUESTED,
-  NOT_CERTIFICATION_EVIDENCE,
 } from '../../test/distributed/harness/scenario-certification.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../../test/distributed/harness/certification-evidence-statement.js';
 import {ReportWriter} from '../../test/distributed/harness/report-writer.js';
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';

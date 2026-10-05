@@ -191,17 +191,6 @@ const CERTIFICATION_NOT_REQUESTED = Object.freeze({
     ') and no real publication convergence was required',
 });
 
-/**
- * The statement a consumer that is NOT certification prints (formation
- * health, the seed budget gate, ship readiness, the distributed matrix).
- */
-const NOT_CERTIFICATION_EVIDENCE = Object.freeze({
-  certificationEvidence: false,
-  statement: 'NOT certification evidence: certification is a ' +
-    '`certified: true` verdict from a `--certify <sha>` distributed harness ' +
-    'run (test/distributed/harness/scenario-certification.js)',
-});
-
 // --- run-scoped evidence ledger ------------------------------------------
 
 const ledgers = new WeakMap();
@@ -1035,7 +1024,6 @@ export {
   CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY,
   CERTIFICATION_NOT_REQUESTED,
   KNOWN_FINDING_SPENT_WAIT_POLICY_MODE,
-  NOT_CERTIFICATION_EVIDENCE,
   captureCertificationNodes,
   certifyScenarioRun,
   certifyUnstartedScenario,

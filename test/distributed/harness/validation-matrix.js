@@ -1,5 +1,5 @@
 import {SCENARIO_OUTCOME, scenarioOutcomeOf} from './scenario-outcome.js';
-import {NOT_CERTIFICATION_EVIDENCE} from './scenario-certification.js';
+import {NOT_CERTIFICATION_EVIDENCE} from './certification-evidence-statement.js';
 
 const ZERO = 0;
 const ONE = 1;

@@ -34,7 +34,7 @@ import {
 } from '../test/distributed/harness/scenario-outcome.js';
 import {
   NOT_CERTIFICATION_EVIDENCE,
-} from '../test/distributed/harness/scenario-certification.js';
+} from '../test/distributed/harness/certification-evidence-statement.js';
 
 const MATRIX_RUNNER = 'test/distributed/run.js';
 const MATRIX_SUMMARIZER = 'scripts/summarize-harness-runs.js';

@@ -11,9 +11,11 @@ import {
   scenarioOutcomeOf,
 } from '../../test/distributed/harness/scenario-outcome.js';
 import {
-  NOT_CERTIFICATION_EVIDENCE,
   evaluateCertificationStreak,
 } from '../../test/distributed/harness/scenario-certification.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../../test/distributed/harness/certification-evidence-statement.js';
 
 const TEXT_ENCODING = 'utf8';
 const REPORT_DIR = 'test-output/reports';

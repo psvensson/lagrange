@@ -27,7 +27,7 @@ import {
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {
   NOT_CERTIFICATION_EVIDENCE,
-} from '../../test/distributed/harness/scenario-certification.js';
+} from '../../test/distributed/harness/certification-evidence-statement.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);

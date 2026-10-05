@@ -23,7 +23,7 @@ import {computeSourceFingerprint} from
 import {readQuest} from '../solve/store.js';
 import {
   NOT_CERTIFICATION_EVIDENCE,
-} from '../../test/distributed/harness/scenario-certification.js';
+} from '../../test/distributed/harness/certification-evidence-statement.js';
 
 const arrayIsArray = Array.isArray;
 const dateToISOString = Function.call.bind(Date.prototype.toISOString);
