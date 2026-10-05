@@ -188,7 +188,7 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
 
   if (!columnsMatch || !valuesMatch) {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_INSERT_FAILED, {
-      sql: stringSubstring(sql, 
+      sql: stringSubstring(sql,
         0,
         PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
       ),
@@ -321,7 +321,7 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
     }
   } else {
     logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
-      sql: stringSubstring(sql, 
+      sql: stringSubstring(sql,
         0,
         PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
       ),
@@ -345,7 +345,7 @@ export function extractDeleteDataFromSQL(sql, logger) {
     return {[keyColumn]: keyValue};
   }
   logger?.warn?.(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_DELETE_WHERE_FAILED, {
-    sql: stringSubstring(sql, 
+    sql: stringSubstring(sql,
       0,
       PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
     ),
@@ -379,7 +379,7 @@ export function extractDataFromParameterizedSQL(
     if (!columnsMatch) {
       logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
-          sql: stringSubstring(sql, 
+          sql: stringSubstring(sql,
             0,
             PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
           ),
@@ -427,7 +427,7 @@ export function extractDataFromParameterizedSQL(
     if (!setMatch) {
       logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
-          sql: stringSubstring(sql, 
+          sql: stringSubstring(sql,
             0,
             PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
           ),
@@ -508,7 +508,7 @@ export function extractDataFromParameterizedSQL(
     if (!whereMatch) {
       logger?.warn?.(
         PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
-          sql: stringSubstring(sql, 
+          sql: stringSubstring(sql,
             0,
             PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
           ),
