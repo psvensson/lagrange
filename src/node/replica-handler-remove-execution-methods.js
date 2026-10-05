@@ -247,11 +247,14 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         throw removalRowDeleteDeferred(replicaId);
       }
       // Retire exactly the runtime this removal owns (the captured service's
-      // port), never whatever runtime now serves the reused logical name.
+      // port), never whatever runtime now serves the reused logical name;
+      // a group retirement records its verified evidence with the row.
       await raftRsLifecycleAdministration.retireReplica(
         replicaId,
         reason || REPLICA_REMOVE_EXECUTION_REASON.DURABLE_REMOVE_CLEANUP_COMPLETE,
-        {groupId: partitionId, runtime: service?.raft ?? null},
+        {groupId: partitionId, runtime: service?.raft ?? null,
+          evidence: request.groupRetirement?.retire === true ?
+            request.groupRetirementEvidence : null},
       );
       // A group retired as a unit: its member-owned tombstone is durable
       // before the replica database (and the lifecycle row in it) is
@@ -418,18 +421,18 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
     }
 
     /**
-     * Whether the replica's own durable lifecycle row records it retired
-     * with its whole group (reason group-retired), for exactly this
-     * identity and group. Never from absence.
-     * @param {string} partitionId
-     * @param {string} replicaId
-     * @return {boolean}
+     * The lifecycle administration's verdicts on one durable lifecycle read:
+     * the read itself plus retired, groupRetired (retired with its whole
+     * group), absent (no row) and holdsRow. Never a verdict from absence.
+     * @param {Object} lifecycle - readReplicaDurableLifecycle's answer.
+     * @return {Object} Frozen read with its verdicts.
      * @private
      */
-    isReplicaDurablyGroupRetired(partitionId, replicaId) {
-      return raftRsLifecycleAdministration.isRetiredFor(
-        this.readReplicaDurableLifecycle(partitionId, replicaId),
-        GROUP_RETIREMENT_REASON);
+    lifecycleVerdictsOf(lifecycle) {
+      const admin = raftRsLifecycleAdministration;
+      return Object.freeze({...lifecycle, retired: admin.isRetired(lifecycle),
+        groupRetired: admin.isRetiredFor(lifecycle, GROUP_RETIREMENT_REASON),
+        absent: admin.isAbsent(lifecycle), holdsRow: admin.holdsRow(lifecycle)});
     }
 
     /**

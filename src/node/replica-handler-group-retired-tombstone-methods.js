@@ -1,9 +1,11 @@
 /**
  * ReplicaHandler methods of the member-owned `group retired` tombstone
- * (group-retired-tombstone-store.js; owner ruling 2026-10-05): written once
- * the replica's own lifecycle row reads retired with its group and before
- * its database is deleted; read to answer a group-retirement REMOVE after a
- * restart; released only once the workflow's record is seen cleared.
+ * (group-retired-tombstone-store.js; owner ruling 2026-10-05): written from
+ * the replica's own retired lifecycle row, bound to its incarnation, and
+ * durable before its database is deleted; read to answer a group-retirement
+ * REMOVE after a restart, never beside a live row or a row of another
+ * incarnation; dropped when the same replica is created again; released
+ * only once the workflow's record is seen cleared.
  */
 import {ReplicaOperationField} from
   '../rebalancer/replica-operation-constants.js';
@@ -16,6 +18,7 @@ import {
 } from '../partition/group-retirement-evidence.js';
 import {
   deleteGroupRetiredTombstone,
+  isTombstoneOfRow,
   isTombstoneWorkflowCleared,
   listGroupRetiredTombstones,
   readGroupRetiredTombstone,
@@ -36,6 +39,8 @@ const TOMBSTONE_LOG_MSG = Object.freeze({
     'database is kept and its lifecycle row answers',
   SWEEP_FAILED: 'Group-retired tombstone sweep failed; the tombstones are ' +
     'kept and re-checked on the next record change',
+  DROPPED: 'Group-retired tombstone dropped: it belongs to another ' +
+    'incarnation of the replica',
 });
 const TOMBSTONE_ERROR_MSG = Object.freeze({
   DELETE_REFUSED: 'Replica database delete refused: the replica is ' +
@@ -44,52 +49,162 @@ const TOMBSTONE_ERROR_MSG = Object.freeze({
 
 class ReplicaHandlerGroupRetiredTombstoneMethods {
   /**
-   * After the replica's lifecycle was retired by a verified group-retirement
-   * REMOVE: write the tombstone when (and only when) its own durable
-   * lifecycle row reads retired with the group-retired reason. A failed
-   * write throws: the database is then not deleted.
+   * One replica's durable lifecycle read with the lifecycle
+   * administration's verdicts (lifecycleVerdictsOf).
+   * @param {string} partitionId
+   * @param {string} replicaId
+   * @return {Object}
+   * @private
+   */
+  durableLifecycleOf(partitionId, replicaId) {
+    return this.lifecycleVerdictsOf(this.readReplicaDurableLifecycle(
+      partitionId, replicaId));
+  }
+
+  /**
+   * Whether the replica's own durable lifecycle row records it retired
+   * with its whole group (reason group-retired), for exactly this identity
+   * and group. Never from absence.
+   * @param {string} partitionId
+   * @param {string} replicaId
+   * @return {boolean}
+   * @private
+   */
+  isReplicaDurablyGroupRetired(partitionId, replicaId) {
+    return this.durableLifecycleOf(partitionId, replicaId).groupRetired;
+  }
+
+  /**
+   * After a verified group-retirement removal retired the replica's
+   * lifecycle: write the tombstone from its own durable row (retired, with
+   * its incarnation), naming the evidence the row recorded with a
+   * group-retired retirement, else the removal's verified evidence (a row
+   * retired earlier for another reason). A failed write throws: the database
+   * is then not deleted.
    * @param {Object} removal - {partitionId, replicaId, evidence}.
    * @return {boolean} Whether a tombstone was written.
    * @private
    */
   recordGroupRetiredTombstone({partitionId, replicaId, evidence}) {
-    if (!evidence ||
-        !this.isReplicaDurablyGroupRetired(partitionId, replicaId)) {
+    const lifecycle = this.durableLifecycleOf(partitionId, replicaId);
+    return this.writeTombstoneFromRow({partitionId, replicaId, lifecycle,
+      evidence: lifecycle.retirementEvidence ?? evidence});
+  }
+
+  /**
+   * The one tombstone writer: only from a lifecycle read of a retired row
+   * that carries its incarnation (never a live, absent, unreadable or
+   * unstamped row). A failed write throws.
+   * @param {Object} fact - {partitionId, replicaId, lifecycle, evidence}.
+   * @return {boolean} Whether a tombstone was written.
+   * @private
+   */
+  writeTombstoneFromRow({partitionId, replicaId, lifecycle, evidence}) {
+    if (!evidence || !lifecycle.retired || !lifecycle.incarnation) {
       return false;
     }
     const record = writeGroupRetiredTombstone(this.dataDir, {
-      groupId: partitionId, replicaIdentity: replicaId, evidence,
-      retiredAt: Date.now()});
+      groupId: partitionId, replicaIdentity: replicaId,
+      incarnation: lifecycle.incarnation, lifecycleReason: lifecycle.reason,
+      evidence, retiredAt: Date.now()});
     this.logger.info(TOMBSTONE_LOG_MSG.WRITTEN, {replicaId, partitionId,
       workflowId: record.workflowId, fenceToken: record.fenceToken,
-      nodeId: this.nodeId});
+      incarnation: record.incarnation, nodeId: this.nodeId});
     return true;
   }
 
   /**
-   * The one guard every replica database delete passes: a replica whose
-   * lifecycle row reads group-retired keeps its database until its tombstone
-   * is durable (its row is then the only proof left).
+   * The one guard every replica database delete passes. A tombstone of
+   * another incarnation than the row being deleted is dropped first (it
+   * would otherwise outlive the row that blocked it). A replica whose
+   * lifecycle row reads group-retired keeps its database until its
+   * tombstone is durable: when it is missing (a crash between the
+   * retirement and the tombstone write), it is written now from the row's
+   * own durable fact - its incarnation and the evidence its retirement
+   * recorded - else the delete is refused (its row is then the only proof
+   * left).
    * @param {string} partitionId
    * @param {string} replicaId
    * @return {void} Throws when the delete must wait.
    * @private
    */
   assertGroupRetiredTombstoneBeforeDelete(partitionId, replicaId) {
-    if (this.isReplicaDurablyGroupRetired(partitionId, replicaId) &&
-        !readGroupRetiredTombstone(this.dataDir, partitionId, replicaId)) {
+    const lifecycle = this.durableLifecycleOf(partitionId, replicaId);
+    this.dropTombstoneOfAnotherIncarnation(partitionId, replicaId, lifecycle,
+      {beforeBirth: false});
+    if (!lifecycle.groupRetired || isTombstoneOfRow(readGroupRetiredTombstone(
+      this.dataDir, partitionId, replicaId), lifecycle)) {
+      return;
+    }
+    let written = false;
+    try {
+      written = this.writeTombstoneFromRow({partitionId, replicaId,
+        lifecycle, evidence: lifecycle.retirementEvidence});
+    } catch (error) {
+      this.logger.warn(TOMBSTONE_LOG_MSG.WRITE_FAILED, {replicaId,
+        partitionId, nodeId: this.nodeId, error: error?.message});
+    }
+    if (!written) {
       throw new Error(TOMBSTONE_ERROR_MSG.DELETE_REFUSED +
         `${partitionId}/${replicaId}`);
     }
   }
 
   /**
+   * Before a replica of this (group, identity) is born (CREATE): drop any
+   * tombstone that is not of the retired row this node still holds for it,
+   * durably (unlink, fsync the directory), so the new incarnation never
+   * meets an earlier one's proof - also after a restart. A failed drop
+   * throws: the create does not proceed.
+   * @param {string} partitionId
+   * @param {string} replicaId
+   * @return {boolean} Whether a tombstone was dropped.
+   * @private
+   */
+  dropGroupRetiredTombstoneBeforeBirth(partitionId, replicaId) {
+    if (!readGroupRetiredTombstone(this.dataDir, partitionId, replicaId)) {
+      return false;
+    }
+    return this.dropTombstoneOfAnotherIncarnation(partitionId, replicaId,
+      this.durableLifecycleOf(partitionId, replicaId), {beforeBirth: true});
+  }
+
+  /**
+   * Drop the tombstone of (group, identity) unless it was written from the
+   * retired row the lifecycle read found. Before a birth any other tombstone
+   * goes; before a delete only one beside a row of another incarnation (an
+   * absent or unreadable row keeps it).
+   * @param {string} partitionId
+   * @param {string} replicaId
+   * @param {Object} lifecycle - The durable lifecycle read (verdicts).
+   * @param {Object} options - {beforeBirth}.
+   * @return {boolean} Whether a tombstone was dropped.
+   * @private
+   */
+  dropTombstoneOfAnotherIncarnation(partitionId, replicaId, lifecycle,
+    {beforeBirth}) {
+    const tombstone = readGroupRetiredTombstone(this.dataDir, partitionId,
+      replicaId);
+    if (!tombstone || isTombstoneOfRow(tombstone, lifecycle) ||
+        !(beforeBirth || lifecycle.holdsRow)) {
+      return false;
+    }
+    deleteGroupRetiredTombstone(this.dataDir, tombstone);
+    this.logger.info(TOMBSTONE_LOG_MSG.DROPPED, {replicaId, partitionId,
+      workflowId: tombstone.workflowId, incarnation: tombstone.incarnation,
+      rowIncarnation: lifecycle?.incarnation ?? null, nodeId: this.nodeId});
+    return true;
+  }
+
+  /**
    * Whether this member durably proves the retirement a group-retirement
-   * REMOVE asks about: its replica's own lifecycle row (retired, reason
-   * group-retired, exact group and identity) - then the tombstone is made
-   * durable too once the REMOVE's evidence verifies against the record - or
-   * its tombstone for the exact table, group, identity and workflow. Never
-   * from absence.
+   * REMOVE asks about, never from absence: its replica's own lifecycle row
+   * retired with the group-retired reason (its tombstone made durable too);
+   * its tombstone, for the exact table, group, identity and workflow and
+   * the incarnation it holds; or (owner decision 2026-10-05) its own row
+   * retired for another reason - a reseed hold never acts for the group
+   * again - once the REMOVE's evidence verifies against the record and its
+   * tombstone is durable.
    * @param {Object} request - REMOVE_REPLICA request.
    * @return {Promise<boolean>}
    * @private
@@ -98,46 +213,83 @@ class ReplicaHandlerGroupRetiredTombstoneMethods {
     const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
     const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
     const evidence = request?.[ReplicaOperationField.GROUP_RETIREMENT];
-    if (this.isReplicaDurablyGroupRetired(partitionId, replicaId)) {
-      await this.tombstoneVerifiedRetirement({partitionId, replicaId,
+    const lifecycle = this.durableLifecycleOf(partitionId, replicaId);
+    if (lifecycle.groupRetired) {
+      await this.tombstoneGroupRetiredRow({partitionId, replicaId, lifecycle,
         evidence});
       return true;
     }
-    const proved = tombstoneProvesRetirement(readGroupRetiredTombstone(
-      this.dataDir, partitionId, replicaId), {partitionId, replicaId,
-      evidence});
-    if (proved) {
+    if (tombstoneProvesRetirement(readGroupRetiredTombstone(this.dataDir,
+      partitionId, replicaId), {partitionId, replicaId, evidence},
+    lifecycle)) {
       this.logger.info(TOMBSTONE_LOG_MSG.ANSWERED, {replicaId, partitionId,
         workflowId: evidence?.workflowId, nodeId: this.nodeId,
         proof: GROUP_RETIREMENT_REASON});
+      return true;
     }
-    return proved;
+    return this.provesHeldMemberRetirement({partitionId, replicaId,
+      lifecycle, evidence});
   }
 
   /**
-   * A replica whose lifecycle row proves its group retirement but whose
-   * tombstone was never written (a restart between the two): the asking
-   * REMOVE's evidence, verified against the record, names the workflow.
-   * @param {Object} removal - {partitionId, replicaId, evidence}.
+   * A group-retired row whose tombstone is not durable yet (a restart
+   * between the two): written from the row's own recorded evidence, or -
+   * a row retired before evidence was recorded - from the asking REMOVE's,
+   * verified against the record.
+   * @param {Object} fact - {partitionId, replicaId, lifecycle, evidence}.
    * @return {Promise<void>}
    * @private
    */
-  async tombstoneVerifiedRetirement({partitionId, replicaId, evidence}) {
-    if (readGroupRetiredTombstone(this.dataDir, partitionId, replicaId)) {
+  async tombstoneGroupRetiredRow({partitionId, replicaId, lifecycle,
+    evidence}) {
+    if (isTombstoneOfRow(readGroupRetiredTombstone(this.dataDir, partitionId,
+      replicaId), lifecycle)) {
       return;
     }
-    const decision = await verifyGroupRetirement(
-      this.getControlPlaneSystemTableGateway(), evidence, partitionId);
-    if (decision?.retire !== true) {
-      return;
+    let rowEvidence = lifecycle.retirementEvidence;
+    if (!rowEvidence) {
+      const decision = await verifyGroupRetirement(
+        this.getControlPlaneSystemTableGateway(), evidence, partitionId);
+      rowEvidence = decision?.retire === true ? evidence : null;
     }
     try {
-      this.recordGroupRetiredTombstone({partitionId, replicaId, evidence});
+      this.writeTombstoneFromRow({partitionId, replicaId, lifecycle,
+        evidence: rowEvidence});
     } catch (error) {
       // The lifecycle row still proves it (and the database stays until a
       // tombstone is durable): the answer does not depend on this write.
       this.logger.warn(TOMBSTONE_LOG_MSG.WRITE_FAILED, {replicaId,
         partitionId, nodeId: this.nodeId, error: error?.message});
+    }
+  }
+
+  /**
+   * A frozen member whose own row is retired for another reason than its
+   * group (a reseed hold): it answers a group-retirement REMOVE whose
+   * evidence verifies against the record, once its tombstone - written from
+   * that row and that evidence - is durable (nothing else writes one before
+   * its database may go). Never for an unverified REMOVE.
+   * @param {Object} fact - {partitionId, replicaId, lifecycle, evidence}.
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async provesHeldMemberRetirement({partitionId, replicaId, lifecycle,
+    evidence}) {
+    if (!lifecycle.retired) {
+      return false;
+    }
+    const decision = await verifyGroupRetirement(
+      this.getControlPlaneSystemTableGateway(), evidence, partitionId);
+    if (decision?.retire !== true) {
+      return false;
+    }
+    try {
+      return this.writeTombstoneFromRow({partitionId, replicaId, lifecycle,
+        evidence});
+    } catch (error) {
+      this.logger.warn(TOMBSTONE_LOG_MSG.WRITE_FAILED, {replicaId,
+        partitionId, nodeId: this.nodeId, error: error?.message});
+      return false;
     }
   }
 

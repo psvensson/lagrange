@@ -28,93 +28,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
-import {PARTITION_TRANSITION_STATE} from
-  '../../src/partition/partition-constants.js';
-import {
-  SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX,
-} from '../../src/partition/split-ack-constants.js';
-import {
-  ReplicaOperationField,
-  ReplicaOperationResponseStatus,
-} from '../../src/rebalancer/replica-operation-constants.js';
+import {ReplicaOperationResponseStatus} from
+  '../../src/rebalancer/replica-operation-constants.js';
 import {
   listGroupRetiredTombstones,
   readGroupRetiredTombstone,
   tombstoneProvesRetirement,
 } from '../../src/node/group-retired-tombstone-store.js';
+import {TABLE_ID, openGroupWorld} from './group-retirement-as-a-unit-fixture.js';
 import {
-  TABLE_ID,
-  createWorkflowOwner,
-  driveUntilRemoved,
-  openGroupWorld,
-} from './group-retirement-as-a-unit-fixture.js';
-
-const GROUP_RETIRED = 'group-retired';
-const WORKFLOW_ID = 'wf-tomb-1';
-const FENCE = 3;
-const SOURCE_KEY = SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION;
-const TOMBSTONE_DIR = 'group-retired-tombstones';
-
-function retiringRecord(partitionId) {
-  return {table_id: TABLE_ID, active_partition_version: 2,
-    partition_transition_state:
-      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
-    partition_transition_metadata: JSON.stringify({workflowId: WORKFLOW_ID,
-      workflowFenceToken: FENCE, targetPartitionVersion: 2,
-      sourcePartitionId: partitionId,
-      targetPartitionIds: [`${partitionId}-l`, `${partitionId}-r`],
-      participants: {[SOURCE_KEY]: {participantKey: SOURCE_KEY,
-        status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED, fenceToken: FENCE}}})};
-}
-
-async function retireAll(world) {
-  const record = retiringRecord(world.partitionId);
-  world.setTablesRow(record);
-  const owner = await createWorkflowOwner(world, {family: 'split', workflow: {
-    workflowId: WORKFLOW_ID, fenceToken: FENCE, tableId: TABLE_ID,
-    partitionId: world.partitionId,
-    status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
-    metadata: JSON.parse(record.partition_transition_metadata),
-    participants: [{participantKey: SOURCE_KEY,
-      status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED}]}});
-  await owner.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
-  return driveUntilRemoved(world, world.members);
-}
-
-function groupRemove(world, replicaId, evidence = {}, partitionId = null) {
-  return {
-    [ReplicaOperationField.TYPE]: 'REMOVE_REPLICA',
-    [ReplicaOperationField.OPERATION_ID]: `${WORKFLOW_ID}:dissolve:` +
-      replicaId,
-    [ReplicaOperationField.OPERATION_TYPE]: 'REMOVE',
-    [ReplicaOperationField.PARTITION_ID]: partitionId ?? world.partitionId,
-    [ReplicaOperationField.REPLICA_ID]: replicaId,
-    [ReplicaOperationField.REASON]: 'split_source_dissolution',
-    [ReplicaOperationField.GROUP_RETIREMENT]: {reason: GROUP_RETIRED,
-      kind: 'split-source', workflowId: WORKFLOW_ID, fenceToken: FENCE,
-      tableId: TABLE_ID, ...evidence},
-  };
-}
-
-// A node restart: the handler's in-memory tracking of the replica is gone;
-// its data directory (and whatever is durable in it) survives.
-function restart(world, replicaId) {
-  const {handler} = world.sources.get(replicaId);
-  handler.localReplicas.delete(replicaId);
-  handler.localServices.delete(replicaId);
-  return handler;
-}
-
-// The member's replica database deleted (in this world the replica's
-// database is the cluster's own file, where its lifecycle row lives; the
-// production removal deletes the handler's path): the lifecycle row is gone.
-function deleteDatabase(world, replicaId) {
-  const dbFile = world.cluster.replica(replicaId).dbFile;
-  for (const suffix of ['', '-wal', '-shm']) {
-    fs.rmSync(`${dbFile}${suffix}`, {force: true});
-  }
-}
+  FENCE,
+  TOMBSTONE_DIR,
+  WORKFLOW_ID,
+  clearedRecord,
+  deleteDatabase,
+  groupRemove,
+  ordinaryRemove,
+  restart,
+  retireAll,
+} from './group-retired-tombstone-world.js';
 
 test('T1 a retired member answers COMPLETED from its tombstone after its ' +
   'database is gone and its node restarted (twice)', async (t) => {
@@ -155,20 +87,21 @@ test('T2 the proof is exact: another workflow, group, table or peer ' +
   'the same replica name in a later group generation');
   t.equal((await handler.handleRemoveReplica(groupRemove(world, first,
     {tableId: 'tbl-other'}))).status, notFound, 'another table');
-  const ordinary = groupRemove(world, second);
-  delete ordinary[ReplicaOperationField.GROUP_RETIREMENT];
-  t.equal((await restart(world, second).handleRemoveReplica(ordinary))
-    .status, notFound, 'an ordinary REMOVE is unchanged (NOT_FOUND)');
+  t.equal((await restart(world, second).handleRemoveReplica(
+    ordinaryRemove(world, second))).status, notFound,
+  'an ordinary REMOVE is unchanged (NOT_FOUND)');
   const tombstone = readGroupRetiredTombstone(handler.dataDir,
     world.partitionId, first);
   const request = {partitionId: world.partitionId, replicaId: first,
     evidence: {tableId: TABLE_ID, workflowId: WORKFLOW_ID}};
-  t.equal(tombstoneProvesRetirement(tombstone, request), true,
+  const gone = handler.durableLifecycleOf(world.partitionId, first);
+  t.equal(gone.absent, true, 'setup: its lifecycle row is gone');
+  t.equal(tombstoneProvesRetirement(tombstone, request, gone), true,
     'control: the exact request is proved');
-  t.equal(tombstoneProvesRetirement({...tombstone, peerId: '1'}, request),
-    false, 'a tombstone of another peer identity proves nothing');
+  t.equal(tombstoneProvesRetirement({...tombstone, peerId: '1'}, request,
+    gone), false, 'a tombstone of another peer identity proves nothing');
   t.equal(tombstoneProvesRetirement(tombstone, {...request,
-    replicaId: second}), false, 'nor for another replica');
+    replicaId: second}, gone), false, 'nor for another replica');
 });
 
 test('T3 the tombstone is kept until the record is cleared, then released',
@@ -193,8 +126,7 @@ test('T3 the tombstone is kept until the record is cleared, then released',
     t.equal((await handler.handleRemoveReplica(groupRemove(world, first)))
       .status, ReplicaOperationResponseStatus.COMPLETED,
     'the re-ask is COMPLETED while it is kept');
-    world.setTablesRow({table_id: TABLE_ID, active_partition_version: 2,
-      partition_transition_state: null, partition_transition_metadata: null});
+    world.setTablesRow(clearedRecord());
     t.equal(await handler.sweepGroupRetiredTombstones(), 1,
       'released once the record is cleared');
     t.equal(readGroupRetiredTombstone(handler.dataDir, world.partitionId,

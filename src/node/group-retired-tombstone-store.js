@@ -17,14 +17,23 @@
  * incarnation is a single-purpose counter.
  * Scope: the exact table id, group (partition) id, replica identity and its
  * raft-rs peer identity, the retiring workflow id and the fence and kind it
- * was retired under. A REMOVE is answered from it only for that exact
- * (table, group, replica identity, peer identity, workflow): a replica of
- * the same name in another group generation (another group id or workflow)
- * never inherits the proof.
- * Written: only after the replica's own durable lifecycle row reads retired
- * with the group-retired reason (a reseed-required hold is never one), and
- * before its database is deleted (the deletion refuses a group-retired
- * replica that has no tombstone).
+ * was retired under, and the INCARNATION of the lifecycle row it was written
+ * from (owner decision 2026-10-05: the stamp the row's lifecycle owner
+ * minted when that replica was born). A REMOVE is answered from it only for
+ * that exact (table, group, replica identity, peer identity, workflow), and
+ * only while this node holds no lifecycle row for the identity (its database
+ * deleted) or holds exactly that retired incarnation: never beside a live
+ * (non-retired) row, an unreadable one, or a row of another incarnation. A
+ * tombstone without an incarnation (written before the stamp) is no proof.
+ * Written: only from the replica's own durable lifecycle row reading retired
+ * - with the group-retired reason, or (owner decision 2026-10-05) any other
+ * reason such as a reseed hold once a group-retirement REMOVE's evidence
+ * verified against the record - carrying its incarnation, and before its
+ * database is deleted (the deletion writes it from a group-retired row's own
+ * recorded evidence, or refuses).
+ * Dropped: when the same (group, replica identity) is created again, before
+ * the new replica is born (a later incarnation never meets it), and before a
+ * database of another incarnation is deleted.
  * Lifetime: kept until the member observes, through the control plane's
  * authoritative read of the workflow's record, that the record no longer
  * belongs to that workflow (cleared, or a later workflow's): the workflow
@@ -32,8 +41,9 @@
  * Bound: one small file per replica this node retired as part of a group
  * whose workflow it has not yet seen cleared (a dropped table's record is
  * absent: its tombstones stay - recorded follow-up).
- * Prohibited: a proof from absence; a proof for another identity, group or
- * workflow; deleting before the record is seen cleared.
+ * Prohibited: a proof from absence; a proof for another identity, group,
+ * workflow or incarnation; a proof beside a live row; releasing before the
+ * record is seen cleared.
  */
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
@@ -50,7 +60,8 @@ import {PARTITION_TRANSITION_METADATA_FIELD} from
   '../partition/partition-constants.js';
 
 const TOMBSTONE_DIRNAME = 'group-retired-tombstones';
-const TOMBSTONE_VERSION = 1;
+// Version 2 carries the replica incarnation; a version 1 file is no proof.
+const TOMBSTONE_VERSION = 2;
 const TOMBSTONE_EXT = '.json';
 const UNREADABLE = 'GROUP_RETIRED_TOMBSTONE_UNREADABLE';
 // A tombstone directory that is missing, or whose place is taken, holds no
@@ -76,6 +87,7 @@ const TOMBSTONE_SCOPE_FIELD = Object.freeze({
   PEER_ID: 'peerId',
   WORKFLOW_ID: 'workflowId',
   KIND: 'kind',
+  INCARNATION: 'incarnation',
 });
 
 function isNonEmptyString(value) {
@@ -95,6 +107,8 @@ function isWellFormed(record) {
  * @param {Object} fact
  * @param {string} fact.groupId - The group (partition) id.
  * @param {string} fact.replicaIdentity - The replica's identity.
+ * @param {string} fact.incarnation - The retired lifecycle row's stamp.
+ * @param {string} [fact.lifecycleReason] - The row's retirement reason.
  * @param {Object} fact.evidence - The verified REMOVE's evidence
  *   ({tableId, workflowId, fenceToken, kind}).
  * @param {number} fact.retiredAt
@@ -119,7 +133,8 @@ function writeGroupRetiredTombstone(dataDir, fact) {
 }
 
 // The record one tombstone write persists.
-function tombstoneRecordOf({groupId, replicaIdentity, evidence, retiredAt}) {
+function tombstoneRecordOf({groupId, replicaIdentity, incarnation,
+  lifecycleReason, evidence, retiredAt}) {
   const identity = String(replicaIdentity ?? '');
   return {
     version: TOMBSTONE_VERSION,
@@ -130,6 +145,8 @@ function tombstoneRecordOf({groupId, replicaIdentity, evidence, retiredAt}) {
     workflowId: String(evidence?.workflowId ?? ''),
     fenceToken: evidence?.fenceToken,
     kind: String(evidence?.kind ?? ''),
+    incarnation: String(incarnation ?? ''),
+    lifecycleReason: String(lifecycleReason ?? ''),
     retiredAt: Number(retiredAt) || 0,
   };
 }
@@ -156,16 +173,37 @@ function readGroupRetiredTombstone(dataDir, groupId, replicaIdentity) {
 }
 
 /**
+ * Whether a tombstone was written from exactly this lifecycle read's row: a
+ * retired row of the tombstone's incarnation.
+ * @param {Object|null} tombstone
+ * @param {Object} lifecycle - The durable lifecycle read with the lifecycle
+ *   administration's verdicts (ReplicaHandler.lifecycleVerdictsOf).
+ * @return {boolean}
+ */
+function isTombstoneOfRow(tombstone, lifecycle) {
+  return Boolean(tombstone) && lifecycle?.retired === true &&
+    isNonEmptyString(lifecycle.incarnation) &&
+    lifecycle.incarnation === tombstone.incarnation;
+}
+
+/**
  * Whether a tombstone proves the retirement a group-retirement REMOVE asks
  * about: the exact table, group, replica identity, peer identity and
- * workflow.
+ * workflow, and the incarnation this node holds for the identity - no row
+ * any more (its database deleted), or exactly the retired row it was
+ * written from. A live row, an unreadable database or a row of another
+ * incarnation is never answered from a tombstone.
  * @param {Object|null} tombstone
  * @param {Object} request - {partitionId, replicaId, evidence}.
+ * @param {Object} lifecycle - The durable lifecycle read of that identity,
+ *   with its verdicts (ReplicaHandler.lifecycleVerdictsOf).
  * @return {boolean}
  */
 function tombstoneProvesRetirement(tombstone, {partitionId, replicaId,
-  evidence}) {
-  if (!tombstone || !isNonEmptyString(replicaId)) {
+  evidence}, lifecycle) {
+  if (!tombstone || !isNonEmptyString(replicaId) ||
+      !(lifecycle?.absent === true ||
+        isTombstoneOfRow(tombstone, lifecycle))) {
     return false;
   }
   const asked = {
@@ -247,6 +285,7 @@ function isTombstoneWorkflowCleared(tombstone, read) {
 
 export {
   deleteGroupRetiredTombstone,
+  isTombstoneOfRow,
   isTombstoneWorkflowCleared,
   listGroupRetiredTombstones,
   readGroupRetiredTombstone,
