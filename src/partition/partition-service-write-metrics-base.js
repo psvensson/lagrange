@@ -66,6 +66,10 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         preparePartitionReadStatement(this.db, sql) :
         this.db.prepare(sql);
       if (isSelect) {
+        // Exact INTEGER decoding is opt-in per read. Re-apply the mode on every
+        // invocation because the statement owner intentionally retains SELECTs.
+        // This keeps BigInt out of ordinary query/result paths.
+        stmt.safeIntegers(options.safeIntegers === true);
         const sqliteStartMs = this.timeSource.now();
         const rows = collectBoundedSqliteRows(stmt, params, {
           cancellationToken: options.cancellationToken || null,
