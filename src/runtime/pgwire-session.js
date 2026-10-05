@@ -11,10 +11,9 @@
  */
 
 import {PG_TRANSACTION_STATE} from './pgwire-protocol-constants.js';
-import {
-  AST_TYPE,
-  classifyTransactionControlStatement,
-} from '../query/sql-parser.js';
+import {AST_TYPE} from '../query/parser-constants.js';
+import {classifyTransactionControlStatement} from
+  '../query/sql-transaction-control-grammar.js';
 
 // PostgreSQL ends a failed transaction block on COMMIT by rolling it back
 // (the CommandComplete tag is ROLLBACK).
@@ -70,6 +69,10 @@ class PgWireSession {
     this.database = options.database || null;
     this.state = PGWIRE_SESSION_STATE.CREATED;
     this.txState = PG_TRANSACTION_STATE.IDLE;
+    // The engine transaction this session's block is in (from the engine's
+    // BEGIN answer); every statement of the block is sent for it, so the
+    // engine refuses one for a transaction it no longer holds.
+    this.transactionId = null;
     this.createdAt = Date.now();
 
     /**
@@ -202,6 +205,18 @@ class PgWireSession {
    */
   setTransactionState(state) {
     this.txState = state;
+    if (state === PG_TRANSACTION_STATE.IDLE) this.transactionId = null;
+  }
+
+  /**
+   * Enter a transaction block the engine began.
+   *
+   * @param {?string} transactionId - The engine's transaction id.
+   */
+  enterTransaction(transactionId) {
+    this.txState = PG_TRANSACTION_STATE.IN_TRANSACTION;
+    this.transactionId = typeof transactionId === 'string' &&
+      transactionId.length > 0 ? transactionId : null;
   }
 
   /**

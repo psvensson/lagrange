@@ -45,6 +45,7 @@ import {
   buildNoData,
   buildEmptyQueryResponse,
 } from './pgwire-message-builders.js';
+import {answerFailedStatement} from './pgwire-transaction-outcome.js';
 import {
   parseStartupParams,
   parseQueryMessage,
@@ -59,7 +60,6 @@ import {
   extractColumns,
   extractRowValues,
   isEmptyStatementResult,
-  resolveFailureSqlState,
 } from './pgwire-result-mapper.js';
 import {readExecutedStatementType} from
   '../query/application-database-result.js';
@@ -76,12 +76,8 @@ import {upgradePgwireSocketToTls} from './pgwire-tls-context.js';
 import {PgWireExtendedQueryHandler} from
   './pgwire-extended-query-handler.js';
 
-// Executed statement kind -> the session transaction state it leaves.
-const TRANSACTION_STATE_AFTER_STATEMENT = new Map([
-  [AST_TYPE.BEGIN_TRANSACTION, PG_TRANSACTION_STATE.IN_TRANSACTION],
-  [AST_TYPE.COMMIT, PG_TRANSACTION_STATE.IDLE],
-  [AST_TYPE.ROLLBACK, PG_TRANSACTION_STATE.IDLE],
-]);
+// Executed transaction-end kinds: a successful one leaves the session idle.
+const TRANSACTION_END_STATEMENTS = new Set([AST_TYPE.COMMIT, AST_TYPE.ROLLBACK]);
 const LOCAL_NUM_INT32_MAX = 0x7FFFFFFF;
 const LOCAL_STR_DATA = 'data';
 const LOCAL_STR_ERROR = 'error';
@@ -612,9 +608,10 @@ class PgWireProtocolHandler {
    * @private
    */
   async _executeAndSend(query, params) {
+    const stateBefore = this._session.getTransactionState();
     try {
       const result = await this._adapter.execute(
-        this._session.sessionId, query, params,
+        this._session.sessionId, query, params, this._executionOptions(),
       );
       if (
         result?.provisioningDeadlineExpired === true &&
@@ -654,36 +651,53 @@ class PgWireProtocolHandler {
       const tag = deriveCommandTag(result);
       this._socket.write(buildCommandComplete(tag));
 
-      this._applyTransactionOutcome(readExecutedStatementType(result));
+      this._applyTransactionOutcome(readExecutedStatementType(result), result);
     } catch (err) {
-      this._applyTransactionFailure();
-      this._sendError(
-        PG_SEVERITY.ERROR,
-        resolveFailureSqlState(err),
-        err.message,
-        err.detail || null,
-      );
+      this._answerFailure(err, stateBefore);
     }
+  }
+
+  /**
+   * Engine options for a statement: inside a transaction block, the engine
+   * transaction the block is in (the engine refuses the statement when it
+   * no longer holds it, instead of running it outside the block).
+   * @return {Object}
+   * @private
+   */
+  _executionOptions() {
+    const transactionId = this._session.transactionId;
+    return transactionId ? {expectedTransactionId: transactionId} : {};
   }
 
   /**
    * Move the session transaction state for a statement the engine executed.
    * @param {?string} statementType - The executed statement kind.
+   * @param {Object} result - The engine result (BEGIN carries its
+   *   transaction id).
    * @private
    */
-  _applyTransactionOutcome(statementType) {
-    const next = TRANSACTION_STATE_AFTER_STATEMENT.get(statementType);
-    if (next !== undefined) this._session.setTransactionState(next);
+  _applyTransactionOutcome(statementType, result) {
+    if (statementType === AST_TYPE.BEGIN_TRANSACTION) {
+      this._session.enterTransaction(result?.transactionId);
+    } else if (TRANSACTION_END_STATEMENTS.has(statementType)) {
+      this._session.setTransactionState(PG_TRANSACTION_STATE.IDLE);
+    }
   }
 
-  /** @private */
-  _applyTransactionFailure() {
-    if (
-      this._session.getTransactionState() ===
-      PG_TRANSACTION_STATE.IN_TRANSACTION
-    ) {
-      this._session.setTransactionState(PG_TRANSACTION_STATE.FAILED);
-    }
+  /**
+   * Answer a failed statement; the session state follows the engine
+   * (pgwire-transaction-outcome owns the rule).
+   * @param {Error} err - The failure (engine result fields assigned).
+   * @param {number} stateBefore - Session state when the statement ran.
+   * @private
+   */
+  _answerFailure(err, stateBefore) {
+    answerFailedStatement({
+      failure: err,
+      stateBefore,
+      session: this._session,
+      write: (message) => this._socket.write(message),
+    });
   }
 
   // --- Error sending ---

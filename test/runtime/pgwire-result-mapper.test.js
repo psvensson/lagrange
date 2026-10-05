@@ -148,6 +148,12 @@ describe('resolveFailureSqlState', () => {
       }), FEATURE_NOT_SUPPORTED_SQLSTATE);
       assert.equal(resolveFailureSqlState({sqlState: '55P03',
         errorCode: 'MULTIPLE_STATEMENTS_UNSUPPORTED'}), '55P03');
+      assert.equal(resolveFailureSqlState({
+        errorCode: 'UNSUPPORTED_SQL_FEATURE',
+      }), FEATURE_NOT_SUPPORTED_SQLSTATE, 'INSERT ... SELECT, RETURNING');
+      assert.equal(resolveFailureSqlState({
+        errorCode: 'TRANSACTION_CONTROL_SYNTAX_ERROR',
+      }), '42601', 'a transaction keyword with trailing content');
       assert.equal(resolveFailureSqlState({errorCode: 'SYNTAX_ERROR'}),
         INTERNAL_ERROR_SQLSTATE);
       assert.equal(resolveFailureSqlState(new Error('x')),

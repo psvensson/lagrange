@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1964,
+    "unit": 1966,
     "integration": 79,
     "bootstrap": 198,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2248,
-  "digest": "fnv1a32-e0c68169",
+  "censusSize": 2250,
+  "digest": "fnv1a32-272f7273",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1425,6 +1425,7 @@
     "test/query/sql-query-engine.test.js": "unit",
     "test/query/sql-query-pbt.test.js": "unit",
     "test/query/sql-request.test.js": "unit",
+    "test/query/sql-statement-refusals.test.js": "unit",
     "test/query/straggler-detection.property.test.js": "unit",
     "test/query/strategy-selector.test.js": "unit",
     "test/query/streaming-aggregation.property.test.js": "unit",
@@ -1855,6 +1856,7 @@
     "test/runtime/pgwire-schema-provisioning-job.test.js": "unit",
     "test/runtime/pgwire-session.test.js": "unit",
     "test/runtime/pgwire-tls-policy-cutover.test.js": "unit",
+    "test/runtime/pgwire-transaction-outcome.test.js": "unit",
     "test/runtime/request-cell-table-read-index.test.js": "unit",
     "test/runtime/runtime-adapter-determinism.test.js": "unit",
     "test/runtime/runtime-adapter-ingress.test.js": "unit",

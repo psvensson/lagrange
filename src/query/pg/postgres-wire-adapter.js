@@ -181,6 +181,8 @@ class PostgresWireAdapter {
    * @param {Object} [options] - Execution options.
    * @param {Object} [options.budgets] - Budget overrides.
    * @param {Object} [options.hints] - Planner hint overrides.
+   * @param {string|null} [options.expectedTransactionId] - The explicit
+   *   transaction the protocol session believes it is in.
    * @return {Promise<Object>} Query result from SqlCore.
    */
   async execute(sessionId, sql, params = [], options = {}) {
@@ -215,6 +217,7 @@ class PostgresWireAdapter {
         configuredBudgetMs: wallTimeLimitMs,
       }),
       securityContext: session.securityContext,
+      expectedTransactionId: options.expectedTransactionId ?? null,
     });
 
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTING_VIA_SQLCORE, {

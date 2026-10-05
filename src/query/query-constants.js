@@ -70,6 +70,12 @@ const QUERY_ERROR_CODE = Object.freeze({
   // no statement at all.
   MULTIPLE_STATEMENTS_UNSUPPORTED: 'MULTIPLE_STATEMENTS_UNSUPPORTED',
   EMPTY_STATEMENT: 'EMPTY_STATEMENT',
+  // A statement form the engine cannot execute as written (INSERT ...
+  // SELECT, RETURNING): refused, never run as a different statement.
+  UNSUPPORTED_SQL_FEATURE: 'UNSUPPORTED_SQL_FEATURE',
+  // A text that begins with a transaction keyword and is not one whole
+  // transaction-control statement (`BEGIN\nINSERT ...`): nothing executes.
+  TRANSACTION_CONTROL_SYNTAX_ERROR: 'TRANSACTION_CONTROL_SYNTAX_ERROR',
   TIMEOUT: 'TIMEOUT',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   // Write-path epoch fencing: the routed write carried an
@@ -100,6 +106,16 @@ const QUERY_ERROR_MSG = Object.freeze({
   NO_TRANSACTION_COMMIT: 'No active transaction to commit',
   NO_TRANSACTION_ROLLBACK: 'No active transaction to rollback',
   NO_ACTIVE_TRANSACTION: 'No active transaction',
+  EXPECTED_TRANSACTION_NOT_HELD_PREFIX: 'transaction ',
+  EXPECTED_TRANSACTION_NOT_HELD_SUFFIX:
+    ' is no longer active on the server (it was rolled back, e.g. its ' +
+    'transaction budget expired); the statement was not executed',
+  INSERT_SELECT_UNSUPPORTED: 'INSERT ... SELECT is not supported',
+  RETURNING_UNSUPPORTED: 'RETURNING is not supported',
+  TRANSACTION_CONTROL_SYNTAX_ERROR:
+    'syntax error: a transaction-control statement must be the whole ' +
+    'statement (BEGIN | START TRANSACTION [modes], COMMIT | END | ' +
+    'ROLLBACK | ABORT [WORK | TRANSACTION]); nothing was executed',
   TRANSACTION_PARTICIPANTS_FROZEN:
     'Transaction participant set is frozen',
   TRANSACTION_RECOVERY_INCOMPLETE:

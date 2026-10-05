@@ -65,6 +65,15 @@ function validateSqlRequestStatementAndParameters(fields) {
   return parameters;
 }
 
+function resolveExpectedTransactionId(fields) {
+  const expected = fields.expectedTransactionId ?? null;
+  if (expected !== null &&
+      (typeof expected !== 'string' || expected.length === 0)) {
+    throw new Error(ADAPTER_ERROR_MSG.EXPECTED_TRANSACTION_ID_INVALID);
+  }
+  return expected;
+}
+
 function validatePartitionCallbackRequest(fields, mode) {
   if (mode !== EXECUTION_MODE.PARTITION_CALLBACK) return;
   if (!fields.callbackModuleRef) {
@@ -123,11 +132,14 @@ const SQL_REQUEST_VALIDATORS = Object.freeze([
  * @param {Object} [fields.hints] - PlannerHints overrides.
  * @param {string|null} [fields.dialect] - Parser dialect hint.
  * @param {Object} [fields.securityContext] - Server-derived protocol context.
+ * @param {string|null} [fields.expectedTransactionId] - The explicit
+ *   transaction the session expects to be in.
  * @return {Readonly<Object>} Frozen SqlRequest.
  * @throws {Error} If required fields are missing or invalid.
  */
 function createSqlRequest(fields) {
   const params = validateSqlRequestStatementAndParameters(fields);
+  const expectedTransactionId = resolveExpectedTransactionId(fields);
   const mode = fields.executionMode ?? EXECUTION_MODE.SQL_STATEMENT;
   const securityFields = buildSqlRequestSecurityFields(fields);
   validatePartitionCallbackRequest(fields, mode);
@@ -144,6 +156,10 @@ function createSqlRequest(fields) {
     budgets: Object.freeze({...DEFAULT_QUERY_BUDGET, ...fields.budgets}),
     hints: fields.hints ? Object.freeze({...fields.hints}) : null,
     dialect: fields.dialect ?? null,
+    // The explicit transaction the session expects to be in (a protocol
+    // session inside a transaction block): the engine refuses a statement
+    // for a transaction it no longer holds instead of running it outside.
+    ...(expectedTransactionId ? {expectedTransactionId} : {}),
     ...(fields.timeoutBudget ? {timeoutBudget: fields.timeoutBudget} : {}),
     ...(fields.cancellationToken ?
       {cancellationToken: fields.cancellationToken} : {}),

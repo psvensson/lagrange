@@ -195,14 +195,34 @@
       "summary": "Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed."
     },
     {
+      "id": "postgres-wire-restricted-dialect",
+      "area": "PostgreSQL compatibility",
+      "summary": "The listener speaks the PostgreSQL wire protocol with a restricted SQL dialect; ORM and psql meta-command compatibility are not claimed. Statements drivers commonly send at startup or for introspection fail: SHOW <setting>, SET, RESET, DISCARD ALL, DEALLOCATE, version(), current_database(), current_setting(), pg_catalog tables, plain EXPLAIN, CREATE INDEX, DROP TABLE, WITH ... SELECT/INSERT/DELETE, IN (subquery) and VALUES (...) as a query."
+    },
+    {
       "id": "sql-multiple-statements",
       "area": "SQL",
       "summary": "A query text that holds more than one statement is refused whole and none of it runs: SQLSTATE 0A000 over the PostgreSQL wire, error code MULTIPLE_STATEMENTS_UNSUPPORTED through the application database. Send each statement separately; trailing semicolons and comments are accepted."
     },
     {
-      "id": "sql-returning",
+      "id": "sql-returning-insert-select",
       "area": "SQL",
-      "summary": "INSERT, UPDATE and DELETE with RETURNING return no rows, only the command tag and count, so INSERT ... RETURNING id gives the client no id."
+      "summary": "INSERT, UPDATE and DELETE with RETURNING are refused (SQLSTATE 0A000, \"RETURNING is not supported\") and nothing is applied; read generated values with a separate SELECT. INSERT ... SELECT is refused the same way (\"INSERT ... SELECT is not supported\")."
+    },
+    {
+      "id": "sql-transaction-control",
+      "area": "SQL",
+      "summary": "Transaction control is BEGIN [WORK, TRANSACTION] or START TRANSACTION with optional PostgreSQL transaction modes, COMMIT or END [WORK, TRANSACTION], and ROLLBACK or ABORT [WORK, TRANSACTION]. Isolation level, READ ONLY and DEFERRABLE modes are accepted but not enforced. The statement must be the whole query text: a transaction keyword followed by anything else (BEGIN followed by an INSERT with no semicolon) is a syntax error (SQLSTATE 42601) and nothing runs. Savepoints, COMMIT AND CHAIN and prepared transactions are not supported. ROLLBACK or COMMIT with no transaction in progress answers its command tag with a WARNING (SQLSTATE 25P01), as PostgreSQL does."
+    },
+    {
+      "id": "sql-transaction-budget",
+      "area": "SQL",
+      "summary": "An explicit transaction has a 60-second budget from BEGIN. When the budget runs out, the server rolls the transaction back within about a second. After that, any later statement in that block, including a new BEGIN, is refused with SQLSTATE 25P04 and never runs outside the transaction; the block is then failed until ROLLBACK, or until a COMMIT, which answers ROLLBACK. A COMMIT of an expired transaction fails with SQLSTATE 25P04 stating that no changes were committed, and leaves the session idle."
+    },
+    {
+      "id": "sql-dollar-quoted-literals",
+      "area": "SQL",
+      "summary": "Dollar-quoted string literals ($$...$$, $tag$...$tag$) are stored as NULL rather than their text. Use single-quoted literals or bind parameters."
     },
     {
       "id": "sql-on-conflict-do-update",

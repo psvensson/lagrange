@@ -67,8 +67,12 @@ const EMPTY_QUERY_RESPONSE = 'EmptyQueryResponse';
  */
 async function observe(client, text, values) {
   const tags = [];
+  const notices = [];
   const onComplete = (message) => tags.push(message.text);
   const onEmpty = () => tags.push(EMPTY_QUERY_RESPONSE);
+  const onNotice = (message) => notices.push({
+    code: message.code, message: message.message, severity: message.severity,
+  });
   const ready = new Promise((resolve) => {
     client.connection.once('readyForQuery', (message) => {
       resolve(message.status);
@@ -76,6 +80,7 @@ async function observe(client, text, values) {
   });
   client.connection.on('commandComplete', onComplete);
   client.connection.on('emptyQuery', onEmpty);
+  client.connection.on('notice', onNotice);
   let observation;
   try {
     const query = values === undefined ?
@@ -91,12 +96,16 @@ async function observe(client, text, values) {
       error: null,
     };
   } catch (error) {
-    observation = {tags, error: {code: error.code, message: error.message}};
+    observation = {tags, error: {
+      code: error.code, detail: error.detail, message: error.message,
+    }};
   } finally {
     client.connection.removeListener('commandComplete', onComplete);
     client.connection.removeListener('emptyQuery', onEmpty);
   }
-  return {...observation, status: await ready};
+  const status = await ready;
+  client.connection.removeListener('notice', onNotice);
+  return {...observation, notices, status};
 }
 
 async function startRuntime(t) {
@@ -127,7 +136,7 @@ async function startRuntime(t) {
   useSingleNodeReplicaShape(runtime.engine);
   const client = await openConsumerSession({...endpoint, ...CREDENTIALS});
   t.teardown(() => client.end());
-  return {client, db, endpoint};
+  return {client, db, endpoint, engine: runtime.engine};
 }
 
 // Statement kind -> the SQL a client sends, its parameters (extended
@@ -370,6 +379,250 @@ async function witnessTransactionRecovery(t, client) {
     'COMMIT in a failed block: the block\'s insert was rolled back');
 }
 
+// Pace between real-path statements on one table (a known separate defect
+// breaks writes after an automatic load split at this base).
+const EXPIRY_PACE_MS = 150;
+const FORMS_TABLE = 'forms_rows';
+const FORMS_SEED = Object.freeze([{id: 1, label: 'a'}, {id: 2, label: 'b'}]);
+const SYNTAX_ERROR = '42601';
+// Statement forms the engine cannot execute as written: refused with the
+// stated SQLSTATE and NOTHING applied (never run as a different statement).
+const REFUSED_FORMS = Object.freeze([
+  ['INSERT ... SELECT', `INSERT INTO ${FORMS_TABLE} (id, label) ` +
+    `SELECT id + 10, label FROM ${FORMS_TABLE}`, FEATURE_NOT_SUPPORTED,
+  /INSERT \.\.\. SELECT is not supported/u],
+  ['INSERT ... RETURNING', `INSERT INTO ${FORMS_TABLE} (id, label) ` +
+    'VALUES (7, \'h\') RETURNING id', FEATURE_NOT_SUPPORTED,
+  /RETURNING is not supported/u],
+  ['UPDATE ... RETURNING', `UPDATE ${FORMS_TABLE} SET label = 'r' ` +
+    'WHERE id = 1 RETURNING id', FEATURE_NOT_SUPPORTED,
+  /RETURNING is not supported/u],
+  ['DELETE ... RETURNING expression', `DELETE FROM ${FORMS_TABLE} ` +
+    'WHERE id = 2 RETURNING id + 1', FEATURE_NOT_SUPPORTED,
+  /RETURNING is not supported/u],
+  ['BEGIN followed by a statement without `;`', 'BEGIN\nINSERT INTO ' +
+    `${FORMS_TABLE} (id, label) VALUES (8, 'i')`, SYNTAX_ERROR,
+  /transaction-control statement must be the whole statement/u],
+  ['COMMIT followed by a statement without `;`', 'COMMIT DELETE FROM ' +
+    FORMS_TABLE, SYNTAX_ERROR,
+  /transaction-control statement must be the whole statement/u],
+]);
+
+async function readFormsRows(client) {
+  const {rows} = await client.query(
+    `SELECT id, label FROM ${FORMS_TABLE} ORDER BY id`);
+  return rows.map((row) => ({id: Number(row.id), label: row.label}));
+}
+
+async function witnessRefusedForms(t, client) {
+  await seedTable(t, client, FORMS_TABLE, ' (id INTEGER PRIMARY KEY, ' +
+    'label TEXT)', ' (id, label) VALUES (1, \'a\'), (2, \'b\')');
+  for (const [label, text, sqlState, message] of REFUSED_FORMS) {
+    for (const values of [undefined, []]) {
+      const mode = values ? 'extended' : 'simple';
+      const refused = await observe(client, text, values);
+      t.same(refused.tags, [], `${mode} ${label}: no CommandComplete`);
+      t.equal(refused.error?.code, sqlState,
+        `${mode} ${label}: refused ${sqlState}`);
+      t.match(refused.error?.message, message,
+        `${mode} ${label}: the refusal names the form`);
+      t.equal(refused.status, IDLE, `${mode} ${label}: the session is idle`);
+      t.same(await readFormsRows(client), FORMS_SEED,
+        `${mode} ${label}: nothing applied`);
+      await managedSleep(t, EXPIRY_PACE_MS);
+    }
+  }
+}
+
+// The standard spellings drivers and ORMs send are the transaction
+// statements they name: they open, commit and roll back a block, and end a
+// failed block.
+const SPELLING_BLOCKS = Object.freeze([
+  ['START TRANSACTION', 'COMMIT WORK', 'COMMIT', [3]],
+  ['BEGIN WORK', 'END', 'COMMIT', [3, 4]],
+  ['BEGIN TRANSACTION', 'ROLLBACK WORK', 'ROLLBACK', [3, 4]],
+  ['START TRANSACTION READ WRITE', 'ABORT', 'ROLLBACK', [3, 4]],
+  ['BEGIN ISOLATION LEVEL SERIALIZABLE', 'COMMIT TRANSACTION', 'COMMIT',
+    [3, 4, 5]],
+]);
+const FAILED_BLOCK_ENDS = Object.freeze([
+  'ROLLBACK WORK', 'ROLLBACK TRANSACTION', 'ABORT', 'END', 'COMMIT WORK',
+]);
+
+async function witnessTransactionSpellings(t, client) {
+  const ids = async () => (await readFormsRows(client)).map((row) => row.id)
+    .filter((id) => id >= 3);
+  let nextId = 3;
+  for (const [begin, end, endTag, expectedIds] of SPELLING_BLOCKS) {
+    const begun = await observe(client, begin);
+    t.same(begun.tags, ['BEGIN'], `${begin}: answered BEGIN`);
+    t.equal(begun.status, 'T', `${begin}: in a transaction block`);
+    t.same((await observe(client, `INSERT INTO ${FORMS_TABLE} (id, label) ` +
+      `VALUES (${nextId}, 's')`)).tags, ['INSERT 0 1'],
+    `${begin}: insert inside the block`);
+    nextId += 1;
+    const ended = await observe(client, end);
+    t.same(ended.tags, [endTag], `${end}: answered ${endTag}`);
+    t.equal(ended.status, IDLE, `${end}: the block ended`);
+    t.same(await ids(), expectedIds, `${begin} ... ${end}: the rows`);
+    if (endTag === 'ROLLBACK') nextId -= 1;
+    await managedSleep(t, EXPIRY_PACE_MS);
+  }
+  for (const end of FAILED_BLOCK_ENDS) {
+    t.same((await observe(client, 'BEGIN')).tags, ['BEGIN'], 'BEGIN');
+    await observe(client, `INSERT INTO ${FORMS_TABLE} (id, label) ` +
+      'VALUES (90, \'f\')');
+    const failing = await observe(client, 'SELECT id FROM no_such_table');
+    t.equal(failing.status, FAILED, `${end}: the block is failed`);
+    const ended = await observe(client, end);
+    t.same(ended.error, null, `${end} in a failed block: no ErrorResponse`);
+    t.same(ended.tags, ['ROLLBACK'],
+      `${end} in a failed block: answered ROLLBACK`);
+    t.equal(ended.status, IDLE, `${end} in a failed block: the block ended`);
+    t.notOk((await ids()).includes(90),
+      `${end} in a failed block: the block's insert rolled back`);
+    await managedSleep(t, EXPIRY_PACE_MS);
+  }
+}
+
+// The engine's transaction budget, shortened for the expiry witness (the
+// production budget is 60 s): the coordinator's recovery sweep rolls back
+// and drops a transaction whose budget is spent.
+const EXPIRY_TABLE = 'expiry_rows';
+const EXPIRY_BUDGET_MS = 1_500;
+const TRANSACTION_TIMEOUT = '25P04';
+const IN_FAILED_TRANSACTION = '25P02';
+const NO_ACTIVE_SQL_TRANSACTION = '25P01';
+const WARNING = 'WARNING';
+
+/**
+ * BEGIN on the client, run one write inside the block, then wait until the
+ * engine's recovery sweep has dropped the session's transaction (its budget
+ * is spent). The client is not told: that is the condition under test.
+ * @param {object} t - Tap test.
+ * @param {object} context - {client, engine}.
+ * @param {string} insert - The write run inside the block (it answers).
+ * @param {unknown[]} [values] - Extended-protocol parameters.
+ * @return {Promise<void>}
+ */
+async function beginWriteAndExpire(t, {client, engine}, insert, values) {
+  const transactions = engine.transactionCoordinator.transactionsBySession;
+  const before = new Set(transactions.keys());
+  t.same((await observe(client, 'BEGIN')).tags, ['BEGIN'], 'BEGIN');
+  const [sessionKey] = [...transactions.keys()].filter((key) =>
+    !before.has(key));
+  t.ok(sessionKey, 'the BEGIN opened one engine transaction');
+  await managedSleep(t, EXPIRY_PACE_MS);
+  t.same((await observe(client, insert, values)).tags, ['INSERT 0 1'],
+    'the write inside the block answered');
+  const deadline = Date.now() + WAIT_MS;
+  while (engine.hasActiveTransaction(sessionKey) && Date.now() < deadline) {
+    await managedSleep(t, POLL_MS);
+  }
+  t.notOk(engine.hasActiveTransaction(sessionKey),
+    'the engine dropped the transaction once its budget was spent');
+}
+
+async function expiryRowIds(client) {
+  const {rows} = await client.query(`SELECT id FROM ${EXPIRY_TABLE}`);
+  return rows.map((row) => Number(row.id)).sort((a, b) => a - b);
+}
+
+function assertNoTransactionWarning(t, observation, tag, label) {
+  t.same(observation.error, null, `${label}: no ErrorResponse`);
+  t.same(observation.tags, [tag], `${label}: answered ${tag}`);
+  t.equal(observation.status, IDLE, `${label}: the session is idle`);
+  t.same(observation.notices.map((notice) => [notice.severity, notice.code]),
+    [[WARNING, NO_ACTIVE_SQL_TRANSACTION]],
+    `${label}: a WARNING notice says no transaction is in progress`);
+}
+
+async function witnessCommitAfterExpiry(t, context, values) {
+  const {client} = context;
+  const label = values === undefined ? 'simple' : 'extended';
+  await beginWriteAndExpire(t, context, `INSERT INTO ${EXPIRY_TABLE} ` +
+    '(id, label) VALUES (1, \'a\')');
+  const committed = await observe(client, 'COMMIT', values);
+  t.equal(committed.error?.code, TRANSACTION_TIMEOUT,
+    `${label} COMMIT after expiry: 25P04 transaction_timeout`);
+  t.match(committed.error?.message, /no changes were committed/u,
+    `${label} COMMIT after expiry: the error says nothing was committed`);
+  t.match(committed.error?.detail, /NO_TRANSACTION/u,
+    `${label} COMMIT after expiry: the engine's typed code is the detail`);
+  t.equal(committed.status, IDLE,
+    `${label} COMMIT after expiry: the block is over (idle)`);
+  assertNoTransactionWarning(t, await observe(client, 'ROLLBACK', values),
+    'ROLLBACK', `${label} ROLLBACK after the failed COMMIT`);
+  t.same((await observe(client, 'SELECT 1')).tags, ['SELECT 1'],
+    `${label}: the session is usable`);
+  t.same(await expiryRowIds(client), [],
+    `${label}: the expired block's insert is absent`);
+}
+
+async function witnessStatementAfterExpiry(t, context, values) {
+  const {client} = context;
+  const label = values === undefined ? 'simple' : 'extended';
+  const insert = values === undefined ?
+    `INSERT INTO ${EXPIRY_TABLE} (id, label) VALUES (2, 'b')` :
+    `INSERT INTO ${EXPIRY_TABLE} (id, label) VALUES ($1, $2)`;
+  await beginWriteAndExpire(t, context, insert, values && [2, 'b']);
+  const late = await observe(client, values === undefined ?
+    `INSERT INTO ${EXPIRY_TABLE} (id, label) VALUES (3, 'c')` : insert,
+  values && [3, 'c']);
+  t.comment(`${label} statement after expiry: ${JSON.stringify(late)}`);
+  t.equal(late.error?.code, TRANSACTION_TIMEOUT,
+    `${label} statement after expiry: refused 25P04 (never autocommitted)`);
+  t.equal(late.status, FAILED,
+    `${label} statement after expiry: the block is failed`);
+  const ignored = await observe(client, 'SELECT 1');
+  t.equal(ignored.error?.code, IN_FAILED_TRANSACTION,
+    `${label}: later statements are ignored until the block ends`);
+  const begun = await observe(client, 'BEGIN');
+  t.equal(begun.error?.code, IN_FAILED_TRANSACTION,
+    `${label}: BEGIN inside the failed block is refused`);
+  const ended = await observe(client, 'COMMIT', values && []);
+  t.same(ended.error, null, `${label} COMMIT ending the failed block`);
+  t.same(ended.tags, ['ROLLBACK'],
+    `${label} COMMIT ending the failed block: answered ROLLBACK`);
+  t.equal(ended.status, IDLE, `${label}: the block ended`);
+  t.same(await expiryRowIds(client), [],
+    `${label}: neither the expired insert nor the late one is present`);
+}
+
+/**
+ * The session follows the engine's transaction truth: a transaction the
+ * engine dropped (its budget spent) never wedges the session, a COMMIT of
+ * it says plainly that nothing was committed, and no later statement of the
+ * block runs outside it.
+ * @param {object} t - Tap test.
+ * @param {object} context - {client, engine}.
+ * @return {Promise<void>}
+ */
+async function witnessTransactionExpiry(t, context) {
+  const {client, engine} = context;
+  await seedTable(t, client, EXPIRY_TABLE, ' (id INTEGER PRIMARY KEY, ' +
+    'label TEXT)', ' (id, label) VALUES (100, \'seed\')');
+  t.same((await observe(client, `DELETE FROM ${EXPIRY_TABLE}`)).tags,
+    ['DELETE 1'], 'expiry table emptied');
+  for (const [text, tag] of [['ROLLBACK', 'ROLLBACK'], ['COMMIT', 'COMMIT']]) {
+    assertNoTransactionWarning(t, await observe(client, text), tag,
+      `${text} while idle`);
+    assertNoTransactionWarning(t, await observe(client, text, []), tag,
+      `extended ${text} while idle`);
+  }
+  const coordinator = engine.transactionCoordinator;
+  const configuredBudgetMs = coordinator.transactionBudgetMs;
+  coordinator.transactionBudgetMs = EXPIRY_BUDGET_MS;
+  try {
+    await witnessCommitAfterExpiry(t, context);
+    await witnessCommitAfterExpiry(t, context, []);
+    await witnessStatementAfterExpiry(t, context);
+    await witnessStatementAfterExpiry(t, context, []);
+  } finally {
+    coordinator.transactionBudgetMs = configuredBudgetMs;
+  }
+}
+
 const COUNTED_COMMANDS = new Set(['INSERT', 'UPDATE', 'DELETE', 'SELECT']);
 const FINAL_ROWS = Object.freeze([
   {id: '1', label: 'u'},
@@ -382,7 +635,8 @@ test('PG-wire command tags from the real engine through a real client',
   {timeout: TEST_TIMEOUT_MS}, async (t) => {
     refuseUnderProbe(PROBE_GUARD_SUBJECT);
     reportOpenHandlesOnTeardown(t);
-    const {client, db, endpoint} = await startRuntime(t);
+    const {client, db, endpoint, engine} = await startRuntime(t);
+    await witnessTransactionExpiry(t, {client, engine});
     let last = null;
     for (const [label, text, values, tag] of TAG_CASES) {
       last = await observe(client, text, values);
@@ -398,14 +652,11 @@ test('PG-wire command tags from the real engine through a real client',
     t.same(last.rows[0], FINAL_ROWS, 'the table holds exactly the rows ' +
       'the counted statements changed');
 
-    // RECORD ONLY (finding, not a pass condition): INSERT ... RETURNING.
-    const returning = await observe(client, `INSERT INTO ${TABLE} ` +
-      '(id, n, label) VALUES (7, 7, \'h\') RETURNING id');
-    t.comment(`RETURNING over the wire: ${JSON.stringify(returning)}`);
-
     await witnessStatementKindTags(t, client);
     await witnessMultiStatementRefusal(t, client, db, endpoint);
     await witnessTransactionRecovery(t, client);
+    await witnessRefusedForms(t, client);
+    await witnessTransactionSpellings(t, client);
     await witnessPsqlTags(t, endpoint);
     t.end();
   });

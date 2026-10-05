@@ -11,9 +11,9 @@
     "convergence-topology": 83,
     "distributed-harness": 174,
     "examples-e2e": 7,
-    "pgwire-compat": 19,
+    "pgwire-compat": 20,
     "placement-rebalance": 258,
-    "query-sql": 165,
+    "query-sql": 166,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 146,
@@ -25,10 +25,10 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2248,
-  "digest": "fnv1a32-ea258a9f",
+  "censusSize": 2250,
+  "digest": "fnv1a32-562d443d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-485e3ec4",
+  "observationDigest": "fnv1a32-f5f42a19",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1444,6 +1444,7 @@
     "test/query/sql-query-engine.test.js": "query-sql",
     "test/query/sql-query-pbt.test.js": "query-sql",
     "test/query/sql-request.test.js": "query-sql",
+    "test/query/sql-statement-refusals.test.js": "query-sql",
     "test/query/straggler-detection.property.test.js": "query-sql",
     "test/query/strategy-selector.test.js": "query-sql",
     "test/query/streaming-aggregation.property.test.js": "query-sql",
@@ -1874,6 +1875,7 @@
     "test/runtime/pgwire-schema-provisioning-job.test.js": "pgwire-compat",
     "test/runtime/pgwire-session.test.js": "pgwire-compat",
     "test/runtime/pgwire-tls-policy-cutover.test.js": "pgwire-compat",
+    "test/runtime/pgwire-transaction-outcome.test.js": "pgwire-compat",
     "test/runtime/request-cell-table-read-index.test.js": "services-runtime",
     "test/runtime/runtime-adapter-determinism.test.js": "services-runtime",
     "test/runtime/runtime-adapter-ingress.test.js": "services-runtime",
@@ -10544,6 +10546,11 @@
       ],
       "directories": [
         "test/fixtures/pgwire-tls"
+      ]
+    },
+    "test/runtime/pgwire-transaction-outcome.test.js": {
+      "files": [
+        "src/runtime/pgwire-transaction-outcome.js"
       ]
     },
     "test/runtime/runtime-callback-fail-closed.test.js": {

@@ -65,6 +65,8 @@ const ADAPTER_ERROR_MSG = Object.freeze({
   STATEMENT_REQUIRED: 'SQL statement string is required',
   STATEMENT_MUST_BE_STRING: 'SQL statement must be a string',
   PARAMETERS_MUST_BE_ARRAY: 'SQL parameters must be an array',
+  EXPECTED_TRANSACTION_ID_INVALID:
+    'expectedTransactionId must be a non-empty string or null',
   SECURITY_CONTEXT_INVALID:
     'SqlRequest security context must contain tenantId, principal, and roles',
   LIFECYCLE_AUTH_ACTION_REQUIRED:

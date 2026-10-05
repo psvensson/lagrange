@@ -9,6 +9,11 @@ import {
   enforceApplicationDatabaseStatementPolicy,
 } from './application-database-statement-policy.js';
 import {
+  STATEMENT_ADMISSION,
+  admitStatementForm,
+  withSessionTransactionState,
+} from './sql-query-engine-statement-admission.js';
+import {
   readAffectedRowCount,
   withExecutedStatementType,
 } from './application-database-result.js';
@@ -54,15 +59,18 @@ const {
   reorderParams,
 } = SQL_QUERY_ENGINE_SHARED;
 
-// Statement-count refusals keep their own code; every other parse failure
-// is a syntax error.
-const STATEMENT_COUNT_FAILURE_CODES = new Set([
+// Typed parser refusals (statement count, unsupported statement form,
+// malformed transaction control) keep their own code; every other parse
+// failure is a syntax error.
+const TYPED_PARSE_FAILURE_CODES = new Set([
   QUERY_ERROR_CODE.EMPTY_STATEMENT,
   QUERY_ERROR_CODE.MULTIPLE_STATEMENTS_UNSUPPORTED,
+  QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+  QUERY_ERROR_CODE.TRANSACTION_CONTROL_SYNTAX_ERROR,
 ]);
 
 function resolveParseFailureCode(parseError) {
-  return STATEMENT_COUNT_FAILURE_CODES.has(parseError?.code) ?
+  return TYPED_PARSE_FAILURE_CODES.has(parseError?.code) ?
     parseError.code :
     QUERY_ERROR_CODE.SYNTAX_ERROR;
 }
@@ -442,6 +450,10 @@ class SQLQueryEngineStatementExecution extends
     if (applicationStatementDecision.allowed !== true) {
       return applicationStatementDecision.failure;
     }
+    const formAdmission = admitStatementForm(ast);
+    if (formAdmission.state === STATEMENT_ADMISSION.REFUSED) {
+      return formAdmission.failure;
+    }
 
     try {
       const accessFailure = await this.authorizeRuntimeServiceStatement(
@@ -514,21 +526,19 @@ class SQLQueryEngineStatementExecution extends
 
       case QUERY_AST_TYPE.BEGIN_TRANSACTION:
         return withExecutedStatementType(
-          await this.handleBeginTransaction(sessionId),
+          await this.handleAdmittedBegin(sessionId, options),
           ast.type,
         );
 
       case QUERY_AST_TYPE.COMMIT:
-        return withExecutedStatementType(
-          await this.handleCommit(sessionId),
-          ast.type,
-        );
-
       case QUERY_AST_TYPE.ROLLBACK:
-        return withExecutedStatementType(
-          await this.handleRollback(sessionId),
-          ast.type,
-        );
+        return withExecutedStatementType(withSessionTransactionState(
+          ast.type === QUERY_AST_TYPE.COMMIT ?
+            await this.handleCommit(sessionId) :
+            await this.handleRollback(sessionId),
+          this.transactionCoordinator,
+          sessionId,
+        ), ast.type);
 
       default:
         throw new Error(

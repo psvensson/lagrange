@@ -1,5 +1,9 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
+  STATEMENT_ADMISSION,
+  admitExpectedTransaction,
+} from './sql-query-engine-statement-admission.js';
+import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.js';
@@ -341,6 +345,23 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       const attempts = Number.isInteger(entry.attempts) ? entry.attempts : 1;
       return sum + Math.max(attempts - 1, 0);
     }, 0);
+  }
+
+  /**
+   * BEGIN for a session that may expect to be inside a transaction already:
+   * when the engine no longer holds the expected one, BEGIN is refused
+   * rather than opening a fresh transaction under the client's old block.
+   * @param {string} sessionId - Session ID.
+   * @param {Object} options - Query options (expectedTransactionId).
+   * @return {Promise<Object>} Transaction result.
+   * @private
+   */
+  async handleAdmittedBegin(sessionId, options = {}) {
+    const admission = admitExpectedTransaction(this.transactionCoordinator,
+      sessionId, options.expectedTransactionId);
+    return admission.state === STATEMENT_ADMISSION.REFUSED ?
+      admission.failure :
+      this.handleBeginTransaction(sessionId);
   }
 
   /**
