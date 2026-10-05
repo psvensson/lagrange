@@ -49,7 +49,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-10-04: tightened 1423 -> 1422 per checker hint: the observation's
 // blocked-partition resolver became the first importer of the shared
 // isPriorityRecoveryClosureWitnessPending rule.
-const BASELINE_UNUSED_EXPORT_COUNT = 1422;
+// 2026-10-05: tightened 1422 -> 1420 per checker hint: the managed-split
+// metrics provider de-exported its three internal helpers (only the
+// provider factory has importers).
+const BASELINE_UNUSED_EXPORT_COUNT = 1420;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

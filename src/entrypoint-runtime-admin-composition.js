@@ -396,8 +396,13 @@ async function createSqlRuntimeComposition(options) {
       messageRouter: options.messageRouter,
       tablePolicyService: options.owner.tablePolicyService,
       listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
+      listOutstandingSplitProposals: () =>
+        sqlQueryEngine.listOutstandingManagedSplitProposals(),
       getPartitionMetrics: createManagedSplitMetricsProvider({
         partitionServices: options.partitionServices,
+        trafficWindowMs: ConfigurationManager.getInstance().get(
+          CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS,
+        ),
       }),
       executeSplitCandidate: (partitionId) =>
         sqlQueryEngine.executeManagedSplit(partitionId),

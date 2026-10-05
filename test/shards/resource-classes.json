@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2229,
+    "ordinary": 2230,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2246,
-  "digest": "fnv1a32-03bfa7b0",
+  "censusSize": 2247,
+  "digest": "fnv1a32-a1d41f94",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1268,6 +1268,7 @@
     "test/partition/split-execution-state-reconstruction.test.js": "ordinary",
     "test/partition/split-key-comparator.test.js": "ordinary",
     "test/partition/split-merge-capacity-preflight.test.js": "ordinary",
+    "test/partition/split-merge-hysteresis.test.js": "ordinary",
     "test/partition/split-merge-overlap-guard.test.js": "ordinary",
     "test/partition/split-mirror-flush-ordering.test.js": "ordinary",
     "test/partition/split-mirror-write-identity.test.js": "ordinary",

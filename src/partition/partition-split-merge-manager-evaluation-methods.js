@@ -4,6 +4,7 @@ import {
 import {
   SPLIT_MERGE_EVENT,
   SPLIT_MERGE_LOG_MSG,
+  SPLIT_MERGE_MERGE_DECISION,
   SPLIT_MERGE_REASON,
 } from './partition-constants.js';
 
@@ -235,6 +236,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         mergeCandidateCount: countResultList(normalized.mergeCandidates),
         executedMergeCount: countResultList(normalized.executedMerges),
         mergeDeferredCount: countResultList(normalized.mergeDeferred),
+        mergeIneligibleCount: countResultList(normalized.mergeIneligible),
         mergeErrorCount: countResultList(normalized.mergeErrors),
       };
       this.lastEvaluationError = null;
@@ -348,9 +350,17 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           executedMerges: [],
           mergeErrors: [],
           mergeDeferred: [],
+          mergeIneligible: [],
         };
 
         const partitions = await this.loadEvaluationPartitions();
+        const outstandingSplitProposals =
+          await this.loadOutstandingSplitProposals();
+        results.splitCandidates.push(...this.resolveOutstandingSplitRedrives(
+          outstandingSplitProposals,
+          new Set(partitions.map((partition) =>
+            this.getPartitionId(partition))),
+        ));
         if (partitions.length === 0) {
           this.recordEvaluationSuccess(
             results,
@@ -363,7 +373,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
 
         for (const partition of partitions) {
           const partitionId = this.getPartitionId(partition);
-          if (!partitionId) {
+          if (!partitionId || results.splitCandidates.includes(partitionId)) {
             continue;
           }
           const metrics = await this.resolvePartitionMetrics(partition);
@@ -500,16 +510,19 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           const rightMetrics = await this.resolvePartitionMetrics(rightPartition);
           const policy = await this.getTablePolicy(leftId);
 
-          if (this.evaluateMergeCriteria(
+          const decision = this.evaluateMergeEligibility({
             leftId, rightId, leftMetrics, rightMetrics, policy,
-          )) {
-            results.mergeCandidates.push({leftId, rightId});
-            this.logger.debug(
-              SPLIT_MERGE_LOG_MSG.MERGE_ELIGIBLE_UNDER_PRESSURE, {
-                leftId,
-                rightId,
-              });
+          });
+          if (decision !== SPLIT_MERGE_MERGE_DECISION.ELIGIBLE) {
+            results.mergeIneligible.push({leftId, rightId, reason: decision});
+            continue;
           }
+          results.mergeCandidates.push({leftId, rightId});
+          this.logger.debug(
+            SPLIT_MERGE_LOG_MSG.MERGE_ELIGIBLE_UNDER_PRESSURE, {
+              leftId,
+              rightId,
+            });
         }
 
         await this.executeMergeCandidatesWithinBudget(
@@ -626,6 +639,8 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         mergeStorageThreshold: this.mergeStorageThreshold,
         mergeTrafficThreshold: this.mergeTrafficThreshold,
         evaluationIntervalMs: this.evaluationIntervalMs,
+        trafficWindowMs: this.trafficWindowMs,
+        mergeMinimumAgeMs: this.mergeMinimumAgeMs,
         maxAutoExecuteSplitsPerEvaluation:
           this.maxAutoExecuteSplitsPerEvaluation,
         maxAutoExecuteMergesPerEvaluation:

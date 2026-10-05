@@ -9,6 +9,13 @@
 import {TABLES} from '../constants/index.js';
 import {QUERY_LOG_MSG} from './query-constants.js';
 import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completion.js';
+import {SPLIT_MERGE_REASON} from '../partition/partition-constants.js';
+import {
+  describeOutstandingSplitProposal,
+} from '../partition/partition-split-merge-manager-proposal-methods.js';
+import {
+  parseTablePartitionTransition,
+} from '../partition/partition-transition-row.js';
 
 
 /**
@@ -215,11 +222,42 @@ const SPLIT_MERGE_COORDINATION_METHODS = Object.freeze({
     }
     if (tableName === TABLES.TABLES) {
       this.handleTablePolicyCacheChange(operation, record);
+      this.requestOutstandingSplitProposalEvaluation(record, null);
       return;
     }
     if (tableName === TABLES.PARTITIONS) {
       this.handlePartitionMetricsCacheChange(operation, record);
+      this.requestOutstandingSplitProposalEvaluation(
+        this.systemCache?.get?.(TABLES.TABLES, this.resolveTableId(record)),
+        this.resolvePartitionId(record),
+      );
     }
+  },
+
+  /**
+   * Wake the split/merge manager on the events that change an outstanding
+   * durable split proposal: the tables-row write of the proposal itself
+   * (sourcePartitionId null), and any row change of the proposal's source
+   * partition (its leader row becoming routable / changing hands).
+   * @param {Object|null} tableRow - The tables row.
+   * @param {string|null} sourcePartitionId - Changed partition, or null.
+   * @return {void}
+   * @private
+   */
+  requestOutstandingSplitProposalEvaluation(tableRow, sourcePartitionId) {
+    const proposal = describeOutstandingSplitProposal(
+      parseTablePartitionTransition(tableRow),
+      {tableId: this.resolveTableId(tableRow)},
+    );
+    if (!proposal ||
+        (sourcePartitionId !== null &&
+          proposal.partitionId !== sourcePartitionId)) {
+      return;
+    }
+    this.requestSplitMergeEvaluation({
+      reasonCode: SPLIT_MERGE_REASON.OUTSTANDING_SPLIT_PROPOSAL,
+      partitionId: proposal.partitionId,
+    });
   },
 
   /**

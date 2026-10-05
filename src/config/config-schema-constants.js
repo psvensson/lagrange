@@ -82,6 +82,8 @@ const CONFIG_SCHEMA = {
         mergeThresholdBytes: {type: 'number', minimum: 1048576},
         mergeThresholdQpm: {type: 'number', minimum: 1},
         evaluationIntervalMs: {type: 'number', minimum: 60000},
+        trafficWindowMs: {type: 'number', minimum: 10000},
+        mergeMinimumAgeMs: {type: 'number', minimum: 0},
         sizeUpdateDebounceMs: {type: 'number', minimum: 1000},
         sizeUpdateIntervalMs: {type: 'number', minimum: 10000},
       },

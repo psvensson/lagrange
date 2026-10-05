@@ -27,6 +27,10 @@ import {
 import {
   createPartitionSplitMergeManagerEvaluationMethods,
 } from './partition-split-merge-manager-evaluation-methods.js';
+import {
+  createPartitionSplitMergeManagerProposalMethods,
+} from './partition-split-merge-manager-proposal-methods.js';
+import {resolveMergeMinimumAgeMs} from './partition-split-merge-policy.js';
 
 const OperationState = SPLIT_MERGE_STATE;
 const DEFAULT_SPLIT_STORAGE_THRESHOLD = SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
@@ -97,6 +101,14 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.deletePartition = options.deletePartition || (() => {});
     this.executeSplitCandidate = options.executeSplitCandidate || null;
     this.executeMergeCandidate = options.executeMergeCandidate || null;
+    // Outstanding durable split proposals (retryable split transitions on
+    // the tables rows); the manager re-drives them regardless of thresholds.
+    this.listOutstandingSplitProposals =
+        options.listOutstandingSplitProposals || null;
+    // Policy clock (merge minimum age against partitions.created_at).
+    this.now = typeof options.now === 'function' ?
+      options.now :
+      () => Date.now();
     this.autoExecuteCandidates = options.autoExecuteCandidates !== false;
     this.maxAutoExecuteSplitsPerEvaluation =
         Number.isInteger(options.maxAutoExecuteSplitsPerEvaluation) &&
@@ -133,6 +145,19 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.evaluationIntervalMs =
         config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS) ||
         SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
+    this.trafficWindowMs = this.getNumericConfig(
+      config,
+      CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS,
+      SPLIT_MERGE_DEFAULT.TRAFFIC_WINDOW_MS,
+    );
+    this.mergeMinimumAgeMs = resolveMergeMinimumAgeMs(
+      this.getNumericConfig(
+        config,
+        CONFIG_KEY.PARTITION_MERGE_MINIMUM_AGE_MS,
+        SPLIT_MERGE_DEFAULT.MERGE_MINIMUM_PARTITION_AGE_MS,
+      ),
+      this.trafficWindowMs,
+    );
     this.splitAmplificationFactor = this.getNumericConfig(
       config,
       STORAGE_CAPACITY_CONFIG_KEY.SPLIT_AMPLIFICATION_FACTOR,
@@ -177,6 +202,7 @@ Object.assign(
   PartitionSplitMergeManager.prototype,
   createPartitionSplitMergeManagerCoreMethods(),
   createPartitionSplitMergeManagerTransitionMethods(),
+  createPartitionSplitMergeManagerProposalMethods(),
   createPartitionSplitMergeManagerEvaluationMethods({
     cloneStringArray,
     operationState: OperationState,

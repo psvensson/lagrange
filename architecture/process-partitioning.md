@@ -130,7 +130,17 @@ Evaluation is threshold-driven and fires when **either** dimension is exceeded:
 | `partition.splitThresholdQpm` | 1000 | queries per minute at which it becomes one |
 | `partition.mergeThresholdBytes` | 2 GiB | size below which it becomes a merge candidate |
 | `partition.mergeThresholdQpm` | 200 | traffic below which it becomes one |
+| `partition.trafficWindowMs` | 60000 | window queries per minute are measured over |
+| `partition.mergeMinimumAgeMs` | 600000 | minimum durable partition age before an automatic merge |
 | `partition.evaluationIntervalMs` | 300000 | how often candidates are evaluated |
+
+Writes also request an evaluation (debounced to one per second), so the
+traffic signal is defined independently of how often evaluation runs:
+queries per minute are measured from the local leader's CDC write counter
+over a full `partition.trafficWindowMs`. Until a partition has been observed
+for one whole window on the node that leads it, it has **no traffic signal**
+(not zero traffic): it cannot split on traffic and cannot merge. A size
+split needs no window.
 
 Per-table policy overrides the cluster-level config, and `SPLIT AT <bytes>` in
 DDL sets that per-table policy field.
@@ -280,6 +290,43 @@ Merge is the mirror image, owned by `ManagedMergeWorkflow` with matching
 phases and the same admission gate. It applies to adjacent, range-compatible
 partitions that have fallen below their thresholds, and it reclaims the
 per-partition Raft-group overhead a table no longer needs.
+
+A merge must never undo a split it would immediately re-create, so an
+adjacent pair is merged only when all of these hold, checked in this order:
+
+1. **Minimum age.** Both partitions are at least
+   `partition.mergeMinimumAgeMs` old (default 10 minutes, never below two
+   traffic windows), measured from the durable `partitions.created_at` the
+   split or merge workflow stamps when it writes the child row. The age
+   survives a manager restart or a leader change; an unknown age is not
+   eligible. One split-merge cycle costs two full membership workflows with
+   group retirement, so this caps a key range at one such cycle per
+   10 minutes, and every merge decision rests on at least ten full traffic
+   windows.
+2. **A traffic signal.** Both partitions have one full window of
+   observations (see above); no signal is never read as low load.
+3. **Hysteresis thresholds.** Combined size and combined queries per minute
+   are at or below the merge thresholds, each clamped to at most half of
+   the split threshold of the same dimension, so the merged partition is
+   below half its split threshold on both and does not qualify to split on
+   the measurement that merged it. The defaults (2 GiB / 200 QPM against
+   10 GiB / 1000 QPM) are already a fifth; the clamp only bites when a
+   policy configures merge thresholds close to or above the split ones.
+
+The minimum age applies to every split, including one requested explicitly
+through the engine: nothing durable distinguishes an explicit split's
+children from an automatic split's once the split has completed, so an
+explicit split is protected for the minimum age, not indefinitely.
+
+A split that admission refuses (`blocked` / `deferred`, for example
+`source_quorum_not_routable` right after `CREATE TABLE`) is not dropped: the
+refusal is persisted on the `tables` row with its retry schedule, and the
+split/merge manager on the source partition's leader re-drives every such
+outstanding split, independent of the split thresholds, when its retry falls
+due. A write of that row and any change to the source partition's row wake
+the manager. After 10 attempts the manager stops and reports a
+`wait_bound_spent` line naming the split admission it waited for and the
+last blocking reasons; the refusal stays visible on the `tables` row.
 
 ## After a split: replicas still have to be placed
 

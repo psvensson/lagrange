@@ -1,0 +1,145 @@
+/**
+ * The automatic split/merge policy: hysteresis thresholds, the minimum age
+ * a partition must reach before it may be merged, and the no-signal rule.
+ * PartitionSplitMergeManager is its only consumer; these are pure
+ * functions of their inputs so the policy has one statement.
+ *
+ * Invariants:
+ *  - Hysteresis: the effective merge threshold of each dimension is at
+ *    most MERGE_HYSTERESIS_FACTOR (< 1) x the split threshold of the same
+ *    dimension, so a merge-eligible pair forms a partition that does not
+ *    qualify to split on the measurement that merged it.
+ *  - No signal is not low load: a partition whose QPM is null (less than
+ *    one full traffic window observed) is never merge-eligible and never
+ *    splits on traffic.
+ *  - Minimum age: both partitions of a pair must be at least the minimum
+ *    merge age old by the DURABLE partitions.created_at, so the decision
+ *    survives a manager restart or leader change; an unknown age is not
+ *    eligible.
+ */
+
+import {
+  SPLIT_MERGE_DEFAULT,
+  SPLIT_MERGE_MERGE_DECISION,
+} from './partition-constants.js';
+
+const LOCAL_STR_OBJECT = 'object';
+
+/**
+ * Whether one metrics payload carries a valid (full-window) traffic signal.
+ * @param {Object} metrics - Partition metrics.
+ * @return {boolean}
+ */
+function hasTrafficSignal(metrics) {
+  return Number.isFinite(metrics?.queriesPerMinute);
+}
+
+/**
+ * Resolve the durable creation time of one partition row.
+ * @param {Object|string|null} partition - Partition row.
+ * @return {number|null} Epoch ms, or null when the row carries none.
+ */
+function resolvePartitionCreatedAtMs(partition) {
+  if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
+    return null;
+  }
+  const createdAt = Number(partition.created_at ?? partition.createdAt);
+  return Number.isFinite(createdAt) && createdAt > 0 ? createdAt : null;
+}
+
+/**
+ * Resolve the effective minimum merge age: the configured age, never below
+ * MERGE_MINIMUM_AGE_TRAFFIC_WINDOWS traffic windows.
+ * @param {number} configuredMs - Configured minimum age.
+ * @param {number} trafficWindowMs - QPM measurement window.
+ * @return {number}
+ */
+function resolveMergeMinimumAgeMs(configuredMs, trafficWindowMs) {
+  const configured = Number.isFinite(configuredMs) && configuredMs >= 0 ?
+    configuredMs :
+    SPLIT_MERGE_DEFAULT.MERGE_MINIMUM_PARTITION_AGE_MS;
+  return Math.max(
+    configured,
+    trafficWindowMs * SPLIT_MERGE_DEFAULT.MERGE_MINIMUM_AGE_TRAFFIC_WINDOWS,
+  );
+}
+
+/**
+ * Clamp one merge threshold under the hysteresis bound of its split
+ * threshold.
+ * @param {number} mergeThreshold - Configured merge threshold.
+ * @param {number} splitThreshold - Split threshold, same dimension.
+ * @return {number}
+ */
+function clampMergeThreshold(mergeThreshold, splitThreshold) {
+  if (!Number.isFinite(splitThreshold)) {
+    return mergeThreshold;
+  }
+  return Math.min(
+    mergeThreshold,
+    splitThreshold * SPLIT_MERGE_DEFAULT.MERGE_HYSTERESIS_FACTOR,
+  );
+}
+
+/**
+ * Resolve the effective (hysteresis-clamped) merge thresholds.
+ * @param {Object} policy - Table policy overrides.
+ * @param {Object} defaults - Manager thresholds.
+ * @return {{storageThreshold: number, trafficThreshold: number}}
+ */
+function resolveEffectiveMergeThresholds(policy, defaults) {
+  return {
+    storageThreshold: clampMergeThreshold(
+      policy.mergeStorageThreshold ?? defaults.mergeStorageThreshold,
+      policy.splitStorageThreshold ?? defaults.splitStorageThreshold,
+    ),
+    trafficThreshold: clampMergeThreshold(
+      policy.mergeTrafficThreshold ?? defaults.mergeTrafficThreshold,
+      policy.splitTrafficThreshold ?? defaults.splitTrafficThreshold,
+    ),
+  };
+}
+
+// The merge gates in decision order: the first gate that refuses names the
+// decision; a pair no gate refuses is ELIGIBLE.
+const MERGE_GATES = Object.freeze([
+  Object.freeze({
+    decision: SPLIT_MERGE_MERGE_DECISION.PARTITION_AGE_UNKNOWN,
+    refuses: (input) => !Number.isFinite(input.leftCreatedAtMs) ||
+      !Number.isFinite(input.rightCreatedAtMs),
+  }),
+  Object.freeze({
+    decision: SPLIT_MERGE_MERGE_DECISION.PARTITION_BELOW_MINIMUM_AGE,
+    refuses: (input) => input.nowMs -
+      Math.max(input.leftCreatedAtMs, input.rightCreatedAtMs) <
+      input.minimumAgeMs,
+  }),
+  Object.freeze({
+    decision: SPLIT_MERGE_MERGE_DECISION.TRAFFIC_SIGNAL_UNAVAILABLE,
+    refuses: (input) => input.trafficKnown !== true,
+  }),
+  Object.freeze({
+    decision: SPLIT_MERGE_MERGE_DECISION.ABOVE_MERGE_THRESHOLD,
+    refuses: (input) => input.withinThresholds() !== true,
+  }),
+]);
+
+/**
+ * Decide one adjacent pair: minimum durable age of BOTH partitions, then a
+ * full-window traffic signal on both, then the hysteresis thresholds.
+ * @param {Object} input - {nowMs, minimumAgeMs, leftCreatedAtMs,
+ *   rightCreatedAtMs, trafficKnown, withinThresholds()}.
+ * @return {string} A SPLIT_MERGE_MERGE_DECISION value.
+ */
+function resolveMergeDecision(input) {
+  const refusal = MERGE_GATES.find((gate) => gate.refuses(input));
+  return refusal ? refusal.decision : SPLIT_MERGE_MERGE_DECISION.ELIGIBLE;
+}
+
+export {
+  hasTrafficSignal,
+  resolveEffectiveMergeThresholds,
+  resolveMergeDecision,
+  resolveMergeMinimumAgeMs,
+  resolvePartitionCreatedAtMs,
+};
