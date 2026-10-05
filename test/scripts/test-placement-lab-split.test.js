@@ -9,8 +9,8 @@ import path from 'node:path';
 import {test} from 'node:test';
 
 import {
-  controllerHeadroom, formatLabDecision, formatLabSkipped, placeLabLanes, placementMachines,
-  runLabTest,
+  controllerHeadroom, formatLabController, formatLabDecision, formatLabSkipped, placeLabLanes,
+  placementMachines, planLabSplit, runLabTest,
 } from '../../scripts/lab/probe.js';
 import {CONTROLLER, LANE, fakeInventory, lab} from './test-placement-fixtures.js';
 
@@ -88,15 +88,79 @@ test('a split spreads a changed set over the free lab hosts by capacity, never a
     const finishes = hot.map((one) => one.loadMs);
     assert.ok(Math.max(...finishes) < 1.2 * Math.min(...finishes),
       `in proportion to capacity: every host finishes together (${finishes})`);
-    // A controller with headroom is one more machine, never the default.
-    const fit = split({});
-    assert.ok(shareOf(fit, '(controller)') > 0, 'a cool controller takes a share');
-    assert.ok(shareOf(fit, '(controller)') < 367 / 2, 'and the majority goes to the lab');
     // Only what no lab host fits stays on a held controller.
     const long = [...CHANGED_COSTS.slice(1), {...CHANGED_COSTS[0], ms: 4 * MINUTE}];
     const tooLong = split({controllerHeadroom: HOT, costs: long});
     assert.deepEqual(tooLong.filter((one) => one.machine.controller)
       .flatMap((one) => one.lanes.flatMap((lane) => lane.files)), [CHANGED_COSTS[0].file]);
+  });
+
+// The five lab hosts of 2026-10-05, all usable: on the combined-head run a
+// cool controller took 449 of 2072 files while these five were ready.
+const FIVE_LABS = Object.freeze([...OBSERVED_LABS, lab('carinas-windows', 1.8, {cores: 8})]);
+const LONG_COSTS = Object.freeze([...CHANGED_COSTS.slice(1),
+  {...CHANGED_COSTS[0], ms: 4 * MINUTE}]);
+
+test('the controller is a reserve while two lab hosts can carry the split', () => {
+  const split = (machines, options = {}) => planLabSplit(CHANGED_367, machines,
+    {controller: OBSERVED_CONTROLLER, costs: CHANGED_COSTS, ...options});
+  const controllerFiles = (placed) => placed.assignments.filter((one) => one.machine.controller)
+    .flatMap((one) => one.lanes.flatMap((lane) => lane.files));
+  // Five free hosts and a cool controller: it keeps only what no host fits.
+  const five = split(FIVE_LABS);
+  assert.deepEqual(controllerFiles(five), [], 'a cool controller takes nothing a lab host fits');
+  assert.equal(FIVE_LABS.filter((one) => shareOf(five.assignments, one.name) > 0).length, 5,
+    'every free host carries a share');
+  assert.equal(formatLabController(five), 'lab test: controller: reserve - 5 free lab hosts; ' +
+    'takes 0 file(s), only what no lab host fits');
+  const unfit = split(FIVE_LABS, {costs: LONG_COSTS});
+  assert.deepEqual(controllerFiles(unfit), [CHANGED_COSTS[0].file]);
+  assert.match(formatLabController(unfit), /reserve - 5 free lab hosts; takes 1 file\(s\), only/u);
+  // One free host: the controller takes part, as one more machine.
+  const one = split(FIVE_LABS.slice(0, 1));
+  assert.ok(controllerFiles(one).length > 0 && shareOf(one.assignments, 'tv-dator') > 0,
+    'a cool controller takes a share beside the one free host');
+  assert.equal(formatLabController(one), 'lab test: controller: peer - 1 free lab host(s), ' +
+    `fewer than 2; takes ${controllerFiles(one).length} file(s)`);
+  // No free host, two held whose holders expect to finish soon: the shares
+  // queue on their locks, charged that wait, rather than run here.
+  const soon = FIVE_LABS.slice(0, 2).map((machine) => ({...machine, waitMs: 2 * MINUTE}));
+  const queued = split([], {held: soon});
+  assert.deepEqual(controllerFiles(queued), []);
+  assert.ok(shareOf(queued.assignments, 'tv-dator') > 0 &&
+    shareOf(queued.assignments, 'lenovo-laptop') > 0, 'both held hosts carry a share');
+  assert.equal(formatLabController(queued), 'lab test: controller: reserve - 0 free lab hosts, ' +
+    '2 held lab hosts, queued on their locks (longest expected wait ~2.0 min); takes 0 file(s), ' +
+    'only what no lab host fits');
+  // Beside one free host the queued held hosts are its peers, not its overflow.
+  const mixed = split(FIVE_LABS.slice(2, 3), {held: soon});
+  assert.deepEqual(FIVE_LABS.slice(0, 3).map((one) => shareOf(mixed.assignments, one.name) > 0),
+    [true, true, true], 'the free host and both held hosts carry a share');
+  assert.deepEqual(controllerFiles(mixed), []);
+  // Held past the shares' own lock wait (at most 30 min): the controller is
+  // the way to finish, and takes part.
+  const late = split([], {held: soon.map((machine) => ({...machine, waitMs: 45 * MINUTE}))});
+  assert.ok(controllerFiles(late).length > 0);
+  assert.match(formatLabController(late),
+    /^lab test: controller: peer - 2 held lab host\(s\) expected busy past/u);
+  // A hot controller is unchanged: only what no host fits, under its reason.
+  const hot = split(FIVE_LABS.slice(0, 1), {controllerHeadroom: HOT, costs: LONG_COSTS});
+  assert.deepEqual(controllerFiles(hot), [CHANGED_COSTS[0].file]);
+  assert.equal(formatLabController(hot), 'lab test: controller: thermally held: CPU package ' +
+    '86C >= 75C; takes 1 file(s), only what no lab host fits');
+});
+
+test('a held host carries its holder\'s expected wait, or the longest wait when it cannot say',
+  () => {
+    const {fleet, state} = fakeInventory();
+    const lock = (holder) => ({state: 'busy', holder});
+    fleet[1].capability.machineLock = lock({startedAt: '2026-10-05T10:00:00Z', expectedMinutes: 38});
+    fleet[2].capability.machineLock = lock({startedAt: '2026-10-05T09:00:00Z', expectedMinutes: 5});
+    const held = placementMachines(fleet, state,
+      {held: true, now: Date.parse('2026-10-05T10:10:00Z')});
+    assert.deepEqual(held.map((one) => [one.name, one.waitMs]),
+      [['alpha', 28 * MINUTE], ['beta', 30 * MINUTE]], 'an overdue holder cannot say');
+    assert.equal(placementMachines(fleet, state).length, 0, 'and a held host is not free');
   });
 
 test('the controller has headroom only under the thermal and load owners\' thresholds', () => {
@@ -184,4 +248,22 @@ test('a split prints its plan and every skipped machine before any share starts'
   assert.ok(plan.includes('lab test: skipped (controller): thermally held: CPU package 86C >= 75C'),
     plan.join('\n'));
   assert.ok(plan.includes('lab test: skipped gamma: not ready: no-repository'), plan.join('\n'));
+  // A cool controller says it is the reserve, before any share starts.
+  events.length = 0;
+  await runLabTest({plan: CHANGED_367, costs: CHANGED_COSTS, split: true,
+    commit: {sha: 'a'.repeat(40), gitRoot: root, release: () => {}}, root,
+    write: (line) => events.push(line)}, {
+    discover: async () => ({fleet, machines}),
+    commitAt: () => 'a'.repeat(40),
+    controllerHeadroom: () => ({fit: true, reason: null}),
+    runRemote: (shard) => {
+      events.push(`started ${shard.machine.name}`);
+      return {done: Promise.resolve({status: 0, log: '', errors: ''})};
+    },
+  });
+  const reserved = events.slice(0, events.findIndex((line) => line.startsWith('started ')));
+  assert.ok(reserved.includes('lab test: controller: reserve - 4 free lab hosts; takes 0 file(s), ' +
+    'only what no lab host fits'), reserved.join('\n'));
+  assert.ok(reserved.includes('lab test: skipped (controller): reserve - 4 free lab hosts'),
+    reserved.join('\n'));
 });

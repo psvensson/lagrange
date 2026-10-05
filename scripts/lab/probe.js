@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {StringDecoder} from 'node:string_decoder';
 
+import {WORKSPACE_INJECTION_ENV} from '../checks/change-selection-constants.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH} from '../checks/impact-proof-cone-constants.js';
 import {LANE_JOBS_CAP_ENV} from '../checks/test-resource-classification-constants.js';
@@ -1174,6 +1175,9 @@ const PLACEMENT_EXIT = Object.freeze({
   SETUP: LAB_LOCK_EXIT.SETUP, BUSY: LAB_LOCK_EXIT.BUSY, INTERRUPTED: 130,
   TERMINATED: LAB_LOCK_EXIT.TERMINATED, SSH: 255,
 });
+// How the workspace injections a placement declares are joined: the
+// separator the change taxonomy's reader splits on (scripts/checks/changed-paths.js).
+const PLACEMENT_INJECTION_SEPARATOR = ',';
 const PLACEMENT_SHELL_LINE = /^placement-shell=(\d+)$/mu;
 // A stopped shard's shell gets this long to clean up before its connection
 // is cut.
@@ -1333,7 +1337,8 @@ export function placeTestFiles(costs, machines, {setupMs = PLACEMENT_REMOTE_SETU
     const shards = assignByCost(costs, candidates, setupMs);
     const free = candidates.filter((machine) => !machine.tier).length;
     const idle = shards
-      .filter((shard) => !shard.machine.controller && shard.loadMs < 2 * setupMs &&
+      .filter((shard) => !shard.machine.controller &&
+        shard.loadMs - (shard.machine.waitMs ?? 0) < 2 * setupMs &&
         (shard.machine.tier || free > 1))
       .sort((left, right) => left.loadMs - right.loadMs)[0];
     if (!idle) return shards.filter((shard) => shard.files.length > 0);
@@ -1343,7 +1348,7 @@ export function placeTestFiles(costs, machines, {setupMs = PLACEMENT_REMOTE_SETU
 
 function assignByCost(costs, machines, setupMs) {
   const shards = machines.map((machine) => ({
-    machine, files: [], loadMs: machine.controller ? 0 : setupMs,
+    machine, files: [], loadMs: machine.controller ? 0 : setupMs + (machine.waitMs ?? 0),
   }));
   const ordered = [...costs].sort((left, right) =>
     (right.ms / right.jobs) - (left.ms / left.jobs) ||
@@ -1400,10 +1405,12 @@ function placementGapsKey(entry) {
  * `held`, the same machines another run holds under the lab convention instead.
  * @param {Array<Object>} fleet discoverFleet's result
  * @param {Object} state the lab inventory
- * @param {{controllerFactor?: number, held?: boolean}} [options]
+ * A held machine also carries `waitMs`, how long its holder expects to keep it.
+ * @param {{controllerFactor?: number, held?: boolean, now?: number}} [options]
  * @return {Array<Object>}
  */
-export function placementMachines(fleet, state, {controllerFactor = 1, held = false} = {}) {
+export function placementMachines(fleet, state, {controllerFactor = 1, held = false,
+  now = Date.now()} = {}) {
   const reference = fleet.find((entry) => entry.controller)?.capability?.cpuSampleMs;
   const machines = [];
   for (const entry of fleet) {
@@ -1428,9 +1435,19 @@ export function placementMachines(fleet, state, {controllerFactor = 1, held = fa
         .split(PLACEMENT_VERSION_SEPARATOR)[0],
       gapsKey,
       avoid: node.placement?.gapsKey === gapsKey ? [...node.placement.avoid] : [],
+      ...(held ? {waitMs: holdWaitMs(cap.machineLock?.holder, now)} : {}),
     });
   }
   return machines;
+}
+
+// How long a held host is expected to stay held: its holder's own estimate
+// less what has passed. A record that cannot say - none, no start or
+// estimate, or already overdue - is the longest any lock wait may be.
+function holdWaitMs(holder, now) {
+  const left = Date.parse(holder?.startedAt) +
+    Number(holder?.expectedMinutes) * MS_PER_MINUTE - now;
+  return Number.isFinite(left) && left > 0 ? left : LAB_LOCK_WAIT_MAX_MS;
 }
 
 // A lab machine a shard can go to: discovered ready this run, answering, not
@@ -1860,11 +1877,16 @@ const PLACEMENT_SCRIPT_HEAD = [
   // what this checkout ignores: an older checkout's copy of a tracked path
   // the placed commit deleted must not reappear in it (verifier round 1).
   // tools/ holds only fetched model checkers (tla2tools.jar, alloy), each
-  // ignored on its own: linked entry by entry, as data/ is.
+  // ignored on its own: linked entry by entry, as data/ is. Every link made is
+  // declared a workspace injection, the publisher's own contract, so none is
+  // ever repository content to the change taxonomy: an ignore rule written
+  // for a directory (tools/alloy-*/) does not match a link to one.
+  'injected=""',
   'for dir in node_modules data tools; do',
   '  [ -e "$repo/$dir" ] || continue',
   '  if [ ! -e "$wt/$dir" ] && git -C "$repo" check-ignore -q "$dir"; then',
-  '    ln -s "$repo/$dir" "$wt/$dir" && echo "placement-link=$dir"',
+  '    ln -s "$repo/$dir" "$wt/$dir" && echo "placement-link=$dir" && ' +
+    `injected="\${injected:+$injected${PLACEMENT_INJECTION_SEPARATOR}}$dir"`,
   '    continue',
   '  fi',
   '  mkdir -p "$wt/$dir"',
@@ -1873,7 +1895,8 @@ const PLACEMENT_SCRIPT_HEAD = [
   '    name="$dir/${entry##*/}"',
   '    [ -e "$wt/$name" ] && continue',
   '    git -C "$repo" check-ignore -q "$name" || continue',
-  '    ln -s "$entry" "$wt/$name" && echo "placement-link=$name"',
+  '    ln -s "$entry" "$wt/$name" && echo "placement-link=$name" && ' +
+    `injected="\${injected:+$injected${PLACEMENT_INJECTION_SEPARATOR}}$name"`,
   '  done',
   'done',
   `cat > "$list" <<'${PLACEMENT_FILES_MARK}'`,
@@ -1891,7 +1914,8 @@ const PLACEMENT_SCRIPT_TAIL = [
   'fi',
   // Its own budgets scaled by its measured speed, the controller's retry and
   // timeout policy, and never placed again.
-  `export ${PLACEMENT_MACHINE_FACTOR_ENV}="$factor" ${PLACEMENT_ENV}=${PLACEMENT_LOCAL}`,
+  `export ${PLACEMENT_MACHINE_FACTOR_ENV}="$factor" ${PLACEMENT_ENV}=${PLACEMENT_LOCAL} ` +
+    `${WORKSPACE_INJECTION_ENV}="$injected"`,
   `if [ -n "$retry" ]; then export ${PLACEMENT_FORWARDED_ENV.RETRY}="$retry"; fi`,
   `if [ -n "$tap_timeout" ]; then export ${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}="$tap_timeout"; fi`,
   // Every lane capped at this host's own processors less one, counted here at
@@ -2532,12 +2556,9 @@ function bySpeed(left, right) {
 /**
  * Which machine runs which lanes of a hand run. Without --split every lane
  * goes to one lab machine: the one named, or the fastest measured this run.
- * With --split the files are spread by measured cost (placeTestFiles) over
- * every free ready lab machine and the controller when it has headroom; a
- * controller without it, and lab hosts another run holds (`held`, whose shard
- * waits for the lock), take only what no free machine can. Each machine's
- * own runner takes its lanes one after another, so the exclusive lane still
- * shares its machine with nothing.
+ * With --split the files are spread by measured cost (placeTestFiles) as
+ * planLabSplit decides. Each machine's own runner takes its lanes one after
+ * another, so the exclusive lane still shares its machine with nothing.
  * @param {Array<{resourceClass: string, files: string[], jobs: number}>} plan
  * @param {Array<Object>} machines placementMachines' result
  * @param {{on?: string|null, split?: boolean, controller?: Object,
@@ -2549,9 +2570,7 @@ export function placeLabLanes(plan, machines, {on = null, split = false,
   controller = CONTROLLER_MACHINE, fleet = [], costs = [], held = [],
   controllerHeadroom = CONTROLLER_FIT} = {}) {
   if (split) {
-    if (machines.length + held.length === 0) throw new Error(PLACEMENT_TEXT.NO_MACHINE);
-    return splitLanes(plan, [{...controller, tier: controllerHeadroom.fit ? 0 : TIER.HOT},
-      ...machines, ...held.map((machine) => ({...machine, tier: TIER.HELD}))], costs);
+    return planLabSplit(plan, machines, {controller, costs, held, controllerHeadroom}).assignments;
   }
   if (machines.length === 0) throw new Error(PLACEMENT_TEXT.NO_MACHINE);
   const first = on === null ? [...machines].sort(bySpeed)[0] :
@@ -2562,6 +2581,109 @@ export function placeLabLanes(plan, machines, {on = null, split = false,
       `${entry ? fleetVerdict(entry) : LAB_TEST_TEXT.NOT_LISTED}`);
   }
   return [{machine: first, lanes: plan}];
+}
+
+// The controller is a reserve while the lab can carry the run (owner,
+// 2026-10-05: test work is parallelized on the lab machines as much as
+// possible; the controller is the machine every agent works on, and it runs
+// hot). From this many free lab hosts - or this many held ones whose locks
+// free within the shares' own waits - it takes only what no lab host fits.
+const CONTROLLER_RESERVE_MIN_HOSTS = 2;
+const CONTROLLER_ROLE_TEXT = Object.freeze({
+  LINE: 'controller: ',
+  RESERVE: 'reserve - ',
+  FREE: ' free lab hosts',
+  QUEUED: ' held lab hosts, queued on their locks (longest expected wait ~',
+  QUEUED_CLOSE: ' min)',
+  PEER: 'peer - ',
+  FEW: ' free lab host(s), fewer than ',
+  LATE: ' held lab host(s) expected busy past their shares\' lock wait',
+  TAKES: '; takes ',
+  FILES: ' file(s)',
+  UNFIT: ', only what no lab host fits',
+});
+
+/**
+ * A --split plan and the controller's part in it, with why. The rule:
+ * - a controller without headroom takes only what no lab host fits;
+ * - with CONTROLLER_RESERVE_MIN_HOSTS free lab hosts it is a reserve: it
+ *   takes only what no lab host fits, and held hosts only what no free one does;
+ * - else with that many held hosts it is a reserve too: the held hosts are
+ *   peers whose shares queue on their locks, charged their holders' expected
+ *   wait - unless a share's host is expected to stay held past that share's
+ *   own bounded lock wait, when the controller is the way to finish and
+ *   takes part as a peer;
+ * - else it takes part as a peer, and held hosts take only what no free
+ *   machine does.
+ * @param {Array<Object>} plan the lanes
+ * @param {Array<Object>} machines the free ready lab machines
+ * @param {{controller?: Object, costs?: Array<Object>, held?: Array<Object>,
+ *   controllerHeadroom?: {fit: boolean, reason: string|null}}} [options]
+ * @return {{assignments: Array<Object>, controller: {reason: string,
+ *   reserve: boolean}}}
+ */
+export function planLabSplit(plan, machines, {controller = CONTROLLER_MACHINE, costs = [],
+  held = [], controllerHeadroom = CONTROLLER_FIT} = {}) {
+  if (machines.length + held.length === 0) throw new Error(PLACEMENT_TEXT.NO_MACHINE);
+  const split = (tier, heldMachines) =>
+    splitLanes(plan, [{...controller, tier}, ...machines, ...heldMachines], costs);
+  const heldTier = held.map((machine) => ({...machine, tier: TIER.HELD}));
+  const role = (assignments, reason, reserve) => ({assignments, controller: {reason, reserve}});
+  if (!controllerHeadroom.fit) {
+    return role(split(TIER.HOT, heldTier), controllerHeadroom.reason, true);
+  }
+  if (machines.length >= CONTROLLER_RESERVE_MIN_HOSTS) {
+    return role(split(TIER.HOT, heldTier), `${CONTROLLER_ROLE_TEXT.RESERVE}${machines.length}` +
+      `${CONTROLLER_ROLE_TEXT.FREE}`, true);
+  }
+  if (held.length >= CONTROLLER_RESERVE_MIN_HOSTS) {
+    const queued = split(TIER.HOT, held.map((machine) =>
+      ({...machine, waitMs: machine.waitMs ?? LAB_LOCK_WAIT_MAX_MS})));
+    const late = lateQueuedShares(queued, costs);
+    if (late.length === 0) return role(queued, queuedReason(machines, held, queued), true);
+    return role(split(0, heldTier), `${CONTROLLER_ROLE_TEXT.PEER}${late.length}` +
+      `${CONTROLLER_ROLE_TEXT.LATE}`, false);
+  }
+  return role(split(0, heldTier), `${CONTROLLER_ROLE_TEXT.PEER}${machines.length}` +
+    `${CONTROLLER_ROLE_TEXT.FEW}${CONTROLLER_RESERVE_MIN_HOSTS}`, false);
+}
+
+// The queued shares whose host is expected to stay held past the share's own
+// lock wait - its estimate, capped as every lab lock wait is - so the share
+// would refuse busy rather than run.
+function lateQueuedShares(assignments, costs) {
+  const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
+  return assignments.filter(({machine, lanes}) => machine.waitMs !== undefined &&
+    machine.waitMs > Math.min(LAB_LOCK_WAIT_MAX_MS,
+      labShareEstimateMs(machine, lanes.flatMap((lane) => lane.files), costOf)));
+}
+
+function queuedReason(machines, held, assignments) {
+  const waits = assignments.map(({machine}) => machine.waitMs ?? 0);
+  return `${CONTROLLER_ROLE_TEXT.RESERVE}${machines.length}${CONTROLLER_ROLE_TEXT.FREE}, ` +
+    `${held.length}${CONTROLLER_ROLE_TEXT.QUEUED}${minutes(Math.max(0, ...waits))}` +
+    `${CONTROLLER_ROLE_TEXT.QUEUED_CLOSE}`;
+}
+
+/**
+ * The plan line that says what the controller took in a split, and why.
+ * @param {{assignments: Array<Object>, controller: {reason: string,
+ *   reserve: boolean}}} split planLabSplit's result
+ * @return {string}
+ */
+export function formatLabController({assignments, controller}) {
+  const files = assignments.filter(({machine}) => machine.controller)
+    .reduce((sum, {lanes}) => sum + lanes.reduce((count, lane) => count + lane.files.length, 0), 0);
+  return `${LAB_TEST_TEXT.PREFIX}${CONTROLLER_ROLE_TEXT.LINE}${controller.reason}` +
+    `${CONTROLLER_ROLE_TEXT.TAKES}${files}${CONTROLLER_ROLE_TEXT.FILES}` +
+    `${controller.reserve ? CONTROLLER_ROLE_TEXT.UNFIT : EMPTY}`;
+}
+
+// A lab machine's estimate for a share, as its shard announces it and waits
+// for the lock: its setup, then its files' cost scaled by its speed.
+function labShareEstimateMs(machine, files, costOf) {
+  return PLACEMENT_REMOTE_SETUP_MS +
+    files.reduce((sum, file) => sum + (costOf.get(file) || 0), 0) * machine.speed;
 }
 
 // The plan's files spread by cost, each machine's share as its own lanes.
@@ -2663,8 +2785,7 @@ function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf
     if (!line.startsWith(PLACEMENT_RESULTS_PREFIX)) write(relayedLine(machine.name, line));
   };
   if (machine.controller) return {machine, files, lines, run: deps.runLocalChild(files, {onLine})};
-  const loadMs = PLACEMENT_REMOTE_SETUP_MS +
-    files.reduce((sum, file) => sum + (costOf.get(file) || 0), 0) * machine.speed;
+  const loadMs = labShareEstimateMs(machine, files, costOf);
   const run = deps.runRemote({machine, files}, {sha: commit.sha, gitRoot: commit.gitRoot,
     deadlineMs: deadlineFor({loadMs}), forward, results, onLine,
     holder: {purpose: labTestPurpose(lanes.map((lane) => lane.resourceClass)),
@@ -2733,11 +2854,12 @@ export async function runLabTest({plan, costs = [], commit, on = null, split = f
   let shares = [];
   try {
     const {fleet = [], machines, held = []} = await deps.discover(commit.sha);
-    const headroom = split ? splitHeadroom(deps, commit.sha) : CONTROLLER_FIT;
-    const assignments = placeLabLanes(plan, machines, {on, split, held, costs,
-      controller: controllerMachine(fleet), fleet, controllerHeadroom: headroom});
-    for (const line of [...formatLabDecision(assignments),
-      ...(split ? formatLabSkipped(fleet, assignments, headroom) : [])]) write(line);
+    const placed = split ? planLabSplit(plan, machines, {held, costs,
+      controller: controllerMachine(fleet), controllerHeadroom: splitHeadroom(deps, commit.sha)}) :
+      {assignments: placeLabLanes(plan, machines, {on, fleet})};
+    const {assignments} = placed;
+    for (const line of [...formatLabDecision(assignments), ...(split ? [formatLabController(placed),
+      ...formatLabSkipped(fleet, assignments, placed.controller)] : [])]) write(line);
     if (assignments.some(({machine}) => machine.controller) && deps.commitAt() !== commit.sha) {
       throw new Error(`${LAB_TEST_TEXT.CONTROLLER_TREE}${commit.sha}`);
     }

@@ -378,6 +378,46 @@ configuration; `--base-sha` pairs with `--sha` as the other end of the range.
 It applies only to the `changed` profile. It narrows what the lab runs; the
 push gate still proves the full range against `origin/main`.
 
+### Split a run over the lab: the controller is a reserve
+
+Test work is parallelized on the lab machines as much as possible (owner,
+2026-10-05). `lab test PROFILE --split` spreads the files by measured cost over
+the ready lab hosts. All five remote hosts are usable - `tv-dator`,
+`carinas-windows`, `adam-laptop`, `adams-gamla` and `lenovo-laptop` - and none
+is excluded; discovery decides each run which of them are ready. The
+controller is the machine every agent works on, and it runs hot, so it is a
+reserve, not a peer:
+
+- With at least two free lab hosts (`CONTROLLER_RESERVE_MIN_HOSTS` in
+  `scripts/lab/probe.js`) it takes only what no lab host can run: a file over
+  every host's per-file bound. A host another run holds is not free; it takes
+  only what no free host fits.
+- With fewer than two free hosts but at least two held ones, the held hosts
+  are peers whose shares queue on their locks, charged their holders'
+  expected wait from the holder record, and the controller stays a reserve -
+  so several agents splitting at once do not all fall back to it. When a
+  holder is expected past a share's own bounded lock wait (its estimate, at
+  most 30 minutes; a record that cannot say counts as the full 30), the
+  controller is the way to finish and takes part as a peer.
+- Otherwise, and whenever it has thermal and load headroom, it takes part as
+  one more machine. A controller without headroom, or whose tree is not the
+  commit, takes only what no lab host fits.
+
+The plan says which rule applied and what the controller kept, for example
+`lab test: controller: reserve - 5 free lab hosts; takes 0 file(s), only what
+no lab host fits`, before any share starts.
+
+A placement checkout on a lab host links this checkout's ignored workspace
+(`node_modules`, `data/` and the model checkers under `tools/`) and declares
+every link it makes in `LAGRANGE_WORKSPACE_INJECTIONS`, as the publisher's
+gate checkout does, so no link is ever repository content to the change
+taxonomy (an ignore rule written for a directory, such as `tools/alloy-*/`,
+does not match a link to one).
+
+Harness nodes that share one host's network take ports in blocks of ten:
+node `n` serves REST on `8080 + 10n`, with its admin and transport ports
+directly above it.
+
 ## Run the distributed matrix on local, lab, or GCP targets
 
 The canonical scenario matrix has one owner:

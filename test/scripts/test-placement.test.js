@@ -744,6 +744,20 @@ const SEALED_GRAPH_TEST_SOURCE = [
   '});',
   '',
 ].join('\n');
+// What the change taxonomy enumerates in a lab machine's checkout: none of
+// the placement's workspace links (a linked tools/alloy-* directory was).
+const LINK_UNIVERSE_TEST = 'test/scripts/lab-link-universe.test.js';
+const LINK_UNIVERSE_TEST_SOURCE = [
+  'import assert from \'node:assert/strict\';',
+  'import fs from \'node:fs\';',
+  'import {test} from \'node:test\';',
+  'import {candidatePaths} from \'../../scripts/checks/change-selection.js\';',
+  'test(\'no workspace link is a candidate\', () => {',
+  '  assert.deepEqual(candidatePaths(process.cwd()).untracked',
+  '    .filter((file) => fs.lstatSync(file).isSymbolicLink()), []);',
+  '});',
+  '',
+].join('\n');
 const RESULTS_FILE = 'test-output/reports/test-results.ndjson';
 const RESULTS_TEXT = '{"file":"a","ok":true}\n{"file":"b","ok":false}\n';
 
@@ -903,6 +917,7 @@ function labFixture(t, {realProducer = false} = {}) {
   // A fetched model checker: tools/ is untracked, its entries ignored one by one.
   fs.mkdirSync(path.join(node, 'tools'), {recursive: true});
   fs.writeFileSync(path.join(node, 'tools', 'tla2tools.jar'), 'x');
+  fs.mkdirSync(path.join(node, 'tools', 'alloy-6.2.0'));
   // What an earlier, interrupted run left behind.
   const parent = path.join(node, 'test-output', 'placement-worktrees');
   fs.mkdirSync(path.join(parent, 'old-run'), {recursive: true});
@@ -921,7 +936,8 @@ function labFixture(t, {realProducer = false} = {}) {
   fs.writeFileSync(path.join(controller, RESULTS_FILE), RESULTS_TEXT);
   if (!realProducer) fs.writeFileSync(path.join(controller, IMPORT_GRAPH_PRODUCER), PRODUCER_STUB);
   fs.writeFileSync(path.join(controller, SEALED_GRAPH_TEST), SEALED_GRAPH_TEST_SOURCE);
-  git(controller, 'add', '-f', GATE_TEST, RESULTS_FILE, SEALED_GRAPH_TEST);
+  fs.writeFileSync(path.join(controller, LINK_UNIVERSE_TEST), LINK_UNIVERSE_TEST_SOURCE);
+  git(controller, 'add', '-f', GATE_TEST, RESULTS_FILE, SEALED_GRAPH_TEST, LINK_UNIVERSE_TEST);
   git(controller, 'commit', '-qam', 'placement witness');
   const sha = git(controller, 'rev-parse', 'HEAD');
   const machine = {name: 'lab', sshTarget: null, repoPath: node, repoHead: basis,
@@ -1319,9 +1335,11 @@ test('a lab machine generates the placed commit\'s import graph before its files
 test('the change proof\'s sealed-graph precondition holds in a lab machine\'s checkout',
   async (t) => {
     const {start} = labFixture(t, {realProducer: true});
-    const ran = await start([SEALED_GRAPH_TEST], {runId: 'sealed'}).done;
+    const ran = await start([SEALED_GRAPH_TEST, LINK_UNIVERSE_TEST], {runId: 'sealed'}).done;
     assert.equal(ran.status, 0, ran.log + ran.errors);
     assert.match(ran.log, new RegExp(`^ok ${SEALED_GRAPH_TEST} `, 'mu'));
+    assert.match(ran.log, /^placement-link=tools\/alloy-6\.2\.0$/mu, 'a model checker is linked');
+    assert.match(ran.log, new RegExp(`^ok ${LINK_UNIVERSE_TEST} `, 'mu'), 'and no candidate');
   });
 
 // The ledger in the throwaway worktree came back whole before it was
