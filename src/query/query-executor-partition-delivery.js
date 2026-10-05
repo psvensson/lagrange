@@ -313,6 +313,26 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       ) {
         const serviceInfo = candidateQueue[candidateIndex];
         const {address} = serviceInfo;
+        // Follow a routed write's retry decision: true when the candidate
+        // loop stops for this attempt (retry here, or defer the partition),
+        // false when it widens to the next recovery candidate.
+        const followRetryDecision = (decision) => {
+          if (decision.state ===
+            CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS) {
+            candidateState.requestRetryCurrentAddress();
+            return true;
+          }
+          if (decision.state ===
+            CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY) {
+            candidateState.requestDeferredPartitionRetry();
+            return true;
+          }
+          candidateState.queueLeaderRecoveryCandidates(
+            candidateIndex,
+            serviceInfo?.nodeId || null,
+          );
+          return false;
+        };
         if (candidateState.shouldSkipCandidateDelivery(serviceInfo, address)) {
           continue;
         }
@@ -581,24 +601,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               address,
             );
-            if (
-              controlPlaneWriteRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
-            ) {
-              candidateState.requestRetryCurrentAddress();
+            if (followRetryDecision(controlPlaneWriteRetryDecision)) {
               break;
             }
-            if (
-              controlPlaneWriteRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
-            ) {
-              candidateState.requestDeferredPartitionRetry();
-              break;
-            }
-            candidateState.queueLeaderRecoveryCandidates(
-              candidateIndex,
-              serviceInfo?.nodeId || null,
-            );
             continue;
           }
           if (
@@ -723,24 +728,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 serviceInfo?.nodeId,
                 address,
               );
-              if (
-                controlPlaneWriteRetryDecision.state ===
-                CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
-              ) {
-                candidateState.requestRetryCurrentAddress();
+              if (followRetryDecision(controlPlaneWriteRetryDecision)) {
                 break;
               }
-              if (
-                controlPlaneWriteRetryDecision.state ===
-                CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
-              ) {
-                candidateState.requestDeferredPartitionRetry();
-                break;
-              }
-              candidateState.queueLeaderRecoveryCandidates(
-                candidateIndex,
-                serviceInfo?.nodeId || null,
-              );
               continue;
             }
             recordCandidateFailure(
@@ -783,24 +773,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               address,
             );
-            if (
-              controlPlaneWriteRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
-            ) {
-              candidateState.requestRetryCurrentAddress();
+            if (followRetryDecision(controlPlaneWriteRetryDecision)) {
               break;
             }
-            if (
-              controlPlaneWriteRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
-            ) {
-              candidateState.requestDeferredPartitionRetry();
-              break;
-            }
-            candidateState.queueLeaderRecoveryCandidates(
-              candidateIndex,
-              serviceInfo?.nodeId || null,
-            );
             continue;
           }
 
