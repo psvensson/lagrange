@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "integerEncoding": "sqlite_integer_exact",
+  "typeAuthority": "declared_primary_key_type",
+  "legacyAmbiguousBoundary": "fail_closed_revalidate",
+  "globalSafeIntegerMode": false
+}
