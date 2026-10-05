@@ -14,7 +14,10 @@ import {
   PG_CLOSE_TYPE,
   PG_HANDLER_LOG,
 } from './pgwire-protocol-constants.js';
-import {PGWIRE_SESSION_ERROR} from './pgwire-session.js';
+import {
+  PGWIRE_SESSION_ERROR,
+  PGWIRE_STATEMENT_ADMISSION,
+} from './pgwire-session.js';
 import {
   buildReadyForQuery,
   buildErrorResponse,
@@ -31,7 +34,6 @@ import {
   parseCloseMessage,
 } from './pgwire-message-parsers.js';
 
-const LOCAL_STR_ROLLBACK = 'ROLLBACK';
 const LOCAL_STR_UNNAMED = '(unnamed)';
 const LOCAL_STR_PORTAL_NOT_FOUND = 'Portal not found';
 const LOCAL_STR_INVALID_DESCRIBE_TARGET = 'Invalid describe target type';
@@ -168,18 +170,18 @@ class PgWireExtendedQueryHandler {
       );
       return;
     }
-    if (session.isInFailedTransaction()) {
-      const upper = statement.query.trimStart().toUpperCase();
-      if (!upper.startsWith(LOCAL_STR_ROLLBACK)) {
-        this._sendError(
-          PG_ERROR_CODE.IN_FAILED_TRANSACTION,
-          LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS +
-            LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK,
-        );
-        return;
-      }
+    // A failed transaction block admits only its end (ROLLBACK, or COMMIT
+    // answered as ROLLBACK).
+    const admission = session.admitStatement(statement.query);
+    if (admission.state !== PGWIRE_STATEMENT_ADMISSION.ADMITTED) {
+      this._sendError(
+        PG_ERROR_CODE.IN_FAILED_TRANSACTION,
+        LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS +
+          LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK,
+      );
+      return;
     }
-    await this._executeAndSend(statement.query, portal.params);
+    await this._executeAndSend(admission.statement, portal.params);
   }
 
   _handleSync() {

@@ -65,6 +65,11 @@ const QUERY_ERROR_CODE = Object.freeze({
   DISTRIBUTED_PARTICIPANT_FAILURE: 'DISTRIBUTED_PARTICIPANT_FAILURE',
   RUNTIME_ACCESS_DENIED: 'RUNTIME_ACCESS_DENIED',
   SYNTAX_ERROR: 'SYNTAX_ERROR',
+  // A query text holding more than one statement is refused whole (nothing
+  // executes); an empty query text (only whitespace, `;` or comments) holds
+  // no statement at all.
+  MULTIPLE_STATEMENTS_UNSUPPORTED: 'MULTIPLE_STATEMENTS_UNSUPPORTED',
+  EMPTY_STATEMENT: 'EMPTY_STATEMENT',
   TIMEOUT: 'TIMEOUT',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   // Write-path epoch fencing: the routed write carried an
@@ -79,6 +84,9 @@ const QUERY_ERROR_CODE = Object.freeze({
 
 const QUERY_ERROR_MSG = Object.freeze({
   UNSUPPORTED_STATEMENT_PREFIX: 'Unsupported statement type: ',
+  MULTIPLE_STATEMENTS_UNSUPPORTED:
+    'multiple statements in one query are not supported; ' +
+    'send them separately',
   TABLE_NOT_FOUND_PREFIX: 'Table not found: ',
   QUERY_TIMEOUT: 'Query timeout',
   QUERY_TIMED_OUT: 'Query timed out',

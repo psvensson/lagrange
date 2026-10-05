@@ -25,7 +25,10 @@ import {
   PG_HANDLER_LOG,
   PG_BUFFER_LIMIT,
 } from './pgwire-protocol-constants.js';
-import {PgWireSession} from './pgwire-session.js';
+import {
+  PGWIRE_STATEMENT_ADMISSION,
+  PgWireSession,
+} from './pgwire-session.js';
 import {
   buildAuthOk,
   buildAuthCleartextPassword,
@@ -55,7 +58,12 @@ import {
   deriveCommandTag,
   extractColumns,
   extractRowValues,
+  isEmptyStatementResult,
+  resolveFailureSqlState,
 } from './pgwire-result-mapper.js';
+import {readExecutedStatementType} from
+  '../query/application-database-result.js';
+import {AST_TYPE} from '../query/parser-constants.js';
 import {
   writeCString,
   readCString,
@@ -68,9 +76,12 @@ import {upgradePgwireSocketToTls} from './pgwire-tls-context.js';
 import {PgWireExtendedQueryHandler} from
   './pgwire-extended-query-handler.js';
 
-const LOCAL_STR_BEGIN = 'BEGIN';
-const LOCAL_STR_COMMIT = 'COMMIT';
-const LOCAL_STR_ROLLBACK = 'ROLLBACK';
+// Executed statement kind -> the session transaction state it leaves.
+const TRANSACTION_STATE_AFTER_STATEMENT = new Map([
+  [AST_TYPE.BEGIN_TRANSACTION, PG_TRANSACTION_STATE.IN_TRANSACTION],
+  [AST_TYPE.COMMIT, PG_TRANSACTION_STATE.IDLE],
+  [AST_TYPE.ROLLBACK, PG_TRANSACTION_STATE.IDLE],
+]);
 const LOCAL_NUM_INT32_MAX = 0x7FFFFFFF;
 const LOCAL_STR_DATA = 'data';
 const LOCAL_STR_ERROR = 'error';
@@ -562,24 +573,23 @@ class PgWireProtocolHandler {
       return;
     }
 
-    // Check for failed transaction state
-    if (this._session.isInFailedTransaction()) {
-      const upper = query.trimStart().toUpperCase();
-      if (!upper.startsWith(LOCAL_STR_ROLLBACK)) {
-        this._sendError(
-          PG_SEVERITY.ERROR,
-          PG_ERROR_CODE.IN_FAILED_TRANSACTION,
-          LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS +
-            LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK,
-        );
-        this._socket.write(
-          buildReadyForQuery(this._session.getTransactionState()),
-        );
-        return;
-      }
+    // A failed transaction block admits only its end (ROLLBACK, or COMMIT
+    // answered as ROLLBACK).
+    const admission = this._session.admitStatement(query);
+    if (admission.state !== PGWIRE_STATEMENT_ADMISSION.ADMITTED) {
+      this._sendError(
+        PG_SEVERITY.ERROR,
+        PG_ERROR_CODE.IN_FAILED_TRANSACTION,
+        LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS +
+          LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK,
+      );
+      this._socket.write(
+        buildReadyForQuery(this._session.getTransactionState()),
+      );
+      return;
     }
 
-    await this._executeAndSend(query, []);
+    await this._executeAndSend(admission.statement, []);
 
     this._socket.write(
       buildReadyForQuery(this._session.getTransactionState()),
@@ -591,18 +601,17 @@ class PgWireProtocolHandler {
   /**
    * Execute a query through the adapter and send result messages.
    *
-   * Updates transaction state based on query type and result.
-   * Sends RowDescription + DataRow* + CommandComplete on success,
-   * or ErrorResponse on failure.
+   * Updates the session transaction state from the statement kind the
+   * engine executed (never from the query text, so a statement the engine
+   * refused changes no state). Sends RowDescription + DataRow* +
+   * CommandComplete on success, EmptyQueryResponse when the text held no
+   * statement, or ErrorResponse on failure.
    *
    * @param {string} query - SQL query text.
    * @param {unknown[]} params - Bind parameters.
    * @private
    */
   async _executeAndSend(query, params) {
-    const upper = query.trimStart().toUpperCase();
-    this._applyTransactionStart(upper);
-
     try {
       const result = await this._adapter.execute(
         this._session.sessionId, query, params,
@@ -618,6 +627,10 @@ class PgWireProtocolHandler {
           retry_after_ms: result.retryAfterMs || 0,
         };
         throw error;
+      }
+      if (isEmptyStatementResult(result)) {
+        this._socket.write(buildEmptyQueryResponse());
+        return;
       }
       if (result?.success === false) {
         const error = new Error(
@@ -638,37 +651,29 @@ class PgWireProtocolHandler {
         }
       }
 
-      const tag = deriveCommandTag(result, query);
+      const tag = deriveCommandTag(result);
       this._socket.write(buildCommandComplete(tag));
 
-      this._applyTransactionCompletion(upper);
+      this._applyTransactionOutcome(readExecutedStatementType(result));
     } catch (err) {
       this._applyTransactionFailure();
       this._sendError(
         PG_SEVERITY.ERROR,
-        typeof err.sqlState === 'string' ?
-          err.sqlState : PG_ERROR_CODE.INTERNAL_ERROR,
+        resolveFailureSqlState(err),
         err.message,
         err.detail || null,
       );
     }
   }
 
-  /** @private */
-  _applyTransactionStart(upperQuery) {
-    if (upperQuery.startsWith(LOCAL_STR_BEGIN)) {
-      this._session.setTransactionState(PG_TRANSACTION_STATE.IN_TRANSACTION);
-    }
-  }
-
-  /** @private */
-  _applyTransactionCompletion(upperQuery) {
-    if (
-      upperQuery.startsWith(LOCAL_STR_COMMIT) ||
-      upperQuery.startsWith(LOCAL_STR_ROLLBACK)
-    ) {
-      this._session.setTransactionState(PG_TRANSACTION_STATE.IDLE);
-    }
+  /**
+   * Move the session transaction state for a statement the engine executed.
+   * @param {?string} statementType - The executed statement kind.
+   * @private
+   */
+  _applyTransactionOutcome(statementType) {
+    const next = TRANSACTION_STATE_AFTER_STATEMENT.get(statementType);
+    if (next !== undefined) this._session.setTransactionState(next);
   }
 
   /** @private */
@@ -744,7 +749,6 @@ export {
   parseExecuteMessage,
   parseCloseMessage,
   // Helpers (exported for testing)
-  deriveCommandTag,
   extractColumns,
   extractRowValues,
   writeCString,

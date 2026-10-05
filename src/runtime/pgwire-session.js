@@ -11,6 +11,21 @@
  */
 
 import {PG_TRANSACTION_STATE} from './pgwire-protocol-constants.js';
+import {
+  AST_TYPE,
+  classifyTransactionControlStatement,
+} from '../query/sql-parser.js';
+
+// PostgreSQL ends a failed transaction block on COMMIT by rolling it back
+// (the CommandComplete tag is ROLLBACK).
+const FAILED_BLOCK_END_STATEMENT = 'ROLLBACK';
+
+// Whether the session runs a statement it was sent.
+const PGWIRE_STATEMENT_ADMISSION = Object.freeze({
+  ADMITTED: 'admitted',
+  // Inside a failed transaction block (25P02).
+  REFUSED_IN_FAILED_BLOCK: 'refused_in_failed_block',
+});
 
 // --- Session state constants ---
 
@@ -199,6 +214,37 @@ class PgWireSession {
   }
 
   /**
+   * Admit a statement the client sent. Outside a failed transaction block
+   * it runs as sent. A failed block admits only its end, classified by the
+   * engine parser's own transaction-control rule: ROLLBACK runs as sent;
+   * COMMIT ends the failed block the way PostgreSQL does, by rolling it
+   * back; every other statement is refused.
+   *
+   * @param {string} query - Statement text the client sent.
+   * @return {{state: string, statement: string}} The admission state
+   *   (PGWIRE_STATEMENT_ADMISSION) and the statement to execute.
+   */
+  admitStatement(query) {
+    if (!this.isInFailedTransaction()) {
+      return {state: PGWIRE_STATEMENT_ADMISSION.ADMITTED, statement: query};
+    }
+    switch (classifyTransactionControlStatement(query)) {
+    case AST_TYPE.ROLLBACK:
+      return {state: PGWIRE_STATEMENT_ADMISSION.ADMITTED, statement: query};
+    case AST_TYPE.COMMIT:
+      return {
+        state: PGWIRE_STATEMENT_ADMISSION.ADMITTED,
+        statement: FAILED_BLOCK_END_STATEMENT,
+      };
+    default:
+      return {
+        state: PGWIRE_STATEMENT_ADMISSION.REFUSED_IN_FAILED_BLOCK,
+        statement: query,
+      };
+    }
+  }
+
+  /**
    * Check if session is closed.
    *
    * @return {boolean}
@@ -209,6 +255,7 @@ class PgWireSession {
 }
 
 export {
+  PGWIRE_STATEMENT_ADMISSION,
   PgWireSession,
   PGWIRE_SESSION_STATE,
   PGWIRE_SESSION_ERROR,

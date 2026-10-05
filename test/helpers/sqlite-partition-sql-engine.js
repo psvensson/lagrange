@@ -57,7 +57,7 @@ function createSystemCache(table, partitions) {
   };
 }
 
-function createPartitionRouter(databases) {
+function createPartitionRouter(databases, uncountedPartitions) {
   return {
     async deliver(address, message) {
       const database = databases.get(
@@ -71,7 +71,10 @@ function createPartitionRouter(databases) {
         return {acknowledged: true, success: true, rows: prepared.all(...params)};
       }
       const {changes} = prepared.run(...params);
-      return {acknowledged: true, success: true, rows: [], changes};
+      const partitionId = address.split('/')[ADDRESS_PARTITION_SEGMENT];
+      return uncountedPartitions.has(partitionId) ?
+        {acknowledged: true, success: true, rows: []} :
+        {acknowledged: true, success: true, rows: [], changes};
     },
   };
 }
@@ -82,10 +85,17 @@ function createPartitionRouter(databases) {
  *   The one table, its key column and the DDL each partition database runs.
  * @param {object[]} options.partitions - Partition rows
  *   ({partition_id, partition_key_start, partition_key_end}).
- * @return {{engine: SQLQueryEngine, close: Function}} The engine and the
- *   release of every partition database.
+ * @param {string[]} [options.uncountedPartitions] - Partitions whose write
+ *   answers carry no `changes` count (the write still applies).
+ * @return {{engine: SQLQueryEngine, databases: Map, close: Function}} The
+ *   engine, each partition's database by partition id, and the release of
+ *   every partition database.
  */
-function createSqlitePartitionSqlEngine({table, partitions}) {
+function createSqlitePartitionSqlEngine({
+  table,
+  partitions,
+  uncountedPartitions = [],
+}) {
   ensureConfiguration();
   const databases = new Map(partitions.map((partition) => {
     const database = new Database(':memory:');
@@ -94,10 +104,14 @@ function createSqlitePartitionSqlEngine({table, partitions}) {
   }));
   const engine = new SQLQueryEngine({
     systemCache: createSystemCache(table, partitions),
-    messageRouter: createPartitionRouter(databases),
+    messageRouter: createPartitionRouter(
+      databases,
+      new Set(uncountedPartitions),
+    ),
   });
   return {
     engine,
+    databases,
     close() {
       for (const database of databases.values()) database.close();
     },

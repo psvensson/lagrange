@@ -170,6 +170,9 @@ turning evidence into a product claim.
 | Service execution | Coordinated partial values are finite numbers and their keys must be disjoint across shards. |
 | Service portability | Managed OCI container activation is unsupported; the recommended service path is a WASI component. |
 | PostgreSQL compatibility | Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed. |
+| SQL | A query text that holds more than one statement is refused whole and none of it runs: SQLSTATE 0A000 over the PostgreSQL wire, error code MULTIPLE_STATEMENTS_UNSUPPORTED through the application database. Send each statement separately; trailing semicolons and comments are accepted. |
+| SQL | INSERT, UPDATE and DELETE with RETURNING return no rows, only the command tag and count, so INSERT ... RETURNING id gives the client no id. |
+| SQL | INSERT ... ON CONFLICT DO UPDATE replaces the conflicting row with the VALUES row: its SET list and WHERE condition are ignored. ON CONFLICT DO NOTHING skips the conflicting row as PostgreSQL does. |
 | Security | Node-to-node transport is plain WebSocket without cryptographic peer authentication; deploy it only on a trusted private network. |
 | Operations | Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x. |
 | Operations | In-place upgrade is unsupported from any build that moved a message-group replica to a joining node under its existing replica name: every release through 0.2.5 (npm 0.1.1, 0.2.4-rc.0 to rc.2 and 0.2.5; Docker 0.1.0, 0.1.1, 0.2.4-rc.2 and 0.2.5), the unreleased 0.2.6, and main before the identity-reuse fix. A node holding a message-group replica whose name it did not create can elect a second leader and lose acknowledged writes after the upgrade; rebuild such clusters or dump and restore them. |

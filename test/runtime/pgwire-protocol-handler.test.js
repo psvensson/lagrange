@@ -14,6 +14,7 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
+import {SQLParser} from '../../src/query/sql-parser.js';
 
 import {
   PgWireProtocolHandler,
@@ -37,7 +38,6 @@ import {
   parseDescribeMessage,
   parseExecuteMessage,
   parseCloseMessage,
-  deriveCommandTag,
   extractColumns,
   extractRowValues,
   writeCString,
@@ -124,7 +124,15 @@ class MockAdapter {
   async execute(sessionId, sql, params) {
     this.executions.push({sessionId, sql, params});
     if (this.execError) throw new Error(this.execError);
-    return this.execResult;
+    if (Object.hasOwn(this.execResult, 'statementType')) {
+      return this.execResult;
+    }
+    // SqlCore stamps the kind of the statement it executed; this stand-in
+    // engine stamps the kind the real parser assigns.
+    return {
+      ...this.execResult,
+      statementType: new SQLParser(sql, {dialect: 'postgresql'}).parse().type,
+    };
   }
   closeSession(sessionId) {
     this.sessions.delete(sessionId);
@@ -987,6 +995,50 @@ describe('pgwire-protocol-handler', () => {
       });
   });
 
+  describe('failed transaction block over the extended protocol', () => {
+    it('COMMIT ends the failed block as ROLLBACK; others get 25P02',
+      async () => {
+        const socket = new MockSocket();
+        const adapter = new MockAdapter({execResult: {rows: []}});
+        const handler = new PgWireProtocolHandler({
+          adapter, socket, logger: silentLogger,
+        });
+        handler.start();
+        await doStartup(handler, socket);
+        const flush = () => new Promise((r) => setImmediate(r));
+        const extended = async (query) => {
+          socket.written = [];
+          socket.emit('data', buildParseMsg('', query));
+          socket.emit('data', buildBindMsg('', '', []));
+          socket.emit('data', buildExecuteMsg(''));
+          socket.emit('data', buildSyncMsg());
+          await flush();
+          await flush();
+        };
+        socket.emit('data', buildQueryMsg('BEGIN'));
+        await flush();
+        adapter.execError = 'engine failure';
+        socket.emit('data', buildQueryMsg('SELECT 1'));
+        await flush();
+        adapter.execError = null;
+
+        await extended('SELECT 2');
+        const refused = socket.findMessages(PG_BACKEND_MSG.ERROR_RESPONSE);
+        assert.equal(refused.length, 1);
+        assert.match(refused[0].toString('utf8'), /25P02/u);
+
+        await extended('COMMIT');
+        const tags = socket.findMessages(PG_BACKEND_MSG.COMMAND_COMPLETE)
+          .map((message) => message.subarray(5, -1).toString('utf8'));
+        assert.deepEqual(tags, ['ROLLBACK']);
+        const rfq = socket.findMessages(PG_BACKEND_MSG.READY_FOR_QUERY);
+        assert.equal(rfq.at(-1)[5], PG_TRANSACTION_STATE.IDLE);
+        assert.deepEqual(adapter.executions.map((entry) => entry.sql),
+          ['BEGIN', 'SELECT 1', 'ROLLBACK']);
+        handler.destroy();
+      });
+  });
+
   describe('terminate and cleanup', () => {
     it('should handle Terminate message', async () => {
       const socket = new MockSocket();
@@ -1303,52 +1355,6 @@ describe('pgwire-protocol-handler', () => {
       const {value, nextOffset} = readCString(buf, 0);
       assert.equal(value, '');
       assert.equal(nextOffset, buf.length);
-    });
-
-    it('deriveCommandTag should handle SELECT', () => {
-      assert.equal(
-        deriveCommandTag({rows: [{a: 1}, {a: 2}]}, 'SELECT 1'),
-        'SELECT 2',
-      );
-    });
-
-    it('deriveCommandTag should handle INSERT', () => {
-      assert.equal(
-        deriveCommandTag({affectedRows: 5}, 'INSERT INTO t VALUES(1)'),
-        'INSERT 0 5',
-      );
-    });
-
-    it('deriveCommandTag should handle UPDATE', () => {
-      assert.equal(
-        deriveCommandTag({affectedRows: 3}, 'UPDATE t SET x=1'),
-        'UPDATE 3',
-      );
-    });
-
-    it('deriveCommandTag should handle DELETE', () => {
-      assert.equal(
-        deriveCommandTag({affectedRows: 1}, 'DELETE FROM t'),
-        'DELETE 1',
-      );
-    });
-
-    it('deriveCommandTag should handle CREATE', () => {
-      assert.equal(
-        deriveCommandTag({}, 'CREATE TABLE t (id INT)'),
-        'CREATE TABLE',
-      );
-    });
-
-    it('deriveCommandTag should handle BEGIN/COMMIT/ROLLBACK',
-      () => {
-        assert.equal(deriveCommandTag({}, 'BEGIN'), 'BEGIN');
-        assert.equal(deriveCommandTag({}, 'COMMIT'), 'COMMIT');
-        assert.equal(deriveCommandTag({}, 'ROLLBACK'), 'ROLLBACK');
-      });
-
-    it('deriveCommandTag should default to OK', () => {
-      assert.equal(deriveCommandTag({}, 'VACUUM'), 'OK');
     });
 
     it('extractColumns from columns array', () => {

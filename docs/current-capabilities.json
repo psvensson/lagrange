@@ -195,6 +195,21 @@
       "summary": "Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed."
     },
     {
+      "id": "sql-multiple-statements",
+      "area": "SQL",
+      "summary": "A query text that holds more than one statement is refused whole and none of it runs: SQLSTATE 0A000 over the PostgreSQL wire, error code MULTIPLE_STATEMENTS_UNSUPPORTED through the application database. Send each statement separately; trailing semicolons and comments are accepted."
+    },
+    {
+      "id": "sql-returning",
+      "area": "SQL",
+      "summary": "INSERT, UPDATE and DELETE with RETURNING return no rows, only the command tag and count, so INSERT ... RETURNING id gives the client no id."
+    },
+    {
+      "id": "sql-on-conflict-do-update",
+      "area": "SQL",
+      "summary": "INSERT ... ON CONFLICT DO UPDATE replaces the conflicting row with the VALUES row: its SET list and WHERE condition are ignored. ON CONFLICT DO NOTHING skips the conflicting row as PostgreSQL does."
+    },
+    {
       "id": "node-transport-security",
       "area": "Security",
       "summary": "Node-to-node transport is plain WebSocket without cryptographic peer authentication; deploy it only on a trusted private network."
