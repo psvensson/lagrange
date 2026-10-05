@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      RS_RAFT_COMPAT_SHA: 0f53e8342449bff92591a3b9605529e7189f745d
+      RS_RAFT_COMPAT_SHA: 26bdc07e3dbeb3e1d8cb49e658cff9e758c0db5c
       BRANCH: review/a1-v13-post-attempt-final
     steps:
       - name: Checkout exact review head
@@ -106,6 +106,7 @@ jobs:
             cd "$wt"
             node scripts/checks/partition-key-ordering-owner-completion-v13.js
             npx tap --timeout=120 test/partition/partition-split-routing.test.js
+            npx tap --timeout=120 test/query/sql-parser.test.js test/query/sql-parser-pg.test.js
           )
           git worktree remove --force "$wt"
 
