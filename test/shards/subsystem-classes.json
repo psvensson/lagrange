@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 148,
+    "storage-partition": 149,
     "storage-raft": 107,
     "test-infrastructure": 141,
     "transactions": 16,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2246,
-  "digest": "fnv1a32-07dda79c",
+  "censusSize": 2247,
+  "digest": "fnv1a32-76f7b774",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7b0a4457",
+  "observationDigest": "fnv1a32-00b93826",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1015,6 +1015,7 @@
     "test/integration/leader-routable-system-writes.integration.test.js": "query-sql",
     "test/integration/load-channel-resilience.integration.test.js": "transport-messaging",
     "test/integration/managed-split-admission-reliability.integration.test.js": "storage-partition",
+    "test/integration/managed-split-writes-after-cutover.integration.test.js": "storage-partition",
     "test/integration/membership-consistency.integration.test.js": "bootstrap-membership",
     "test/integration/message-group-multi-join-formation.integration.test.js": "transport-messaging",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "services-runtime",
@@ -6881,6 +6882,18 @@
       "files": [
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/integration/managed-split-writes-after-cutover.integration.test.js": {
+      "files": [
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/embedded-lagrange.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "wit"
       ]
     },
     "test/integration/membership-consistency.integration.test.js": {
