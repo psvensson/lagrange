@@ -12,6 +12,8 @@ test('Cluster sets partition env overrides when configured', async (t) => {
       splitThresholdQpm: 123,
       mergeThresholdQpm: 45,
       evaluationIntervalMs: 60000,
+      trafficWindowMs: 30000,
+      mergeMinimumAgeMs: 120000,
     },
   });
 
@@ -43,5 +45,7 @@ test('Cluster sets partition env overrides when configured', async (t) => {
     env[PARTITION_ENV_KEYS.EVALUATION_INTERVAL_MS],
     '60000',
   );
+  assert.equal(env[PARTITION_ENV_KEYS.TRAFFIC_WINDOW_MS], '30000');
+  assert.equal(env[PARTITION_ENV_KEYS.MERGE_MINIMUM_AGE_MS], '120000');
   t.end();
 });

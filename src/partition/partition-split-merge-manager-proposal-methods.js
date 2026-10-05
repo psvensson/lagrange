@@ -4,9 +4,19 @@
  * A split that admission refuses (BLOCKED / DEFERRED) is already recorded
  * durably by the split workflow: a retryable split transition on the
  * tables row naming the source partition, with retry.attemptCount and
- * retry.nextAttemptAt. That record IS the request, whoever made it (this
- * manager on a threshold, or an explicit engine.executeManagedSplit call),
- * so the manager re-drives it regardless of the split thresholds:
+ * retry.nextAttemptAt. That record IS the request. The durable record does
+ * not say who made it (an explicit engine.executeManagedSplit call or this
+ * manager on a threshold), so:
+ *  - a proposal THIS manager originated on the policy in this process
+ *    lifetime is re-driven only through the policy: the threshold loop
+ *    re-proposes it while it still qualifies, and it is not re-driven once
+ *    its trigger is gone;
+ *  - every other proposal (explicit, or the policy's from before a
+ *    restart, which the record cannot tell apart) is re-driven regardless
+ *    of the split thresholds. Telling those apart needs a durable origin
+ *    marker (requestedBy: explicit|policy) in the transition metadata,
+ *    which the split workflow (the record's writer) owns.
+ * The re-drive:
  *  - when the record's own retry is due and this node leads the source
  *    (the workflow refuses an attempt before nextAttemptAt);
  *  - woken by the events that change it: the tables-row write of the
@@ -159,6 +169,7 @@ class PartitionSplitMergeManagerProposalMethods {
    * @private
    */
   resolveOutstandingSplitRedrives(proposals, listedPartitionIds) {
+    this.forgetUnlistedPolicySplitSources(listedPartitionIds);
     const redrives = [];
     for (const proposal of proposals) {
       const partitionId = proposal?.partitionId;
@@ -177,7 +188,10 @@ class PartitionSplitMergeManagerProposalMethods {
         });
         continue;
       }
-      if (!listedPartitionIds.has(partitionId)) {
+      if (!listedPartitionIds.has(partitionId) ||
+          this.policySplitSources.has(partitionId)) {
+        // A policy proposal of this manager is re-checked by the threshold
+        // loop instead.
         continue;
       }
       this.logger.info(SPLIT_MERGE_LOG_MSG.OUTSTANDING_SPLIT_REDRIVEN, {
@@ -190,6 +204,34 @@ class PartitionSplitMergeManagerProposalMethods {
       redrives.push(partitionId);
     }
     return redrives;
+  }
+
+  /**
+   * Record the split candidates this evaluation proposed on the policy.
+   * @param {string[]} partitionIds - Policy split candidates.
+   * @return {void}
+   * @private
+   */
+  notePolicySplitSources(partitionIds) {
+    for (const partitionId of partitionIds) {
+      this.policySplitSources.add(partitionId);
+    }
+  }
+
+  /**
+   * Forget policy split sources this node no longer lists (split done,
+   * dissolved, or no longer led here): the set is bounded by the listed
+   * partitions.
+   * @param {Set<string>} listedPartitionIds - Partitions listed now.
+   * @return {void}
+   * @private
+   */
+  forgetUnlistedPolicySplitSources(listedPartitionIds) {
+    for (const partitionId of this.policySplitSources) {
+      if (!listedPartitionIds.has(partitionId)) {
+        this.policySplitSources.delete(partitionId);
+      }
+    }
   }
 }
 

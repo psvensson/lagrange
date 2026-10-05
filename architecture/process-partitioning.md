@@ -134,13 +134,37 @@ Evaluation is threshold-driven and fires when **either** dimension is exceeded:
 | `partition.mergeMinimumAgeMs` | 600000 | minimum durable partition age before an automatic merge |
 | `partition.evaluationIntervalMs` | 300000 | how often candidates are evaluated |
 
-Writes also request an evaluation (debounced to one per second), so the
-traffic signal is defined independently of how often evaluation runs:
-queries per minute are measured from the local leader's CDC write counter
-over a full `partition.trafficWindowMs`. Until a partition has been observed
-for one whole window on the node that leads it, it has **no traffic signal**
-(not zero traffic): it cannot split on traffic and cannot merge. A size
-split needs no window.
+Writes also request an evaluation (debounced to one per second), while a
+node whose partitions take no writes evaluates only every
+`partition.evaluationIntervalMs`. The traffic signal is therefore defined
+independently of how often evaluation runs. Queries per minute for a
+partition is **the average write rate (the local leader's CDC write
+counter) over the most recent span of at least one
+`partition.trafficWindowMs` during which this node continuously led the
+partition**: one leadership term, one counter instance, no counter
+regression. The span runs from the newest stored sample that is at least one
+window old to the moment of the reading.
+
+The node stores samples on its own fixed cadence (one twelfth of the window,
+5 s by default), whoever asks and however often, and keeps at most 13 per
+partition. Extra evaluations add no samples, so the window stays one window
+however many evaluations run; with an evaluation at least every few seconds
+the span exceeds the window by less than one cadence step plus the gap
+between two evaluations. When evaluations are sparse the span is longer: on
+a node that only runs the periodic evaluation, a partition has a signal from
+its second periodic evaluation on, averaged over the interval between the
+two. Samples are kept for the longer of two windows and one evaluation
+interval plus one window. A longer span is still an average over at least
+one window. For a merge that is the stated criterion, so it is safe; for a
+split it can only delay a split on a recent burst.
+
+Until such a span exists, the partition has **no traffic signal** (not zero
+traffic). That is the case after it is created, after a leader change or a
+restart of its partition service, and on a node that does not lead it. With
+no traffic signal it cannot split on traffic and cannot merge. A size split
+needs no window. The window and the evaluation interval take effect at
+restart. One validator resolves them for both the measurement and the
+policy.
 
 Per-table policy overrides the cluster-level config, and `SPLIT AT <bytes>` in
 DDL sets that per-table policy field.
@@ -322,8 +346,11 @@ A split that admission refuses (`blocked` / `deferred`, for example
 `source_quorum_not_routable` right after `CREATE TABLE`) is not dropped: the
 refusal is persisted on the `tables` row with its retry schedule, and the
 split/merge manager on the source partition's leader re-drives every such
-outstanding split, independent of the split thresholds, when its retry falls
-due. A write of that row and any change to the source partition's row wake
+outstanding split when its retry falls due. A split the manager itself
+proposed on the thresholds during this process lifetime is re-driven only
+while the thresholds still qualify it. Every other outstanding split
+(explicit, or proposed before a restart: the durable record does not say
+who requested it) is re-driven independent of the split thresholds. A write of that row and any change to the source partition's row wake
 the manager. After 10 attempts the manager stops and reports a
 `wait_bound_spent` line naming the split admission it waited for and the
 last blocking reasons; the refusal stays visible on the `tables` row.

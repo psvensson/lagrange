@@ -1,6 +1,7 @@
 /**
  * The automatic split/merge policy: hysteresis thresholds, the minimum age
- * a partition must reach before it may be merged, and the no-signal rule.
+ * a partition must reach before it may be merged, the no-signal rule, and
+ * the one validator of the traffic measurement configuration.
  * PartitionSplitMergeManager is its only consumer; these are pure
  * functions of their inputs so the policy has one statement.
  *
@@ -24,6 +25,8 @@ import {
 } from './partition-constants.js';
 
 const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_NUMBER = 'number';
 
 /**
  * Whether one metrics payload carries a valid (full-window) traffic signal.
@@ -45,6 +48,47 @@ function resolvePartitionCreatedAtMs(partition) {
   }
   const createdAt = Number(partition.created_at ?? partition.createdAt);
   return Number.isFinite(createdAt) && createdAt > 0 ? createdAt : null;
+}
+
+/**
+ * Resolve one configured positive duration: a finite value above 0 (a
+ * numeric string counts), else the default.
+ * @param {*} configured - Raw configured value.
+ * @param {number} fallback - Default.
+ * @return {number}
+ */
+function resolvePositiveDurationMs(configured, fallback) {
+  const value = typeof configured === LOCAL_STR_STRING &&
+    configured.trim() !== '' ?
+    Number(configured) :
+    configured;
+  return typeof value === LOCAL_STR_NUMBER && Number.isFinite(value) &&
+    value > 0 ?
+    value :
+    fallback;
+}
+
+/**
+ * The ONE validator of the traffic measurement configuration, used by the
+ * manager (policy) and the metrics provider (measurement) alike: the QPM
+ * window (`partition.trafficWindowMs`) and the periodic evaluation
+ * interval (`partition.evaluationIntervalMs`, which bounds how sparse the
+ * provider's calls can be).
+ * @param {{trafficWindowMs: *, evaluationIntervalMs: *}} configured - Raw
+ *   configured values.
+ * @return {{trafficWindowMs: number, evaluationIntervalMs: number}}
+ */
+function resolveTrafficMeasurement(configured = {}) {
+  return {
+    trafficWindowMs: resolvePositiveDurationMs(
+      configured.trafficWindowMs,
+      SPLIT_MERGE_DEFAULT.TRAFFIC_WINDOW_MS,
+    ),
+    evaluationIntervalMs: resolvePositiveDurationMs(
+      configured.evaluationIntervalMs,
+      SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS,
+    ),
+  };
 }
 
 /**
@@ -142,4 +186,5 @@ export {
   resolveMergeDecision,
   resolveMergeMinimumAgeMs,
   resolvePartitionCreatedAtMs,
+  resolveTrafficMeasurement,
 };

@@ -40,14 +40,22 @@ import {
 } from '../../src/query/sql-query-engine-table-routing-methods.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
+  EVALUATION_MODE,
   MINUTE_MS,
   SECOND_MS,
   createSplitMergeSimulation,
 } from './split-merge-load-simulation.js';
+import {CONFIG_KEY} from '../../src/config/config-key-constants.js';
+import {CONFIG_DEFINITIONS} from '../../src/config/config-definitions.js';
+import {
+  createManagedSplitMetricsProvider,
+} from '../../src/partition/managed-split-metrics-provider.js';
 
 const MIN_AGE_MS = SPLIT_MERGE_DEFAULT.MERGE_MINIMUM_PARTITION_AGE_MS;
 const WINDOW_MS = SPLIT_MERGE_DEFAULT.TRAFFIC_WINDOW_MS;
 const LIGHT_QPM = 20;
+const CADENCE_MS = WINDOW_MS / 12;
+const HOUR_S = 3600;
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -210,6 +218,193 @@ async (t) => {
     {sizeBytes: 1024, queriesPerMinute: null}, {splitTrafficThreshold: 1}),
   'no traffic signal never splits on traffic');
   manager.shutdown();
+});
+
+// --- The measurement is independent of the evaluation cadence (B1/B2) ---
+
+test('W8 (B2): an explicit split of an idle table on a node that evaluates ' +
+  'ONLY on the 300 s periodic timer merges exactly once, at or after the ' +
+  'minimum age, over 4 h', async (t) => {
+  const log = collectIneligibleReasons();
+  const sim = createSplitMergeSimulation({
+    evaluation: EVALUATION_MODE.PERIODIC_ONLY,
+    onEvaluation: log.onEvaluation,
+  });
+  const splitAtMs = sim.now();
+  await sim.splitRequest(sim.rows[0].partition_id);
+  await sim.run(4 * HOUR_S, () => 0);
+  t.equal(sim.count('merge'), 1, 'exactly one merge in 4 h');
+  const merge = sim.events.find((event) => event.kind === 'merge');
+  t.ok(merge.atMs - splitAtMs >= MIN_AGE_MS,
+    `not before the minimum age (${(merge.atMs - splitAtMs) / 1000} s)`);
+  t.ok(merge.atMs - splitAtMs <= MIN_AGE_MS +
+    sim.manager.evaluationIntervalMs,
+  'at the first periodic evaluation past the minimum age');
+  t.notOk(log.reasons.has('above_merge_threshold'),
+    'an idle pair is never read as busy');
+  sim.manager.shutdown();
+});
+
+test('W9 (B1): children at 300 QPM for 6 h, then 5000 QPM: a child splits ' +
+  'within one window (+ cadence) of the step, not hours later', async (t) => {
+  const sim = createSplitMergeSimulation({evaluationsPerSecond: 3});
+  await sim.splitRequest(sim.rows[0].partition_id);
+  await sim.run(6 * HOUR_S, () => 300);
+  t.equal(sim.count('split'), 1, 'only the explicit split during warm-up');
+  t.equal(sim.count('merge'), 0, '150 + 150 QPM stays above the merge ' +
+    'threshold');
+  const hotAtMs = sim.now();
+  await sim.run(5 * MINUTE_MS / SECOND_MS, () => 5000);
+  const hotSplits = sim.events.filter((event) =>
+    event.kind === 'split' && event.atMs > hotAtMs);
+  t.ok(hotSplits.length >= 1, 'the hot children split');
+  t.ok(hotSplits[0].atMs - hotAtMs <= WINDOW_MS + CADENCE_MS + 2 * SECOND_MS,
+    `first child split ${(hotSplits[0].atMs - hotAtMs) / 1000} s after the ` +
+    'step (<= window + cadence + 2 s)');
+  sim.manager.shutdown();
+});
+
+test('W10 (B1): a split table whose children then carry 95 + 95 QPM merges ' +
+  'exactly once (190 <= 200), one window after the drop', async (t) => {
+  const sim = createSplitMergeSimulation({evaluationsPerSecond: 3});
+  const dropAtElapsedMs = 15 * MINUTE_MS;
+  const dropAtMs = sim.now() + dropAtElapsedMs;
+  await sim.run(2 * HOUR_S, (elapsedMs) =>
+    (elapsedMs < dropAtElapsedMs ? 1500 : 190));
+  t.equal(sim.count('split'), 1, 'one split under 1500 QPM');
+  t.equal(sim.count('merge'), 1, 'exactly one merge at 95 + 95 QPM');
+  const split = sim.events.find((event) => event.kind === 'split');
+  const merge = sim.events.find((event) => event.kind === 'merge');
+  t.ok(merge.atMs - split.atMs >= MIN_AGE_MS, 'after the minimum age');
+  t.ok(merge.atMs <= Math.max(dropAtMs, split.atMs + MIN_AGE_MS) +
+    WINDOW_MS + CADENCE_MS + 2 * SECOND_MS,
+  'within one window (+ cadence) of the drop');
+  sim.manager.shutdown();
+});
+
+// --- Minimum-age witnesses (mutants M2, M3, M10) ---
+
+const AGE_NOW_MS = 1_700_000_000_000;
+
+function buildAgeManager(rows, executed) {
+  return new PartitionSplitMergeManager({
+    pressureGovernor: {configure() {}, evaluate: () => ({action: 'allow'})},
+    now: () => AGE_NOW_MS,
+    listPartitions: () => rows,
+    getPartitionMetrics: () => ({sizeBytes: 64, queriesPerMinute: 0}),
+    executeMergeCandidate: async (candidate) => {
+      executed.push(candidate);
+      return {success: true};
+    },
+  });
+}
+
+function ageRow(partitionId, start, end, createdAt) {
+  return {
+    partition_id: partitionId,
+    table_id: 'tbl-age',
+    partition_key_start: start,
+    partition_key_end: end,
+    size_bytes: 64,
+    created_at: createdAt,
+  };
+}
+
+test('M2: a partition with no durable created_at has an UNKNOWN age and is ' +
+  'never merge-eligible (never read as old)', async (t) => {
+  for (const missing of [null, undefined, 0, 'garbage']) {
+    const executed = [];
+    const manager = buildAgeManager([
+      ageRow('a', null, 'm', missing),
+      ageRow('b', 'm', null, AGE_NOW_MS - 10 * MIN_AGE_MS),
+    ], executed);
+    const results = await manager.evaluateAllPartitions();
+    t.same(executed, [], `created_at ${String(missing)}: not merged`);
+    t.same(results.mergeIneligible.map((entry) => entry.reason),
+      ['partition_age_unknown'], `created_at ${String(missing)}: age unknown`);
+    manager.shutdown();
+  }
+});
+
+test('M3: the pair age is the YOUNGER partition age, in either order',
+  async (t) => {
+    const old = AGE_NOW_MS - 10 * MIN_AGE_MS;
+    const young = AGE_NOW_MS - MIN_AGE_MS / 2;
+    for (const [left, right] of [[old, young], [young, old]]) {
+      const executed = [];
+      const manager = buildAgeManager([
+        ageRow('a', null, 'm', left),
+        ageRow('b', 'm', null, right),
+      ], executed);
+      const results = await manager.evaluateAllPartitions();
+      t.same(executed, [], 'a young partition is not merged');
+      t.same(results.mergeIneligible.map((entry) => entry.reason),
+        ['partition_below_minimum_age']);
+      manager.shutdown();
+    }
+  });
+
+test('M10: the minimum age is never below two traffic windows, even when ' +
+  'configured to 0', async (t) => {
+  ConfigurationManager.resetInstance();
+  ConfigurationManager.getInstance().initialize({
+    node: {id: 'sim-node'},
+    partition: {mergeMinimumAgeMs: 0},
+  });
+  const executed = [];
+  const aged = AGE_NOW_MS - 1.5 * WINDOW_MS;
+  const manager = buildAgeManager([
+    ageRow('a', null, 'm', aged),
+    ageRow('b', 'm', null, aged),
+  ], executed);
+  t.equal(manager.mergeMinimumAgeMs, 2 * WINDOW_MS, 'floor = 2 windows');
+  const results = await manager.evaluateAllPartitions();
+  t.same(executed, [], 'a pair 1.5 windows old is not merged');
+  t.same(results.mergeIneligible.map((entry) => entry.reason),
+    ['partition_below_minimum_age']);
+  manager.shutdown();
+});
+
+// --- Configuration: one resolver, truthful restart declarations ---
+
+test('config: partition.trafficWindowMs and partition.evaluationIntervalMs ' +
+  'resolve through ONE validator for the manager and the provider',
+async (t) => {
+  for (const configured of [0, -5, Number.NaN, '45000', 30_000]) {
+    ConfigurationManager.resetInstance();
+    const config = ConfigurationManager.getInstance();
+    config.initialize({node: {id: 'sim-node'}});
+    config.setByPath(CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS, configured);
+    config.setByPath(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS, configured);
+    const manager = new PartitionSplitMergeManager();
+    const provider = createManagedSplitMetricsProvider({
+      partitionServices: new Map(),
+      trafficWindowMs: config.get(CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS),
+      evaluationIntervalMs:
+        config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS),
+    });
+    const census = provider.describeTrafficSamples();
+    t.equal(census.trafficWindowMs, manager.trafficWindowMs,
+      `window ${String(configured)}: provider and manager agree ` +
+      `(${manager.trafficWindowMs})`);
+    t.equal(census.evaluationIntervalMs, manager.evaluationIntervalMs,
+      `interval ${String(configured)}: provider and manager agree ` +
+      `(${manager.evaluationIntervalMs})`);
+    t.ok(manager.trafficWindowMs > 0 && manager.evaluationIntervalMs > 0,
+      'never a non-positive window or interval');
+    manager.shutdown();
+  }
+});
+
+test('config: every split/merge measurement key read only at construction ' +
+  'is declared restart-required', async (t) => {
+  for (const key of [
+    CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS,
+    CONFIG_KEY.PARTITION_MERGE_MINIMUM_AGE_MS,
+    CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS,
+  ]) {
+    t.equal(CONFIG_DEFINITIONS[key].requiresRestart, true, key);
+  }
 });
 
 // --- Outstanding durable split proposals (BLOCKED explicit split) ---
@@ -400,4 +595,63 @@ test('W7e: the engine lists every outstanding split proposal from the tables ' +
   t.equal(proposals[0].partitionId, SOURCE_ID);
   t.equal(proposals[0].localLeader, true);
   t.equal(proposals[0].retryDue, true);
+});
+
+// --- A proposal this manager made on the policy is re-checked (R-b) ---
+
+test('R-b: an outstanding split proposal this manager originated on the ' +
+  'policy is re-driven only while the policy still qualifies it; an ' +
+  'explicit one is re-driven regardless', async (t) => {
+  let qpm = 5000;
+  let proposals = [];
+  const executed = [];
+  const manager = new PartitionSplitMergeManager({
+    pressureGovernor: {configure() {}, evaluate: () => ({action: 'allow'})},
+    listPartitions: () => [{
+      partition_id: SOURCE_ID,
+      table_id: 'tbl-x',
+      partition_key_start: null,
+      partition_key_end: null,
+      size_bytes: 4096,
+      created_at: 1,
+    }],
+    getPartitionMetrics: () => ({sizeBytes: 4096, queriesPerMinute: qpm}),
+    listOutstandingSplitProposals: () => proposals,
+    executeSplitCandidate: async (partitionId) => {
+      executed.push(partitionId);
+      return {success: false, state: 'blocked'};
+    },
+  });
+  await manager.evaluateAllPartitions();
+  t.same(executed, [SOURCE_ID], 'the policy proposed the split (BLOCKED)');
+  proposals = [{partitionId: SOURCE_ID, workflowId: 'wf', attemptCount: 1,
+    retryDue: true, localLeader: true, state: 'BLOCKED'}];
+  qpm = 10;
+  await manager.evaluateAllPartitions();
+  t.same(executed, [SOURCE_ID],
+    'the trigger is gone: the policy proposal is not re-driven');
+  qpm = 5000;
+  await manager.evaluateAllPartitions();
+  t.same(executed, [SOURCE_ID, SOURCE_ID],
+    'the policy still qualifies it: re-driven (once per evaluation)');
+  manager.shutdown();
+
+  const explicitExecuted = [];
+  const explicit = new PartitionSplitMergeManager({
+    pressureGovernor: {configure() {}, evaluate: () => ({action: 'allow'})},
+    listPartitions: () => [{
+      partition_id: SOURCE_ID, table_id: 'tbl-x', partition_key_start: null,
+      partition_key_end: null, size_bytes: 4096, created_at: 1,
+    }],
+    getPartitionMetrics: () => ({sizeBytes: 4096, queriesPerMinute: 10}),
+    listOutstandingSplitProposals: () => proposals,
+    executeSplitCandidate: async (partitionId) => {
+      explicitExecuted.push(partitionId);
+      return {success: false, state: 'blocked'};
+    },
+  });
+  await explicit.evaluateAllPartitions();
+  t.same(explicitExecuted, [SOURCE_ID],
+    'a proposal this manager did not originate (explicit) is re-driven');
+  explicit.shutdown();
 });

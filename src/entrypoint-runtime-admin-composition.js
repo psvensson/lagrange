@@ -403,6 +403,9 @@ async function createSqlRuntimeComposition(options) {
         trafficWindowMs: ConfigurationManager.getInstance().get(
           CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS,
         ),
+        evaluationIntervalMs: ConfigurationManager.getInstance().get(
+          CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS,
+        ),
       }),
       executeSplitCandidate: (partitionId) =>
         sqlQueryEngine.executeManagedSplit(partitionId),

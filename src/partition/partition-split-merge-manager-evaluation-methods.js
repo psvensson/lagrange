@@ -356,11 +356,12 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         const partitions = await this.loadEvaluationPartitions();
         const outstandingSplitProposals =
           await this.loadOutstandingSplitProposals();
-        results.splitCandidates.push(...this.resolveOutstandingSplitRedrives(
+        const redrives = this.resolveOutstandingSplitRedrives(
           outstandingSplitProposals,
           new Set(partitions.map((partition) =>
             this.getPartitionId(partition))),
-        ));
+        );
+        results.splitCandidates.push(...redrives);
         if (partitions.length === 0) {
           this.recordEvaluationSuccess(
             results,
@@ -419,6 +420,8 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           }
         }
 
+        this.notePolicySplitSources(results.splitCandidates.filter(
+          (partitionId) => !redrives.includes(partitionId)));
         let splitExecutionAttempts = 0;
         for (const partitionId of results.splitCandidates) {
           if (

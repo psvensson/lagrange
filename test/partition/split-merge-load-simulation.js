@@ -11,9 +11,22 @@
  *
  * The load is uniform over the integer key space [0, KEY_SPACE), so a
  * partition receives the share of the table's QPM its key range covers.
+ *
+ * Evaluation cadence modes (the measurement must not depend on them):
+ *  - `evaluation: 'reactive'` (default): the write-driven evaluation fires
+ *    `evaluationsPerSecond` times (default 1) in every second the table
+ *    takes writes, plus the periodic timer. Each evaluation asks the
+ *    provider about every partition ~3 times (split loop, then left and
+ *    right in the merge loop), so even the default exceeds 64 provider
+ *    calls per partition per window once a table has two partitions.
+ *  - `evaluation: 'periodic-only'`: only the periodic timer
+ *    (`partition.evaluationIntervalMs`, 300 s by default) evaluates, as on
+ *    a node whose led partitions take no writes.
  */
 
 import {CDC_PIPELINE_METRIC} from '../../src/constants/index.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {CONFIG_KEY} from '../../src/config/config-key-constants.js';
 import {
   PartitionSplitMergeManager,
 } from '../../src/partition/partition-split-merge-manager.js';
@@ -26,6 +39,10 @@ const TABLE_ID = 'tbl-sim';
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
 const SIM_START_MS = 1_700_000_000_000;
+const EVALUATION_MODE = Object.freeze({
+  REACTIVE: 'reactive',
+  PERIODIC_ONLY: 'periodic-only',
+});
 const ALLOW_PRESSURE_GOVERNOR = Object.freeze({
   configure() {},
   evaluate() {
@@ -133,6 +150,9 @@ function createSplitMergeSimulation(options = {}) {
   };
 
   const now = () => nowMs;
+  // The provider is composed exactly as the runtime composes it: from the
+  // raw configured window and evaluation interval.
+  const config = ConfigurationManager.getInstance();
   const buildManager = () => new PartitionSplitMergeManager({
     nodeId: 'sim-node',
     now,
@@ -141,6 +161,9 @@ function createSplitMergeSimulation(options = {}) {
     getPartitionMetrics: createManagedSplitMetricsProvider({
       partitionServices: services,
       now,
+      trafficWindowMs: config.get(CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS),
+      evaluationIntervalMs:
+        config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS),
     }),
     executeSplitCandidate,
     executeMergeCandidate,
@@ -164,10 +187,23 @@ function createSplitMergeSimulation(options = {}) {
     }
   };
 
+  const evaluationMode = options.evaluation ?? EVALUATION_MODE.REACTIVE;
+  const evaluationsPerSecond = options.evaluationsPerSecond ?? 1;
+  const evaluate = async (triggerReason) => {
+    const results = await manager.evaluateAllPartitions({
+      triggerReason,
+      reasonCodes: ['write_activity'],
+    });
+    if (options.onEvaluation) {
+      options.onEvaluation(results, nowMs);
+    }
+  };
+
   /**
-   * Advance the clock second by second; the reactive (write-driven,
-   * 1 s debounced) evaluation fires each second the table takes writes,
-   * and the periodic evaluation fires on its own interval.
+   * Advance the clock second by second; in the reactive mode the
+   * write-driven evaluation fires `evaluationsPerSecond` times each second
+   * the table takes writes; the periodic evaluation fires on its own
+   * interval in every mode.
    * @param {number} seconds - Seconds to simulate.
    * @param {Function} qpmAt - (elapsedMs) => table-wide QPM this second.
    * @return {Promise<void>}
@@ -179,14 +215,14 @@ function createSplitMergeSimulation(options = {}) {
       applyLoadSecond(qpm);
       const periodicDue = Math.floor(nowMs / manager.evaluationIntervalMs) !==
         Math.floor((nowMs - SECOND_MS) / manager.evaluationIntervalMs);
-      if (qpm > 0 || periodicDue || options.evaluateEverySecond === true) {
-        const results = await manager.evaluateAllPartitions({
-          triggerReason: qpm > 0 ? 'reactive_request' : 'periodic_timer',
-          reasonCodes: ['write_activity'],
-        });
-        if (options.onEvaluation) {
-          options.onEvaluation(results, nowMs);
+      const reactiveDue = evaluationMode === EVALUATION_MODE.REACTIVE &&
+        (qpm > 0 || options.evaluateEverySecond === true);
+      if (reactiveDue) {
+        for (let index = 0; index < evaluationsPerSecond; index += 1) {
+          await evaluate('reactive_request');
         }
+      } else if (periodicDue) {
+        await evaluate('periodic_timer');
       }
     }
   };
@@ -214,6 +250,7 @@ function createSplitMergeSimulation(options = {}) {
 }
 
 export {
+  EVALUATION_MODE,
   KEY_SPACE,
   MINUTE_MS,
   SECOND_MS,

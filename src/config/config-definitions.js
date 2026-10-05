@@ -439,7 +439,9 @@ const CONFIG_DEFINITIONS = {
   [CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS]: {
     defaultValue: DEFAULT_CONFIG.partition.evaluationIntervalMs,
     type: CONFIG_VALUE_TYPE.NUMBER,
-    requiresRestart: false,
+    // Read once by the split/merge manager (its periodic timer) and the
+    // traffic metrics provider (its sample retention) at construction.
+    requiresRestart: true,
     description: 'Partition evaluation interval in milliseconds',
   },
   [CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS]: {
@@ -452,7 +454,8 @@ const CONFIG_DEFINITIONS = {
   [CONFIG_KEY.PARTITION_MERGE_MINIMUM_AGE_MS]: {
     defaultValue: DEFAULT_CONFIG.partition.mergeMinimumAgeMs,
     type: CONFIG_VALUE_TYPE.NUMBER,
-    requiresRestart: false,
+    // Read once by the split/merge manager at construction.
+    requiresRestart: true,
     description: 'Minimum durable partition age before an automatic ' +
       'merge; never below two traffic windows',
   },

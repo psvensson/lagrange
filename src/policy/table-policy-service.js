@@ -603,47 +603,6 @@ class TablePolicyService extends EventEmitter {
   }
 
   /**
-   * Check if a partition should be split based on its table's policy.
-   * @param {string} partitionId - Partition ID.
-   * @param {Object} metrics - Partition metrics.
-   * @return {Promise<boolean>} True if partition should be split.
-   */
-  async shouldSplitPartition(partitionId, metrics) {
-    const policy = await this.getPolicyForPartition(partitionId);
-    const sizeBytes = metrics.sizeBytes || 0;
-    const queriesPerMinute = metrics.queriesPerMinute || 0;
-
-    // Split if EITHER threshold is exceeded
-    return sizeBytes >= policy.splitStorageThreshold ||
-           queriesPerMinute >= policy.splitTrafficThreshold;
-  }
-
-  /**
-   * Check if two partitions should be merged.
-   * @param {string} leftPartitionId - Left partition ID.
-   * @param {string} rightPartitionId - Right partition ID.
-   * @param {Object} leftMetrics - Left partition metrics.
-   * @param {Object} rightMetrics - Right partition metrics.
-   * @return {Promise<boolean>} True if partitions should be merged.
-   */
-  async shouldMergePartitions(
-    leftPartitionId, rightPartitionId, leftMetrics, rightMetrics,
-  ) {
-    const policy =
-      await this.getPolicyForPartition(leftPartitionId);
-    const combinedStorage =
-      (leftMetrics.sizeBytes || 0) +
-      (rightMetrics.sizeBytes || 0);
-    const combinedTraffic =
-      (leftMetrics.queriesPerMinute || 0) +
-      (rightMetrics.queriesPerMinute || 0);
-
-    // Merge if BOTH thresholds are satisfied
-    return combinedStorage <= policy.mergeStorageThreshold &&
-           combinedTraffic <= policy.mergeTrafficThreshold;
-  }
-
-  /**
    * Clear the policy cache.
    */
   clearCache() {

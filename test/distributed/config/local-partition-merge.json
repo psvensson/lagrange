@@ -23,7 +23,9 @@
     "cpus": "2.0"
   },
   "partition": {
-    "evaluationIntervalMs": 60000
+    "evaluationIntervalMs": 60000,
+    "trafficWindowMs": 60000,
+    "mergeMinimumAgeMs": 120000
   },
   "benchmark": {
     "loadQueryTimeoutMs": 10000,

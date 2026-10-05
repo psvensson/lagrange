@@ -30,7 +30,10 @@ import {
 import {
   createPartitionSplitMergeManagerProposalMethods,
 } from './partition-split-merge-manager-proposal-methods.js';
-import {resolveMergeMinimumAgeMs} from './partition-split-merge-policy.js';
+import {
+  resolveMergeMinimumAgeMs,
+  resolveTrafficMeasurement,
+} from './partition-split-merge-policy.js';
 
 const OperationState = SPLIT_MERGE_STATE;
 const DEFAULT_SPLIT_STORAGE_THRESHOLD = SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
@@ -102,9 +105,13 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.executeSplitCandidate = options.executeSplitCandidate || null;
     this.executeMergeCandidate = options.executeMergeCandidate || null;
     // Outstanding durable split proposals (retryable split transitions on
-    // the tables rows); the manager re-drives them regardless of thresholds.
+    // the tables rows); the manager re-drives them (see the proposal
+    // methods for which are re-checked on the policy instead).
     this.listOutstandingSplitProposals =
         options.listOutstandingSplitProposals || null;
+    // Split sources this manager proposed on the policy (this process
+    // lifetime): their outstanding proposals are re-checked, not re-driven.
+    this.policySplitSources = new Set();
     // Policy clock (merge minimum age against partitions.created_at).
     this.now = typeof options.now === 'function' ?
       options.now :
@@ -142,14 +149,15 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.mergeTrafficThreshold =
         config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_QPM) ||
         SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESHOLD_QPM;
-    this.evaluationIntervalMs =
-        config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS) ||
-        SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
-    this.trafficWindowMs = this.getNumericConfig(
-      config,
-      CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS,
-      SPLIT_MERGE_DEFAULT.TRAFFIC_WINDOW_MS,
-    );
+    // The window and the evaluation interval resolve through the one
+    // validator the metrics provider uses too.
+    const measurement = resolveTrafficMeasurement({
+      trafficWindowMs: config.get(CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS),
+      evaluationIntervalMs:
+        config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS),
+    });
+    this.evaluationIntervalMs = measurement.evaluationIntervalMs;
+    this.trafficWindowMs = measurement.trafficWindowMs;
     this.mergeMinimumAgeMs = resolveMergeMinimumAgeMs(
       this.getNumericConfig(
         config,
