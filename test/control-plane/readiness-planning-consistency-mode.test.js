@@ -29,7 +29,6 @@ function planningService({asyncAnswer, armed = []}) {
   const service = Object.create(
     Object.getPrototypeOf(ControlPlaneReadinessService.prototype));
   Object.assign(service, {
-    membershipPublicationPlanningSnapshotRefreshTimeoutMs: 1000,
     setTimeoutFn: (fn, delayMs) => {
       armed.push(delayMs);
       return {delayMs};
