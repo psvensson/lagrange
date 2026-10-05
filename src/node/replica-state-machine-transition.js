@@ -36,6 +36,11 @@ import {clearLeaderOrRecordDebt} from
 import {createReplicaRowInCdc} from
   './replica-state-machine-create-persistence.js';
 import {mintServiceRowCreatedAt} from './service-row-incarnation.js';
+import {
+  isCreateSyncingEdge,
+  resolveCreateSyncingEdge,
+  settleUnappliedLifecycleWrite,
+} from './replica-state-machine-create-syncing-edge.js';
 
 const STATE_ENTERED_AT_COLUMN = 'state_entered_at';
 const OBSERVED_STATE_CHANGED_OUTCOME = 'observed_state_changed';
@@ -65,17 +70,17 @@ const RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES = new Set([
   ReplicaState.ACTIVE,
 ]);
 
-async function resolveUncertainLifecycleUpdate(
-  stateMachine,
-  replicaState,
-  previousState,
-  cause,
-) {
+async function resolveUncertainLifecycleUpdate(stateMachine, replicaState,
+  previousState, cause) {
+  if (isCreateSyncingEdge(replicaState, previousState)) {
+    const resolved = await resolveCreateSyncingEdge(stateMachine,
+      replicaState, previousState, cause);
+    if (resolved === null) throw cause;
+    return resolved;
+  }
   const serviceId = replicaState.serviceId || replicaState.replicaId;
   const observation = await observeAuthoritativeReplicaLifecycle(
-    stateMachine,
-    serviceId,
-  );
+    stateMachine, serviceId);
   if (observation.available !== true ||
       !rowMatchesReplicaLifecycle(observation.row, replicaState)) {
     throw cause;
@@ -578,29 +583,21 @@ async function updateReplicaStateInCdc(
       .submitMutation(mutation, persistenceOptions);
     const durableApplyConfirmed =
       didDurableServiceRowWriteApply(mutationResult);
-    if (durableApplyConfirmed) {
-      stateMachine.clearServiceRowLocalOnly?.(serviceId);
-      await clearLeaderOrRecordDebt(
-        stateMachine,
-        replicaState,
-        previousState,
-      );
+    if (!durableApplyConfirmed) {
+      return await settleUnappliedLifecycleWrite(stateMachine, replicaState,
+        previousState, mutationResult);
     }
-
+    stateMachine.clearServiceRowLocalOnly?.(serviceId);
+    await clearLeaderOrRecordDebt(stateMachine, replicaState, previousState);
     reportServiceRowPersisted(stateMachine, replicaState);
-
     return mutationResult;
   } catch (error) {
     reportServiceRowPersistenceError(stateMachine, replicaState, error);
     if (replicaState.state === ReplicaState.REMOVING) {
       throw error;
     }
-    return resolveUncertainLifecycleUpdate(
-      stateMachine,
-      replicaState,
-      previousState,
-      error,
-    );
+    return resolveUncertainLifecycleUpdate(stateMachine, replicaState,
+      previousState, error);
   }
 }
 

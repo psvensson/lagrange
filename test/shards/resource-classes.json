@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2192,
+    "ordinary": 2194,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2209,
-  "digest": "fnv1a32-ede84940",
+  "censusSize": 2211,
+  "digest": "fnv1a32-83ef3ed9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -160,6 +160,7 @@
     "test/bootstrap/join-delegate-bundles.test.js": "ordinary",
     "test/bootstrap/join-formation-discovery-window-budget.test.js": "ordinary",
     "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js": "ordinary",
+    "test/bootstrap/join-message-group-identity-record.test.js": "ordinary",
     "test/bootstrap/join-message-group-phase.test.js": "ordinary",
     "test/bootstrap/join-readiness-evaluator.test.js": "ordinary",
     "test/bootstrap/join-readiness-non-participating-exclusion.repro.test.js": "ordinary",
@@ -1731,6 +1732,7 @@
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": "ordinary",
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": "ordinary",
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": "ordinary",
+    "test/rebalancer/terminal-failed-add-target-cleanup.test.js": "ordinary",
     "test/rebalancer/terminal-status-constants.test.js": "ordinary",
     "test/rebalancer/terminal-status-sql-clause-consistency.property.test.js": "ordinary",
     "test/rebalancer/timeout-triggers-failure.property.test.js": "ordinary",

@@ -303,6 +303,10 @@ class MessageGroupService extends EventEmitter {
     // The opening host's authoritative row proves this replica identity
     // existed before (the open-time rule).
     this.identityExisted = options.identityExisted === true;
+    // A replica whose identity fact (its services row) is written only after
+    // it opened: the port steps nothing until the durable row write releases
+    // this (the identity-record window, verifier N3 / F1).
+    this.identityRecorded = options.identityRecorded ?? null;
     this.deferElectionUntilJoinConvergence =
       options.deferElectionUntilJoinConvergence === true;
     this.deferElection =

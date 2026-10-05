@@ -9,6 +9,7 @@ import {
 const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
+  isBootstrapPeerAdmissible,
   reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
 } from './partition-service-raft-peer-cache-reconciliation.js';
@@ -527,8 +528,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     for (const peerId of this.replicaIds) {
       // A committed member the address book cannot place yet resolves once
       // discovery catches up; the bootstrap membership, not the address
-      // book, names the members (owner decision O1).
-      const peerAddress = peerId === this.replicaId ? null :
+      // book, names the members (owner decision O1). A peer whose row has
+      // not recorded its fact is admitted only on that row change (F2).
+      const peerAddress = peerId === this.replicaId ||
+        !isBootstrapPeerAdmissible(this, peerId) ? null :
         this.resolveKnownPeerAddress(peerId);
       if (peerAddress !== null) {
         if (!this.suppressLifecycleLogs) {

@@ -79,12 +79,21 @@ function pendingReplicaIdentityRecord({existed,
   return {recorded: promise, release: resolve, abandon: reject};
 }
 
+function trackedLifecycleState(handler, replicaId) {
+  const tracked = handler.replicaStateMachine?.getState?.(replicaId) ?? null;
+  return typeof tracked === REPLICA_HANDLER_TYPEOF.STRING ?
+    tracked : tracked?.state ?? null;
+}
+
 /**
  * Write the prior-existence fact (SYNCING) through the status owner's
  * bounded retry and release the record on its durable acknowledgement only.
  * A write that ends without it (refused, unknown past the retry bound) logs
  * the spent wait, abandons the record - the port, which never stepped
- * anything, is closed by the create's failure path - and rethrows.
+ * anything, is closed by the create's failure path - and rethrows. A write
+ * whose answer was lost resolves inside the retry, against the authoritative
+ * row (replica-state-machine-create-syncing-edge.js): the row SYNCING for
+ * this incarnation on this node IS the release condition.
  * @param {Object} handler - The replica handler.
  * @param {string} replicaId - The replica.
  * @param {string} partitionId - Its partition.
@@ -93,6 +102,11 @@ function pendingReplicaIdentityRecord({existed,
  */
 async function recordReplicaIdentity(handler, replicaId, partitionId,
   record) {
+  if (record === null &&
+      trackedLifecycleState(handler, replicaId) === ReplicaStatus.SYNCING) {
+    // A create resumed on its own durable SYNCING row: the fact is written.
+    return;
+  }
   try {
     await handler.persistReplicaStatusWithRetry(replicaId,
       ReplicaStatus.SYNCING, {partitionId});
@@ -130,5 +144,6 @@ async function observeReplicaIdentity(handler, replicaId,
 export {
   observeReplicaIdentity,
   observeReplicaIdentityExisted,
+  pendingReplicaIdentityRecord,
   recordReplicaIdentity,
 };

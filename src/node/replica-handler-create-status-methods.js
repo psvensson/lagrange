@@ -47,7 +47,7 @@ function deferredDurableWriteActivation(handler, replicaId) {
   };
 }
 
-function registerAuthoritativeFailedCreateSnapshot(
+function registerAuthoritativeCreateSnapshot(
   handler,
   replicaId,
   service,
@@ -56,7 +56,7 @@ function registerAuthoritativeFailedCreateSnapshot(
   handler.replicaStateMachine.registerReplicaSnapshot(replicaId, {
     partitionId: service.partition_id,
     nodeId: service.node_id,
-    state: ReplicaStatus.FAILED,
+    state: service.status,
     serviceId: service.service_id,
     serviceType: service.service_type,
     serviceAddress: service.address,
@@ -80,41 +80,33 @@ function observeTrackedReplicaState(handler, replicaId) {
   };
 }
 
-function isExactFailedCreateRow(handler, row, replicaId, partitionId) {
+function isExactCreateRow(handler, row, {replicaId, partitionId, status}) {
   return row?.service_id === replicaId &&
     row.replica_id === replicaId &&
     row.partition_id === partitionId &&
     row.node_id === handler.nodeId &&
     row.service_type === REPLICA_HANDLER_SERVICE.TYPE &&
-    row.status === ReplicaStatus.FAILED &&
+    row.status === status &&
     Number.isFinite(row.created_at) &&
     Boolean(durableRowVersion(row));
 }
 
-async function resolveFailedCreateReplay(handler, replicaId, partitionId) {
+// The exact authoritative row of this create on this node in `status`,
+// installed as the tracked state; null when the row is anything else.
+async function resolveCreateReplay(handler, replicaId, partitionId, status) {
   const observation = await handler.replicaStateMachine
     .observeAuthoritativeReplicaLifecycle(replicaId);
   if (observation?.available !== true ||
-      !isExactFailedCreateRow(
-        handler,
-        observation.row,
-        replicaId,
-        partitionId,
-      )) {
+      !isExactCreateRow(handler, observation.row,
+        {replicaId, partitionId, status})) {
     return null;
   }
-  registerAuthoritativeFailedCreateSnapshot(
-    handler,
-    replicaId,
-    observation.row,
-  );
+  registerAuthoritativeCreateSnapshot(handler, replicaId, observation.row);
   const trackedState = observeTrackedReplicaState(
     handler,
     replicaId,
   ).trackedState;
-  return trackedState?.state === ReplicaStatus.FAILED ?
-    {service: observation.row} :
-    null;
+  return trackedState?.state === status ? {service: observation.row} : null;
 }
 
 function buildFailedCreateReplayContext(
@@ -177,7 +169,8 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         replicaId,
         pendingStatusPersisted = false,
       } = options;
-      if (await this.restartFailedReplicaCreateStatus(options)) {
+      if (await this.restartFailedReplicaCreateStatus(options) ||
+          await this.resumeSyncingReplicaCreateStatus(options)) {
         return true;
       }
       try {
@@ -228,11 +221,8 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      */
     async restartFailedReplicaCreateStatus(options = {}) {
       const {partitionId, replicaId} = options;
-      const replay = await resolveFailedCreateReplay(
-        this,
-        replicaId,
-        partitionId,
-      );
+      const replay = await resolveCreateReplay(
+        this, replicaId, partitionId, ReplicaStatus.FAILED);
       if (!replay) {
         return false;
       }
@@ -266,6 +256,39 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         replicaId,
         partitionId,
         status: ReplicaStatus.CREATING,
+        service: null,
+      });
+      return true;
+    }
+
+    /**
+     * A create re-driven onto its own durable SYNCING row (the ack-loss
+     * wedge, F3 (c)): an earlier attempt of this create opened its port and
+     * its SYNCING write - the prior-existence fact - applied, but the attempt
+     * failed before it saw that. The row is adopted as the tracked state and
+     * no PENDING/CREATING is written again; the create then opens with the
+     * fact durable (identityExisted): its durable record restores - a virgin
+     * one never voted, since a gated port steps nothing and the core
+     * persists its hard state before it sends a vote - and an absent record
+     * is refused reseed-required. A tracked runtime is never resumed over.
+     * @param {Object} options - {partitionId, replicaId}.
+     * @return {Promise<boolean>} Whether the create resumes at SYNCING.
+     * @private
+     */
+    async resumeSyncingReplicaCreateStatus(options = {}) {
+      const {partitionId, replicaId} = options;
+      if (this.getTrackedService(replicaId)) {
+        return false;
+      }
+      const replay = await resolveCreateReplay(
+        this, replicaId, partitionId, ReplicaStatus.SYNCING);
+      if (!replay) {
+        return false;
+      }
+      this.setLocalReplica(replicaId, {
+        replicaId,
+        partitionId,
+        status: ReplicaStatus.SYNCING,
         service: null,
       });
       return true;

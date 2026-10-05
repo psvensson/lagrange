@@ -50,6 +50,21 @@ function buildJoinEnvelopeLogger(options, logger, address) {
   };
 }
 
+/**
+ * The join replica's identity options (F1): a rejoin's replica named by this
+ * node's existing services row opened before - without its record it is
+ * refused reseed-required; a first join's replica steps nothing until its row
+ * is durable.
+ * @param {Object} options - Join replica options.
+ * @return {Object} {identityExisted, identityRecorded}.
+ */
+function joinReplicaIdentity(options) {
+  return {
+    identityExisted: options.identityExisted === true,
+    identityRecorded: options.identityRecorded ?? null,
+  };
+}
+
 const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
   /**
    * Create a join message-group replica with unified lifecycle.
@@ -92,6 +107,7 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       deferElectionUntilJoinConvergence:
         options.deferElectionUntilJoinConvergence === true,
       isJoiningExistingGroup: Boolean(options.isJoiningExistingGroup),
+      ...joinReplicaIdentity(options),
       publishRoleMetadata: options.publishRoleMetadata !== false,
       publishLeaderNodeMetadata:
         options.publishLeaderNodeMetadata !== false,

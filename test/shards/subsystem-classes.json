@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 282,
+    "bootstrap-membership": 283,
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 205,
@@ -12,7 +12,7 @@
     "distributed-harness": 169,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 255,
+    "placement-rebalance": 256,
     "query-sql": 164,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2209,
-  "digest": "fnv1a32-a4f69dd1",
+  "censusSize": 2211,
+  "digest": "fnv1a32-de29ee90",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-829fc5a3",
+  "observationDigest": "fnv1a32-4fea759b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -180,6 +180,7 @@
     "test/bootstrap/join-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/join-formation-discovery-window-budget.test.js": "bootstrap-membership",
     "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js": "bootstrap-membership",
+    "test/bootstrap/join-message-group-identity-record.test.js": "bootstrap-membership",
     "test/bootstrap/join-message-group-phase.test.js": "bootstrap-membership",
     "test/bootstrap/join-readiness-evaluator.test.js": "bootstrap-membership",
     "test/bootstrap/join-readiness-non-participating-exclusion.repro.test.js": "bootstrap-membership",
@@ -1751,6 +1752,7 @@
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": "placement-rebalance",
+    "test/rebalancer/terminal-failed-add-target-cleanup.test.js": "placement-rebalance",
     "test/rebalancer/terminal-status-constants.test.js": "placement-rebalance",
     "test/rebalancer/terminal-status-sql-clause-consistency.property.test.js": "placement-rebalance",
     "test/rebalancer/timeout-triggers-failure.property.test.js": "placement-rebalance",
@@ -2667,6 +2669,19 @@
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js",
         "test/integration/helpers/cluster-test-helpers.js"
+      ]
+    },
+    "test/bootstrap/join-message-group-identity-record.test.js": {
+      "files": [
+        "src/bootstrap/phases/create-message-group-phase.js",
+        "src/message-group/message-group-consensus-port.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
     "test/bootstrap/join-message-group-phase.test.js": {
@@ -7477,11 +7492,6 @@
         "src/partition/partition-raft-storage.js"
       ]
     },
-    "test/partition/partition-peer-cache-identity-record.test.js": {
-      "files": [
-        "src/partition/partition-service-raft-peer-cache-reconciliation.js"
-      ]
-    },
     "test/partition/partition-port-refusal-outcomes.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -9930,6 +9940,12 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js"
+      ]
+    },
+    "test/rebalancer/terminal-failed-add-target-cleanup.test.js": {
+      "files": [
+        "src/rebalancer/replica-status.js",
+        "src/rebalancer/unified-rebalancer-replica-state.js"
       ]
     },
     "test/rebalancer/timeout-triggers-failure.property.test.js": {

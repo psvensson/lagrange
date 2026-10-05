@@ -10,8 +10,10 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {reconcileRaftPeersFromCacheForService} from
-  '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
+import {
+  isBootstrapPeerAdmissible,
+  reconcileRaftPeersFromCacheForService,
+} from '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
 import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
@@ -83,4 +85,34 @@ test('the row change that records the fact admits the peer', () => {
   reconcileRaftPeersFromCacheForService(service);
   assert.deepEqual(proposed.map((change) => change.replicaIdentity),
     [rows[0].service_id]);
+});
+
+// F2: the init loop admits a bootstrap peer through the same rule. A
+// restored opener's bootstrap ids come from rows with no status filter
+// (buildReplicatedServiceBootstrapTopology), so a PENDING/CREATING peer is
+// withheld there too; a bootstrap peer with no row yet is admitted as before.
+test('the init loop admits a bootstrap peer only once its row records the ' +
+  'identity fact', () => {
+  const rows = new Map();
+  const service = {
+    replicaId: `${PARTITION_ID}-leader`,
+    systemTableCache: {get: (_table, key) => rows.get(key) ?? null},
+  };
+  const peer = rowOf(ReplicaStatus.CREATING);
+  assert.equal(isBootstrapPeerAdmissible(service, peer.service_id), true,
+    'no row: the bootstrap membership names it');
+  rows.set(peer.service_id, peer);
+  assert.equal(isBootstrapPeerAdmissible(service, peer.service_id), false);
+  for (const status of [ReplicaStatus.PENDING, ReplicaStatus.FAILED,
+    ReplicaStatus.REMOVING, ReplicaStatus.REMOVED]) {
+    rows.set(peer.service_id, {...peer, status});
+    assert.equal(isBootstrapPeerAdmissible(service, peer.service_id), false,
+      status);
+  }
+  for (const status of [ReplicaStatus.SYNCING, ReplicaStatus.ACTIVE,
+    SERVICE_STATUS.STOPPED]) {
+    rows.set(peer.service_id, {...peer, status});
+    assert.equal(isBootstrapPeerAdmissible(service, peer.service_id), true,
+      status);
+  }
 });

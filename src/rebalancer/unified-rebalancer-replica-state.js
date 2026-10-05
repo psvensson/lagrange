@@ -615,9 +615,13 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
-   * Failed REPLACE rows can still leave the target replica in raft placement.
-   * Surface those target replica IDs to the planner as cleanup removals so a
-   * failed create path cannot hold the partition above target indefinitely.
+   * Failed REPLACE and ADD rows can still leave the target replica in raft
+   * placement - and, once the leader admitted it on its SYNCING row, in the
+   * group's configuration as a voter whose port the failed create closed (the
+   * ack-loss wedge: its FAILED write may never land). Surface those target
+   * replica IDs to the planner as cleanup removals (the FAILED_REPLICA cure:
+   * REMOVE -> REMOVING -> the row-driven RemoveNode), so a failed create can
+   * neither hold the partition above target nor leave a closed voter in it.
    *
    * @return {Set<string>}
    * @private
@@ -634,7 +638,8 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
           nowMs: this.nowFn(),
         });
         return (
-          normalizedOperation.type === OperationType.REPLACE &&
+          (normalizedOperation.type === OperationType.REPLACE ||
+            normalizedOperation.type === OperationType.ADD) &&
           (normalizedOperation.status === ReplicaStatus.FAILED ||
             normalizedOperation.workflowStep === WORKFLOW_STEP.FAILED)
         );

@@ -12,6 +12,7 @@ import {
   takeDeferredRetirements,
 } from './partition-service-raft-membership-administration.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {isPeerRowStatusAdmissible} from '../rebalancer/replica-status.js';
 
 // The admission outcomes that leave a peer outside the configuration.
 const UNADMITTED_PEER_OUTCOMES = Object.freeze(new Set([
@@ -100,23 +101,31 @@ function resolvePeerAddressFromService(addressManager, serviceRow, replicaId) {
 // would count a voter that cannot answer - and, for the group that stores
 // the fact itself (the services partition), make the fact's own write wait
 // on that voter. It is admitted on the row change that records the fact.
-const PEER_ROWS_BEFORE_IDENTITY_RECORD = Object.freeze(new Set([
-  ReplicaStatus.PENDING,
-  ReplicaStatus.CREATING,
-]));
-const RETIRED_PEER_ROW_STATUSES = Object.freeze(new Set([
-  ReplicaStatus.FAILED,
-  ReplicaStatus.REMOVING,
-  ReplicaStatus.REMOVED,
-]));
-
+// Retiring rows never are. The rule is the one isPeerRowStatusAdmissible.
 function shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) {
   if (!replicaId || replicaId === partitionService.replicaId) {
     return true;
   }
-  const status = serviceRow.status || ReplicaStatus.ACTIVE;
-  return RETIRED_PEER_ROW_STATUSES.has(status) ||
-    PEER_ROWS_BEFORE_IDENTITY_RECORD.has(status);
+  return !isPeerRowStatusAdmissible(serviceRow.status);
+}
+
+/**
+ * Whether the init loop may admit a bootstrap peer (F2): the same filter as
+ * the row-driven reconciliation, over the peer's services row when this
+ * node's cache holds one. A bootstrap peer with no row yet is admitted as
+ * before (the bootstrap membership names it); a PENDING/CREATING or retiring
+ * row is not, here or anywhere: it is admitted on the row change that records
+ * its fact.
+ * @param {Object} partitionService - The opening partition replica.
+ * @param {string} peerId - The bootstrap peer.
+ * @return {boolean}
+ */
+function isBootstrapPeerAdmissible(partitionService, peerId) {
+  const serviceRow = typeof partitionService.systemTableCache?.get ===
+    PARTITION_SERVICE_TYPE.FUNCTION ?
+    partitionService.systemTableCache.get(TABLES.SERVICES, peerId) : null;
+  return !serviceRow ||
+    !shouldSkipPeerServiceRow(partitionService, serviceRow, peerId);
 }
 
 function addressMatchesReplica(addressManager, address, replicaId) {
@@ -437,6 +446,7 @@ function redriveAdmissionsOnMembershipChange(partitionService) {
 }
 
 export {
+  isBootstrapPeerAdmissible,
   reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
   retireRaftPeerFromAuthoritativeServiceChange,

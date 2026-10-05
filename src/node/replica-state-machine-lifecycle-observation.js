@@ -202,6 +202,17 @@ function rowMatchesReplicaLifecycle(row, replicaState) {
   );
 }
 
+// The same incarnation in the same state, whatever its durable version: the
+// identity fields and the status of the state's predicate, the version left
+// out (the create-SYNCING edge's idempotence; nothing else may use it).
+function rowHoldsReplicaIncarnation(row, replicaState) {
+  if (!replicaState || typeof replicaState !== 'object') return false;
+  const predicate = buildReplicaLifecyclePredicateFromState(replicaState);
+  if (!isReplicaLifecycleMutationPredicate(predicate)) return false;
+  return Object.entries(predicate).every(([field, value]) =>
+    field === replicaState.durableVersionColumn || row?.[field] === value);
+}
+
 async function installAuthoritativeReplicaLifecycleSnapshot(
   stateMachine,
   service,
@@ -261,6 +272,7 @@ export {
   readAuthoritativePartitionLeader,
   readAuthoritativeReplicaLifecycle,
   resolveReplicaCreateGroupId,
+  rowHoldsReplicaIncarnation,
   rowMatchesReplicaLifecycle,
   rowMatchesReplicaLifecyclePredicate,
 };

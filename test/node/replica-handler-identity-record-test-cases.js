@@ -47,26 +47,30 @@ function addressOf(replicaId) {
 
 // The partition factory: one real port per create, from the handler's own
 // options; a refused opening throws as PartitionService.initialize does.
+function portRequest(options, db) {
+  return {
+    [REQUEST.GROUP_ID]: options.partitionId,
+    [REQUEST.PEER_ID]: options.replicaId,
+    [REQUEST.PEER_ADDRESS]: addressOf(options.replicaId),
+    [REQUEST.BOOTSTRAP_PEER_IDS]: [options.replicaId],
+    [REQUEST.BOOTSTRAP_MEMBERSHIP]: genesisStamp([options.replicaId]),
+    [REQUEST.IDENTITY_EXISTED]: options.identityExisted,
+    ...(options.identityRecorded === undefined ? {} :
+      {[REQUEST.IDENTITY_RECORDED]: options.identityRecorded}),
+    [REQUEST.DURABLE_STORAGE]: db,
+    [REQUEST.TIMING]: TIMING,
+    [REQUEST.DEFER_ELECTION]: true,
+    [REQUEST.SEND_TO_PEER]: () => undefined,
+    [REQUEST.RESOLVE_PEER_ADDRESS]: addressOf,
+    [REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
+    [REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
+  };
+}
+
 function realPortFactory(directory, opened) {
   return async (options) => {
     const db = new Database(path.join(directory, `${options.replicaId}.db`));
-    const request = {
-      [REQUEST.GROUP_ID]: options.partitionId,
-      [REQUEST.PEER_ID]: options.replicaId,
-      [REQUEST.PEER_ADDRESS]: addressOf(options.replicaId),
-      [REQUEST.BOOTSTRAP_PEER_IDS]: [options.replicaId],
-      [REQUEST.BOOTSTRAP_MEMBERSHIP]: genesisStamp([options.replicaId]),
-      [REQUEST.IDENTITY_EXISTED]: options.identityExisted,
-      ...(options.identityRecorded === undefined ? {} :
-        {[REQUEST.IDENTITY_RECORDED]: options.identityRecorded}),
-      [REQUEST.DURABLE_STORAGE]: db,
-      [REQUEST.TIMING]: TIMING,
-      [REQUEST.DEFER_ELECTION]: true,
-      [REQUEST.SEND_TO_PEER]: () => undefined,
-      [REQUEST.RESOLVE_PEER_ADDRESS]: addressOf,
-      [REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
-      [REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
-    };
+    const request = portRequest(options, db);
     const entry = {options, port: null, refusal: null, closed: false};
     opened.push(entry);
     try {
@@ -84,6 +88,8 @@ function realPortFactory(directory, opened) {
       async shutdown() {
         if (!entry.closed) {
           entry.closed = true;
+          // A test's last look at the port before its fence closes it.
+          entry.beforeClose?.(entry.port);
           entry.port.close();
           db.close();
         }
@@ -108,8 +114,9 @@ export async function registerReplicaHandlerIdentityRecordTests({
   createSeededCache,
 }) {
   async function driveCreate({replicaId, beforeMutation, seedRow = null,
-    request = {}}) {
+    request = {}, prepare = null}) {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'identity-rec-'));
+    prepare?.(directory);
     const cache = createSeededCache({partitionId: PARTITION_ID});
     if (seedRow !== null) {
       cache.applySystemTableChange('services', 'INSERT', seedRow);
@@ -119,7 +126,8 @@ export async function registerReplicaHandlerIdentityRecordTests({
       nodeId: NODE_ID,
       controlPlaneSystemTableGateway:
         createLifecycleControlPlaneGatewayForCache(cache, {
-          beforeMutation: (mutation) => beforeMutation?.(mutation, opened),
+          beforeMutation: (mutation, _options, store) =>
+            beforeMutation?.(mutation, opened, store),
         }),
     });
     const handler = new ReplicaHandler({
@@ -222,11 +230,20 @@ export async function registerReplicaHandlerIdentityRecordTests({
     'wait is logged and the never-participating port is closed',
   async (t) => {
     let campaignWhileClosed = null;
+    let atClose = null;
     const run = await driveCreate({
       replicaId: 'r3-target',
       beforeMutation: (mutation, opened) => {
         if (syncingWrite(mutation, ReplicaStatus.SYNCING)) {
           campaignWhileClosed = opened[0].port.campaign();
+          // The failure path's fence: what the port admits between the
+          // refused write and its close.
+          opened[0].beforeClose = (port) => {
+            atClose = {
+              identityRecorded: port.readStatus().identityRecorded,
+              campaign: port.campaign()?.reason ?? null,
+            };
+          };
           throw new Error('SERVICES write refused');
         }
       },
@@ -236,6 +253,12 @@ export async function registerReplicaHandlerIdentityRecordTests({
       t.equal(campaignWhileClosed?.reason,
         'participation-gate-identity-unrecorded');
       t.equal(run.opened[0].closed, true, 'the port is closed');
+      // A refused write abandons the record: it stays unreleased up to the
+      // port's close, and no step is admitted between the failure and the
+      // fence (verifier mutant V1: releasing on the failed write).
+      t.same(atClose, {identityRecorded: false,
+        campaign: 'participation-gate-identity-unrecorded'},
+      'unreleased and stepping nothing up to the close');
       const spent = run.warnings.find((line) => line.message ===
         REPLICA_HANDLER_LOG_MSG.IDENTITY_RECORD_WAIT_SPENT);
       t.ok(spent, 'the spent wait is logged');
@@ -281,6 +304,149 @@ export async function registerReplicaHandlerIdentityRecordTests({
             COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED);
         } else {
           t.comment(`${name}: refused before the open: ${run.failure.message}`);
+        }
+      } finally {
+        await run.finish();
+      }
+    });
+  }
+
+  // The ack-loss wedge (F3): the SYNCING write applies, its answer is lost
+  // and the authority read fails once. The write resolves against the row
+  // inside the status owner's bounded retry: the row SYNCING for this
+  // incarnation on this node IS the release condition.
+  t.test('R5: a SYNCING write applied with its answer lost while the ' +
+    'authority read is down once releases on the durable row, and the ' +
+    'create completes', async (t) => {
+    const atWrite = [];
+    let store = null;
+    let reads = 0;
+    const run = await driveCreate({
+      replicaId: 'r5-target',
+      beforeMutation: (mutation, opened, mutationStore) => {
+        if (!syncingWrite(mutation, ReplicaStatus.SYNCING)) return;
+        store = mutationStore;
+        atWrite.push(recordStateAt(opened[0]));
+        if (atWrite.length > 1) return;
+        store.setApplyThenThrowStatus(ReplicaStatus.SYNCING);
+        store.setAuthoritativeReadAvailable(false);
+        store.setBeforeAuthoritativeRead(() => {
+          reads += 1;
+          if (reads > 1) store.setAuthoritativeReadAvailable(true);
+        });
+      },
+    });
+    try {
+      t.equal(run.failure, null, 'the create completes');
+      t.same(atWrite, [false, false],
+        'unrecorded through the lost answer and its retry');
+      t.ok(reads >= 2, 'the row was read again after the failed read');
+      t.equal(recordStateAt(run.opened[0]), true, 'released');
+      t.equal(store.durableRow('services', 'r5-target')?.status,
+        ReplicaStatus.ACTIVE, 'the next CAS fenced on the adopted row');
+      t.notOk(run.warnings.some((line) => line.message ===
+        REPLICA_HANDLER_LOG_MSG.IDENTITY_RECORD_WAIT_SPENT), 'no spent wait');
+    } finally {
+      await run.finish();
+    }
+  });
+
+  t.test('R5b: a lost answer is never resolved by a SYNCING row of another ' +
+    'incarnation: the record stays unreleased and the create fails',
+  async (t) => {
+    let released = null;
+    const run = await driveCreate({
+      replicaId: 'r5b-target',
+      beforeMutation: (mutation, opened, store) => {
+        if (!syncingWrite(mutation, ReplicaStatus.SYNCING)) return;
+        store.setApplyThenThrowStatus(ReplicaStatus.SYNCING);
+        store.setBeforeAuthoritativeRead((_table, _params, durable) => {
+          const row = durable.services.get('r5b-target');
+          if (row?.status === ReplicaStatus.SYNCING) {
+            durable.services.set('r5b-target', {...row, created_at: 999});
+          }
+          released = recordStateAt(opened[0]);
+        });
+      },
+    });
+    try {
+      t.ok(run.failure, 'the create fails');
+      t.equal(released, false, 'unreleased when the row was read');
+      t.ok(run.warnings.some((line) => line.message ===
+        REPLICA_HANDLER_LOG_MSG.IDENTITY_RECORD_WAIT_SPENT), 'spent wait');
+    } finally {
+      await run.finish();
+    }
+  });
+
+  // A durable record that never voted: no hard state beyond term 0 / vote 0,
+  // no log entry, the opening configuration at applied index 0.
+  function readRecord(directory, replicaId) {
+    const db = new Database(path.join(directory, `${replicaId}.db`),
+      {readonly: true});
+    try {
+      return {
+        hardState: db.prepare('SELECT term, vote, commit_index FROM ' +
+          '_raft_rs_hard_state WHERE group_id = ?').get(PARTITION_ID) ?? null,
+        entries: db.prepare('SELECT COUNT(*) AS n FROM _raft_rs_log ' +
+          'WHERE group_id = ?').get(PARTITION_ID).n,
+        applied: db.prepare('SELECT applied_index FROM ' +
+          '_raft_rs_applied_state WHERE group_id = ?').get(PARTITION_ID),
+      };
+    } finally {
+      db.close();
+    }
+  }
+  const isVirgin = (record) => record.entries === 0 &&
+    Number(record.applied?.applied_index ?? 0) === 0 &&
+    (record.hardState === null || (Number(record.hardState.term) === 0 &&
+      Number(record.hardState.vote) === 0));
+
+  // An earlier attempt of this create left its record and its durable
+  // SYNCING row: gated (virgin) or, for the control, one that led.
+  function leaveEarlierAttempt(replicaId, {voted}) {
+    return (directory) => {
+      const db = new Database(path.join(directory, `${replicaId}.db`));
+      const pending = Promise.withResolvers();
+      pending.promise.catch(() => undefined);
+      const port = createRaftRsOperationPort(portRequest({
+        partitionId: PARTITION_ID, replicaId, identityExisted: false,
+        ...(voted ? {} : {identityRecorded: pending.promise}),
+      }, db));
+      port.campaign();
+      port.close();
+      db.close();
+    };
+  }
+
+  for (const voted of [false, true]) {
+    const label = voted ? 'a record that voted' : 'a virgin record';
+    t.test(`R6: a create re-driven onto its own SYNCING row with ${label} ` +
+      'resumes: no PENDING/CREATING rewrite, the record restores, the ' +
+      'create completes', async (t) => {
+      const replicaId = `r6-${voted ? 'voted' : 'virgin'}`;
+      let before = null;
+      let directoryOf = null;
+      const run = await driveCreate({
+        replicaId,
+        seedRow: openedRow(replicaId, ReplicaStatus.SYNCING),
+        prepare: (directory) => {
+          leaveEarlierAttempt(replicaId, {voted})(directory);
+          directoryOf = directory;
+          before = readRecord(directory, replicaId);
+        },
+      });
+      try {
+        t.equal(isVirgin(before), !voted, `the earlier record: ${label}`);
+        t.equal(run.failure, null, 'the re-drive completes');
+        t.equal(run.opened.length, 1);
+        t.equal(run.opened[0].options.identityExisted, true, 'fact read');
+        t.equal(run.opened[0].options.identityRecorded, undefined,
+          'no pending record: the fact is durable');
+        t.equal(run.opened[0].port.readStatus().gateOpen, true);
+        if (voted) {
+          t.ok(Number(readRecord(directoryOf, replicaId).hardState?.term) >= 1,
+            'the voted record restored, not re-founded');
         }
       } finally {
         await run.finish();

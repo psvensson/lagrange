@@ -32,8 +32,11 @@
 // "narrow the tests", no crate fork). Runs are therefore compared on what
 // ambient ancestry could corrupt and the core does not decide: no attributed
 // segment opens without an execution node (per run), the same set of owners
-// runs (node stripped from owner@node), the same nodes are charged, and the
-// same set of owners is charged across them.
+// runs, the same nodes are charged, and the same set of owners is charged
+// across them. Only the leader-side owners lose their node: the
+// leadership-independent owners (bootstrap, admin, transport, raft_protocol,
+// worker_dispatch) are compared exactly as owner@node, and per node in the
+// charging report.
 import {AsyncResource} from 'node:async_hooks';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -72,26 +75,53 @@ function withTranscript(body) {
   });
 }
 
-// Attributed segments opened with no node, and which owners ran (the node
-// they ran on is leadership-dependent and stripped).
+// The owners whose node does not depend on who leads: every node boots,
+// serves admin, carries transport, runs its own raft protocol and dispatches
+// its own workers whoever wins an election. For these the node is compared
+// exactly (owner@node), so ambient ancestry leaking another node's identity
+// into one of their segments fails; only the leader-side owners
+// (rebalancer, membership_publication, readiness, a joiner's raft_apply) are
+// compared without their node.
+const LEADERSHIP_INDEPENDENT_OWNERS = new Set([
+  FORMATION_OWNER.BOOTSTRAP,
+  FORMATION_OWNER.ADMIN,
+  FORMATION_OWNER.TRANSPORT,
+  FORMATION_OWNER.RAFT_PROTOCOL,
+  FORMATION_OWNER.WORKER_DISPATCH,
+]);
+
+function ownerOfEntry(entry) {
+  return entry.slice(0, entry.lastIndexOf(OWNER_NODE_SEPARATOR));
+}
+
+// Attributed segments opened with no node, which owners ran, and on which
+// node each leadership-independent owner ran.
 function attributionShape(entries) {
   const attributed = entries.filter((entry) =>
     !entry.startsWith(`${FORMATION_OWNER.UNATTRIBUTED}${OWNER_NODE_SEPARATOR}`));
   return {
     unbound: attributed.filter((entry) =>
       entry.endsWith(`${OWNER_NODE_SEPARATOR}null`)).length,
-    owners: [...new Set(attributed.map((entry) =>
-      entry.slice(0, entry.lastIndexOf(OWNER_NODE_SEPARATOR))))].sort(),
+    owners: [...new Set(attributed.map(ownerOfEntry))].sort(),
+    independentOwnersOnNodes: [...new Set(attributed.filter((entry) =>
+      LEADERSHIP_INDEPENDENT_OWNERS.has(ownerOfEntry(entry))))].sort(),
   };
 }
 
-// Which nodes were charged and which owners were charged across them, read
-// from per-node owner lists ({nodeId, owners}); which node a leader-side
-// owner was charged on is leadership-dependent and not compared.
+// Which nodes were charged, which owners were charged across them, and -
+// exactly, per node - which leadership-independent owners each node was
+// charged for, read from per-node owner lists ({nodeId, owners}); which node
+// a leader-side owner was charged on is leadership-dependent and not
+// compared.
 function chargingShapeOfNodes(nodes) {
   return JSON.stringify({
     nodeIds: nodes.map((node) => node.nodeId),
     owners: [...new Set(nodes.flatMap((node) => node.owners))].sort(),
+    independentOwnersByNode: nodes.map((node) => ({
+      nodeId: node.nodeId,
+      owners: node.owners.filter((owner) =>
+        LEADERSHIP_INDEPENDENT_OWNERS.has(owner)).sort(),
+    })),
   });
 }
 
@@ -118,6 +148,9 @@ function assertSameShapes(observed, reference, name) {
     `${name}: attributed work opened with no execution node`);
   assert.deepEqual(observed.attribution.owners,
     reference.attribution.owners, `${name}: another set of owners ran`);
+  assert.deepEqual(observed.attribution.independentOwnersOnNodes,
+    reference.attribution.independentOwnersOnNodes,
+    `${name}: a leadership-independent owner ran on another node`);
   assert.equal(observed.charging, reference.charging,
     `${name}: other nodes or other owners were charged`);
 }

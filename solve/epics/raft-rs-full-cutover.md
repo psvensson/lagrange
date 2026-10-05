@@ -706,6 +706,23 @@ or a first create; a gated joiner whose applied index freezes while its group
 advances; a replica that stays `identityRecorded: false` after its SYNCING
 row is durable; two leaders in one term.
 
+**Live-formation watch list after the identity follow-up (verifier
+verify-identity-4, 2026-10-05).** Should show: creates logging SYNCING then
+AddNode within about 1 s (event-driven); create->voter-ready of a few seconds,
+the same as base within noise; an RF1 partition's first leader 1-2 s after its
+SYNCING; no new spent 60 s voter-ready waits attributable to the admission
+filter; a joiner's self-hosted message group electing only after its STOPPED
+services rows are registered. Must NOT show: two leaders in one term;
+`IDENTITY_RECORD_WAIT_SPENT` in a healthy formation (any occurrence is the
+ack-loss wedge or its residue: capture the row and the authority-read
+errors); a replica stuck with `identityRecorded:false` after its SYNCING row
+is visible; `participation-gate-identity-unrecorded` refusals after release;
+reseed-required at open for a first create or a first join; a leaderless group
+whose ConfState names a FAILED or closed target (the FAILED_REPLICA cure must
+REMOVE a terminally failed ADD/REPLACE target); a services group leaderless
+after a seed restart during an ADD (I3-i); a message-group replica of a joiner
+that leads before its services row is durable.
+
 **The heartbeat hold stays as the second net.** P1, the local-log guard's
 commit-beyond-log hold, is unchanged.
 
