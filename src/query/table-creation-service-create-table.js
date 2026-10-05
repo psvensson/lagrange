@@ -184,12 +184,15 @@ function buildCreateTableMetadataContext(service, ast, options) {
   const partitionKey = service.derivePartitionKey(ast.primaryKey);
   const tableId = options.tableId || `tbl-${uuidv4()}`;
   const partitionId = options.partitionId || `${tableId}-p1`;
+  const schemaDefinition = service.buildSchemaDefinition(ast.columns);
+  const partitionKeyColumn = schemaDefinition.columns.find(
+    (column) => column.name === partitionKey,
+  );
+  const partitionKeyType = partitionKeyColumn?.type || null;
   const tableMetadata = {
     table_id: tableId,
     table_name: ast.tableName,
-    schema_definition: JSON.stringify(
-      service.buildSchemaDefinition(ast.columns),
-    ),
+    schema_definition: JSON.stringify(schemaDefinition),
     partition_key: partitionKey,
     table_policies: JSON.stringify(resolveCreateTablePolicy(ast)),
     partition_count: 1,
@@ -206,6 +209,7 @@ function buildCreateTableMetadataContext(service, ast, options) {
     table_name: ast.tableName,
     partition_key_start: null,
     partition_key_end: null,
+    partition_key_type: partitionKeyType,
     partition_version: 1,
     replica_count: service.defaultReplicaCount,
     size_bytes: 0,
