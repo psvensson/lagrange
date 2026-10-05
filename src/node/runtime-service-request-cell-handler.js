@@ -1,3 +1,4 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {HEALTH_STATUS} from '../runtime/runtime-driver.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
@@ -24,6 +25,41 @@ const REQUEST_CELL_RUNTIME_MESSAGE = Object.freeze({
     'Request Cell Service_Message security context is invalid',
   TARGET_MOVED: 'Request Cell actual moved to another node',
 });
+
+const REQUEST_CELL_DEADLINE_WAIT = Object.freeze({
+  wait: 'Request Cell invocation deadlineMs',
+  awaited: 'Request Cell invocation reached its local actual before its deadline',
+});
+
+/**
+ * A Request Cell invocation arrived (or was re-checked) after its deadline:
+ * one wait_bound_spent ERROR with how far past the deadline it was and the
+ * route it was bound to. An invocation without a finite deadline is a
+ * malformed request, not a spent wait, and is not reported.
+ * @param {Object} handler - The runtime service handler (its logger).
+ * @param {Object} route - The selected route.
+ * @param {Object} invocation - The invocation (id, deadlineMs).
+ * @return {void}
+ */
+function reportRequestCellDeadlineSpent(handler, route, invocation) {
+  if (!Number.isFinite(invocation?.deadlineMs)) {
+    return;
+  }
+  reportWaitBoundSpent(handler?.logger ?? null, {
+    ...REQUEST_CELL_DEADLINE_WAIT,
+    boundMs: null,
+    elapsedMs: null,
+    lastObserved: {
+      overdueMs: Date.now() - invocation.deadlineMs,
+      hostNodeId: route?.hostNodeId ?? null,
+      serviceId: route?.serviceId ?? null,
+    },
+    scope: {
+      nodeId: handler?.nodeId ?? null,
+      invocationId: invocation.id ?? null,
+    },
+  });
+}
 
 function valueOrFallback(value, fallback) {
   return value === undefined ? fallback : value;
@@ -129,6 +165,7 @@ function assertCurrentRequestCellTarget(
     !Number.isFinite(invocation?.deadlineMs) ||
     Date.now() >= invocation.deadlineMs
   ) {
+    reportRequestCellDeadlineSpent(handler, route, invocation);
     throw new RequestCellRoutingError(
       REQUEST_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED,
       REQUEST_CELL_RUNTIME_MESSAGE.DEADLINE_EXPIRED,

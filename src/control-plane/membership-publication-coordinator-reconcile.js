@@ -67,7 +67,7 @@ function hasPrioritySummaryRefreshClearedGap(latestPublicationRow, candidate) {
       ?.priorityPartitionSummary,
   ) && !hasPriorityRecoverySpreadGap(candidate?.priorityPartitionSummary);
 }
-const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000;
+const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000; // ends-on: the reconcileActiveGateMembershipPublication() drive resolves
 const OWNER_MEMBERSHIP_DRIVER_ERROR_MSG =
   'Owner-driven membership reconcile error';
 const OWNER_MEMBERSHIP_DRIVER_RAN_MSG =

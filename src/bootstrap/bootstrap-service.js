@@ -126,6 +126,8 @@ const LOCAL_STR_TRIGGERREBALANCINGONALLPARTITIONS = 'triggerRebalancingOnAllPart
 const LOCAL_STR_RETRYING_SEED_STEADY_STATE_CONTROL_PLANE = 'Retrying seed steady-state control-plane writers until ';
 const LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS = 'lifecycle metadata publication readiness is satisfied';
 const LOCAL_STR_DEFERRING_SEED_STEADY_STATE_CONTROL_PLAN = 'Deferring seed steady-state control-plane writers until ';
+const SEED_STEADY_STATE_METADATA_PUBLICATION_SPENT_SUBJECT =
+  'seed_steady_state_control_plane_writers';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapLog = BOOTSTRAP_LOG_MSG;
@@ -450,6 +452,9 @@ class BootstrapService extends EventEmitter {
         getMetadataPublicationReadinessOptions: () => ({
           readinessState: this.bootstrapReadinessState,
           sleep: (delayMs) => this.sleep(delayMs),
+          logger: this.logger,
+          scope: {nodeId: this.nodeId},
+          spentSubject: SEED_STEADY_STATE_METADATA_PUBLICATION_SPENT_SUBJECT,
           onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
             this.logger.warn(
               LOCAL_STR_RETRYING_SEED_STEADY_STATE_CONTROL_PLANE +

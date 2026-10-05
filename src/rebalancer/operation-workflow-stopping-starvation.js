@@ -21,10 +21,15 @@
 // count bound is ~10s of continuous authoritative-lane unavailability —
 // far above transient blips, far below the joiner's 120s
 // formation-barrier budget.
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
 const STOPPING_OBSERVATION_STARVATION_DEFERRAL_LIMIT = 40;
 const STOPPING_OBSERVATION_STARVATION_MIN_ELAPSED_MS = 10_000;
-const STOPPING_OBSERVATION_STARVATION_LOG_MESSAGE =
-  'Stopping-replica observation starved; failing operation visibly';
+const STOPPING_OBSERVATION_STARVATION_WAIT = Object.freeze({
+  wait: 'STOPPING_OBSERVATION_STARVATION_MIN_ELAPSED_MS',
+  awaited: 'authoritative stopping-replica observation',
+  observationState: 'unavailable',
+});
 const STOPPING_OBSERVATION_STARVATION_FAILURE_MESSAGE =
   'stopping-observation starvation: authoritative replica observation ' +
   'stayed unavailable past the bounded deferral limit';
@@ -115,16 +120,27 @@ function clearStoppingObservationDeferrals(owner, operationId) {
  * @return {Promise<boolean>}
  */
 async function escalateStarvedStoppingObservation(owner, operation) {
-  owner.logger.error(
-    STOPPING_OBSERVATION_STARVATION_LOG_MESSAGE,
-    {
-      operationId: operation.operationId,
-      partitionId: operation.partitionId || null,
-      workflowStep: operation.workflowStep || null,
-      deferralLimit: STOPPING_OBSERVATION_STARVATION_DEFERRAL_LIMIT,
-      minElapsedMs: STOPPING_OBSERVATION_STARVATION_MIN_ELAPSED_MS,
-    },
+  const record = owner.stoppingObservationDeferralsByOperationId.get(
+    operation.operationId,
   );
+  reportWaitBoundSpent(owner.logger, {
+    wait: STOPPING_OBSERVATION_STARVATION_WAIT.wait,
+    awaited: STOPPING_OBSERVATION_STARVATION_WAIT.awaited,
+    boundMs: STOPPING_OBSERVATION_STARVATION_MIN_ELAPSED_MS,
+    elapsedMs: owner.resolveTimeoutCheckNowMs() - record.firstDeferredAtMs,
+    lastObserved: {
+      observationState: STOPPING_OBSERVATION_STARVATION_WAIT.observationState,
+      deferralCount: record.deferralCount,
+      deferralLimit: STOPPING_OBSERVATION_STARVATION_DEFERRAL_LIMIT,
+      workflowStep: operation.workflowStep || null,
+      sourceNodeId: operation.sourceNodeId || null,
+    },
+    scope: {
+      nodeId: owner.nodeId || null,
+      partitionId: operation.partitionId || null,
+      operationId: operation.operationId,
+    },
+  });
   clearStoppingObservationDeferrals(owner, operation.operationId);
   await owner.failOperation(
     operation,

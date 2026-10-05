@@ -31,7 +31,7 @@ const DEFAULT_REPAIR_NO_CHANGE_COOLDOWN_MS = 15000;
 // repairs in 4s, ~384/run on the seed → event-loop starvation). The floor collapses the
 // burst while keeping force-fresh responsiveness far below the normal cooldown.
 const DEFAULT_REPAIR_BYPASS_FLOOR_MS = 1000;
-const DEFAULT_REPAIR_QUERY_TIMEOUT_MS = 1500;
+const DEFAULT_REPAIR_QUERY_TIMEOUT_MS = 1500; // ends-on: the node snapshot repair read answers
 const DEFAULT_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS =
   NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT.repairStaleHeartbeatMs;
 const REPAIR_STAGE = Object.freeze({

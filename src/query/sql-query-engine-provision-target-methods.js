@@ -4,6 +4,10 @@ import {throwIfCancellationRequested} from './query-cancellation.js';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_THREE = 3;
+const TARGET_NODE_WAIT_LOG_LEVEL = Object.freeze({
+  FAIL: 'error',
+  CONTINUE: 'warn',
+});
 
 const {
   AddressManager,
@@ -18,6 +22,33 @@ const {
   TIMEOUT_BUDGET_CLASSIFICATION,
   buildOwnerContractOutcome,
 } = SQL_QUERY_ENGINE_SHARED;
+
+/**
+ * Log a provisioning-target wait failure that waitForCondition did not
+ * already report as a spent bound (e.g. a budget refused up front).
+ * @param {Object} engine - SQL query engine.
+ * @param {Error} error - The wait failure.
+ * @param {Object} payload - Log payload.
+ * @param {boolean} failOnTimeout - Whether the failure propagates.
+ * @private
+ */
+function logUnreportedTargetNodeWaitFailure(
+  engine,
+  error,
+  payload,
+  failOnTimeout,
+) {
+  if (error?.waitBoundSpentReported === true) {
+    return;
+  }
+  const level = failOnTimeout ?
+    TARGET_NODE_WAIT_LOG_LEVEL.FAIL :
+    TARGET_NODE_WAIT_LOG_LEVEL.CONTINUE;
+  engine.logger[level](
+    QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
+    payload,
+  );
+}
 
 class SQLQueryEngineProvisionTargetMethods {
   /**
@@ -179,6 +210,23 @@ class SQLQueryEngineProvisionTargetMethods {
           classification:
             TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
           nestedOperation: TABLE_PARTITION_TARGET_NODE_WAIT,
+          scope: {partitionId},
+          observe: () => ({
+            requiredReplicaCount,
+            resolvedNodeCount: resolvedNodeIds.length,
+            activeNodeRowCount: lastDiagnostics?.activeNodeRowCount ?? null,
+            usedDegradedFallback: lastDiagnostics?.usedDegradedFallback === true,
+            maximumProvisionableReplicaCount:
+              lastAdmissionProbe?.maximumProvisionableReplicaCount ?? null,
+            failOnTimeout,
+            // The replaced timeout line's payload, after the summary (a
+            // truncated observation keeps its leading fields in its preview).
+            maxWaitMs: waitTimeoutMs,
+            requestedMaxWaitMs: maxWaitMs,
+            allowAdaptiveAdmissionConvergenceWait,
+            timeoutDiagnostics: lastDiagnostics,
+            admissionProbe: lastAdmissionProbe,
+          }),
         },
       );
     } catch (error) {
@@ -194,17 +242,15 @@ class SQLQueryEngineProvisionTargetMethods {
         diagnostics: lastDiagnostics,
         admissionProbe: lastAdmissionProbe,
       };
+      logUnreportedTargetNodeWaitFailure(
+        this,
+        error,
+        timeoutLogPayload,
+        failOnTimeout,
+      );
       if (failOnTimeout) {
-        this.logger.error(
-          QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
-          timeoutLogPayload,
-        );
         throw error;
       }
-      this.logger.warn(
-        QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
-        timeoutLogPayload,
-      );
     }
 
     if (lastDiagnostics?.usedDegradedFallback && !timedOut) {

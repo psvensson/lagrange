@@ -71,6 +71,7 @@ const TRANSPORT_DEFAULT = Object.freeze({
   WS_HOST: HOST.LOCALHOST,
   WS_PROTOCOL: PROTOCOL.WS,
   LOCAL_ADDRESS_PREFIX: 'ws-',
+  // ends-on: the peer acknowledges or answers the message
   MESSAGE_TIMEOUT_MS: 5000,
   ACK_TIMEOUT_QUARANTINE_THRESHOLD: 2,
   // Quarantine requires evidence the peer is DEAD, not merely slow: when any
@@ -79,7 +80,9 @@ const TRANSPORT_DEFAULT = Object.freeze({
   // sever the connection ("never break, only slow"). During formation all
   // joiners quarantined the alive-but-saturated seed — their only
   // control-plane path — within 1s of each other (closure record CL-007).
+  // ends-on: n/a lookback
   ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS: 30000,
+  // ends-on: the pinged peer returns a PONG
   PING_TIMEOUT_MS: 1000,
   RECONNECT_INTERVAL_MS: 1000,
   RECONNECT_MAX_ATTEMPTS: 10,
@@ -113,6 +116,7 @@ const TRANSPORT_DEFAULT = Object.freeze({
   PRODUCTION_OUTBOUND_QUEUE_READINESS_RESERVE: NUM.EIGHT,
   PRODUCTION_OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE: 2,
   SHUTDOWN_WAIT_MS: 100,
+  // ends-on: the RPC response arrives (unreachable: nothing in src/ calls rpcClient.call)
   RPC_TIMEOUT_MS: 30000,
   EMPTY: STRING.EMPTY,
   CONNECTION_POOL_TTL_MS: 300000, // 5 minutes

@@ -18,9 +18,9 @@ import {
   scheduleDeferredSafetyRetry,
 } from '../../src/rebalancer/operation-workflow-dispatch-rearm-evidence.js';
 
-const REARM_DROPPED_MSG =
-  'Dropped deferred replica operation retry: not re-armed while ' +
-  'uninitialized after operation budget exhausted';
+// A drop at the spent operation budget is a spent wait: one ERROR with the
+// stable wait_bound_spent shape (src/logging/wait-bound-spent.js).
+const REARM_DROPPED_WAIT = 'REBALANCE_OPERATION_BUDGET_MS';
 
 function buildFakeOwner(operation) {
   const timers = [];
@@ -30,16 +30,21 @@ function buildFakeOwner(operation) {
     dispatchRetryTimerByOperationId: new Map(),
     safetyDeferredRetryTimerByOperationId: new Map(),
     warnings: [],
+    errors: [],
     logger: {
       warn(message, context) {
         owner.warnings.push({message, context});
       },
       info() {},
-      error() {},
+      error(message, context) {
+        owner.errors.push({message, context});
+      },
     },
     capturedTimers: timers,
     dropWarnings() {
-      return owner.warnings.filter((w) => w.message === REARM_DROPPED_MSG);
+      return owner.errors.filter((e) =>
+        e.context?.event === 'wait_bound_spent' &&
+        e.context?.wait === REARM_DROPPED_WAIT);
     },
     setTimeoutFn(callback) {
       const handle = {id: timers.length + 1};
@@ -124,8 +129,12 @@ test('deferred dispatch retry is dropped once the operation budget expires', (t)
   );
   const drops = owner.dropWarnings();
   t.equal(drops.length, 1, 'emits one drop warning');
-  t.equal(drops[0].message, REARM_DROPPED_MSG, 'drop warning message');
-  t.equal(drops[0].context.retryKind, 'dispatch_retry', 'retry kind');
+  t.equal(drops[0].context.event, 'wait_bound_spent', 'drop is a spent wait');
+  t.equal(
+    drops[0].context.lastObserved.retryKind,
+    'dispatch_retry',
+    'retry kind',
+  );
   t.end();
 });
 
@@ -177,6 +186,10 @@ test('deferred safety retry is dropped once the operation budget expires', (t) =
   t.equal(owner.capturedTimers.length, 1, 'no re-arm after budget expiry');
   const drops = owner.dropWarnings();
   t.equal(drops.length, 1, 'emits one drop warning');
-  t.equal(drops[0].context.retryKind, 'safety_retry', 'retry kind');
+  t.equal(
+    drops[0].context.lastObserved.retryKind,
+    'safety_retry',
+    'retry kind',
+  );
   t.end();
 });

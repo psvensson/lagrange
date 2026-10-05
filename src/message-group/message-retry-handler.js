@@ -10,6 +10,7 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {resolveRandomSource} from '../random/random-source.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_MESSAGE_RETRY_HANDLER = 'message-retry-handler';
 const LOCAL_STR_STARTING_RETRY_EXECUTION = 'Starting retry execution';
@@ -22,7 +23,6 @@ const LOCAL_STR_NOT_ACKNOWLEDGED = 'not_acknowledged';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_DELIVERY_ATTEMPT_FAILED = 'Delivery attempt failed';
 const LOCAL_STR_SWITCHING_TO_ALTERNATIVE_REPLICA = 'Switching to alternative replica';
-const LOCAL_STR_MAX_RETRIES_EXCEEDED = 'Max retries exceeded';
 const LOCAL_STR_NON_RETRYABLE_FAILURE = 'Delivery failed with a non-retryable error';
 const LOCAL_STR_MAXRETRIESEXCEEDED = 'maxRetriesExceeded';
 const LOCAL_STR_FAILED_TO_GET_ALTERNATIVE_REPLICAS = 'Failed to get alternative replicas';
@@ -30,6 +30,54 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_ALTERNATIVE_REPLICA_PROVIDER_MUST_BE_A_F = 'Alternative replica provider must be a function';
 const LOCAL_STR_RETRY_CONFIGURATION_UPDATED = 'Retry configuration updated';
 const LOCAL_STR_MAXRETRIESEXCEEDEDERROR = 'MaxRetriesExceededError';
+const MESSAGE_RETRY_EXHAUSTED_WAIT = Object.freeze({
+  wait: 'MESSAGE_GROUP_RETRY_MAX_ATTEMPTS',
+  awaited: 'an acknowledged delivery within the retry attempt budget',
+});
+
+// Bound on the attempt records (and tried targets) one exhaustion line
+// carries; the reporter also caps the serialized size of the observation.
+const MESSAGE_RETRY_REPORTED_ATTEMPTS = 16;
+
+/**
+ * The attempt budget ran out: one wait_bound_spent ERROR naming the last
+ * target, the last failure and how many targets were tried. The bound is
+ * an attempt count, so boundMs is null and the budget is in lastObserved.
+ * @param {MessageRetryHandler} handler - The retry owner.
+ * @param {Object} diagnostics - The exhaustion diagnostics.
+ * @param {number} maxAttempts - The attempt budget spent.
+ * @return {void}
+ */
+function reportMessageRetryExhausted(handler, diagnostics, maxAttempts) {
+  const firstAttemptAt = diagnostics.attemptHistory[0]?.timestamp;
+  const now = handler.timeSource ? handler.timeSource.now() : Date.now();
+  reportWaitBoundSpent(handler.logger, {
+    ...MESSAGE_RETRY_EXHAUSTED_WAIT,
+    boundMs: null,
+    elapsedMs: Number.isFinite(firstAttemptAt) ? now - firstAttemptAt : null,
+    // Observer: the attempt history (target, status, error per attempt) and
+    // the targets tried, as the replaced WARN carried them; the newest
+    // MESSAGE_RETRY_REPORTED_ATTEMPTS attempts, with the omitted count.
+    lastObserved: () => ({
+      maxAttempts,
+      totalAttempts: diagnostics.totalAttempts,
+      lastTarget: diagnostics.lastTarget ?? null,
+      triedTargetCount: diagnostics.triedTargets.length,
+      triedTargets: diagnostics.triedTargets.slice(
+        -MESSAGE_RETRY_REPORTED_ATTEMPTS),
+      lastError: diagnostics.lastError,
+      attemptHistory: diagnostics.attemptHistory.slice(
+        -MESSAGE_RETRY_REPORTED_ATTEMPTS),
+      attemptHistoryOmitted: Math.max(0, diagnostics.attemptHistory.length -
+        MESSAGE_RETRY_REPORTED_ATTEMPTS),
+    }),
+    scope: {
+      retryId: diagnostics.retryId,
+      messageId: diagnostics.messageId ?? null,
+      originalTarget: diagnostics.originalTarget ?? null,
+    },
+  });
+}
 
 /**
  * Retry result status enumeration.
@@ -331,7 +379,7 @@ class MessageRetryHandler extends EventEmitter {
       attemptHistory,
     };
 
-    this.logger.warn(LOCAL_STR_MAX_RETRIES_EXCEEDED, diagnostics);
+    reportMessageRetryExhausted(this, diagnostics, maxRetries + 1);
 
     this.emit(LOCAL_STR_MAXRETRIESEXCEEDED, diagnostics);
 

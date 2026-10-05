@@ -9,8 +9,10 @@ import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_BINARY = 'binary';
@@ -20,6 +22,51 @@ const LOCAL_STR_LITERAL = 'literal';
 const LOCAL_STR_PARAMETER = 'parameter';
 const LOCAL_STR_COLUMN_REF = 'column_ref';
 const LOCAL_STR_STAR = 'star';
+
+/**
+ * Read the caller's last-observed state at expiry; an observer failure is
+ * itself the observation (the spent error must still be thrown).
+ * @param {Function|undefined} observe
+ * @return {Object|null}
+ * @private
+ */
+function observeConditionWait(observe) {
+  if (typeof observe !== LOCAL_STR_FUNCTION) {
+    return null;
+  }
+  try {
+    return observe();
+  } catch (observeError) {
+    return {observeError: observeError?.message || String(observeError)};
+  }
+}
+
+/**
+ * Report one spent waitForCondition bound and mark the thrown error so a
+ * caller that used to log the same expiry does not log it twice.
+ * @param {Object} engine - SQL query engine.
+ * @param {Object} spent - {error, budget, polls, timeoutError,
+ *   timeoutOptions}.
+ * @private
+ */
+function reportConditionWaitSpent(engine, spent) {
+  const options = spent.timeoutOptions;
+  const observed = observeConditionWait(options.observe);
+  reportWaitBoundSpent(engine.logger, {
+    wait: options.nestedOperation || LOCAL_STR_WAIT_FOR_CONDITION,
+    awaited: spent.timeoutError,
+    boundMs: spent.budget?.configuredBudgetMs,
+    elapsedMs: (engine.nowFn || Date.now)() - spent.budget?.startedAtMs,
+    lastObserved: {
+      predicateSatisfied: false,
+      polls: spent.polls,
+      classification: spent.error.timeoutClassification?.classification,
+      ...observed,
+    },
+    scope: options.scope,
+  });
+  spent.error.waitBoundSpentReported = true;
+}
 
 const {
   AuthoritativeControlPlaneView,
@@ -108,8 +155,10 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       }) :
       this.createControlPlaneTimeoutBudget(timeoutMs);
 
+    let polls = 0;
     while (true) {
       throwIfCancellationRequested(cancellationToken);
+      polls += 1;
       if (await predicate()) {
         return;
       }
@@ -127,7 +176,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     if (await predicate()) {
       return;
     }
-    throw createTimeoutBudgetError({
+    const spentError = createTimeoutBudgetError({
       message: timeoutError,
       budget: effectiveBudget,
       classification:
@@ -136,6 +185,14 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       nestedOperation: timeoutOptions.nestedOperation || LOCAL_STR_WAIT_FOR_CONDITION,
       now: this.nowFn,
     });
+    reportConditionWaitSpent(this, {
+      error: spentError,
+      budget: effectiveBudget,
+      polls,
+      timeoutError,
+      timeoutOptions,
+    });
+    throw spentError;
   }
 
   /**

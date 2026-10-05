@@ -1,4 +1,22 @@
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const MIGRATION_CUTOVER_RETRY_WAIT = Object.freeze({
+  wait: 'MIGRATION_DEFAULT.MAX_RETRY_COUNT',
+  awaited: 'migration cutover transaction committed',
+});
+const MIGRATION_PARTITION_RETRY_WAIT = Object.freeze({
+  wait: 'MIGRATION_DEFAULT.MAX_RETRY_COUNT',
+  awaited: 'partition migration operation succeeded',
+});
+
+// Every retry of a migration step failed: the retry bound is spent.
+function reportMigrationRetrySpent(coordinator, waitSite, spent) {
+  reportWaitBoundSpent(coordinator.logger, {...waitSite, ...spent});
+}
 
 function createMigrationCoordinatorStageMethods(deps = {}) {
   const {
@@ -218,6 +236,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
       const refreshedMigrationRow = await this.getMigrationById(migrationId);
       const partitionRows = await this.getPartitionMigrationRows(migrationId);
       let lastError = null;
+      const retryStartedAtMs = readWaitClock(this);
       for (let attempt = LOCAL_NUM_ZERO; attempt <= MIGRATION_DEFAULT.MAX_RETRY_COUNT; attempt++) {
         try {
           await this.executeCutoverTransaction(refreshedMigrationRow, partitionRows);
@@ -247,6 +266,16 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
         }
       }
 
+      reportMigrationRetrySpent(this, MIGRATION_CUTOVER_RETRY_WAIT, {
+        boundMs: null,
+        elapsedMs: this.now() - retryStartedAtMs,
+        lastObserved: () => ({
+          attempts: MIGRATION_DEFAULT.MAX_RETRY_COUNT + LOCAL_NUM_ONE,
+          lastError: lastError?.message || null,
+          partitionCount: partitionRows.length,
+        }),
+        scope: {migrationId},
+      });
       await this.transitionMigrationStage(
         migrationId,
         MIGRATION_STATUS.FAILED,
@@ -328,6 +357,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
       }
 
       let lastError = null;
+      const retryStartedAtMs = readWaitClock(this);
       for (let attempt = LOCAL_NUM_ZERO; attempt <= MIGRATION_DEFAULT.MAX_RETRY_COUNT; attempt++) {
         const childBudget = this.migrationTimeoutPolicy.allocateOrThrow({
           timeoutBudget: options.timeoutBudget || null,
@@ -358,6 +388,16 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
         }
       }
 
+      reportMigrationRetrySpent(this, MIGRATION_PARTITION_RETRY_WAIT, {
+        boundMs: null,
+        elapsedMs: this.now() - retryStartedAtMs,
+        lastObserved: {
+          attempts: MIGRATION_DEFAULT.MAX_RETRY_COUNT + LOCAL_NUM_ONE,
+          lastError: lastError?.message || null,
+          statusOnFailure,
+        },
+        scope: {migrationId, partitionId},
+      });
       throw lastError || new Error(MIGRATION_ERROR_MSG.RETRY_EXHAUSTED);
     }
 

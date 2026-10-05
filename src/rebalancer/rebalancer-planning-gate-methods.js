@@ -1,4 +1,5 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {reportClusterReadinessSpent} from './cluster-readiness-wait-report.js';
 import {
   applyUserTableLeaderPlacementCure,
   evaluateLeaderPlacementCureBehindPrioritySpreadGate,
@@ -279,11 +280,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     if (elapsed >= this.clusterReadinessTimeoutMs) {
       this.clusterReadinessConfirmed = true;
       this.clusterReadinessState = 'degraded_timeout';
-      this.logger.warn(REBALANCER_LOG_MSG.CLUSTER_READINESS_TIMEOUT, {
-        entityId: this.entityId,
-        elapsedMs: elapsed,
-        unmetConditions: result.unmetConditions,
-      });
+      reportClusterReadinessSpent(this, elapsed, result);
       return null;
     }
 

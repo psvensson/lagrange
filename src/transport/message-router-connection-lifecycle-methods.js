@@ -1,3 +1,4 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
 const {
@@ -20,6 +21,41 @@ const {
   normalizeToWebSocketAddress,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
+
+const CONNECT_WAIT = Object.freeze({
+  wait: 'CONNECT_TIMEOUT_MS (+ per-attempt step, capped)',
+  awaited: 'WebSocket OPEN to the node',
+});
+
+/**
+ * An outbound connect spent its bound before OPEN: one wait_bound_spent
+ * ERROR per node with the socket's ready state and the reconnect attempt,
+ * folded while those are unchanged.
+ * @param {Object} router - The message router.
+ * @param {Object} connectionInfo - The connection record.
+ * @param {Object} ws - The connecting socket.
+ * @param {number} boundMs - The connect bound applied.
+ * @return {void}
+ */
+function reportConnectSpent(router, connectionInfo, ws, boundMs) {
+  reportWaitBoundSpent(router.logger, {
+    ...CONNECT_WAIT,
+    boundMs,
+    elapsedMs: boundMs,
+    lastObserved: {
+      readyState: ws?.readyState ?? null,
+      connectionState: connectionInfo.state ?? null,
+      reconnectAttempts: connectionInfo.reconnectAttempts || 0,
+      address: connectionInfo.address ?? null,
+    },
+    scope: {
+      nodeId: router.nodeId ?? null,
+      targetNodeId: connectionInfo.nodeId ?? null,
+      connectionId: connectionInfo.connectionId ?? null,
+    },
+    subject: connectionInfo.nodeId ?? null,
+  });
+}
 
 const objectFreeze = Object.freeze;
 
@@ -300,6 +336,8 @@ class MessageRouterConnectionLifecycleMethods {
           this.connectTimeoutMs + attempts * 5000,
         );
         connectTimeout = this.timeSource.setTimeout(() => {
+          reportConnectSpent(this, connectionInfo, ws,
+            currentConnectTimeoutMs);
           const error = new Error(
             `WebSocket connection timeout after ${currentConnectTimeoutMs}ms`,
           );

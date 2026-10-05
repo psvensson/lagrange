@@ -12,6 +12,10 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const CDC_SQL_PREVIEW_START = 0;
+const PARTITION_SIZE_WRITE_WAIT = Object.freeze({
+  wait: 'PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_TIMEOUT_MS',
+  awaited: 'partition size_bytes write accepted by the control plane',
+});
 
 /**
  * The SQL excerpt a CDC diagnostic carries, or null without SQL.
@@ -71,10 +75,15 @@ function buildPendingProposal({options, resolve, reject, timeoutId}) {
  * deadline and sleeps on the replica's own clock - the clock the replica's
  * debounce and cadence already read.
  * @param {Object} timeSource - The replica's time source.
+ * @param {Object} [owner] - {logger, scope}: names the replica in the
+ *   spent-wait report when the retry budget is spent.
  * @return {Object} runRetryableControlPlaneWrite options.
  */
-function partitionSizeRetryOptions(timeSource) {
+function partitionSizeRetryOptions(timeSource, owner = {}) {
   return {
+    logger: owner.logger,
+    spentWait: PARTITION_SIZE_WRITE_WAIT,
+    scope: owner.scope,
     timeoutMs: PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_TIMEOUT_MS,
     baseDelayMs: PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_BASE_DELAY_MS,
     maxDelayMs: PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_MAX_DELAY_MS,

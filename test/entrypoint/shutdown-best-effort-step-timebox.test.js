@@ -11,11 +11,12 @@ import {
 // drain reaches exit(0). A fast step completes normally with no time-box warning.
 
 function makeCapturingLogger() {
-  const calls = {info: [], warn: []};
+  const calls = {info: [], warn: [], error: []};
   return {
     logger: {
       info: (msg, ctx) => calls.info.push({msg, ctx}),
       warn: (msg, ctx) => calls.warn.push({msg, ctx}),
+      error: (msg, ctx) => calls.error.push({msg, ctx}),
     },
     calls,
   };
@@ -38,6 +39,10 @@ test('fix C: a step slower than the time-box returns near the timeout, not the s
     const warned = calls.warn.some((c) =>
       /time-box/i.test(c.msg) && c.ctx?.step === 'shutdownLogsTablePersistence');
     t.ok(warned, 'a timed-out best-effort step logs the time-box warning');
+    // The bound is a time-box on a best-effort step that routinely takes
+    // 5-7 s under churn: expiry is the designed exit, not a spent wait.
+    t.equal(calls.error.length, 0,
+      'a timed-out best-effort step is a time-box, not a wait_bound_spent ERROR');
     const timing = calls.info.find((c) =>
       c.ctx?.step === 'shutdownLogsTablePersistence');
     t.equal(timing?.ctx?.timedOut, true, 'timing log marks the step timedOut=true');
@@ -55,6 +60,7 @@ test('fix C: a fast step completes normally with no time-box warning',
     );
     t.ok(ran, 'the fast step actually ran to completion');
     t.equal(calls.warn.length, 0, 'no time-box warning for a fast step');
+    t.equal(calls.error.length, 0, 'no ERROR for a fast step');
     const timing = calls.info.find((c) =>
       c.ctx?.step === 'shutdownLogsTablePersistence');
     t.equal(timing?.ctx?.timedOut, false, 'timing log marks the step timedOut=false');

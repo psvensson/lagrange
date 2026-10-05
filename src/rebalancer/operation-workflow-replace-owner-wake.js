@@ -57,6 +57,7 @@
  * fallback.
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   runDeferredSafetyReentryTurn,
 } from './operation-workflow-dispatch-rearm-evidence.js';
@@ -71,6 +72,10 @@ const REPLACE_OWNER_WAKE_BOUNDARY = 'replace_owner_wake';
 // Bounded resubmission: a level that keeps changing is re-evaluated at most
 // this many times per wake; the 1 s fallback timer stays armed meanwhile.
 const REPLACE_OWNER_WAKE_MAX_RUNS = 16;
+const REPLACE_OWNER_WAKE_RUNS_WAIT = Object.freeze({
+  wait: 'REPLACE_OWNER_WAKE_MAX_RUNS',
+  awaited: 'REPLACE owner waited-on level stable after a re-drive',
+});
 const LEVEL_NODE_SEPARATOR = '|';
 const LEVEL_FIELD_SEPARATOR = ':';
 const LEVEL_PART_SEPARATOR = '#';
@@ -375,6 +380,42 @@ function isWaiterLevelCurrent(owner, waiter) {
   ) === waiter.levelKey;
 }
 
+/**
+ * The wake re-drive spent its run bound with the waited-on level still
+ * changing: one wait_bound_spent ERROR (re-fires per wake, so the operation
+ * is the subject); liveness stays with the armed 1 s fallback, unchanged.
+ * @param {Object} owner
+ * @param {Object} state
+ * @param {string} operationId
+ * @param {number} startedAtMs - Date.now() when the re-drive started.
+ * @return {void}
+ */
+function reportReplaceOwnerWakeRunsSpent(
+  owner, state, operationId, startedAtMs) {
+  const waiter = state.waiterByOperationId.get(operationId);
+  if (!waiter || isWaiterLevelCurrent(owner, waiter)) {
+    // The last permitted run settled the level: nothing was spent.
+    return;
+  }
+  reportWaitBoundSpent(owner.logger, {
+    ...REPLACE_OWNER_WAKE_RUNS_WAIT,
+    boundMs: null,
+    startedAtMs,
+    lastObserved: {
+      runs: REPLACE_OWNER_WAKE_MAX_RUNS,
+      workflowStep: waiter.operation?.workflowStep || null,
+      waitedNodeIds: waiter.nodeIds || null,
+      waitedLevelKey: waiter.levelKey || null,
+    },
+    scope: {
+      nodeId: owner.nodeId || null,
+      partitionId: waiter.operation?.partitionId || null,
+      operationId,
+    },
+    subject: operationId,
+  });
+}
+
 function runWaiterInOwnerTurn(owner, state, operationId, waiter) {
   // Consumed when its turn starts; the run re-registers a fresh waiter (with
   // its own entry level) if it waits again.
@@ -402,6 +443,7 @@ async function redriveReplaceOwnerWake(owner, operationId) {
     return;
   }
   state.redriveInFlightOperationIds.add(operationId);
+  const startedAtMs = Date.now();
   try {
     for (let run = 0; run < REPLACE_OWNER_WAKE_MAX_RUNS; run++) {
       if (owner.isShuttingDown || !owner.isInitialized) {
@@ -413,6 +455,7 @@ async function redriveReplaceOwnerWake(owner, operationId) {
       }
       await runWaiterInOwnerTurn(owner, state, operationId, waiter);
     }
+    reportReplaceOwnerWakeRunsSpent(owner, state, operationId, startedAtMs);
   } finally {
     state.redriveInFlightOperationIds.delete(operationId);
   }

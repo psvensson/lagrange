@@ -13,6 +13,7 @@ const FUNCTION_CONFIG_KEY = Object.freeze({
 });
 
 const FUNCTION_DEFAULT = Object.freeze({
+  // ends-on: the SQL engine returns the query result (unreachable: FunctionQueryExecutor is never instantiated in src/)
   QUERY_TIMEOUT_MS: 30000,
   QUERY_BATCH_SIZE: 100,
 });

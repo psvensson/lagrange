@@ -1,4 +1,5 @@
 import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
@@ -73,6 +74,46 @@ async function reconcilePartitionReplaceTargetStatus(
     REPLACE_TARGET_REMOVED_BEFORE_ACTIVE :
     REPLACE_TARGET_DEAD_BEFORE_INTENT);
   return true;
+}
+
+const OPERATION_STEP_TIMEOUT_WAIT = Object.freeze({
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+});
+
+/**
+ * An operation's step timeout or the enclosing rebalance budget is spent
+ * and the operation is failed for it: one wait_bound_spent ERROR per spend,
+ * the operation as the subject. A time-exempt REPLACE never reaches here:
+ * its budget is a diagnostic only (recordReplaceBudgetDiagnostic), not a
+ * bound, so its expiry is not a spent wait.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {Object} spent - {stepTimeout, elapsed, budgetExhausted,
+ *   stepExceeded, timeoutClassification}
+ * @return {void}
+ */
+function reportOperationStepTimeoutSpent(owner, operation, spent) {
+  reportWaitBoundSpent(owner.logger, {
+    ...OPERATION_STEP_TIMEOUT_WAIT,
+    boundMs: spent.stepTimeout,
+    elapsedMs: spent.elapsed,
+    lastObserved: {
+      type: operation.type || null,
+      workflowStep: operation.workflowStep || null,
+      status: operation.status || null,
+      targetNodeId: operation.targetNodeId || null,
+      stepExceeded: spent.stepExceeded,
+      budgetExhausted: spent.budgetExhausted,
+      timeoutClassification: spent.timeoutClassification || null,
+    },
+    scope: {
+      nodeId: owner.nodeId || null,
+      partitionId: operation.partitionId || null,
+      operationId: operation.operationId || null,
+    },
+    subject: operation.operationId || null,
+  });
 }
 
 class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
@@ -714,12 +755,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
           now: () => now,
         });
 
-      this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TIMED_OUT, {
-        operationId: operation.operationId,
-        workflowStep: operation.workflowStep,
-        elapsed,
-        timeout: stepTimeout,
-        budgetExhausted,
+      reportOperationStepTimeoutSpent(this, operation, {
+        stepTimeout, elapsed, budgetExhausted, stepExceeded,
         timeoutClassification,
       });
 

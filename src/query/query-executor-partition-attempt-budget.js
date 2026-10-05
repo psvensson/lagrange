@@ -2,20 +2,82 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   QUERY_EXECUTOR_LITERAL,
 } = QUERY_EXECUTOR_SHARED;
 
-const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = 1;
-const READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS =
+const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = 1; // ends-on: n/a clamp
+const READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: timer (1 ms by design: a not-connected read candidate's delivery is cut so the next candidate is tried)
   READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
-const RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS =
+const RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS = // ends-on: timer (1 ms by design: a not-connected recovery candidate's delivery is cut so the next candidate is tried)
   READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS;
 const RECOVERY_CANDIDATE_CONNECTED_CONNECTION_STATE = 'connected';
 const RECOVERY_CANDIDATE_CONNECTING_CONNECTION_STATE = 'connecting';
 const RECOVERY_CANDIDATE_UNOBSERVED_CONNECTION_STATE = 'unobserved';
+const PARTITION_EXECUTION_DEADLINE_WAIT = Object.freeze({
+  wait: 'partition_execution_deadline',
+  awaited: 'successful partition delivery before the execution deadline',
+  retryDelay: 'retry_delay_exceeds_budget',
+  beforeRetry: 'budget_spent_before_retry',
+  afterRetry: 'budget_spent_after_retry_delay',
+  beforeDelivery: 'budget_spent_before_delivery',
+  beforeAttempt: 'budget_spent_before_attempt',
+});
+const READ_ATTEMPTS_WAIT = Object.freeze({
+  wait: 'getReadRetryAttemptLimit',
+  awaited: 'successful partition read within the read attempt limit',
+});
+
+/**
+ * One spent-bound reporter per executeOnPartition call: the deadline (or
+ * the read attempt limit) is reported once, with the caller's observed
+ * delivery state.
+ * @param {Object} context - {executor, partitionId, forRead,
+ *   executionTimeoutMs, startedAtMs, executionOptions}.
+ * @return {Object} {setObserver, reportDeadlineSpent,
+ *   reportReadAttemptsSpent}
+ * @private
+ */
+function createPartitionSpentReporter(context) {
+  let observe = null;
+  let reported = false;
+  const report = (waitIdentity, boundMs, extra) => {
+    if (reported) {
+      return;
+    }
+    reported = true;
+    reportWaitBoundSpent(context.executor.logger, {
+      wait: waitIdentity.wait,
+      awaited: waitIdentity.awaited,
+      boundMs,
+      elapsedMs: executorNow(context.executor) - context.startedAtMs,
+      lastObserved: () => ({...(observe ? observe() : null), ...extra}),
+      scope: {
+        partitionId: context.partitionId,
+        forRead: context.forRead,
+        nodeId: context.executor.nodeId ?? null,
+      },
+    });
+  };
+  return Object.freeze({
+    setObserver: (fn) => {
+      observe = fn;
+    },
+    reportDeadlineSpent: (site, extra = {}) => report(
+      PARTITION_EXECUTION_DEADLINE_WAIT,
+      context.executionTimeoutMs,
+      {site, ...extra},
+    ),
+    reportReadAttemptsSpent: (maxAttempts) => report(
+      READ_ATTEMPTS_WAIT,
+      null,
+      {maxAttempts},
+    ),
+  });
+}
 
 function resolvePartitionExecutionTimeoutMs(executor, forRead, options) {
   if (Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0) {
@@ -61,6 +123,15 @@ function createPartitionAttemptBudget({
       localDeadlineMs === null ?
         parentDeadlineMs :
         Math.min(parentDeadlineMs, localDeadlineMs);
+  const spentReporter = createPartitionSpentReporter({
+    executor,
+    partitionId,
+    forRead,
+    executionTimeoutMs: executionDeadlineMs === null ?
+      null :
+      executionDeadlineMs - executorNow(executor),
+    startedAtMs: executorNow(executor),
+  });
   const getRemainingExecutionBudgetMs = () => {
     if (executionDeadlineMs === null) {
       return null;
@@ -251,6 +322,9 @@ function createPartitionAttemptBudget({
     const remainingBudgetMs = getRemainingExecutionBudgetMs();
     if (remainingBudgetMs !== null) {
       if (remainingBudgetMs <= 0) {
+        spentReporter.reportDeadlineSpent(
+          PARTITION_EXECUTION_DEADLINE_WAIT.beforeDelivery,
+        );
         return null;
       }
       routerOptions.timeoutMs = resolveRouterDeliveryTimeoutMs(
@@ -288,23 +362,54 @@ function createPartitionAttemptBudget({
       return true;
     }
     if (remainingBudgetMs <= 0) {
+      spentReporter.reportDeadlineSpent(
+        PARTITION_EXECUTION_DEADLINE_WAIT.beforeRetry,
+      );
       return false;
     }
     if (normalizedRetryDelayMs > remainingBudgetMs) {
+      spentReporter.reportDeadlineSpent(
+        PARTITION_EXECUTION_DEADLINE_WAIT.retryDelay,
+        {retryDelayMs: normalizedRetryDelayMs, remainingBudgetMs},
+      );
       return false;
     }
     if (normalizedRetryDelayMs > 0) {
       await executor.delay(normalizedRetryDelayMs);
       executor.throwIfCancelled(cancellationToken);
     }
-    const nextRemainingBudgetMs = getRemainingExecutionBudgetMs();
-    return nextRemainingBudgetMs === null || nextRemainingBudgetMs > 0;
+    return hasBudgetAfterRetryDelay(
+      getRemainingExecutionBudgetMs(),
+      spentReporter,
+    );
   };
   return Object.freeze({
     buildRouterDeliveryOptions,
     getRemainingExecutionBudgetMs,
     waitForRetryBudget,
+    observeSpent: spentReporter.setObserver,
+    reportDeadlineSpentBeforeAttempt: () => spentReporter.reportDeadlineSpent(
+      PARTITION_EXECUTION_DEADLINE_WAIT.beforeAttempt,
+    ),
+    reportReadAttemptsSpent: spentReporter.reportReadAttemptsSpent,
   });
+}
+
+/**
+ * After the retry delay: the budget either remains or is reported spent.
+ * @param {number|null} nextRemainingBudgetMs
+ * @param {Object} spentReporter
+ * @return {boolean} True when another attempt may run.
+ * @private
+ */
+function hasBudgetAfterRetryDelay(nextRemainingBudgetMs, spentReporter) {
+  if (nextRemainingBudgetMs === null || nextRemainingBudgetMs > 0) {
+    return true;
+  }
+  spentReporter.reportDeadlineSpent(
+    PARTITION_EXECUTION_DEADLINE_WAIT.afterRetry,
+  );
+  return false;
 }
 
 export {createPartitionAttemptBudget};

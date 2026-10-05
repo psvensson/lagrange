@@ -37,8 +37,8 @@ const DYNAMIC_CONFIG_STARTUP_LOG_MSG = Object.freeze({
   ADAPTIVE_CONTROLLER_SHUTDOWN_FAILED:
     'Failed to shutdown raft adaptive timing controller',
 });
-const DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS = 300;
-const DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS = 300;
+const DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS = 300; // ends-on: the dynamicConfigService.get(key) read resolves
+const DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS = 300; // ends-on: the adaptiveTimingController.initialize() call resolves
 
 /**
  * Resolve startup read timeout for initial dynamic-config hydration.

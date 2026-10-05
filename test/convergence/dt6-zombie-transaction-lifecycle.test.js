@@ -115,6 +115,12 @@ async function createPartition(t, {groupReplicaIds = ['replica-1']} = {}) {
     warnings.push({message, payload});
     return originalWarn(message, payload);
   };
+  // A spent hold is reported as one wait_bound_spent ERROR.
+  const originalError = partition.logger.error.bind(partition.logger);
+  partition.logger.error = (message, payload) => {
+    warnings.push({message, payload});
+    return originalError(message, payload);
+  };
   return {partition, warnings};
 }
 
@@ -183,7 +189,9 @@ t.test(
       );
       t.ok(
         warnings.some(
-          (w) => typeof w.message === 'string' && w.message.includes('Active transaction held'),
+          (w) => w.payload?.event === 'wait_bound_spent' &&
+            w.payload.lastObserved?.phase === 'active' &&
+            w.payload.lastObserved?.outcome === 'rolled_back_and_marked_lost',
         ),
         'the heal is loud',
       );
@@ -220,9 +228,9 @@ t.test(
       );
       t.ok(
         warnings.some(
-          (w) =>
-            typeof w.message === 'string' &&
-            w.message.includes('Stuck transaction heal deferred'),
+          (w) => w.payload?.event === 'wait_bound_spent' &&
+            w.payload.lastObserved?.outcome ===
+              'heal_deferred_leader_or_candidate',
         ),
         'the deferral is loud',
       );

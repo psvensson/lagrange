@@ -26,6 +26,10 @@ import {
   isNodeTerminalTransitionCompleted,
   isNodeTerminalTransitionRefused,
 } from './node-terminal-transition-fence.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
 
 // Phase 4 (4.1c): the membership-publication reconcile is only ever triggered on
 // recovering nodes, never on the stable leader — so when those nodes defer to the
@@ -41,6 +45,66 @@ const SCHEDULED_RECONCILE_NO_SERVICE_MSG =
   'Scheduled membership reconcile tick: no membershipPublicationService';
 const SCHEDULED_RECONCILE_DIAG_MSG =
   'Scheduled membership reconcile tick: owner/leadership state';
+// A spent heartbeat bound is a failure and is visible: one wait_bound_spent
+// ERROR naming what was awaited and the last observed state.
+const HEARTBEAT_ATTEMPT_WAIT = Object.freeze({
+  wait: 'heartbeatAttemptTimeoutMs',
+  awaited: 'heartbeat attempt completion (stats + node-state publication)',
+});
+const NODE_STATE_REPORTER_WAIT = Object.freeze({
+  wait: 'nodeStateReporterTimeoutMs',
+  awaited: 'node-state reporter acknowledgement of the lifecycle request',
+});
+const HEARTBEAT_ATTEMPT_STAGE = Object.freeze({
+  STARTED: 'started',
+  STATS: 'stats',
+  PUBLISH: 'publish',
+});
+
+function buildHeartbeatPublicationObservation(service) {
+  const diagnostics = service.heartbeatPublicationDiagnostics || {};
+  return {
+    publicationPath: diagnostics.publicationPath ?? null,
+    targetNodeId: diagnostics.targetNodeId ?? null,
+    lastFailureStage: diagnostics.lastFailureStage ?? null,
+    reporterVisibilityState: service.nodeHeartbeatReporterVisibilityState ?? null,
+  };
+}
+
+function reportHeartbeatAttemptSpent(service, attempt) {
+  reportWaitBoundSpent(service.logger, {
+    ...HEARTBEAT_ATTEMPT_WAIT,
+    boundMs: service.heartbeatAttemptTimeoutMs,
+    elapsedMs: service.now() - attempt.startedAtMs,
+    lastObserved: () => ({
+      attemptStage: attempt.stage,
+      ...buildHeartbeatPublicationObservation(service),
+    }),
+    scope: {
+      nodeId: service.nodeId,
+      attemptId: attempt.id,
+      consecutiveFailures: service.heartbeatConsecutiveFailures,
+    },
+    subject: service.nodeId,
+  });
+}
+
+function reportNodeStateReporterSpent(service, payload, boundMs, startedAtMs) {
+  reportWaitBoundSpent(service.logger, {
+    ...NODE_STATE_REPORTER_WAIT,
+    boundMs,
+    elapsedMs: service.now() - startedAtMs,
+    lastObserved: () => ({
+      reporterSettled: false,
+      requestedState: payload?.state ?? null,
+      publicationMode: payload?.publicationMode ?? null,
+      requireDurableCompletion: payload?.requireDurableCompletion === true,
+      ...buildHeartbeatPublicationObservation(service),
+    }),
+    scope: {nodeId: service.nodeId},
+    subject: service.nodeId,
+  });
+}
 
 class HeartbeatServiceLifecycleMethods {
   /**
@@ -179,6 +243,7 @@ class HeartbeatServiceLifecycleMethods {
     }
     let timeoutHandle = null;
     let settled = false;
+    const startedAtMs = readWaitClock(this);
     return new Promise((resolve, reject) => {
       const finalize = (callback, value) => {
         if (settled) {
@@ -192,6 +257,7 @@ class HeartbeatServiceLifecycleMethods {
         callback(value);
       };
       timeoutHandle = this.setTimeoutFn(() => {
+        reportNodeStateReporterSpent(this, payload, boundedTimeoutMs, startedAtMs);
         const timeoutError = new Error(`Node-state reporter timed out after ${boundedTimeoutMs}ms`);
         timeoutError.code = HEARTBEAT_SERVICE_LITERAL.NODE_STATE_REPORTER_TIMEOUT;
         timeoutError.publicationDiagnostics = {
@@ -249,6 +315,7 @@ class HeartbeatServiceLifecycleMethods {
       try {
         let stats = options.stats;
         if (options.getStats) {
+          attempt.stage = HEARTBEAT_ATTEMPT_STAGE.STATS;
           try {
             stats = await options.getStats();
           } catch (error) {
@@ -261,6 +328,7 @@ class HeartbeatServiceLifecycleMethods {
         if (attempt.timedOut) {
           return;
         }
+        attempt.stage = HEARTBEAT_ATTEMPT_STAGE.PUBLISH;
         try {
           await this.sendHeartbeat(stats, options.capabilities);
         } catch (error) {
@@ -516,6 +584,7 @@ class HeartbeatServiceLifecycleMethods {
       timedOut: false,
       timeoutHandle: null,
       startedAtMs: this.now(),
+      stage: HEARTBEAT_ATTEMPT_STAGE.STARTED,
     };
     this.heartbeatAttemptSequence = attempt.id;
     this.activeHeartbeatAttempt = attempt;
@@ -530,6 +599,7 @@ class HeartbeatServiceLifecycleMethods {
         return;
       }
       attempt.timedOut = true;
+      reportHeartbeatAttemptSpent(this, attempt);
       this.recordFailure(
         HEARTBEAT_SERVICE_LITERAL.ATTEMPT_TIMEOUT,
         `Heartbeat attempt timed out after ${this.heartbeatAttemptTimeoutMs}ms`,

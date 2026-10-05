@@ -29,6 +29,10 @@ import {runRetryableControlPlaneWrite} from
   '../shared/retryable-control-plane-write.js';
 
 const LOCAL_STR_INSERT = 'insert';
+const REGISTER_SERVICE_WRITE_WAIT = Object.freeze({
+  wait: 'registerServiceWriteRetryTimeoutMs',
+  awaited: 'register-service services-row control-plane write accepted',
+});
 const LOCAL_STR_UPDATE = 'update';
 const LOCAL_STR_RETRYABLE_REGISTER_SERVICE_METADATA_WRIT = 'retryable register-service metadata write failure';
 const LOCAL_STR_SYNCING = 'syncing';
@@ -413,6 +417,13 @@ class ServiceRegistrationHandoffOwner {
           );
         },
         sleep: (delayMs) => this.sleep(delayMs),
+        logger: this.getLogger(),
+        spentWait: REGISTER_SERVICE_WRITE_WAIT,
+        scope: {
+          nodeId: serviceData[COLUMN.NODE_ID],
+          serviceId: serviceData[COLUMN.SERVICE_ID],
+          groupId: serviceData[COLUMN.GROUP_ID] || null,
+        },
       },
     );
   }

@@ -30,6 +30,20 @@ import {
   classifyClusterIdMatch,
 } from '../cluster-identity-constants.js';
 import {getRemainingBudgetMs} from '../../control-plane/timeout-budget.js';
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+
+const JOIN_ADMISSION_SPENT_WAIT = Object.freeze({
+  RESERVATION_LOCK: Object.freeze({
+    wait: 'bootstrapRequestExecutionBudgetMs',
+    awaited: 'MOVE_REPLICA assignment reservation lock released by the previous holder',
+    LOCK_HELD: 'previous_reservation_still_held',
+  }),
+  EXECUTION_BUDGET: Object.freeze({
+    wait: 'bootstrapRequestExecutionBudgetMs',
+    awaited: 'bootstrap request assignment work within the seed execution budget',
+    STAGE: 'assignment_reservation',
+  }),
+});
 
 const REJOIN_TERMINAL_STATES = Object.freeze(new Set([
   NODE_STATE.STOPPED,
@@ -130,7 +144,29 @@ class BootstrapJoinAdmissionOwner {
     if (this.hasRemainingBootstrapRequestExecutionBudget(timeoutBudget)) {
       return;
     }
+    this.reportJoinAdmissionBudgetSpent(
+      JOIN_ADMISSION_SPENT_WAIT.EXECUTION_BUDGET,
+      timeoutBudget,
+      {stage: JOIN_ADMISSION_SPENT_WAIT.EXECUTION_BUDGET.STAGE},
+    );
     throw this.createBootstrapRequestExecutionBudgetExhaustedError();
+  }
+
+  /**
+   * Report a spent bootstrap-request execution budget at a join-admission
+   * stage.
+   * @param {Object} spentWait - One JOIN_ADMISSION_SPENT_WAIT entry.
+   * @param {Object} timeoutBudget
+   * @param {Object} lastObserved
+   */
+  reportJoinAdmissionBudgetSpent(spentWait, timeoutBudget, lastObserved) {
+    reportWaitBoundSpent(this.getLogger(), {
+      wait: spentWait.wait,
+      awaited: spentWait.awaited,
+      boundMs: timeoutBudget.configuredBudgetMs,
+      startedAtMs: timeoutBudget.startedAtMs,
+      lastObserved,
+    });
   }
 
   createBootstrapRequestExecutionBudgetExhaustedError() {
@@ -506,6 +542,11 @@ class BootstrapJoinAdmissionOwner {
         );
       if (lockWaitOutcome ===
           MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME.BUDGET_EXHAUSTED) {
+        this.reportJoinAdmissionBudgetSpent(
+          JOIN_ADMISSION_SPENT_WAIT.RESERVATION_LOCK,
+          options.timeoutBudget,
+          {lock: JOIN_ADMISSION_SPENT_WAIT.RESERVATION_LOCK.LOCK_HELD},
+        );
         throw this.createBootstrapRequestExecutionBudgetExhaustedError();
       }
       this.assertBootstrapRequestExecutionBudget(options.timeoutBudget);

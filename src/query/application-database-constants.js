@@ -42,6 +42,7 @@ const APPLICATION_DATABASE_LIMIT = Object.freeze({
   SQL_LENGTH: 1024 * 1024,
   STRING_BIND_LENGTH: 16 * 1024 * 1024,
   BYTE_BIND_LENGTH: 64 * 1024 * 1024,
+  // ends-on: the embedded runtime finishes shutting down
   STOP_TIMEOUT_MS: 30000,
 });
 

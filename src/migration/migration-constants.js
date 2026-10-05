@@ -47,6 +47,7 @@ const MIGRATION_DEFAULT = Object.freeze({
   MAX_RETRY_COUNT: 3,
   RETRY_BASE_DELAY_MS: 100,
   RETRY_MAX_DELAY_MS: 5000,
+  // ends-on: the partition backfill SQL statement returns
   TIMEOUT_BUDGET_MS: 300000,
 });
 

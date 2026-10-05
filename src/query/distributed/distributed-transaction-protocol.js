@@ -15,8 +15,20 @@ import {
   TIMEOUT_ERROR_MESSAGES,
   TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../../logging/wait-bound-spent.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const TRANSACTION_BUDGET_WAIT = Object.freeze({
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+});
+const PARTICIPANT_RETRY_WAIT = Object.freeze({
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+});
 const COMMIT_MISS_RESOLUTION = Object.freeze({
   NOT_A_MISS: 'NOT_A_MISS',
   COMMITTED: PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
@@ -122,6 +134,74 @@ function isParticipantCommitMiss(stage, error) {
   return IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES.has(errorMessage);
 }
 
+/**
+ * Count participants per status (small last-observed summary).
+ * @param {Object} tx - Transaction state.
+ * @return {Object} status -> count.
+ * @private
+ */
+
+function countParticipantStatuses(tx) {
+  const counts = {};
+  for (const participant of tx.participants?.values?.() || []) {
+    counts[participant.status] = (counts[participant.status] || 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Report a spent transaction budget (or a participant-timeout abort).
+ * @param {Object} owner - Coordinator.
+ * @param {Object} tx - Transaction state.
+ * @param {string} stage - Stage where the abort was decided.
+ * @private
+ */
+
+function reportTransactionBudgetSpent(owner, tx, stage) {
+  const nowMs = owner.now();
+  reportWaitBoundSpent(owner.logger, {
+    ...TRANSACTION_BUDGET_WAIT,
+    boundMs: tx.timeoutBudget?.configuredBudgetMs ??
+      owner.transactionBudgetMs,
+    elapsedMs: Number.isFinite(tx.createdAt) ? nowMs - tx.createdAt : null,
+    lastObserved: () => ({
+      stage,
+      status: tx.status,
+      commitMode: tx.commitMode,
+      remainingBudgetMs: owner.getRemainingTransactionBudgetMs(tx),
+      participantStatuses: countParticipantStatuses(tx),
+    }),
+    scope: {transactionId: tx.transactionId, sessionId: tx.sessionId},
+  });
+}
+
+/**
+ * Report exhausted participant-operation retries.
+ * @param {Object} owner - Coordinator.
+ * @param {Object} spent - {tx, stage, partitionId, attempt, error,
+ *   startedAtMs}.
+ * @private
+ */
+
+function reportParticipantRetriesSpent(owner, spent) {
+  reportWaitBoundSpent(owner.logger, {
+    ...PARTICIPANT_RETRY_WAIT,
+    boundMs: null,
+    elapsedMs: owner.now() - spent.startedAtMs,
+    lastObserved: () => ({
+      stage: spent.stage,
+      maxRetries: owner.participantRetryMaxRetries,
+      attempts: spent.attempt + 1,
+      lastError: spent.error?.message || String(spent.error),
+      lastErrorCode: spent.error?.errorCode || spent.error?.code || null,
+    }),
+    scope: {
+      transactionId: spent.tx.transactionId,
+      partitionId: spent.partitionId,
+    },
+  });
+}
+
 const distributedTransactionProtocolMethods = {
   async setTransactionStatus(tx, status) {
     const previousStatus = tx.status;
@@ -174,6 +254,7 @@ const distributedTransactionProtocolMethods = {
    */
 
   async abortTimedOutTransaction(tx, stage) {
+    reportTransactionBudgetSpent(this, tx, stage);
     if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     }
@@ -517,6 +598,7 @@ const distributedTransactionProtocolMethods = {
     options = {},
   ) {
     let attempt = 0;
+    const startedAtMs = readWaitClock(this);
     const skipBudgetEnforcement = options.skipBudgetEnforcement === true;
     while (true) {
       if (
@@ -550,6 +632,9 @@ const distributedTransactionProtocolMethods = {
             PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
         }
         if (attempt >= this.participantRetryMaxRetries) {
+          reportParticipantRetriesSpent(this, {
+            tx, stage, partitionId, attempt, error, startedAtMs,
+          });
           throw error;
         }
 

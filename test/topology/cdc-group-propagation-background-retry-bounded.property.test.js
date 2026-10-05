@@ -30,7 +30,6 @@ import {
 } from '../../src/topology/latency-topology-constants.js';
 import {
   CDC_GROUP_PROPAGATION_RETRY,
-  CDC_GROUP_PROPAGATION_LOG_MSG,
 } from '../../src/topology/cdc-group-propagation-constants.js';
 import {
   CDCGroupPropagationService,
@@ -130,6 +129,7 @@ test('Property 1 Bug Condition A: scheduleBackgroundRetry SHALL NOT ' +
         setupConfig();
         const cache = createTopologyCache();
         const warnLogs = [];
+        const errorLogs = [];
         const service = new CDCGroupPropagationService({
           nodeId: TEST_NODE_ID,
           systemTableCache: cache,
@@ -150,6 +150,9 @@ test('Property 1 Bug Condition A: scheduleBackgroundRetry SHALL NOT ' +
           info() {},
           warn(message, context) {
             warnLogs.push({message, context});
+          },
+          error(message, context) {
+            errorLogs.push({message, context});
           },
           debug() {},
         };
@@ -197,11 +200,13 @@ test('Property 1 Bug Condition A: scheduleBackgroundRetry SHALL NOT ' +
             `${timerCountBefore} to ${timerCountAfter}`,
           );
 
-          // Expected behavior: exhaustion should be logged.
-          const exhaustionLog = warnLogs.find(
-            (entry) => entry.message ===
-              CDC_GROUP_PROPAGATION_LOG_MSG
-                .DELIVERY_RETRY_EXHAUSTED,
+          // Expected behavior: exhaustion is a spent wait, logged as one
+          // wait_bound_spent ERROR.
+          const exhaustionLog = errorLogs.find(
+            (entry) => entry.context?.event === 'wait_bound_spent' &&
+              entry.context?.wait ===
+                'CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS + ' +
+                'BACKGROUND_MAX_ATTEMPTS',
           );
           assert.ok(
             exhaustionLog,
@@ -209,6 +214,8 @@ test('Property 1 Bug Condition A: scheduleBackgroundRetry SHALL NOT ' +
             'when attempt >= max, but no exhaustion log ' +
             'was emitted',
           );
+          assert.equal(exhaustionLog.context.lastObserved.background, true,
+            'the exhaustion line says the background retry spent it');
         } finally {
           service.stop();
           forceCleanupTimers(service);

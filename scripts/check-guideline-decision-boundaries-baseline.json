@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-08-05T17:56:03.717Z",
-  "rawViolationCount": 808,
+  "rawViolationCount": 810,
   "violations": [
     {
       "filePath": "examples/call-binding-account-summary/run-call-binding-account-summary.js",
@@ -5019,6 +5019,24 @@
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 135) and SQL/DB (line 135) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/query-executor-partition-attempt-budget.js",
+      "line": 13,
+      "column": 1,
+      "functionName": "READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS",
+      "kind": "wait_constant_timer_only",
+      "reason": "a wait whose only exit is the timer is refused; name the event that should end it before the bound",
+      "ruleReference": "docs/steering/rules.md R07. A semantic outcome is a named state (a named wait declares the event that ends it before its bound)"
+    },
+    {
+      "filePath": "src/query/query-executor-partition-attempt-budget.js",
+      "line": 15,
+      "column": 1,
+      "functionName": "RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS",
+      "kind": "wait_constant_timer_only",
+      "reason": "a wait whose only exit is the timer is refused; name the event that should end it before the bound",
+      "ruleReference": "docs/steering/rules.md R07. A semantic outcome is a named state (a named wait declares the event that ends it before its bound)"
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",

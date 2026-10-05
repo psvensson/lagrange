@@ -78,8 +78,10 @@ const RATCHET_TARGETS = [
     // deletion.
     // origin/main 2026-10-03 tightened 54/1731 -> 52/1666 (failed-gate-
     // keeps-evidence, checker hint); the lower value here supersedes it.
-    baselineCloneGroupCount: 49,
-    baselineDuplicatedLineCount: 1559,
+    // 2026-10-04: tightened 49/1559 -> 48/1512 on the checker's hint
+    // (spent-waits wiring replaced duplicated expiry log blocks).
+    baselineCloneGroupCount: 48,
+    baselineDuplicatedLineCount: 1512,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

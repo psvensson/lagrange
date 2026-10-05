@@ -14,6 +14,7 @@ import {
   snapshotEmbeddedFactoryConfiguration,
 } from './embedded-lagrange-input.js';
 import {reserveProcessRuntime} from './lagrange-runtime-process-claim.js';
+import {reportWaitBoundSpent} from './logging/wait-bound-spent.js';
 
 const EMBEDDED_RUNTIME_STATE = Object.freeze({
   CREATED: 'created',
@@ -30,6 +31,11 @@ const objectCreate = Object.create;
 const objectFreeze = Object.freeze;
 const promiseThen = Promise.prototype.then;
 const reflectApply = Reflect.apply;
+const dateNow = Date.now;
+const EMBEDDED_STOP_WAIT = objectFreeze({
+  wait: 'APPLICATION_DATABASE_LIMIT.STOP_TIMEOUT_MS',
+  awaited: 'embedded runtime shutdownRuntime() settled',
+});
 const {isProxy} = utilTypes;
 
 function normalizeStartupFailure(error) {
@@ -48,6 +54,23 @@ function createStopTimeout() {
     APPLICATION_DATABASE_ERROR_CODE.RUNTIME_STOP_TIMEOUT,
     APPLICATION_DATABASE_ERROR_MSG.RUNTIME_STOP_TIMEOUT,
   );
+}
+
+/**
+ * Report the spent embedded stop bound (the library facade has no logger of
+ * its own; the reporter falls back to the process logging service).
+ * @param {number} stopTimeoutMs
+ * @param {number} startedAtMs
+ * @param {string} state - Handle state when the bound was spent.
+ */
+function reportEmbeddedStopSpent(stopTimeoutMs, startedAtMs, state) {
+  reportWaitBoundSpent(null, {
+    wait: EMBEDDED_STOP_WAIT.wait,
+    awaited: EMBEDDED_STOP_WAIT.awaited,
+    boundMs: stopTimeoutMs,
+    elapsedMs: dateNow() - startedAtMs,
+    lastObserved: {handleState: state},
+  });
 }
 
 function createEmbeddedLagrangeHandle(options) {
@@ -148,9 +171,13 @@ function createEmbeddedLagrangeHandle(options) {
         throw error;
       },
     ]);
+    const stopStartedAtMs = dateNow();
     stopPromise = new Promise((resolve, reject) => {
       const timer = setTimeout(
-        () => reject(createStopTimeout()),
+        () => {
+          reportEmbeddedStopSpent(stopTimeoutMs, stopStartedAtMs, state);
+          reject(createStopTimeout());
+        },
         stopTimeoutMs,
       );
       reflectApply(promiseThen, cleanup, [

@@ -1,3 +1,4 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {HEALTH_STATUS} from '../runtime/runtime-driver.js';
 import {SYSTEM_TABLE_NAME} from
   '../bootstrap/system-table-schemas-constants.js';
@@ -57,6 +58,40 @@ const CALL_CELL_INVOCATION_EXPORT_NAME = Object.freeze({
 });
 const CALL_CELL_INVOCATION_EXPORT_DEFAULT = CALL_CELL_INVOCATION_EXPORT_NAME.RUN;
 
+const CALL_CELL_DEADLINE_WAIT = Object.freeze({
+  wait: 'Call Cell invocation deadlineMs',
+  awaited: 'Call Cell invocation reached its local actual before its deadline',
+});
+
+/**
+ * A Call Cell invocation arrived (or was re-checked) after its deadline:
+ * one wait_bound_spent ERROR with how far past the deadline it was and the
+ * route it was bound to. An invocation without a finite deadline is a
+ * malformed request, not a spent wait, and is not reported.
+ * @param {Object} handler - The runtime service handler (its logger).
+ * @param {Object} route - The selected route.
+ * @param {Object} invocation - The invocation (id, deadlineMs).
+ * @return {void}
+ */
+function reportCallCellDeadlineSpent(handler, route, invocation) {
+  if (!Number.isFinite(invocation?.deadlineMs)) {
+    return;
+  }
+  reportWaitBoundSpent(handler?.logger ?? null, {
+    ...CALL_CELL_DEADLINE_WAIT,
+    boundMs: null,
+    elapsedMs: null,
+    lastObserved: {
+      overdueMs: Date.now() - invocation.deadlineMs,
+      hostNodeId: route?.hostNodeId ?? null,
+      serviceId: route?.serviceId ?? null,
+    },
+    scope: {
+      nodeId: handler?.nodeId ?? null,
+      invocationId: invocation.id ?? null,
+    },
+  });
+}
 function valueOrFallback(value, fallback) {
   return value === undefined ? fallback : value;
 }
@@ -382,6 +417,7 @@ function assertCurrentCallCellTarget(handler, call, route, invocation) {
     !Number.isFinite(invocation?.deadlineMs) ||
     Date.now() >= invocation.deadlineMs
   ) {
+    reportCallCellDeadlineSpent(handler, route, invocation);
     throw new CallCellRoutingError(
       CALL_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED,
       CALL_CELL_RUNTIME_MESSAGE.DEADLINE_EXPIRED,

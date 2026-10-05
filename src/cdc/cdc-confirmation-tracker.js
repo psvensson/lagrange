@@ -12,10 +12,10 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS,
   CDC_CONFIRMATION_ERROR_TYPE,
-  CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
@@ -23,6 +23,10 @@ import {
 
 
 const TRACKER_SUBSYSTEM = 'cdc-confirmation';
+const CONFIRMATION_WAIT = Object.freeze({
+  wait: 'CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS',
+  awaited: 'CDC event applied to the local SystemTableCache',
+});
 
 /**
  * CDCConfirmationTracker provides promise-based confirmation that a
@@ -74,6 +78,7 @@ class CDCConfirmationTracker {
       return Promise.reject(this._shutdownError(tableName, primaryKey));
     }
 
+    const startedAtMs = Date.now();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(key);
@@ -86,10 +91,15 @@ class CDCConfirmationTracker {
         error.tableName = tableName;
         error.primaryKey = primaryKey;
         error.timeoutMs = timeout;
-        this.logger.warn(CDC_LIFECYCLE_LOG_MSG.CONFIRMATION_TIMEOUT, {
-          tableName,
-          primaryKey,
-          timeoutMs: timeout,
+        reportWaitBoundSpent(this.logger, {
+          ...CONFIRMATION_WAIT,
+          boundMs: timeout,
+          startedAtMs,
+          lastObserved: {
+            confirmed: false,
+            pendingConfirmations: this.pending.size,
+          },
+          scope: {tableName, primaryKey},
         });
         reject(error);
       }, timeout);

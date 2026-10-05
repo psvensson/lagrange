@@ -214,6 +214,7 @@ const JOIN_PLAN_SEGMENT = Object.freeze({
 });
 
 const BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT = Object.freeze({
+  // ends-on: a leader is observed for the system partitions
   TIMEOUT_CAP_MS: 5000,
   INITIAL_DELAY_MS: 10,
   MAX_DELAY_MS: 100,
@@ -248,7 +249,6 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   WAITING_PARTITION_LEADERS: 'Waiting for partition leadership',
   PARTITION_LEADERS_IMMEDIATE: 'All partition leaders found immediately',
   PARTITION_LEADERS_FOUND: 'All partition leaders found',
-  PARTITION_LEADERS_PENDING: 'Some partitions still electing leaders, failing bootstrap',
   CREATING_SYSTEM_PARTITION: 'Creating system table partition',
   PARTITION_REPLICA_CREATED: 'Partition replica created',
   PARTITION_CREATION_BATCH_STARTING:

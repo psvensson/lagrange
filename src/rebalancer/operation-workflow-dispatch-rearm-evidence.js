@@ -1,4 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   ReplicaOperationField,
   ReplicaOperationVisibilityClass,
@@ -48,6 +49,10 @@ const {
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 const SAFETY_DEFERRED_RETRY_BOUNDARY = 'safety_retry';
+const DEFERRED_RETRY_REARM_WAIT = Object.freeze({
+  wait: 'REBALANCE_OPERATION_BUDGET_MS',
+  awaited: 'deferred replica operation retry re-armed after re-initialization',
+});
 const DISPATCH_REARM_RECONCILE_BLOCKING_STATUSES = Object.freeze(
   new Set([
     ReplicaStatus.PENDING,
@@ -302,6 +307,10 @@ function isProtectedCreateDispatchRetryBudgetActive(
 // precedent (operation-workflow-transition-retry.js). A genuine shutdown is
 // still aborted by the caller before reaching these helpers.
 function logDeferredRetryRearmDropped(owner, operation, retryKind) {
+  if (!isOperationWithinRetryBudget(operation)) {
+    reportDeferredRetryRearmBudgetSpent(owner, operation, retryKind);
+    return;
+  }
   owner.logger.warn(
     REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_REARM_DROPPED,
     {
@@ -311,6 +320,27 @@ function logDeferredRetryRearmDropped(owner, operation, retryKind) {
       retryKind,
     },
   );
+}
+
+// The drop is the operation budget spent (the timer fired while the node was
+// uninitialized): one wait_bound_spent ERROR instead of the drop warn.
+function reportDeferredRetryRearmBudgetSpent(owner, operation, retryKind) {
+  reportWaitBoundSpent(owner.logger, {
+    ...DEFERRED_RETRY_REARM_WAIT,
+    boundMs: TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS,
+    startedAtMs: resolveOperationStartedAtMs(operation),
+    lastObserved: {
+      retryKind,
+      workflowStep: operation?.workflowStep || null,
+      type: operation?.type || null,
+      initialized: owner.isInitialized === true,
+    },
+    scope: {
+      nodeId: owner.nodeId || null,
+      partitionId: operation?.partitionId || null,
+      operationId: operation?.operationId || null,
+    },
+  });
 }
 
 function rearmDispatchRetryWhileUninitialized(owner, operation, errorLike) {

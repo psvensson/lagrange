@@ -134,11 +134,13 @@ test('awaitCdcSubscriptionsForReadiness - proceeds after timeout with warning',
       return nowCounter * 50000;
     };
 
-    // Capture log output
-    const originalWarn = service.logger.warn.bind(service.logger);
-    service.logger.warn = (msg, meta) => {
+    // Capture log output: the spent CDC wait is reported as one
+    // wait_bound_spent ERROR (it was a degraded WARN before spent waits
+    // became visible failures).
+    const originalError = service.logger.error.bind(service.logger);
+    service.logger.error = (msg, meta) => {
       logMessages.push({msg, meta});
-      return originalWarn(msg, meta);
+      return originalError(msg, meta);
     };
 
     await service.awaitCdcSubscriptionsForReadiness();
@@ -149,12 +151,18 @@ test('awaitCdcSubscriptionsForReadiness - proceeds after timeout with warning',
       'CDC subscriptions still inactive after timeout',
     );
 
-    const degradedLog = logMessages.find(
-      (l) => l.msg.includes('degraded'),
+    const spentLogs = logMessages.filter(
+      (l) => l.meta?.event === 'wait_bound_spent',
     );
-    t.ok(
-      degradedLog,
-      'logged degraded warning when timeout expired',
+    t.equal(
+      spentLogs.length,
+      1,
+      'reported the spent CDC wait once when the timeout expired',
+    );
+    t.equal(
+      spentLogs[0]?.meta?.lastObserved?.cdcSubscriptionsActive,
+      false,
+      'the report carries the last observed subscription state',
     );
   },
 );
