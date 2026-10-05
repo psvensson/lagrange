@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1925,
+    "unit": 1927,
     "integration": 77,
     "bootstrap": 194,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2203,
-  "digest": "fnv1a32-1ba66ff1",
+  "censusSize": 2205,
+  "digest": "fnv1a32-af7814f4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1226,6 +1226,7 @@
     "test/partition/range-integrity-validation.property.test.js": "unit",
     "test/partition/replica-operations-schema-migration.test.js": "unit",
     "test/partition/routing-key-comparator.test.js": "unit",
+    "test/partition/settled-replay-preserves-result.test.js": "unit",
     "test/partition/split-abort-fence-parity.test.js": "unit",
     "test/partition/split-ack-constants.test.js": "unit",
     "test/partition/split-backfill-internal-pacing.test.js": "unit",
@@ -1362,6 +1363,7 @@
     "test/query/service-lifecycle-sql-control-surface.test.js": "unit",
     "test/query/service-partition-access-attribution.test.js": "unit",
     "test/query/service-read-locality-routing.test.js": "unit",
+    "test/query/settled-replay-sql-surface.test.js": "unit",
     "test/query/sql-execution-guard.test.js": "unit",
     "test/query/sql-parse-cache.property.test.js": "unit",
     "test/query/sql-parse-cache.test.js": "unit",

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2186,
+    "ordinary": 2188,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2203,
-  "digest": "fnv1a32-ee774c07",
+  "censusSize": 2205,
+  "digest": "fnv1a32-1d4a8270",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1225,6 +1225,7 @@
     "test/partition/range-integrity-validation.property.test.js": "ordinary",
     "test/partition/replica-operations-schema-migration.test.js": "ordinary",
     "test/partition/routing-key-comparator.test.js": "ordinary",
+    "test/partition/settled-replay-preserves-result.test.js": "ordinary",
     "test/partition/split-abort-fence-parity.test.js": "ordinary",
     "test/partition/split-ack-constants.test.js": "ordinary",
     "test/partition/split-backfill-internal-pacing.test.js": "ordinary",
@@ -1361,6 +1362,7 @@
     "test/query/service-lifecycle-sql-control-surface.test.js": "ordinary",
     "test/query/service-partition-access-attribution.test.js": "ordinary",
     "test/query/service-read-locality-routing.test.js": "ordinary",
+    "test/query/settled-replay-sql-surface.test.js": "ordinary",
     "test/query/sql-execution-guard.test.js": "ordinary",
     "test/query/sql-parse-cache.property.test.js": "ordinary",
     "test/query/sql-parse-cache.test.js": "ordinary",

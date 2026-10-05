@@ -56,8 +56,10 @@ import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {RUNTIME_PHASE} from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
-import {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
-  '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
+  PARTITION_SETTLED_REPLAY,
+} from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 
@@ -254,8 +256,9 @@ test('B2: the same entry identity retried after its acknowledgement is an ' +
       'entry-retried');
     assert.equal(retriedInProcess.success, true,
       'an in-process retry of the acknowledged entry is acknowledged');
-    assert.equal(retriedInProcess.idempotentReplay, true,
-      'an in-process retry is answered as an idempotent replay');
+    assert.equal(retriedInProcess.settledReplay,
+      PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
+      'an in-process retry is answered as a replay of the applied statement');
     const recordedApplied = outcomeOf(dbPath, partition, 'entry-retried');
     assert.deepEqual(recordedApplied.map((row) => [row.outcome, row.log_index]),
       [[PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED, acknowledged.logIndex]],
@@ -274,10 +277,13 @@ test('B2: the same entry identity retried after its acknowledgement is an ' +
     assert.equal(retriedAfterRestart.success, true,
       'a retry after restart is acknowledged ' +
       `(${JSON.stringify(retriedAfterRestart)})`);
-    assert.equal(retriedAfterRestart.changes, 0,
-      'the replay changed nothing');
-    assert.equal(retriedAfterRestart.idempotentReplay, true,
-      'the retry after restart is answered as an idempotent replay');
+    assert.equal(retriedAfterRestart.changes, acknowledged.changes,
+      'the replay answers the applied statement\'s own row count (never ' +
+      'zero rows: superseded by the owner ruling on the replay answer)');
+    assert.equal(retriedAfterRestart.settledReplay,
+      PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
+      'the retry after restart is answered as a replay of the applied ' +
+      'statement');
     assert.equal(retriedAfterRestart.replayOfLogIndex, acknowledged.logIndex,
       'the replay names the index the write was applied at');
     assert.deepEqual(outcomeOf(dbPath, restarted, 'entry-retried'),
@@ -328,7 +334,7 @@ test('B2: a retry of a FAILED statement under the same entry identity ' +
       'and its original code');
     assert.equal(retriedInProcess.replayOfLogIndex, failed.logIndex,
       'naming the index the failure was recorded at');
-    assert.equal(retriedInProcess.idempotentReplay, undefined,
+    assert.equal(retriedInProcess.settledReplay, undefined,
       'a failure is never answered as a replayed success');
     assert.equal(rowCount(dbPath), 1, 'the retry wrote no row');
     assert.deepEqual(outcomeOf(dbPath, partition, 'entry-failed'), recorded,
@@ -603,7 +609,7 @@ test('F-ad: a present-but-invalid entryId is refused before consensus; a ' +
     assert.equal(outcomeOf(dbPath, partition, 'client-entry-7').length, 1,
       'its outcome row is keyed by it');
     const retry = await forwardWrite(partition, 'row-kept', 'client-entry-7');
-    assert.equal(retry.idempotentReplay, true,
+    assert.equal(retry.settledReplay, PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
       `a retry with it is answered from its outcome row (${
         JSON.stringify(retry)})`);
     const minted = await forwardWrite(partition, 'row-minted', undefined);

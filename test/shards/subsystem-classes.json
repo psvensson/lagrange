@@ -13,22 +13,22 @@
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 255,
-    "query-sql": 164,
+    "query-sql": 165,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 144,
+    "storage-partition": 145,
     "storage-raft": 106,
     "test-infrastructure": 140,
     "transactions": 15,
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2203,
-  "digest": "fnv1a32-a2d92629",
+  "censusSize": 2205,
+  "digest": "fnv1a32-a125b7d3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-30866168",
+  "observationDigest": "fnv1a32-614a95bb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1245,6 +1245,7 @@
     "test/partition/range-integrity-validation.property.test.js": "storage-partition",
     "test/partition/replica-operations-schema-migration.test.js": "storage-partition",
     "test/partition/routing-key-comparator.test.js": "storage-partition",
+    "test/partition/settled-replay-preserves-result.test.js": "storage-partition",
     "test/partition/split-abort-fence-parity.test.js": "storage-partition",
     "test/partition/split-ack-constants.test.js": "storage-partition",
     "test/partition/split-backfill-internal-pacing.test.js": "storage-partition",
@@ -1381,6 +1382,7 @@
     "test/query/service-lifecycle-sql-control-surface.test.js": "query-sql",
     "test/query/service-partition-access-attribution.test.js": "query-sql",
     "test/query/service-read-locality-routing.test.js": "query-sql",
+    "test/query/settled-replay-sql-surface.test.js": "query-sql",
     "test/query/sql-execution-guard.test.js": "query-sql",
     "test/query/sql-parse-cache.property.test.js": "query-sql",
     "test/query/sql-parse-cache.test.js": "query-sql",
@@ -7399,7 +7401,6 @@
     "test/partition/committed-statement-outcome.test.js": {
       "files": [
         "src/config/configuration-manager.js",
-        "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-service-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -7507,6 +7508,7 @@
     "test/partition/partition-runtime-reconstruction-leadership.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
@@ -7613,7 +7615,6 @@
     },
     "test/partition/partition-service-write-commit.test.js": {
       "files": [
-        "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
@@ -7743,6 +7744,20 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/partition/partition-service.js"
+      ]
+    },
+    "test/partition/settled-replay-preserves-result.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-proposal-codec.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/split-cutover-owner-delegation.test.js": {
@@ -7923,6 +7938,7 @@
     "test/query/partition-write-answer-consumers.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
         "src/raft/raft-operation-port-constants.js",
@@ -8019,6 +8035,15 @@
       "files": [
         "src/control-plane/owners/index.js",
         "src/query/pg/postgres-wire-adapter.js"
+      ]
+    },
+    "test/query/settled-replay-sql-surface.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-mutation-outcome-classifier.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
+        "src/partition/partition-committed-statement-outcome-constants.js"
       ]
     },
     "test/query/sql-query-engine-execution.test.js": {

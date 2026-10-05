@@ -14,8 +14,10 @@ import {
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
-import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
-  '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {
+  PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
+  PARTITION_SETTLED_REPLAY,
+} from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_SERVICE_ERROR_MSG,
@@ -199,7 +201,10 @@ test('PartitionService retains the durable witness for completed idempotent repl
 
     t.equal(first.success, true);
     t.equal(replay.success, true);
-    t.equal(replay.idempotentReplay, true);
+    t.equal(replay.settledReplay, PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
+      'the replay names itself a replay whose outcome was retained');
+    t.equal(replay.changes, first.changes,
+      'and answers the applied statement\'s own row count');
     t.same(
       replay.durableCommitWitness,
       first.durableCommitWitness,

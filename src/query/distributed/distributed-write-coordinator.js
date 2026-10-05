@@ -1,5 +1,7 @@
 import {createHash, randomUUID} from 'node:crypto';
 import {LoggingService} from '../../logging/logging-service.js';
+import {isAppliedWithUnknownCount} from
+  '../../partition/partition-write-kernel.js';
 import {
   QUERY_AST_NODE,
   QUERY_AST_TYPE,
@@ -347,10 +349,17 @@ class DistributedWriteCoordinator {
       };
     }
 
+    // A primary participant acknowledged as a settled replay whose count is
+    // not known leaves the statement's count unknown: the result carries the
+    // named state, never a sum that counts it as zero rows.
+    const unknownCount = participantResults.find((result) =>
+      result.success && result.role !== PARTICIPANT_ROLE_MIRROR &&
+      isAppliedWithUnknownCount(result));
     return {
       success: true,
       operation: plan.statementType,
-      affectedRows,
+      ...(unknownCount === undefined ? {affectedRows} :
+        {settledReplay: unknownCount.settledReplay}),
       rows,
       partitions: primaryPartitions,
       mirrorPartitions,

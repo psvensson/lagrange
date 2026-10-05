@@ -1,5 +1,7 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {renderSqliteIdentifier} from './sqlite-identifier.js';
+import {isAppliedWithUnknownCount} from
+  '../partition/partition-write-kernel.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -29,6 +31,22 @@ function copyParticipantDisposition(error, result) {
   });
 }
 
+// The affected rows a mutation's answers add up to: their sum, or - when an
+// acknowledged answer is a settled replay whose count is not known - no
+// count at all, the named state carried instead (an unknown count is never
+// added as zero rows).
+function mutationAffectedRows(results, countOf) {
+  const unknown = results.find((result) => result.success &&
+    isAppliedWithUnknownCount(result));
+  if (unknown !== undefined) {
+    return {settledReplay: unknown.settledReplay};
+  }
+  return {affectedRows: results.reduce(
+    (sum, result) => sum + (result.success ? countOf(result) || 0 : 0),
+    0,
+  )};
+}
+
 function buildDistributedMutationResult(
   results,
   partitionIds,
@@ -36,10 +54,6 @@ function buildDistributedMutationResult(
   fanoutMetrics,
 ) {
   const failedResults = results.filter((result) => !result.success);
-  const affectedRows = results.reduce(
-    (sum, result) => sum + (result.success ? result.changes || 0 : 0),
-    0,
-  );
   const rows = results.flatMap((result) =>
     result.success && Array.isArray(result.rows) ? result.rows : [],
   );
@@ -50,7 +64,7 @@ function buildDistributedMutationResult(
     results.every((result) => result.originHlc === originHlc);
   const commonResult = {
     operation,
-    affectedRows,
+    ...mutationAffectedRows(results, (result) => result.changes),
     partitions: partitionIds,
     rows,
     ...(hasSharedOriginHlc ? {originHlc} : {}),
@@ -408,10 +422,12 @@ const queryExecutorSqlCommandMethods = {
     return {
       success: true,
       operation: QUERY_EXECUTOR_LITERAL.STRING_INSERT,
-      affectedRows:
-        typeof result?.changes === QUERY_EXECUTOR_LITERAL.STRING_NUMBER ?
-          result.changes :
-          ast.values.length,
+      ...(isAppliedWithUnknownCount(result) ?
+        {settledReplay: result.settledReplay} :
+        {affectedRows:
+          typeof result?.changes === QUERY_EXECUTOR_LITERAL.STRING_NUMBER ?
+            result.changes :
+            ast.values.length}),
       rows: Array.isArray(result.rows) ? result.rows : [],
       partitions: [partitionId],
       durableCommitWitness: result.durableCommitWitness,

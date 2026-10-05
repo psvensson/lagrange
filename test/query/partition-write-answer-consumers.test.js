@@ -43,6 +43,8 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
+import {PARTITION_SETTLED_REPLAY} from
+  '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
   '../../src/partition/proposal-queue-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -386,8 +388,10 @@ test('F-aj: the query executor answers an unknown outcome to its client ' +
     const rerouted = await append(leader, 'row-1', held.entryId);
     assert.equal(rerouted.success, true, 'the re-proposal under B\'s entryId ' +
       `is answered (${JSON.stringify(rerouted)})`);
-    assert.equal(rerouted.idempotentReplay, true,
+    assert.equal(rerouted.settledReplay,
+      PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
       'from B\'s durable outcome row');
+    assert.equal(rerouted.changes, 1, 'with the row B updated');
     assert.equal(await waitFor(() => values('row-1').every((value) =>
       value === 'v+')), true, 'B applied once on every replica ' +
       `(${values('row-1')})`);

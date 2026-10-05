@@ -6,6 +6,8 @@ import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
 import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
   './partition-service-constants.js';
+import {PARTITION_SETTLED_REPLAY} from
+  './partition-committed-statement-outcome-constants.js';
 import {
   PROPOSAL_QUEUE_BACKPRESSURE_CODE,
   PROPOSAL_QUEUE_PROPOSAL_STATE,
@@ -122,6 +124,20 @@ function isRetryableWriteFailureCode(code) {
 function isReroutableWriteFailureCode(code, {carriesEntryId = false} = {}) {
   return isRetryableWriteFailureCode(code) &&
     (code !== REFUSAL.OUTCOME_UNKNOWN || carriesEntryId === true);
+}
+
+/**
+ * Whether a write answer is a settled replay whose affected-row count is not
+ * known (PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED): the write was
+ * applied, and it carries no count. Every consumer that turns an answer's
+ * count into an outcome asks this first - an unknown count is never zero
+ * rows.
+ * @param {*} answer - A partition write answer, or a result built from
+ *   answers that carries their named replay state.
+ * @return {boolean} Whether the answer is applied with an unknown count.
+ */
+function isAppliedWithUnknownCount(answer) {
+  return answer?.settledReplay === PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED;
 }
 
 const PARTITION_WRITE_KERNEL_LITERAL = Object.freeze({
@@ -451,6 +467,7 @@ export {
   buildPartitionWriteProposalRefusal,
   buildPartitionWriteSideEffectPlan,
   buildReleasedPendingWriteAnswer,
+  isAppliedWithUnknownCount,
   isHeldByHostFailure,
   isPartitionWriteFailureCode,
   isReroutableWriteFailureCode,
