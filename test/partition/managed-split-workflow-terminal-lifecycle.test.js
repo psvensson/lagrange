@@ -347,11 +347,10 @@ test('split dissolution: a refused SOURCE_DISSOLVED acknowledgement fails ' +
   const refused = lines.filter((line) => line.level === 'error' &&
     /outcome refused/u.test(line.message));
   t.ok(refused.length >= 1, 'one typed ERROR');
-  t.equal(refused[0]?.fields?.workflowId, workflowId, 'naming the workflow');
-  t.equal(refused[0]?.fields?.status, SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
-    'the outcome');
-  t.equal(refused[0]?.fields?.result, 'stale_fence', 'and the reason');
-  t.equal(refused[0]?.fields?.receivedFenceToken, fence, 'the owner fence');
-  t.equal(refused[0]?.fields?.currentFenceToken, fence + 5,
-    'the record\'s fence');
+  const fields = refused[0]?.fields || {};
+  t.same([fields.workflowId, fields.status, fields.result,
+    fields.receivedFenceToken, fields.currentFenceToken],
+  [workflowId, SPLIT_ACK_STATUS.SOURCE_DISSOLVED, 'stale_fence', fence,
+    fence + 5], 'naming the workflow, the outcome, the reason, the owner ' +
+    'fence and the record\'s fence');
 });

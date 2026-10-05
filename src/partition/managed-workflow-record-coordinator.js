@@ -102,6 +102,17 @@ function assertAcknowledgement(ack) {
   }
 }
 
+// What a refused owner-recorded outcome's ERROR names.
+function refusedOutcomeFieldsOf(workflowId, ack, result) {
+  return {workflowId,
+    participantKey: ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY],
+    status: ack[PARTICIPANT_ACK_FIELD.STATUS], result: result?.result,
+    reason: result?.reason ?? null,
+    receivedFenceToken: ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] ?? null,
+    currentFenceToken: result?.currentFenceToken ?? null,
+    currentStatus: result?.currentStatus ?? null};
+}
+
 // The typed error of a step transition the record refused.
 function transitionRefusedError(write) {
   return Object.assign(new Error(write.refusal?.details?.message ??
@@ -323,13 +334,7 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
     if (OWNER_OUTCOME_LANDED.has(result?.result)) {
       return result;
     }
-    const fields = {workflowId,
-      participantKey: ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY],
-      status: ack[PARTICIPANT_ACK_FIELD.STATUS], result: result?.result,
-      reason: result?.reason ?? null,
-      receivedFenceToken: ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] ?? null,
-      currentFenceToken: result?.currentFenceToken ?? null,
-      currentStatus: result?.currentStatus ?? null};
+    const fields = refusedOutcomeFieldsOf(workflowId, ack, result);
     this.recordOwner.logger?.error?.(COORDINATOR_ERROR_MSG.OUTCOME_REFUSED,
       fields);
     throw Object.assign(new Error(COORDINATOR_ERROR_MSG.OUTCOME_REFUSED +
