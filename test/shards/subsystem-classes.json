@@ -7,7 +7,7 @@
     "bootstrap-membership": 282,
     "cdc-metadata": 58,
     "cli-tooling": 96,
-    "control-plane": 205,
+    "control-plane": 206,
     "convergence-topology": 83,
     "distributed-harness": 169,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2211,
-  "digest": "fnv1a32-ab67f0c5",
+  "censusSize": 2212,
+  "digest": "fnv1a32-441f09f7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-84314adc",
+  "observationDigest": "fnv1a32-c590f242",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -515,6 +515,7 @@
     "test/control-plane/control-plane-readiness-service.test.js": "control-plane",
     "test/control-plane/control-plane-snapshot-owner.test.js": "control-plane",
     "test/control-plane/control-plane-system-table-gateway.test.js": "control-plane",
+    "test/control-plane/control-plane-write-identity.test.js": "control-plane",
     "test/control-plane/core-system-logic-runtime-witness.test.js": "control-plane",
     "test/control-plane/current-membership-epoch-null-unreadable.test.js": "control-plane",
     "test/control-plane/deployment-binding-owner.test.js": "control-plane",
@@ -3516,6 +3517,11 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/pressure-governor.js",
         "test/control-plane/control-plane-system-table-gateway-pressure-test-fixture.js"
+      ]
+    },
+    "test/control-plane/control-plane-write-identity.test.js": {
+      "files": [
+        "src/partition/partition-write-kernel.js"
       ]
     },
     "test/control-plane/core-system-logic-runtime-witness.test.js": {

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1932,
+    "unit": 1933,
     "integration": 77,
     "bootstrap": 195,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2211,
-  "digest": "fnv1a32-29f49c36",
+  "censusSize": 2212,
+  "digest": "fnv1a32-2b04d9e6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -496,6 +496,7 @@
     "test/control-plane/control-plane-readiness-service.test.js": "unit",
     "test/control-plane/control-plane-snapshot-owner.test.js": "unit",
     "test/control-plane/control-plane-system-table-gateway.test.js": "unit",
+    "test/control-plane/control-plane-write-identity.test.js": "unit",
     "test/control-plane/core-system-logic-runtime-witness.test.js": "unit",
     "test/control-plane/current-membership-epoch-null-unreadable.test.js": "unit",
     "test/control-plane/deployment-binding-owner.test.js": "unit",

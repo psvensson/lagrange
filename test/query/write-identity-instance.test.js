@@ -64,6 +64,7 @@ import {
 
 const OUTCOME_UNKNOWN =
   writeKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
+const NOT_LEADER = writeKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER;
 const TEST_TIMEOUT_MS = 60000;
 const BOOT_INCARNATION = 7;
 const RESERVATION_INSERT = `INSERT INTO ${TABLES.STORAGE_RESERVATIONS} ` +
@@ -131,6 +132,88 @@ async () => {
     assert.equal(again.affectedRows, 1, 'with its own count');
     assert.ok(deliveries.at(-1).entryId !== firstEntry,
       'under its own entry, never the first birth\'s');
+  });
+});
+
+// The reservation birth V3 writes, under its name.
+function reservationBirth(gateway, bytes, now) {
+  return gateway.executeQuery(RESERVATION_INSERT,
+    ['res-op-v3', 'op-v3', 'partition', 'p-1', 'p-1', 'n-1', bytes, 1,
+      'active', now, now, now + 1000],
+    {writeIdentity: `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`,
+      skipCacheWait: true});
+}
+
+test('a re-drive refused before it was proposed does not end an instance ' +
+  'an earlier attempt left unknown: the next re-drive is that entry',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withSurface([TABLES.STORAGE_RESERVATIONS], async ({engine, gateway,
+    deliveries, of}) => {
+    const surface = of(TABLES.STORAGE_RESERVATIONS);
+    const now = Date.now();
+    const {first} = await spendFirstAttempt({engine, surface,
+      attempt: () => reservationBirth(gateway, 111, now)});
+    assert.equal(first.success, false, 'setup: the first birth is unknown');
+    assert.ok(await appliedRow(surface, 'res-op-v3'), 'setup: it commits');
+    // The re-drive meets only replicas that refuse before proposing.
+    const handle = surface.partition.handleRemoteQuery;
+    surface.partition.handleRemoteQuery = async () => ({success: false,
+      partitionId: surface.partitionId, failureCode: NOT_LEADER,
+      error: 'No leader available for write operation'});
+    let refused;
+    try {
+      refused = await withMutedConsoleError(() =>
+        reservationBirth(gateway, 111, now));
+    } finally {
+      surface.partition.handleRemoteQuery = handle;
+    }
+    assert.equal(refused.success, false, 'setup: the re-drive is refused');
+    assert.ok(!JSON.stringify(refused).includes(OUTCOME_UNKNOWN),
+      'setup: a refusal before proposal, nothing unknown in it');
+    engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
+    const again = await reservationBirth(gateway, 111, now);
+    assert.equal(again.success, true, 'answered applied ' +
+      `(${JSON.stringify(again.error ?? null)})`);
+    assert.equal(again.affectedRows, 1, 'with the first entry\'s result');
+    assert.equal(new Set(deliveries.map((d) => d.entryId)).size, 1,
+      'every delivery is the first entry');
+    assert.deepEqual(rowsOf(surface.dbPath, TABLES.STORAGE_RESERVATIONS,
+      'reservation_id'), ['res-op-v3'], 'one row');
+  });
+});
+
+test('a write of a name whose pending instance stays unknown is the typed ' +
+  'unknown naming that instance - nothing of the new content is delivered',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withSurface([TABLES.STORAGE_RESERVATIONS], async ({engine, gateway,
+    deliveries, of}) => {
+    const surface = of(TABLES.STORAGE_RESERVATIONS);
+    const now = Date.now();
+    const {first: answers} = await spendFirstAttempt({engine, surface,
+      attempt: async () => {
+        const first = await reservationBirth(gateway, 111, now);
+        const mark = deliveries.length;
+        const second = await reservationBirth(gateway, 222, now);
+        return {first, second, mark};
+      }});
+    const firstEntry = deliveries[0].entryId;
+    assert.equal(answers.first.success, false, 'setup: the first is unknown');
+    const {second} = answers;
+    assert.equal(second.success, false, 'never applied');
+    assert.equal(second.failureCode, OUTCOME_UNKNOWN, 'the typed unknown');
+    assert.equal(second.pendingInstance?.outcome, 'unknown',
+      `naming the pending instance (${JSON.stringify(second.pendingInstance)})`);
+    assert.equal(second.pendingInstance.writeIdentity,
+      `${TABLES.STORAGE_RESERVATIONS}:res-op-v3:birth`, 'by its name');
+    assert.equal(second.entryId, firstEntry, 'and its entry');
+    assert.ok(deliveries.slice(answers.mark).length > 0 &&
+      deliveries.slice(answers.mark).every((d) => d.entryId === firstEntry),
+    'only the pending entry was delivered');
+    assert.ok(await appliedRow(surface, 'res-op-v3'),
+      'the pending birth commits once the trap is gone');
+    assert.deepEqual(selectRows(surface.dbPath, 'SELECT estimated_bytes ' +
+      `FROM ${TABLES.STORAGE_RESERVATIONS}`), [{estimated_bytes: 111}],
+    'with its own content');
   });
 });
 

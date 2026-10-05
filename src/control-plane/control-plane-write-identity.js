@@ -203,6 +203,9 @@ function judgeAttempt(answer, thrown) {
 }
 
 function settleInstance(record, answer, thrown) {
+  // The entry an attempt was answered unknown under: the instance's entry,
+  // named by every later answer that resolves or reports it.
+  record.entryId = findLinkedEntryId(answer) ?? record.entryId;
   const verdict = judgeAttempt(answer, thrown);
   const releases = verdict === ATTEMPT_VERDICT.SETTLED ||
     (verdict === ATTEMPT_VERDICT.NOT_PROPOSED && !record.unresolved);
@@ -237,7 +240,7 @@ function holdNewInstance(name, digest, attempt) {
   // The instance's own content, for its re-delivery when a different write
   // of the name must first resolve it.
   const record = {name, instance, digest, key, unresolved: false,
-    redeliver: attempt};
+    entryId: null, redeliver: attempt};
   heldInstances.set(name, record);
   return record;
 }
@@ -247,7 +250,7 @@ function describePendingInstance(record, outcome, answer) {
     writeIdentity: record.name,
     instance: record.instance,
     idempotencyKey: record.key,
-    entryId: findLinkedEntryId(answer),
+    entryId: findLinkedEntryId(answer) ?? record.entryId,
     outcome,
   });
 }
@@ -369,19 +372,9 @@ function isPendingInstanceApplied(answer) {
   return answer?.pendingInstance?.outcome === PENDING_INSTANCE_OUTCOME.APPLIED;
 }
 
-/**
- * The held instances (bound and count), for reports and witnesses.
- * @return {Object} {held, bound}.
- */
-function describeHeldControlPlaneWrites() {
-  return Object.freeze({held: heldInstances.size,
-    bound: MAX_HELD_WRITE_INSTANCES});
-}
-
 export {
   CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE,
   controlPlaneWriteIdentity,
-  describeHeldControlPlaneWrites,
   isPendingInstanceApplied,
   mintControlPlaneWriteKey,
   releaseControlPlaneWriteIdentities,
