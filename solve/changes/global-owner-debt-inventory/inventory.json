@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417243,
-        "sha256": "c3919ec7c1ed5f260fcc573f8dd6fb4e0386f2daa49186e9eda6ba57944d8a98"
+        "bytes": 417444,
+        "sha256": "44787e6bbd49dbffd88fdf42eb81a836808e7927a3e8a5edab77f9fa2141a14a"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2652418,
-        "sha256": "74007f62dc4c5c24abfb0eef409aa81763608dfae7204c00d06ecbb007b8c2fa"
+        "sha256": "cec011d0b8a029b7a2cb24c29604cf9fb092f248c6d65aefd40a2b91467f11a1"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "6bb40715c845a6b86f0c0352788c90ebe5b8d1509088cd7c0435f6c7a9a1e663"
+    "inputDigest": "f961d4cc6ca8b5280c6eb0884b75a992dddeaadc5791e7124e69337b11367664"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417243,
-        "sha256": "c3919ec7c1ed5f260fcc573f8dd6fb4e0386f2daa49186e9eda6ba57944d8a98"
+        "bytes": 417444,
+        "sha256": "44787e6bbd49dbffd88fdf42eb81a836808e7927a3e8a5edab77f9fa2141a14a"
       },
-      "declaredCount": 1765,
-      "observedCount": 1765,
-      "assignedCount": 1765
+      "declaredCount": 1766,
+      "observedCount": 1766,
+      "assignedCount": 1766
     },
     "cognitive": {
       "identity": {
@@ -168,34 +168,34 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2652418,
-        "sha256": "74007f62dc4c5c24abfb0eef409aa81763608dfae7204c00d06ecbb007b8c2fa"
+        "sha256": "cec011d0b8a029b7a2cb24c29604cf9fb092f248c6d65aefd40a2b91467f11a1"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "9dfcda3833de7b7a4c30eac964b75593c624db36482ddd5309001f576b647750",
+      "sourceDigest": "7f35927cbd9fe3faaaae7784a1db1b40bee4ac11a2264ef2ff3cd0ae3acc8ef7",
       "moduleCount": 5058,
       "edgeCount": 24879,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2517,
-    "assignedSignalCount": 2517,
-    "uniqueAssignmentCount": 2517,
-    "digest": "f0b64d2cab55f95834ac15cf3616bc2e26d8f8ae6b5fb56697ddc3e60a52800e"
+    "sourceSignalCount": 2518,
+    "assignedSignalCount": 2518,
+    "uniqueAssignmentCount": 2518,
+    "digest": "4f9ab2d174e611a2c11d9170f8acb2e30d23bf92c36c678fd5071e3e987cee53"
   },
   "signalCounts": {
     "cognitive": 153,
-    "complexity": 1765,
+    "complexity": 1766,
     "duplication": 513,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1288,
+    "filesWithDebt": 1289,
     "rankedBoundaryCount": 114,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 94,
@@ -1210,6 +1210,34 @@
       ]
     },
     {
+      "key": "area:test/cdc",
+      "owner": null,
+      "boundary": "test/cdc",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/cdc"
+      ],
+      "fileCount": 11,
+      "signalCount": 11,
+      "complexity": 3,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 470,
+      "cloneTouches": 14,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 79,
+      "score": 59,
+      "topPaths": [
+        "test/cdc/websocket-address-derivation.property.test.js",
+        "test/cdc/cdc-pipeline-metrics.property.test.js",
+        "test/cdc/retry-delay-backoff.property.test.js",
+        "test/cdc/bootstrap-mode-routing.property.test.js",
+        "test/cdc/cdc-integration-service.test.js"
+      ]
+    },
+    {
       "key": "area:src/logging",
       "owner": null,
       "boundary": "src/logging",
@@ -1263,34 +1291,6 @@
         "src/node/replica-state-machine-recovery.js",
         "src/node/message-group-service-handler.js",
         "src/node/node-reintegration-reconciliation.js"
-      ]
-    },
-    {
-      "key": "area:test/cdc",
-      "owner": null,
-      "boundary": "test/cdc",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/cdc"
-      ],
-      "fileCount": 10,
-      "signalCount": 10,
-      "complexity": 2,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 470,
-      "cloneTouches": 14,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 0,
-      "importOut": 64,
-      "score": 55,
-      "topPaths": [
-        "test/cdc/websocket-address-derivation.property.test.js",
-        "test/cdc/cdc-pipeline-metrics.property.test.js",
-        "test/cdc/retry-delay-backoff.property.test.js",
-        "test/cdc/bootstrap-mode-routing.property.test.js",
-        "test/cdc/cdc-pipeline-readiness-gate.property.test.js"
       ]
     },
     {

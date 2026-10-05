@@ -653,8 +653,14 @@ test('CDCIntegrationService logs retryable table-write failures as warnings',
 
     t.ok(warnings.length >= 1,
       'retryable table-write deferrals should log at least one warning');
-    t.equal(errors.length, 0,
-      'retryable table-write deferrals should not log hard errors');
+    // The routed-mutation attempt budget spent on a retryable error is a
+    // spent wait: exactly one wait_bound_spent ERROR, and no other error.
+    t.equal(errors.length, 1,
+      'only the spent retry budget is an ERROR, nothing else');
+    t.equal(errors[0]?.[1]?.event, 'wait_bound_spent');
+    t.equal(errors[0]?.[1]?.wait, 'CDC_DEFAULTS.RETRY_MAX_ATTEMPTS');
+    t.equal(errors[0]?.[1]?.lastObserved?.errorCode,
+      'CONTROL_PLANE_PRESSURE_DEGRADED');
     const finalWarningPayload = warnings[warnings.length - 1]?.[1] || null;
     t.equal(finalWarningPayload?.code, 'CONTROL_PLANE_PRESSURE_DEGRADED',
       'warning should preserve the typed error code');
