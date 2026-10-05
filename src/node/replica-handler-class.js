@@ -13,6 +13,8 @@
  * Requirements: 10.2, 3.1
  */
 import {EventEmitter} from 'events';
+import {assignReplicaHandlerGroupRetiredTombstoneMethods} from
+  './replica-handler-group-retired-tombstone-methods.js';
 import fs from 'fs';
 import path from 'path';
 import {AddressManager} from '../address/address-manager.js';
@@ -190,6 +192,7 @@ assignReplicaHandlerMembershipMethods(ReplicaHandler);
 assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler);
 assignReplicaHandlerVoterReadinessMethods(ReplicaHandler);
 assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler);
+assignReplicaHandlerGroupRetiredTombstoneMethods(ReplicaHandler);
 assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   AddressManager,
   METADATA_RESOLUTION_POLL_INTERVAL_MS,

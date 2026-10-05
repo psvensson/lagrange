@@ -250,19 +250,22 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
      * restarted after retiring it, before its answer was recorded) or is
      * still removing (its row cleanup running after the retirement): the
      * member's own durable fact - its raft-rs lifecycle row for EXACTLY this
-     * replica identity and group, retired with the group-retired reason -
-     * answers COMPLETED. Never from absence: no database, no row, another
-     * state or another reason (a reseed hold) answers nothing here.
+     * replica identity and group, retired with the group-retired reason, or
+     * (its database deleted) its group-retired tombstone for exactly this
+     * table, group, identity and workflow - answers COMPLETED. Never from
+     * absence: no database, no row, another state or another reason (a
+     * reseed hold), no matching tombstone answers nothing here.
      * @param {Object} request - REMOVE_REPLICA request.
-     * @return {Object|null} COMPLETED response, or null.
+     * @return {Promise<Object|null>} COMPLETED response, or null.
      * @private
      */
-    answerDurablyRetiredGroupMember(request) {
+    async answerDurablyRetiredGroupMember(request) {
       const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
       const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
-      // No file, no row or an unreadable database is no fact: the member
+      // No file, no row, an unreadable database, no tombstone (or one of
+      // another table, group, identity or workflow) is no fact: the member
       // stays listed.
-      if (!this.isReplicaDurablyGroupRetired(partitionId, replicaId)) {
+      if (!await this.provesGroupRetirement(request)) {
         return null;
       }
       this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED, {
@@ -278,10 +281,10 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
      * lifecycle row (answerDurablyRetiredGroupMember), or null - always null
      * for an ordinary REMOVE.
      * @param {Object} request - REMOVE_REPLICA request.
-     * @return {Object|null}
+     * @return {Promise<Object|null>}
      * @private
      */
-    groupMemberDurableAnswer(request) {
+    async groupMemberDurableAnswer(request) {
       return request?.[ReplicaOperationField.GROUP_RETIREMENT] ?
         this.answerDurablyRetiredGroupMember(request) : null;
     }
@@ -340,6 +343,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
                 replicaId,
                 reason,
                 groupRetirement,
+                groupRetirementEvidence:
+                  request?.[ReplicaOperationField.GROUP_RETIREMENT] ?? null,
               }).catch((error) => {
                 this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED, {
                   operationId,
@@ -395,7 +400,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       // Check if replica exists
       const replica = this.getLocalReplica(replicaId);
       if (!replica) {
-        return this.groupMemberDurableAnswer(request) ??
+        return (await this.groupMemberDurableAnswer(request)) ??
           this.answerRemoveNotFound(replicaId);
       }
       // Cross-check partition identity before any status write or shutdown:
@@ -436,7 +441,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         }
         // Its durable retirement already recorded, a group member answers
         // COMPLETED while its row cleanup finishes (it never serves again).
-        return this.groupMemberDurableAnswer(request) ??
+        return (await this.groupMemberDurableAnswer(request)) ??
           this.answerRemoveInProgress(replicaId);
       }
       // Check idempotency - already removed. Cleanup reconcile is only safe

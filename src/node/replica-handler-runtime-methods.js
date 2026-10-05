@@ -200,6 +200,8 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
             `Replica cleanup ownership changed for ${replicaId}`,
           );
         }
+        this.assertGroupRetiredTombstoneBeforeDelete(partitionId,
+          replicaId);
         const removal = await removeReplicaStorageArtifacts(
           fs,
           dbPath,

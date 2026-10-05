@@ -534,7 +534,6 @@ const WORKFLOW_RECORD_STORE = Object.freeze({
 });
 
 export {
-  RECORD_WRITE_OUTCOME,
   WORKFLOW_RECORD_STORE,
   beginWorkflowRecordLineage,
   recordWitnessOf,

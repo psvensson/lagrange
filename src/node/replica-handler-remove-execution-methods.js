@@ -253,6 +253,13 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         reason || REPLICA_REMOVE_EXECUTION_REASON.DURABLE_REMOVE_CLEANUP_COMPLETE,
         {groupId: partitionId, runtime: service?.raft ?? null},
       );
+      // A group retired as a unit: its member-owned tombstone is durable
+      // before the replica database (and the lifecycle row in it) is
+      // deleted; a failed write keeps the database.
+      if (request.groupRetirement?.retire === true) {
+        handler.recordGroupRetiredTombstone({partitionId, replicaId,
+          evidence: request.groupRetirementEvidence});
+      }
       const cleanupAuthority = await takeoverRemovingRowForCleanupOrThrow(
         handler,
         replicaId,

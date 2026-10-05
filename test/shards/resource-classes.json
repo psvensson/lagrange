@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2189,
+    "ordinary": 2190,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2206,
-  "digest": "fnv1a32-440f9b59",
+  "censusSize": 2207,
+  "digest": "fnv1a32-b2d6ea8f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1070,6 +1070,7 @@
     "test/node/failure-detector.test.js": "ordinary",
     "test/node/failure-repair-intent-contract.test.js": "ordinary",
     "test/node/fault-recovery-behavior.property.test.js": "ordinary",
+    "test/node/group-retired-tombstone.test.js": "ordinary",
     "test/node/group-retirement-as-a-unit.test.js": "ordinary",
     "test/node/group-retirement-fail-closed.test.js": "ordinary",
     "test/node/group-retirement-fences.test.js": "ordinary",

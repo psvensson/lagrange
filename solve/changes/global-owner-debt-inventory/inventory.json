@@ -6,12 +6,12 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 418041,
-        "sha256": "d1c37536fdb859625ab0d4e216a2c902995e063ebdbf6a24abf38bc30be4ca98"
+        "sha256": "1fba18517f3ea2585413671349e3e9aab30f347c504a535422a0486ae035c6ae"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 35283,
-        "sha256": "57d537f92f42f57cfce4ac27f9346592eadf4cc684c01f198f29486a295cb8d2"
+        "sha256": "927be343825f7693e7c3febd77cbcac19dcaaa2e09a1df364fbd47f4e30c8cae"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2640641,
-        "sha256": "981b2b27ae813207eee115acb6e3f0bdfa6023abb32ffdb14784dda91459e08a"
+        "bytes": 2642291,
+        "sha256": "d86b1e2db6ea280a16ab79b8309c150360a2779fcdc19adb52249b9bffb2285d"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "85eeefc3e9728b9a04521e7475761066ccba819824fccae542e0121131f89e80"
+        "sha256": "e7db8bd91bb019c019ff0118a327e3c9ba5ac92a449fc67afdea07e1404bb1a4"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a63c3ce92e162f63be370c28e4f3d0cd2ec111d6ede913476fabf3aa371da568"
+        "sha256": "51524640013d81ffdc271a110076744befc63bfc50d3037e0aa6339175242430"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "859cb7dd50100ce5dafe027bf0ef5d8db605dbb559daf569206d116ca75b87e9"
+    "inputDigest": "27a975841bba05a0d884f5cfdc5a662ce8fc274e6e40a5acfdec3955adfe0e5a"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 418041,
-        "sha256": "d1c37536fdb859625ab0d4e216a2c902995e063ebdbf6a24abf38bc30be4ca98"
+        "sha256": "1fba18517f3ea2585413671349e3e9aab30f347c504a535422a0486ae035c6ae"
       },
       "declaredCount": 1769,
       "observedCount": 1769,
@@ -79,7 +79,7 @@
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 35283,
-        "sha256": "57d537f92f42f57cfce4ac27f9346592eadf4cc684c01f198f29486a295cb8d2"
+        "sha256": "927be343825f7693e7c3febd77cbcac19dcaaa2e09a1df364fbd47f4e30c8cae"
       },
       "declaredCount": 153,
       "observedCount": 153,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "85eeefc3e9728b9a04521e7475761066ccba819824fccae542e0121131f89e80"
+          "sha256": "e7db8bd91bb019c019ff0118a327e3c9ba5ac92a449fc67afdea07e1404bb1a4"
         },
         "cloneGroups": 49,
         "duplicatedLines": 1559,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a63c3ce92e162f63be370c28e4f3d0cd2ec111d6ede913476fabf3aa371da568"
+          "sha256": "51524640013d81ffdc271a110076744befc63bfc50d3037e0aa6339175242430"
         },
         "cloneGroups": 717,
         "duplicatedLines": 27288,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2640641,
-        "sha256": "981b2b27ae813207eee115acb6e3f0bdfa6023abb32ffdb14784dda91459e08a"
+        "bytes": 2642291,
+        "sha256": "d86b1e2db6ea280a16ab79b8309c150360a2779fcdc19adb52249b9bffb2285d"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "a2c7375d5159609dd5294bdbf6ea135d8736322610e15b6e235b541dd2255529",
-      "moduleCount": 5034,
-      "edgeCount": 24787,
+      "sourceDigest": "018840b4a33e7752fdad306d9d2eabfe784171e0d56ca2ac1aec995b7b0b2473",
+      "moduleCount": 5037,
+      "edgeCount": 24808,
       "unresolvedCount": 36
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2523,
     "assignedSignalCount": 2523,
     "uniqueAssignmentCount": 2523,
-    "digest": "6be07bf361afd33df0e5a8548b2fd87e096bd5f05d8ce619272c778eddf0ad7d"
+    "digest": "d4d3cc5cad08694c30754532603d10e96f72cf6538d8695bdcdea4940aece343"
   },
   "signalCounts": {
     "cognitive": 153,
@@ -1032,7 +1032,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 12,
-      "importOut": 94,
+      "importOut": 95,
       "score": 84,
       "topPaths": [
         "src/node/replica-handler-runtime-metadata-methods.js",

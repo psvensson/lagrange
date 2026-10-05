@@ -26,6 +26,8 @@
  */
 import Database from 'better-sqlite3';
 
+import fs from 'node:fs';
+import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   PARTITION_TRANSITION_STATE,
@@ -352,11 +354,15 @@ test('P5 an untracked member answers COMPLETED only from its own durable ' +
     .handleRemoveReplica(groupRemove(world, second, {groupRetirement: false}));
   t.equal(ordinary.status, ReplicaOperationResponseStatus.NOT_FOUND,
     'an ordinary REMOVE is unchanged (NOT_FOUND)');
-  // A retired row for another reason (a reseed hold) is no group retirement.
+  // A retired row for another reason (a reseed hold) is no group retirement
+  // (such a replica never wrote a group-retired tombstone: its truthful one
+  // from this world's retirement is removed with the rewrite).
   const db = new Database(world.cluster.replica(third).dbFile);
   db.prepare('UPDATE _raft_rs_replica_lifecycle SET reason = ? ' +
     'WHERE group_id = ?').run('reseed-required', world.partitionId);
   db.close();
+  fs.rmSync(path.join(world.sources.get(third).handler.dataDir,
+    'group-retired-tombstones'), {recursive: true, force: true});
   const reseeded = await forget(world, third)
     .handleRemoveReplica(groupRemove(world, third));
   t.equal(reseeded.status, ReplicaOperationResponseStatus.NOT_FOUND,

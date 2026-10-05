@@ -470,6 +470,7 @@ export {
   buildGroupRetirementEvidence,
   groupRetirementEvidenceFromRecord,
   isGroupRetiringInView,
+  readGroupRetirementRecord,
   retiringSourceStatus,
   retiringWorkflowOf,
   verifyGroupRetirement,
