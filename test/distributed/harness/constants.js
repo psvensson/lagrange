@@ -809,6 +809,9 @@ const CAPTURE_LOGS_ENV_VAR = 'LAGRANGE_CAPTURE_LOGS';
 // Request a CERTIFICATION verdict for the exact commit named by the value
 // (40 hex digits): test/distributed/harness/scenario-certification.js.
 const ARG_CERTIFY = '--certify';
+// The certification run directory the lab harness created (with its
+// started.json) before holding any node: certification-evidence-archive.js.
+const ARG_CERTIFY_RUN_DIR = '--certify-run-dir';
 
 const CLI = Object.freeze({
   DEFAULT_CONFIG: DEFAULT_CONFIG_PATH,
@@ -826,6 +829,7 @@ const CLI = Object.freeze({
   ARG_CAPTURE_LOGS,
   CAPTURE_LOGS_ENV_VAR,
   ARG_CERTIFY,
+  ARG_CERTIFY_RUN_DIR,
 });
 
 // --- Exit Codes ---

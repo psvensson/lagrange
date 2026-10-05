@@ -28,7 +28,7 @@
   "censusSize": 2250,
   "digest": "fnv1a32-942f89cc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a468d014",
+  "observationDigest": "fnv1a32-0cb28a59",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11811,6 +11811,7 @@
       "directories": [
         "scripts",
         "scripts/lab",
+        "solve/epics/raft-rs-full-cutover",
         "src",
         "test",
         "test/distributed/scenarios"
@@ -11997,6 +11998,7 @@
       ],
       "directories": [
         "data",
+        "solve/epics/raft-rs-full-cutover",
         "solve/quests",
         "src/test-helpers",
         "test",

@@ -513,11 +513,51 @@ boot id cannot be read over ssh; two selected nodes share one boot id; or the
 generated config cannot place the scenario's nodes one per machine (four
 machines for five nodes). Only the first `size` machines of `--nodes` (the
 base config's size, one node each) take part: a listed machine beyond them
-gets no node and is neither observed, held nor tunneled. `--dry-run` performs
-exactly these checks (it reads each placed machine's boot id over ssh, writes
-the generated config under `.tmp/home-lab`, builds nothing, holds nothing and
-starts nothing) and prints the node-to-machine table, the certification
-topology, the runner command and any unplaced machine.
+gets no node and is neither observed, held nor tunneled.
+
+`--dry-run --certify SHA` is the certification PRE-FLIGHT
+(`scripts/lab/certification-preflight.js`): it builds nothing, holds nothing
+and starts nothing, writes only the generated config under `.tmp/home-lab`,
+and runs one read-only ssh command per placed machine. It prints one
+`PASS`/`FAIL` line per item and fails on any `FAIL`: a clean checkout at
+`SHA` (context roots included); the bounded-wait census present;
+`LAGRANGE_LOG_FILE` unset and pretty printing off (environment and base
+config); per machine, docker reachable, at least 10 GiB free under the docker
+root, its clock within 2 s of the controller's over the ssh round trip, and
+every base image of the Dockerfile (`FROM`) present; the base image ids equal
+on every machine; and as many distinct boot ids as placed machines. It then
+performs the checks above and prints the node-to-machine table, the
+certification topology, the runner command and any unplaced machine.
+
+Operating procedure for one certification run:
+
+1. `--dry-run --certify SHA` from a clean checkout at `SHA`: every pre-flight
+   line `PASS` (pre-pull identical base images and prune images first if not).
+2. Run without `--dry-run`, adding `--quest <id>`. The harness creates
+   `test-output/certification/<sha>/<run start>/started.json` BEFORE it holds
+   any machine, then holds all five (nothing else may run on them), builds,
+   runs, and tears down. A run interrupted anywhere after that (a lost hold, a
+   crash, Ctrl-C, a kill) leaves the directory without a manifest, which the
+   streak counts as a FAILED run.
+3. Whatever the outcome, the harness prints the run's record line
+   (`node scripts/solve.js note --id <quest> --kind evidence --finding
+   "certification-run ... manifest=<digest|none (...)>"`). Record it after
+   EVERY run, certified or not, before anything else: the streak is claimed
+   only over recorded runs, and a recorded run whose directory later vanishes
+   or changes resets it. A run directory deleted BEFORE its line was recorded
+   is the one case nothing can detect.
+4. Keep the evidence (owner decision 2026-10-05, option 1):
+   `node scripts/lab.js harness keep-evidence test-output/certification/<sha>/<run start>`
+   copies the verdict files to
+   `solve/epics/raft-rs-full-cutover/evidence/certification/<sha>/<run start>/`
+   (commit them) and prints where the node logs are and their digests; copy the
+   logs to the retained log store before any checkout cleanup.
+
+What resets a streak: an uncertified or failed certification run, a run
+directory that does not verify (interrupted, partial, edited), a recorded run
+whose directory is missing or whose digest differs, and a certified run at
+another sha (ends it). A refused run is not a sample; an unrecorded certified
+run is not counted. See `test/distributed/README.local.md` for the conditions.
 A `--certify` passed after `--` is refused: certification is never a
 passthrough.
 

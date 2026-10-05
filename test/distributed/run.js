@@ -47,6 +47,9 @@ import {
   completeCertificationBuild,
   prepareCertificationBuild,
 } from './harness/certification-image-identity.js';
+import {
+  openRunnerCertificationRun,
+} from './harness/certification-evidence-archive.js';
 import {writeFailureBundlesForReport} from './harness/failure-bundle.js';
 import {
   formatStateMachinePressurePreflightSummary,
@@ -1066,6 +1069,13 @@ async function main() {
     process.stderr.write(certifyProblem + '\n');
     process.exit(EXIT_CODES.FAILURE);
   }
+  // A certification run's directory (started.json) exists before anything
+  // is built; one that cannot be created aborts the run.
+  const certificationRun = args.certify === null ? null :
+    await openRunnerCertificationRun(args).catch((error) => {
+      process.stderr.write(`certification run not started: ${error.message}\n`);
+      process.exit(EXIT_CODES.FAILURE);
+    });
   // --debug-logs is delivered to node containers via the LAGRANGE_* env
   // auto-forward in the cluster's node-env builder. Setting it here (rather than
   // threading a flag through cluster construction) also lets an operator opt in
@@ -1300,6 +1310,7 @@ async function main() {
         reportMetadata,
         stateMachinePressurePreflight,
         certification,
+        certificationRunDir: certificationRun?.dir ?? null,
       });
     runPhaseTiming.scenarioEndMs = Date.now();
 

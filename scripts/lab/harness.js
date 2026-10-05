@@ -22,6 +22,14 @@ import {
 import {
   evaluateScenarioCertificationTopology,
 } from '../../test/distributed/harness/scenario-host-topology.js';
+import {
+  printCertificationRecord,
+  startCertificationRun,
+} from '../../test/distributed/harness/certification-evidence-archive.js';
+import {
+  formatCertificationPreflight,
+  runCertificationPreflight,
+} from './certification-preflight.js';
 
 const DEFAULT_BASE_CONFIG = 'test/distributed/config/local-three-node.json';
 const DEFAULT_DOCKER_SOCKET = '/var/run/docker.sock';
@@ -111,6 +119,8 @@ const CERTIFICATION_TEXT = Object.freeze({
   PASSTHROUGH: 'request certification with --certify SHA, not as a runner ' +
     'passthrough argument',
   TOPOLOGY: 'the generated config cannot certify: ',
+  PREFLIGHT: 'the certification preflight failed',
+  ITEM_SEPARATOR: '; ',
   UNPLACED: ': no node placed (not observed, held or tunneled)\n',
 });
 
@@ -406,6 +416,11 @@ export async function runHarness({
   certify = null,
   readCommitIdentity,
   write = (text) => process.stdout.write(text),
+  // The quest the printed `solve note` record line names.
+  quest = null,
+  // Injectable pre-flight host observer and evidence root (tests).
+  observeHost,
+  evidenceRoot,
 }) {
   validateHarnessNodes(nodes);
   if (nodes.length < MIN_PHYSICAL_HOSTS) {
@@ -417,7 +432,7 @@ export async function runHarness({
   if (certify !== null) {
     return runCertificationHarness({nodes, scenario, baseConfig, nodesPerHost,
       verbose, extraArgs, dryRun, hold, environment, observeMachine, certify,
-      readCommitIdentity, write});
+      readCommitIdentity, write, quest, observeHost, evidenceRoot});
   }
   const absoluteBase = resolve(baseConfig);
   const timestamp = new Date().toISOString().replace(/[:.]/gu, NAME_SEPARATOR);
@@ -492,12 +507,29 @@ async function placedCertificationNodes(baseConfig, nodes) {
     nodes;
 }
 
+// The dry run of a certification run is its pre-flight: nothing is held,
+// built or started; every item prints PASS/FAIL and a failure fails it.
+async function certificationPreflight(options, nodes) {
+  const items = await runCertificationPreflight({baseConfig: options.baseConfig,
+    certify: options.certify, environment: options.environment, nodes,
+    observeHost: options.observeHost, readCommitIdentity: options.readCommitIdentity});
+  options.write(formatCertificationPreflight(items));
+  const failed = items.filter((entry) => !entry.ok);
+  if (failed.length > 0) {
+    refuseCertification(`${CERTIFICATION_TEXT.PREFLIGHT}: ` + failed.map((entry) =>
+      `${entry.item}: ${entry.detail}`).join(CERTIFICATION_TEXT.ITEM_SEPARATOR));
+  }
+}
+
 // A certification run: every check before any hold, the config generated
-// with one node per observed machine, the runner asked for the verdict.
+// with one node per observed machine, the run directory (started.json)
+// created BEFORE any hold or build, the runner asked for the verdict, and
+// the run's record line printed whatever the outcome.
 async function runCertificationHarness(options) {
   const {scenario, baseConfig, verbose, extraArgs, dryRun, hold,
     environment, certify, write} = options;
   const nodes = await placedCertificationNodes(baseConfig, options.nodes);
+  if (dryRun) await certificationPreflight(options, nodes);
   const prepared = await prepareCertificationRun({...options, nodes});
   const timestamp = new Date().toISOString().replace(/[:.]/gu, NAME_SEPARATOR);
   const configPath = resolve(CONFIG_DIR.ROOT, CONFIG_DIR.LEAF,
@@ -509,23 +541,35 @@ async function runCertificationHarness(options) {
   const config = await buildRemoteConfig(resolve(baseConfig), nodes, ports, configPath,
     CERTIFICATION_NODES_PER_HOST, prepared.machineIds);
   const topology = refuseUncertifiableConfig(prepared.requirement, config);
-  const args = buildHarnessRunnerArgs({configPath, scenario, verbose,
-    extraArgs: [...extraArgs, CLI.ARG_CERTIFY, certify]});
   if (dryRun) {
     write(`Would write config: ${configPath}\n`);
-    printCertificationDryRun(write, nodes, prepared, topology, args);
+    printCertificationDryRun(write, nodes, prepared, topology,
+      buildHarnessRunnerArgs({configPath, scenario, verbose,
+        extraArgs: [...extraArgs, CLI.ARG_CERTIFY, certify]}));
     for (const unplaced of options.nodes.slice(nodes.length)) {
       write(`  ${unplaced.name}${CERTIFICATION_TEXT.UNPLACED}`);
     }
     return;
   }
-  const holds = await holdHarnessNodes(nodes, sanitizeName(scenario), hold);
-  const tunnels = [];
+  // Its failure aborts the run: nothing is held yet.
+  const run = await startCertificationRun({hosts: nodes.map((node) => node.name),
+    hostSet: prepared.machineIds.map((machineId) => `host:${machineId}`),
+    requestedSha: certify, root: options.evidenceRoot, scenario});
+  write(`certification run started: ${run.dir}\n`);
+  const args = buildHarnessRunnerArgs({configPath, scenario, verbose,
+    extraArgs: [...extraArgs, CLI.ARG_CERTIFY, certify,
+      CLI.ARG_CERTIFY_RUN_DIR, run.dir]});
   try {
-    await openTunnels(nodes, ports, tunnels);
-    await runFormation(args, nodes, environment);
+    const holds = await holdHarnessNodes(nodes, sanitizeName(scenario), hold);
+    const tunnels = [];
+    try {
+      await openTunnels(nodes, ports, tunnels);
+      await runFormation(args, nodes, environment);
+    } finally {
+      await Promise.all(tunnels.map(stopTunnel));
+      await releaseHolds(holds);
+    }
   } finally {
-    await Promise.all(tunnels.map(stopTunnel));
-    await releaseHolds(holds);
+    printCertificationRecord(run.dir, {questId: options.quest, write});
   }
 }

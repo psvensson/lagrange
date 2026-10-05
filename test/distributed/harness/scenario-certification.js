@@ -72,7 +72,11 @@ import {
   observeNodeImages,
 } from './certification-image-identity.js';
 import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
-import {VOTER_TARGET_STATE} from './convergence-voter-targets.js';
+import {
+  VOTER_TARGET_STATE,
+  readPartitionVoterTargets,
+} from './convergence-voter-targets.js';
+import {CONVERGENCE_DEFAULTS} from './constants.js';
 import {fullLogDestPath} from './full-node-log-capture.js';
 import {PUBLICATION_CONVERGENCE_CLAIM_STATE} from './publication-convergence-claim.js';
 import {SCENARIO_OUTCOME, scenarioOutcomeOf} from './scenario-outcome.js';
@@ -148,12 +152,32 @@ const CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY =
 // CONSECUTIVE_READY qualifying polls in a row, held for at least the
 // harness's load-readiness stable window (the cluster's own
 // _resolveLoadReadinessStableWindowMs, as waitForLoadReadinessStability).
+// R4: the window is never shorter than MIN_STABLE_WINDOW_MS, whatever the
+// config's `timeouts.loadReadinessStableWindowMs` says; the effective and
+// the configured window are recorded.
 const CERTIFICATION_PUBLICATION_WAIT = Object.freeze({
   BUDGET_MS: 120000,
   CONSECUTIVE_READY: 3,
+  MIN_STABLE_WINDOW_MS: 5000,
   NAME: 'CERTIFICATION_PUBLICATION_WAIT.BUDGET_MS',
   POLL_MS: 2000,
 });
+// R6: the stage's strict convergence wait ends only on an observation with
+// voters at target AND every partition of the partitions read claimed
+// (a split parent's pending dissolution leaves it unclaimed), re-checked
+// within ONE budget: the single wait's own settle bound
+// (CONVERGENCE_DEFAULTS.settleTimeoutMs, 30 s), never lengthened.
+const CERTIFICATION_CONVERGENCE_WAIT = Object.freeze({
+  AWAITED: 'a convergence wait ending voters_at_target with every ' +
+    'partition of the partitions read claimed (unclaimed = [])',
+  BUDGET_MS: CONVERGENCE_DEFAULTS.settleTimeoutMs,
+  MIN_ATTEMPT_MS: 1,
+  NAME: 'CERTIFICATION_CONVERGENCE_WAIT.BUDGET_MS',
+  POLL_MS: 2000,
+});
+// R3: the expected partition set is cross-checked against the partitions
+// read of at least this many nodes (the tables catalog is not read).
+const PARTITION_CROSS_CHECK_MIN_NODES = 2;
 const PUBLICATION_AWAITED =
   'a window of consecutive load-mode probes with every node active, ' +
   'complete snapshot coverage and the publication convergence gate ' +
@@ -367,13 +391,25 @@ async function probePublicationGate(cluster, deadline) {
   }
 }
 
-function resolvePublicationStableWindowMs(cluster, clock) {
+function resolveConfiguredStableWindowMs(cluster, clock) {
   if (Number.isFinite(clock.stableWindowMs)) {
     return clock.stableWindowMs;
   }
   return typeof cluster?._resolveLoadReadinessStableWindowMs === 'function' ?
     cluster._resolveLoadReadinessStableWindowMs() :
     LOAD_READINESS_STABLE_WINDOW_MS;
+}
+
+// The effective window: the configured one, never below the floor.
+function resolvePublicationStableWindow(cluster, clock) {
+  const configuredStableWindowMs =
+    resolveConfiguredStableWindowMs(cluster, clock);
+  const stableWindowFloorMs = clock.stableWindowFloorMs ??
+    CERTIFICATION_PUBLICATION_WAIT.MIN_STABLE_WINDOW_MS;
+  return {configuredStableWindowMs, stableWindowFloorMs,
+    stableWindowMs: Math.max(stableWindowFloorMs,
+      Number.isFinite(configuredStableWindowMs) ? configuredStableWindowMs :
+        stableWindowFloorMs)};
 }
 
 function describePoll(probe, atMs) {
@@ -391,7 +427,7 @@ function resolvePublicationClock(cluster, clock) {
     window: {consecutiveReady: ZERO, consecutiveReadyRequired:
       clock.consecutiveReady ?? CERTIFICATION_PUBLICATION_WAIT.CONSECUTIVE_READY,
     firstReadyAtMs: null, heldMs: ZERO,
-    stableWindowMs: resolvePublicationStableWindowMs(cluster, clock)},
+    ...resolvePublicationStableWindow(cluster, clock)},
   };
 }
 
@@ -455,14 +491,117 @@ async function observePublicationConvergence(cluster, clock = {}) {
     window};
 }
 
-async function runStageConvergenceWait(cluster) {
+async function attemptConvergenceWait(cluster, settleTimeoutMs) {
   try {
     // Recorded by the cluster's own waitForConvergence (observed below).
-    await cluster.waitForConvergence();
+    await cluster.waitForConvergence({settleTimeoutMs});
     return null;
   } catch (error) {
     return String(error?.message || error);
   }
+}
+
+function isClaimedAtTarget(record) {
+  return record?.state === VOTER_TARGET_STATE.AT_TARGET &&
+    partitionClaimProblems(record).length === ZERO;
+}
+
+function resolveConvergenceClock(clock) {
+  return {
+    budgetMs: clock.convergenceBudgetMs ??
+      CERTIFICATION_CONVERGENCE_WAIT.BUDGET_MS,
+    now: clock.now || Date.now,
+    pollMs: clock.convergencePollMs ?? CERTIFICATION_CONVERGENCE_WAIT.POLL_MS,
+    sleep: clock.sleep ||
+      ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+  };
+}
+
+// One attempt of the stage wait, bounded by what is left of the budget;
+// returns the record it left on the ledger (or null) and its error.
+async function attemptStageConvergence(cluster, timing, startedAtMs) {
+  const ledger = ledgerOf(cluster);
+  const before = ledger.convergenceWaits.length;
+  const error = await attemptConvergenceWait(cluster, Math.max(
+    CERTIFICATION_CONVERGENCE_WAIT.MIN_ATTEMPT_MS,
+    timing.budgetMs - (timing.now() - startedAtMs)));
+  const record = ledger.convergenceWaits.length > before ?
+    ledger.convergenceWaits.at(-ONE) : null;
+  return {error, observed: error === null && isClaimedAtTarget(record),
+    record};
+}
+
+// Only the last stage record decides; the earlier ones are superseded.
+function markStageRecords(records) {
+  records.forEach((record, index) => {
+    if (record) {
+      record.stageAttempt = index + ONE;
+      record.supersededByStage = index < records.length - ONE;
+    }
+  });
+}
+
+// The stage's strict convergence wait (R6): re-run, bounded, until one
+// observation has voters at target and nothing unclaimed.
+async function runStageConvergenceWait(cluster, clock = {}) {
+  const timing = resolveConvergenceClock(clock);
+  const startedAtMs = timing.now();
+  const within = () => timing.now() - startedAtMs < timing.budgetMs;
+  const records = [];
+  let attempt = {error: null, observed: false};
+  do {
+    attempt = await attemptStageConvergence(cluster, timing, startedAtMs);
+    records.push(attempt.record);
+    if (!attempt.observed && within()) {
+      await timing.sleep(timing.pollMs);
+    }
+  } while (!attempt.observed && within());
+  markStageRecords(records);
+  const elapsedMs = timing.now() - startedAtMs;
+  const last = records.at(-ONE) ?? null;
+  return {attempts: records.length, budgetMs: timing.budgetMs, elapsedMs,
+    error: attempt.error, lastObserved: last, observed: attempt.observed,
+    spentWait: attempt.observed ? null : {
+      awaited: CERTIFICATION_CONVERGENCE_WAIT.AWAITED,
+      boundMs: timing.budgetMs, elapsedMs, lastObserved: last,
+      wait: CERTIFICATION_CONVERGENCE_WAIT.NAME}};
+}
+
+function describeSetDifference(expected, observed) {
+  const expectedSet = new Set(expected);
+  const observedSet = new Set(observed);
+  return {extra: arrayFilter(observed, (id) => !expectedSet.has(id)),
+    missing: arrayFilter(expected, (id) => !observedSet.has(id))};
+}
+
+// R3: every node's own partitions read must name the same set as the
+// expected set the final convergence record judged; at least
+// PARTITION_CROSS_CHECK_MIN_NODES nodes must answer.
+async function crossCheckPartitionSet(nodes, expected) {
+  const reads = [];
+  for (const node of nodes) {
+    const read = await readPartitionVoterTargets([node]);
+    reads.push({error: read.error, nodeId: node?.id ?? null,
+      partitionIds: read.partitionIds});
+  }
+  const problems = [];
+  const answered = arrayFilter(reads, (read) => Array.isArray(read.partitionIds));
+  if (answered.length < PARTITION_CROSS_CHECK_MIN_NODES) {
+    problems.push(`partition set cross-check: ${answered.length} node(s) ` +
+      `answered the partitions read, needs ${PARTITION_CROSS_CHECK_MIN_NODES}`);
+  }
+  if (!Array.isArray(expected)) {
+    problems.push('partition set cross-check: no expected set recorded');
+  }
+  for (const read of Array.isArray(expected) ? answered : []) {
+    const difference = describeSetDifference(expected, read.partitionIds);
+    if (difference.extra.length > ZERO || difference.missing.length > ZERO) {
+      problems.push(`partition set cross-check: node ${read.nodeId} ` +
+        `disagrees with the expected set: ${JSON.stringify(difference)}`);
+    }
+  }
+  return {expected: expected ?? null, minNodes: PARTITION_CROSS_CHECK_MIN_NODES,
+    problems, reads};
 }
 
 /**
@@ -493,7 +632,7 @@ function captureCertificationNodes(cluster) {
  * @return {Promise<Object>}
  */
 async function runCertificationStage(cluster, clock = {}) {
-  const convergenceError = await runStageConvergenceWait(cluster);
+  const convergence = await runStageConvergenceWait(cluster, clock);
   const publication = await observePublicationConvergence(cluster, clock);
   let liveNodes = [];
   try {
@@ -501,8 +640,12 @@ async function runCertificationStage(cluster, clock = {}) {
   } catch (_error) {
     liveNodes = [];
   }
-  return {convergenceError, nodeImages: await observeNodeImages(liveNodes),
-    nodes: captureCertificationNodes(cluster), publication};
+  return {convergence, convergenceError: convergence.error,
+    nodeImages: await observeNodeImages(liveNodes),
+    nodes: captureCertificationNodes(cluster),
+    partitionCrossCheck: await crossCheckPartitionSet(liveNodes,
+      convergence.lastObserved?.expectedPartitionIds ?? null),
+    publication};
 }
 
 // --- spent waits ---------------------------------------------------------
@@ -920,8 +1063,25 @@ function partitionClaimProblems(wait) {
     [];
 }
 
+// The stage's own convergence observation and partition cross-check.
+function stageVoterProblems(stage) {
+  if (!stage) {
+    return ['the certification stage did not run: no strict convergence ' +
+      'observation and no partition set cross-check'];
+  }
+  const problems = [...(stage.partitionCrossCheck?.problems ??
+    ['partition set cross-check: not run'])];
+  if (stage.convergence?.observed !== true) {
+    problems.push('the stage convergence wait ended without voters at ' +
+      'target and every partition claimed (' +
+      `${CERTIFICATION_CONVERGENCE_WAIT.NAME} spent)`);
+  }
+  return problems;
+}
+
 function evaluateVoters(evidence) {
-  const waits = evidence.convergenceWaits || [];
+  const waits = arrayFilter(evidence.convergenceWaits || [],
+    (wait) => wait.supersededByStage !== true);
   const problems = [];
   if (waits.length === ZERO) {
     problems.push('no convergence wait observed');
@@ -938,9 +1098,13 @@ function evaluateVoters(evidence) {
       problems.push(...partitionClaimProblems(wait));
     }
   }
+  problems.push(...stageVoterProblems(evidence.stage));
   return condition(CERTIFICATION_CONDITION.VOTERS_AT_TARGET,
     problems.length === ZERO, CERTIFICATION_FAILURE.VOTERS,
-    {problems, required: VOTER_TARGET_STATE.AT_TARGET, waits});
+    {problems, required: VOTER_TARGET_STATE.AT_TARGET,
+      stageConvergence: evidence.stage?.convergence ?? null,
+      partitionCrossCheck: evidence.stage?.partitionCrossCheck ?? null,
+      waits: evidence.convergenceWaits || []});
 }
 
 function gateRecordProblems(records, gateName) {

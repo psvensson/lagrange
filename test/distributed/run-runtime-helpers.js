@@ -457,6 +457,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       }
       const archived = await archiveReportedCertification({config, report,
         root: options.certificationEvidenceRoot, runStartedAt, scenarioName,
+        runDir: options.certificationRunDir ?? undefined,
         write: options.certificationEvidenceWrite, ...extra});
       hasUncertified = hasUncertified || archived.error !== null;
     };

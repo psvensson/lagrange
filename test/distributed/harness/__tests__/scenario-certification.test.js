@@ -21,6 +21,9 @@ import {
   VOTER_TARGET_STATE,
   classifyVoterTargets,
 } from '../convergence-voter-targets.js';
+
+// The policy read's SQL (convergence-voter-targets.js VOTER_TARGET_QUERY).
+const VOTER_TARGET_QUERY = 'SELECT partition_id, replica_count FROM partitions';
 import {fullLogDestPath} from '../full-node-log-capture.js';
 import {PUBLICATION_CONVERGENCE_CLAIM_STATE} from '../publication-convergence-claim.js';
 import {
@@ -34,6 +37,7 @@ import {
   observeConvergenceWait,
   parseSpentWaitCensus,
   readSpentWaitCensus,
+  runCertificationStage,
 } from '../scenario-certification.js';
 import {
   SCENARIO_REFUSAL,
@@ -217,10 +221,31 @@ function buildNodes(config, plan) {
     _dockerProvider: fakeNodeProvider(`n${placed.nodeIndex}`, plan),
     containerId: `container-n${placed.nodeIndex}`,
     id: `n${placed.nodeIndex}`,
-    query: async (sqlText) => (sqlText === SQL.SELECT_PARTITIONS ?
-      plan.truth.partitions :
-      plan.truth.services),
+    query: async (sqlText) => partitionReadOf(sqlText, plan,
+      `n${placed.nodeIndex}`),
   }));
+}
+
+const POLICY_PARTITIONS = Object.freeze(['sys-p1', 't_left', 't_right']);
+const BASE_IMAGES = Object.freeze(['node:22-slim',
+  'gcr.io/distroless/nodejs22-debian12']);
+const BASE_IMAGE_ID = 'sha256:base-image';
+
+// The partitions read each node answers: the policy read (the voter-target
+// query, the partition set cross-check), the scenario's split truth, or
+// the services rows. `partitionReadsByNode` names a node's own set; a
+// node whose entry is null fails its read.
+function partitionReadOf(sqlText, plan, nodeId) {
+  if (sqlText === VOTER_TARGET_QUERY) {
+    const own = plan.partitionReadsByNode?.[nodeId];
+    if (own === null) {
+      throw new Error(`node ${nodeId} partitions read failed`);
+    }
+    return arrayMap(own || plan.policyPartitionIds || POLICY_PARTITIONS,
+      (partitionId) => ({partition_id: partitionId, replica_count: 3}));
+  }
+  return sqlText === SQL.SELECT_PARTITIONS ? plan.truth.partitions :
+    plan.truth.services;
 }
 
 function fakeCluster(config, plan, counters) {
@@ -254,16 +279,26 @@ function fakeCluster(config, plan, counters) {
     },
     // The real cluster's waitForConvergence records through the same
     // observer (cluster-class-lifecycle-base.js).
-    waitForConvergence: (options) => observeConvergenceWait(cluster, options,
-      async () => {
-        if (plan.stageWaitThrows && options === undefined) {
-          throw new Error('convergence wait timed out');
-        }
-        // rawVoterState: a verdict that names no partition set at all.
-        return {voterTargets: plan.rawVoterState ?
-          {state: plan.rawVoterState} :
-          voterVerdict(plan, options)};
-      }),
+    // stageUnrecorded: a stage wait that leaves no record on the ledger.
+    waitForConvergence: (options) => (plan.stageUnrecorded &&
+      options?.settleTimeoutMs !== undefined ? Promise.resolve({}) :
+      observeConvergenceWait(cluster, options,
+        async () => {
+          if (plan.stageWaitThrows && options?.settleTimeoutMs !== undefined) {
+            throw new Error('convergence wait timed out');
+          }
+          // rawVoterState: a verdict that names no partition set at all;
+          // stageVerdicts: the stage's successive observations (the last
+          // one repeats).
+          if (options?.settleTimeoutMs !== undefined && plan.stageVerdicts) {
+            const next = plan.stageVerdicts.length > 1 ?
+              plan.stageVerdicts.shift() : plan.stageVerdicts[0];
+            return {voterTargets: voterVerdict({...plan, ...next}, options)};
+          }
+          return {voterTargets: plan.rawVoterState ?
+            {state: plan.rawVoterState} :
+            voterVerdict(plan, options)};
+        })),
   };
   return cluster;
 }
@@ -277,8 +312,6 @@ function probeOf(step) {
     snapshotCoverage: {completeCoverage: explicit ? step.completeCoverage :
       true}};
 }
-
-const POLICY_PARTITIONS = Object.freeze(['sys-p1', 't_left', 't_right']);
 
 // The REAL voter verdict (convergence-voter-targets.js) over the plan's
 // claimed set, the partitions read and the voter counts.
@@ -306,14 +339,19 @@ function cleanIdentity(overrides = {}) {
 // prepareCertificationBuild) and the labels read back from each host.
 function certificationRequest(overrides = {}) {
   return {
-    build: {buildId: BUILD_ID, context: {digest: CONTEXT_DIGEST, error: null,
-      fileCount: 3}, dockerfile: 'Dockerfile', labels: CERTIFIED_LABELS,
-    refusal: null, srcFingerprint: SRC_FINGERPRINT,
-    ...(overrides.build || {})},
-    clock: {budgetMs: 40, pollMs: 1, stableWindowMs: 0,
+    build: {baseImageRefs: [...BASE_IMAGES], buildId: BUILD_ID,
+      context: {digest: CONTEXT_DIGEST, error: null,
+        fileCount: 3}, dockerfile: 'Dockerfile', labels: CERTIFIED_LABELS,
+      refusal: null, srcFingerprint: SRC_FINGERPRINT,
+      ...(overrides.build || {})},
+    clock: {budgetMs: 40, convergenceBudgetMs: 40, convergencePollMs: 1,
+      pollMs: 1, stableWindowFloorMs: 0, stableWindowMs: 0,
       ...(overrides.clock || {})},
     commitIdentity: cleanIdentity(overrides.commitIdentity),
     image: {imageReadback: arrayMap([0, 1, 2, 3, 4], (index) => ({
+      baseImages: arrayMap(BASE_IMAGES, (ref) => ({imageId:
+        Object.hasOwn(overrides.baseImageIds || {}, index) ?
+          overrides.baseImageIds[index] : BASE_IMAGE_ID, ref})),
       host: `tcp://127.0.0.1:${1000 + index}`, imageId: IMAGE_ID,
       labels: {...CERTIFIED_LABELS, ...(index === 3 ?
         overrides.hostLabels || {} : {})}})),
@@ -395,9 +433,16 @@ describe('certification-grade verdict (owner rulings 5 and 6)', () => {
     assert.equal(publication.window.consecutiveReadyRequired, 3);
     assert.deepEqual(conditionOf(certification, 'voters_at_target').evidence
       .waits, [{claimedPartitionIds: POLICY_PARTITIONS, error: null,
-      expectedPartitionIds: POLICY_PARTITIONS, state: 'voters_at_target',
+      expectedPartitionIds: POLICY_PARTITIONS, stageAttempt: 1,
+      state: 'voters_at_target', supersededByStage: false,
       toleranceDeclared: false, toleranceReason: null,
       unclaimedPartitionIds: []}]);
+    const voterEvidence = conditionOf(certification, 'voters_at_target')
+      .evidence;
+    assert.equal(voterEvidence.stageConvergence.observed, true);
+    assert.equal(voterEvidence.stageConvergence.budgetMs, 40);
+    assert.equal(voterEvidence.partitionCrossCheck.reads.length, 5);
+    assert.deepEqual(voterEvidence.partitionCrossCheck.problems, []);
     assert.ok(certification.notCertified.length >= 2);
     assert.equal(run.hasUncertified, false);
   });
@@ -728,6 +773,84 @@ describe('certification-grade verdict (owner rulings 5 and 6)', () => {
       .evidence.problems.join('\n'), /node n3: no boot provenance line/u);
   });
 
+  it('R1: a host whose base image (FROM) reads back another image id, or ' +
+    'none, or a Dockerfile with no FROM read, is not certified', async () => {
+    const cases = [
+      [{request: {baseImageIds: {3: 'sha256:other-base'}}},
+        /base image node:22-slim differs across hosts/u],
+      [{request: {baseImageIds: {1: null}}},
+        /image on tcp:\/\/127\.0\.0\.1:1001: base image node:22-slim not read back/u],
+      [{request: {build: {baseImageRefs: []}}},
+        /no base image \(FROM\) was read from the Dockerfile/u],
+    ];
+    for (const [options, pattern] of cases) {
+      const run = await runFixture({}, options);
+      assert.deepEqual(run.entry.certification.failures,
+        [CERTIFICATION_FAILURE.COMMIT_IDENTITY], String(pattern));
+      assert.match(conditionOf(run.entry.certification, 'commit_identity')
+        .evidence.problems.join('\n'), pattern);
+    }
+  });
+
+  it('R6: the stage waits past an observation that leaves the split ' +
+    'parent unclaimed (voters already at target) and certifies on the ' +
+    'later complete one; one that never completes is a named spent wait',
+  async () => {
+    const withParent = {policyPartitionIds: ['sys-p1', 't-p1', 't_left',
+      't_right'], claimedPartitionIds: POLICY_PARTITIONS};
+    const settles = await runFixture({stageVerdicts: [withParent, withParent,
+      {}]}, {request: {clock: {convergenceBudgetMs: 5000}}});
+    assert.equal(settles.entry.certification.certified, true,
+      JSON.stringify(settles.entry.certification.notCertified));
+    const evidence = conditionOf(settles.entry.certification,
+      'voters_at_target').evidence;
+    assert.equal(evidence.stageConvergence.attempts, 3);
+    assert.equal(evidence.stageConvergence.observed, true);
+    assert.deepEqual(arrayMap(evidence.waits, (wait) =>
+      wait.supersededByStage), [true, true, false]);
+    assert.deepEqual(evidence.waits[0].unclaimedPartitionIds, ['t-p1']);
+    const never = await runFixture({stageVerdicts: [withParent]});
+    assert.deepEqual(never.entry.certification.failures,
+      [CERTIFICATION_FAILURE.VOTERS]);
+    const spent = conditionOf(never.entry.certification, 'voters_at_target')
+      .evidence;
+    assert.equal(spent.stageConvergence.spentWait.wait,
+      'CERTIFICATION_CONVERGENCE_WAIT.BUDGET_MS');
+    assert.equal(spent.stageConvergence.spentWait.boundMs, 40);
+    assert.ok(spent.stageConvergence.elapsedMs >= 40);
+    assert.match(spent.problems.join('\n'), /left partitions unclaimed: \["t-p1"\]/u);
+  });
+
+  it('R6: a stage wait that recorded no observation is not certified, ' +
+    'even when the scenario\'s own waits were at target', async () => {
+    const run = await runFixture({scenarioConvergenceWaits: [{}],
+      stageUnrecorded: true});
+    assert.deepEqual(run.entry.certification.failures,
+      [CERTIFICATION_FAILURE.VOTERS]);
+    assert.match(conditionOf(run.entry.certification, 'voters_at_target')
+      .evidence.problems.join('\n'),
+    /stage convergence wait ended without voters at target/u);
+  });
+
+  it('R3: a node whose own partitions read disagrees with the expected ' +
+    'set, or fewer than two answering nodes, is not certified, naming the ' +
+    'difference', async () => {
+    const disagree = await runFixture({partitionReadsByNode: {
+      n3: ['sys-p1', 't_left', 't_extra']}});
+    assert.deepEqual(disagree.entry.certification.failures,
+      [CERTIFICATION_FAILURE.VOTERS]);
+    assert.match(conditionOf(disagree.entry.certification, 'voters_at_target')
+      .evidence.problems.join('\n'), new RegExp('node n3 disagrees with the ' +
+      'expected set: \\{"extra":\\["t_extra"\\],"missing":\\["t_right"\\]\\}', 'u'));
+    const alone = await runFixture({partitionReadsByNode: {n1: null, n2: null,
+      n3: null, n4: null}});
+    assert.deepEqual(alone.entry.certification.failures,
+      [CERTIFICATION_FAILURE.VOTERS]);
+    assert.match(conditionOf(alone.entry.certification, 'voters_at_target')
+      .evidence.problems.join('\n'),
+    /1 node\(s\) answered the partitions read, needs 2/u);
+  });
+
   it('a failed scenario is never certified (the stage never ran)',
     async () => {
       const run = await runFixture({scenarioThrows: true});
@@ -788,6 +911,31 @@ describe('certification-grade verdict (owner rulings 5 and 6)', () => {
     assert.equal(unarchived.hasUncertified, true);
     assert.match(unarchived.counters.printed.join(''),
       /certification evidence NOT archived/u);
+  });
+});
+
+describe('the certification stage window floor (R4)', () => {
+  it('a configured load-readiness window of 0 ms still needs the 5 s ' +
+    'floor of real publication convergence; both are recorded', async () => {
+    let nowMs = 0;
+    const cluster = {
+      _probeClusterActiveState: async () => probeOf(LOAD_READY),
+      _resolveLoadReadinessStableWindowMs: () => 0,
+      getNodes: () => [],
+    };
+    cluster.waitForConvergence = (options) => observeConvergenceWait(cluster,
+      options, async () => ({voterTargets: voterVerdict({}, options)}));
+    const stage = await runCertificationStage(cluster, {now: () => nowMs,
+      pollMs: 1000, sleep: async (ms) => {
+        nowMs += ms;
+      }});
+    assert.equal(stage.publication.observed, true);
+    assert.equal(stage.publication.window.stableWindowMs, 5000);
+    assert.equal(stage.publication.window.configuredStableWindowMs, 0);
+    assert.equal(stage.publication.window.stableWindowFloorMs, 5000);
+    assert.equal(stage.publication.window.heldMs, 5000);
+    assert.equal(stage.publication.polls, 6);
+    assert.equal(stage.convergence.budgetMs, 30000);
   });
 });
 

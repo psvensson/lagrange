@@ -9,7 +9,9 @@
 
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {
+  mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {test} from 'node:test';
@@ -32,6 +34,8 @@ import {
 } from '../../test/distributed/harness/scenario-certification.js';
 import {
   archiveCertificationRun,
+  describeCertificationRun,
+  formatCertificationRecord,
 } from '../../test/distributed/harness/certification-evidence-archive.js';
 import {
   NOT_CERTIFICATION_EVIDENCE,
@@ -55,14 +59,25 @@ function certifiedEntry(sha) {
   scenario: SCENARIO};
 }
 
-// Durable evidence, oldest first (certification-evidence-archive.js).
-async function archiveEntries(root, entries) {
+// Durable evidence, oldest first (certification-evidence-archive.js); each
+// run's record line is appended to `log` as `solve note --kind evidence`
+// records it.
+async function archiveEntries(root, entries, {log = null} = {}) {
   let second = 10;
+  const lines = [];
   for (const entry of entries) {
     second += 1;
-    await archiveCertificationRun({entry, gates: [], nodes: [],
-      outputDir: null, root, runStartedAt: `2026-10-05T00:00:${second}Z`,
-      scenarioName: SCENARIO});
+    const archived = await archiveCertificationRun({entry, gates: [],
+      nodes: [], outputDir: null, root,
+      runStartedAt: `2026-10-05T00:00:${second}Z`, scenarioName: SCENARIO});
+    const line = formatCertificationRecord(describeCertificationRun(
+      archived.dir), 'q');
+    lines.push(JSON.stringify({kind: 'evidence',
+      text: line.slice(line.indexOf('certification-run'), -1),
+      ts: `2026-10-05T00:01:${second}Z`, type: 'finding'}));
+  }
+  if (log !== null) {
+    writeFileSync(log, lines.join('\n') + '\n', {flag: 'a'});
   }
 }
 
@@ -82,20 +97,36 @@ test('quest probe, certification: true - only certified runs at ONE sha ' +
   'from durable evidence count; report files never do; another sha does ' +
   'not', async (t) => {
   const three = scratch(t, 'cert-probe-');
+  const log = join(three, 'log.ndjson');
   // Oldest first; the probe reads newest first.
   await archiveEntries(three, [certifiedEntry(SHA), certifiedEntry(SHA),
-    certifiedEntry(SHA)]);
+    certifiedEntry(SHA)], {log});
   const done = scenarioHarnessProbe.measure({certification: true,
-    consecutive: 3, evidenceDir: three, scenario: SCENARIO});
+    consecutive: 3, evidenceDir: three, recordedLog: log, scenario: SCENARIO});
   assert.equal(done.done, true);
   assert.equal(done.metric, 0);
   assert.equal(done.detail.certification.sha, SHA);
+  assert.equal(done.detail.certification.recordedCheck, 'checked');
+  // Without the quest log the streak is not claimed.
+  const unrecorded = scenarioHarnessProbe.measure({certification: true,
+    consecutive: 3, evidenceDir: three, scenario: SCENARIO});
+  assert.equal(unrecorded.done, false);
+  assert.equal(unrecorded.detail.certification.recordedCheck, 'not_supplied');
+  // An empty log: every certified sample is unrecorded, none counts.
+  const emptyLog = join(three, 'empty.ndjson');
+  writeFileSync(emptyLog, '');
+  const none = scenarioHarnessProbe.measure({certification: true,
+    consecutive: 3, evidenceDir: three, recordedLog: emptyLog,
+    scenario: SCENARIO});
+  assert.equal(none.done, false);
+  assert.equal(none.detail.certification.unrecordedSamples.length, 3);
 
   const mixed = scratch(t, 'cert-probe-sha-');
   await archiveEntries(mixed, [certifiedEntry(OTHER_SHA),
-    certifiedEntry(SHA), certifiedEntry(SHA)]);
+    certifiedEntry(SHA), certifiedEntry(SHA)], {log: join(mixed, 'log')});
   const notDone = scenarioHarnessProbe.measure({certification: true,
-    consecutive: 3, evidenceDir: mixed, scenario: SCENARIO});
+    consecutive: 3, evidenceDir: mixed, recordedLog: join(mixed, 'log'),
+    scenario: SCENARIO});
   assert.equal(notDone.done, false);
   assert.equal(notDone.metric, 1);
   assert.equal(notDone.detail.certification.endedBy, 'other_sha');
@@ -146,9 +177,24 @@ const NEVER_HOLD = () => {
   throw new Error('a refused certification run must hold no node');
 };
 
+const BASE_IMAGE_IDS = Object.freeze({
+  'gcr.io/distroless/nodejs22-debian12': 'sha256:distroless',
+  'node:22-slim': 'sha256:node22slim'});
+
+// What the pre-flight's one read-only ssh command answers for a healthy
+// host (certification-preflight.js).
+function healthyHost(node) {
+  const now = Date.now();
+  return {baseImages: {...BASE_IMAGE_IDS}, bootId: bootIdOf(node),
+    clockMs: now, docker: '29.1.3', freeKib: 50 * 1024 * 1024,
+    receivedMs: now, sentMs: now};
+}
+
 function labRun(overrides = {}, write = () => {}) {
   return runHarness({baseConfig: BASE_FIVE, certify: SHA, dryRun: true,
-    hold: NEVER_HOLD, nodes: LAB_NODES, observeMachine: async (node) =>
+    environment: {}, hold: NEVER_HOLD, nodes: LAB_NODES,
+    observeHost: async (node) => healthyHost(node),
+    observeMachine: async (node) =>
       bootIdOf(node), readCommitIdentity: cleanAt(SHA), scenario: SCENARIO,
     verbose: false, write, ...overrides});
 }
@@ -164,6 +210,11 @@ async function captureOutput(run) {
 test('lab certification dry-run: five nodes on five observed machines, ' +
   'one per machine, the runner asked for the verdict', async (t) => {
   const output = await captureOutput((write) => labRun({}, write));
+  assert.match(output, /^PASS clean checkout at the sha/mu);
+  assert.match(output, /^PASS host carinas-windows clock skew/mu);
+  assert.match(output, /^PASS 5 distinct boot ids/mu);
+  assert.match(output, /^certification preflight: PASS$/mu);
+  assert.doesNotMatch(output, /^FAIL /mu);
   assert.match(output, /Certification topology: 5 node\(s\) on 5 distinct machine\(s\), at most 1 per machine: met/u);
   assert.match(output, new RegExp(`--certify ${SHA} --no-fast-local`, 'u'));
   const configPath = /Would write config: (\S+)/u.exec(output)[1];
@@ -172,6 +223,83 @@ test('lab certification dry-run: five nodes on five observed machines, ' +
   assert.equal(config.nodesPerHost, 1);
   assert.equal(new Set(config.docker.hostInfo.map((entry) =>
     entry.machineId)).size, 5);
+});
+
+test('lab certification pre-flight (--dry-run --certify): each failing ' +
+  'item is a FAIL line and refuses the run, nothing held or built',
+async () => {
+  const at = (name, change) => async (node) => (node.name === name ?
+    {...healthyHost(node), ...change(healthyHost(node))} : healthyHost(node));
+  const cases = [
+    [{observeHost: at('adam-laptop', () => ({baseImages: {...BASE_IMAGE_IDS,
+      'node:22-slim': 'sha256:older'}}))},
+    /FAIL base image ids equal on every host: node:22-slim: .*adam-laptop=sha256:older/u],
+    [{observeHost: at('tv-dator', () => ({baseImages: {}}))},
+      /FAIL host tv-dator base images present: missing: node:22-slim/u],
+    [{observeHost: at('lenovo-laptop', () => ({freeKib: 1024}))},
+      /FAIL host lenovo-laptop free disk: 1024 KiB free/u],
+    [{observeHost: at('carinas-windows', (host) => ({clockMs:
+      host.receivedMs + 2001}))}, /FAIL host carinas-windows clock skew/u],
+    [{observeHost: at('adams-gamla', () => ({docker: 'unreachable'}))},
+      /FAIL host adams-gamla docker: docker unreachable/u],
+    [{observeHost: async (node) => {
+      if (node.name === 'tv-dator') throw new Error('ssh: connect timed out');
+      return healthyHost(node);
+    }}, /FAIL host tv-dator reachable: ssh: connect timed out/u],
+    [{observeHost: at('adams-gamla', () => ({bootId: bootIdOf(LAB_NODES[0])}))},
+      /FAIL 5 distinct boot ids: 4 distinct of 5/u],
+    [{environment: {LAGRANGE_LOG_FILE: '/tmp/x.log'}},
+      /FAIL log capture streamed .*: LAGRANGE_LOG_FILE/u],
+    [{environment: {LOG_PRETTY_PRINT: 'true'}},
+      /FAIL log capture streamed .*: LOG_PRETTY_PRINT/u],
+    [{readCommitIdentity: () => ({...cleanAt(SHA)(), dirty: true,
+      dirtyPathCount: 2})}, /FAIL clean checkout at the sha/u],
+  ];
+  for (const [overrides, pattern] of cases) {
+    let output = '';
+    await assert.rejects(labRun(overrides, (text) => {
+      output += text;
+    }), /certification refused \(nothing held, nothing run\): the certification preflight failed/u,
+    String(pattern));
+    assert.match(output, pattern);
+    assert.match(output, /^certification preflight: FAIL \(\d item\(s\)\)$/mu,
+      String(pattern));
+    assert.doesNotMatch(output, /Would write config/u);
+  }
+});
+
+test('lab certification (B3): the run directory and its started.json ' +
+  'exist BEFORE any hold; a run aborted at the hold leaves it and prints ' +
+  'its record line as interrupted; a directory that cannot be created ' +
+  'aborts before any hold', async (t) => {
+  const root = join(scratch(t, 'cert-lab-run-'), 'certification');
+  const seen = [];
+  let output = '';
+  await assert.rejects(labRun({dryRun: false, evidenceRoot: root,
+    hold: () => {
+      seen.push(readdirSync(join(root, SHA)));
+      throw new Error('hold lost');
+    }, quest: 'zero-liferaft-active-runtime'}, (text) => {
+    output += text;
+  }), /hold lost/u);
+  const [runName] = readdirSync(join(root, SHA));
+  assert.deepEqual(seen, [[runName]]);
+  assert.deepEqual(readdirSync(join(root, SHA, runName)), ['started.json']);
+  const started = JSON.parse(readFileSync(join(root, SHA, runName,
+    'started.json'), 'utf8'));
+  assert.equal(started.scenario, SCENARIO);
+  assert.equal(started.requestedSha, SHA);
+  assert.equal(started.hostSet.length, 5);
+  assert.equal(started.controller.pid, process.pid);
+  assert.match(output, new RegExp('node scripts/solve\\.js note --id ' +
+    'zero-liferaft-active-runtime --kind evidence --finding ' +
+    `"certification-run scenario=${SCENARIO} sha=${SHA} ` +
+    `start=${started.runStartedAt} outcome=interrupted ` +
+    'manifest=none \\(no manifest: interrupted\\)"', 'u'));
+  const blocked = join(scratch(t, 'cert-lab-blocked-'), 'file');
+  writeFileSync(blocked, 'not a directory');
+  await assert.rejects(labRun({dryRun: false, evidenceRoot: join(blocked, 'x'),
+    hold: NEVER_HOLD}), /ENOTDIR/u);
 });
 
 test('lab certification (S5): a sixth listed machine gets no node, so it ' +

@@ -9,6 +9,7 @@
 
 import {execFile} from 'node:child_process';
 import {DockerProvider} from './harness/docker-provider.js';
+import {readBaseImages} from './harness/certification-image-identity.js';
 
 const BUILD_PROGRESS_LOG_PREFIX = 'docker-build: ';
 const DOCKER_LINE_EMPTY = '';
@@ -278,6 +279,7 @@ async function buildCertificationImages({providers, config, verbose, gitHash,
     );
     const inspect = await provider.inspectImage(config.image);
     imageReadback.push({host: describeBuildHost(config, index),
+      baseImages: await readBaseImages(provider, certification.baseImageRefs),
       imageId: inspect?.Id ?? null, labels: inspect?.Config?.Labels ?? null});
   }
   return {image: config.image, gitHash, gitDirty, imageReadback,

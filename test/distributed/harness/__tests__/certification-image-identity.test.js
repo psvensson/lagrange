@@ -19,6 +19,7 @@ import {fileURLToPath} from 'node:url';
 import {buildImage} from '../../build-image.js';
 import {
   CERTIFICATION_IMAGE_LABEL,
+  dockerfileBaseImages,
   certifyArgumentProblem,
   completeCertificationBuild,
   observeCommitIdentity,
@@ -127,6 +128,24 @@ describe('certification build: fresh, labelled, read back (B1)', () => {
       assert.equal(entry.labels[CERTIFICATION_IMAGE_LABEL.BUILD_ID], 'run-1');
       assert.equal(entry.labels['ddb.git-hash'], SHORT);
     }
+  });
+
+  it('R1: after the build each host\'s base images (the Dockerfile FROM ' +
+    'refs) are read back by image id and recorded', async (t) => {
+    stubDaemon(t, {'ddb.git-hash': SHORT});
+    const certified = await buildImage({docker: TWO_HOSTS, image: 'x:test'},
+      false, null, {certification: {baseImageRefs: ['node:22-slim',
+        'gcr.io/distroless/nodejs22-debian12'], labels: {}, refusal: null},
+      gitDirty: false, gitHash: SHORT});
+    for (const entry of certified.imageReadback) {
+      assert.deepEqual(entry.baseImages, [
+        {imageId: 'sha256:node:22-slim', ref: 'node:22-slim', repoDigests: []},
+        {imageId: 'sha256:gcr.io/distroless/nodejs22-debian12',
+          ref: 'gcr.io/distroless/nodejs22-debian12', repoDigests: []}]);
+    }
+    assert.deepEqual(dockerfileBaseImages('FROM node:22-slim AS builder\n' +
+      'RUN x\nfrom --platform=linux/amd64 gcr.io/d:1 as runtime\n' +
+      'FROM builder\nFROM node:22-slim\n'), ['node:22-slim', 'gcr.io/d:1']);
   });
 
   it('a refused request (dirty checkout) builds nothing: a dirty-built ' +

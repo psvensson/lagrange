@@ -30,6 +30,8 @@
 
 import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
 import {
   computeFileSetFingerprint,
 } from '../../../src/diagnostics/source-fingerprint.js';
@@ -43,6 +45,8 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
+const regExpExec = Function.call.bind(RegExp.prototype.exec);
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const objectEntries = Object.entries;
 
 const ZERO = 0;
@@ -56,6 +60,8 @@ const GIT_CONTEXT_STATUS_ARGS = Object.freeze(['status', '--porcelain',
   '--ignored', '--untracked-files=all', '--']);
 const DIRTY_PATHS_REPORTED = 20;
 const CLEAN_LABEL_VALUE = 'true';
+// `FROM [--flag ...] image [AS stage]`: the image, and the stage name.
+const FROM_LINE = /^\s*from\s+(?:--\S+\s+)*(\S+)(?:\s+as\s+(\S+))?/iu;
 
 const CERTIFICATION_IMAGE_LABEL = Object.freeze({
   BUILD_ID: 'ddb.certify.build-id',
@@ -150,6 +156,40 @@ async function observeBuildContext({cwd = process.cwd(),
 }
 
 /**
+ * The base images a Dockerfile builds FROM (an earlier stage's name is not
+ * a base image). Pure.
+ * @param {string} text
+ * @return {Array<string>}
+ */
+function dockerfileBaseImages(text) {
+  const stages = new Set();
+  const seen = new Set();
+  const refs = [];
+  for (const line of stringSplit(String(text), LINE_SEPARATOR)) {
+    const match = regExpExec(FROM_LINE, line);
+    if (match === null) {
+      continue;
+    }
+    if (!stages.has(stringToLowerCase(match[1])) && !seen.has(match[1])) {
+      seen.add(match[1]);
+      refs.push(match[1]);
+    }
+    if (match[2]) {
+      stages.add(stringToLowerCase(match[2]));
+    }
+  }
+  return refs;
+}
+
+function readBaseImageRefs(cwd, dockerfile) {
+  try {
+    return dockerfileBaseImages(readFileSync(join(cwd, dockerfile), 'utf8'));
+  } catch (_error) {
+    return [];
+  }
+}
+
+/**
  * The certification request of a `--certify SHA` run, observed BEFORE the
  * image build: the checkout, the build context, and the labels the fresh
  * build writes. `build.refusal` names why nothing may be built.
@@ -166,8 +206,9 @@ async function prepareCertificationBuild({requestedSha, srcFingerprint,
   const refusal = commitIdentityProblem(commitIdentity) ??
     (context.error ? 'build context unreadable: ' + context.error : null) ??
     (srcFingerprint ? null : 'no src fingerprint for the build');
+  const baseImageRefs = readBaseImageRefs(cwd, dockerfile);
   return {
-    build: {buildId, context, dockerfile, labels: {
+    build: {baseImageRefs, buildId, context, dockerfile, labels: {
       [CERTIFICATION_IMAGE_LABEL.BUILD_ID]: buildId,
       [CERTIFICATION_IMAGE_LABEL.CLEAN]: CLEAN_LABEL_VALUE,
       [CERTIFICATION_IMAGE_LABEL.CONTEXT_DIGEST]: String(context.digest),
@@ -279,10 +320,62 @@ function postBuildProblems(image, build) {
   return problems;
 }
 
+// R1: the base images each host built FROM, read back after the build
+// (docker image inspect of every FROM image), must be present and the same
+// image id on every host: an unpinned tag cached differently per host is
+// different bits under identical labels.
+function baseImageProblems(image, build) {
+  const refs = build.baseImageRefs || [];
+  if (refs.length === ZERO) {
+    return ['no base image (FROM) was read from the Dockerfile'];
+  }
+  const problems = [];
+  for (const ref of refs) {
+    const ids = new Map();
+    for (const entry of image.imageReadback || []) {
+      const base = arrayFind(entry.baseImages || [], (item) =>
+        item.ref === ref);
+      if (!base?.imageId) {
+        problems.push(`image on ${entry.host}: base image ${ref} not read ` +
+          'back');
+        continue;
+      }
+      ids.set(base.imageId, [...(ids.get(base.imageId) || []), entry.host]);
+    }
+    if (ids.size > 1) {
+      problems.push(`base image ${ref} differs across hosts: ` +
+        JSON.stringify(Object.fromEntries(ids)));
+    }
+  }
+  return problems;
+}
+
 function buildProblems(certification) {
   const image = certification.image || {};
   return [...freshBuildProblems(image, certification.build),
+    ...baseImageProblems(image, certification.build),
     ...postBuildProblems(image, certification.build)];
+}
+
+/**
+ * Inspect each base image on one docker provider (after the build).
+ * @param {Object} provider DockerProvider (inspectImage).
+ * @param {Array<string>} refs
+ * @return {Promise<Array<{ref, imageId, repoDigests}>>}
+ */
+async function readBaseImages(provider, refs) {
+  const observed = [];
+  for (const ref of refs || []) {
+    try {
+      const inspect = await provider.inspectImage(ref);
+      observed.push({imageId: inspect?.Id ?? null, ref,
+        repoDigests: inspect?.RepoDigests ?? []});
+    } catch (error) {
+      observed.push({error: String(error?.message || error), imageId: null,
+        ref, repoDigests: []});
+    }
+  }
+  return observed;
 }
 
 function nodeProblems(build, nodes, nodeImages, bootProvenance) {
@@ -362,7 +455,9 @@ export {
   commitIdentityProblem,
   commitIdentityProblems,
   completeCertificationBuild,
+  dockerfileBaseImages,
   observeCommitIdentity,
   observeNodeImages,
   prepareCertificationBuild,
+  readBaseImages,
 };
