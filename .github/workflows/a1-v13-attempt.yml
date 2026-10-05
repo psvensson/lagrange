@@ -90,6 +90,7 @@ jobs:
             test/partition/partition-split-routing.test.js
           )
           node node_modules/eslint/bin/eslint.js --no-warn-ignored "${paths[@]}"
+          node scripts/check-guideline-literals.js --json "${paths[@]}"
           node scripts/check-guideline-literals.js "${paths[@]}"
           node scripts/check-guideline-decision-boundaries.js "${paths[@]}"
           node scripts/check-guideline-ambient-intrinsics.js "${paths[@]}"
