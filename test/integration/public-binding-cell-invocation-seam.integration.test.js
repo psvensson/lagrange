@@ -1,3 +1,4 @@
+// probe: re-run this file on lenovo-laptop at 3626bdf43 (combined-head red comparison); comment only.
 /**
  * I3 - the public application -> Binding invocation seam, end to end.
  *
