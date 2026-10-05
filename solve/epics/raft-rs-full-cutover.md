@@ -565,3 +565,77 @@ This epic closes only when:
   2PC split/merge defect above, which main already has) does not clear a
   release-level blocker: each item here is cleared only by its own fix or by
   the release's supported-contract documentation excluding it.
+
+<!-- BEGIN identity-open-refusal-native-prevote 2026-10-05 -->
+### 2026-10-05: open-time identity refusal, native pre-vote / check-quorum (owner ruling)
+
+**Closing condition (part a).** pre_vote and check_quorum on for every group the
+port opens is a required closing condition of this epic. It is no longer an
+optional follow-up. `RAFT_RS_GROUP_TUNING` in
+`src/raft/raft-rs-group-constants.js` is the one place, and `tuningOf` builds
+every core config from it. The disruptive-server requirement rests on
+raft-rs's own lease:
+- a replica that heard a leader within its election timeout ignores a
+  higher-term vote or pre-vote request;
+- a pre-vote never moves a term;
+- a leader that hears no quorum for an election timeout steps down.
+
+A transfer's election (MsgTimeoutNow, CAMPAIGN_TRANSFER) bypasses the lease.
+
+**Tick ownership.** Every opened replica is ticked, so no lease freezes.
+- A COMMITTED joiner opens with itself as a **learner** of C_j. O2 still
+  holds: it names itself. The core does not campaign it: raft-rs
+  `tick_election` returns before MsgHup while the replica is not promotable.
+- The applied AddNode that opens the participation gate is the entry that
+  makes it a voter.
+- Configuration entries at or below j are folded into C_j and not applied to
+  the core again. Without the fold, a replay could walk C_j through
+  configurations the group never held, or leave it with no voter.
+- The gate still refuses campaigns, proposals, and a tick of a gated core that
+  is promotable (only a record written before this change).
+- Founder deferrals and the durable-rejoin deferral stay host decisions,
+  bounded by `startElection()` in the same phase. The joiner deferral is
+  removed.
+- B0: `quest-records/identity-open-refusal-native-prevote/b0-gate-ticking-finding-2026-10-05.md`.
+
+**Open-time refusal (primary amnesia detector).** The rule lives in one place,
+the participation gate's opening admission (`openingWithoutRecordRefusal`).
+An opening under any bootstrap source (GENESIS, COMMITTED, DURABLE_RECORD) is
+refused when both hold:
+- the replica holds no durable raft record;
+- the opening host's authoritative row proves the identity existed before.
+
+The refusal is reseed-required and is held durably by the replica's lifecycle
+owner, before the core is entered.
+
+The prior-existence facts:
+- **Seed and message-group founders:** a SERVICES row for this replica on this
+  node in a non-empty startup admission. The seed registers founder rows only
+  after the founders opened, so a first boot has an empty admission.
+- **CREATE_REPLICA targets (provisioning GENESIS retries, stale COMMITTED
+  stamps):** the authoritative SERVICES row read before this create writes any
+  status. It names this node in SYNCING or ACTIVE, statuses the target writes
+  only after its port opened. An unreadable row defers the create.
+
+Residual: a crash between the target's open and its SYNCING write leaves the
+row CREATING. That window has no prior-existence fact surviving the replica-DB
+loss, and the row is not read as one.
+
+**The heartbeat hold stays as the second net.** P1, the local-log guard's
+commit-beyond-log hold, is unchanged.
+
+**Removed.** The host's non-member vote/pre-vote refusal (C1, 08f2cbb87) is
+removed. Three host-side patches of it each opened a new hole, the last a
+permanent lock-out (verdict round 2, B1). The owner ruled out a fourth patch
+and any host-side lease.
+
+**Residuals, stated plainly:**
+- A non-member's higher-term heartbeat or append still deposes its receiver
+  transiently, exactly as in plain raft-rs with the same settings, and the
+  members re-elect. It cannot be refused without locking out a new leader the
+  receiver has not applied yet (binding direction section 6).
+- `from` is unauthenticated, so a forger naming a member id is not covered.
+- A held replica has no recovery path until the fresh-identity ADD exists.
+- With a quorum held or unreachable, the leader now steps down (no leader,
+  term unchanged under pre-vote) instead of leading a group that cannot commit.
+<!-- END identity-open-refusal-native-prevote 2026-10-05 -->
