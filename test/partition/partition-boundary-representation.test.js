@@ -52,3 +52,34 @@ t.test('routing uses exact persisted INTEGER boundary', (t) => {
   t.equal(resolver.resolvePartitionForKey('items', 9007199254740993n, partitions), 'right');
   t.end();
 });
+
+t.test('persisted INTEGER boundary round-trips across JSON restart metadata', (t) => {
+  const persistedRow = JSON.parse(JSON.stringify({
+    partition_id: 'right',
+    partition_key_start: '9007199254740993',
+    partition_key_end: null,
+    partition_key_type: 'INTEGER',
+  }));
+  const restartedBoundary = decodePartitionBoundaryValue(
+    persistedRow.partition_key_start,
+    persistedRow.partition_key_type,
+  );
+  t.equal(restartedBoundary, 9007199254740993n);
+  t.equal(compareRoutingKeys(9007199254740992n, restartedBoundary), -1);
+  t.equal(compareRoutingKeys(9007199254740994n, restartedBoundary), 1);
+  t.end();
+});
+
+t.test('persisted numeric-looking TEXT round-trips without numeric coercion', (t) => {
+  const persistedRow = JSON.parse(JSON.stringify({
+    partition_key_start: '9007199254740993',
+    partition_key_type: 'TEXT',
+  }));
+  const restartedBoundary = decodePartitionBoundaryValue(
+    persistedRow.partition_key_start,
+    persistedRow.partition_key_type,
+  );
+  t.equal(restartedBoundary, '9007199254740993');
+  t.equal(typeof restartedBoundary, 'string');
+  t.end();
+});
