@@ -688,6 +688,9 @@ class PartitionResolver {
       partition.partition_key_start : partition.keyRange?.start;
     const pEnd = 'partition_key_end' in partition ?
       partition.partition_key_end : partition.keyRange?.end;
+    const keyType = partition.partition_key_type ?? partition.partitionKeyType;
+    const decodedStart = decodePartitionBoundaryValue(pStart, keyType);
+    const decodedEnd = decodePartitionBoundaryValue(pEnd, keyType);
     const {low, high, lowInclusive, highInclusive} = conditions;
 
     // Check if partition range overlaps with query range
@@ -695,16 +698,16 @@ class PartitionResolver {
     // Query: [low, high] or variations based on inclusive flags
 
     // If partition ends before query starts, no overlap
-    if (pEnd !== null && pEnd !== undefined && low !== null) {
-      const cmp = this.compareValues(pEnd, low);
+    if (decodedEnd !== null && decodedEnd !== undefined && low !== null) {
+      const cmp = this.compareValues(decodedEnd, low);
       if (cmp < 0 || (cmp === 0 && !lowInclusive)) {
         return false;
       }
     }
 
     // If partition starts after query ends, no overlap
-    if (pStart !== null && pStart !== undefined && high !== null) {
-      const cmp = this.compareValues(pStart, high);
+    if (decodedStart !== null && decodedStart !== undefined && high !== null) {
+      const cmp = this.compareValues(decodedStart, high);
       if (cmp > 0 || (cmp === 0 && !highInclusive)) {
         return false;
       }
