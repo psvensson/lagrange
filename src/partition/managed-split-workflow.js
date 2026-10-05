@@ -484,12 +484,24 @@ class ManagedSplitWorkflow {
         metadata: transitionMetadata,
       });
 
+      const sourcePartitionKeyType =
+        partitionInfo.partition_key_type ??
+        partitionInfo.partitionKeyType ??
+        null;
+      if (!sourcePartitionKeyType) {
+        throw new Error(
+          'Partition boundary type authority is missing; revalidate legacy ' +
+          `partition ${partitionId} before split`,
+        );
+      }
+
       const leftPartitionMetadata = {
         partition_id: splitPlan.leftPartition.partitionId,
         table_id: tableId,
         table_name: tableName,
         partition_key_start: splitPlan.leftPartition.keyRange.start,
         partition_key_end: splitPlan.leftPartition.keyRange.end,
+        partition_key_type: sourcePartitionKeyType,
         partition_version: targetVersion,
         replica_count: replicaCount,
         size_bytes: 0,
@@ -504,6 +516,7 @@ class ManagedSplitWorkflow {
         table_name: tableName,
         partition_key_start: splitPlan.rightPartition.keyRange.start,
         partition_key_end: splitPlan.rightPartition.keyRange.end,
+        partition_key_type: sourcePartitionKeyType,
         partition_version: targetVersion,
         replica_count: replicaCount,
         size_bytes: 0,
