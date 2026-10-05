@@ -35,7 +35,7 @@ const dimensions = {
   exactMedianRead: split.includes('{safeIntegers: true}') &&
     readPath.includes('stmt.safeIntegers(options.safeIntegers === true)'),
   splitPropagation:
-    workflow.includes('partition_key_type: sourcePartitionKeyType'),
+    workflow.includes('[LOCAL_STR_PARTITION_KEY_TYPE]: sourcePartitionKeyType'),
   exactLargeInteger: decoder.includes('BigInt(value)') &&
     witness.includes('9007199254740993n'),
 };
