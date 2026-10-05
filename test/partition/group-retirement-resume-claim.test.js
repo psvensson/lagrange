@@ -25,6 +25,8 @@
  * Owner clock and scheduler are injected: nothing here waits on wall time.
  */
 import {test} from '../../src/test-helpers/tap.js';
+import {WAIT_BOUND_SPENT_EVENT} from
+  '../../src/logging/wait-bound-spent.js';
 import {ManagedSplitWorkflow} from
   '../../src/partition/managed-split-workflow.js';
 import {ManagedMergeWorkflow} from
@@ -242,6 +244,18 @@ function leaseTimers(scheduler) {
   return scheduler.pending().filter((timer) => timer.ms > 30_000);
 }
 
+// The foreign-lease wait's spent report (one wait_bound_spent ERROR).
+function foreignLeaseSpentOf(owner) {
+  return owner.log.filter((line) => line.level === 'error' &&
+    line.fields?.event === WAIT_BOUND_SPENT_EVENT &&
+    line.fields.wait === 'awaitForeignLease.leaseExpiresAt');
+}
+
+// The first report's fields (empty sections when there is none).
+function firstFieldsOf(lines) {
+  return lines[0]?.fields ?? {lastObserved: {}, scope: {}};
+}
+
 function linesOf(owner, level, pattern) {
   return owner.log.filter((line) => line.level === level &&
     pattern.test(line.message));
@@ -312,12 +326,13 @@ async (t) => {
   clock.now = storedClaim(store).leaseExpiresAt + 1;
   scheduler.fireAll();
   await turns();
-  const spent = linesOf(loser, 'warn', /awaited foreign lease expired/u);
-  t.equal(spent.length, 1, 'the spent wait is one WARN');
-  t.equal(spent[0]?.fields?.awaited, 'foreign-lease-expiry',
-    'naming what was awaited');
-  t.equal(spent[0]?.fields?.lastOwnerId, winner.workflowOwnerId,
+  const spent = foreignLeaseSpentOf(loser);
+  t.equal(spent.length, 1, 'the spent wait is one wait_bound_spent ERROR');
+  const fields = firstFieldsOf(spent);
+  t.equal(fields.awaited, 'foreign-lease-expiry', 'naming what was awaited');
+  t.equal(fields.lastObserved.lastOwnerId, winner.workflowOwnerId,
     'and the last observed owner');
+  t.equal(fields.scope.workflowId, WORKFLOW_ID, 'scoped to the workflow');
   t.equal(loser.steps, 1, 'after the spent wait the loser claimed and drove');
 });
 
@@ -341,8 +356,8 @@ test('Mk the lease re-scan reads the current record: a record that left its ' +
   await turns();
   t.equal(store.writes.length, 0, 'no claim after the record cleared');
   t.equal(owner.steps, 0, 'nothing driven');
-  t.same(linesOf(owner, 'warn', /awaited foreign lease/u), [],
-    'no spent-wait WARN for a record that finished');
+  t.same(foreignLeaseSpentOf(owner), [],
+    'no spent-wait report for a record that finished');
 });
 
 test('Mj an owner already driving neither claims nor re-runs on further ' +

@@ -42,8 +42,9 @@
  *                   an event-triggered re-run re-arms it at the current
  *                   delay); every fallback run logs a WARN
  *                   naming the workflow, the group and the unacknowledged
- *                   replicas, and when the bound is spent one ERROR per
- *                   entry - it never ends anything silently, and an
+ *                   replicas, and when the bound is spent one
+ *                   wait_bound_spent ERROR per entry (the spent-wait
+ *                   reporter) - it never ends anything silently, and an
  *                   exhausted entry stays re-drivable by every event above;
  *   STALLED         a re-run that neither completed nor re-reported (it
  *                   returned early) arms the fallback with a WARN.
@@ -63,7 +64,8 @@
  * healthy owner driving a retirement longer than its lease is never
  * superseded mid-step; a dead owner renews nothing and loses the lease at
  * its expiry. A refused renewal is a lost workflow: this owner abandons it
- * (WARN). This timer is a renewal, never an exit: nothing completes on it.
+ * (WARN). This timer is a renewal, never an exit: nothing completes on it
+ * (ends-on: n/a period).
  * Prohibited: no step is completed here; a superseded owner (its evidence
  * refused for workflow or fence, its record write refused, its renewal
  * refused) stops re-driving.
@@ -72,6 +74,10 @@
 import {wasNodeRecordReadyWhenWritten} from '../node/node-readiness-policy.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {claimWorkflowOwnershipCore} from './managed-workflow-ownership-core.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
 
 const REDRIVE_TRIGGER = Object.freeze({
   FAILED_ACK: 'failed-ack',
@@ -88,8 +94,6 @@ const REDRIVE_LOG_MSG = Object.freeze({
     'their REMOVE; the workflow owner re-drives them',
   FALLBACK: 'Group retirement re-driven by the fallback backoff: no event ' +
     'reported the unacknowledged replicas\' nodes ready',
-  EXHAUSTED: 'Group retirement fallback backoff exhausted: waiting for a ' +
-    'node-ready event or a durable resume',
   SUPERSEDED: 'Group retirement re-drive stopped: this owner\'s evidence ' +
     'was refused as superseded',
   STALLED: 'Group retirement re-run returned without completing or ' +
@@ -99,6 +103,8 @@ const REDRIVE_LOG_MSG = Object.freeze({
   RENEWAL_FAILED: 'Group retirement lease renewal did not answer; retrying ' +
     'at the next renewal interval',
 });
+// The ownership lease renewal: a recurring period, never an exit.
+// ends-on: n/a period
 const LEASE_RENEWALS_PER_TERM = 3;
 const RENEWAL_UNCONFIRMED = 'Workflow lease renewal not confirmed for ';
 
@@ -106,6 +112,13 @@ const REDRIVE_DEFAULT = Object.freeze({
   BACKOFF_BASE_MS: 1000,
   BACKOFF_MAX_MS: 30000,
   FALLBACK_ATTEMPTS: 8,
+});
+// The fallback's spent bound (one report per entry; the entry stays tracked
+// and re-drivable by every event).
+const REDRIVE_FALLBACK_WAIT = Object.freeze({
+  wait: 'REDRIVE_DEFAULT.FALLBACK_ATTEMPTS',
+  awaited: 'every unacknowledged replica of the retiring group answered ' +
+    'COMPLETED to its REMOVE',
 });
 
 const NODES_TABLE = 'nodes';
@@ -211,7 +224,7 @@ class GroupRetirementRedrive {
     }
     const entry = this.entries.get(key) ||
       {key, workflowId, partitionId, attempts: 0, fallbackRuns: 0,
-        timer: null, exhausted: false};
+        timer: null, exhausted: false, startedAtMs: readWaitClock(null)};
     entry.unacknowledged = unacknowledged;
     entry.membershipUnavailable = membershipUnavailable;
     entry.redrive = redrive;
@@ -358,7 +371,16 @@ class GroupRetirementRedrive {
       // Once per entry; it stays tracked and re-drivable by every event.
       if (!entry.exhausted) {
         entry.exhausted = true;
-        this.logger.error(REDRIVE_LOG_MSG.EXHAUSTED, fieldsOf(entry));
+        reportWaitBoundSpent(this.logger, {
+          ...REDRIVE_FALLBACK_WAIT,
+          boundMs: null,
+          elapsedMs: readWaitClock(null) - entry.startedAtMs,
+          lastObserved: () => ({...fieldsOf(entry), fallbackRuns,
+            attemptLimit: REDRIVE_DEFAULT.FALLBACK_ATTEMPTS,
+            attempts: entry.attempts, lastTrigger: entry.lastTrigger ?? null}),
+          scope: {workflowId: entry.workflowId,
+            partitionId: entry.partitionId},
+        });
       }
       return;
     }

@@ -18,8 +18,9 @@
  *   a live FOREIGN lease (the claim refuses it without a write; the durable
  *   row is re-read after any refused claim) - one timer at THAT lease's
  *   expiry (the ownership protocol's own bound), logged once when armed and
- *   as a spent wait (WARN: what was awaited, the last observed owner and
- *   lease) when it fires on a still-retiring record;
+ *   as a spent wait (one wait_bound_spent ERROR through the spent-wait
+ *   reporter: what was awaited, the last observed owner and lease) when it
+ *   fires on a still-retiring record;
  *   a refused claim with no live foreign lease on the re-read row (the
  *   record moved under the claim: e.g. a driver whose lease lapsed wrote
  *   progress) - ONE immediate re-claim (a change applied to the record at
@@ -35,6 +36,10 @@
 import {WORKFLOW_FAMILY, retiringWorkflowOf} from
   './group-retirement-evidence.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
 
 const TABLES_TABLE = 'tables';
 const DELETE_OPERATION = 'DELETE';
@@ -51,8 +56,6 @@ const RESUME_LOG_MSG = Object.freeze({
     'workflow owner',
   AWAITING_LEASE: 'Group retirement resume awaits a foreign owner\'s ' +
     'live lease; re-scanning once at its expiry',
-  LEASE_WAIT_SPENT: 'Group retirement resume: the awaited foreign lease ' +
-    'expired with the record still retiring',
   CLAIM_REFUSED: 'Group retirement resume: ownership claim refused with ' +
     'no live foreign lease on the durable record; waiting for the next ' +
     'record change',
@@ -60,6 +63,10 @@ const RESUME_LOG_MSG = Object.freeze({
     'change',
 });
 const AWAITED_FOREIGN_LEASE = 'foreign-lease-expiry';
+// The wait for a foreign owner's live lease: spent when the lease expired
+// with the record still retiring (that owner stopped driving it).
+// ends-on: the foreign owner's workflow record leaves its retiring state
+const FOREIGN_LEASE_WAIT = 'awaitForeignLease.leaseExpiresAt';
 
 function resumeKey(workflowId) {
   return `resume:${workflowId}`;
@@ -98,20 +105,29 @@ function attachGroupRetirementResume(owner, spec) {
       leaseExpiresAt: Number(workflow.leaseExpiresAt)};
     owner.logger.info(RESUME_LOG_MSG.AWAITING_LEASE, {workflowId,
       ...awaited});
+    const startedAtMs = readWaitClock(owner);
+    const boundMs = awaited.leaseExpiresAt - startedAtMs;
     const timer = scheduler.setTimeout(() => {
       leaseWaits.delete(workflowId);
       const record = currentRecord(owner, tablesRow);
       if (retiringWorkflowOf(record).retiring) {
-        const last = durableOwnershipClaimOf(
-          owner.parsePartitionTransition?.(record)?.metadata);
-        owner.logger.warn(RESUME_LOG_MSG.LEASE_WAIT_SPENT, {workflowId,
-          awaited: AWAITED_FOREIGN_LEASE, ...awaited,
-          lastOwnerId: last.workflowOwnerId ?? null,
-          lastLeaseExpiresAt: last.leaseExpiresAt ?? null,
-          recordState: record?.partition_transition_state ?? null});
+        reportWaitBoundSpent(owner.logger, {
+          wait: FOREIGN_LEASE_WAIT,
+          awaited: AWAITED_FOREIGN_LEASE,
+          boundMs,
+          elapsedMs: readWaitClock(owner) - startedAtMs,
+          lastObserved: () => {
+            const last = durableOwnershipClaimOf(
+              owner.parsePartitionTransition?.(record)?.metadata);
+            return {...awaited, lastOwnerId: last.workflowOwnerId ?? null,
+              lastLeaseExpiresAt: last.leaseExpiresAt ?? null,
+              recordState: record?.partition_transition_state ?? null};
+          },
+          scope: {workflowId},
+        });
       }
       resume(record, RESUME_TRIGGER.LEASE_EXPIRED).catch(failed);
-    }, awaited.leaseExpiresAt - owner.now());
+    }, boundMs);
     timer?.unref?.();
     leaseWaits.set(workflowId, timer);
   };

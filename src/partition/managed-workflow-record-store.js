@@ -69,12 +69,21 @@ import {
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {PARTITION_TRANSITION_METADATA_FIELD} from './partition-constants.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
 
 const RECORD_SQL = 'SELECT * FROM tables WHERE table_id = ?';
 const STRING_TYPE = 'string';
 const OBJECT_TYPE = 'object';
 const FUNCTION_TYPE = 'function';
 const MAX_COMPARE_AND_SWAP_ATTEMPTS = 3;
+// The change's bounded attempts spent undecided (UNCONFIRMED).
+const RECORD_CHANGE_ATTEMPTS_WAIT = Object.freeze({
+  wait: 'MAX_COMPARE_AND_SWAP_ATTEMPTS',
+  awaited: 'the workflow record change decided on the authoritative record',
+});
 const STATE_COLUMN = 'partition_transition_state';
 // The record generation (round 7): strictly increased by every accepted
 // change, the terminal clear included, and compared by every
@@ -600,6 +609,7 @@ async function runChange(owner, workflowId, change, options) {
     // own.
     write: null};
   let submitError = null;
+  const startedAtMs = readWaitClock(owner);
   for (let attempt = 0; attempt < MAX_COMPARE_AND_SWAP_ATTEMPTS;
     attempt += 1) {
     const step = turn.write?.base === turn.base ? null :
@@ -626,6 +636,17 @@ async function runChange(owner, workflowId, change, options) {
     turn.confirmed = true;
     turn.base = decided.base;
   }
+  reportWaitBoundSpent(owner.logger, {
+    ...RECORD_CHANGE_ATTEMPTS_WAIT,
+    boundMs: null,
+    elapsedMs: readWaitClock(owner) - startedAtMs,
+    lastObserved: () => ({attempts: MAX_COMPARE_AND_SWAP_ATTEMPTS,
+      kind: turn.kind, baseState: turn.base?.[STATE_COLUMN] ?? null,
+      baseGeneration: turn.base?.[GENERATION_COLUMN] ?? null,
+      submitError: submitError ? String(submitError.message ?? submitError) :
+        null}),
+    scope: {workflowId, tableId: turn.tableId},
+  });
   return settled(RECORD_CHANGE_OUTCOME.UNCONFIRMED, {submitError});
 }
 

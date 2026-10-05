@@ -12,8 +12,8 @@
  * L3  a departed or deleted node re-checks; a deleted member services row
  *     only re-runs the step (owner ruling 2026-10-04: never proof the member
  *     is gone) - the member stays required and listed, nothing completes;
- *     the exhaustion ERROR is logged once across heartbeats and the entry
- *     stays re-drivable.
+ *     the exhaustion ERROR (wait_bound_spent) is logged once across
+ *     heartbeats and the entry stays re-drivable.
  * L4  a re-run that returns early arms the fallback with a WARN; the
  *     merge-source, aborted-child and aborted-target lost REMOVEs recover.
  * L5  a replica opened with its record unreadable WARNs once.
@@ -35,6 +35,8 @@
 
 
 import {test} from '../../src/test-helpers/tap.js';
+import {WAIT_BOUND_SPENT_EVENT} from
+  '../../src/logging/wait-bound-spent.js';
 import {
   TABLE_ID,
   driveUntilRemoved,
@@ -53,6 +55,13 @@ import {
   settle,
   WORKFLOW_ID,
 } from './group-retirement-liveness-world.js';
+
+// The re-drive fallback's spent bound: its one wait_bound_spent ERROR.
+function fallbackSpentOf(owner) {
+  return owner.ownerLog.filter((line) => line.level === 'error' &&
+    line.fields?.event === WAIT_BOUND_SPENT_EVENT &&
+    line.fields.wait === 'REDRIVE_DEFAULT.FALLBACK_ATTEMPTS');
+}
 
 // The record's ownership lease, lapsed (a dead owner renews nothing).
 function expireRecordLease(world) {
@@ -180,13 +189,13 @@ async (t) => {
     world.scheduler.fireAll();
     await settle(world, 3);
   }
-  t.equal(logsOf(owner, 'error', /exhausted/u).length, 1,
+  t.equal(fallbackSpentOf(owner).length, 1,
     'exhaustion is one ERROR');
   for (let beat = 0; beat < 5; beat += 1) {
     world.emitNodeRow(readyNodeRow(`${away}-node`));
     await settle(world, 3);
   }
-  t.equal(logsOf(owner, 'error', /exhausted/u).length, 1,
+  t.equal(fallbackSpentOf(owner).length, 1,
     'five more heartbeats log no new ERROR');
   const before = world.deliveries.filter((d) => d.replicaId === gone).length;
   world.emitSystemRow('nodes', 'DELETE', {node_id: `${gone}-node`});

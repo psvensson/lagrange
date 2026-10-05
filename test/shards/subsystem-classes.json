@@ -28,7 +28,7 @@
   "censusSize": 2278,
   "digest": "fnv1a32-2ebb7b8f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0df468ce",
+  "observationDigest": "fnv1a32-feb8072e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7618,6 +7618,7 @@
     "test/node/group-retired-tombstone-incarnation.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/logging/wait-bound-spent.js",
         "src/node/replica-handler-constants.js",
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-merge-workflow.js",
@@ -7645,6 +7646,7 @@
     "test/node/group-retired-tombstone.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/logging/wait-bound-spent.js",
         "src/node/replica-handler-constants.js",
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-merge-workflow.js",
@@ -7671,6 +7673,7 @@
     "test/node/group-retirement-as-a-unit.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/logging/wait-bound-spent.js",
         "src/node/replica-handler-constants.js",
         "src/node/replica-removal-consensus-exit.js",
         "src/partition/managed-merge-workflow-state-methods.js",
@@ -7698,6 +7701,7 @@
     "test/node/group-retirement-fail-closed.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/logging/wait-bound-spent.js",
         "src/node/replica-handler-constants.js",
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-merge-workflow.js",
@@ -7724,6 +7728,7 @@
     "test/node/group-retirement-fences.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/logging/wait-bound-spent.js",
         "src/node/replica-handler-constants.js",
         "src/partition/group-retirement-members.js",
         "src/partition/managed-merge-workflow-state-methods.js",
@@ -7753,6 +7758,7 @@
     "test/node/group-retirement-liveness.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/logging/wait-bound-spent.js",
         "src/node/replica-handler-constants.js",
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-merge-workflow.js",
@@ -7779,6 +7785,7 @@
     "test/node/group-retirement-redrive.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/logging/wait-bound-spent.js",
         "src/node/replica-handler-constants.js",
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-merge-workflow.js",
@@ -7805,6 +7812,7 @@
     "test/node/group-retirement-reseed-held.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/logging/wait-bound-spent.js",
         "src/node/replica-handler-constants.js",
         "src/partition/managed-merge-workflow-state-methods.js",
         "src/partition/managed-merge-workflow.js",
@@ -8203,6 +8211,7 @@
     },
     "test/partition/group-retirement-resume-claim.test.js": {
       "files": [
+        "src/logging/wait-bound-spent.js",
         "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow.js",
         "src/partition/partition-constants.js"

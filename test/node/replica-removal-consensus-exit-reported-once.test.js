@@ -61,9 +61,12 @@ test('the backstop elapsing inside the wait writes no line of its own',
     };
     const keepAlive = setTimeout(() => {}, 60_000);
     try {
-      t.same(await awaitReplicaConsensusExit(stillVoterService(),
+      // The answer carries the wait's last witness read (the caller's
+      // report names it); the wait itself writes nothing.
+      t.match(await awaitReplicaConsensusExit(stillVoterService(),
         {replicaId: SELF, backstopMs: 20}),
-      {reason: REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP}, 'answers BACKSTOP');
+      {reason: REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP,
+        lastObservation: {state: 'voter'}}, 'answers BACKSTOP');
     } finally {
       logging.error = originalError;
       clearTimeout(keepAlive);

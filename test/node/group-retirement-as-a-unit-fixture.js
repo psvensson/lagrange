@@ -16,15 +16,16 @@
  *
  * Counters, never wall time: conf-change proposals made at the reconcile
  * seam (every member's port), consensus-exit waits armed, consensus-exit
- * backstop alarms logged at ERROR, and each handler's reported exits.
+ * backstop alarms (the backstop's wait_bound_spent ERROR), and each
+ * handler's reported exits.
  */
 
 import {CDC_OPERATION} from '../../src/constants/index.js';
 import {isLivePartitionServiceRow} from '../../src/constants/service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {REPLICA_HANDLER_LOG_MSG} from
-  '../../src/node/replica-handler-constants.js';
+import {WAIT_BOUND_SPENT_EVENT} from
+  '../../src/logging/wait-bound-spent.js';
 import {retireRaftPeerFromAuthoritativeServiceChange} from
   '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
 import {ManagedMergeWorkflowStateMethods} from
@@ -70,6 +71,9 @@ const SERVICES = 'services';
 const TABLES = 'tables';
 const TABLE_ID = 'tbl-retire';
 const ELECTION_ROUNDS = 400;
+// The removal backstop's spent-wait name (its one wait_bound_spent report).
+const BACKSTOP_WAIT =
+  'REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS';
 const RETIRED = 'retired';
 const QUIET_LOGGER = Object.freeze({debug() {}, info() {}, warn() {},
   error() {}});
@@ -197,8 +201,8 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
     const logger = handler.logger;
     handler.logger = Object.assign(Object.create(logger), {
       error(message, fields) {
-        if (message ===
-            REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT_BACKSTOP_ALARM) {
+        if (fields?.event === WAIT_BOUND_SPENT_EVENT &&
+            fields.wait === BACKSTOP_WAIT) {
           world.alarms.push(fields);
         }
         return logger.error(message, fields);

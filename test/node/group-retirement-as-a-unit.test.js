@@ -383,7 +383,7 @@ for (const testCase of W3_CASES) {
   });
 }
 
-test('W7 the consensus-exit backstop is an ERROR alarm', async (t) => {
+test('W7 the consensus-exit backstop is a wait_bound_spent ERROR', async (t) => {
   mock.timers.enable({apis: ['setTimeout']});
   t.teardown(() => mock.timers.reset());
   // An ordinary REMOVE whose RemoveNode nobody proposes (no reconcile): the
@@ -401,12 +401,16 @@ test('W7 the consensus-exit backstop is an ERROR alarm', async (t) => {
   t.same(world.alarms, [], 'no alarm before the bound');
   mock.timers.tick(REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS);
   await driveUntilRemoved(world, [follower], 10);
-  t.same(world.exitsOf(follower), [REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP],
-    'the bound elapsed');
-  t.equal(world.alarms.length, 1, 'exactly one ERROR alarm was logged');
-  t.equal(world.alarms[0]?.replicaId, follower, 'it names the replica');
-  t.equal(world.alarms[0]?.partitionId, world.partitionId,
+  t.equal(world.alarms.length, 1,
+    'exactly one wait_bound_spent ERROR was logged');
+  // The backstop exit is reported by that one line, never by the ordinary
+  // exit info line (the spent-wait reporter is its one report).
+  t.equal(world.alarms[0]?.lastObserved?.exitReason,
+    REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP, 'the bound elapsed');
+  t.same(world.exitsOf(follower), [], 'no ordinary exit line for it');
+  t.equal(world.alarms[0]?.scope?.replicaId, follower, 'it names the replica');
+  t.equal(world.alarms[0]?.scope?.partitionId, world.partitionId,
     'it names the group');
-  t.equal(world.alarms[0]?.lastObservation?.state, 'voter',
+  t.equal(world.alarms[0]?.lastObserved?.lastObservation?.state, 'voter',
     'it says why no exit came: the replica is still a committed voter');
 });
