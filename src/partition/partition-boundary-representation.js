@@ -19,8 +19,8 @@ function decodePartitionBoundaryValue(value, keyType) {
     if (typeof value === 'bigint') return value;
     if (typeof value === 'number' && Number.isSafeInteger(value)) {
       return BigInt(value);
-    }
-    if (typeof value === 'string' && /^-?\\d+(?:\\.0+)?$/u.test(value)) {
+    if (typeof value === 'string' && /^-?[0-9]+(?:[.]0+)?$/u.test(value)) {
+      return BigInt(value.replace(/[.]0+$/u, ''));
       return BigInt(value.replace(/\\.0+$/u, ''));
     }
     throw new Error('Invalid INTEGER partition boundary representation');
