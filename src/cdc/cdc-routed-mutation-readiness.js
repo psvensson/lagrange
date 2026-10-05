@@ -1,4 +1,4 @@
-import {resolveControlPlaneWriteKey} from
+import {mintControlPlaneWriteKey} from
   '../control-plane/control-plane-write-identity.js';
 import {deriveParticipantEntryId} from
   '../query/distributed/distributed-write-coordinator.js';
@@ -446,7 +446,9 @@ class CDCRoutedMutationReadiness {
     // this write), so the engine plans each as the same entry: an attempt
     // after an unknown outcome is answered from the first's outcome row.
     baseQueryOptions.idempotencyKey =
-      resolveControlPlaneWriteKey({idempotencyKey: options?.idempotencyKey});
+      typeof options?.idempotencyKey === 'string' &&
+      options.idempotencyKey.length > 0 ?
+        options.idempotencyKey : mintControlPlaneWriteKey();
     if (options?.cancellationToken) {
       baseQueryOptions.cancellationToken = options.cancellationToken;
     }

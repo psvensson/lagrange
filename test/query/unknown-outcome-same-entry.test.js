@@ -24,33 +24,12 @@
 //   change ends with the original result, once (W2).
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {test} from 'node:test';
 
-import Database from 'better-sqlite3';
-
-import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
-import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
-import {ConfigurationManager} from
-  '../../src/config/configuration-manager.js';
 import {TABLES} from '../../src/constants/index.js';
 import {ERRORS} from '../../src/constants/errors.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
-import {
-  CDCOperation,
-  PartitionService,
-} from '../../src/partition/partition-service.js';
 import * as writeKernel from '../../src/partition/partition-write-kernel.js';
-import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {setCoreFaultInjector} from
-  '../../src/raft/raft-rs-runtime-owner.js';
-import {createControlPlaneRuntimeBundle} from
-  '../../src/control-plane/control-plane-runtime-bundle.js';
-import {CONTROL_PLANE_PHASE_SCOPE} from
-  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   NODE_REGISTRATION_OUTCOME,
   writeNodeRegistrationAtIncarnation,
@@ -59,249 +38,43 @@ import {MembershipPublicationRuntimeOwner} from
   '../../src/control-plane/owners/membership-publication-runtime-owner.js';
 import {ENDPOINT_INCARNATION_OUTCOME} from
   '../../src/control-plane/owners/endpoint-incarnation-authority.js';
-import {getSchemaByTableName} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {PARTITION_SETTLED_REPLAY} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {
+  EXECUTOR_RETRY_DELAY_MS,
+  JOINER_ID,
+  JOIN_WRITE_OPTIONS,
+  NODE_ID,
+  SETTLE_BUDGET_MS,
+  SPENT_BUDGET_MS,
+  SURFACE_INSERT,
+  USER_TABLE,
+  appliedRow,
+  lastLogIndexOf,
+  logEntriesOf,
+  authoritativeLeaderReads,
+  nodeRow,
+  rowsOf,
+  spendFirstAttempt,
+  trapCore,
+  waitFor,
+  withGroupSurface,
+  withMutedConsoleError,
+  withSurface,
+} from './unknown-outcome-surface-fixture.js';
 
 const OUTCOME_UNKNOWN =
   writeKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN;
 const TEMP_PREFIX = 'unknown-outcome-same-entry-';
 const TEST_TIMEOUT_MS = 60000;
-const NODE_ID = 'uo-node';
-const EXECUTOR_RETRY_DELAY_MS = 5;
-// The executor budget of a delivery the trap outlasts.
-const SPENT_BUDGET_MS = 600;
 // A CDC routed write's budget: room for several engine attempts (each gets
 // at least the CDC service's one-second floor).
 const CDC_ROUTED_BUDGET_MS = 4000;
-const SETTLE_BUDGET_MS = 8000;
-const POLL_MS = 10;
-const ADVANCE_APPEND = 'advance_append';
-const TRAP_MESSAGE = 'unreachable';
 const BOOT_INCARNATION = 7;
-const JOINER_ID = 'uo-joiner';
-const USER_TABLE = 'uo_rows';
-const SURFACE_INSERT = `INSERT INTO ${USER_TABLE} (node_id, value) ` +
-  'VALUES (?, ?)';
-const ACTIVE_PARTITION_VERSION = 1;
-const GROUP_TIMING = Object.freeze({
-  heartbeatIntervalMs: 20,
-  electionTimeoutMinMs: 150,
-  electionTimeoutMaxMs: 300,
-});
-const GROUP_BUDGET_MS = 10000;
-const JOIN_WRITE_OPTIONS = Object.freeze({
-  deliveryPriority: 'critical',
-  phaseScope: CONTROL_PLANE_PHASE_SCOPE.JOIN,
-  skipCacheWait: true,
-});
-
-function quietEnvironment(raft = {}) {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  ConfigurationManager.getInstance().initialize({node: {id: NODE_ID}, raft});
-  LoggingService.getInstance().initialize({level: 'fatal'});
-}
-
-function resetEnvironment() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitFor(predicate, budgetMs = SETTLE_BUDGET_MS) {
-  const deadline = Date.now() + budgetMs;
-  while (Date.now() < deadline) {
-    if (await predicate()) {
-      return true;
-    }
-    await sleep(POLL_MS);
-  }
-  return false;
-}
-
-function rowsOf(dbPath, table, keyColumn) {
-  const independent = new Database(dbPath, {readonly: true});
-  try {
-    return independent.prepare(`SELECT ${keyColumn} AS k FROM ${table}`)
-      .all().map((row) => row.k);
-  } finally {
-    independent.close();
-  }
-}
-
-// The partition schema of a system table: its real columns, its key.
-function partitionSchemaOf(table) {
-  if (table === USER_TABLE) {
-    return {columns: [
-      {name: 'node_id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'TEXT'},
-    ]};
-  }
-  return {columns: getSchemaByTableName(table).columns.map(
-    ({name, type, primaryKey}) => ({name, type, primaryKey: primaryKey === true}))};
-}
-
-function keyOf(table) {
-  return partitionSchemaOf(table).columns.find((column) => column.primaryKey)
-    .name;
-}
-
-// A trap of the shared core on `groupId`'s light-Ready advance (after the
-// write's entry is durable, before it commits), as a trapped WASM instance
-// throws: `once` traps the next one; otherwise every one until released.
-function trapCore(groupId, {once}) {
-  const trap = {count: 0, armed: true};
-  setCoreFaultInjector((stepGroupId, operation) => {
-    if (trap.armed && stepGroupId === groupId &&
-        operation === ADVANCE_APPEND) {
-      trap.count += 1;
-      if (once) {
-        trap.armed = false;
-        setCoreFaultInjector(null);
-      }
-      throw new globalThis.WebAssembly.RuntimeError(TRAP_MESSAGE);
-    }
-  });
-  trap.release = () => {
-    trap.armed = false;
-    setCoreFaultInjector(null);
-  };
-  return trap;
-}
-
-async function withMutedConsoleError(body) {
-  const original = console.error;
-  console.error = () => undefined;
-  try {
-    return await body();
-  } finally {
-    console.error = original;
-  }
-}
-
-// Lone rs-raft leaders, one per table, behind the production engine and a
-// router that delivers to each partition's remote-query handler; the
-// control-plane gateway (SQL path, as the joiner's) on that engine.
-async function withSurface(tables, body) {
-  quietEnvironment();
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
-  const surfaces = new Map();
-  const tableRows = [];
-  const partitionRows = [];
-  const serviceRows = [];
-  const deliveries = [];
-  try {
-    for (const table of tables) {
-      const partitionId = `${table}-p1`;
-      const replicaId = `${partitionId}-r1`;
-      const address = `${NODE_ID}/partition/${replicaId}`;
-      const dbPath = path.join(directory, `${partitionId}.sqlite`);
-      const tableRow = {table_name: table, primaryKey: keyOf(table),
-        active_partition_version: ACTIVE_PARTITION_VERSION};
-      const partition = new PartitionService(withFoundingStamp({
-        tableId: table, tableName: table, partitionId, replicaId,
-        replicaIds: [replicaId], nodeId: NODE_ID, dbPath,
-        systemTableCache: {get: (type, key) => (type === TABLES.TABLES &&
-          key === table ? tableRow : null)},
-        schema: partitionSchemaOf(table),
-      }));
-      await partition.initialize();
-      partition.startElection();
-      // Leading, as the core says and as the service's write path sees it.
-      assert.equal(await waitFor(() => partition.raft.readStatus().role ===
-        RAFT_ROLE.LEADER && partition.role === RAFT_ROLE.LEADER), true,
-      `setup: ${partitionId} leads`);
-      surfaces.set(address, {partition, dbPath, partitionId, table});
-      tableRows.push(tableRow);
-      partitionRows.push({partition_id: partitionId, table_name: table,
-        leader_node_id: NODE_ID, partition_key_start: null,
-        partition_key_end: null});
-      serviceRows.push({service_id: replicaId, service_type: 'partition',
-        partition_id: partitionId, node_id: NODE_ID, raft_role: 'leader',
-        address, status: 'active'});
-    }
-    const byType = {tables: tableRows, partitions: partitionRows,
-      services: serviceRows};
-    const messageRouter = {
-      async deliver(address, message) {
-        const surface = surfaces.get(address);
-        const answer = await surface.partition.handleRemoteQuery(message);
-        deliveries.push({table: surface.table, entryId: message.entryId,
-          answer});
-        return answer;
-      },
-    };
-    const engine = new SQLQueryEngine({
-      nodeId: NODE_ID,
-      systemCache: {
-        get(type, key) {
-          if (type === TABLES.TABLES) {
-            return tableRows.find((row) => row.table_name === key);
-          }
-          if (type === TABLES.PARTITIONS) {
-            return partitionRows.find((row) => row.partition_id === key) ||
-              null;
-          }
-          return null;
-        },
-        filter: (type, predicate) => (byType[type] || []).filter(predicate),
-        getAll: (type) => byType[type] || [],
-      },
-      messageRouter,
-      cdcIntegrationService: {
-        async upsertSystemTableRow() {
-          return {success: true};
-        },
-      },
-    });
-    engine.persistDistributedWriteOperationRow = async () => ({success: true});
-    engine.queryExecutor.leaderRetryDelayMs = EXECUTOR_RETRY_DELAY_MS;
-    const gateway = createControlPlaneRuntimeBundle({nodeId: NODE_ID,
-      sqlQueryEngine: engine, messageRouter}).controlPlaneSystemTableGateway;
-    const of = (table) => [...surfaces.values()].find((surface) =>
-      surface.table === table);
-    await body({engine, gateway, deliveries, of});
-  } finally {
-    setCoreFaultInjector(null);
-    for (const {partition} of surfaces.values()) {
-      // A group the trap left held is restored before its partition stops
-      // (a group stopped while held keeps the shared core from electing the
-      // next test's groups - recorded as a runtime-owner finding).
-      await waitFor(() => partition.raft.readStatus().role ===
-        RAFT_ROLE.LEADER);
-      await partition.shutdown();
-    }
-    fs.rmSync(directory, {recursive: true, force: true});
-    resetEnvironment();
-  }
-}
-
-// Wait until the partition applied a row with this key (the replaced
-// runtime commits the trapped entry; reads drive the runtime).
-async function appliedRow(surface, key) {
-  return waitFor(() => {
-    surface.partition.raft.readStatus();
-    return rowsOf(surface.dbPath, surface.table, keyOf(surface.table))
-      .includes(key);
-  });
-}
-
-function nodeRow() {
-  const now = Date.now();
-  return {node_id: JOINER_ID, node_address: 'ws://uo-joiner:1',
-    cpu_cores: 1, memory_mb: 1, disk_gb: 1, status: 'joining',
-    connection_state: 'connected', last_heartbeat: now,
-    latency_assignment_state: 'unassigned', created_at: now};
-}
 
 const unavailableAuthority = async () => ({available: false, row: null});
 
@@ -352,74 +125,75 @@ test('W1 (R6-B): a registration INSERT cut by a runtime replacement, with no ' +
   });
 });
 
-// ---------------------------------------------------------------------------
-// The budget-spent shape (the lab chain): the trap outlasts the executor's
-// budget, so the first attempt ends unknown; the joiner's re-drive of the
-// same registration must be the same entry.
 
-async function spendFirstAttempt({engine, surface, attempt}) {
-  engine.queryExecutor.queryTimeoutMs = SPENT_BUDGET_MS;
-  const warnings = [];
-  const logger = engine.queryExecutor.logger;
-  engine.queryExecutor.logger = {...logger,
-    warn: (message, context) => warnings.push({message, context}),
-    debug: () => undefined, info: () => undefined, error: () => undefined};
-  const trap = trapCore(surface.partitionId, {once: false});
-  let first;
-  try {
-    first = await withMutedConsoleError(attempt);
-  } finally {
-    trap.release();
-    engine.queryExecutor.logger = logger;
-  }
-  return {first, trap, warnings};
-}
+// The re-drive carries the first attempt's row (the same instance), or a
+// row the join built again (new timestamps: a different logical write of the
+// name, issued only after the pending instance was resolved under its own
+// entry).
+for (const [label, rebuildRow] of [['the same row', false],
+  ['a rebuilt row', true]]) {
+  test(`W1/W5/W6: the joiner's registration re-driven (${label}) after its ` +
+    'unknown outcome resolves the first entry - ACCEPTED with one row, never ' +
+    '"not confirmed" (real gateway, nodes table)', {timeout: TEST_TIMEOUT_MS},
+  async () => {
+    await withSurface([TABLES.NODES], async ({engine, gateway, deliveries,
+      of}) => {
+      const surface = of(TABLES.NODES);
+      const firstRow = nodeRow();
+      // The joiner's authoritative read is unavailable, as in the lab run.
+      const register = (row) => withMutedConsoleError(() =>
+        writeNodeRegistrationAtIncarnation({
+          row, bootIncarnation: BOOT_INCARNATION,
+          observe: unavailableAuthority,
+          insert: (stamped, identity) => gateway.insertSystemTableRow(
+            TABLES.NODES, stamped, {...JOIN_WRITE_OPTIONS, ...identity}),
+          advance: (where, stamped, identity) => gateway.updateSystemTableRow(
+            TABLES.NODES, where, stamped, {...JOIN_WRITE_OPTIONS, ...identity}),
+        }));
+      const {first, trap} = await spendFirstAttempt({engine, surface,
+        attempt: () => register(firstRow)});
+      assert.ok(trap.count >= 1, 'setup: the core trapped the write');
+      assert.equal(first.outcome, NODE_REGISTRATION_OUTCOME.UNRESOLVED,
+        'setup: the first attempt ends unresolved (unknown, no read)');
+      assert.ok(await appliedRow(surface, JOINER_ID),
+        'setup: the entry then commits in the replaced runtime');
+      const firstEntries = new Set(deliveries.map((d) => d.entryId));
+      assert.equal(firstEntries.size, 1, 'setup: one entry');
+      const [firstEntry] = firstEntries;
+      const mark = deliveries.length;
+      engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
 
-test('W1/W5/W6: the joiner\'s registration re-driven after its unknown ' +
-  'outcome is the same entry - ACCEPTED with one row, never UNIQUE, never ' +
-  '"not confirmed" (real gateway, nodes table)', {timeout: TEST_TIMEOUT_MS},
-async () => {
-  await withSurface([TABLES.NODES], async ({engine, gateway, deliveries,
-    of}) => {
-    const surface = of(TABLES.NODES);
-    // The joiner's authoritative read is unavailable, as in the lab run.
-    const register = () => withMutedConsoleError(() =>
-      writeNodeRegistrationAtIncarnation({
-        row: nodeRow(), bootIncarnation: BOOT_INCARNATION,
-        observe: unavailableAuthority,
-        insert: (row, identity) => gateway.insertSystemTableRow(TABLES.NODES,
-          row, {...JOIN_WRITE_OPTIONS, ...identity}),
-        advance: (where, row, identity) => gateway.updateSystemTableRow(
-          TABLES.NODES, where, row, {...JOIN_WRITE_OPTIONS, ...identity}),
-      }));
-    const {first, trap} = await spendFirstAttempt({engine, surface,
-      attempt: register});
-    assert.ok(trap.count >= 1, 'setup: the core trapped the write');
-    assert.equal(first.outcome, NODE_REGISTRATION_OUTCOME.UNRESOLVED,
-      'setup: the first attempt ends unresolved (unknown, no read)');
-    assert.ok(await appliedRow(surface, JOINER_ID),
-      'setup: the entry then commits in the replaced runtime');
-    const firstEntries = new Set(deliveries.map((d) => d.entryId));
-    engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
-
-    const redrive = await register();
-    assert.equal(redrive.outcome, NODE_REGISTRATION_OUTCOME.ACCEPTED,
-      `the re-drive is accepted (${JSON.stringify(redrive)})`);
-    assert.equal(redrive.error, null, 'no failure surfaced');
-    assert.ok(!JSON.stringify(deliveries.map((d) => d.answer))
-      .includes('UNIQUE'), 'no delivery was answered UNIQUE');
-    assert.equal(new Set(deliveries.map((d) => d.entryId)).size, 1,
-      'every delivery of both attempts carried one entryId ' +
-      `(${[...new Set(deliveries.map((d) => d.entryId))]})`);
-    assert.deepEqual([...firstEntries], [deliveries.at(-1).entryId],
-      'the re-drive is the first attempt\'s entry');
-    assert.equal(deliveries.at(-1).answer.settledReplay,
-      PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
-      'answered from the outcome row: the original result');
-    assert.deepEqual(rowsOf(surface.dbPath, TABLES.NODES, 'node_id'),
-      [JOINER_ID], 'exactly one row (W6)');
+      const redrive = await register(rebuildRow ?
+        {...nodeRow(), last_heartbeat: firstRow.last_heartbeat + 1} :
+        firstRow);
+      assert.equal(redrive.outcome, NODE_REGISTRATION_OUTCOME.ACCEPTED,
+        `the re-drive is accepted (${JSON.stringify(redrive)})`);
+      assert.equal(redrive.error, null, 'no failure surfaced');
+      const redriven = deliveries.slice(mark);
+      assert.equal(redriven[0].entryId, firstEntry,
+        'the first entry is delivered first');
+      assert.equal(redriven[0].answer.settledReplay,
+        PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
+        'answered from its outcome row: the original result');
+      if (rebuildRow) {
+        // The rebuilt row is a new instance, issued after the first was
+        // resolved; its answer is its own (the row exists), never the
+        // first's.
+        assert.equal(redriven.length, 2, 'then the new instance, once');
+        assert.notEqual(redriven[1].entryId, firstEntry,
+          'under its own entry');
+        assert.ok(String(redriven[1].answer.error).includes('UNIQUE'),
+          'answered truthfully: the row exists');
+      } else {
+        assert.equal(redriven.length, 1, 'the same instance: nothing else');
+        assert.ok(!JSON.stringify(deliveries.map((d) => d.answer))
+          .includes('UNIQUE'), 'no delivery was answered UNIQUE');
+      }
+      assert.deepEqual(rowsOf(surface.dbPath, TABLES.NODES, 'node_id'),
+        [JOINER_ID], 'exactly one row (W6)');
+    });
   });
-});
+}
 
 // ---------------------------------------------------------------------------
 // W3/W4: every hop carries the typed outcome and its entryId; the executor
@@ -671,9 +445,10 @@ test('W5/W6: a reservation birth ensured again after its lost answer is the ' +
   });
 });
 
-test('W5/W6: the rebalancer\'s reservation birth (its own method) ensured ' +
-  'again after its unknown outcome is CREATED from the same entry - one row, ' +
-  'never UNIQUE', {timeout: TEST_TIMEOUT_MS}, async () => {
+test('W5/W6: the rebalancer\'s reservation birth (its own method) created ' +
+  'again after its unknown outcome resolves the first entry and is answered ' +
+  'by the authority - ALREADY_ACTIVE, one row', {timeout: TEST_TIMEOUT_MS},
+async () => {
   await withSurface([TABLES.STORAGE_RESERVATIONS], async ({engine, gateway,
     deliveries, of}) => {
     const surface = of(TABLES.STORAGE_RESERVATIONS);
@@ -688,25 +463,35 @@ test('W5/W6: the rebalancer\'s reservation birth (its own method) ensured ' +
       logger: {warn: () => undefined, info: () => undefined,
         debug: () => undefined, error: () => undefined},
       emit: () => undefined,
+      controlPlaneSystemTableGateway: gateway,
       executeOperationMutationWithRetry: (sql, params, options) =>
         gateway.executeQuery(sql, params, {...options, skipCacheWait: true}),
     });
     const operation = {operationId: 'op-w5', type: OperationType.ADD,
       entityType: 'partition', entityId: 'p-w5', partitionId: 'p-w5',
       targetNodeId: 'n-w5'};
+    authoritativeLeaderReads(gateway, surface);
     const {first} = await spendFirstAttempt({engine, surface,
       attempt: () => coordinator.createReservationForOperation(operation)});
     assert.notEqual(first.outcome, 'created',
       `setup: the first birth is not confirmed (${JSON.stringify(first)})`);
     assert.ok(await appliedRow(surface, 'res-op-w5'), 'setup: it commits');
+    const [firstEntry] = new Set(deliveries.map((d) => d.entryId));
+    const mark = deliveries.length;
     engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
+    // Created again: its timestamps are new, so it is a new logical write of
+    // the name - issued only after the first entry was resolved.
     const again = await coordinator.createReservationForOperation(operation);
-    assert.equal(again.outcome, 'created', 'ensured again: CREATED from the ' +
-      `same entry (${JSON.stringify(again)})`);
-    assert.equal(new Set(deliveries.map((d) => d.entryId)).size, 1,
-      'one entryId for both calls');
-    assert.ok(!JSON.stringify(deliveries.map((d) => d.answer))
-      .includes('UNIQUE'), 'never answered UNIQUE');
+    assert.equal(again.outcome, 'already_active', 'answered by the ' +
+      `authority: the first birth's reservation is ACTIVE (${JSON.stringify(
+        again)})`);
+    const redriven = deliveries.slice(mark);
+    assert.equal(redriven[0].entryId, firstEntry,
+      'the first entry is resolved first');
+    assert.equal(redriven[0].answer.success, true,
+      'answered applied from its outcome row');
+    assert.ok(redriven.slice(1).every((d) => d.entryId !== firstEntry),
+      'the new birth is never answered by the first entry');
     assert.deepEqual(rowsOf(surface.dbPath, TABLES.STORAGE_RESERVATIONS,
       'reservation_id'), ['res-op-w5'], 'one row (W6)');
   });
@@ -765,72 +550,16 @@ test('W5/W6: the CDC service\'s routed write retries every engine attempt ' +
 test('W2: an INSERT whose proposer loses leadership mid-write commits ' +
   'under the new leader, and the caller ends with the original result, ' +
   'exactly once', {timeout: TEST_TIMEOUT_MS}, async () => {
-  quietEnvironment(GROUP_TIMING);
-  const partitionId = 'uo-lc';
-  const members = [[`${partitionId}-r1`, 'node-1'],
-    [`${partitionId}-r2`, 'node-2'], [`${partitionId}-r3`, 'node-3']];
-  const group = await formAdmittedGroup({partitionId, members,
-    tempPrefix: TEMP_PREFIX, budgetMs: GROUP_BUDGET_MS,
-    serviceOptions: {tableId: USER_TABLE, tableName: USER_TABLE,
-      schema: partitionSchemaOf(USER_TABLE)}});
-  const {services, dbFileOf, addressOf} = group;
-  const [r1, r2] = services;
-  const network = r1.transport;
-  const deliver = network.deliver;
-  const blocked = new Set();
-  network.deliver = (address, envelope, ...rest) => {
-    const packet = envelope?.payload ?? envelope;
-    return blocked.has(`${packet?.from}>${packet?.to}`) ?
-      Promise.resolve({acknowledged: true}) :
-      deliver.call(network, address, envelope, ...rest);
-  };
-  try {
-    const tableRow = {table_id: USER_TABLE, table_name: USER_TABLE,
-      primaryKey: 'node_id',
-      active_partition_version: ACTIVE_PARTITION_VERSION};
-    // Each replica validates the engine's epoch fence against its own
-    // tables row.
-    for (const service of services) {
-      service.systemTableCache.applySystemTableChange(TABLES.TABLES,
-        CDCOperation.INSERT, tableRow);
-    }
-    const partitionRows = [{partition_id: partitionId, table_name: USER_TABLE,
-      leader_node_id: 'node-1', partition_key_start: null,
-      partition_key_end: null}];
-    const serviceRows = members.map((member, index) => ({
-      service_id: member[0], service_type: 'partition', partition_id:
-        partitionId, node_id: member[1], address: addressOf(member),
-      raft_role: index === 0 ? 'leader' : 'follower', status: 'active'}));
-    const byType = {tables: [tableRow], partitions: partitionRows,
-      services: serviceRows};
-    const sent = [];
-    const engine = new SQLQueryEngine({
-      systemCache: {
-        get: (type, key) => (type === TABLES.TABLES ?
-          byType.tables.find((row) => row.table_name === key) :
-          byType.partitions.find((row) => row.partition_id === key) || null),
-        filter: (type, predicate) => (byType[type] || []).filter(predicate),
-        getAll: (type) => byType[type] || [],
-      },
-      messageRouter: {
-        async deliver(address, message) {
-          sent.push({address, entryId: message.entryId});
-          return services[members.findIndex((member) =>
-            addressOf(member) === address)].handleRemoteQuery(message);
-        },
-      },
-      cdcIntegrationService: {async upsertSystemTableRow() {
-        return {success: true};
-      }},
-    });
-    engine.persistDistributedWriteOperationRow = async () => ({success: true});
-    engine.queryExecutor.leaderRetryDelayMs = EXECUTOR_RETRY_DELAY_MS;
+  await withGroupSurface({partitionId: 'uo-lc', table: USER_TABLE,
+    tempPrefix: TEMP_PREFIX}, async ({engine, services, members, peers,
+    blocked, sent, dbFileOf}) => {
+    const [, r2] = services;
     const served = await engine.executeQuery(SURFACE_INSERT, ['row-0', 's']);
     assert.equal(served.success, true, 'setup: the group serves a write ' +
       `(${JSON.stringify(served.error ?? null)} ` +
       `${JSON.stringify(served.participantFailures ?? null)})`);
-    const [p1, p2, p3] = services.map((service) =>
-      String(service.raft.readStatus().peerId));
+    sent.length = 0;
+    const [p1, p2, p3] = peers;
     // r1's appends reach r2 only, and no follower's answer reaches r1: the
     // write is on r1's and r2's logs, uncommitted.
     for (const pair of [`${p1}>${p3}`, `${p2}>${p1}`, `${p3}>${p1}`]) {
@@ -838,9 +567,10 @@ test('W2: an INSERT whose proposer loses leadership mid-write commits ' +
     }
     const write = engine.executeQuery(SURFACE_INSERT, ['row-1', 'v'],
       {timeoutMs: SETTLE_BUDGET_MS});
-    assert.equal(await waitFor(() => rowsOf(dbFileOf(members[1]), USER_TABLE,
-      'node_id').length >= 1 && r2.raft.readStatus().lastIndex ===
-      r1.raft.readStatus().lastIndex), true, 'setup: the entry reached r2');
+    assert.equal(await waitFor(() => lastLogIndexOf(dbFileOf(members[1])) ===
+      lastLogIndexOf(dbFileOf(members[0])) &&
+      sent.some((d) => d.entryId && logEntriesOf(dbFileOf(members[1]),
+        d.entryId).length === 1)), true, 'setup: the entry reached r2');
     await r2.raft.campaign();
     assert.equal(await waitFor(() => r2.raft.readStatus().role ===
       RAFT_ROLE.LEADER), true, 'setup: r2 leads');
@@ -853,14 +583,10 @@ test('W2: an INSERT whose proposer loses leadership mid-write commits ' +
       `(${JSON.stringify(answered.error ?? null)})`);
     assert.equal(answered.affectedRows, 1, 'with its original result');
     assert.ok(sent.length >= 2, `re-delivered (${JSON.stringify(sent)})`);
-    assert.equal(new Set(sent.slice(1).map((d) => d.entryId)).size, 1,
-      'under the one entryId');
+    assert.equal(new Set(sent.map((d) => d.entryId)).size, 1,
+      'every delivery of the write under its one entryId');
     assert.equal(await waitFor(() => members.every((member) =>
       rowsOf(dbFileOf(member), USER_TABLE, 'node_id').sort().join() ===
       'row-0,row-1')), true, 'every replica holds the row once');
-  } finally {
-    network.deliver = deliver;
-    await group.dispose();
-    resetEnvironment();
-  }
+  });
 });

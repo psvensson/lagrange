@@ -1,5 +1,7 @@
-import {randomUUID} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
+import {ERRORS} from '../constants/errors.js';
 import {
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
   isPartitionWriteFailureCode,
   isWriteOutcomeUnknown,
 } from '../partition/partition-write-kernel.js';
@@ -11,19 +13,55 @@ import {
 // committed entry: the second is answered from the first's outcome row - the
 // original result - or runs for the first time; never a second apply.
 //
-// - A caller that holds a stable key passes it (`idempotencyKey`).
-// - A caller whose logical write outlives one call (a registration re-driven
-//   by its join, an endpoint birth, a reservation ensured again) names it
-//   (`writeIdentity`): its key is minted once and HELD while the write's
-//   outcome is unknown, so the next attempt of that write is the same entry;
-//   it is released once an attempt is answered known (applied, failed for
-//   good, or not proposed), so a later write of the same name is a new entry.
-// - Otherwise the key is minted for this one call, and the call's own retry
-//   loops (the CDC routed mutation, the engine) re-use it.
+// - A caller that holds a stable key passes it (`idempotencyKey`); it owns
+//   that key's lifetime and content.
+// - Otherwise a key is minted for this one call (its own retry loops - the
+//   CDC routed mutation, the engine - re-use it).
+// - A caller whose logical write outlives one call names it
+//   (`writeIdentity`, built with controlPlaneWriteIdentity). THE RULE: one
+//   entry identity never stands for two logical writes.
+//   * A name has at most one INSTANCE at a time: a held record {instance
+//     nonce, content digest, key}. Its key is derived from the name, the
+//     instance nonce and the digest of the exact content the write carries,
+//     so changed content can never be answered with another content's
+//     outcome.
+//   * A write of the name with the held digest is a re-drive of that same
+//     instance: the same key, the same entry.
+//   * Any other write of the name is a new logical write. While the held
+//     instance is unresolved it is resolved FIRST - its own content
+//     re-delivered under its own key (the executor's partition delivery,
+//     the one re-delivery owner, re-delivers it under its entryId) - and only
+//     then is the new write issued, as a new instance (its answer carries the
+//     resolved `pendingInstance`). An instance still unresolved answers the
+//     new write with the typed unknown outcome naming it: nothing is applied
+//     for content that was not written.
+//   * An instance lives for exactly one logical write. It is released when
+//     an attempt settles its entry (applied, or a committed statement's
+//     failure), when its FIRST attempt is refused before it was proposed
+//     (nothing of it can commit), and by its owning authority once that
+//     authority classified any outcome other than "still unresolved"
+//     (readback, refusal, supersession, abandonment) or its row was deleted
+//     or its incarnation ended (releaseControlPlaneWriteIdentities). A
+//     refusal before proposal does not release an instance an earlier
+//     attempt left unknown: that entry may still commit.
+//   * The held records are bounded (MAX_HELD_WRITE_INSTANCES). A held
+//     instance is never evicted: at the bound a NEW named write is refused
+//     before it is delivered (typed, retryable), so no unresolved instance
+//     is forgotten and re-born blind.
 const CONTROL_PLANE_WRITE_KEY_PREFIX = 'cpw-';
-// Bound of the held identities (a write whose outcome stays unknown and is
-// never attempted again); the oldest is dropped first.
-const MAX_HELD_WRITE_IDENTITIES = 4096;
+const MAX_HELD_WRITE_INSTANCES = 4096;
+const CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE =
+  'CONTROL_PLANE_WRITE_IDENTITY_CAPACITY';
+const CAPACITY_RETRY_AFTER_MS = 1000;
+const CAPACITY_REFUSAL_MESSAGE = 'Control-plane write identities at capacity';
+const PENDING_INSTANCE_OUTCOME = Object.freeze({
+  APPLIED: 'applied',
+  FAILED: 'failed',
+  UNKNOWN: 'unknown',
+});
+const DIGEST_ALGORITHM = 'sha256';
+const DIGEST_ENCODING = 'hex';
+const KEY_DIGEST_LENGTH = 32;
 const LINKED_ANSWER_FIELDS = Object.freeze([
   'partitionResult',
   'firstFailedParticipant',
@@ -36,49 +74,72 @@ const LINKED_ANSWER_LIST_FIELDS = Object.freeze([
 const MAX_LINK_DEPTH = 4;
 const STRING_TYPE = 'string';
 const OBJECT_TYPE = 'object';
+const BIGINT_TYPE = 'bigint';
+const NAME_PART_SEPARATOR = ',';
 
-const heldWriteKeys = new Map();
+const heldInstances = new Map();
 
 function isNonEmptyString(value) {
   return typeof value === STRING_TYPE && value.length > 0;
 }
 
 /**
- * Mint one control-plane write's idempotency key.
+ * Mint one control-plane write's idempotency key (a write delivered under a
+ * key of its own, or a retry loop's own name).
  * @return {string} A fresh key.
  */
 function mintControlPlaneWriteKey() {
   return `${CONTROL_PLANE_WRITE_KEY_PREFIX}${randomUUID()}`;
 }
 
-function holdWriteKey(writeIdentity, key) {
-  heldWriteKeys.set(writeIdentity, key);
-  if (heldWriteKeys.size > MAX_HELD_WRITE_IDENTITIES) {
-    heldWriteKeys.delete(heldWriteKeys.keys().next().value);
-  }
+/**
+ * The name of a logical control-plane write: its parts (subject first, verb
+ * last), so an owner can release every name of a subject at once.
+ * @param {...*} parts - JSON values, e.g. ('endpoint', id, inc, 'birth').
+ * @return {string} The write identity.
+ */
+function controlPlaneWriteIdentity(...parts) {
+  return JSON.stringify(parts);
 }
 
 /**
- * The idempotency key this attempt of a write is delivered under: the
- * caller's key; the key held for its named write (minted once when none is
- * held); or a key minted for this call.
- * @param {Object} [options] - {idempotencyKey?, writeIdentity?}.
- * @return {string} The key.
+ * Release every held instance whose name is these parts or starts with them
+ * (the subject's names), whatever their state: the owner classified the
+ * write, or the row it wrote was deleted, or its incarnation ended.
+ * @param {...*} parts - A name's parts, or a prefix of them.
+ * @return {number} How many instances were released.
  */
-function resolveControlPlaneWriteKey(options = {}) {
-  if (isNonEmptyString(options?.idempotencyKey)) {
-    return options.idempotencyKey;
+function releaseControlPlaneWriteIdentities(...parts) {
+  const exact = controlPlaneWriteIdentity(...parts);
+  const prefix = `${exact.slice(0, -1)}${NAME_PART_SEPARATOR}`;
+  let released = 0;
+  for (const name of [...heldInstances.keys()]) {
+    if (name === exact || name.startsWith(prefix)) {
+      heldInstances.delete(name);
+      released += 1;
+    }
   }
-  if (!isNonEmptyString(options?.writeIdentity)) {
-    return mintControlPlaneWriteKey();
-  }
-  const held = heldWriteKeys.get(options.writeIdentity);
-  if (held !== undefined) {
-    return held;
-  }
-  const minted = mintControlPlaneWriteKey();
-  holdWriteKey(options.writeIdentity, minted);
-  return minted;
+  return released;
+}
+
+/**
+ * Release the instance of one name (a retry loop's own name at its end).
+ * @param {string} writeIdentity - The name.
+ */
+function releaseControlPlaneWriteIdentity(writeIdentity) {
+  heldInstances.delete(writeIdentity);
+}
+
+/**
+ * The digest of the exact content a write carries.
+ * @param {*} content - Its statement and parameters, or its mutation.
+ * @return {string} Hex digest.
+ */
+function digestWriteContent(content) {
+  return createHash(DIGEST_ALGORITHM)
+    .update(JSON.stringify(content ?? null, (_key, value) =>
+      (typeof value === BIGINT_TYPE ? `${value}n` : value)))
+    .digest(DIGEST_ENCODING);
 }
 
 // Whether an answer, or any answer linked to it (the partition result it
@@ -100,69 +161,230 @@ function someLinkedAnswer(answer, predicate, depth = 0) {
       someLinkedAnswer(linked, predicate, depth + 1)));
 }
 
-// A typed answer that says what became of the write: a committed statement
-// failed, or the write was refused before it was proposed.
-function isKnownTypedAnswer(answer) {
-  return answer.committed === true ||
-    (isPartitionWriteFailureCode(answer.failureCode) &&
-      !isWriteOutcomeUnknown(answer));
+function findLinkedEntryId(answer) {
+  let entryId = null;
+  someLinkedAnswer(answer, (linked) => {
+    if (isWriteOutcomeUnknown(linked) && isNonEmptyString(linked.entryId)) {
+      entryId = linked.entryId;
+      return true;
+    }
+    return false;
+  });
+  return entryId;
 }
 
-/**
- * Whether a write's answer - or any answer linked to it - is the typed
- * unknown outcome.
- * @param {*} answer - A result or error.
- * @return {boolean} Whether its outcome is not known.
- */
-function isControlPlaneWriteOutcomeUnknown(answer) {
-  return someLinkedAnswer(answer, isWriteOutcomeUnknown);
-}
+const isCommittedAnswer = (answer) => answer.committed === true;
+const isRefusedBeforeProposal = (answer) =>
+  isPartitionWriteFailureCode(answer.failureCode) &&
+  !isWriteOutcomeUnknown(answer) && answer.committed !== true;
 
-/**
- * Settle a named write's held key after one attempt: kept while the outcome
- * is unknown (a typed unknown answer, or a thrown attempt whose error says
- * nothing typed of the write - nothing says it did not apply), released once
- * the attempt is answered known.
- * @param {Object} [options] - The attempt's {idempotencyKey?,
- *   writeIdentity?}.
- * @param {*} answer - The attempt's result, or what it threw.
- * @param {boolean} [thrown] - Whether the attempt threw.
- */
-function settleControlPlaneWriteKey(options = {}, answer = null,
-  thrown = false) {
-  if (isNonEmptyString(options?.idempotencyKey) ||
-    !isNonEmptyString(options?.writeIdentity)) {
-    return;
+// What one attempt says of its instance's entry: SETTLED (applied, or a
+// committed statement failed), NOT_PROPOSED (refused before it was proposed
+// and nothing of it is unknown), or UNKNOWN (anything else - nothing says it
+// did not, or will not, apply).
+const ATTEMPT_VERDICT = Object.freeze({
+  SETTLED: 'settled',
+  NOT_PROPOSED: 'not_proposed',
+  UNKNOWN: 'unknown',
+});
+
+function judgeAttempt(answer, thrown) {
+  if (someLinkedAnswer(answer, isWriteOutcomeUnknown)) {
+    return ATTEMPT_VERDICT.UNKNOWN;
   }
-  if (isControlPlaneWriteOutcomeUnknown(answer) ||
-    (thrown && !someLinkedAnswer(answer, isKnownTypedAnswer))) {
-    return;
+  if (!thrown && answer?.success !== false) {
+    return ATTEMPT_VERDICT.SETTLED;
   }
-  heldWriteKeys.delete(options.writeIdentity);
+  if (someLinkedAnswer(answer, isCommittedAnswer)) {
+    return ATTEMPT_VERDICT.SETTLED;
+  }
+  return someLinkedAnswer(answer, isRefusedBeforeProposal) ?
+    ATTEMPT_VERDICT.NOT_PROPOSED : ATTEMPT_VERDICT.UNKNOWN;
 }
 
-/**
- * Run one attempt of a write whose key was resolved for it
- * (resolveControlPlaneWriteKey), settling a named write's held key by the
- * attempt's answer.
- * @param {Object} options - The caller's {idempotencyKey?, writeIdentity?}.
- * @param {Function} attempt - () => Promise of the answer.
- * @return {Promise<*>} The attempt's answer.
- */
-async function settleControlPlaneWriteAttempt(options, attempt) {
+function settleInstance(record, answer, thrown) {
+  const verdict = judgeAttempt(answer, thrown);
+  const releases = verdict === ATTEMPT_VERDICT.SETTLED ||
+    (verdict === ATTEMPT_VERDICT.NOT_PROPOSED && !record.unresolved);
+  if (!releases) {
+    record.unresolved = true;
+  } else if (heldInstances.get(record.name) === record) {
+    heldInstances.delete(record.name);
+  }
+  return releases;
+}
+
+// One attempt of an instance under its key; the instance is settled by the
+// attempt's answer, or by what it threw.
+async function attemptInstance(record, attempt) {
   let answer;
   try {
-    answer = await attempt();
+    answer = await attempt(record.key);
   } catch (error) {
-    settleControlPlaneWriteKey(options, error, true);
+    settleInstance(record, error, true);
     throw error;
   }
-  settleControlPlaneWriteKey(options, answer, false);
+  settleInstance(record, answer, false);
   return answer;
 }
 
+function holdNewInstance(name, digest, attempt) {
+  const instance = randomUUID();
+  const key = `${CONTROL_PLANE_WRITE_KEY_PREFIX}${createHash(DIGEST_ALGORITHM)
+    .update(JSON.stringify([name, instance, digest]))
+    .digest(DIGEST_ENCODING)
+    .slice(0, KEY_DIGEST_LENGTH)}`;
+  // The instance's own content, for its re-delivery when a different write
+  // of the name must first resolve it.
+  const record = {name, instance, digest, key, unresolved: false,
+    redeliver: attempt};
+  heldInstances.set(name, record);
+  return record;
+}
+
+function describePendingInstance(record, outcome, answer) {
+  return Object.freeze({
+    writeIdentity: record.name,
+    instance: record.instance,
+    idempotencyKey: record.key,
+    entryId: findLinkedEntryId(answer),
+    outcome,
+  });
+}
+
+function capacityRefusal(name) {
+  return {
+    success: false,
+    error: `${CAPACITY_REFUSAL_MESSAGE} (${heldInstances.size}/${MAX_HELD_WRITE_INSTANCES} unresolved ` +
+      `named writes held); ${name} was not delivered`,
+    errorCode: CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE,
+    retryable: true,
+    deferRetry: true,
+    retryAfterMs: CAPACITY_RETRY_AFTER_MS,
+    heldWriteIdentities: heldInstances.size,
+    heldWriteIdentityBound: MAX_HELD_WRITE_INSTANCES,
+  };
+}
+
+// The held instance of a name, resolved under its own entry by re-delivering
+// its own content: the pending instance it was, or - still unresolved - the
+// typed unknown answer naming it.
+async function resolvePendingInstance(record) {
+  let answer;
+  let thrown = false;
+  try {
+    answer = await attemptInstance(record, record.redeliver);
+  } catch (error) {
+    answer = error;
+    thrown = true;
+  }
+  if (heldInstances.get(record.name) === record) {
+    const pendingInstance = describePendingInstance(record,
+      PENDING_INSTANCE_OUTCOME.UNKNOWN, answer);
+    return {unresolved: {
+      success: false,
+      error: ERRORS.WRITE_OUTCOME_UNKNOWN,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+      entryId: pendingInstance.entryId,
+      pendingInstance,
+      cause: answer,
+    }};
+  }
+  const applied = !thrown && answer?.success !== false;
+  return {pendingInstance: describePendingInstance(record, applied ?
+    PENDING_INSTANCE_OUTCOME.APPLIED : PENDING_INSTANCE_OUTCOME.FAILED,
+  answer)};
+}
+
+function withPendingInstance(answer, pendingInstance) {
+  if (pendingInstance === null || !answer ||
+    typeof answer !== OBJECT_TYPE) {
+    return answer;
+  }
+  if (answer instanceof Error) {
+    answer.pendingInstance = pendingInstance;
+    return answer;
+  }
+  return {...answer, pendingInstance};
+}
+
+async function runNamedControlPlaneWrite(name, content, attempt) {
+  const digest = digestWriteContent(content);
+  let record = heldInstances.get(name);
+  let pendingInstance = null;
+  if (record !== undefined && record.digest !== digest) {
+    const resolution = await resolvePendingInstance(record);
+    if (resolution.unresolved) {
+      return resolution.unresolved;
+    }
+    pendingInstance = resolution.pendingInstance;
+    record = heldInstances.get(name);
+    if (record !== undefined && record.digest !== digest) {
+      // Another write of the name took the slot meanwhile: resolve that
+      // one too before this one is issued.
+      return runNamedControlPlaneWrite(name, content, attempt);
+    }
+  }
+  if (record === undefined) {
+    if (heldInstances.size >= MAX_HELD_WRITE_INSTANCES) {
+      return capacityRefusal(name);
+    }
+    record = holdNewInstance(name, digest, attempt);
+  }
+  try {
+    return withPendingInstance(await attemptInstance(record, attempt),
+      pendingInstance);
+  } catch (error) {
+    throw withPendingInstance(error, pendingInstance);
+  }
+}
+
+/**
+ * Run one attempt of a control-plane write under its identity: the caller's
+ * key; a key minted for this call; or - for a named write - its instance's
+ * key per the rule above.
+ * @param {Object} options - The caller's {idempotencyKey?, writeIdentity?}.
+ * @param {*} content - The exact content this attempt carries (statement
+ *   and parameters, or the mutation).
+ * @param {Function} attempt - (idempotencyKey) => Promise of the answer.
+ * @return {Promise<*>} The attempt's answer.
+ */
+function runControlPlaneWrite(options, content, attempt) {
+  if (isNonEmptyString(options?.idempotencyKey)) {
+    return attempt(options.idempotencyKey);
+  }
+  if (!isNonEmptyString(options?.writeIdentity)) {
+    return attempt(mintControlPlaneWriteKey());
+  }
+  return runNamedControlPlaneWrite(options.writeIdentity, content, attempt);
+}
+
+/**
+ * Whether the pending instance an answer carries applied: an earlier
+ * instance of the same logical write, resolved before this one was issued.
+ * @param {*} answer - A write's answer or error.
+ * @return {boolean} Whether it applied.
+ */
+function isPendingInstanceApplied(answer) {
+  return answer?.pendingInstance?.outcome === PENDING_INSTANCE_OUTCOME.APPLIED;
+}
+
+/**
+ * The held instances (bound and count), for reports and witnesses.
+ * @return {Object} {held, bound}.
+ */
+function describeHeldControlPlaneWrites() {
+  return Object.freeze({held: heldInstances.size,
+    bound: MAX_HELD_WRITE_INSTANCES});
+}
+
 export {
+  CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE,
+  controlPlaneWriteIdentity,
+  describeHeldControlPlaneWrites,
+  isPendingInstanceApplied,
   mintControlPlaneWriteKey,
-  resolveControlPlaneWriteKey,
-  settleControlPlaneWriteAttempt,
+  releaseControlPlaneWriteIdentities,
+  releaseControlPlaneWriteIdentity,
+  runControlPlaneWrite,
 };

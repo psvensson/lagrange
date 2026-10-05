@@ -153,8 +153,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         lastFailureDetails,
       ),
     });
+    // An unresolved write's re-deliveries back off (the redelivery owner).
     const waitForLeaderRetryBudget = async () => waitForRetryBudget(
-      resolvePartitionRetryDelayMs(this.leaderRetryDelayMs, lastFailureDetails),
+      unknownOutcome.nextDeliveryDelayMs(resolvePartitionRetryDelayMs(
+        this.leaderRetryDelayMs, lastFailureDetails)),
     );
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       this.throwIfCancelled(cancellationToken);

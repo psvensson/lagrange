@@ -6,8 +6,10 @@ import {
   NUM,
   TIME_MS,
 } from '../../constants/index.js';
-import {mintControlPlaneWriteKey} from
-  '../../control-plane/control-plane-write-identity.js';
+import {
+  mintControlPlaneWriteKey,
+  releaseControlPlaneWriteIdentity,
+} from '../../control-plane/control-plane-write-identity.js';
 
 const DEFAULT_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
 const DEFAULT_RETRY_BASE_DELAY_MS = NUM.HUNDRED;
@@ -71,6 +73,22 @@ async function delayRetryableControlPlaneWrite(
   );
 }
 
+// Every attempt is the same logical write: the executor delivers each under
+// one write identity (the caller's, or named here for this loop), so an
+// attempt after an unknown outcome is the same entry, never a second apply.
+// A name the loop minted dies with it: its instance is released when the
+// loop ends, whatever the outcome (no later write can carry the name).
+function loopWriteIdentity(options) {
+  if (typeof options.writeIdentity === 'string' &&
+    options.writeIdentity.length > 0) {
+    return {identity: Object.freeze({writeIdentity: options.writeIdentity}),
+      release: () => undefined};
+  }
+  const writeIdentity = mintControlPlaneWriteKey();
+  return {identity: Object.freeze({writeIdentity}),
+    release: () => releaseControlPlaneWriteIdentity(writeIdentity)};
+}
+
 async function runRetryableControlPlaneWrite(executor, options = {}) {
   const now = typeof options.now === 'function' ? options.now : Date.now;
   const sleep =
@@ -90,57 +108,32 @@ async function runRetryableControlPlaneWrite(executor, options = {}) {
   const deadlineMs = now() + timeoutMs;
   let nextDelayMs = baseDelayMs;
   let attempt = 0;
-  // Every attempt is the same logical write: the executor delivers each
-  // under this one write identity (the caller's, or named once here), so an
-  // attempt after an unknown outcome is the same entry, never a second apply.
-  const attemptIdentity = Object.freeze({
-    writeIdentity: typeof options.writeIdentity === 'string' &&
-      options.writeIdentity.length > 0 ?
-      options.writeIdentity : mintControlPlaneWriteKey(),
-  });
+  const loopIdentity = loopWriteIdentity(options);
+  const retryOptions = {baseDelayMs, maxDelayMs, now,
+    onRetry: options.onRetry, sleep};
 
-  while (true) {
-    attempt += 1;
-    try {
-      const result = await executor(attemptIdentity);
-      if (result?.success !== false) {
-        return result;
+  try {
+    while (true) {
+      attempt += 1;
+      let resultOrError;
+      try {
+        const result = await executor(loopIdentity.identity);
+        if (result?.success !== false ||
+          !shouldRetryControlPlaneWrite(result, deadlineMs, now)) {
+          return result;
+        }
+        resultOrError = result;
+      } catch (error) {
+        if (!shouldRetryControlPlaneWrite(error, deadlineMs, now)) {
+          throw error;
+        }
+        resultOrError = error;
       }
-      if (!shouldRetryControlPlaneWrite(result, deadlineMs, now)) {
-        return result;
-      }
-      nextDelayMs = await delayRetryableControlPlaneWrite(
-        deadlineMs,
-        nextDelayMs,
-        result,
-        {
-          attempt,
-          baseDelayMs,
-          maxDelayMs,
-          now,
-          onRetry: options.onRetry,
-          sleep,
-        },
-      );
-      continue;
-    } catch (error) {
-      if (!shouldRetryControlPlaneWrite(error, deadlineMs, now)) {
-        throw error;
-      }
-      nextDelayMs = await delayRetryableControlPlaneWrite(
-        deadlineMs,
-        nextDelayMs,
-        error,
-        {
-          attempt,
-          baseDelayMs,
-          maxDelayMs,
-          now,
-          onRetry: options.onRetry,
-          sleep,
-        },
-      );
+      nextDelayMs = await delayRetryableControlPlaneWrite(deadlineMs,
+        nextDelayMs, resultOrError, {...retryOptions, attempt});
     }
+  } finally {
+    loopIdentity.release();
   }
 }
 

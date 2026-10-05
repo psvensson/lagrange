@@ -150,6 +150,11 @@
       "summary": "CREATE INDEX is unsupported and no secondary-index runtime path is active."
     },
     {
+      "id": "sql-write-outcome-unknown",
+      "area": "SQL writes",
+      "summary": "A SQL write whose proposal reached consensus but whose outcome the serving replica cannot confirm is re-delivered under its own entry identity (backing off to 2 s) until the statement deadline, or query.timeoutMs (30 s) when the caller passed none, and then fails typed as partition_write_outcome_unknown; it may have applied. Re-issuing it is safe only under the same idempotency key, which the PostgreSQL wire and embedded application database surfaces do not yet accept."
+    },
+    {
       "id": "message-group-log-lifecycle",
       "area": "Replication",
       "summary": "SQLite partition logs use the active snapshot and proof-gated compaction path; in-memory message-group logs still grow without bound and recover by full replay."

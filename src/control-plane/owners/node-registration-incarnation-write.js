@@ -6,6 +6,11 @@ import {
 import {classifyControlPlaneMutationResult} from
   '../control-plane-mutation-outcome-classifier.js';
 import {
+  controlPlaneWriteIdentity,
+  isPendingInstanceApplied,
+  releaseControlPlaneWriteIdentities,
+} from '../control-plane-write-identity.js';
+import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READ_LEADER_MODE,
   isAuthoritativeControlPlaneRowReadSuccessful,
@@ -47,7 +52,7 @@ const NODE_REGISTRATION_AUTHORITATIVE_READ = Object.freeze({
 
 const REGISTRATION_WRITE_VERB = Object.freeze({
   BIRTH: 'birth',
-  ADVANCE_FROM: 'advance-from-',
+  ADVANCE_FROM: 'advance-from',
 });
 
 const NODE_REGISTRATION_INCARNATION_REQUIRED =
@@ -113,12 +118,16 @@ async function readAuthoritativeNodeRow(gateway, nodeId) {
   };
 }
 
-// One mutation attempt: applied per the canonical classifier; a failure
-// keeps its own error (code, retry-after hint) for the caller to surface.
+// One mutation attempt: applied per the canonical classifier - or because
+// the earlier instance of this same registration, resolved before this one
+// was issued, applied (every instance of a registration name writes this
+// node's row at this incarnation, which is what the outcome classifies); a
+// failure keeps its own error (code, retry-after hint) for the caller.
 async function attempt(write) {
   try {
     const result = await write();
-    if (classifyControlPlaneMutationResult(result).applied === true) {
+    if (classifyControlPlaneMutationResult(result).applied === true ||
+        isPendingInstanceApplied(result)) {
       return {applied: true, error: null};
     }
     return {applied: false, error: result?.success === false ?
@@ -145,10 +154,15 @@ function failedResultError(result) {
 // of them - the reread's retry, the join's re-drive after an unknown
 // outcome - is delivered under this identity, so it is the same committed
 // entry: answered applied with its original result, or run for the first
-// time; never a second birth that fails UNIQUE.
-function registrationWriteIdentity(row, verb) {
-  return {writeIdentity: `${TABLES.NODES}:${row[COLUMN.NODE_ID]}@` +
-    `${row[COLUMN.BOOT_INCARNATION]}:${verb}`};
+// time; never a second birth that fails UNIQUE. Its instance is released
+// once the registration is classified (registrationWriteSubject).
+function registrationWriteSubject(row) {
+  return [TABLES.NODES, row[COLUMN.NODE_ID], row[COLUMN.BOOT_INCARNATION]];
+}
+
+function registrationWriteIdentity(row, ...verb) {
+  return {writeIdentity: controlPlaneWriteIdentity(
+    ...registrationWriteSubject(row), ...verb)};
 }
 
 // The one mutation an observation admits: birth when absent, one CAS on
@@ -166,8 +180,8 @@ function planRegistration(options, row, observedRow, bootIncarnation) {
     [COLUMN.NODE_ID]: row[COLUMN.NODE_ID],
     [COLUMN.BOOT_INCARNATION]: observedValue === undefined ?
       null : observedValue,
-  }, row, registrationWriteIdentity(row,
-    `${REGISTRATION_WRITE_VERB.ADVANCE_FROM}${observedValue}`));
+  }, row, registrationWriteIdentity(row, REGISTRATION_WRITE_VERB.ADVANCE_FROM,
+    observedValue === undefined ? null : observedValue));
 }
 
 function classifyObservation(read, bootIncarnation, afterAttempt) {
@@ -187,6 +201,16 @@ function classifyObservation(read, bootIncarnation, afterAttempt) {
 
 function freezeOutcome(outcome, observedRow = null, error = null) {
   return Object.freeze({outcome, observedRow, error});
+}
+
+// A registration classified anything but UNRESOLVED is done: its write
+// identities are released, so a later registration of this incarnation is a
+// new logical write.
+function settleRegistration(row, outcome) {
+  if (outcome.outcome !== NODE_REGISTRATION_OUTCOME.UNRESOLVED) {
+    releaseControlPlaneWriteIdentities(...registrationWriteSubject(row));
+  }
+  return outcome;
 }
 
 /**
@@ -218,15 +242,16 @@ async function writeNodeRegistrationAtIncarnation(options) {
   const observedRow = observed.available === true ? observed.row : null;
   const first = planRegistration(options, row, observedRow, bootIncarnation);
   if (first === null) {
-    return freezeOutcome(
-      classifyObservation(observed, bootIncarnation, false), observedRow);
+    return settleRegistration(row, freezeOutcome(
+      classifyObservation(observed, bootIncarnation, false), observedRow));
   }
   const firstAttempt = await attempt(first);
   if (firstAttempt.applied) {
-    return freezeOutcome(NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow);
+    return settleRegistration(row,
+      freezeOutcome(NODE_REGISTRATION_OUTCOME.ACCEPTED, observedRow));
   }
-  return resolveUnappliedRegistration(options, row, bootIncarnation,
-    firstAttempt);
+  return settleRegistration(row, await resolveUnappliedRegistration(options,
+    row, bootIncarnation, firstAttempt));
 }
 
 // A failed or unknown attempt: one authoritative reread; an older owner

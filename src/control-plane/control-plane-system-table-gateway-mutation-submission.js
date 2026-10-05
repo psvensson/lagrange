@@ -14,10 +14,7 @@ import {
 import {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {
-  resolveControlPlaneWriteKey,
-  settleControlPlaneWriteAttempt,
-} from './control-plane-write-identity.js';
+import {runControlPlaneWrite} from './control-plane-write-identity.js';
 
 const LOCAL_STR_MUTATIONSINGLEFLIGHTJOINCOUNT = 'mutationSingleFlightJoinCount';
 const GATEWAY_REPLICA_OPERATION_ID_FIELD = 'operation_id';
@@ -181,15 +178,10 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       normalizedMutation,
       options,
     );
-    let writeOptions = {
-      ...this.buildWriteOptions(mutationOptions, {
-        tableName,
-        operationKind: operation,
-      }),
-      // Every attempt of this logical write - the engine's, the CDC
-      // service's and its caller's - is delivered under this one key.
-      idempotencyKey: resolveControlPlaneWriteKey(mutationOptions),
-    };
+    let writeOptions = this.buildWriteOptions(mutationOptions, {
+      tableName,
+      operationKind: operation,
+    });
     const cdcIntegrationService = this.resolveCdcIntegrationService();
     const {requestKey, mergePolicy} = this.buildMutationCoalescingDescriptor(
       normalizedMutation,
@@ -247,12 +239,12 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
       this.recordMutationTelemetry(telemetryContext, mutationReadinessFailure);
       return mutationReadinessFailure;
     }
-    const executeIntent = async () => {
+    const executeIntent = async (deliveryOptions) => {
       if (!cdcIntegrationService) {
-        if (this.shouldUseSqlMutationFallback(writeOptions, tableName)) {
+        if (this.shouldUseSqlMutationFallback(deliveryOptions, tableName)) {
           return this.executeSqlMutationFallback(
             normalizedMutation,
-            writeOptions,
+            deliveryOptions,
           );
         }
         throw new Error(GATEWAY_ERROR_MSG.CDC_REQUIRED);
@@ -268,7 +260,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
           await cdcIntegrationService.insertSystemTableRow(
             tableName,
             normalizedMutation.row,
-            writeOptions,
+            deliveryOptions,
           ),
         );
       }
@@ -290,7 +282,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
             tableName,
             normalizedMutation.whereClause,
             normalizedMutation.data,
-            writeOptions,
+            deliveryOptions,
           ),
         );
       }
@@ -305,7 +297,7 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
           await cdcIntegrationService.upsertSystemTableRow(
             tableName,
             normalizedMutation.row,
-            writeOptions,
+            deliveryOptions,
           ),
         );
       }
@@ -319,13 +311,16 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
         await cdcIntegrationService.deleteSystemTableRow(
           tableName,
           normalizedMutation.whereClause,
-          writeOptions,
+          deliveryOptions,
         ),
       );
     };
-    // A named write's held key is settled by this attempt's answer.
-    const executionFactory = () =>
-      settleControlPlaneWriteAttempt(mutationOptions, executeIntent);
+    // Every attempt of this logical write - the engine's, the CDC service's
+    // and its caller's - is delivered under its one identity (the caller's
+    // key, a named write's instance, or one for this call).
+    const executionFactory = () => runControlPlaneWrite(mutationOptions,
+      normalizedMutation, (idempotencyKey) =>
+        executeIntent({...writeOptions, idempotencyKey}));
 
     if (
       mergePolicy === CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING &&

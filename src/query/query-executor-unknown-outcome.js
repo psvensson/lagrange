@@ -18,13 +18,20 @@ import {
 // is refused before it was proposed (no leader, backpressure) does not settle
 // it. When the budget is spent unresolved, the write's answer is the typed
 // unknown outcome carrying its entryId and one report of the wait it spent:
-// never a text alone, and never the last refusal's code.
+// never a text alone, and never the last refusal's code. Re-deliveries of an
+// unresolved write back off exponentially from the executor's retry delay up
+// to UNKNOWN_OUTCOME_REDELIVERY_MAX_DELAY_MS, so an outage costs a few
+// deliveries per write, not one per retry delay; the budget is the caller's
+// deadline when it passed one (timeoutMs / timeoutBudget), else the
+// executor's queryTimeoutMs.
 const UNKNOWN_OUTCOME_DECISION = Object.freeze({
   NONE: 'none',
   REDELIVER: 'redeliver-under-same-entry',
   UNRESOLVABLE: 'unknown-without-entry-identity',
 });
 const UNKNOWN_OUTCOME_LOST_ANSWER_STATE = 'answer_lost_after_delivery';
+const UNKNOWN_OUTCOME_REDELIVERY_MAX_DELAY_MS = 2000;
+const UNKNOWN_OUTCOME_REDELIVERY_GROWTH = 2;
 const UNKNOWN_OUTCOME_AWAITED = 'settled answer for the write\'s entry';
 const LOG_UNKNOWN_OUTCOME_WAIT_SPENT =
   'Partition write outcome still unknown when its delivery budget was spent';
@@ -98,6 +105,7 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
     lastObservedState: null,
     settled: false,
     reported: false,
+    redeliveryDelays: 0,
     answeredEntryId: null,
   };
   const markUnresolved = (observed) => {
@@ -158,6 +166,23 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
     },
     isUnresolved,
     /**
+     * The delay before the next delivery: the executor's own while the
+     * write is not unresolved; once it is, doubled for each re-delivery up
+     * to the cap (never below the executor's own).
+     * @param {number} baseDelayMs - The executor's retry delay.
+     * @return {number} The delay.
+     */
+    nextDeliveryDelayMs(baseDelayMs) {
+      if (!isUnresolved()) {
+        return baseDelayMs;
+      }
+      const backedOff = Math.min(UNKNOWN_OUTCOME_REDELIVERY_MAX_DELAY_MS,
+        Math.max(1, baseDelayMs) *
+          UNKNOWN_OUTCOME_REDELIVERY_GROWTH ** state.redeliveryDelays);
+      state.redeliveryDelays += 1;
+      return Math.max(baseDelayMs, backedOff);
+    },
+    /**
      * The answer a delivery ends with: an unresolved write's failure becomes
      * the typed unknown outcome with its entryId and the spent wait.
      * @param {Object} failureResult - The failure the delivery ends with.
@@ -187,6 +212,7 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
 
 export {
   UNKNOWN_OUTCOME_DECISION,
+  UNKNOWN_OUTCOME_REDELIVERY_MAX_DELAY_MS,
   createUnknownOutcomeRedelivery,
   withWriteEntryIdentity,
 };

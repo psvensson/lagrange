@@ -30,28 +30,56 @@ export function resolveParticipantBackpressureState(result = {}) {
   return Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > 0;
 }
 
-export function buildParticipantFailureEntry(result) {
+// The answer a participant failed with: its own, or - when it ran as a
+// one-partition distributed statement (an UPDATE or DELETE participant is
+// answered with the executor's mutation summary) - the participant failure
+// that summary carries, so its typed fields are read where they are.
+function participantFailureAnswerOf(result) {
+  const nested = result?.firstFailedParticipant;
+  if (!nested || typeof nested !== 'object') {
+    return result;
+  }
   return {
-    partitionId: result.partitionId,
-    participantNodeId: normalizeParticipantFailureString(result.participantNodeId),
-    participantAddress: normalizeParticipantFailureString(result.participantAddress),
-    errorCode: normalizeParticipantFailureString(result.errorCode),
-    failureCode: normalizeParticipantFailureString(result.failureCode),
-    committed: result?.committed === true,
-    outcome: normalizeParticipantFailureString(result.outcome),
-    disposition: normalizeParticipantFailureString(result.disposition),
-    logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
-    entryId: normalizeParticipantFailureString(result.entryId),
-    ...(result?.spentWait ? {spentWait: result.spentWait} : {}),
-    error: result.error || ERRORS.QUERY_FAILED,
+    ...result,
+    ...nested,
+    partitionId: result.partitionId ?? nested.partitionId,
+    failedTable: nested.failedTable ?? result.failedTable,
+  };
+}
+
+/**
+ * The one participant failure entry of a write or read fan-out, for every
+ * statement kind: what the participant was answered (its code, entryId, log
+ * index, consensus state, committed outcome, the redelivery owner's spent
+ * wait) is carried as it is - no path rebuilds it and drops a field.
+ * @param {Object} result - A failed participant's result.
+ * @return {Object} The participant failure entry.
+ */
+export function buildParticipantFailureEntry(result) {
+  const answer = participantFailureAnswerOf(result);
+  const typed = pickTypedWriteAnswer(answer);
+  return {
+    partitionId: answer.partitionId,
+    participantNodeId: normalizeParticipantFailureString(answer.participantNodeId),
+    participantAddress: normalizeParticipantFailureString(answer.participantAddress),
+    errorCode: normalizeParticipantFailureString(answer.errorCode),
+    failureCode: normalizeParticipantFailureString(answer.failureCode),
+    committed: answer?.committed === true,
+    outcome: normalizeParticipantFailureString(answer.outcome),
+    disposition: normalizeParticipantFailureString(answer.disposition),
+    logIndex: Number.isSafeInteger(answer?.logIndex) ? answer.logIndex : null,
+    entryId: normalizeParticipantFailureString(answer.entryId),
+    ...(typed.consensus ? {consensus: typed.consensus} : {}),
+    ...(typed.spentWait ? {spentWait: typed.spentWait} : {}),
+    error: answer.error || ERRORS.QUERY_FAILED,
     durationMs:
-      Number.isFinite(result?.durationMs) ?
-        Math.max(0, Math.floor(result.durationMs)) :
+      Number.isFinite(answer?.durationMs) ?
+        Math.max(0, Math.floor(answer.durationMs)) :
         null,
-    retryAfterMs: normalizeParticipantRetryAfterMs(result?.retryAfterMs),
-    deferRetry: result?.deferRetry === true,
-    backpressured: resolveParticipantBackpressureState(result),
-    failedTable: normalizeParticipantFailureString(result.failedTable),
+    retryAfterMs: normalizeParticipantRetryAfterMs(answer?.retryAfterMs),
+    deferRetry: answer?.deferRetry === true,
+    backpressured: resolveParticipantBackpressureState(answer),
+    failedTable: normalizeParticipantFailureString(answer.failedTable),
   };
 }
 

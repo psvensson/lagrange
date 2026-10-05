@@ -1,5 +1,10 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
+  controlPlaneWriteIdentity,
+  isPendingInstanceApplied,
+  releaseControlPlaneWriteIdentities,
+} from '../control-plane/control-plane-write-identity.js';
+import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
 } from './operation-reservation-attempt-outcome.js';
 import {
@@ -81,6 +86,13 @@ const {
   readAuthoritativeControlPlaneRows,
 } = REBALANCE_COORDINATOR_SHARED;
 
+const RESERVATION_BIRTH_VERB = 'birth';
+
+// The subject of a reservation's write identities.
+function reservationWriteSubject(reservationId) {
+  return [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS, reservationId];
+}
+
 class RebalanceCoordinatorReservationLifecycleMethods {
   // --- Reservation lifecycle (Req 4.1, 4.2, 4.3, 4.4, 4.5) ---
 
@@ -153,6 +165,11 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     now,
     options = {},
   ) {
+    // The reservation leaves ACTIVE: its birth is a finished logical write,
+    // so an ensure after this transition is a new one, never answered from
+    // the old birth's outcome.
+    releaseControlPlaneWriteIdentities(
+      ...reservationWriteSubject(reservationId));
     const result = await this.executeOperationMutationWithRetry(
       SQL.UPDATE_RESERVATION_STATUS_BY_ID,
       [nextStatus, now, now, reservationId, RESERVATION_STATUS.ACTIVE],
@@ -248,12 +265,23 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         sessionId: options.sessionId,
         // The reservation's birth is one logical write: an ensure after its
         // answer was lost is the same entry (answered from its outcome row),
-        // never a second INSERT of the deterministic id.
-        writeIdentity: `${SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS}:` +
-          `${reservationId}:birth`,
+        // never a second INSERT of the deterministic id. Its instance ends
+        // when the reservation leaves ACTIVE (transitionActiveReservation
+        // ById).
+        writeIdentity: controlPlaneWriteIdentity(
+          ...reservationWriteSubject(reservationId), RESERVATION_BIRTH_VERB),
       },
     );
 
+    if (!result.success && isPendingInstanceApplied(result)) {
+      // An earlier birth of this reservation applied (resolved before this
+      // one was issued, which then found the row): whether the reservation
+      // is ACTIVE now is the authority's answer, never this birth's.
+      const observed = await this.observeActiveReservation(operation);
+      if (observed !== null) {
+        return observed;
+      }
+    }
     if (!result.success) {
       this.logger.warn(
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_CREATE_FAILED,
@@ -315,6 +343,22 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.NOT_REQUIRED,
       });
     }
+    const observed = await this.observeActiveReservation(operation);
+    if (observed !== null) {
+      return observed;
+    }
+    return this.createReservationForOperation(operation);
+  }
+
+  /**
+   * The authoritative answer whether an operation's reservation is ACTIVE:
+   * ALREADY_ACTIVE, FAILED when the read is unavailable (absence of proof is
+   * not proof of presence), or null when no ACTIVE row exists.
+   * @param {Object} operation - The operation.
+   * @return {Promise<Object|null>} The outcome, or null.
+   * @private
+   */
+  async observeActiveReservation(operation) {
     const activeResult = await readAuthoritativeControlPlaneRows(
       this.controlPlaneSystemTableGateway,
       SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
@@ -343,7 +387,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         error: activeResult.error || null,
       });
     }
-    return this.createReservationForOperation(operation);
+    return null;
   }
 
   /**

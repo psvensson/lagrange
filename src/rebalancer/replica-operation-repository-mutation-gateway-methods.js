@@ -5,8 +5,10 @@ import {
 import {isReroutableWriteError} from '../constants/errors.js';
 import {isReroutableWriteFailureCode} from
   '../partition/partition-write-kernel.js';
-import {mintControlPlaneWriteKey} from
-  '../control-plane/control-plane-write-identity.js';
+import {
+  mintControlPlaneWriteKey,
+  releaseControlPlaneWriteIdentity,
+} from '../control-plane/control-plane-write-identity.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
@@ -16,13 +18,21 @@ const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_PREFIX =
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_SEPARATOR = ':';
 
 // Every attempt of one retried mutation is one logical write: it is
-// delivered under the caller's write identity, or one named once for the
-// retry loop, so an attempt after an unknown outcome is the same entry.
-function withMutationWriteIdentity(options = {}) {
-  return typeof options.writeIdentity === 'string' &&
-    options.writeIdentity.length > 0 ?
-    options :
-    {...options, writeIdentity: mintControlPlaneWriteKey()};
+// delivered under the caller's write identity, or one named for this retry
+// loop, so an attempt after an unknown outcome is the same entry. A name the
+// loop named dies with it: released when the loop ends, whatever the
+// outcome.
+async function withMutationWriteIdentity(callerOptions, loop) {
+  if (typeof callerOptions?.writeIdentity === 'string' &&
+    callerOptions.writeIdentity.length > 0) {
+    return loop(callerOptions);
+  }
+  const writeIdentity = mintControlPlaneWriteKey();
+  try {
+    return await loop({...callerOptions, writeIdentity});
+  } finally {
+    releaseControlPlaneWriteIdentity(writeIdentity);
+  }
 }
 
 function assignReplicaOperationRepositoryMutationGatewayMethods(
@@ -63,7 +73,11 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
 
   class ReplicaOperationRepositoryMutationGatewayMethods {
     async executeOperationMutationWithRetry(sql, params, callerOptions = {}) {
-      const options = withMutationWriteIdentity(callerOptions);
+      return withMutationWriteIdentity(callerOptions, (options) =>
+        this.retryOperationMutation(sql, params, options));
+    }
+
+    async retryOperationMutation(sql, params, options) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
       while (true) {
@@ -181,7 +195,12 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       callerOptions = {},
       fallback = {},
     ) {
-      const options = withMutationWriteIdentity(callerOptions);
+      return withMutationWriteIdentity(callerOptions, (options) =>
+        this.retryReplicaOperationGatewayMutation(mutation, options,
+          fallback));
+    }
+
+    async retryReplicaOperationGatewayMutation(mutation, options, fallback) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
       let priorMutationDeliveryMayHaveBeenAttempted = false;

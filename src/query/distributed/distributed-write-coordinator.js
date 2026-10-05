@@ -1,7 +1,10 @@
 import {createHash, randomUUID} from 'node:crypto';
 import {LoggingService} from '../../logging/logging-service.js';
-import {isAppliedWithUnknownCount} from
-  '../../partition/partition-write-kernel.js';
+import {
+  isAppliedWithUnknownCount,
+  pickTypedWriteAnswer,
+} from '../../partition/partition-write-kernel.js';
+import {buildParticipantFailureEntry} from '../query-execution-budget.js';
 import {
   QUERY_AST_NODE,
   QUERY_AST_TYPE,
@@ -27,22 +30,6 @@ const UNARY_MINUS = '-';
 const UNARY_PLUS = '+';
 const PARTICIPANT_ROLE_PRIMARY = 'primary';
 const PARTICIPANT_ROLE_MIRROR = 'mirror';
-
-function participantFailureDisposition(result = {}) {
-  return {
-    failureCode: typeof result.failureCode === 'string' ?
-      result.failureCode : null,
-    committed: result.committed === true,
-    outcome: typeof result.outcome === 'string' ? result.outcome : null,
-    disposition: typeof result.disposition === 'string' ?
-      result.disposition : null,
-    logIndex: Number.isSafeInteger(result.logIndex) ? result.logIndex : null,
-    entryId: typeof result.entryId === 'string' ? result.entryId : null,
-    // The redelivery owner's report of the wait it spent on an unknown
-    // outcome.
-    spentWait: result.spentWait ?? null,
-  };
-}
 
 // One log line per failed fan-out: the operation identity plus the
 // partition/service ids and error codes of every failed participant, so the
@@ -293,42 +280,14 @@ class DistributedWriteCoordinator {
     }
 
     if (failedParticipants.length > 0) {
-      const participantFailures = failedParticipants.map((result) => ({
-        partitionId: result.partitionId,
-        participantNodeId:
-            typeof result.participantNodeId === 'string' ?
-              result.participantNodeId :
-              null,
-        participantAddress:
-            typeof result.participantAddress === 'string' ?
-              result.participantAddress :
-              null,
-        errorCode:
-            typeof result.errorCode === 'string' ?
-              result.errorCode :
-              null,
-        ...participantFailureDisposition(result),
-        error:
-            result.error ||
+      // The one participant failure entry (INSERT, UPDATE and DELETE alike).
+      const participantFailures = failedParticipants.map((result) =>
+        buildParticipantFailureEntry({
+          ...result,
+          error: result.error ||
             QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        durationMs:
-            Number.isFinite(result?.durationMs) ?
-              Math.max(0, Math.floor(result.durationMs)) :
-              null,
-        retryAfterMs:
-            Number.isFinite(result?.retryAfterMs) &&
-            result.retryAfterMs > 0 ?
-              Math.floor(result.retryAfterMs) :
-              null,
-        deferRetry: result?.deferRetry === true,
-        backpressured: result?.backpressured === true,
-        failedTable:
-            typeof result.failedTable === 'string' ?
-              result.failedTable :
-              (typeof result.tableName === 'string' ?
-                result.tableName :
-                null),
-      }));
+          failedTable: result.failedTable ?? result.tableName,
+        }));
       const firstFailedParticipant =
           participantFailures.length > 0 ?
             participantFailures[0] :
@@ -446,7 +405,7 @@ class DistributedWriteCoordinator {
             error.errorCode.length > 0 ?
               error.errorCode :
               null),
-        ...participantFailureDisposition(error),
+        ...pickTypedWriteAnswer(error),
         retryAfterMs:
           Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0 ?
             Math.floor(error.retryAfterMs) :
