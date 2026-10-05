@@ -4,10 +4,10 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 288,
+    "bootstrap-membership": 289,
     "cdc-metadata": 62,
     "cli-tooling": 96,
-    "control-plane": 211,
+    "control-plane": 212,
     "convergence-topology": 83,
     "distributed-harness": 174,
     "examples-e2e": 7,
@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 148,
-    "storage-raft": 106,
+    "storage-raft": 107,
     "test-infrastructure": 141,
     "transactions": 16,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2243,
-  "digest": "fnv1a32-94cf420e",
+  "censusSize": 2246,
+  "digest": "fnv1a32-07dda79c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-890d8bec",
+  "observationDigest": "fnv1a32-283073e8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -591,6 +591,7 @@
     "test/control-plane/node-trust-state.test.js": "control-plane",
     "test/control-plane/operational-probes-not-routed.guard.test.js": "control-plane",
     "test/control-plane/owner-membership-driver.test.js": "control-plane",
+    "test/control-plane/owner-membership-reconcile-wait-bound-spent.test.js": "control-plane",
     "test/control-plane/owner-outcome-contract.test.js": "control-plane",
     "test/control-plane/phase-exit-criteria.test.js": "control-plane",
     "test/control-plane/pressure-governor.test.js": "control-plane",
@@ -1152,6 +1153,7 @@
     "test/node/replica-local-only-row-convergence.test.js": "bootstrap-membership",
     "test/node/replica-recovery-service.test.js": "bootstrap-membership",
     "test/node/replica-removal-consensus-exit-decisions.test.js": "bootstrap-membership",
+    "test/node/replica-removal-consensus-exit-reported-once.test.js": "bootstrap-membership",
     "test/node/replica-removal-consensus-exit.test.js": "bootstrap-membership",
     "test/node/replica-removal-deferred-row-write.test.js": "bootstrap-membership",
     "test/node/replica-removal-graceful-shutdown.property.test.js": "bootstrap-membership",
@@ -1516,6 +1518,7 @@
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js": "storage-raft",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "storage-raft",
     "test/raft/raft-rs-backend/stampless-opening-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "storage-raft",
@@ -4005,6 +4008,11 @@
         "src/query/query-executor-partition-service-resolution.js",
         "src/rebalancer/operation-workflow-recovery-timeout.js",
         "src/rebalancer/operation-workflow-remove-safety-evaluator.js"
+      ]
+    },
+    "test/control-plane/owner-membership-reconcile-wait-bound-spent.test.js": {
+      "files": [
+        "src/logging/wait-bound-spent.js"
       ]
     },
     "test/control-plane/priority-recovery-decision-provenance.test.js": {
@@ -7509,6 +7517,12 @@
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
+    "test/node/replica-removal-consensus-exit-reported-once.test.js": {
+      "files": [
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/node/replica-removal-consensus-exit.js"
+      ]
+    },
     "test/node/replica-removal-consensus-exit.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -8960,6 +8974,18 @@
         "src/raft/raft-rs-core-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-group-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-fault-log.js",
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },

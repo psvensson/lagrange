@@ -238,6 +238,41 @@ These are kept wired, with behaviour unchanged.
 - **R4 premise.** `pending.proposal` at partition-service-cdc-stream-base never carried a write payload: it is the ProposalQueue state string. The site is hardened anyway (state name, or type plus serialized size). The function-query site now reports `statementKind` and `sqlChars` instead of a SQL snippet.
 - **Cold-reconnect 1 ms delivery bounds** (`READ_/RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS`). These are timer-only waits, now in the one-way baseline (2). The skip is already decided from connection state, so the fix is to skip without a delivery. Whether that delivery kicks a reconnect is unverified.
 
+## Wire at merge, done (2026-10-05)
+
+This section supersedes the `deferred_to_merge` rows named below; those rows
+are kept as first recorded. Done on `finalize/zero-liferaft-2026-10-02` after
+the three owner-ordered merges (scenario-gates cf36fdf8f, one-spread-authority
+875adb033, spent-waits 2e990a00b). Visibility only: no control flow, timeout
+or return value changed at any site.
+
+**Totals after the merge wiring:**
+- 174 bounded waits.
+- 137 wired (132 + the 5 deferred rows).
+- 0 deferred to merge.
+- 37 not wired. raft-rs-persistence-admission.js:54 moves from "import fence"
+  to "forwarded": its expiry answer is the owner's `exceeded()` outcome,
+  reported at runtime owner :369. The not-wired count is unchanged.
+
+| Site (merged tree) | wait | Wiring | Witness |
+| --- | --- | --- | --- |
+| raft-rs-runtime-owner.js `drainReady` (`if (cycles >= RAFT_RS_READY_DRAIN_MAX_CYCLES) {`) | `RAFT_RS_READY_DRAIN_MAX_CYCLES` | `reportWaitBoundExceeded(group, READY_DRAIN_BOUND_EXCEEDED, {cycles, maxCycles})` before the unchanged `hostFailure` | test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js (real Ready loop driven to the cap: each `has_ready` proposes the captured command again) |
+| raft-rs-runtime-owner.js `retryInboundDrainWhenAdmitted` (`if (group.timers.now() >= group.inboundDrainDeadline) {`) | `PERSISTENCE_ADMISSION_WAIT.BOUND_MS (inbound drain)` | `reportWaitBoundExceeded(group, INBOUND_DRAIN_ADMISSION_BOUND_EXCEEDED, {elapsedMs, queuedInbound})` before the deadline is cleared | same file (VirtualTimeSource past the bound with a user transaction open; envelopes still queued) |
+| raft-rs-runtime-owner.js `admissionWaitOutcomes.exceeded` | `PERSISTENCE_ADMISSION_WAIT.BOUND_MS` | block body: `reportWaitBoundExceeded(group, PERSISTENCE_ADMISSION_BOUND_EXCEEDED, {phase, reason})`, then the unchanged `groupHostFailure(...)` | same file (a taken Ready across an asynchronous send; the same host failure at the bound) |
+| membership-publication-coordinator-reconcile.js `driveOwnerMembershipReconcile` race | `OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS` | `reportOwnerMembershipReconcileSpent` when `timedOut`; subject = nodeId (folds per node and state within the window); lastObserved missingCount, ownerAckCompletionPendingCount, publicationEpoch, leadershipTier | test/control-plane/owner-membership-reconcile-wait-bound-spent.test.js (mock timers; the drive still answers true and the transition warn still says reconcileTimedOut) |
+| replica-removal-consensus-exit.js:129 backstop | `REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS` | reported ONCE at its caller (replica-handler-remove-execution-methods.js `logReplicaRemovalConsensusExit`); nothing added inside the wait | test/node/replica-removal-consensus-exit-reported-once.test.js (the wait answers BACKSTOP and writes nothing; the caller holds the one report) |
+
+The three runtime kinds go through the group's injected `reportFault` seam
+(raft-rs-runtime-faults.js `reportWaitBoundExceeded`), so the runtime owner's
+import closure still never reaches logging (restore-path fence:
+restart-from-durable-record.test.js green). raft-rs-runtime-fault-log.js
+maps the three new `RUNTIME_FAULT_REPORT` kinds to one `wait_bound_spent`
+each (scope groupId/replicaIdentity/peerId; the ready-drain cap's bound in
+cycles is in lastObserved as `bound`, its `boundMs` is null) and leaves every
+other fault line unchanged (unit case in the runtime witness file). Each
+runtime wiring was mutation-checked: removing one call reddens exactly its
+own witness. The reconcile wiring was mutation-checked the same way.
+
 ## Not wired (43) and deferred to merge (4)
 
 | Reason | Count | Sites |

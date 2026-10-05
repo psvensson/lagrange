@@ -48,6 +48,7 @@ import {
   './control-plane-system-table-gateway-constants.js';
 import {buildPublicationActiveGateMembershipConvergence} from
   './publication-active-gate-handoff-contract-helpers.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 // Owner-driven membership liveness (Workstream A). A dedicated always-on interval
 // — started UNCONDITIONALLY, independent of metadata-publication readiness so it
@@ -68,6 +69,25 @@ function hasPrioritySummaryRefreshClearedGap(latestPublicationRow, candidate) {
   ) && !hasPriorityRecoverySpreadGap(candidate?.priorityPartitionSummary);
 }
 const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000; // ends-on: the reconcileActiveGateMembershipPublication() drive resolves
+const OWNER_MEMBERSHIP_RECONCILE_WAIT = Object.freeze({
+  wait: 'OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS',
+  awaited: 'the owner-driven reconcileActiveGateMembershipPublication() ' +
+    'drive resolves',
+  boundMs: OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS,
+});
+
+// The owner drive's bound was spent: the driver carries on unchanged (the
+// next interval drives again); this only makes the expiry visible, once per
+// node and observed state within the reporter's fold window.
+function reportOwnerMembershipReconcileSpent(coordinator, startedAtMs, observed) {
+  reportWaitBoundSpent(coordinator.logger, {
+    ...OWNER_MEMBERSHIP_RECONCILE_WAIT,
+    elapsedMs: Date.now() - startedAtMs,
+    subject: coordinator.nodeId ?? null,
+    lastObserved: observed,
+    scope: {nodeId: coordinator.nodeId ?? null},
+  });
+}
 const OWNER_MEMBERSHIP_DRIVER_ERROR_MSG =
   'Owner-driven membership reconcile error';
 const OWNER_MEMBERSHIP_DRIVER_RAN_MSG =
@@ -804,6 +824,7 @@ class MembershipPublicationCoordinatorReconcile extends
       }
       let timer = null;
       let timedOut = true;
+      const reconcileStartedAtMs = Date.now();
       await Promise.race([
         this.reconcileActiveGateMembershipPublication(handoffContract, {
           reconcileAuthoritativeMembershipPublication: true,
@@ -816,6 +837,15 @@ class MembershipPublicationCoordinatorReconcile extends
       ]);
       if (timer) {
         clearTimeout(timer);
+      }
+      if (timedOut) {
+        reportOwnerMembershipReconcileSpent(this, reconcileStartedAtMs, {
+          missingCount,
+          ownerAckCompletionPendingCount:
+            ownerAckCompletionPendingNodeIds.length,
+          publicationEpoch,
+          leadershipTier: leadership.tier,
+        });
       }
       // Diagnostic: the driver IS acting as owner (Tier-0 fired) with a deficit.
       // timedOut distinguishes "predicate fixed but write can't commit (quorum)"

@@ -174,9 +174,23 @@ function reportRuntimeReplaced(trigger, fields) {
   report(trigger, RUNTIME_FAULT_REPORT.RUNTIME_REPLACED, fields);
 }
 
+/**
+ * A wait bound of the runtime was spent: reported through the group's
+ * injected fault reporter (the restore-path fence keeps logging out of the
+ * runtime owner), which writes it as one wait_bound_spent line. Visibility
+ * only: the caller's answer is unchanged.
+ * @param {Object} group - The runtime group.
+ * @param {string} kind - A RUNTIME_FAULT_REPORT *_BOUND_EXCEEDED name.
+ * @param {Object} fields - What the site observed at expiry.
+ */
+function reportWaitBoundExceeded(group, kind, fields) {
+  report(group, kind, fields);
+}
+
 export {
   recordReseedHold,
   refuseInboundStep,
   reportCoreTrap,
   reportRuntimeReplaced,
+  reportWaitBoundExceeded,
 };

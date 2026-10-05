@@ -200,6 +200,13 @@ const RUNTIME_FAULT_REPORT = Object.freeze({
   // in force in memory and the write is asked again by the group's next
   // operation or delivery): reported on the first failure.
   RESEED_HOLD_WRITE_FAILED: 'reseed-hold-write-failed',
+  // A spent wait bound (visibility only; the runtime's answer is unchanged):
+  // the Ready drain's cycle cap, a taken Ready's persistence admission wait,
+  // and the delivered-inbound drain's persistence admission deadline.
+  READY_DRAIN_BOUND_EXCEEDED: 'ready-drain-bound-exceeded',
+  PERSISTENCE_ADMISSION_BOUND_EXCEEDED: 'persistence-admission-bound-exceeded',
+  INBOUND_DRAIN_ADMISSION_BOUND_EXCEEDED:
+    'inbound-drain-admission-bound-exceeded',
 });
 // A Ready already taken holds the core's pending Ready, so its remaining
 // durable writes cannot be refused after an asynchronous send: they wait for

@@ -35,6 +35,7 @@ import {
   refuseInboundStep,
   reportCoreTrap,
   reportRuntimeReplaced,
+  reportWaitBoundExceeded,
 } from './raft-rs-runtime-faults.js';
 import {
   decideLeadershipTransfer,
@@ -67,6 +68,7 @@ import {
   ROLE,
   ROLE_LEADER,
   RUNTIME_COMMAND,
+  RUNTIME_FAULT_REPORT,
   RUNTIME_EVENT,
   RUNTIME_PHASE,
   RUNTIME_REASON,
@@ -366,8 +368,15 @@ function admissionWaitOutcomes(group) {
       reason: RUNTIME_REASON.CLOSED, phase: RUNTIME_PHASE.READY_PERSISTENCE,
       retryable: false, recoveryRequired: false,
     }),
-    exceeded: () => groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE,
-      RUNTIME_REASON.USER_TRANSACTION_OPEN),
+    exceeded: () => {
+      reportWaitBoundExceeded(group,
+        RUNTIME_FAULT_REPORT.PERSISTENCE_ADMISSION_BOUND_EXCEEDED, {
+          phase: RUNTIME_PHASE.READY_PERSISTENCE,
+          reason: RUNTIME_REASON.USER_TRANSACTION_OPEN,
+        });
+      return groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE,
+        RUNTIME_REASON.USER_TRANSACTION_OPEN);
+    },
   };
 }
 
@@ -929,6 +938,9 @@ function finishReady(group, expectedGeneration, ready) {
 
 function drainReady(group, expectedGeneration, cycles = 0) {
   if (cycles >= RAFT_RS_READY_DRAIN_MAX_CYCLES) {
+    reportWaitBoundExceeded(group,
+      RUNTIME_FAULT_REPORT.READY_DRAIN_BOUND_EXCEEDED,
+      {cycles, maxCycles: RAFT_RS_READY_DRAIN_MAX_CYCLES});
     return hostFailure(
       RUNTIME_PHASE.READY_DRAIN,
       new Error(RUNTIME_REASON.READY_DRAIN_BOUND_EXCEEDED),
@@ -1430,6 +1442,12 @@ function retryInboundDrainWhenAdmitted(group) {
       group.timers.now() + PERSISTENCE_ADMISSION_WAIT.BOUND_MS;
   }
   if (group.timers.now() >= group.inboundDrainDeadline) {
+    reportWaitBoundExceeded(group,
+      RUNTIME_FAULT_REPORT.INBOUND_DRAIN_ADMISSION_BOUND_EXCEEDED, {
+        elapsedMs: group.timers.now() -
+          (group.inboundDrainDeadline - PERSISTENCE_ADMISSION_WAIT.BOUND_MS),
+        queuedInbound: group.inbound.length,
+      });
     group.inboundDrainDeadline = null;
     return;
   }
