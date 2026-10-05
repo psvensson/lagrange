@@ -128,7 +128,7 @@ function workingCopyOffence(root, file, committed) {
 }
 
 // The final edge: HEAD -> the working tree, so a rewrite is refused before it
-// can be committed as well as after.
+// can be committed as well as after. `solve land` asks it before it commits.
 function workingTreeOffences(root) {
   const files = committedQuestLogs(root, HEAD_REV);
   const blobs = readBlobs(root, arrayMap(files, (file) =>
@@ -168,4 +168,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   process.exitCode = main(process.argv.slice(ARGV_OFFSET));
 }
 
-export {OFFENCE, questLogOffences};
+export {OFFENCE, questLogOffences, workingTreeOffences};

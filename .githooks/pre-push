@@ -80,12 +80,14 @@ SAW_REF=0
 PUSHED_SHA=""
 PUSHED_REF=""
 MAIN_REMOTE_SHA=""
+MAIN_LOCAL_SHA=""
 ALL_PROVEN_TAG_REFS=1
 ALL_NON_MAIN_BRANCH_REFS=1
 ZERO_SHA="0000000000000000000000000000000000000000"
 # The ref lines are kept so the exact-checkout re-run below sees the same push.
 REF_LINES_FILE="$(mktemp)"
-trap 'report_gate_exit $?; rm -f "${REF_LINES_FILE}"' EXIT
+ADMISSION_CODE_DIR=""
+trap 'report_gate_exit $?; rm -rf "${REF_LINES_FILE}" ${ADMISSION_CODE_DIR:+"${ADMISSION_CODE_DIR}"}' EXIT
 while read -r _local_ref local_sha remote_ref remote_sha; do
   SAW_REF=1
   printf '%s %s %s %s\n' "${_local_ref}" "${local_sha}" "${remote_ref}" "${remote_sha}" >> "${REF_LINES_FILE}"
@@ -96,6 +98,7 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
   if [ "${remote_ref}" = "refs/heads/main" ]; then
     PUSHING_MAIN=1
     MAIN_REMOTE_SHA="${remote_sha}"
+    MAIN_LOCAL_SHA="${local_sha}"
   fi
   case "${remote_ref}" in
     refs/heads/*)
@@ -284,6 +287,54 @@ if [ -n "${PUSHED_SHA}" ] && [ "${PUSHED_SHA}" != "${ZERO_SHA}" ]; then
   fi
 fi
 echo "pre-push: proving ${GATE_HEAD} (ref ${PUSHED_REF:-${LAGRANGE_GATE_PUSHED_REF:-HEAD}}) against main base ${MAIN_REMOTE_SHA:-<publication merge-base>}"
+
+# Owner decision 2026-10-04: a change under src/ reaches main only as a solver
+# landing. Before anything expensive, every commit this push brings to main
+# (the pushed main sha over the remote main sha - nothing already on main is
+# judged) that changes src/ must be a landing whose terminal entry binds
+# exactly that change, or be brought by a merge admitted by its exact-SHA
+# receipt, governing quest and the owner's decision finding naming it (the
+# GitHub approval is checked by whoever merges; this stage is offline); the
+# refusal names each commit and path. Git
+# plumbing only. A push that does not update main never gets here.
+# The rules in force judge: the admission code (scripts/ and src/ as remote
+# main has them) is extracted from the remote main sha, so a commit in this
+# push cannot weaken the check that judges it; only while remote main has no
+# admission entry point (the one bootstrap push) does the pushed code judge,
+# and the stage says so. Admission is the owner's exit 0 AND its verdict line
+# naming exactly the judged range; anything else refuses.
+if [ "${PUSHING_MAIN}" = "1" ] && [ -n "${MAIN_LOCAL_SHA}" ] && [ "${MAIN_LOCAL_SHA}" != "${ZERO_SHA}" ] \
+  && [ -n "${MAIN_REMOTE_SHA}" ] && [ "${MAIN_REMOTE_SHA}" != "${ZERO_SHA}" ]; then
+  stage "solver-landing-admission" "every production-surface (src/, vendor/) change entering main is a solver landing"
+  ADMISSION_VERDICT="solver-landing admission: admitted ${MAIN_REMOTE_SHA}..${MAIN_LOCAL_SHA}"
+  ADMISSION_CODE="scripts/solve/guards.js"
+  if ! git cat-file -e "${MAIN_REMOTE_SHA}^{commit}" 2>/dev/null; then
+    echo "pre-push: remote main ${MAIN_REMOTE_SHA} is not in this repository - fetch first (git fetch origin main); refusing"
+    exit 1
+  fi
+  REMOTE_ADMISSION_CODE="$(git cat-file -p "${MAIN_REMOTE_SHA}:${ADMISSION_CODE}" 2>/dev/null || true)"
+  case "${REMOTE_ADMISSION_CODE}" in
+    *"solver-landing admission: "*)
+      ADMISSION_CODE_DIR="$(mktemp -d)"
+      git archive "${MAIN_REMOTE_SHA}" package.json scripts src | tar -x -C "${ADMISSION_CODE_DIR}"
+      ADMISSION_CODE="${ADMISSION_CODE_DIR}/${ADMISSION_CODE}"
+      echo "pre-push: judged by the admission code of remote main ${MAIN_REMOTE_SHA}" ;;
+    *)
+      echo "pre-push: bootstrap - remote main ${MAIN_REMOTE_SHA} has no admission entry point; the pushed code judges this push (once main has it, main's code judges)" ;;
+  esac
+  ADMISSION_STATUS=0
+  ADMISSION_OUTPUT="$(node "${ADMISSION_CODE}" admit --base "${MAIN_REMOTE_SHA}" --head "${MAIN_LOCAL_SHA}" 2>&1)" \
+    || ADMISSION_STATUS=$?
+  printf '%s\n' "${ADMISSION_OUTPUT}"
+  case $'\n'"${ADMISSION_OUTPUT}"$'\n' in
+    *$'\n'"${ADMISSION_VERDICT}"$'\n'*) ;;
+    *) ADMISSION_STATUS=1 ;;
+  esac
+  if [ "${ADMISSION_STATUS}" -ne 0 ]; then
+    echo "pre-push: the admission did not say '${ADMISSION_VERDICT}' - refusing"
+    exit 1
+  fi
+fi
 
 stage "unused-files" "unused-files check"
 npm run -s test:unused:push

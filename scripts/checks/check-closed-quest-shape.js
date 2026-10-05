@@ -140,6 +140,7 @@ function questRecordFromBlob(record) {
 
 // Composition: every file the closed quest holds must be one the sealed
 // claim justifies, and every artifact it justifies must still be there.
+// `solve land` asks it of the quest it is about to close, before any proof.
 function compositionOffences(root, id) {
   const {directory, required, allowed} = allowedPaths(root, id);
   const present = walk(root, directory);
@@ -250,4 +251,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   process.exitCode = main(process.argv.slice(ARGV_OFFSET));
 }
 
-export {OFFENCE, closedQuestShapeOffences};
+export {OFFENCE, closedQuestShapeOffences, compositionOffences};

@@ -24,11 +24,10 @@ material the router names, or an owner's own authority.
 
 ## Choose The Work Unit
 
-Create a Quest for work likely to need more than one measured attempt, or for a
-change to an owner-boundary contract. A single-sitting fix, documentation edit,
-or mechanical change with an obvious proof may be done and committed directly.
-The binding threshold is in
-[`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md).
+Every production-surface change (`src/`, `vendor/`) is a Quest landed with
+`solve land`; the main push gate refuses any other. So is work likely to need
+more than one measured attempt, or a change to an owner-boundary contract.
+Docs, tests and scripts may be committed directly, naming their witness.
 
 ## Quest Happy Path
 
