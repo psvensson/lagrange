@@ -475,6 +475,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       let partitionService = null;
       try {
         this.throwIfShuttingDown();
+        this.dropGroupRetiredTombstoneBeforeBirth(partitionId, replicaId);
         if (!skipLifecycleStatusPersistence) {
           const initialStatusPersisted =
             await this.persistReplicaCreateInitialStatus({

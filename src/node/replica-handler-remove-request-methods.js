@@ -250,11 +250,13 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
      * restarted after retiring it, before its answer was recorded) or is
      * still removing (its row cleanup running after the retirement): the
      * member's own durable fact - its raft-rs lifecycle row for EXACTLY this
-     * replica identity and group, retired with the group-retired reason, or
-     * (its database deleted) its group-retired tombstone for exactly this
-     * table, group, identity and workflow - answers COMPLETED. Never from
-     * absence: no database, no row, another state or another reason (a
-     * reseed hold), no matching tombstone answers nothing here.
+     * replica identity and group, retired with the group-retired reason;
+     * retired for another reason (a reseed hold) once the REMOVE's evidence
+     * verifies; or its group-retired tombstone for exactly this table,
+     * group, identity, workflow and incarnation - answers COMPLETED
+     * (provesGroupRetirement). Never from absence: no database, no row, a
+     * live row, an unverified hold, no matching tombstone answers nothing
+     * here.
      * @param {Object} request - REMOVE_REPLICA request.
      * @return {Promise<Object|null>} COMPLETED response, or null.
      * @private

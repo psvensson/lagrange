@@ -19,7 +19,10 @@
  *        not durable) stays listed, typed in-progress, and nothing completes.
  * P5     a node that no longer tracks a member answers COMPLETED from that
  *        member's durable lifecycle row (retired, group-retired, exact
- *        identity and group); a reseed-required retired row, no row, or an
+ *        identity and group); a reseed-required retired row whose group
+ *        retirement no longer verifies (the workflow completed and cleared
+ *        its record - a verified one completes it, owner decision
+ *        2026-10-05, group-retirement-reseed-held.test.js), no row, or an
  *        ordinary REMOVE answers NOT_FOUND.
  * P3     a leaderless group's "membership unavailable" ends on the group
  *        gaining a leader (its leader's services row), no timer.
@@ -354,9 +357,11 @@ test('P5 an untracked member answers COMPLETED only from its own durable ' +
     .handleRemoveReplica(groupRemove(world, second, {groupRetirement: false}));
   t.equal(ordinary.status, ReplicaOperationResponseStatus.NOT_FOUND,
     'an ordinary REMOVE is unchanged (NOT_FOUND)');
-  // A retired row for another reason (a reseed hold) is no group retirement
-  // (such a replica never wrote a group-retired tombstone: its truthful one
-  // from this world's retirement is removed with the rewrite).
+  // A retired row for another reason (a reseed hold) answers a group
+  // retirement only once its evidence verifies against the record (owner
+  // decision 2026-10-05); here the workflow completed and cleared it. Its
+  // truthful tombstone from this world's retirement is removed with the
+  // rewrite.
   const db = new Database(world.cluster.replica(third).dbFile);
   db.prepare('UPDATE _raft_rs_replica_lifecycle SET reason = ? ' +
     'WHERE group_id = ?').run('reseed-required', world.partitionId);
@@ -366,7 +371,8 @@ test('P5 an untracked member answers COMPLETED only from its own durable ' +
   const reseeded = await forget(world, third)
     .handleRemoveReplica(groupRemove(world, third));
   t.equal(reseeded.status, ReplicaOperationResponseStatus.NOT_FOUND,
-    'a reseed-required retired row answers NOT_FOUND');
+    'a reseed-required retired row whose retirement no longer verifies ' +
+    'answers NOT_FOUND');
   const other = openGroupWorld(t, {partitionId: 'fence-p5-live', voters: 1});
   const [live] = other.members;
   other.cache.delete('services', live);

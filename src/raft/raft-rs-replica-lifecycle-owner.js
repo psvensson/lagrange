@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import {
@@ -5,6 +6,16 @@ import {
 } from './raft-operation-port-constants.js';
 
 const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
+// Columns added after the table first shipped: an older database gains them
+// (NULL for its existing rows) the first time a lifecycle owner opens it.
+// `incarnation` is the replica incarnation stamp: minted once, when the row
+// is born (or, for a row born before the column existed, the first time its
+// owner opens it), never replaced and never reused by a later replica of the
+// same name (a later replica is a new row: its database was deleted, or its
+// row removed, before it could be born). `retirement_evidence` is the
+// verified group-retirement evidence a retirement recorded with the row.
+const LIFECYCLE_ADDED_COLUMNS = Object.freeze(['incarnation',
+  'retirement_evidence']);
 const LIFECYCLE_STATE = Object.freeze({
   ACTIVE: 'active',
   RETIRED: 'retired',
@@ -35,6 +46,26 @@ function frozenResult(outcome, reason, detail = null) {
   return Object.freeze({outcome, reason, detail});
 }
 
+// An older table gains the columns added since it was created.
+function addMissingLifecycleColumns(db) {
+  const present = new Set(db.prepare(`PRAGMA table_info(${LIFECYCLE_TABLE})`)
+    .all().map((column) => column.name));
+  for (const column of LIFECYCLE_ADDED_COLUMNS) {
+    if (!present.has(column)) {
+      db.exec(`ALTER TABLE ${LIFECYCLE_TABLE} ADD COLUMN ${column} TEXT`);
+    }
+  }
+}
+
+// A row born before the stamp existed gets one, once: the update never
+// replaces a stamp.
+function stampUnstampedRow(db, {groupId, peerId, mintIncarnation}) {
+  db.prepare(`
+    UPDATE ${LIFECYCLE_TABLE} SET incarnation = ?
+    WHERE group_id = ? AND peer_id = ? AND incarnation IS NULL
+  `).run(String(mintIncarnation()), groupId, peerId);
+}
+
 class RaftRsReplicaLifecycleOwner {
   #db;
   #groupId;
@@ -46,7 +77,8 @@ class RaftRsReplicaLifecycleOwner {
   #activeCount = 0;
   #waiters = [];
 
-  constructor({db, groupId, peerId, replicaIdentity}) {
+  constructor({db, groupId, peerId, replicaIdentity,
+    mintIncarnation = randomUUID}) {
     this.#db = db;
     this.#groupId = groupId;
     this.#peerId = peerId;
@@ -59,10 +91,13 @@ class RaftRsReplicaLifecycleOwner {
         state TEXT NOT NULL CHECK (state IN ('active', 'retired')),
         reason TEXT,
         changed_at TEXT NOT NULL,
+        incarnation TEXT,
+        retirement_evidence TEXT,
         PRIMARY KEY (group_id, peer_id),
         UNIQUE (group_id, replica_identity)
       )
     `);
+    addMissingLifecycleColumns(db);
     const row = db.prepare(`
       SELECT peer_id, replica_identity, state
       FROM ${LIFECYCLE_TABLE}
@@ -84,9 +119,11 @@ class RaftRsReplicaLifecycleOwner {
       } else {
         db.prepare(`
           INSERT INTO ${LIFECYCLE_TABLE}
-            (group_id, peer_id, replica_identity, state, reason, changed_at)
-          VALUES (?, ?, ?, 'active', NULL, ?)
-        `).run(groupId, peerId, replicaIdentity, new Date().toISOString());
+            (group_id, peer_id, replica_identity, state, reason, changed_at,
+              incarnation)
+          VALUES (?, ?, ?, 'active', NULL, ?, ?)
+        `).run(groupId, peerId, replicaIdentity, new Date().toISOString(),
+          String(mintIncarnation()));
         this.#state = LIFECYCLE_STATE.ACTIVE;
       }
     } else {
@@ -94,6 +131,7 @@ class RaftRsReplicaLifecycleOwner {
         this.#state = null;
         this.#refusalReason = LIFECYCLE_REASON.IDENTITY_MISMATCH;
       } else {
+        stampUnstampedRow(db, {groupId, peerId, mintIncarnation});
         this.#state = row.state;
         this.#refusalReason = row.state === LIFECYCLE_STATE.RETIRED ?
           LIFECYCLE_REASON.RETIRED : null;
@@ -134,7 +172,15 @@ class RaftRsReplicaLifecycleOwner {
     return result;
   }
 
-  async retire(reason) {
+  /**
+   * Retire this replica generation durably. A row already retired keeps its
+   * state, reason and evidence (a reseed hold is never overwritten).
+   * @param {string} reason - Why its logical identity is terminal.
+   * @param {Object|null} [evidence] - The verified group-retirement evidence
+   *   of a retirement with its whole group, recorded with the row.
+   * @return {Promise<Object>} Frozen outcome.
+   */
+  async retire(reason, evidence = null) {
     if (this.#state === LIFECYCLE_STATE.RETIRED) {
       return frozenResult(
         RAFT_OPERATION_OUTCOME.CORE_REFUSED, LIFECYCLE_REASON.RETIRED);
@@ -149,11 +195,13 @@ class RaftRsReplicaLifecycleOwner {
     }
     this.#db.prepare(`
       UPDATE ${LIFECYCLE_TABLE}
-      SET state = 'retired', reason = ?, changed_at = ?
+      SET state = 'retired', reason = ?, changed_at = ?,
+        retirement_evidence = ?
       WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
     `).run(
       String(reason || LIFECYCLE_REASON.RETIRED),
       new Date().toISOString(),
+      evidence ? JSON.stringify(evidence) : null,
       this.#groupId,
       this.#peerId,
       this.#replicaIdentity,
@@ -207,10 +255,12 @@ function unregisterRuntimeLifecycle(runtime, owner) {
  * @param {string} request.groupId
  * @param {string} request.replicaIdentity
  * @param {string} request.reason
+ * @param {Object|null} [request.evidence] - Verified group-retirement
+ *   evidence recorded with the retired row.
  * @return {Promise<Object>} Frozen outcome.
  */
 async function retireReplicaLifecycle({runtime, groupId, replicaIdentity,
-  reason}) {
+  reason, evidence = null}) {
   const owner = runtime ? RUNTIME_LIFECYCLE_OWNERS.get(runtime) : undefined;
   if (!owner) {
     return frozenResult(
@@ -224,38 +274,59 @@ async function retireReplicaLifecycle({runtime, groupId, replicaIdentity,
       LIFECYCLE_REASON.IDENTITY_MISMATCH,
     );
   }
-  return owner.retire(reason);
+  return owner.retire(reason, evidence);
 }
 
 // What a read of a replica database's lifecycle row found when it holds no
 // such row, or could not be read: neither is a lifecycle state.
 const DURABLE_LIFECYCLE_READ = Object.freeze({
-  ABSENT: Object.freeze({state: 'absent', reason: 'lifecycle-row-absent'}),
+  ABSENT: Object.freeze({state: 'absent', reason: 'lifecycle-row-absent',
+    incarnation: null, retirementEvidence: null}),
   UNREADABLE: Object.freeze({state: 'unreadable',
-    reason: 'lifecycle-database-unreadable'}),
+    reason: 'lifecycle-database-unreadable', incarnation: null,
+    retirementEvidence: null}),
 });
+
+// The recorded evidence, or null (none, or one that cannot be parsed).
+function retirementEvidenceOf(raw) {
+  if (typeof raw !== 'string' || raw.length === 0) {
+    return null;
+  }
+  try {
+    const evidence = JSON.parse(raw);
+    return evidence && typeof evidence === 'object' ?
+      Object.freeze(evidence) : null;
+  } catch (_error) {
+    return null;
+  }
+}
 
 function lifecycleRowOf(db, groupId, replicaIdentity) {
   const table = db.prepare(`
     SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?
   `).get(LIFECYCLE_TABLE);
+  // Every column: an older table has no incarnation or evidence column.
   const row = table === undefined ? undefined : db.prepare(`
-    SELECT state, reason FROM ${LIFECYCLE_TABLE}
+    SELECT * FROM ${LIFECYCLE_TABLE}
     WHERE group_id = ? AND replica_identity = ?
   `).get(String(groupId), String(replicaIdentity));
   return row === undefined ? DURABLE_LIFECYCLE_READ.ABSENT :
-    Object.freeze({state: row.state, reason: String(row.reason ?? '')});
+    Object.freeze({state: row.state, reason: String(row.reason ?? ''),
+      incarnation: typeof row.incarnation === 'string' &&
+        row.incarnation.length > 0 ? row.incarnation : null,
+      retirementEvidence: retirementEvidenceOf(row.retirement_evidence)});
 }
 
 /**
  * The durable lifecycle row of exactly one (group, replica identity), read
  * read-only from a replica database file without opening a runtime or
- * creating anything: {state, reason}. A missing file or row is ABSENT, a
+ * creating anything: {state, reason, incarnation, retirementEvidence} (a row
+ * born before the stamp, never opened since, reads incarnation null). A missing file or row is ABSENT, a
  * database that cannot be read is UNREADABLE - never a lifecycle state.
  * @param {string} dbPath - The replica's database file.
  * @param {string} groupId
  * @param {string} replicaIdentity
- * @return {Object} Frozen {state, reason}.
+ * @return {Object} Frozen {state, reason, incarnation, retirementEvidence}.
  */
 function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
   try {
@@ -274,6 +345,7 @@ function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
 }
 
 export {
+  DURABLE_LIFECYCLE_READ,
   LIFECYCLE_STATE,
   RaftRsReplicaLifecycleOwner,
   readDurableReplicaLifecycle,
