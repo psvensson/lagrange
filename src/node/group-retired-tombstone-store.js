@@ -132,21 +132,26 @@ function writeGroupRetiredTombstone(dataDir, fact) {
   return record;
 }
 
+// A persisted text field: the value as a string, '' when there is none.
+function textOf(value) {
+  return String(value ?? '');
+}
+
 // The record one tombstone write persists.
 function tombstoneRecordOf({groupId, replicaIdentity, incarnation,
   lifecycleReason, evidence, retiredAt}) {
-  const identity = String(replicaIdentity ?? '');
+  const identity = textOf(replicaIdentity);
   return {
     version: TOMBSTONE_VERSION,
-    tableId: String(evidence?.tableId ?? ''),
-    groupId: String(groupId ?? ''),
+    tableId: textOf(evidence?.tableId),
+    groupId: textOf(groupId),
     replicaIdentity: identity,
     peerId: isNonEmptyString(identity) ? deriveRaftRsPeerId(identity) : '',
-    workflowId: String(evidence?.workflowId ?? ''),
+    workflowId: textOf(evidence?.workflowId),
     fenceToken: evidence?.fenceToken,
-    kind: String(evidence?.kind ?? ''),
-    incarnation: String(incarnation ?? ''),
-    lifecycleReason: String(lifecycleReason ?? ''),
+    kind: textOf(evidence?.kind),
+    incarnation: textOf(incarnation),
+    lifecycleReason: textOf(lifecycleReason),
     retiredAt: Number(retiredAt) || 0,
   };
 }
