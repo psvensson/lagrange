@@ -122,6 +122,23 @@ const PARTITION_PROVISIONING_METHODS = Object.freeze({
         existingTableRecord?.activePartitionVersion ??
         1,
     );
+    let partitionKeyType = null;
+    try {
+      const schemaDefinition = JSON.parse(
+        existingTableRecord?.schema_definition ||
+          existingTableRecord?.schemaDefinition ||
+          '{}',
+      );
+      const partitionKey =
+        existingTableRecord?.partition_key ||
+        existingTableRecord?.partitionKey ||
+        null;
+      partitionKeyType = schemaDefinition?.columns?.find(
+        (column) => column?.name === partitionKey,
+      )?.type || null;
+    } catch {
+      partitionKeyType = null;
+    }
     return {
       partition_id: `${tableId}-p1`,
       table_id: tableId,
@@ -131,6 +148,7 @@ const PARTITION_PROVISIONING_METHODS = Object.freeze({
         tableName,
       partition_key_start: null,
       partition_key_end: null,
+      partition_key_type: partitionKeyType,
       partition_version:
         Number.isInteger(partitionVersion) && partitionVersion > 0 ?
           partitionVersion :
