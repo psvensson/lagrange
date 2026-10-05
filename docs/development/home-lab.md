@@ -564,8 +564,12 @@ and runs one read-only ssh command per placed machine. It prints one
 `LAGRANGE_LOG_FILE` unset and pretty printing off (environment and base
 config); per machine, docker reachable, at least 10 GiB free under the docker
 root, its clock within 2 s of the controller's over the ssh round trip, and
-every base image of the Dockerfile (`FROM`) present; the base image ids equal
-on every machine; and as many distinct boot ids as placed machines. It then
+every base image of the Dockerfile (`FROM`) present with a registry digest
+(`RepoDigests`); the base images' registry digests equal on every machine
+(never the image Id: the classic `overlay2` store reports the config digest
+and the containerd store the manifest digest for the same pulled content; the
+Id and the storage driver are printed as evidence); and as many distinct boot
+ids as placed machines. It then
 performs the checks above and prints the node-to-machine table, the
 certification topology, the runner command and any unplaced machine.
 
@@ -579,16 +583,17 @@ Operating procedure for one certification run:
    runs, and tears down. A run interrupted anywhere after that (a lost hold, a
    crash, Ctrl-C, a kill) leaves the directory without a manifest, which the
    streak counts as a FAILED run.
-3. Whatever the outcome, the harness prints the run's record line
-   (`node scripts/solve.js note --id <quest> --kind evidence --finding
-   "certification-run ... manifest=<digest|none (...)>"`). Record it after
+3. Whatever the outcome (Ctrl-C and SIGTERM included), the harness prints the
+   run's record line (`node scripts/solve.js note --id <quest> --kind evidence
+   --finding "certification-run ... manifest=<digest|none (...)>"`); after a
+   SIGKILL, `keep-evidence` (step 4) prints it for the directory. Record it after
    EVERY run, certified or not, before anything else: the streak is claimed
    only over recorded runs, and a recorded run whose directory later vanishes
    or changes resets it. A run directory deleted BEFORE its line was recorded
    is the one case nothing can detect.
 4. Keep the evidence (owner decision 2026-10-05, option 1):
-   `node scripts/lab.js harness keep-evidence test-output/certification/<sha>/<run start>`
-   copies the verdict files to
+   `node scripts/lab.js harness keep-evidence test-output/certification/<sha>/<run start> --quest <id>`
+   prints the run's record line, then copies the verdict files to
    `solve/epics/raft-rs-full-cutover/evidence/certification/<sha>/<run start>/`
    (commit them) and prints where the node logs are and their digests; copy the
    logs to the retained log store before any checkout cleanup.

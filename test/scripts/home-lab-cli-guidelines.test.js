@@ -44,7 +44,7 @@ const USAGE = [
   '      (--certify SHA: a certification run - one node per distinct ',
   'machine, a clean checkout at SHA; with --dry-run its pre-flight; see ',
   'docs/development/home-lab.md)\n',
-  '  lab harness keep-evidence RUN_DIR [--to DIR]\n',
+  '  lab harness keep-evidence RUN_DIR [--to DIR] [--quest ID]\n',
   '  lab k3s init-server NAME [--version VERSION]\n',
   '  lab k3s join NAME --server SERVER\n',
   '  lab k3s status --server SERVER\n',

@@ -57,6 +57,7 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const stringSplit = Function.call.bind(String.prototype.split);
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 const OTHER_SHA = 'fedcba9876543210fedcba9876543210fedcba98';
@@ -230,6 +231,7 @@ const POLICY_PARTITIONS = Object.freeze(['sys-p1', 't_left', 't_right']);
 const BASE_IMAGES = Object.freeze(['node:22-slim',
   'gcr.io/distroless/nodejs22-debian12']);
 const BASE_IMAGE_ID = 'sha256:base-image';
+const BASE_REPO_DIGEST = 'sha256:base-content';
 
 // The partitions read each node answers: the policy read (the voter-target
 // query, the partition set cross-check), the scenario's split truth, or
@@ -351,7 +353,11 @@ function certificationRequest(overrides = {}) {
     image: {imageReadback: arrayMap([0, 1, 2, 3, 4], (index) => ({
       baseImages: arrayMap(BASE_IMAGES, (ref) => ({imageId:
         Object.hasOwn(overrides.baseImageIds || {}, index) ?
-          overrides.baseImageIds[index] : BASE_IMAGE_ID, ref})),
+          overrides.baseImageIds[index] : BASE_IMAGE_ID, ref,
+      repoDigests: Object.hasOwn(overrides.baseRepoDigests || {}, index) ?
+        overrides.baseRepoDigests[index] :
+        [`${stringSplit(ref, ':')[0]}@${BASE_REPO_DIGEST}`],
+      storageDriver: 'overlayfs'})),
       host: `tcp://127.0.0.1:${1000 + index}`, imageId: IMAGE_ID,
       labels: {...CERTIFIED_LABELS, ...(index === 3 ?
         overrides.hostLabels || {} : {})}})),
@@ -773,11 +779,14 @@ describe('certification-grade verdict (owner rulings 5 and 6)', () => {
       .evidence.problems.join('\n'), /node n3: no boot provenance line/u);
   });
 
-  it('R1: a host whose base image (FROM) reads back another image id, or ' +
-    'none, or a Dockerfile with no FROM read, is not certified', async () => {
+  it('R1: a host whose base image (FROM) reads back other registry content ' +
+    '(RepoDigests), none, no registry digest, or a Dockerfile with no FROM ' +
+    'read, is not certified', async () => {
     const cases = [
-      [{request: {baseImageIds: {3: 'sha256:other-base'}}},
+      [{request: {baseRepoDigests: {3: ['node@sha256:other-content']}}},
         /base image node:22-slim differs across hosts/u],
+      [{request: {baseRepoDigests: {2: []}}},
+        /image on tcp:\/\/127\.0\.0\.1:1002: base image node:22-slim has no registry digest/u],
       [{request: {baseImageIds: {1: null}}},
         /image on tcp:\/\/127\.0\.0\.1:1001: base image node:22-slim not read back/u],
       [{request: {build: {baseImageRefs: []}}},
@@ -790,6 +799,15 @@ describe('certification-grade verdict (owner rulings 5 and 6)', () => {
       assert.match(conditionOf(run.entry.certification, 'commit_identity')
         .evidence.problems.join('\n'), pattern);
     }
+    // Different image Ids (classic overlay2 store: config digest; containerd
+    // store: manifest digest) with the same registry content certify; the
+    // base RepoDigests may name the repository in either spelling.
+    const sameContent = await runFixture({}, {request: {baseImageIds:
+      {3: 'sha256:config-digest-on-overlay2'}, baseRepoDigests:
+      {3: [`docker.io/library/node@${BASE_REPO_DIGEST}`,
+        `gcr.io/distroless/nodejs22-debian12@${BASE_REPO_DIGEST}`]}}});
+    assert.deepEqual(sameContent.entry.certification.failures, []);
+    assert.equal(sameContent.entry.certification.certified, true);
   });
 
   it('R6: the stage waits past an observation that leaves the split ' +

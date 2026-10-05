@@ -402,6 +402,16 @@ class DockerProvider {
   }
 
   /**
+   * The daemon's image storage driver (`docker info` Driver: overlay2 for
+   * the classic store, overlayfs for the containerd image store); it decides
+   * what an image Id means.
+   * @returns {Promise<string|null>}
+   */
+  async storageDriver() {
+    return (await this._docker.info())?.Driver ?? null;
+  }
+
+  /**
    * Check whether an image tag exists locally.
    * @param {string} tag
    * @returns {Promise<boolean>}

@@ -32,7 +32,7 @@
  */
 
 import {existsSync, readFileSync} from 'node:fs';
-import {mkdir, readFile, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, readdir, writeFile} from 'node:fs/promises';
 import {hostname} from 'node:os';
 import {basename, join} from 'node:path';
 import {fullLogDestPath} from './full-node-log-capture.js';
@@ -51,6 +51,7 @@ import {
 // Module-load captures (the harness tree's ambient-intrinsics rule).
 const arrayAt = Function.call.bind(Array.prototype.at);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySort = Function.call.bind(Array.prototype.sort);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
@@ -118,9 +119,14 @@ async function startCertificationRun(input) {
   return {dir, started};
 }
 
-// An existing run directory (the lab harness created it): its started.json
-// must name this run's sha and scenario.
-async function adoptCertificationRun(dir, requestedSha, scenarioName) {
+// An existing run directory, adopted by the runner the lab harness spawned
+// (`--certify-run-dir`): its started.json must name this run's sha and
+// scenario, the directory must hold nothing else yet, and it must be the
+// directory of THIS run: created on this host by the runner's parent
+// process (`controllerPids`, default [process.ppid]). An old interrupted
+// directory therefore cannot be turned into a certified run at an old start.
+async function adoptCertificationRun(dir, requestedSha, scenarioName,
+  {controllerPids = [process.ppid], controllerHost = hostname()} = {}) {
   const started = JSON.parse(await readFile(join(dir, EVIDENCE_FILE.STARTED),
     UTF8));
   if (started.requestedSha !== requestedSha ||
@@ -128,8 +134,33 @@ async function adoptCertificationRun(dir, requestedSha, scenarioName) {
     throw new Error(`${dir}: started.json names ${started.scenario} at ` +
       `${started.requestedSha}, not ${scenarioName} at ${requestedSha}`);
   }
+  await refuseUnlessFreshRunDir(dir);
+  refuseUnlessRunController(dir, started, controllerPids, controllerHost);
   return {dir, started};
 }
+
+async function refuseUnlessFreshRunDir(dir) {
+  const entries = await readdir(dir);
+  if (entries.length !== ONE || entries[0] !== EVIDENCE_FILE.STARTED) {
+    throw new Error(`${dir}: holds ${jsonStringify(arraySort(entries))}, ` +
+      `not only ${EVIDENCE_FILE.STARTED}: not a fresh run directory`);
+  }
+}
+
+function refuseUnlessRunController(dir, started, controllerPids,
+  controllerHost) {
+  if (started.controller?.host !== controllerHost ||
+      !arrayIncludes(controllerPids, started.controller?.pid)) {
+    throw new Error(`${dir}: started.json names controller ` +
+      `${jsonStringify(started.controller ?? null)}, not this run's ` +
+      `${jsonStringify({host: controllerHost, pids: controllerPids})}`);
+  }
+}
+
+// At archive time the runner's run directory was either adopted (created
+// by its parent, the lab harness) or created by the runner itself.
+const ARCHIVE_CONTROLLER = Object.freeze({
+  controllerPids: Object.freeze([process.pid, process.ppid])});
 
 async function writeEvidenceFile(dir, path, bytes, files) {
   await writeFile(join(dir, path), bytes, EXCLUSIVE);
@@ -160,7 +191,7 @@ async function copyNodeLogs(dir, input, files) {
  * is started here at `runStartedAt`). Never overwrites.
  * @param {{entry: Object, gates: Array, nodes: Array, outputDir: ?string,
  *   scenarioName: string, runDir?: string, runStartedAt?: string,
- *   root?: string}} input
+ *   root?: string, controller?: {controllerPids, controllerHost}}} input
  * @return {Promise<{dir, manifestDigest, runIdentity}>}
  */
 async function archiveCertificationRun(input) {
@@ -168,7 +199,7 @@ async function archiveCertificationRun(input) {
   const requestedSha = certification.requestedSha ?? null;
   const run = input.runDir ?
     await adoptCertificationRun(input.runDir, requestedSha,
-      input.scenarioName) :
+      input.scenarioName, input.controller ?? ARCHIVE_CONTROLLER) :
     await startCertificationRun({requestedSha, root: input.root,
       runStartedAt: input.runStartedAt, scenario: input.scenarioName});
   const {dir} = run;
@@ -300,23 +331,56 @@ function printCertificationRecord(runDir, {questId = null,
   return line;
 }
 
+const RECORD_SIGNALS = Object.freeze([['SIGINT', 130], ['SIGTERM', 143]]);
+
+/**
+ * Print the run's record line when the controlling process is interrupted
+ * (Ctrl-C, SIGTERM), then exit with the signal's conventional code; SIGKILL
+ * cannot be caught (`lab harness keep-evidence` prints the line for any
+ * existing directory).
+ * @param {string} runDir
+ * @param {{questId?: string, write?: Function, on?: Function,
+ *   off?: Function, exit?: Function}} [options]
+ * @return {Function} removes the handlers
+ */
+function printCertificationRecordOnSignal(runDir, {questId = null,
+  write = (text) => process.stdout.write(text),
+  on = (signal, listener) => process.on(signal, listener),
+  off = (signal, listener) => process.off(signal, listener),
+  exit = (code) => process.exit(code)} = {}) {
+  const listeners = arrayMap(RECORD_SIGNALS, ([signal, code]) => {
+    const listener = () => {
+      printCertificationRecord(runDir, {questId, write});
+      exit(code);
+    };
+    on(signal, listener);
+    return [signal, listener];
+  });
+  return () => {
+    for (const [signal, listener] of listeners) off(signal, listener);
+  };
+}
+
 /**
  * The runner's (run.js) certification run directory, opened before
  * anything is built: the lab harness's (`--certify-run-dir`), or one
  * created here, whose record line is then printed on every exit but
  * SIGKILL.
  * @param {{certify: string, certifyRunDir: ?string, scenario: ?string}} args
- * @param {{root?: string, onExit?: Function}} [options]
+ * @param {{root?: string, onExit?: Function,
+ *   controller?: {controllerPids, controllerHost}}} [options] `controller`
+ *   names the process that created an adopted directory (default: this
+ *   process's parent on this host)
  * @return {Promise<{dir: string, created: boolean}>}
  */
-async function openRunnerCertificationRun(args, {root,
+async function openRunnerCertificationRun(args, {root, controller,
   onExit = (listener) => process.on('exit', listener)} = {}) {
   if (!args.scenario) {
     throw new Error('--certify names exactly one --scenario');
   }
   if (args.certifyRunDir) {
     await adoptCertificationRun(args.certifyRunDir, args.certify,
-      args.scenario);
+      args.scenario, controller);
     return {created: false, dir: args.certifyRunDir};
   }
   const run = await startCertificationRun({requestedSha: args.certify, root,
@@ -362,5 +426,6 @@ export {
   keepCertificationVerdict,
   openRunnerCertificationRun,
   printCertificationRecord,
+  printCertificationRecordOnSignal,
   startCertificationRun,
 };

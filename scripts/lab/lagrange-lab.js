@@ -59,7 +59,7 @@ const USAGE = [
   '      (--certify SHA: a certification run - one node per distinct ',
   'machine, a clean checkout at SHA; with --dry-run its pre-flight; see ',
   'docs/development/home-lab.md)\n',
-  '  lab harness keep-evidence RUN_DIR [--to DIR]\n',
+  '  lab harness keep-evidence RUN_DIR [--to DIR] [--quest ID]\n',
   '  lab k3s init-server NAME [--version VERSION]\n',
   '  lab k3s join NAME --server SERVER\n',
   '  lab k3s status --server SERVER\n',
@@ -432,7 +432,8 @@ async function commandRunner(action, args) {
 async function commandHarness(action, args) {
   if (action === ACTION.KEEP_EVIDENCE) {
     await keepCertificationEvidence({runDir: args.positional[POSITIONAL.NAME],
-      to: typeof args.flags[FLAG.TO] === 'string' ? args.flags[FLAG.TO] : undefined});
+      to: typeof args.flags[FLAG.TO] === 'string' ? args.flags[FLAG.TO] : undefined,
+      quest: typeof args.flags[FLAG.QUEST] === 'string' ? args.flags[FLAG.QUEST] : null});
     return;
   }
   const state = await loadState();

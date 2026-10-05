@@ -3,18 +3,22 @@
 // be checked WITHOUT holding a machine, building an image or starting a
 // container. Each item prints one PASS/FAIL line; a failed item fails the
 // dry run. It only reads: git, the census file, the environment, and one
-// read-only ssh command per host (boot id, clock, docker version, free disk
-// under the docker root, the base images' ids).
+// read-only ssh command per host (boot id, clock, docker version, storage
+// driver, free disk under the docker root, the base images' ids and
+// RepoDigests).
 //
 // Also the owner-decided retention step (2026-10-05, option 1):
-// `lab harness keep-evidence RUN_DIR [--to DIR]` copies a run's verdict
-// files into the committed evidence tree and prints where the node logs
-// are and their digests.
+// `lab harness keep-evidence RUN_DIR [--to DIR] [--quest ID]` prints the
+// run's `solve note` record line (for ANY run directory, an interrupted one
+// included: the line a SIGKILLed run never printed), then copies its verdict
+// files into the committed evidence tree and prints where the node logs are
+// and their digests.
 
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {capture} from './process.js';
 import {
+  baseImageContentDigests,
   commitIdentityProblem,
   dockerfileBaseImages,
   observeCommitIdentity,
@@ -22,6 +26,7 @@ import {
 import {readSpentWaitCensus} from '../../test/distributed/harness/scenario-certification.js';
 import {
   keepCertificationVerdict,
+  printCertificationRecord,
 } from '../../test/distributed/harness/certification-evidence-archive.js';
 
 const TEXT_ENCODING = 'utf8';
@@ -49,7 +54,7 @@ const LOG_ENV = Object.freeze(['LAGRANGE_LOG_FILE']);
 const PRETTY_ENV = Object.freeze(['LOG_PRETTY_PRINT', 'LAGRANGE_LOG_PRETTY_PRINT']);
 const CONFIG_LOG_MARKERS = Object.freeze([...LOG_ENV, ...PRETTY_ENV, 'prettyPrint']);
 const MARK = Object.freeze({BOOT: 'BOOT', CLOCK: 'CLOCK', DOCKER: 'DOCKER',
-  DISK: 'DISK', BASE: 'BASE'});
+  DRIVER: 'DRIVER', DISK: 'DISK', BASE: 'BASE'});
 const MISSING = 'missing';
 const UNREACHABLE = 'unreachable';
 const WORD = /\s+/u;
@@ -63,7 +68,8 @@ const TEXT = Object.freeze({
   LINE: '\n',
   DISK_TAIL: '2>/dev/null || echo /)" | awk \'NR==2{print $4}\')',
   NO_CLOCK: 'no clock read',
-  BASES_EQUAL: 'base image ids equal on every host',
+  BASES_EQUAL: 'base image registry digests equal on every host',
+  NO_REGISTRY_DIGEST: 'no registry digest (RepoDigests) for: ',
   LOG_CAPTURE: 'log capture streamed (LAGRANGE_LOG_FILE unset, pretty print off)',
   UNSET: 'unset',
   TRUE: 'true',
@@ -78,11 +84,14 @@ function item(name, ok, detail) {
   return {detail, item: name, ok};
 }
 
-// One read-only command; every answer is one marked line.
+// One read-only command; every answer is one marked line. A base image
+// answers `BASE <ref> <Id> <RepoDigests as JSON>` (quoted: the JSON is not
+// globbed), or `BASE <ref> missing`.
 function hostScript(baseImages) {
   const bases = baseImages.map((ref) =>
-    `echo ${MARK.BASE} ${ref} $(docker image inspect --format '{{.Id}}' ${ref} ` +
-    `2>/dev/null || echo ${MISSING})`).join(TEXT.CLAUSE);
+    `echo ${MARK.BASE} ${ref} "$(docker image inspect --format ` +
+    `'{{.Id}} {{json .RepoDigests}}' ${ref} 2>/dev/null || echo ${MISSING})"`)
+    .join(TEXT.CLAUSE);
   return [
     `echo ${MARK.BOOT} $(cat /proc/sys/kernel/random/boot_id)`,
     // Seconds with a fraction: `%3N` is not portable (uutils date, as on
@@ -90,22 +99,39 @@ function hostScript(baseImages) {
     `echo ${MARK.CLOCK} $(date +%s.%N)`,
     `echo ${MARK.DOCKER} $(docker info --format '{{.ServerVersion}}' 2>/dev/null ` +
       `|| echo ${UNREACHABLE})`,
+    `echo ${MARK.DRIVER} $(docker info --format '{{.Driver}}' 2>/dev/null ` +
+      `|| echo ${UNREACHABLE})`,
     `echo ${MARK.DISK} $(df -Pk "$(docker info --format '{{.DockerRootDir}}' ` +
       TEXT.DISK_TAIL,
     bases,
   ].filter(Boolean).join(TEXT.CLAUSE);
 }
 
+function parseRepoDigests(text) {
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function parseBaseAnswer(id, digestsJson) {
+  if (!id || id === MISSING) return {imageId: MISSING, repoDigests: []};
+  return {imageId: id, repoDigests: parseRepoDigests(digestsJson)};
+}
+
 export function parseHostAnswer(text) {
   const answer = {baseImages: {}, bootId: null, clockMs: null, docker: null,
-    freeKib: null};
+    freeKib: null, storageDriver: null};
   for (const line of String(text).split(TEXT.LINE)) {
-    const [mark, first, second] = line.trim().split(WORD);
+    const [mark, first, second, third] = line.trim().split(WORD);
     if (mark === MARK.BOOT) answer.bootId = first || null;
     if (mark === MARK.CLOCK) answer.clockMs = Math.round(Number(first) * MS_PER_SECOND);
     if (mark === MARK.DOCKER) answer.docker = first || null;
+    if (mark === MARK.DRIVER) answer.storageDriver = first || null;
     if (mark === MARK.DISK) answer.freeKib = Number(first);
-    if (mark === MARK.BASE && first) answer.baseImages[first] = second || MISSING;
+    if (mark === MARK.BASE && first) answer.baseImages[first] = parseBaseAnswer(second, third);
   }
   return answer;
 }
@@ -128,33 +154,57 @@ function clockItem(name, answer) {
     `${answer.clockMs - answer.sentMs} ms from the controller (bound ${bound} ms)`);
 }
 
+function baseImageOf(answer, ref) {
+  const base = answer.baseImages?.[ref];
+  return base && base.imageId && base.imageId !== MISSING ? base : null;
+}
+
+function describeBase(ref, base) {
+  return `${ref}=${base.imageId} ${JSON.stringify(base.repoDigests)}`;
+}
+
 function hostItems(node, answer, baseImages) {
   const prefix = `host ${node.name}`;
   if (answer.error) return [item(`${prefix} reachable`, false, answer.error)];
   const minKib = CERTIFICATION_PREFLIGHT_BOUND.MIN_FREE_DISK_KIB;
-  const missing = baseImages.filter((ref) =>
-    !answer.baseImages[ref] || answer.baseImages[ref] === MISSING);
+  const missing = baseImages.filter((ref) => baseImageOf(answer, ref) === null);
+  const undigested = baseImages.filter((ref) => baseImageOf(answer, ref) !== null &&
+    baseImageContentDigests(ref, baseImageOf(answer, ref).repoDigests).length === 0);
   return [
     item(`${prefix} docker`, Boolean(answer.docker) && answer.docker !== UNREACHABLE,
-      `docker ${answer.docker ?? UNREACHABLE}`),
+      `docker ${answer.docker ?? UNREACHABLE} (storage driver ` +
+        `${answer.storageDriver ?? UNREACHABLE})`),
     item(`${prefix} free disk`, Number.isFinite(answer.freeKib) && answer.freeKib >= minKib,
       `${answer.freeKib} KiB free under the docker root (minimum ${minKib} KiB)`),
     clockItem(`${prefix} clock skew`, answer),
-    item(`${prefix} base images present`, missing.length === 0,
-      missing.length === 0 ? baseImages.map((ref) =>
-        `${ref}=${answer.baseImages[ref]}`).join(TEXT.SPACE) :
-        `missing: ${missing.join(TEXT.LIST)}`),
+    item(`${prefix} base images present`, missing.length === 0 && undigested.length === 0,
+      missing.length > 0 ? `missing: ${missing.join(TEXT.LIST)}` :
+        undigested.length > 0 ? TEXT.NO_REGISTRY_DIGEST +
+          undigested.map((ref) => describeBase(ref, baseImageOf(answer, ref)))
+            .join(TEXT.LIST) :
+          baseImages.map((ref) => describeBase(ref, baseImageOf(answer, ref)))
+            .join(TEXT.SPACE)),
   ];
+}
+
+// Equal registry content, by RepoDigests: the image Id differs between the
+// classic and the containerd image store for the same pulled content.
+function contentOf(answer, ref) {
+  const base = baseImageOf(answer, ref);
+  return base === null ? MISSING :
+    baseImageContentDigests(ref, base.repoDigests).join(TEXT.LIST) || MISSING;
 }
 
 function equalBaseImagesItem(nodes, answers, baseImages) {
   const differing = baseImages.filter((ref) => new Set(answers.map((answer) =>
-    answer.baseImages?.[ref] ?? MISSING)).size !== 1);
+    contentOf(answer, ref))).size !== 1 ||
+    answers.some((answer) => contentOf(answer, ref) === MISSING));
   return item(TEXT.BASES_EQUAL, differing.length === 0 &&
     baseImages.length > 0, differing.length === 0 ?
-    `${baseImages.length} base image(s) identical on ${nodes.length} host(s)` :
+    `${baseImages.length} base image(s) the same registry content on ` +
+      `${nodes.length} host(s)` :
     differing.map((ref) => `${ref}: ${nodes.map((node, index) =>
-      `${node.name}=${answers[index].baseImages?.[ref] ?? MISSING}`).join(TEXT.SPACE)}`)
+      `${node.name}=${contentOf(answers[index], ref)}`).join(TEXT.SPACE)}`)
       .join(TEXT.CLAUSE));
 }
 
@@ -222,15 +272,17 @@ export function formatCertificationPreflight(items) {
 }
 
 /**
- * `lab harness keep-evidence RUN_DIR [--to DIR]`: copy the run's verdict
- * files to the committed evidence tree; print where they went, and where
- * the node logs are kept with their manifest digests.
- * @param {{runDir: string, to?: string, write?: Function}} input
+ * `lab harness keep-evidence RUN_DIR [--to DIR] [--quest ID]`: print the
+ * run's record line first (whatever the directory holds), then copy the
+ * run's verdict files to the committed evidence tree; print where they
+ * went, and where the node logs are kept with their manifest digests.
+ * @param {{runDir: string, to?: string, quest?: ?string, write?: Function}} input
  * @return {Promise<Object>}
  */
 export async function keepCertificationEvidence({runDir, to = COMMITTED_CERTIFICATION_EVIDENCE,
-  write = (text) => process.stdout.write(text)}) {
+  quest = null, write = (text) => process.stdout.write(text)}) {
   if (!runDir) throw new Error(TEXT.NO_RUN_DIR);
+  printCertificationRecord(resolve(runDir), {questId: quest, write});
   const kept = await keepCertificationVerdict({destRoot: resolve(to),
     runDir: resolve(runDir)});
   write(`kept ${kept.copied.join(TEXT.LIST)} -> ${kept.dest} (commit these)\n`);

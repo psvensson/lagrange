@@ -19,6 +19,7 @@ import {fileURLToPath} from 'node:url';
 import {buildImage} from '../../build-image.js';
 import {
   CERTIFICATION_IMAGE_LABEL,
+  baseImageContentDigests,
   dockerfileBaseImages,
   certifyArgumentProblem,
   completeCertificationBuild,
@@ -33,6 +34,7 @@ import {createDistributedRunArgHelpers} from '../../run-args-helpers.js';
 // Module-load captures (the harness tree's ambient-intrinsics rule).
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringTrim = Function.call.bind(String.prototype.trim);
+const stringSplit = Function.call.bind(String.prototype.split);
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const SHORT = 'abcdef012345';
@@ -47,13 +49,18 @@ function stubDaemon(t, initialLabels) {
     getImageLabel: DockerProvider.prototype.getImageLabel,
     imageExists: DockerProvider.prototype.imageExists,
     inspectImage: DockerProvider.prototype.inspectImage,
+    storageDriver: DockerProvider.prototype.storageDriver,
   };
   const hostOf = (provider) => `${provider._docker?.modem?.host}:` +
     String(provider._docker?.modem?.port);
   DockerProvider.prototype.inspectImage = async function inspect(tag) {
     const labels = daemon.images.get(`${hostOf(this)}|${tag}`) ??
       initialLabels;
-    return labels ? {Config: {Labels: labels}, Id: `sha256:${tag}`} : null;
+    return labels ? {Config: {Labels: labels}, Id: `sha256:${tag}`,
+      RepoDigests: [`${stringSplit(tag, ':')[0]}@sha256:content`]} : null;
+  };
+  DockerProvider.prototype.storageDriver = async function driver() {
+    return 'overlayfs';
   };
   DockerProvider.prototype.imageExists = async function exists(tag) {
     return Boolean(await this.inspectImage(tag));
@@ -131,7 +138,8 @@ describe('certification build: fresh, labelled, read back (B1)', () => {
   });
 
   it('R1: after the build each host\'s base images (the Dockerfile FROM ' +
-    'refs) are read back by image id and recorded', async (t) => {
+    'refs) are read back with image id, RepoDigests and the host storage ' +
+    'driver, and recorded', async (t) => {
     stubDaemon(t, {'ddb.git-hash': SHORT});
     const certified = await buildImage({docker: TWO_HOSTS, image: 'x:test'},
       false, null, {certification: {baseImageRefs: ['node:22-slim',
@@ -139,10 +147,23 @@ describe('certification build: fresh, labelled, read back (B1)', () => {
       gitDirty: false, gitHash: SHORT});
     for (const entry of certified.imageReadback) {
       assert.deepEqual(entry.baseImages, [
-        {imageId: 'sha256:node:22-slim', ref: 'node:22-slim', repoDigests: []},
+        {imageId: 'sha256:node:22-slim', ref: 'node:22-slim',
+          repoDigests: ['node@sha256:content'], storageDriver: 'overlayfs'},
         {imageId: 'sha256:gcr.io/distroless/nodejs22-debian12',
-          ref: 'gcr.io/distroless/nodejs22-debian12', repoDigests: []}]);
+          ref: 'gcr.io/distroless/nodejs22-debian12',
+          repoDigests: ['gcr.io/distroless/nodejs22-debian12@sha256:content'],
+          storageDriver: 'overlayfs'}]);
     }
+    // The compared identity is the registry digest for the ref's own
+    // repository, whatever spelling the image store records it in; an
+    // image with no repository digest has none.
+    assert.deepEqual(baseImageContentDigests('node:22-slim',
+      ['docker.io/library/node@sha256:b', 'node@sha256:a', 'other@sha256:c']),
+    ['sha256:a', 'sha256:b']);
+    assert.deepEqual(baseImageContentDigests('localhost:5000/x:1',
+      ['localhost:5000/x@sha256:d']), ['sha256:d']);
+    assert.deepEqual(baseImageContentDigests('node:22-slim', []), []);
+    assert.deepEqual(baseImageContentDigests('node:22-slim', null), []);
     assert.deepEqual(dockerfileBaseImages('FROM node:22-slim AS builder\n' +
       'RUN x\nfrom --platform=linux/amd64 gcr.io/d:1 as runtime\n' +
       'FROM builder\nFROM node:22-slim\n'), ['node:22-slim', 'gcr.io/d:1']);

@@ -48,6 +48,12 @@ const stringTrim = Function.call.bind(String.prototype.trim);
 const regExpExec = Function.call.bind(RegExp.prototype.exec);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const objectEntries = Object.entries;
+const arrayIsArray = Array.isArray;
+const arraySort = Function.call.bind(Array.prototype.sort);
+const stringIndexOf = Function.call.bind(String.prototype.indexOf);
+const stringLastIndexOf = Function.call.bind(String.prototype.lastIndexOf);
+const stringSlice = Function.call.bind(String.prototype.slice);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const ZERO = 0;
 const SHA_PATTERN = /^[0-9a-f]{40}$/u;
@@ -320,10 +326,65 @@ function postBuildProblems(image, build) {
   return problems;
 }
 
+// The registry content identity of a base image: the digests of its
+// RepoDigests entries for the image's own repository (`repo@sha256:...`;
+// `docker.io/` and `library/` normalised away), sorted. The image Id is NOT
+// comparable across hosts: the classic overlay2 store reports the config
+// digest, the containerd image store the manifest digest, for identical
+// registry content. Empty when the image has no repository digest (built or
+// tagged locally, never pulled): such a base cannot be compared.
+const DEFAULT_REGISTRY_PREFIX = 'docker.io/';
+const OFFICIAL_LIBRARY_PREFIX = 'library/';
+const DIGEST_SEPARATOR = '@';
+const TAG_SEPARATOR = ':';
+const PATH_SEPARATOR = '/';
+
+function normalizedRepository(name) {
+  let repository = String(name);
+  if (stringStartsWith(repository, DEFAULT_REGISTRY_PREFIX)) {
+    repository = stringSlice(repository, DEFAULT_REGISTRY_PREFIX.length);
+  }
+  if (stringStartsWith(repository, OFFICIAL_LIBRARY_PREFIX)) {
+    repository = stringSlice(repository, OFFICIAL_LIBRARY_PREFIX.length);
+  }
+  return repository;
+}
+
+function repositoryOfRef(ref) {
+  const withoutDigest = stringSplit(String(ref), DIGEST_SEPARATOR)[ZERO];
+  const tagAt = stringLastIndexOf(withoutDigest, TAG_SEPARATOR);
+  const tagged = tagAt > stringLastIndexOf(withoutDigest, PATH_SEPARATOR);
+  return normalizedRepository(tagged ?
+    stringSlice(withoutDigest, ZERO, tagAt) : withoutDigest);
+}
+
+/**
+ * A base image's registry content digests (see above). Pure.
+ * @param {string} ref The Dockerfile FROM reference.
+ * @param {Array<string>|null} repoDigests `docker image inspect` RepoDigests.
+ * @return {Array<string>} sorted digests; empty when none names the ref's
+ *   repository
+ */
+function baseImageContentDigests(ref, repoDigests) {
+  const repository = repositoryOfRef(ref);
+  const digests = new Set();
+  for (const entry of arrayIsArray(repoDigests) ? repoDigests : []) {
+    const at = stringIndexOf(String(entry), DIGEST_SEPARATOR);
+    if (at > ZERO && normalizedRepository(stringSlice(String(entry), ZERO,
+      at)) === repository) {
+      digests.add(stringSlice(String(entry), at + 1));
+    }
+  }
+  return arraySort([...digests]);
+}
+
 // R1: the base images each host built FROM, read back after the build
-// (docker image inspect of every FROM image), must be present and the same
-// image id on every host: an unpinned tag cached differently per host is
-// different bits under identical labels.
+// (docker image inspect of every FROM image), must be present, carry a
+// registry digest, and be the same registry content on every host: an
+// unpinned tag cached differently per host is different bits under
+// identical labels. Compared by RepoDigests, never by image Id (see
+// baseImageContentDigests); the built image's own Id is never compared
+// across hosts either (its labels and build id are its identity).
 function baseImageProblems(image, build) {
   const refs = build.baseImageRefs || [];
   if (refs.length === ZERO) {
@@ -331,23 +392,37 @@ function baseImageProblems(image, build) {
   }
   const problems = [];
   for (const ref of refs) {
-    const ids = new Map();
+    const contents = new Map();
     for (const entry of image.imageReadback || []) {
-      const base = arrayFind(entry.baseImages || [], (item) =>
-        item.ref === ref);
-      if (!base?.imageId) {
-        problems.push(`image on ${entry.host}: base image ${ref} not read ` +
-          'back');
-        continue;
+      const key = hostBaseContent(entry, ref, problems);
+      if (key !== null) {
+        contents.set(key, [...(contents.get(key) || []), entry.host]);
       }
-      ids.set(base.imageId, [...(ids.get(base.imageId) || []), entry.host]);
     }
-    if (ids.size > 1) {
+    if (contents.size > 1) {
       problems.push(`base image ${ref} differs across hosts: ` +
-        JSON.stringify(Object.fromEntries(ids)));
+        JSON.stringify(Object.fromEntries(contents)));
     }
   }
   return problems;
+}
+
+// One host's registry content of one base image, or null (the problem is
+// pushed).
+function hostBaseContent(entry, ref, problems) {
+  const base = arrayFind(entry.baseImages || [], (item) => item.ref === ref);
+  if (!base?.imageId) {
+    problems.push(`image on ${entry.host}: base image ${ref} not read back`);
+    return null;
+  }
+  const digests = baseImageContentDigests(ref, base.repoDigests);
+  if (digests.length === ZERO) {
+    problems.push(`image on ${entry.host}: base image ${ref} has no ` +
+      `registry digest (RepoDigests ${JSON.stringify(base.repoDigests ??
+        null)}): its content cannot be compared`);
+    return null;
+  }
+  return digests.join(',');
 }
 
 function buildProblems(certification) {
@@ -358,24 +433,35 @@ function buildProblems(certification) {
 }
 
 /**
- * Inspect each base image on one docker provider (after the build).
- * @param {Object} provider DockerProvider (inspectImage).
+ * Inspect each base image on one docker provider (after the build): its Id,
+ * its RepoDigests (the compared identity) and the host's storage driver
+ * (which decides what the Id means), all recorded as evidence.
+ * @param {Object} provider DockerProvider (inspectImage, storageDriver).
  * @param {Array<string>} refs
- * @return {Promise<Array<{ref, imageId, repoDigests}>>}
+ * @return {Promise<Array<{ref, imageId, repoDigests, storageDriver}>>}
  */
 async function readBaseImages(provider, refs) {
   const observed = [];
+  const storageDriver = await readStorageDriver(provider);
   for (const ref of refs || []) {
     try {
       const inspect = await provider.inspectImage(ref);
       observed.push({imageId: inspect?.Id ?? null, ref,
-        repoDigests: inspect?.RepoDigests ?? []});
+        repoDigests: inspect?.RepoDigests ?? [], storageDriver});
     } catch (error) {
       observed.push({error: String(error?.message || error), imageId: null,
-        ref, repoDigests: []});
+        ref, repoDigests: [], storageDriver});
     }
   }
   return observed;
+}
+
+async function readStorageDriver(provider) {
+  try {
+    return await provider.storageDriver();
+  } catch (_error) {
+    return null;
+  }
 }
 
 function nodeProblems(build, nodes, nodeImages, bootProvenance) {
@@ -451,6 +537,7 @@ function certifyArgumentProblem(certify) {
 
 export {
   CERTIFICATION_IMAGE_LABEL,
+  baseImageContentDigests,
   certifyArgumentProblem,
   commitIdentityProblem,
   commitIdentityProblems,

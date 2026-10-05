@@ -24,6 +24,7 @@ import {
 } from '../../test/distributed/harness/scenario-host-topology.js';
 import {
   printCertificationRecord,
+  printCertificationRecordOnSignal,
   startCertificationRun,
 } from '../../test/distributed/harness/certification-evidence-archive.js';
 import {
@@ -559,6 +560,10 @@ async function runCertificationHarness(options) {
   const args = buildHarnessRunnerArgs({configPath, scenario, verbose,
     extraArgs: [...extraArgs, CLI.ARG_CERTIFY, certify,
       CLI.ARG_CERTIFY_RUN_DIR, run.dir]});
+  // Ctrl-C or SIGTERM still prints the record line (SIGKILL cannot:
+  // `lab harness keep-evidence` prints it for any run directory).
+  const stopSignalRecord = printCertificationRecordOnSignal(run.dir,
+    {questId: options.quest, write});
   try {
     const holds = await holdHarnessNodes(nodes, sanitizeName(scenario), hold);
     const tunnels = [];
@@ -570,6 +575,7 @@ async function runCertificationHarness(options) {
       await releaseHolds(holds);
     }
   } finally {
+    stopSignalRecord();
     printCertificationRecord(run.dir, {questId: options.quest, write});
   }
 }

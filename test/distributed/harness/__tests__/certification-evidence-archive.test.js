@@ -23,7 +23,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import {tmpdir} from 'node:os';
+import {hostname, tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {gzipSync} from 'node:zlib';
 import {
@@ -34,6 +34,7 @@ import {
   formatCertificationRecord,
   keepCertificationVerdict,
   openRunnerCertificationRun,
+  printCertificationRecordOnSignal,
   startCertificationRun,
 } from '../certification-evidence-archive.js';
 import {
@@ -49,6 +50,9 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const stringReplace = Function.call.bind(String.prototype.replace);
 
 const SHA = '0123456789abcdef0123456789abcdef01234567';
+const OTHER_SHA = 'fedcba9876543210fedcba9876543210fedcba98';
+// The directories these tests create are created by this process.
+const THIS_CONTROLLER = Object.freeze({controllerPids: [process.pid]});
 const SCENARIO = 'public-path-multinode-baseline';
 const NODES = Object.freeze(arrayMap([0, 1, 2, 3, 4], (index) => ({
   hostIdentity: {hostId: `boot:${index}`}, id: `n${index}`})));
@@ -426,11 +430,109 @@ describe('committed verdict copies (owner decision: option 1)', () => {
     assert.deepEqual(readdirSync(own.dir), [EVIDENCE_FILE.STARTED]);
     assert.equal(exits.length, 1);
     const adopted = await openRunnerCertificationRun({certify: SHA,
-      certifyRunDir: own.dir, scenario: SCENARIO}, {root});
+      certifyRunDir: own.dir, scenario: SCENARIO}, {controller:
+      THIS_CONTROLLER, root});
     assert.equal(adopted.created, false);
     await assert.rejects(openRunnerCertificationRun({certify: SHA,
-      certifyRunDir: own.dir, scenario: 'another'}, {root}), /started\.json/u);
+      certifyRunDir: own.dir, scenario: 'another'}, {controller:
+      THIS_CONTROLLER, root}), /started\.json/u);
     await assert.rejects(openRunnerCertificationRun({certify: SHA,
       certifyRunDir: null, scenario: null}, {root}), /exactly one --scenario/u);
+  });
+
+  it('R-a: --certify-run-dir adopts only this run\'s fresh directory: ' +
+    'created on this host by the runner\'s parent (process.ppid by ' +
+    'default), holding nothing but started.json', async (t) => {
+    const root = join(scratch(t), 'cert');
+    const own = await startCertificationRun({requestedSha: SHA, root,
+      runStartedAt: '2026-10-05T09:00:00.000Z', scenario: SCENARIO});
+    const adopt = (options) => openRunnerCertificationRun({certify: SHA,
+      certifyRunDir: own.dir, scenario: SCENARIO}, {root, ...options});
+    // The default controller is the runner's parent: an in-process
+    // directory (another pid) is refused, as is an old interrupted one.
+    await assert.rejects(adopt({}), /not this run's/u);
+    await assert.rejects(adopt({controller: {controllerHost: 'elsewhere',
+      controllerPids: [process.pid]}}), /not this run's/u);
+    assert.equal((await adopt({controller: THIS_CONTROLLER})).created, false);
+    // started.json records the controller that created the directory.
+    const started = JSON.parse(readFileSync(join(own.dir,
+      EVIDENCE_FILE.STARTED), 'utf8'));
+    assert.deepEqual(started.controller, {host: hostname(), pid: process.pid});
+    // Anything beside started.json: not a fresh run directory.
+    writeFileSync(join(own.dir, EVIDENCE_FILE.ENTRY), '{}\n');
+    await assert.rejects(adopt({controller: THIS_CONTROLLER}),
+      /not only started\.json: not a fresh run directory/u);
+    await assert.rejects(archiveCertificationRun({controller: THIS_CONTROLLER,
+      entry: entry(true), gates: [], nodes: NODES, outputDir: null, root,
+      runDir: own.dir, scenarioName: SCENARIO}), /not a fresh run directory/u);
+  });
+
+  it('V8: adopting a directory started for another sha is refused', async (t) => {
+    const root = join(scratch(t), 'cert');
+    const other = await startCertificationRun({requestedSha: OTHER_SHA, root,
+      runStartedAt: '2026-10-05T09:00:00.000Z', scenario: SCENARIO});
+    await assert.rejects(openRunnerCertificationRun({certify: SHA,
+      certifyRunDir: other.dir, scenario: SCENARIO}, {controller:
+      THIS_CONTROLLER, root}), new RegExp(`started\\.json names ${SCENARIO} ` +
+      `at ${OTHER_SHA}, not ${SCENARIO} at ${SHA}`, 'u'));
+    await assert.rejects(archiveCertificationRun({controller: THIS_CONTROLLER,
+      entry: entry(true), gates: [], nodes: NODES, outputDir: null, root,
+      runDir: other.dir, scenarioName: SCENARIO}), /started\.json names/u);
+    assert.deepEqual(readdirSync(other.dir), [EVIDENCE_FILE.STARTED]);
+  });
+
+  it('V3: a run recorded as interrupted and later completed (certified) ' +
+    'through its directory is a FAILED sample', async (t) => {
+    const dir = scratch(t);
+    const root = join(dir, 'cert');
+    const out = join(dir, 'out');
+    writeLogs(out);
+    await archiveRun(root, out, '2026-10-05T10:00:00.000Z');
+    const interrupted = await startCertificationRun({requestedSha: SHA, root,
+      runStartedAt: '2026-10-05T11:00:00.000Z', scenario: SCENARIO});
+    const recordedInterrupted = recordAll(root);
+    assert.equal(recordedInterrupted.length, 2);
+    await archiveCertificationRun({controller: THIS_CONTROLLER,
+      entry: entry(true), gates: [], nodes: NODES, outputDir: out, root,
+      runDir: interrupted.dir, scenarioName: SCENARIO});
+    await archiveRun(root, out, '2026-10-05T12:00:00.000Z');
+    await archiveRun(root, out, '2026-10-05T13:00:00.000Z');
+    const recorded = [...recordedInterrupted,
+      ...recordAll(root).slice(-2)];
+    // Every directory now verifies as certified, yet the recorded line of
+    // the 11:00 run says interrupted (manifest none): it is FAILED.
+    const unrecorded = streak(root, 3, null);
+    assert.equal(unrecorded.count, 3);
+    assert.equal(unrecorded.invalidSamples.length, 0);
+    const result = streak(root, 3, recorded);
+    assert.equal(result.count, 2);
+    assert.equal(result.done, false);
+    assert.equal(result.endedBy, 'failed');
+  });
+
+  it('R-b: an interrupted lab harness (SIGINT, SIGTERM) prints the run\'s ' +
+    'record line before it exits; the handlers are removable', async (t) => {
+    const root = join(scratch(t), 'cert');
+    const run = await startCertificationRun({requestedSha: SHA, root,
+      runStartedAt: '2026-10-05T09:00:00.000Z', scenario: SCENARIO});
+    const handlers = new Map();
+    const exits = [];
+    const lines = [];
+    const remove = printCertificationRecordOnSignal(run.dir, {
+      exit: (code) => exits.push(code),
+      off: (signal) => handlers.delete(signal),
+      on: (signal, listener) => handlers.set(signal, listener),
+      questId: 'certification-quest', write: (text) => lines.push(text)});
+    assert.deepEqual([...handlers.keys()], ['SIGINT', 'SIGTERM']);
+    handlers.get('SIGINT')();
+    handlers.get('SIGTERM')();
+    assert.deepEqual(exits, [130, 143]);
+    assert.equal(lines.length, 2);
+    assert.match(lines[0], new RegExp('node scripts/solve\\.js note --id ' +
+      'certification-quest --kind evidence --finding "certification-run ' +
+      `scenario=${SCENARIO} sha=${SHA} start=2026-10-05T09:00:00\\.000Z ` +
+      'outcome=interrupted manifest=none', 'u'));
+    remove();
+    assert.equal(handlers.size, 0);
   });
 });

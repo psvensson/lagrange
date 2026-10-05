@@ -21,7 +21,10 @@ import {
   prepareCertificationRun,
   runHarness,
 } from '../../scripts/lab/harness.js';
-import {parseHostAnswer} from '../../scripts/lab/certification-preflight.js';
+import {
+  keepCertificationEvidence,
+  parseHostAnswer,
+} from '../../scripts/lab/certification-preflight.js';
 import {renderTrendSummary} from '../../scripts/checks/formation-health.js';
 import {
   runFormationSeedBudgetGate,
@@ -37,6 +40,7 @@ import {
   archiveCertificationRun,
   describeCertificationRun,
   formatCertificationRecord,
+  startCertificationRun,
 } from '../../test/distributed/harness/certification-evidence-archive.js';
 import {
   NOT_CERTIFICATION_EVIDENCE,
@@ -178,9 +182,13 @@ const NEVER_HOLD = () => {
   throw new Error('a refused certification run must hold no node');
 };
 
+const NODE_DIGEST = 'node@sha256:43ac6c60b8f8';
+const DISTROLESS_DIGEST = 'gcr.io/distroless/nodejs22-debian12@sha256:8a3e96fe3345';
 const BASE_IMAGE_IDS = Object.freeze({
-  'gcr.io/distroless/nodejs22-debian12': 'sha256:distroless',
-  'node:22-slim': 'sha256:node22slim'});
+  'gcr.io/distroless/nodejs22-debian12': {imageId: 'sha256:8a3e96fe3345',
+    repoDigests: [DISTROLESS_DIGEST]},
+  'node:22-slim': {imageId: 'sha256:43ac6c60b8f8',
+    repoDigests: [NODE_DIGEST]}});
 
 // What the pre-flight's one read-only ssh command answers for a healthy
 // host (certification-preflight.js).
@@ -188,7 +196,7 @@ function healthyHost(node) {
   const now = Date.now();
   return {baseImages: {...BASE_IMAGE_IDS}, bootId: bootIdOf(node),
     clockMs: now, docker: '29.1.3', freeKib: 50 * 1024 * 1024,
-    receivedMs: now, sentMs: now};
+    receivedMs: now, sentMs: now, storageDriver: 'overlayfs'};
 }
 
 function labRun(overrides = {}, write = () => {}) {
@@ -233,8 +241,12 @@ async () => {
     {...healthyHost(node), ...change(healthyHost(node))} : healthyHost(node));
   const cases = [
     [{observeHost: at('adam-laptop', () => ({baseImages: {...BASE_IMAGE_IDS,
-      'node:22-slim': 'sha256:older'}}))},
-    /FAIL base image ids equal on every host: node:22-slim: .*adam-laptop=sha256:older/u],
+      'node:22-slim': {imageId: 'sha256:43ac6c60b8f8',
+        repoDigests: ['node@sha256:older']}}}))},
+    /FAIL base image registry digests equal on every host: node:22-slim: .*adam-laptop=sha256:older/u],
+    [{observeHost: at('adam-laptop', () => ({baseImages: {...BASE_IMAGE_IDS,
+      'node:22-slim': {imageId: 'sha256:43ac6c60b8f8', repoDigests: []}}}))},
+    /FAIL host adam-laptop base images present: no registry digest \(RepoDigests\) for: node:22-slim=sha256:43ac6c60b8f8 \[\]/u],
     [{observeHost: at('tv-dator', () => ({baseImages: {}}))},
       /FAIL host tv-dator base images present: missing: node:22-slim/u],
     [{observeHost: at('lenovo-laptop', () => ({freeKib: 1024}))},
@@ -306,11 +318,79 @@ test('lab certification (B3): the run directory and its started.json ' +
 test('lab certification pre-flight parses a host answer, a clock read as ' +
   'seconds with any fraction width (uutils date on carinas-windows)', () => {
   const answer = parseHostAnswer('BOOT be32\nCLOCK 1791195512.3914937\n' +
-    'DOCKER 29.1.3\nDISK 6438752\nBASE node:22-slim sha256:a\n' +
-    'BASE gcr.io/d missing\n');
-  assert.deepEqual(answer, {baseImages: {'gcr.io/d': 'missing',
-    'node:22-slim': 'sha256:a'}, bootId: 'be32', clockMs: 1791195512391,
-  docker: '29.1.3', freeKib: 6438752});
+    'DOCKER 29.1.3\nDRIVER overlay2\nDISK 6438752\n' +
+    'BASE node:22-slim sha256:a ["node@sha256:43ac"]\n' +
+    'BASE gcr.io/d missing\nBASE local:1 sha256:b []\n');
+  assert.deepEqual(answer, {baseImages: {'gcr.io/d': {imageId: 'missing',
+    repoDigests: []}, 'local:1': {imageId: 'sha256:b', repoDigests: []},
+  'node:22-slim': {imageId: 'sha256:a', repoDigests: ['node@sha256:43ac']}},
+  bootId: 'be32', clockMs: 1791195512391, docker: '29.1.3',
+  freeKib: 6438752, storageDriver: 'overlay2'});
+});
+
+test('lab certification pre-flight compares base images by registry ' +
+  'digest (RepoDigests), never by image Id: the classic and the containerd ' +
+  'image store report different Ids for the same pulled content',
+async () => {
+  const preflight = async (observeHost) => {
+    const lines = [];
+    await labRun({observeHost}, (text) => lines.push(String(text)))
+      .catch(() => {});
+    return lines.join('');
+  };
+  // lenovo-laptop: overlay2 store, config-digest Ids; the rest: containerd
+  // store, manifest-digest Ids; identical RepoDigests -> PASS.
+  const differentIds = await preflight(async (node) => (node.name ===
+    'lenovo-laptop' ? {...healthyHost(node), storageDriver: 'overlay2',
+      baseImages: {
+        'gcr.io/distroless/nodejs22-debian12': {imageId: 'sha256:a5830fa2',
+          repoDigests: [DISTROLESS_DIGEST]},
+        'node:22-slim': {imageId: 'sha256:88f8ba58',
+          repoDigests: ['docker.io/library/' + NODE_DIGEST]}}} :
+    healthyHost(node)));
+  assert.match(differentIds, /^PASS base image registry digests equal on every host/mu);
+  assert.match(differentIds, /^PASS host lenovo-laptop docker: docker 29\.1\.3 \(storage driver overlay2\)/mu);
+  assert.match(differentIds, /^certification preflight: PASS$/mu);
+  // Equal Ids, different registry content -> FAIL.
+  const equalIds = await preflight(async (node) => (node.name ===
+    'adams-gamla' ? {...healthyHost(node), baseImages: {...BASE_IMAGE_IDS,
+      'node:22-slim': {imageId: 'sha256:43ac6c60b8f8',
+        repoDigests: ['node@sha256:0ther']}}} : healthyHost(node)));
+  assert.match(equalIds, /^FAIL base image registry digests equal on every host: node:22-slim: .*adams-gamla=sha256:0ther/mu);
+  // No RepoDigests on one host (a locally built base) -> FAIL, named.
+  const undigested = await preflight(async (node) => (node.name ===
+    'tv-dator' ? {...healthyHost(node), baseImages: {...BASE_IMAGE_IDS,
+      'gcr.io/distroless/nodejs22-debian12': {imageId: 'sha256:8a3e96fe3345',
+        repoDigests: []}}} : healthyHost(node)));
+  assert.match(undigested, /^FAIL host tv-dator base images present: no registry digest \(RepoDigests\) for: gcr\.io\/distroless\/nodejs22-debian12/mu);
+  assert.match(undigested, /^FAIL base image registry digests equal on every host: gcr\.io\/distroless\/nodejs22-debian12: .*tv-dator=missing/mu);
+});
+
+test('lab harness keep-evidence prints the record line of ANY run ' +
+  'directory, an interrupted one (SIGKILL: no line was printed) included, ' +
+  'before it keeps the verdict files', async (t) => {
+  const dir = scratch(t, 'cert-keep-');
+  const interrupted = await startCertificationRun({requestedSha: SHA,
+    root: join(dir, 'cert'), runStartedAt: '2026-10-05T09:00:00.000Z',
+    scenario: SCENARIO});
+  const lines = [];
+  const kept = await keepCertificationEvidence({quest: 'zl',
+    runDir: interrupted.dir, to: join(dir, 'committed'),
+    write: (text) => lines.push(String(text))});
+  const output = lines.join('');
+  assert.match(lines[0], /^certification run record/u);
+  assert.ok(output.includes('node scripts/solve.js note --id zl --kind ' +
+    `evidence --finding "certification-run scenario=${SCENARIO} sha=${SHA} ` +
+    'start=2026-10-05T09:00:00.000Z outcome=interrupted manifest=none ' +
+    '(no manifest: interrupted)"'), output);
+  assert.deepEqual(kept.copied, ['started.json']);
+  // A second keep refuses (never overwritten), but the line is still
+  // printed first.
+  const again = [];
+  await assert.rejects(keepCertificationEvidence({quest: 'zl',
+    runDir: interrupted.dir, to: join(dir, 'committed'),
+    write: (text) => again.push(String(text))}), /EEXIST/u);
+  assert.match(again.join(''), /outcome=interrupted manifest=none/u);
 });
 
 test('lab certification (S5): a sixth listed machine gets no node, so it ' +
