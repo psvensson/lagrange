@@ -79,7 +79,9 @@ const TARGET_THRESHOLD = 12;
 // origin/main ec63fbb00 merge and the native-append inference deletion.
 // 2026-10-04: tightened 1773 -> 1770 on the checker's hint after the
 // origin/main d60c30921 merge (consensus-cutover closeout tree).
-const BASELINE_COUNT = 1770;
+// 2026-10-05: tightened 1770 -> 1769 on the checker's hint (the
+// group-retired tombstone record's text fields go through one helper).
+const BASELINE_COUNT = 1769;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
