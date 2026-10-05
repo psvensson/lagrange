@@ -25,16 +25,23 @@
  *   topology               the scenario's declared certification topology
  *                          (one node per distinct machine) holds on the
  *                          config AND on every placed node's host identity;
- *   publication_convergence after the scenario, the load-mode publication
- *                          convergence gate is `ready === true` from real
- *                          evidence with claimState CLAIMED_LOAD - the
- *                          startup admission (`not claimed at startup`)
- *                          never counts; a bounded wait that expires is a
- *                          reported spent wait;
+ *   publication_convergence after the scenario, a WINDOW of consecutive
+ *                          load-mode probes, each with every node active,
+ *                          complete snapshot coverage and the publication
+ *                          gate `ready === true` from real evidence with
+ *                          claimState CLAIMED_LOAD, at least
+ *                          CERTIFICATION_PUBLICATION_WAIT.CONSECUTIVE_READY
+ *                          polls held for the harness's load-readiness
+ *                          stable window; any other poll restarts the
+ *                          window; the startup admission (`not claimed at
+ *                          startup`) never counts; a bounded wait that
+ *                          expires is a reported spent wait;
  *   voters_at_target       every convergence wait of the run (the
  *                          scenario's and the certification stage's own)
  *                          ended voters_at_target with no under-replication
- *                          tolerance declared;
+ *                          tolerance declared, over a claimed set equal to
+ *                          every partition the wait's authoritative
+ *                          `partitions` read returned (none unclaimed);
  *   host_spread            the scenario's named spread gate passed with
  *                          spreadUnit 'host' on declared machine facts;
  *   no_refusal             the scenario was not refused;
@@ -43,19 +50,27 @@
  *                          the bounded-wait census: any wait outside the
  *                          census's known findings fails; known findings
  *                          are listed with their owner and decided by
- *                          CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY;
- *   commit_identity        the controller checkout the images were built
- *                          from is clean and its HEAD is the requested sha,
- *                          the image carries that commit, and no node booted
- *                          stale source.
+ *                          CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY
+ *                          (today FAIL: a spent wait hides a bug); a line
+ *                          naming the token that is not the reporter's
+ *                          record, an empty log or one without the node's
+ *                          boot provenance line is incomplete evidence;
+ *   commit_identity        observed, never inferred
+ *                          (certification-image-identity.js): a clean
+ *                          checkout at the sha, a fresh labelled build on
+ *                          every host read back, every node's container
+ *                          image and boot provenance line.
  */
 
-import {execFileSync} from 'node:child_process';
 import {createReadStream, existsSync, readFileSync} from 'node:fs';
 import {createInterface} from 'node:readline';
 import {fileURLToPath} from 'node:url';
 import {createGunzip} from 'node:zlib';
 import {WAIT_BOUND_SPENT_EVENT} from '../../../src/logging/wait-bound-spent.js';
+import {
+  commitIdentityProblems,
+  observeNodeImages,
+} from './certification-image-identity.js';
 import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 import {VOTER_TARGET_STATE} from './convergence-voter-targets.js';
 import {fullLogDestPath} from './full-node-log-capture.js';
@@ -63,7 +78,8 @@ import {PUBLICATION_CONVERGENCE_CLAIM_STATE} from './publication-convergence-cla
 import {SCENARIO_OUTCOME, scenarioOutcomeOf} from './scenario-outcome.js';
 import {HOST_IDENTITY_SOURCE, SPREAD_UNIT} from './scenario-host-topology.js';
 
-const {CLUSTER_READINESS_MODE_LOAD} = CLUSTER_BASE_LAYER;
+const {CLUSTER_READINESS_MODE_LOAD, LOAD_READINESS_STABLE_WINDOW_MS} =
+  CLUSTER_BASE_LAYER;
 
 // Module-load captures (the harness tree's ambient-intrinsics rule).
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -75,6 +91,8 @@ const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringReplace = Function.call.bind(String.prototype.replace);
+const stringIncludes = Function.call.bind(String.prototype.includes);
+const objectHasOwn = Object.hasOwn;
 const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const weakMapGet = Function.call.bind(WeakMap.prototype.get);
 const weakMapSet = Function.call.bind(WeakMap.prototype.set);
@@ -83,11 +101,9 @@ const ZERO = 0;
 const ONE = 1;
 const CERTIFICATION_SCHEMA = 'scenario-certification/1';
 const SHA_PATTERN = /^[0-9a-f]{40}$/u;
-const GIT = 'git';
-const GIT_HEAD_ARGS = Object.freeze(['rev-parse', 'HEAD']);
-const GIT_STATUS_ARGS = Object.freeze(['status', '--porcelain']);
-const DIRTY_PATHS_REPORTED = 20;
 const SPENT_WAIT_SAMPLES_PER_WAIT = 3;
+const UNPARSED_SPENT_WAIT_SAMPLES = 3;
+const BOOT_PROVENANCE_FIELD = 'srcFingerprintMatches';
 const LINE_SEPARATOR = '\n';
 const WAIT_PART_SEPARATOR = '+';
 const TABLE_CELL = '|';
@@ -115,26 +131,35 @@ const KNOWN_FINDING_SPENT_WAIT_POLICY_MODE = Object.freeze({
 
 /**
  * THE policy for a spent wait the census lists under "Known findings
- * (owner)". The owner has not ruled that known findings fail certification:
- * each occurrence is listed prominently with its owner and does not fail by
- * itself. Tighten to KNOWN_FINDING_SPENT_WAIT_POLICY_MODE.FAIL to make
- * every known finding fail certification. A wait OUTSIDE the known findings
- * always fails (certification_unexpected_spent_wait).
+ * (owner)". Under the owner's rule "a fully spent timeout always hides a
+ * bug", a certification run with ANY spent wait is not certified: a known
+ * finding fails (certification_known_finding_spent_wait) and is reported
+ * with its owner in the failure detail. Today a run in which SWIM declared a
+ * node DEAD (`swimSuspicionTimeoutMs`) or the 60 s voter-ready wait expired
+ * (`REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS`) cannot certify. Only the owner
+ * relaxes it, explicitly, to LIST_WITH_OWNER. A wait OUTSIDE the known
+ * findings always fails (certification_unexpected_spent_wait).
  */
 const CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY =
-  KNOWN_FINDING_SPENT_WAIT_POLICY_MODE.LIST_WITH_OWNER;
+  KNOWN_FINDING_SPENT_WAIT_POLICY_MODE.FAIL;
 
 // The certification stage's own bounded wait for real publication
-// convergence (after the scenario, before certifying).
+// convergence (after the scenario, before certifying): a window of
+// CONSECUTIVE_READY qualifying polls in a row, held for at least the
+// harness's load-readiness stable window (the cluster's own
+// _resolveLoadReadinessStableWindowMs, as waitForLoadReadinessStability).
 const CERTIFICATION_PUBLICATION_WAIT = Object.freeze({
   BUDGET_MS: 120000,
+  CONSECUTIVE_READY: 3,
   NAME: 'CERTIFICATION_PUBLICATION_WAIT.BUDGET_MS',
   POLL_MS: 2000,
 });
 const PUBLICATION_AWAITED =
-  'load-mode publication convergence gate ready === true from real ' +
-  'evidence (claimState ' +
+  'a window of consecutive load-mode probes with every node active, ' +
+  'complete snapshot coverage and the publication convergence gate ' +
+  'ready === true from real evidence (claimState ' +
   PUBLICATION_CONVERGENCE_CLAIM_STATE.CLAIMED_LOAD + ')';
+const PUBLICATION_POLLS_RECORDED = 8;
 
 const CERTIFICATION_CONDITION = Object.freeze({
   COMMIT_IDENTITY: 'commit_identity',
@@ -149,6 +174,7 @@ const CERTIFICATION_CONDITION = Object.freeze({
 
 const CERTIFICATION_FAILURE = Object.freeze({
   COMMIT_IDENTITY: 'certification_commit_identity_not_exact',
+  EVIDENCE_ARCHIVE: 'certification_evidence_not_archived',
   EVIDENCE_COLLECTION: 'certification_evidence_collection_failed',
   HOST_SPREAD: 'certification_host_spread_not_observed',
   KNOWN_FINDING_SPENT_WAIT: 'certification_known_finding_spent_wait',
@@ -168,13 +194,24 @@ const SPENT_WAIT_CLASS = Object.freeze({
 
 const CONVERGENCE_WAIT_FAILED = 'convergence_wait_failed';
 
+// How the cluster captured node logs: streamed docker stdout/stderr (both
+// reporter sinks), or a bind-mounted pino file (stdout not captured).
+const CAPTURE_MODE = Object.freeze({
+  FILE: 'file_logging',
+  STREAMED: 'streamed_stdout',
+});
+
 
 // What a certified verdict still does NOT certify, stated on every verdict.
 const STANDING_LIMITS = Object.freeze([
   'committed raft membership (raft-rs ConfState) is not observed: the ' +
     'gates measure replicated services/partitions rows',
-  'known-finding spent waits are listed with their owner and decided by ' +
-    'CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY, not hidden',
+  'known-finding spent waits are decided by ' +
+    'CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY (today: any spent wait ' +
+    'fails, reported with its owner)',
+  'the node boot provenance line fingerprints /app/src only; vendor/, ' +
+    'package*.json and the Dockerfile are attested by the image labels of ' +
+    'each node\'s container',
 ]);
 
 /**
@@ -216,16 +253,33 @@ function recordCertificationGate(cluster, record) {
   ledgerOf(cluster)?.gates.push(record);
 }
 
-// How one cluster.waitForConvergence call ended.
+function sortedIds(ids) {
+  return Array.isArray(ids) ? [...ids].sort() : null;
+}
+
+function describeConvergenceEnding(ending) {
+  if (ending.error) {
+    return {error: String(ending.error.message || ending.error),
+      state: CONVERGENCE_WAIT_FAILED, verdict: null};
+  }
+  const verdict = ending.result?.voterTargets ?? null;
+  return {error: null, state: verdict?.state ?? null, verdict};
+}
+
+// How one cluster.waitForConvergence call ended, with the partition sets
+// its verdict covered: expected = every partition the wait's authoritative
+// `partitions` read returned, claimed = the set the verdict judged.
 function recordConvergenceWait(cluster, options, ending) {
   const tolerance = options?.tolerateUnderReplication;
+  const {error, state, verdict} = describeConvergenceEnding(ending);
   ledgerOf(cluster)?.convergenceWaits.push({
-    error: ending.error ? String(ending.error.message || ending.error) : null,
-    state: ending.error ?
-      CONVERGENCE_WAIT_FAILED :
-      (ending.result?.voterTargets?.state ?? null),
+    claimedPartitionIds: sortedIds(verdict?.claimedPartitionIds),
+    error,
+    expectedPartitionIds: sortedIds(verdict?.policyPartitionIds),
+    state,
     toleranceDeclared: tolerance !== undefined,
     toleranceReason: tolerance?.reason ?? null,
+    unclaimedPartitionIds: sortedIds(verdict?.unclaimedPartitionIds),
   });
 }
 
@@ -259,83 +313,15 @@ function readLedger(cluster) {
 
 // --- commit identity -----------------------------------------------------
 
-function defaultGit(args, cwd) {
-  return execFileSync(GIT, args, {cwd, encoding: 'utf8'});
-}
-
-/**
- * Observe the controller checkout the harness builds images from.
- * @param {{requestedSha: string, cwd?: string, git?: Function}} input
- * @return {Object} {requestedSha, headSha, dirty, dirtyPaths,
- *   dirtyPathCount, error}
- */
-function observeCommitIdentity({requestedSha, cwd = process.cwd(),
-  git = defaultGit}) {
-  try {
-    const headSha = stringTrim(String(git([...GIT_HEAD_ARGS], cwd)));
-    const dirtyPaths = arrayFilter(stringSplit(
-      String(git([...GIT_STATUS_ARGS], cwd)), LINE_SEPARATOR),
-    (line) => stringTrim(line).length > ZERO);
-    return {dirty: dirtyPaths.length > ZERO,
-      dirtyPathCount: dirtyPaths.length,
-      dirtyPaths: dirtyPaths.slice(ZERO, DIRTY_PATHS_REPORTED), error: null,
-      headSha, requestedSha: requestedSha ?? null};
-  } catch (error) {
-    return {dirty: null, dirtyPathCount: null, dirtyPaths: [],
-      error: String(error?.message || error), headSha: null,
-      requestedSha: requestedSha ?? null};
-  }
-}
-
-/**
- * Why a commit identity cannot certify, or null.
- * @param {Object|null} identity From observeCommitIdentity.
- * @return {string|null}
- */
-function commitIdentityProblem(identity) {
-  if (!identity || identity.error) {
-    return 'commit identity not observed' +
-      (identity?.error ? ': ' + identity.error : '');
-  }
-  if (!SHA_PATTERN.test(String(identity.requestedSha || ''))) {
-    return 'requested sha is not a full 40-hex commit: ' +
-      JSON.stringify(identity.requestedSha);
-  }
-  if (identity.dirty !== false) {
-    return `checkout is dirty (${identity.dirtyPathCount} path(s))`;
-  }
-  if (identity.headSha !== identity.requestedSha) {
-    return `checkout HEAD ${identity.headSha} is not the requested ` +
-      identity.requestedSha;
-  }
-  return null;
-}
-
-function imageIdentityProblem(image, headSha) {
-  if (!image || typeof image.gitHash !== 'string' ||
-      image.gitHash.length === ZERO) {
-    return 'image commit not observed';
-  }
-  if (image.gitDirty !== false) {
-    return 'image built from a dirty checkout';
-  }
-  return stringStartsWith(String(headSha || ''), image.gitHash) ?
-    null :
-    `image commit ${image.gitHash} is not ${headSha}`;
-}
-
 function evaluateCommitIdentity(evidence) {
   const certification = evidence.certification || {};
-  const identity = certification.commitIdentity || null;
-  const problems = arrayFilter([
-    commitIdentityProblem(identity),
-    imageIdentityProblem(certification.image, identity?.headSha),
-    evidence.staleSourceWarning || null,
-  ], (problem) => problem !== null);
+  const problems = commitIdentityProblems(evidence);
   return condition(CERTIFICATION_CONDITION.COMMIT_IDENTITY,
     problems.length === ZERO, CERTIFICATION_FAILURE.COMMIT_IDENTITY, {
+      build: certification.build || null,
+      identity: certification.commitIdentity || null,
       image: certification.image || null,
-      identity,
+      nodeImages: evidence.nodeImages || [],
       problems,
       staleSourceWarning: evidence.staleSourceWarning || null,
     });
@@ -361,48 +347,112 @@ function isRealPublicationConvergence(gate) {
     gate?.ready === true;
 }
 
+// One poll qualifies for the window only with every node active, complete
+// snapshot coverage and real publication convergence.
+function qualifiesForPublicationWindow(probe) {
+  return probe.allActive === true && probe.completeCoverage === true &&
+    isRealPublicationConvergence(probe.gate);
+}
+
 async function probePublicationGate(cluster, deadline) {
   try {
     const probe = await cluster._probeClusterActiveState(deadline,
       {mode: CLUSTER_READINESS_MODE_LOAD});
-    return {error: null, gate: probe?.publicationConvergenceGate ?? null};
+    return {allActive: probe?.allActive === true,
+      completeCoverage: probe?.snapshotCoverage?.completeCoverage === true,
+      error: null, gate: probe?.publicationConvergenceGate ?? null};
   } catch (error) {
-    return {error: String(error?.message || error), gate: null};
+    return {allActive: false, completeCoverage: false,
+      error: String(error?.message || error), gate: null};
   }
 }
 
+function resolvePublicationStableWindowMs(cluster, clock) {
+  if (Number.isFinite(clock.stableWindowMs)) {
+    return clock.stableWindowMs;
+  }
+  return typeof cluster?._resolveLoadReadinessStableWindowMs === 'function' ?
+    cluster._resolveLoadReadinessStableWindowMs() :
+    LOAD_READINESS_STABLE_WINDOW_MS;
+}
+
+function describePoll(probe, atMs) {
+  return {...describeGateObservation(probe.gate), allActive: probe.allActive,
+    atMs, completeCoverage: probe.completeCoverage, error: probe.error};
+}
+
+function resolvePublicationClock(cluster, clock) {
+  return {
+    budgetMs: clock.budgetMs ?? CERTIFICATION_PUBLICATION_WAIT.BUDGET_MS,
+    now: clock.now || Date.now,
+    pollMs: clock.pollMs ?? CERTIFICATION_PUBLICATION_WAIT.POLL_MS,
+    sleep: clock.sleep ||
+      ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+    window: {consecutiveReady: ZERO, consecutiveReadyRequired:
+      clock.consecutiveReady ?? CERTIFICATION_PUBLICATION_WAIT.CONSECUTIVE_READY,
+    firstReadyAtMs: null, heldMs: ZERO,
+    stableWindowMs: resolvePublicationStableWindowMs(cluster, clock)},
+  };
+}
+
+// One poll moves the window: a qualifying poll extends it, any other
+// restarts it. Returns whether the window is now complete.
+function advancePublicationWindow(window, probe, atMs) {
+  if (qualifiesForPublicationWindow(probe)) {
+    window.consecutiveReady += ONE;
+    window.firstReadyAtMs = window.firstReadyAtMs ?? atMs;
+    window.heldMs = atMs - window.firstReadyAtMs;
+  } else {
+    window.consecutiveReady = ZERO;
+    window.firstReadyAtMs = null;
+    window.heldMs = ZERO;
+  }
+  return window.consecutiveReady >= window.consecutiveReadyRequired &&
+    window.heldMs >= window.stableWindowMs;
+}
+
+function rememberPoll(recent, poll) {
+  recent.push(poll);
+  if (recent.length > PUBLICATION_POLLS_RECORDED) {
+    recent.shift();
+  }
+  return poll;
+}
+
 /**
- * Wait, bounded, for real publication convergence. On expiry the result
- * carries the spent wait: what was awaited and the last observed state.
+ * Wait, bounded, for a WINDOW of real publication convergence. On expiry
+ * the result carries the spent wait: what was awaited and the last
+ * observed state.
  * @param {Object} cluster Exposes _probeClusterActiveState(deadline, opts).
- * @param {Object} [clock] {now, sleep, budgetMs, pollMs}
+ * @param {Object} [clock] {now, sleep, budgetMs, pollMs, stableWindowMs,
+ *   consecutiveReady}
  * @return {Promise<Object>}
  */
 async function observePublicationConvergence(cluster, clock = {}) {
-  const now = clock.now || Date.now;
-  const sleep = clock.sleep ||
-    ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-  const budgetMs = clock.budgetMs ?? CERTIFICATION_PUBLICATION_WAIT.BUDGET_MS;
-  const pollMs = clock.pollMs ?? CERTIFICATION_PUBLICATION_WAIT.POLL_MS;
+  const {budgetMs, now, pollMs, sleep, window} =
+    resolvePublicationClock(cluster, clock);
   const startedAtMs = now();
+  const recent = [];
   let polls = ZERO;
   let last = null;
   while (polls === ZERO || now() - startedAtMs < budgetMs) {
     const probe = await probePublicationGate(cluster, startedAtMs + budgetMs);
+    const atMs = now();
     polls += ONE;
-    last = {...describeGateObservation(probe.gate), error: probe.error};
-    if (isRealPublicationConvergence(probe.gate)) {
+    last = rememberPoll(recent, describePoll(probe, atMs));
+    if (advancePublicationWindow(window, probe, atMs)) {
       return {awaited: PUBLICATION_AWAITED, budgetMs,
         elapsedMs: now() - startedAtMs, lastObserved: last, observed: true,
-        polls, spentWait: null};
+        polls, recentPolls: recent, spentWait: null, window};
     }
     await sleep(pollMs);
   }
   const elapsedMs = now() - startedAtMs;
   return {awaited: PUBLICATION_AWAITED, budgetMs, elapsedMs,
-    lastObserved: last, observed: false, polls,
+    lastObserved: last, observed: false, polls, recentPolls: recent,
     spentWait: {awaited: PUBLICATION_AWAITED, boundMs: budgetMs, elapsedMs,
-      lastObserved: last, wait: CERTIFICATION_PUBLICATION_WAIT.NAME}};
+      lastObserved: last, wait: CERTIFICATION_PUBLICATION_WAIT.NAME},
+    window};
 }
 
 async function runStageConvergenceWait(cluster) {
@@ -435,8 +485,9 @@ function captureCertificationNodes(cluster) {
 /**
  * The certification stage, run only when certification was requested and
  * the scenario's own run returned: a strict convergence wait (no
- * tolerance), then the bounded wait for real publication convergence. It
- * never throws and never changes the scenario's outcome.
+ * tolerance), the bounded window of real publication convergence, then the
+ * image each node's container runs. It never throws and never changes the
+ * scenario's outcome.
  * @param {Object} cluster
  * @param {Object} [clock]
  * @return {Promise<Object>}
@@ -444,8 +495,14 @@ function captureCertificationNodes(cluster) {
 async function runCertificationStage(cluster, clock = {}) {
   const convergenceError = await runStageConvergenceWait(cluster);
   const publication = await observePublicationConvergence(cluster, clock);
-  return {convergenceError, nodes: captureCertificationNodes(cluster),
-    publication};
+  let liveNodes = [];
+  try {
+    liveNodes = cluster.getNodes() || [];
+  } catch (_error) {
+    liveNodes = [];
+  }
+  return {convergenceError, nodeImages: await observeNodeImages(liveNodes),
+    nodes: captureCertificationNodes(cluster), publication};
 }
 
 // --- spent waits ---------------------------------------------------------
@@ -534,48 +591,96 @@ function knownFindingOf(wait, census) {
   return null;
 }
 
-function parseSpentWaitLine(line) {
-  let parsed = null;
+function parseJsonLine(line) {
   try {
-    parsed = JSON.parse(line);
+    const parsed = JSON.parse(line);
+    return parsed && typeof parsed === 'object' ? parsed : null;
   } catch (_error) {
     return null;
   }
-  return parsed && parsed.event === WAIT_BOUND_SPENT_EVENT ? parsed : null;
 }
 
-async function readNodeSpentWaits(path, nodeId) {
-  const spent = [];
+// The reporter's record: event and a named wait. Anything else naming the
+// token (a pretty-printed, prefixed or inspect-style line) is unparsed.
+function isSpentWaitRecord(parsed) {
+  return parsed?.event === WAIT_BOUND_SPENT_EVENT &&
+    typeof parsed.wait === 'string';
+}
+
+function bootProvenanceOf(parsed) {
+  return parsed !== null && objectHasOwn(parsed, BOOT_PROVENANCE_FIELD) ?
+    {bootedSrcFingerprint: parsed.bootedSrcFingerprint ?? null,
+      expectedSrcFingerprint: parsed.expectedSrcFingerprint ?? null,
+      srcFingerprintMatches: parsed[BOOT_PROVENANCE_FIELD]} :
+    null;
+}
+
+function scanLogLine(line, nodeId, scan) {
+  scan.lineCount += ONE;
+  const parsed = parseJsonLine(line);
+  const boot = bootProvenanceOf(parsed);
+  if (boot !== null) {
+    scan.bootProvenance.push(boot);
+  }
+  if (!stringIncludes(line, WAIT_BOUND_SPENT_EVENT)) {
+    return;
+  }
+  if (isSpentWaitRecord(parsed)) {
+    scan.spent.push({...parsed, nodeId});
+    return;
+  }
+  scan.unparsedSpentWaitLines += ONE;
+  if (scan.unparsedSamples.length < UNPARSED_SPENT_WAIT_SAMPLES) {
+    scan.unparsedSamples.push(line.slice(ZERO, 200));
+  }
+}
+
+/**
+ * One node's full log: its spent-wait records, every line that names the
+ * token without being one, and its boot provenance lines. Both reporter
+ * sinks (the logger's error and logConsoleOnly) write through the node's
+ * one pino destination, its stdout, which the streaming capture writes
+ * here (full-node-log-capture.js).
+ * @param {string} path
+ * @param {string} nodeId
+ * @return {Promise<Object>}
+ */
+async function readNodeLogEvidence(path, nodeId) {
+  const scan = {bootProvenance: [], lineCount: ZERO, spent: [],
+    unparsedSamples: [], unparsedSpentWaitLines: ZERO};
   const source = createReadStream(path);
   const gunzip = createGunzip();
   // A read or decompression error ends the iteration with that error.
   source.on('error', (error) => gunzip.destroy(error));
   const lines = createInterface({crlfDelay: Infinity,
     input: source.pipe(gunzip)});
-  let lineCount = ZERO;
   try {
     for await (const line of lines) {
-      lineCount += ONE;
-      const parsed = parseSpentWaitLine(line);
-      if (parsed !== null) {
-        spent.push({...parsed, nodeId});
-      }
+      scanLogLine(line, nodeId, scan);
     }
-    return {error: null, lineCount, nodeId, path, spent};
+    return {...scan, error: null, nodeId, path};
   } catch (error) {
-    return {error: String(error?.message || error), lineCount, nodeId, path,
-      spent};
+    return {...scan, error: String(error?.message || error), nodeId, path};
   } finally {
     lines.close();
     source.destroy();
   }
 }
 
+function summarizeNodeLog(log) {
+  return {bootProvenanceLines: log.bootProvenance.length, error: log.error,
+    lineCount: log.lineCount, nodeId: log.nodeId, path: log.path,
+    spentWaitLines: log.spent.length, unparsedSamples: log.unparsedSamples,
+    unparsedSpentWaitLines: log.unparsedSpentWaitLines};
+}
+
 /**
- * Read every `wait_bound_spent` line from each node's full log of the run.
- * A node without a readable full log leaves the evidence incomplete.
+ * Read every `wait_bound_spent` line and every boot provenance line from
+ * each node's full log of the run. A node without a readable full log
+ * leaves the evidence incomplete.
  * @param {{outputDir: string, scenarioName: string, nodeIds: string[]}} input
- * @return {Promise<Object>} {lines, logs, missingNodeIds, unreadable}
+ * @return {Promise<Object>} {lines, logs, missingNodeIds, unreadable,
+ *   bootProvenance: {nodeId: [...]}}
  */
 async function collectSpentWaitsFromNodeLogs({outputDir, scenarioName,
   nodeIds}) {
@@ -589,17 +694,18 @@ async function collectSpentWaitsFromNodeLogs({outputDir, scenarioName,
       missingNodeIds.push(nodeId);
       continue;
     }
-    logs.push(await readNodeSpentWaits(path, nodeId));
+    logs.push(await readNodeLogEvidence(path, nodeId));
   }
   const lines = [];
+  const bootProvenance = {};
   for (const log of logs) {
     lines.push(...log.spent);
+    bootProvenance[log.nodeId] = log.bootProvenance;
   }
-  return {lines, logs: arrayMap(logs, (log) => ({error: log.error,
-    lineCount: log.lineCount, nodeId: log.nodeId, path: log.path,
-    spentWaitLines: log.spent.length})), missingNodeIds,
-  unreadable: arrayMap(arrayFilter(logs, (log) => log.error !== null),
-    (log) => log.nodeId)};
+  return {bootProvenance, lines, logs: arrayMap(logs, summarizeNodeLog),
+    missingNodeIds,
+    unreadable: arrayMap(arrayFilter(logs, (log) => log.error !== null),
+      (log) => log.nodeId)};
 }
 
 function sampleOf(line) {
@@ -634,8 +740,31 @@ function groupSpentWaits(lines, census) {
     (left.wait < right.wait ? -ONE : ONE));
 }
 
+function nodeLogProblems(logs) {
+  const problems = [];
+  for (const log of logs || []) {
+    if (log.lineCount === ZERO) {
+      problems.push(`empty full log for node ${log.nodeId}`);
+    } else if (log.bootProvenanceLines === ZERO) {
+      problems.push(`full log for node ${log.nodeId} has no boot ` +
+        'provenance line (implausible capture)');
+    }
+    if (log.unparsedSpentWaitLines > ZERO) {
+      problems.push(`${log.unparsedSpentWaitLines} line(s) naming ` +
+        `${WAIT_BOUND_SPENT_EVENT} in node ${log.nodeId}'s log are not the ` +
+        'reporter\'s record');
+    }
+  }
+  return problems;
+}
+
 function spentWaitEvidenceProblems(collected, census, captureWarning) {
   return arrayFilter([
+    ...nodeLogProblems(collected.logs),
+    collected.captureMode && collected.captureMode !== CAPTURE_MODE.STREAMED ?
+      `node logs captured in ${collected.captureMode} mode: the node's ` +
+        'stdout (pre-initialization console lines) is not in the full log' :
+      null,
     census.error ? 'census unreadable: ' + census.error : null,
     collected.missingNodeIds.length > ZERO ?
       'no full log for node(s) ' + collected.missingNodeIds.join(', ') :
@@ -676,6 +805,8 @@ function classifySpentWaits(collected, census,
       CERTIFICATION_FAILURE.KNOWN_FINDING_SPENT_WAIT :
       null,
   ], (failure) => failure !== null);
+  const failureDetail = arrayMap(known, (group) =>
+    `${group.wait} (owner: ${group.owner}; ${group.lines} line(s))`);
   return {
     condition: CERTIFICATION_CONDITION.SPENT_WAITS,
     evidence: {byWait: groups, census: {expectedNone: census.expectedNone,
@@ -686,6 +817,10 @@ function classifySpentWaits(collected, census,
     logs: collected.logs, policy, problems,
     unexpected: arrayMap(unexpected, (group) => group.wait)},
     failure: failures[ZERO] ?? null,
+    failureDetail: failures.length > ZERO ?
+      [...problems, ...arrayMap(unexpected, (group) =>
+        `${group.wait} (unexpected)`), ...failureDetail] :
+      [],
     failures,
     met: failures.length === ZERO,
   };
@@ -764,6 +899,27 @@ function evaluatePublication(evidence) {
       'certification stage did not run (the scenario did not return)'});
 }
 
+// The claim must be every partition that exists: the wait's authoritative
+// partitions read (system, priority and user-table partitions, split
+// children included). A partition outside the claim was never judged.
+function partitionClaimProblems(wait) {
+  const expected = wait.expectedPartitionIds;
+  const unclaimed = wait.unclaimedPartitionIds;
+  if (!Array.isArray(expected) || expected.length === ZERO) {
+    return ['a convergence wait recorded no partition from the partitions ' +
+      'read (expected set empty)'];
+  }
+  if (!Array.isArray(unclaimed) || unclaimed.length > ZERO) {
+    return ['a convergence wait left partitions unclaimed: ' +
+      JSON.stringify(unclaimed ?? null)];
+  }
+  const missing = arrayFilter(expected, (partitionId) =>
+    !arrayIncludes(wait.claimedPartitionIds || [], partitionId));
+  return missing.length > ZERO ?
+    ['a convergence wait did not claim ' + JSON.stringify(missing)] :
+    [];
+}
+
 function evaluateVoters(evidence) {
   const waits = evidence.convergenceWaits || [];
   const problems = [];
@@ -777,6 +933,9 @@ function evaluateVoters(evidence) {
     if (wait.toleranceDeclared) {
       problems.push('an under-replication tolerance was declared: ' +
         String(wait.toleranceReason));
+    }
+    if (wait.state !== CONVERGENCE_WAIT_FAILED) {
+      problems.push(...partitionClaimProblems(wait));
     }
   }
   return condition(CERTIFICATION_CONDITION.VOTERS_AT_TARGET,
@@ -831,6 +990,11 @@ function evaluateHostSpread(evidence) {
     {unit: SPREAD_UNIT.HOST});
 }
 
+function describeFailureDetail(entry) {
+  const detail = entry.failureDetail ?? entry.evidence?.problems ?? [];
+  return detail.length > ZERO ? ` (${detail.join('; ')})` : '';
+}
+
 const CONDITION_EVALUATORS = Object.freeze([
   evaluateScenarioPassed,
   evaluateNoRefusal,
@@ -864,7 +1028,8 @@ function buildCertificationVerdict(evidence) {
     failures,
     notCertified: [
       ...arrayMap(arrayFilter(conditions, (entry) => !entry.met),
-        (entry) => `${entry.condition}: ${entry.failures.join(', ')}`),
+        (entry) => `${entry.condition}: ${entry.failures.join(', ')}` +
+          describeFailureDetail(entry)),
       ...STANDING_LIMITS,
     ],
     requested: true,
@@ -898,28 +1063,39 @@ async function certifyScenarioRun(input) {
   }
 }
 
-async function observeRunSpentWaits(input, nodes) {
+function captureModeOf(cluster) {
+  return typeof cluster?._isFileLoggingEnabled === 'function' &&
+    cluster._isFileLoggingEnabled() === true ?
+    CAPTURE_MODE.FILE :
+    CAPTURE_MODE.STREAMED;
+}
+
+function classifyRunSpentWaits(input, collected, nodes) {
+  return classifySpentWaits({...collected,
+    captureMode: captureModeOf(input.cluster), nodeCount: nodes.length},
+  input.census || readSpentWaitCensus(), input.policy,
+  input.cluster?._incompleteCaptureWarning ?? null);
+}
+
+async function decideScenarioCertification(input) {
+  const stage = input.stage || null;
+  const nodes = stage?.nodes || input.nodes || [];
+  const ledger = readLedger(input.cluster);
   const collected = await collectSpentWaitsFromNodeLogs({
     nodeIds: arrayMap(nodes, (node) => node.id),
     outputDir: input.config?.outputDir ?? null,
     scenarioName: input.scenarioName,
   });
-  return classifySpentWaits({...collected, nodeCount: nodes.length},
-    input.census || readSpentWaitCensus(), input.policy,
-    input.cluster?._incompleteCaptureWarning ?? null);
-}
-
-async function decideScenarioCertification(input) {
-  const nodes = input.stage?.nodes || input.nodes || [];
-  const ledger = readLedger(input.cluster);
   return buildCertificationVerdict({
+    bootProvenance: collected.bootProvenance,
     certification: input.certification,
     convergenceWaits: ledger.convergenceWaits,
     gates: ledger.gates,
+    nodeImages: stage?.nodeImages ?? [],
     nodes,
     scenarioResult: input.scenarioResult,
-    spentWaits: await observeRunSpentWaits(input, nodes),
-    stage: input.stage || null,
+    spentWaits: classifyRunSpentWaits(input, collected, nodes),
+    stage,
     staleSourceWarning: input.cluster?._staleSourceWarning ?? null,
     topology: input.topology || null,
   });
@@ -1028,10 +1204,9 @@ export {
   certifyScenarioRun,
   certifyUnstartedScenario,
   classifySpentWaits,
-  commitIdentityProblem,
   evaluateCertificationStreak,
-  observeCommitIdentity,
   observeConvergenceWait,
+  readLedger as readCertificationLedger,
   parseSpentWaitCensus,
   readSpentWaitCensus,
   recordCertificationGate,

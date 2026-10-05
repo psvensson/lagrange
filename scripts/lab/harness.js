@@ -18,7 +18,7 @@ import {
 import {
   commitIdentityProblem,
   observeCommitIdentity,
-} from '../../test/distributed/harness/scenario-certification.js';
+} from '../../test/distributed/harness/certification-image-identity.js';
 import {
   evaluateScenarioCertificationTopology,
 } from '../../test/distributed/harness/scenario-host-topology.js';
@@ -111,6 +111,7 @@ const CERTIFICATION_TEXT = Object.freeze({
   PASSTHROUGH: 'request certification with --certify SHA, not as a runner ' +
     'passthrough argument',
   TOPOLOGY: 'the generated config cannot certify: ',
+  UNPLACED: ': no node placed (not observed, held or tunneled)\n',
 });
 
 const ERROR_TEXT = Object.freeze({
@@ -480,12 +481,24 @@ function runFormation(args, nodes, environment) {
     .catch(nameRefusedRun);
 }
 
+// One node per machine: the base config's size names how many machines get
+// a node. A listed machine beyond them gets none, so it is neither
+// observed, held nor tunneled.
+async function placedCertificationNodes(baseConfig, nodes) {
+  const size = Number(JSON.parse(await readFile(resolve(baseConfig),
+    TEXT_ENCODING)).size);
+  return Number.isSafeInteger(size) && size >= MIN_CONFIG_SIZE ?
+    nodes.slice(0, size) :
+    nodes;
+}
+
 // A certification run: every check before any hold, the config generated
 // with one node per observed machine, the runner asked for the verdict.
 async function runCertificationHarness(options) {
-  const {nodes, scenario, baseConfig, verbose, extraArgs, dryRun, hold,
+  const {scenario, baseConfig, verbose, extraArgs, dryRun, hold,
     environment, certify, write} = options;
-  const prepared = await prepareCertificationRun(options);
+  const nodes = await placedCertificationNodes(baseConfig, options.nodes);
+  const prepared = await prepareCertificationRun({...options, nodes});
   const timestamp = new Date().toISOString().replace(/[:.]/gu, NAME_SEPARATOR);
   const configPath = resolve(CONFIG_DIR.ROOT, CONFIG_DIR.LEAF,
     `${sanitizeName(scenario)}-certify-${timestamp}.json`);
@@ -501,6 +514,9 @@ async function runCertificationHarness(options) {
   if (dryRun) {
     write(`Would write config: ${configPath}\n`);
     printCertificationDryRun(write, nodes, prepared, topology, args);
+    for (const unplaced of options.nodes.slice(nodes.length)) {
+      write(`  ${unplaced.name}${CERTIFICATION_TEXT.UNPLACED}`);
+    }
     return;
   }
   const holds = await holdHarnessNodes(nodes, sanitizeName(scenario), hold);

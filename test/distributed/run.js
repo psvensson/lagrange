@@ -42,7 +42,11 @@ import {formatLogEntry} from './harness/log-collector.js';
 import {analyzeMemoryLeakFromPlayback} from './harness/memory-leak-analyzer.js';
 import {buildPerformanceDiagnostics} from './harness/performance-diagnostics.js';
 import {resolveRunExitCode} from './harness/scenario-outcome.js';
-import {observeCommitIdentity} from './harness/scenario-certification.js';
+import {
+  certifyArgumentProblem,
+  completeCertificationBuild,
+  prepareCertificationBuild,
+} from './harness/certification-image-identity.js';
 import {writeFailureBundlesForReport} from './harness/failure-bundle.js';
 import {
   formatStateMachinePressurePreflightSummary,
@@ -1056,6 +1060,12 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  // `--certify` without a full 40-hex sha is an error, never an ordinary run.
+  const certifyProblem = certifyArgumentProblem(args.certify);
+  if (certifyProblem !== null) {
+    process.stderr.write(certifyProblem + '\n');
+    process.exit(EXIT_CODES.FAILURE);
+  }
   // --debug-logs is delivered to node containers via the LAGRANGE_* env
   // auto-forward in the cluster's node-env builder. Setting it here (rather than
   // threading a flag through cluster construction) also lets an operator opt in
@@ -1109,7 +1119,10 @@ async function main() {
     if (isLocalDockerConfig(runConfig)) {
       runConfig = await applyScenarioArtifactBind(runConfig);
     }
-    if (resolveFastLocalMode(args, runConfig)) {
+    // A certification run never bind-mounts live source or reuses
+    // containers: it runs the image it builds fresh.
+    if (resolveFastLocalMode(args.certify === null ? args :
+      {...args, fastLocal: false}, runConfig)) {
       runConfig = await applyFastLocalConfig(runConfig);
       if (args.verbose) {
         process.stdout.write(FAST_LOCAL_LOG_PREFIX);
@@ -1175,13 +1188,12 @@ async function main() {
       process.stdout.write(RUNNER_STAGE_SCENARIO_DISCOVERY);
     }
 
-    // A certification run observes the checkout the images are built from
-    // BEFORE the build: its HEAD must be the requested sha, clean.
-    const certification = args.certify === null ? null : {
-      commitIdentity: observeCommitIdentity({requestedSha: args.certify}),
-      requested: true,
-      requestedSha: args.certify,
-    };
+    // A certification run observes the checkout and the build context the
+    // images are built from BEFORE the build (certification-image-identity).
+    const certification = args.certify === null ? null :
+      await prepareCertificationBuild({dockerfile: runConfig.dockerfile,
+        requestedSha: args.certify,
+        srcFingerprint: runConfig?.docker?.srcFingerprint ?? null});
 
     // Build Docker image before running scenarios
     const dockerOperationSink = createDockerOperationSink(args.verbose);
@@ -1191,7 +1203,7 @@ async function main() {
         runConfig,
         args.verbose,
         dockerOperationSink,
-        {extractBuildProgressLine},
+        {extractBuildProgressLine, certification: certification?.build},
       );
     } catch (err) {
       runStatusContext.milestones.failedAt = new Date().toISOString();
@@ -1277,8 +1289,7 @@ async function main() {
 
     runPhaseTiming.setupEndMs = Date.now();
     if (certification !== null) {
-      certification.image = {gitDirty: imageResult?.gitDirty ?? null,
-        gitHash: imageResult?.gitHash ?? null};
+      await completeCertificationBuild(certification, imageResult);
     }
     const {report, hasFailures, hasRefusals, hasUncertified} =
       await runScenarios(runConfig, scenarios, {

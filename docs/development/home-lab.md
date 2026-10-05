@@ -511,13 +511,21 @@ dirty or its `HEAD` is not `SHA`; `--nodes-per-host` is anything but 1; the
 scenario declares no `SCENARIO_CERTIFICATION_REQUIREMENT`; a selected node's
 boot id cannot be read over ssh; two selected nodes share one boot id; or the
 generated config cannot place the scenario's nodes one per machine (four
-machines for five nodes). `--dry-run` performs exactly these checks (it reads
-each machine's boot id over ssh, holds nothing and starts nothing) and prints
-the node-to-machine table, the certification topology and the runner command.
+machines for five nodes). Only the first `size` machines of `--nodes` (the
+base config's size, one node each) take part: a listed machine beyond them
+gets no node and is neither observed, held nor tunneled. `--dry-run` performs
+exactly these checks (it reads each placed machine's boot id over ssh, writes
+the generated config under `.tmp/home-lab`, builds nothing, holds nothing and
+starts nothing) and prints the node-to-machine table, the certification
+topology, the runner command and any unplaced machine.
 A `--certify` passed after `--` is refused: certification is never a
 passthrough.
 
-The run passes `--certify SHA` to the distributed runner. Each scenario's
+The run passes `--certify SHA` to the distributed runner, which builds the
+image fresh on every machine (no label reuse; the shared `distributed-db:test`
+tag is relabelled with this run's build id), reads its labels back, and
+archives the run's evidence under `test-output/certification/` on the
+controller. Each scenario's
 report entry then carries a `certification` block: `certified: true|false`,
 one record per condition with the evidence observed, the named failures, the
 certified `sha` and what is still not certified (see

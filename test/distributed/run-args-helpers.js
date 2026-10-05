@@ -43,8 +43,9 @@ export function createDistributedRunArgHelpers({CLI}) {
         captureLogs = true;
       } else if (arg === '--contract' && i + 1 < argv.length) {
         contract = argv[++i];
-      } else if (arg === CLI.ARG_CERTIFY && i + 1 < argv.length) {
-        certify = argv[++i];
+      } else if (arg === CLI.ARG_CERTIFY) {
+        // A trailing --certify is recorded empty: the runner refuses it.
+        certify = i + 1 < argv.length ? argv[++i] : '';
       }
     }
 

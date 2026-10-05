@@ -31,6 +31,9 @@ import {
   CERTIFICATION_NOT_REQUESTED,
 } from '../../test/distributed/harness/scenario-certification.js';
 import {
+  archiveCertificationRun,
+} from '../../test/distributed/harness/certification-evidence-archive.js';
+import {
   NOT_CERTIFICATION_EVIDENCE,
 } from '../../test/distributed/harness/certification-evidence-statement.js';
 import {ReportWriter} from '../../test/distributed/harness/report-writer.js';
@@ -47,8 +50,20 @@ function scratch(t, prefix) {
 }
 
 function certifiedEntry(sha) {
-  return {certification: {certified: true, requested: true, sha},
-    outcome: 'passed', passed: true, scenario: SCENARIO};
+  return {certification: {certified: true, requested: true,
+    requestedSha: sha, sha}, outcome: 'passed', passed: true,
+  scenario: SCENARIO};
+}
+
+// Durable evidence, oldest first (certification-evidence-archive.js).
+async function archiveEntries(root, entries) {
+  let second = 10;
+  for (const entry of entries) {
+    second += 1;
+    await archiveCertificationRun({entry, gates: [], nodes: [],
+      outputDir: null, root, runStartedAt: `2026-10-05T00:00:${second}Z`,
+      scenarioName: SCENARIO});
+  }
 }
 
 const UNCERTIFIED_PASS = Object.freeze({
@@ -64,25 +79,36 @@ function writeReports(dir, entries) {
 }
 
 test('quest probe, certification: true - only certified runs at ONE sha ' +
-  'count; an uncertified pass does not; another sha does not', (t) => {
+  'from durable evidence count; report files never do; another sha does ' +
+  'not', async (t) => {
   const three = scratch(t, 'cert-probe-');
-  // Oldest first on disk; the probe reads newest first.
-  writeReports(three, [certifiedEntry(SHA), UNCERTIFIED_PASS,
-    certifiedEntry(SHA), certifiedEntry(SHA)]);
+  // Oldest first; the probe reads newest first.
+  await archiveEntries(three, [certifiedEntry(SHA), certifiedEntry(SHA),
+    certifiedEntry(SHA)]);
   const done = scenarioHarnessProbe.measure({certification: true,
-    consecutive: 3, reportDir: three, scenario: SCENARIO});
+    consecutive: 3, evidenceDir: three, scenario: SCENARIO});
   assert.equal(done.done, true);
   assert.equal(done.metric, 0);
   assert.equal(done.detail.certification.sha, SHA);
 
   const mixed = scratch(t, 'cert-probe-sha-');
-  writeReports(mixed, [certifiedEntry(OTHER_SHA), certifiedEntry(SHA),
-    certifiedEntry(SHA)]);
+  await archiveEntries(mixed, [certifiedEntry(OTHER_SHA),
+    certifiedEntry(SHA), certifiedEntry(SHA)]);
   const notDone = scenarioHarnessProbe.measure({certification: true,
-    consecutive: 3, reportDir: mixed, scenario: SCENARIO});
+    consecutive: 3, evidenceDir: mixed, scenario: SCENARIO});
   assert.equal(notDone.done, false);
   assert.equal(notDone.metric, 1);
   assert.equal(notDone.detail.certification.endedBy, 'other_sha');
+
+  // Certified entries in mutable report files are not evidence.
+  const reportsOnly = scratch(t, 'cert-probe-reports-');
+  writeReports(reportsOnly, [certifiedEntry(SHA), certifiedEntry(SHA),
+    certifiedEntry(SHA)]);
+  const fromReports = scenarioHarnessProbe.measure({certification: true,
+    consecutive: 3, evidenceDir: scratch(t, 'cert-probe-empty-'),
+    reportDir: reportsOnly, scenario: SCENARIO});
+  assert.equal(fromReports.done, false);
+  assert.equal(fromReports.measuring, false);
 
   // Three plain passes satisfy a pass streak and NOT a certification one.
   const passes = scratch(t, 'cert-probe-pass-');
@@ -93,7 +119,8 @@ test('quest probe, certification: true - only certified runs at ONE sha ' +
   assert.equal(plain.done, true);
   assert.equal(plain.detail.certification, NOT_CERTIFICATION_EVIDENCE);
   assert.equal(scenarioHarnessProbe.measure({certification: true,
-    consecutive: 3, reportDir: passes, scenario: SCENARIO}).done, false);
+    consecutive: 3, evidenceDir: passes, reportDir: passes,
+    scenario: SCENARIO}).done, false);
 });
 
 const LAB_NODES = Object.freeze([
@@ -110,8 +137,9 @@ function bootIdOf(node) {
 }
 
 function cleanAt(sha) {
-  return () => ({dirty: false, dirtyPathCount: 0, dirtyPaths: [], error: null,
-    headSha: sha, requestedSha: SHA});
+  return () => ({contextDirtyPathCount: 0, contextDirtyPaths: [],
+    contextRoots: [], dirty: false, dirtyPathCount: 0, dirtyPaths: [],
+    error: null, headSha: sha, requestedSha: SHA});
 }
 
 const NEVER_HOLD = () => {
@@ -146,6 +174,26 @@ test('lab certification dry-run: five nodes on five observed machines, ' +
     entry.machineId)).size, 5);
 });
 
+test('lab certification (S5): a sixth listed machine gets no node, so it ' +
+  'is neither observed, held nor tunneled', async (t) => {
+  const observed = [];
+  const extra = {ip: '192.168.86.20', name: 'main-linux',
+    ssh: 'peter@192.168.86.20'};
+  const output = await captureOutput((write) => labRun({
+    nodes: [...LAB_NODES, extra], observeMachine: async (node) => {
+      observed.push(node.name);
+      return bootIdOf(node);
+    }}, write));
+  const configPath = /Would write config: (\S+)/u.exec(output)[1];
+  t.after(() => rmSync(configPath, {force: true}));
+  assert.deepEqual(observed, LAB_NODES.map((node) => node.name));
+  assert.match(output, /main-linux: no node placed \(not observed, held or tunneled\)/u);
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  assert.equal(config.docker.hosts.length, 5);
+  assert.ok(!config.docker.hostInfo.some((entry) =>
+    entry.internalIp === extra.ip));
+});
+
 test('lab certification refuses before any hold: shared boot id, an ' +
   'unobservable machine, a dirty or other checkout, two per host, a ' +
   'passthrough --certify, an undeclared scenario, too few machines',
@@ -159,7 +207,10 @@ async () => {
       return bootIdOf(node);
     }}, /no machine identity for node carinas-windows: ssh timeout/u],
     [{readCommitIdentity: () => ({...cleanAt(SHA)(), dirty: true,
-      dirtyPathCount: 2})}, /checkout is dirty \(2 path\(s\)\)/u],
+      dirtyPathCount: 2})}, /checkout is dirty \(2 path\(s\)/u],
+    [{readCommitIdentity: () => ({...cleanAt(SHA)(), contextDirtyPathCount: 1,
+      contextDirtyPaths: ['!! src/stray.js'], dirty: true})},
+    /1 untracked, ignored or modified path\(s\) inside the build context/u],
     [{readCommitIdentity: cleanAt(OTHER_SHA)},
       /checkout HEAD fedcba.* is not the requested 0123/u],
     [{nodesPerHost: 2}, /--nodes-per-host must be 1 or omitted, got 2/u],
@@ -225,4 +276,32 @@ test('the distributed matrix never certifies: it says so and refuses a ' +
   assert.notEqual(refused.status, 0);
   assert.match(refused.stderr,
     /--certify is owned by the distributed matrix runner/u);
+});
+
+test('certification:verdict (S6) states what it certifies and that it is ' +
+  'not the formation certification; its verdict and metric are unchanged',
+(t) => {
+  const reports = scratch(t, 'cert-verdict-');
+  const json = spawnSync(process.execPath, [
+    'scripts/checks/certification-verdict.js', '--scenario',
+    'rolling-restart', '--reports', reports], {encoding: 'utf8'});
+  const projected = JSON.parse(json.stdout);
+  assert.equal(projected.formationCertification, false);
+  assert.match(projected.certifies, /sealed-bar statistical certification/u);
+  assert.match(projected.statement, /NOT the formation certification/u);
+  assert.ok(projected.shortfalls.length > 0);
+  const metric = spawnSync(process.execPath, [
+    'scripts/checks/certification-verdict.js', '--scenario',
+    'rolling-restart', '--reports', reports, '--metric'], {encoding: 'utf8'});
+  assert.equal(metric.status, json.status);
+  assert.match(metric.stdout, /^\d+\n$/u);
+  assert.match(metric.stderr, /NOT the formation certification/u);
+});
+
+test('the GCP handoff streak (S6) names itself a pass streak, not ' +
+  'certification, in its header and refusal text', () => {
+  const source = readFileSync(
+    'scripts/checks/run-formation-release-handoff-gcp-streak.js', 'utf8');
+  assert.match(source, /^\/\/ Bounded PASS streak \(NOT certification/u);
+  assert.doesNotMatch(source, /runner certifies|certification streak/u);
 });

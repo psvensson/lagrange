@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1965,
+    "unit": 1967,
     "integration": 78,
     "bootstrap": 198,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2248,
-  "digest": "fnv1a32-1e2b61fa",
+  "censusSize": 2250,
+  "digest": "fnv1a32-3c7b4e12",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -785,6 +785,8 @@
     "test/distributed/harness/__tests__/benchmark-whole-topology-resource-accounting-adversarial.test.js": "unit",
     "test/distributed/harness/__tests__/benchmark-whole-topology-resource-accounting.test.js": "unit",
     "test/distributed/harness/__tests__/boundary-transition-scenarios.test.js": "unit",
+    "test/distributed/harness/__tests__/certification-evidence-archive.test.js": "unit",
+    "test/distributed/harness/__tests__/certification-image-identity.test.js": "unit",
     "test/distributed/harness/__tests__/chaos.test.js": "unit",
     "test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js": "unit",
     "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js": "unit",

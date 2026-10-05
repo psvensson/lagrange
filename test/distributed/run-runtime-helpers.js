@@ -13,6 +13,9 @@ import {
   runCertificationStage,
 } from './harness/scenario-certification.js';
 import {
+  archiveReportedCertification,
+} from './harness/certification-evidence-archive.js';
+import {
   SCENARIO_OUTCOME,
   SCENARIO_RESULT_LABEL,
   buildRefusedScenarioResult,
@@ -445,6 +448,18 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       options.certification :
       null;
     let hasUncertified = false;
+    // Every certification-requesting entry is archived as durable evidence
+    // (certification-evidence-archive.js); an unarchived one never certifies.
+    const archiveCertification = async (scenarioName, runStartedAt,
+      extra = {}) => {
+      if (certification === null) {
+        return;
+      }
+      const archived = await archiveReportedCertification({config, report,
+        root: options.certificationEvidenceRoot, runStartedAt, scenarioName,
+        write: options.certificationEvidenceWrite, ...extra});
+      hasUncertified = hasUncertified || archived.error !== null;
+    };
     const dockerOperationSink = typeof options?.dockerOperationSink === 'function' ?
       options.dockerOperationSink :
       null;
@@ -477,6 +492,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           certification, topology.loadFailure, null);
         hasUncertified = hasUncertified || certification !== null;
         report.addResult(scenario.name, topology.loadFailure);
+        await archiveCertification(scenario.name, startedAt);
         continue;
       }
       const refusal = topology.refusal;
@@ -490,6 +506,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
             ' ' + scenario.name + ': ' + refusal.error + '\n');
         }
         report.addResult(scenario.name, refusal);
+        await archiveCertification(scenario.name, startedAt);
         continue;
       }
 
@@ -815,6 +832,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         hasUncertified = hasUncertified || (certification !== null &&
           scenarioResult.certification.certified !== true);
         report.addResult(scenario.name, scenarioResult);
+        await archiveCertification(scenario.name, startedAt,
+          {cluster, nodes: certificationNodes});
       }
     }
 
