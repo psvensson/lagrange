@@ -1,14 +1,20 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   DECISION_BASELINE_FILE_URL,
   FILE_CLASS,
+  TIMER_ONLY_BASELINE_CEILING,
   VIOLATION_KIND,
   buildDecisionBoundaryViolationIdentity,
+  checkTimerOnlyBaselineCeiling,
   classifyFilePath,
+  collectDecisionBoundaryViolations,
   collectDecisionBoundaryViolationsFromSource,
+  collectDecisionBoundaryViolationsWithBaseline,
   collectNamedWaitConstants,
+  collectRefutedDeadClaims,
   withoutUnbaselinableWaitAllowances,
 } from '../../scripts/check-guideline-decision-boundaries.js';
 import {applyCountBaseline} from '../../scripts/guideline-check-shared.js';
@@ -409,8 +415,14 @@ test('the timebox, dead and misnamed non-wait kinds pass; skip is not one',
       'const STEP_TIMEOUT_MS = 3000;',
       'const UNUSED_TIMEOUT_MS = 1; // ends-on: n/a dead',
       'const N_TIMEOUT_MS = 1; // ends-on: N/A clamp',
-      'const L = {SQL_QUERY_TIMEOUT_MS: 100}; // ends-on: n/a misnamed',
+      'const L = {SQL_QUERY_TIMEOUT_MS: 100}; ' +
+        '// ends-on: n/a misnamed (a SQL preview length, not a time)',
     ].join('\n')), []);
+    for (const bare of ['n/a misnamed', 'n/a misnamed (a length)']) {
+      t.same(waitKinds(`const M_TIMEOUT_MS = 1; // ends-on: ${bare}\n`), [
+        ['M_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_MISNAMED_UNJUSTIFIED],
+      ], `"${bare}" does not say what the value is`);
+    }
     t.same(waitKinds('const S_TIMEOUT_MS = 1; // ends-on: n/a skip\n'), [
       ['S_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND],
     ], 'skip is not a non-wait kind: a 1 ms delivery is still a wait');
@@ -462,11 +474,10 @@ test('the shared baseline admits only timer-only waits', async (t) => {
     'an undeclared, unknown-kind or unnamed-event entry is no allowance');
 });
 
-// One-way: the baseline may only shrink. Lower this ceiling when an entry is
-// removed; never raise it. Only timer-only waits may enter the shared
+// One-way: the baseline may only shrink (the ceiling is the audit's own,
+// TIMER_ONLY_BASELINE_CEILING). Only timer-only waits may enter the shared
 // decision-boundary baseline: an undeclared wait, an unknown non-wait kind or
 // an unnamed event can never be baselined.
-const TIMER_ONLY_BASELINE_CEILING = 2;
 
 test('the timer-only baseline cannot grow and holds no stale entry',
   async (t) => {
@@ -534,4 +545,140 @@ test('the governed set is derived from src/, and every member is declared',
     t.same([...fromAudit].sort(), [...fromText].sort(),
       'the audit set equals an independent text scan of src/');
     t.same(undeclared, [], 'every named wait in src/ declares its end');
+  });
+
+test('a timer expiry named anywhere in the event is the timer', async (t) => {
+  for (const timer of [
+    'when the timer fires',
+    'on timer expiry the step is cut',
+    'the request timeout elapses first',
+    'the deadline expires before any reply',
+  ]) {
+    t.same(waitKinds(`const A_TIMEOUT_MS = 1; // ends-on: ${timer}\n`), [
+      ['A_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY],
+    ], `"${timer}" is the timer`);
+  }
+  for (const event of [
+    'the heartbeat timer delivers a fresh lease',
+    'the peer acknowledges the deadline request',
+  ]) {
+    t.same(waitKinds(`const A_TIMEOUT_MS = 1; // ends-on: ${event}\n`), [],
+      `"${event}" names another timer-driven subject`);
+  }
+});
+
+async function writeReferenceFixture(files) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dead-claims-'));
+  const sourceRoot = path.join(root, 'src');
+  await fs.mkdir(sourceRoot, {recursive: true});
+  for (const [name, text] of Object.entries(files)) {
+    await fs.writeFile(path.join(sourceRoot, name), text);
+  }
+  return sourceRoot;
+}
+
+const DEAD_CLAIM_CONSTANTS = [
+  'export const OWNER = Object.freeze({',
+  '  // ends-on: n/a dead (nothing reads it)',
+  '  UNREAD_TIMEOUT_MS: 1,',
+  '  // ends-on: n/a dead (claimed dead, read by reader.js)',
+  '  READ_TIMEOUT_MS: 1,',
+  '  NESTED: {',
+  '    // ends-on: n/a dead (claimed dead, read through a computed key)',
+  '    KEYED_TIMEOUT_MS: 1,',
+  '  },',
+  '});',
+  'export const ESCAPES = {',
+  '  // ends-on: n/a dead (claimed dead, read after the object escapes)',
+  '  ESCAPED_TIMEOUT_MS: 1,',
+  '};',
+  '// ends-on: n/a dead (claimed dead, read below)',
+  'const LOCAL_DEADLINE_MS = 1;',
+  'export const twice = LOCAL_DEADLINE_MS * 2;',
+].join('\n');
+
+const DEAD_CLAIM_READER = [
+  'import {OWNER, ESCAPES} from \'./constants.js\';',
+  'const FIELD = \'KEYED_TIMEOUT_MS\';',
+  'export const read = OWNER.READ_TIMEOUT_MS;',
+  'export const keyed = OWNER.NESTED[FIELD];',
+  'const bag = {ESCAPES};',
+  'export const escaped = bag.ESCAPES.ESCAPED_TIMEOUT_MS;',
+  'export const unrelated = {UNREAD_TIMEOUT_MS: 5}.UNREAD_TIMEOUT_MS;',
+].join('\n');
+
+test('an n/a dead claim is checked against every reference in src/',
+  async (t) => {
+    const sourceRoot = await writeReferenceFixture({
+      'constants.js': DEAD_CLAIM_CONSTANTS,
+      'reader.js': DEAD_CLAIM_READER,
+    });
+    const report = await collectDecisionBoundaryViolations(
+      [path.join(sourceRoot, 'constants.js')],
+      {referenceRoots: [sourceRoot]},
+    );
+    t.same(report.violations
+      .filter((violation) => violation.kind.startsWith('wait_constant'))
+      .map((violation) => [violation.functionName, violation.kind]), [
+      ['OWNER.READ_TIMEOUT_MS', VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED],
+      ['OWNER.NESTED.KEYED_TIMEOUT_MS',
+        VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED],
+      ['ESCAPES.ESCAPED_TIMEOUT_MS',
+        VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED],
+      ['LOCAL_DEADLINE_MS', VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED],
+    ], 'a direct, computed, escaped or declarator read refutes the claim; ' +
+      'a same-named key on an unrelated object does not');
+    await fs.rm(path.dirname(sourceRoot), {recursive: true, force: true});
+  });
+
+test('the live removal backstop cannot be declared dead', async (t) => {
+  const filePath = 'src/node/replica-handler-constants.js';
+  const source = (await fs.readFile(filePath, 'utf8')).replace(
+    /\n(\s*)REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS:/u,
+    '\n$1// ends-on: n/a dead (a false claim)\n$1' +
+      'REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS:',
+  );
+  const claims = collectNamedWaitConstants(source, filePath).filter(
+    (constant) =>
+      constant.name === 'REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS');
+  t.equal(claims.length, 1, 'the false claim is read');
+  t.same((await collectRefutedDeadClaims(claims, ['src']))
+    .map((violation) => violation.kind),
+  [VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED], 'src/ refutes it');
+});
+
+test('the audit itself refuses a timer-only baseline above its ceiling',
+  async (t) => {
+    const allowance = (name) => [buildDecisionBoundaryViolationIdentity({
+      filePath: 'src/x.js',
+      functionName: name,
+      kind: VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY,
+    }), 1];
+    const atCeiling = new Map(Array.from(
+      {length: TIMER_ONLY_BASELINE_CEILING},
+      (_, index) => allowance(`T${index}_TIMEOUT_MS`)));
+    t.same(checkTimerOnlyBaselineCeiling(atCeiling), [], 'at the ceiling');
+    const above = new Map([...atCeiling, allowance('GROWN_TIMEOUT_MS')]);
+    t.same(checkTimerOnlyBaselineCeiling(above)
+      .map((violation) => violation.kind),
+    [VIOLATION_KIND.WAIT_CONSTANT_BASELINE_CEILING], 'one above it is red');
+    t.equal(TIMER_ONLY_BASELINE_CEILING, 2,
+      'the ceiling holds exactly the two cold-reconnect constants');
+    const sourceRoot = await writeReferenceFixture({'empty.js': '\n'});
+    const baselinePath = path.join(path.dirname(sourceRoot), 'baseline.json');
+    await fs.writeFile(baselinePath, JSON.stringify({
+      version: 1,
+      violations: [...above.keys()].map((identity) => {
+        const [filePath, functionName, kind] = JSON.parse(identity);
+        return {filePath, functionName, kind};
+      }),
+    }));
+    const report = await collectDecisionBoundaryViolationsWithBaseline(
+      [sourceRoot],
+      {baselineFileUrl: baselinePath, referenceRoots: [sourceRoot]},
+    );
+    t.same(report.violations.map((violation) => violation.kind),
+      [VIOLATION_KIND.WAIT_CONSTANT_BASELINE_CEILING],
+      'the baselined audit run itself is red');
+    await fs.rm(path.dirname(sourceRoot), {recursive: true, force: true});
   });

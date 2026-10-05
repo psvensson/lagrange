@@ -59,10 +59,13 @@ const CATCHUP_TABLE_RETRY_WAIT = Object.freeze({
 });
 
 // Every deferred retry of one table's catch-up read is spent: the table is
-// left un-hydrated (the caller's summary lists it failed).
+// left un-hydrated (the caller's summary lists it failed). Catch-up re-runs
+// per join and per publication, so the report folds per table and partition.
 function reportCatchupTableRetriesSpent(service, spent) {
+  const partitionId = INITIAL_PARTITION_IDS[spent.tableName] ?? null;
   reportWaitBoundSpent(service.logger, {
     ...CATCHUP_TABLE_RETRY_WAIT,
+    subject: `${spent.tableName}@${partitionId}`,
     boundMs: null,
     elapsedMs: spent.elapsedMs,
     lastObserved: {
@@ -70,7 +73,7 @@ function reportCatchupTableRetriesSpent(service, spent) {
       lastFailure: spent.lastFailure,
       retryAfterMs: spent.retryAfterMs,
     },
-    scope: {nodeId: service.nodeId, tableName: spent.tableName},
+    scope: {nodeId: service.nodeId, tableName: spent.tableName, partitionId},
   });
 }
 

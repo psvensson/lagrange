@@ -104,8 +104,6 @@ const AUTHORITATIVE_READINESS_REPAIR = Object.freeze({
 });
 const MEMBERSHIP_PUBLICATION_PLANNING = Object.freeze({
   ACTIVE_STALE_GRACE_MS: DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  // ends-on: n/a dead (stored as membershipPublicationPlanningSnapshotRefreshTimeoutMs, which nothing reads)
-  REFRESH_TIMEOUT_MS: TIME_MS.SECOND,
 });
 const MEMBERSHIP_PUBLICATION_PLANNING_SOURCE = Object.freeze({
   OWNER_ANSWER: 'owner_answer',

@@ -53,7 +53,6 @@ const ADMIN_LIMIT = Object.freeze({
 
 const ADMIN_CONFIG_KEY = Object.freeze({
   QUERY_TIMEOUT_MS: CONFIG_KEY.ADMIN_QUERY_TIMEOUT_MS,
-  CACHE_DUMP_TIMEOUT_MS: CONFIG_KEY.ADMIN_CACHE_DUMP_TIMEOUT_MS,
 });
 
 const ADMIN_DEFAULT = Object.freeze({
@@ -61,8 +60,6 @@ const ADMIN_DEFAULT = Object.freeze({
   WEBSOCKET_PORT: LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET,
   // ends-on: the SQL engine answers the admin query
   QUERY_TIMEOUT_MS: 30000,
-  // ends-on: n/a dead (stored as cacheDumpTimeoutMs, which nothing reads)
-  CACHE_DUMP_TIMEOUT_MS: 5000,
   HOST: '127.0.0.1',
   ENFORCEMENT_MODE: 'enforce',
 });

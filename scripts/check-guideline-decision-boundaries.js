@@ -1,8 +1,10 @@
 import {KEYS} from 'eslint-visitor-keys';
+import fs from 'node:fs/promises';
 import {
   FILE_CLASS,
   applyCountBaseline,
   buildGuidelineViolationReport,
+  collectJavaScriptFiles,
   loadCountBaseline,
   writeCountBaseline,
   classifyFilePath,
@@ -52,6 +54,9 @@ const VIOLATION_KIND = Object.freeze({
   WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND: 'wait_constant_unknown_non_wait_kind',
   WAIT_CONSTANT_EVENT_UNNAMED: 'wait_constant_end_event_unnamed',
   WAIT_CONSTANT_DECLARED: 'wait_constant_declared',
+  WAIT_CONSTANT_DEAD_REFERENCED: 'wait_constant_dead_referenced',
+  WAIT_CONSTANT_MISNAMED_UNJUSTIFIED: 'wait_constant_misnamed_unjustified',
+  WAIT_CONSTANT_BASELINE_CEILING: 'wait_constant_baseline_ceiling',
 });
 
 const SEMANTIC_NAME_PART = Object.freeze([
@@ -483,9 +488,13 @@ function checkLocalRetryLoop(node, functionName, filePath, violations) {
 // matches WAIT_NAME_PATTERN: an `_MS` declarator always, a member or a
 // name without `_MS` when it holds a bound (isBoundShapedValue). The event
 // names at least EVENT_MIN_WORDS words; one naming the timer (`timer`,
-// `the timer`, `Timer`, ...) is refused; a bound that is not a wait declares
-// `ends-on: n/a <kind>` with a kind from NON_WAIT_KIND. Only timer-only waits
-// may be baselined, one-way (the test ceiling-guards the shared baseline).
+// `the timer`, `Timer`, ...) or the timer's own expiry anywhere in the text
+// (`when the timer fires`, `timer expiry`, `timeout elapses`) is refused; a
+// bound that is not a wait declares `ends-on: n/a <kind>` with a kind from
+// NON_WAIT_KIND. `n/a dead` is checked: the bound has no reference in src/
+// other than its declaration. `n/a misnamed` carries a justification of at
+// least EVENT_MIN_WORDS words. Only timer-only waits may be baselined,
+// one-way: the audit refuses a baseline above TIMER_ONLY_BASELINE_CEILING.
 // Browser code (src/admin/static/*.html) is out of scope: the audit parses
 // .js modules, and a page's fetch timeout is not a server wait.
 const WAIT_NAME_PATTERN =
@@ -494,8 +503,10 @@ const MS_NAME_SUFFIX = '_MS';
 const ENDS_ON_PATTERN = /\/\/\s*ends-on:\s*(.*)$/u;
 const LINE_COMMENT_PREFIX = '//';
 const TIMER_EVENT_PATTERN =
-  /^(?:(?:the|its|a|an|their|this|that)\s+)?timer\b/iu;
-const NON_WAIT_PATTERN = /^n\/a(?:\s+(\S+))?/iu;
+  /^(?:(?:the|its|a|an|their|this|that)\s+)?timer\b|\b(?:timer|timeout|deadline)\b.*\b(?:fires|expires|expiry|elapses|elapsed|runs out)\b/iu;
+const NON_WAIT_PATTERN = /^n\/a(?:\s+(\S+))?(.*)$/iu;
+const NON_WAIT_KIND_DEAD = 'dead';
+const NON_WAIT_KIND_MISNAMED = 'misnamed';
 const EVENT_WORD_PATTERN = /[a-z]/iu;
 const EVENT_MIN_WORDS = 3;
 const EXPORT_NAMED_DECLARATION = 'ExportNamedDeclaration';
@@ -519,10 +530,11 @@ const NON_WAIT_KIND = Object.freeze(new Set([
   'delay',
   // a budget that is the designed normal exit of a best-effort step
   'timebox',
-  // a named bound with no consumer: nothing waits on it
-  'dead',
-  // the name matches the wait pattern but the value is not a time
-  'misnamed',
+  // a named bound with no consumer: no reference in src/ but its declaration
+  NON_WAIT_KIND_DEAD,
+  // the name matches the wait pattern but the value is not a time (with a
+  // justification of at least EVENT_MIN_WORDS words)
+  NON_WAIT_KIND_MISNAMED,
 ]));
 const NODE_TYPE_BINARY = 'BinaryExpression';
 const NODE_TYPE_TEMPLATE = 'TemplateLiteral';
@@ -553,13 +565,29 @@ const WAIT_CONSTANT_REASON = Object.freeze({
     `(${[...NON_WAIT_KIND].join(LOCAL_STR_COMMA_SPACE)})`,
   [VIOLATION_KIND.WAIT_CONSTANT_EVENT_UNNAMED]:
     `ends-on must name the ending event in at least ${EVENT_MIN_WORDS} words`,
+  [VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED]:
+    'ends-on: n/a dead, but src/ references the bound outside its declaration',
+  [VIOLATION_KIND.WAIT_CONSTANT_MISNAMED_UNJUSTIFIED]:
+    'ends-on: n/a misnamed must say what the value is in at least ' +
+    `${EVENT_MIN_WORDS} words`,
+  [VIOLATION_KIND.WAIT_CONSTANT_BASELINE_CEILING]:
+    'the timer-only wait baseline may only shrink; fix the wait instead',
 });
+// One-way: the shared baseline holds at most this many timer-only waits (the
+// two 1 ms cold-reconnect defer constants). Lower it when an entry is
+// removed; never raise it.
+const TIMER_ONLY_BASELINE_CEILING = 2;
+const DECISION_BASELINE_FILE_PATH =
+  'scripts/check-guideline-decision-boundaries-baseline.json';
 // The kinds the shared baseline can never admit: only a timer-only wait has
 // a one-way baseline.
 const UNBASELINABLE_WAIT_KIND = Object.freeze(new Set([
   VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED,
   VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND,
   VIOLATION_KIND.WAIT_CONSTANT_EVENT_UNNAMED,
+  VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED,
+  VIOLATION_KIND.WAIT_CONSTANT_MISNAMED_UNJUSTIFIED,
+  VIOLATION_KIND.WAIT_CONSTANT_BASELINE_CEILING,
 ]));
 
 function isSourceRootPath(filePath) {
@@ -593,6 +621,22 @@ function countEventWords(value) {
     .length;
 }
 
+function classifyNonWaitDeclaration(kind, justification) {
+  if (!NON_WAIT_KIND.has(kind)) {
+    return VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND;
+  }
+  return kind === NON_WAIT_KIND_MISNAMED &&
+    countEventWords(justification) < EVENT_MIN_WORDS ?
+    VIOLATION_KIND.WAIT_CONSTANT_MISNAMED_UNJUSTIFIED :
+    VIOLATION_KIND.WAIT_CONSTANT_DECLARED;
+}
+
+function isDeadClaim(constant) {
+  return constant.kind === VIOLATION_KIND.WAIT_CONSTANT_DECLARED &&
+    NON_WAIT_PATTERN.exec(constant.declaration.value)?.[1]?.toLowerCase() ===
+      NON_WAIT_KIND_DEAD;
+}
+
 function classifyEndsOnDeclaration(declaration) {
   if (!declaration.declared || declaration.value.length === 0) {
     return VIOLATION_KIND.WAIT_CONSTANT_UNDECLARED;
@@ -602,9 +646,7 @@ function classifyEndsOnDeclaration(declaration) {
   }
   const nonWait = NON_WAIT_PATTERN.exec(declaration.value);
   if (nonWait) {
-    return NON_WAIT_KIND.has(nonWait[1]?.toLowerCase()) ?
-      VIOLATION_KIND.WAIT_CONSTANT_DECLARED :
-      VIOLATION_KIND.WAIT_CONSTANT_UNKNOWN_NON_WAIT_KIND;
+    return classifyNonWaitDeclaration(nonWait[1]?.toLowerCase(), nonWait[2]);
   }
   if (countEventWords(declaration.value) < EVENT_MIN_WORDS) {
     return VIOLATION_KIND.WAIT_CONSTANT_EVENT_UNNAMED;
@@ -756,11 +798,14 @@ function collectNamedWaitConstants(source, filePath) {
   return constants;
 }
 
-function checkNamedWaitConstants(source, filePath, violations) {
+function checkNamedWaitConstants(source, filePath, violations, deadClaims) {
   if (!isSourceRootPath(filePath)) {
     return;
   }
   for (const constant of collectNamedWaitConstants(source, filePath)) {
+    if (isDeadClaim(constant)) {
+      deadClaims?.push(constant);
+    }
     if (constant.kind === VIOLATION_KIND.WAIT_CONSTANT_DECLARED) {
       continue;
     }
@@ -788,7 +833,7 @@ function collectDecisionBoundaryViolationsFromSource(
 
   const ast = parseSourceFile(source);
   const violations = [];
-  checkNamedWaitConstants(source, filePath, violations);
+  checkNamedWaitConstants(source, filePath, violations, options.deadWaitClaims);
 
   walkAst(ast, (node, parent, ancestors) => {
     checkSchemaUnsafeWrite(node, filePath, violations);
@@ -813,12 +858,188 @@ function collectDecisionBoundaryViolationsFromSource(
   return violations;
 }
 
+// `n/a dead` is checked against every src/ file, not only the scanned ones.
+// A reference is a use of the declared name path (`ROOT.A.LEAF`, or a
+// declarator's name), a string literal equal to the leaf (computed access),
+// or, once a prefix of the path escapes as a value (passed, spread, stored,
+// destructured), any `.LEAF` access or `{LEAF}` pattern anywhere: an escaped
+// object's members can be read under another name. Over-counting only
+// refuses a claim; it never lets a live bound pass as dead.
+const DEAD_CLAIM_REFERENCE_ROOTS = Object.freeze(['src']);
+const SPECIFIER_TYPE = Object.freeze(new Set([
+  'ExportSpecifier',
+  'ImportDefaultSpecifier',
+  'ImportNamespaceSpecifier',
+  'ImportSpecifier',
+]));
+const OBJECT_PATTERN = 'ObjectPattern';
+
+function isMemberChainTop(node, parent) {
+  return !(parent?.type === LOCAL_STR_MEMBEREXPRESSION && parent.object === node);
+}
+
+// The static part of a member chain: `ROOT.A[key].B` reads through `ROOT.A`.
+function readStaticChainPrefix(node) {
+  let current = node;
+  while (current.type === LOCAL_STR_MEMBEREXPRESSION &&
+      extractTargetName(current) === null) {
+    current = current.object;
+  }
+  return extractTargetName(current);
+}
+
+// The dotted name path a node reads, or null when it is not a read (a
+// binding name, a property key, a member property, a specifier).
+function readReferencePath(node, parent) {
+  if (node.type === LOCAL_STR_MEMBEREXPRESSION) {
+    return isMemberChainTop(node, parent) ? readStaticChainPrefix(node) : null;
+  }
+  if (node.type !== LOCAL_STR_IDENTIFIER || !isMemberChainTop(node, parent) ||
+      SPECIFIER_TYPE.has(parent?.type)) {
+    return null;
+  }
+  const isBindingName =
+    (parent?.type === LOCAL_STR_VARIABLEDECLARATOR && parent.id === node) ||
+    (parent?.type === LOCAL_STR_PROPERTY && parent.key === node &&
+      parent.value !== node) ||
+    (parent?.type === LOCAL_STR_MEMBEREXPRESSION && parent.property === node);
+  return isBindingName ? null : node.name;
+}
+
+function readLeafReference(node, parent) {
+  if (node.type === LOCAL_STR_LITERAL) {
+    return typeof node.value === LOCAL_STR_STRING ? node.value : null;
+  }
+  if (node.type === LOCAL_STR_MEMBEREXPRESSION && !node.computed) {
+    return extractTargetName(node.property);
+  }
+  return node.type === LOCAL_STR_PROPERTY && parent?.type === OBJECT_PATTERN ?
+    readPropertyKeyName(node) :
+    null;
+}
+
+function createDeadClaimTally(claim) {
+  const segments = claim.name.split(MEMBER_PATH_SEPARATOR);
+  return {
+    claim,
+    path: claim.name,
+    leaf: segments[segments.length - 1],
+    prefixes: new Set(segments.slice(0, -1)
+      .map((_, index) => segments.slice(0, index + 1).join(MEMBER_PATH_SEPARATOR))),
+    pathReferences: 0,
+    leafReferences: 0,
+    escaped: false,
+  };
+}
+
+function tallyNode(tally, node, parent) {
+  const referencePath = readReferencePath(node, parent);
+  if (referencePath === tally.path ||
+      referencePath?.startsWith(`${tally.path}${MEMBER_PATH_SEPARATOR}`)) {
+    tally.pathReferences += 1;
+  } else if (tally.prefixes.has(referencePath)) {
+    tally.escaped = true;
+  }
+  if (readLeafReference(node, parent) === tally.leaf) {
+    tally.leafReferences += 1;
+  }
+}
+
+// The declaration itself is neither a read (a declarator name, an object
+// key) nor a leaf occurrence (an object key is not a pattern key).
+function isDeadClaimRefuted(tally) {
+  return tally.pathReferences > 0 ||
+    (tally.escaped && tally.leafReferences > 0);
+}
+
+async function listReferenceFiles(referenceRoots) {
+  const files = [];
+  for (const root of referenceRoots) {
+    files.push(...await collectJavaScriptFiles(root));
+  }
+  return files;
+}
+
+async function tallyDeadClaimReferences(claims, referenceRoots) {
+  const tallies = claims.map(createDeadClaimTally);
+  const needles = [...new Set(tallies.flatMap((tally) =>
+    [tally.leaf, ...tally.prefixes, tally.path]))];
+  for (const filePath of await listReferenceFiles(referenceRoots)) {
+    const source = await fs.readFile(filePath, 'utf8');
+    if (!needles.some((needle) => source.includes(needle))) {
+      continue;
+    }
+    walkAst(parseSourceFile(source), (node, parent) => {
+      for (const tally of tallies) {
+        tallyNode(tally, node, parent);
+      }
+    });
+  }
+  return tallies;
+}
+
+function buildWaitViolation(constant, kind) {
+  return {
+    filePath: constant.filePath,
+    line: constant.line,
+    column: 1,
+    functionName: constant.name,
+    kind,
+    reason: WAIT_CONSTANT_REASON[kind],
+    ruleReference: WAIT_CONSTANT_RULE_REFERENCE,
+  };
+}
+
+function withAddedViolations(report, added) {
+  if (added.length === 0) {
+    return report;
+  }
+  const violations = [...report.violations, ...added];
+  const byFile = new Map();
+  for (const violation of violations) {
+    byFile.set(violation.filePath, (byFile.get(violation.filePath) || 0) + 1);
+  }
+  return {
+    ...report,
+    totalViolationCount: report.totalViolationCount + added.length,
+    filesWithViolations: [...byFile.entries()]
+      .map(([filePath, violationCount]) => ({filePath, violationCount}))
+      .sort((left, right) => right.violationCount - left.violationCount ||
+        left.filePath.localeCompare(right.filePath)),
+    violations,
+  };
+}
+
+/**
+ * The `n/a dead` claims that src/ refutes: each claimed bound that is still
+ * referenced outside its declaration.
+ * @param {Array<Object>} claims - Constants from collectNamedWaitConstants.
+ * @param {Array<string>} referenceRoots - Directories that hold every reader.
+ * @return {Promise<Array<Object>>} One violation per refuted claim.
+ */
+async function collectRefutedDeadClaims(
+  claims,
+  referenceRoots = DEAD_CLAIM_REFERENCE_ROOTS,
+) {
+  if (claims.length === 0) {
+    return [];
+  }
+  const tallies = await tallyDeadClaimReferences(claims, referenceRoots);
+  return tallies.filter(isDeadClaimRefuted).map((tally) =>
+    buildWaitViolation(tally.claim, VIOLATION_KIND.WAIT_CONSTANT_DEAD_REFERENCED));
+}
+
 async function collectDecisionBoundaryViolations(pathsToScan, options = {}) {
-  return buildGuidelineViolationReport(
+  const deadWaitClaims = [];
+  const report = await buildGuidelineViolationReport(
     pathsToScan,
-    options,
+    {...options, deadWaitClaims},
     collectDecisionBoundaryViolationsFromSource,
   );
+  return withAddedViolations(report, await collectRefutedDeadClaims(
+    deadWaitClaims,
+    options.referenceRoots,
+  ));
 }
 
 // 2026-07-28 upward re-anchor: the required CI gate was silently red (the
@@ -852,6 +1073,29 @@ function withoutUnbaselinableWaitAllowances(allowances) {
     !UNBASELINABLE_WAIT_KIND.has(JSON.parse(identity)[2])));
 }
 
+/**
+ * The audit's own one-way ceiling on the shared baseline: more timer-only
+ * wait allowances than TIMER_ONLY_BASELINE_CEILING is a violation.
+ * @param {Map<string, number>} allowances - Baseline identity -> count.
+ * @return {Array<Object>} Zero or one ceiling violation.
+ */
+function checkTimerOnlyBaselineCeiling(allowances) {
+  let timerOnly = 0;
+  for (const [identity, count] of allowances) {
+    if (JSON.parse(identity)[2] === VIOLATION_KIND.WAIT_CONSTANT_TIMER_ONLY) {
+      timerOnly += count;
+    }
+  }
+  if (timerOnly <= TIMER_ONLY_BASELINE_CEILING) {
+    return [];
+  }
+  return [buildWaitViolation({
+    filePath: DECISION_BASELINE_FILE_PATH,
+    line: 1,
+    name: `${timerOnly} timer-only allowances > ${TIMER_ONLY_BASELINE_CEILING}`,
+  }, VIOLATION_KIND.WAIT_CONSTANT_BASELINE_CEILING)];
+}
+
 async function collectDecisionBoundaryViolationsWithBaseline(
   pathsToScan,
   options = {},
@@ -859,15 +1103,15 @@ async function collectDecisionBoundaryViolationsWithBaseline(
   const [report, baseline] = await Promise.all([
     collectDecisionBoundaryViolations(pathsToScan, options),
     loadCountBaseline(
-      DECISION_BASELINE_FILE_URL,
+      options.baselineFileUrl || DECISION_BASELINE_FILE_URL,
       buildDecisionBoundaryViolationIdentity,
     ),
   ]);
-  return applyCountBaseline(
+  return withAddedViolations(applyCountBaseline(
     report,
     withoutUnbaselinableWaitAllowances(baseline),
     buildDecisionBoundaryViolationIdentity,
-  );
+  ), checkTimerOnlyBaselineCeiling(baseline));
 }
 
 function formatHumanSummary(report) {
@@ -910,9 +1154,12 @@ export {
   DECISION_BASELINE_FILE_URL,
   FILE_CLASS,
   RULE_REFERENCE,
+  TIMER_ONLY_BASELINE_CEILING,
   VIOLATION_KIND,
   buildDecisionBoundaryViolationIdentity,
+  checkTimerOnlyBaselineCeiling,
   collectNamedWaitConstants,
+  collectRefutedDeadClaims,
   classifyFilePath,
   collectDecisionBoundaryViolations,
   collectDecisionBoundaryViolationsWithBaseline,

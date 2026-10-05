@@ -235,3 +235,19 @@ test('a wait clock read never requires an owner clock', (t) => {
   t.ok(Number.isFinite(readWaitClock(null)), 'no owner at all');
   t.end();
 });
+
+test('a throwing owner clock falls back to the wall clock, never throws',
+  (t) => {
+    const owner = {
+      now() {
+        throw new Error('owner clock unavailable');
+      },
+    };
+    const before = Date.now();
+    let read;
+    t.doesNotThrow(() => {
+      read = readWaitClock(owner);
+    }, 'a wait start never throws on a broken owner clock');
+    t.ok(read >= before && read <= Date.now(), 'the wall clock is used');
+    t.end();
+  });

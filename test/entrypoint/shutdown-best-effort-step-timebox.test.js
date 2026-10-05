@@ -60,6 +60,7 @@ test('fix C: a fast step completes normally with no time-box warning',
     );
     t.ok(ran, 'the fast step actually ran to completion');
     t.equal(calls.warn.length, 0, 'no time-box warning for a fast step');
+    t.equal(calls.error.length, 0, 'no ERROR for a fast step');
     const timing = calls.info.find((c) =>
       c.ctx?.step === 'shutdownLogsTablePersistence');
     t.equal(timing?.ctx?.timedOut, false, 'timing log marks the step timedOut=false');

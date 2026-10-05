@@ -106,8 +106,6 @@ const REBALANCER_DEFAULT = Object.freeze({
     PERIODIC_CHECK_JITTER_MS: 10000,
     CRITICAL_CHECK_DELAY_MS: 5000,
     MAX_CONCURRENT_MOVES: NUM.FIVE,
-    // ends-on: n/a dead (assigned to moveTimeoutMs, which nothing reads)
-    MOVE_TIMEOUT_MS: 300000,
     MOVE_BATCH_SIZE: 2,
     INTER_BATCH_DELAY_MS: 100,
     REBALANCE_BUDGET: 10,

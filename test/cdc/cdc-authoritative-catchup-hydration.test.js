@@ -926,3 +926,28 @@ test('catch-up retries spent on a deferred table log one wait_bound_spent ' +
   t.equal(spent[0].context.lastObserved.retryAfterMs, 25);
   t.equal(spent[0].context.scope.tableName, 'nodes');
 });
+
+test('a table whose catch-up retries are spent again with the same failure ' +
+  'folds into one line per table and partition', async (t) => {
+  const deferredAnswer = {
+    success: false,
+    error: 'Partition service not found',
+    retryAfterMs: 30,
+    deferRetry: true,
+  };
+  const capture = captureLogger();
+  for (let round = 0; round < 2; round += 1) {
+    const service = createServiceStub({
+      readResults: {nodes: [deferredAnswer, deferredAnswer]},
+    });
+    service.logger = capture.logger;
+    await hydrateCdcPropagatedTablesFromAuthority(service, {
+      tables: ['nodes'],
+      maxAttemptsPerTable: 2,
+    });
+  }
+  const spent = capture.spent();
+  t.equal(spent.length, 1, 'the repeat for the same table folds');
+  t.equal(spent[0].context.scope.partitionId, INITIAL_PARTITION_IDS.nodes,
+    'the report names the partition the table lives on');
+});

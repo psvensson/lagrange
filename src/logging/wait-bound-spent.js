@@ -305,12 +305,20 @@ const DEFAULT_REPORTER = new WaitBoundSpentReporter();
  * Read a wait's clock from its owner: the owner's injected `now()` when it
  * has one, else the wall clock. A site reads its start and its elapsed time
  * through this so that wiring the reporter never adds a hard dependency on
- * an owner clock to the wait's normal path.
+ * an owner clock to the wait's normal path; a throwing owner clock falls
+ * back to the wall clock, so a wait start never throws.
  * @param {Object} owner - The wait's owner (may lack `now`).
  * @return {number} Milliseconds.
  */
 function readWaitClock(owner) {
-  return typeof owner?.now === 'function' ? owner.now() : Date.now();
+  if (typeof owner?.now !== 'function') {
+    return Date.now();
+  }
+  try {
+    return owner.now();
+  } catch {
+    return Date.now();
+  }
 }
 
 /**

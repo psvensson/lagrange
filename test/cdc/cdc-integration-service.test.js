@@ -608,6 +608,15 @@ test('CDCIntegrationService - defers routed writes under pressure when allowed',
     t.equal(sqlCalls, 0, 'deferred routed writes should not hit routed SQL');
   });
 
+function assertSingleRetryBudgetSpentError(t, errors) {
+  t.equal(errors.length, 1,
+    'only the spent retry budget is an ERROR, nothing else');
+  const [, context] = errors[0];
+  t.equal(context.event, 'wait_bound_spent');
+  t.equal(context.wait, 'CDC_DEFAULTS.RETRY_MAX_ATTEMPTS');
+  t.equal(context.lastObserved.errorCode, 'CONTROL_PLANE_PRESSURE_DEGRADED');
+}
+
 test('CDCIntegrationService logs retryable table-write failures as warnings',
   async (t) => {
     const service = new CDCIntegrationService({
@@ -655,12 +664,7 @@ test('CDCIntegrationService logs retryable table-write failures as warnings',
       'retryable table-write deferrals should log at least one warning');
     // The routed-mutation attempt budget spent on a retryable error is a
     // spent wait: exactly one wait_bound_spent ERROR, and no other error.
-    t.equal(errors.length, 1,
-      'only the spent retry budget is an ERROR, nothing else');
-    t.equal(errors[0]?.[1]?.event, 'wait_bound_spent');
-    t.equal(errors[0]?.[1]?.wait, 'CDC_DEFAULTS.RETRY_MAX_ATTEMPTS');
-    t.equal(errors[0]?.[1]?.lastObserved?.errorCode,
-      'CONTROL_PLANE_PRESSURE_DEGRADED');
+    assertSingleRetryBudgetSpentError(t, errors);
     const finalWarningPayload = warnings[warnings.length - 1]?.[1] || null;
     t.equal(finalWarningPayload?.code, 'CONTROL_PLANE_PRESSURE_DEGRADED',
       'warning should preserve the typed error code');

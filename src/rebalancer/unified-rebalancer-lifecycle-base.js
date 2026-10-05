@@ -150,9 +150,6 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     this.maxConcurrentMoves =
       config.get(REBALANCER_CONFIG_KEY.MAX_CONCURRENT_MOVES) ||
       REBALANCER_DEFAULT.UNIFIED.MAX_CONCURRENT_MOVES;
-    this.moveTimeoutMs =
-      config.get(REBALANCER_CONFIG_KEY.MOVE_TIMEOUT_MS) ||
-      REBALANCER_DEFAULT.UNIFIED.MOVE_TIMEOUT_MS;
     this.moveBatchSize =
       config.get(REBALANCER_CONFIG_KEY.MOVE_BATCH_SIZE) ||
       REBALANCER_DEFAULT.UNIFIED.MOVE_BATCH_SIZE;
