@@ -18,7 +18,6 @@ import {
 import {bootstrapOfRequest} from './raft-rs-bootstrap-membership.js';
 import {committedMembershipRefusal} from
   './raft-rs-committed-membership-read.js';
-import {participationGateClosed} from './raft-rs-participation-gate.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   './raft-operation-port-request.js';
@@ -184,9 +183,7 @@ function createRaftRsOperationPort(request) {
       registry.registerReplica(joiningReplicaIdentity),
   });
   const listeners = new Map();
-  let schedulingRequested = false;
   const emit = (eventName, ...args) => {
-    rearmOnGateOpened(eventName);
     for (const listener of listeners.get(eventName) || []) {
       listener(...args.map((value) => deepFreeze(value)));
     }
@@ -281,25 +278,16 @@ function createRaftRsOperationPort(request) {
       tickIntervalMs);
     timer.unref?.();
   };
-  // Scheduling starts only while the participation gate is open (O1 gate):
-  // asked while it is closed, the start is refused typed and remembered, and
-  // the runtime owner's GATE_OPENED re-arms it in the drain that opened the
-  // gate.
+  // Scheduling ticks the group from the moment it is asked for, whether or
+  // not the participation gate is open: the gate (O1) is enforced where a
+  // tick could campaign - the runtime owner enters the core with a gated
+  // group's tick only while its core is not promotable (a learner), which
+  // raft-rs never campaigns - so a gated replica's election timer, and the
+  // check-quorum lease it bounds, keeps running instead of freezing.
   const startScheduling = () => dispatch(() => {
-    if (!dispatcher.participationGateOpen()) {
-      schedulingRequested = true;
-      return participationGateClosed();
-    }
     scheduleTicks();
     return coreOk('scheduling-started');
   });
-  function rearmOnGateOpened(eventName) {
-    if (eventName === RAFT_EVENT.GATE_OPENED && schedulingRequested &&
-        !closed) {
-      schedulingRequested = false;
-      scheduleTicks();
-    }
-  }
   const subscribe = (eventName, listener) => {
     const normalizedEventName = EVENT_ALIAS[eventName] || eventName;
     if (!EVENTS.has(normalizedEventName)) {

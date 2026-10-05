@@ -804,8 +804,20 @@ function thenMaybe(value, continuation) {
 // call's own shape on every path: {ok: true, value, decoded?} once a
 // conf-change entry is applied (or the configuration of any other entry is
 // read), {ok: false, result} naming the core call that failed.
+// A joiner opens from the committed configuration at its bootstrap index j
+// (C_j, itself a learner in it); the configuration entries at or below j are
+// history C_j already contains, so they are not applied to the core again:
+// replayed onto C_j they would walk it through configurations the group
+// never held (a transient sole voter, or no voter at all - which raft-rs
+// refuses) instead of leaving it at C_j. A founder's bootstrap index is 0.
+function foldedIntoBootstrap(group, entry) {
+  return group.gate !== null && group.gate.bootstrapIndex > 0n &&
+    BigInt(entry.index) <= group.gate.bootstrapIndex;
+}
+
 function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
-  if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) {
+  if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType) &&
+      !foldedIntoBootstrap(group, entry)) {
     const decoded = invokeCoreAt(
       group, expectedGeneration,
       'decode_conf_change_entry', entry.entryType, entry.data);
@@ -1323,7 +1335,29 @@ const COMMAND_OPERATION = Object.freeze({
     transferLeadership(group, generation, command.transfer),
 });
 const PROPOSE_CONF_CHANGE = 'propose-conf-change';
+const TICK_COMMAND = 'tick';
 const PROPOSAL_COMMANDS = new Set(['propose', PROPOSE_CONF_CHANGE]);
+
+// What the closed participation gate refuses (O1: a replica not yet
+// admitted may not campaign or serve): every proposal, and a tick that could
+// campaign. A tick of a core that is not promotable - a gated joiner is a
+// learner of its own configuration until the AddNode that opens its gate is
+// applied - enters the core: raft-rs advances its election timer and never
+// campaigns it (tick_election returns before MsgHup), so its view of time,
+// and the check-quorum lease built on it, never freezes. A gated core that
+// is promotable (a record written before joiners opened as learners) keeps
+// the refusal: ticked, it would campaign.
+function gatedCommandRefusal(group, command, expectedGeneration) {
+  if (command.type !== TICK_COMMAND) {
+    return participationGateClosed();
+  }
+  const status = invokeCoreAt(group, expectedGeneration, 'status');
+  if (!status.ok) {
+    return status.result;
+  }
+  return status.value.promotable === false ? null :
+    participationGateClosed();
+}
 
 function performCommand(group, command, expectedGeneration) {
   if (Object.hasOwn(COMMAND_OPERATION, command.type)) {
@@ -1335,7 +1369,10 @@ function performCommand(group, command, expectedGeneration) {
     [PROPOSE_CONF_CHANGE]: ['propose_conf_change_v2', [command.change]],
   }[command.type];
   if (primitive && !group.gateOpen) {
-    return participationGateClosed();
+    const refused = gatedCommandRefusal(group, command, expectedGeneration);
+    if (refused !== null) {
+      return refused;
+    }
   }
   if (!primitive) {
     return outcome(CORE_REFUSED, {

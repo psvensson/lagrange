@@ -8,8 +8,10 @@
 //     founding set, bootstrap index 0; a replica that says it joins an
 //     existing group carries that, and is refused when it holds no record;
 //   COMMITTED (a join) - the group's committed configuration as its leader
-//     answered it at applied index j, plus this replica (owner decision O2),
-//     learners passed through, bootstrap index j;
+//     answered it at applied index j, plus this replica as a learner (owner
+//     decision O2: the joiner names itself; not yet a voter until the
+//     group's applied AddNode admits it), learners passed through, bootstrap
+//     index j;
 //   DURABLE_RECORD (a restart or rejoin) - nothing: the runtime owner restores
 //     the record or refuses.
 //
@@ -70,14 +72,19 @@ function committedBootstrap(membership, registry, peerId) {
   const learners = (membership.learners || []).map(String);
   const self = String(peerId);
   const selfCommittedVoter = voters.includes(self);
-  // Under O2 a joiner names itself in its own bootstrap configuration; the
-  // participation gate, not the configuration, holds it until the group's
-  // own applied AddNode admits it.
+  // Under O2 a joiner names itself in its own bootstrap configuration - as a
+  // learner: not yet a voter is Raft's own meaning of not yet admitted. The
+  // core never campaigns a learner (raft-rs tick_election returns before
+  // MsgHup while the replica is not promotable), so a gated joiner is ticked
+  // like every replica and its election timer, and with it the core's
+  // check-quorum lease, keeps running; the group's applied AddNode that
+  // opens the participation gate is the same entry that makes it a voter.
   const joins = !selfCommittedVoter && !learners.includes(self);
   return {
     source: BOOTSTRAP_MEMBERSHIP_SOURCE.COMMITTED,
-    voters: (joins ? [...voters, self] : voters).sort(ascendingPeerIdOrder),
-    learners,
+    voters: [...voters].sort(ascendingPeerIdOrder),
+    learners: (joins ? [...learners, self] : learners)
+      .sort(ascendingPeerIdOrder),
     bootstrapIndex: String(membership.appliedIndex),
     selfCommittedVoter,
   };

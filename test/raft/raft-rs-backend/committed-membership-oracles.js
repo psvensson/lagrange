@@ -164,14 +164,38 @@ function decoder() {
  *   (index 0 = genesis), voters and learners sorted.
  */
 function logFold(dbFile, groupId, genesisPeerIds) {
+  return foldFrom(dbFile, groupId, {voters: genesisPeerIds, learners: [],
+    bootstrapIndex: 0});
+}
+
+/**
+ * O-a for a COMMITTED joiner: it opens from C_j with itself a learner, and
+ * the configuration entries at or below j are already folded into C_j (not
+ * applied again); only the entries above j are folded over it, an AddNode of
+ * itself moving it to the voters.
+ * @param {string} dbFile - The replica whose log is folded.
+ * @param {string} groupId - The group.
+ * @param {Object} bootstrap - {voters, learners, bootstrapIndex, selfPeerId}:
+ *   C_j as the stamp names it, j, and the joiner's own raft peer id.
+ * @return {Array<Object>} [{index, voters, learners}] as logFold.
+ */
+function bootstrapFold(dbFile, groupId, {voters, learners = [],
+  bootstrapIndex, selfPeerId}) {
+  return foldFrom(dbFile, groupId, {voters,
+    learners: [...learners, selfPeerId], bootstrapIndex});
+}
+
+function foldFrom(dbFile, groupId, start) {
   const wire = bindingWireNumbers();
   const confChangeEntryTypes = new Set([wire.entryType.EntryConfChange,
     wire.entryType.EntryConfChangeV2]);
-  const voters = new Set(genesisPeerIds.map(String));
-  const learners = new Set();
-  const snapshots = [{index: 0, voters: [...voters].sort(), learners: []}];
+  const voters = new Set(start.voters.map(String));
+  const learners = new Set(start.learners.map(String));
+  const snapshots = [{index: 0, voters: [...voters].sort(),
+    learners: [...learners].sort()}];
   for (const entry of durableLog(dbFile, groupId)) {
-    if (confChangeEntryTypes.has(entry.entryType)) {
+    if (confChangeEntryTypes.has(entry.entryType) &&
+        Number(entry.index) > Number(start.bootstrapIndex)) {
       const decoded = decoder().decode_conf_change_entry(
         entry.entryType, entry.data ?? undefined);
       for (const change of decoded.changes) {
@@ -209,6 +233,7 @@ function foldAt(fold, index) {
 
 export {
   bindingWireNumbers,
+  bootstrapFold,
   durableAppliedState,
   durableHardState,
   durableLog,

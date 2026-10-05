@@ -352,8 +352,10 @@ test('M4 (H1 + self): a runtime reconstruction at the transient sole-voter ' +
     commitVoterChange(cluster, RAFT_MEMBERSHIP_OPERATION.ADD_PEER, target);
     const targetPeerId = peerIdIn(cluster, target, target);
     const aSelf = admissionIndexOf(cluster, leader, targetPeerId, j);
-    // The transient index: the removal of b, where the target's replayed
-    // view over {b, t} is {t} alone.
+    // The transient index: the removal of b, where a replay of the history
+    // over {b, t} would be {t} alone. Configuration entries at or below j
+    // are folded into the bootstrap (C_j, the target a learner), so the
+    // target's view there is C_j itself.
     const transient = changeIndices.find((index) =>
       committedAt(cluster, leader, [...stamp.voters, targetPeerId], index)
         .voters.length === 1);
@@ -364,7 +366,7 @@ test('M4 (H1 + self): a runtime reconstruction at the transient sole-voter ' +
       durableOf(cluster, target).applied.appliedIndex === transient,
     [leader]), 'setup: the target replays to the transient index');
     assert.deepEqual(durableOf(cluster, target).applied.voters,
-      [targetPeerId], 'setup: the target view is the sole-voter one');
+      stamp.voters, 'setup: the target view is C_j, not a sole-voter one');
     const before = termAndVote(durableOf(cluster, target).hard);
     const trapped = trapSharedCore(cluster, target);
     assert.equal(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL,
