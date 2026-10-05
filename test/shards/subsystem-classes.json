@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 281,
+    "bootstrap-membership": 282,
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 205,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 144,
-    "storage-raft": 109,
+    "storage-partition": 145,
+    "storage-raft": 110,
     "test-infrastructure": 140,
     "transactions": 15,
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2206,
-  "digest": "fnv1a32-2a0a1f5b",
+  "censusSize": 2209,
+  "digest": "fnv1a32-a4f69dd1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-56779f61",
+  "observationDigest": "fnv1a32-829fc5a3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -267,6 +267,7 @@
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-message-group-founder-open-refusal.test.js": "bootstrap-membership",
     "test/bootstrap/seed-registration-phase.test.js": "bootstrap-membership",
     "test/bootstrap/seed-restart-recovery-gate.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
@@ -1195,6 +1196,7 @@
     "test/partition/partition-descriptor-epoch-contract.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
     "test/partition/partition-legacy-consensus-state.test.js": "storage-partition",
+    "test/partition/partition-peer-cache-identity-record.test.js": "storage-partition",
     "test/partition/partition-port-refusal-outcomes.test.js": "storage-partition",
     "test/partition/partition-raft-storage.test.js": "storage-partition",
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
@@ -1454,6 +1456,7 @@
     "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/identity-record-window.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "storage-raft",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
@@ -2983,6 +2986,12 @@
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": {
       "files": [
         "src/bootstrap/phases/seed-infrastructure-phase.js"
+      ]
+    },
+    "test/bootstrap/seed-message-group-founder-open-refusal.test.js": {
+      "files": [
+        "src/bootstrap/phases/seed-message-groups-phase.js",
+        "src/raft/raft-committed-membership-constants.js"
       ]
     },
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": {
@@ -6638,7 +6647,8 @@
     "test/integration/managed-split-admission-reliability.integration.test.js": {
       "files": [
         "src/bootstrap/phases/seed-partitions-phase.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js"
       ]
     },
     "test/integration/membership-consistency.integration.test.js": {
@@ -7218,9 +7228,14 @@
     "test/node/replica-handler.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
         "src/node/replica-handler-leader-handoff-methods.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-operation-port.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
+        "test/node/replica-handler-identity-record-test-cases.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -7460,6 +7475,11 @@
     "test/partition/partition-legacy-consensus-state.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js"
+      ]
+    },
+    "test/partition/partition-peer-cache-identity-record.test.js": {
+      "files": [
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js"
       ]
     },
     "test/partition/partition-port-refusal-outcomes.test.js": {
@@ -8376,6 +8396,18 @@
         "package.json"
       ]
     },
+    "test/raft/raft-rs-backend/identity-record-window.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": {
       "files": [
         "src/raft/raft-committed-membership-constants.js",
@@ -8504,7 +8536,8 @@
         "src/raft/raft-rs-runtime-owner.js"
       ],
       "env": [
-        "RANDOMIZED_RUNS"
+        "RANDOMIZED_RUNS",
+        "RANDOMIZED_SEED_OFFSET"
       ]
     },
     "test/raft/raft-rs-backend/open-time-identity-refusal.test.js": {
@@ -8666,6 +8699,9 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js"
+      ],
+      "env": [
+        "INGRESS_FUZZ_SEEDS"
       ]
     },
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": {

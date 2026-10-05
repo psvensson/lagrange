@@ -14,7 +14,10 @@
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
-import {REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
+import {
+  REPLICA_HANDLER_LOG_MSG,
+  REPLICA_HANDLER_TYPEOF,
+} from './replica-handler-constants.js';
 
 const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
 // The SERVICES statuses the target writes only after its partition port
@@ -54,4 +57,78 @@ async function observeReplicaIdentityExisted(handler, replicaId) {
     OPENED_REPLICA_STATUSES.has(row?.status);
 }
 
-export {observeReplicaIdentityExisted};
+/**
+ * The identity record of a create that writes its own prior-existence fact
+ * AFTER its port opens (verifier N3, the open-to-SYNCING window): the port
+ * is handed `recorded` and steps nothing until it resolves, so a crash
+ * before the SYNCING write leaves a core that never voted. Null when the
+ * fact is already durable (the identity existed: the record restores, or the
+ * open is refused) or this create writes no status (runtime repair, admitted
+ * only on an ACTIVE row).
+ * @param {Object} options - {existed, skipLifecycleStatusPersistence}.
+ * @return {Object|null} {recorded, release, abandon}.
+ */
+function pendingReplicaIdentityRecord({existed,
+  skipLifecycleStatusPersistence}) {
+  if (existed === true || skipLifecycleStatusPersistence === true) {
+    return null;
+  }
+  const {promise, resolve, reject} = Promise.withResolvers();
+  // An abandoned record releases nothing; nobody else awaits it.
+  promise.catch(() => undefined);
+  return {recorded: promise, release: resolve, abandon: reject};
+}
+
+/**
+ * Write the prior-existence fact (SYNCING) through the status owner's
+ * bounded retry and release the record on its durable acknowledgement only.
+ * A write that ends without it (refused, unknown past the retry bound) logs
+ * the spent wait, abandons the record - the port, which never stepped
+ * anything, is closed by the create's failure path - and rethrows.
+ * @param {Object} handler - The replica handler.
+ * @param {string} replicaId - The replica.
+ * @param {string} partitionId - Its partition.
+ * @param {Object|null} record - The pending identity record, if any.
+ * @return {Promise<void>}
+ */
+async function recordReplicaIdentity(handler, replicaId, partitionId,
+  record) {
+  try {
+    await handler.persistReplicaStatusWithRetry(replicaId,
+      ReplicaStatus.SYNCING, {partitionId});
+  } catch (error) {
+    if (record !== null) {
+      handler.logger.warn(REPLICA_HANDLER_LOG_MSG.IDENTITY_RECORD_WAIT_SPENT, {
+        replicaId,
+        partitionId,
+        awaited: ReplicaStatus.SYNCING,
+        lastObserved: error?.message ?? null,
+        nodeId: handler.nodeId,
+      });
+      record.abandon(error);
+    }
+    throw error;
+  }
+  record?.release();
+}
+
+/**
+ * The create's prior-existence read and, when the fact is not yet durable,
+ * its pending identity record (pendingReplicaIdentityRecord).
+ * @param {Object} handler - The replica handler.
+ * @param {string} replicaId - The replica.
+ * @param {boolean} skipLifecycleStatusPersistence - A runtime repair.
+ * @return {Promise<Object>} {existed, record}.
+ */
+async function observeReplicaIdentity(handler, replicaId,
+  skipLifecycleStatusPersistence) {
+  const existed = await observeReplicaIdentityExisted(handler, replicaId);
+  return {existed, record: pendingReplicaIdentityRecord({existed,
+    skipLifecycleStatusPersistence})};
+}
+
+export {
+  observeReplicaIdentity,
+  observeReplicaIdentityExisted,
+  recordReplicaIdentity,
+};

@@ -82,6 +82,11 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_FAILED_STATUS_WRITE_DEFERRED:
     'Replica failed-status write deferred after retryable control-plane failure',
   UPDATE_STATUS: 'Updating replica status',
+  // The wait for the CREATE target's prior-existence fact (its durable
+  // SYNCING row) ended without it: the port never participated and the
+  // create fails (verifier N3).
+  IDENTITY_RECORD_WAIT_SPENT:
+    'Replica identity record never became durable; the replica never participated',
   UPDATE_STATUS_RETRY:
     'Retrying replica status persistence after retryable control-plane failure',
   CDC_UNAVAILABLE: 'CDC integration service not available',

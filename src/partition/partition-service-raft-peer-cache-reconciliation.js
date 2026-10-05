@@ -93,16 +93,30 @@ function resolvePeerAddressFromService(addressManager, serviceRow, replicaId) {
   return null;
 }
 
+// A row whose replica has not durably recorded that its port opened (a
+// CREATE_REPLICA target writes PENDING and CREATING before its open and
+// SYNCING, its prior-existence fact, after it): that replica steps nothing
+// until the fact is durable (verifier N3), so admitting it as a voter now
+// would count a voter that cannot answer - and, for the group that stores
+// the fact itself (the services partition), make the fact's own write wait
+// on that voter. It is admitted on the row change that records the fact.
+const PEER_ROWS_BEFORE_IDENTITY_RECORD = Object.freeze(new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+]));
+const RETIRED_PEER_ROW_STATUSES = Object.freeze(new Set([
+  ReplicaStatus.FAILED,
+  ReplicaStatus.REMOVING,
+  ReplicaStatus.REMOVED,
+]));
+
 function shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) {
   if (!replicaId || replicaId === partitionService.replicaId) {
     return true;
   }
   const status = serviceRow.status || ReplicaStatus.ACTIVE;
-  return (
-    status === ReplicaStatus.FAILED ||
-    status === ReplicaStatus.REMOVING ||
-    status === ReplicaStatus.REMOVED
-  );
+  return RETIRED_PEER_ROW_STATUSES.has(status) ||
+    PEER_ROWS_BEFORE_IDENTITY_RECORD.has(status);
 }
 
 function addressMatchesReplica(addressManager, address, replicaId) {

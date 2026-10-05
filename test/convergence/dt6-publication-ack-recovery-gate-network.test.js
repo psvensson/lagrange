@@ -363,14 +363,20 @@ t.test('the real ack -> recovery-gate fail-back is deterministic and holds acros
   async (t) => {
     const a = await runAckFailback(5);
     const b = await runAckFailback(5);
+    // The failover winner is drawn by raft-rs's own randomness under check_quorum (owner
+    // 2026-10-05: narrow the tests, no crate fork): its identity is not compared, only that it
+    // is one of the first leader's followers.
     const reduce = (m) => ({
       leaderA: m.leaderA,
-      leaderB: m.leaderB,
       v1Ready: IDS.map((id) => m.afterAckV1[id]?.ready),
       v2Ready: IDS.map((id) => m.afterHeal[id]?.ready),
     });
     t.same(reduce(a), reduce(b),
       'same seed -> identical election, ack-cycle convergence, and fail-back');
+    for (const [name, m] of [['run a', a], ['run b', b]]) {
+      t.ok(IDS.filter((id) => id !== m.leaderA).includes(m.leaderB),
+        `${name}: the failover leader is one of the first leader's followers`);
+    }
 
     const survivors = new Set();
     for (let seed = 0; seed < 10; seed += 1) {

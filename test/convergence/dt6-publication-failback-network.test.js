@@ -236,13 +236,21 @@ t.test('Phase C: heal leaves the migrated epoch stable and the old leader steppe
 t.test('the publication fail-back is deterministic and holds across seeds', async (t) => {
   const a = await runPublicationFailback(5);
   const b = await runPublicationFailback(5);
+  // Same seed: the first election is seed-determined (no lease held); the failover winner and
+  // its exact term are drawn by raft-rs's own randomness under check_quorum (owner 2026-10-05:
+  // narrow the tests, no crate fork), so per run only their shape is asserted.
   t.same(
-    {leaderA: a.leaderA, termA: a.termA, leaderB: a.leaderB, termB: a.termB,
-      epochA: a.afterElection.store.committedEpoch, epochB: a.afterPartition.store.committedEpoch},
-    {leaderA: b.leaderA, termA: b.termA, leaderB: b.leaderB, termB: b.termB,
-      epochA: b.afterElection.store.committedEpoch, epochB: b.afterPartition.store.committedEpoch},
-    'same seed -> identical election, migration, and publication fail-back',
+    {leaderA: a.leaderA, termA: a.termA, epochA: a.afterElection.store.committedEpoch},
+    {leaderA: b.leaderA, termA: b.termA, epochA: b.afterElection.store.committedEpoch},
+    'same seed -> identical first election and publication',
   );
+  for (const [name, m] of [['run a', a], ['run b', b]]) {
+    t.ok(IDS.filter((id) => id !== m.leaderA).includes(m.leaderB),
+      `${name}: the failover leader is one of the first leader's followers`);
+    t.ok(m.termB > m.termA, `${name}: the failover term is above the first term`);
+    t.equal(m.afterPartition.store.committedEpoch, m.termB,
+      `${name}: the fail-back epoch is the failover leader's term`);
+  }
 
   const survivors = new Set();
   for (let seed = 0; seed < 10; seed += 1) {

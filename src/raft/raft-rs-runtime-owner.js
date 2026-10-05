@@ -87,12 +87,15 @@ import {
   createdParticipationGate,
   recordAppliedEntry,
   durableRecordIncompatible,
+  identityUnrecorded,
   participationGateClosed,
   participationGateColumns,
   participationObservation,
   openingWithoutRecordRefusal,
   restoredParticipationGate,
+  recordIdentity,
   settleParticipationGate,
+  withIdentityRecord,
 } from './raft-rs-participation-gate.js';
 import {answerCommittedMembership} from
   './raft-rs-committed-membership-read.js';
@@ -104,6 +107,7 @@ import {
 } from './raft-rs-persistence-admission.js';
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {PARTICIPATION_GATE} from './raft-committed-membership-constants.js';
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 
@@ -474,7 +478,8 @@ function createNodeArguments(group, {restore, record}) {
 // lifecycle owner, durably (the open-time rule): it never opens empty.
 function openingParticipationRefusal(group, opening) {
   if (opening.restore) {
-    group.gate = restoredParticipationGate(opening.record);
+    group.gate = withIdentityRecord(
+      restoredParticipationGate(opening.record), group.identityRecorded);
     group.appliedIndex = BigInt(opening.record.appliedIndex);
     return null;
   }
@@ -485,7 +490,9 @@ function openingParticipationRefusal(group, opening) {
     }
     return refused;
   }
-  group.gate = createdParticipationGate(group.bootstrap, group.peerId);
+  group.gate = withIdentityRecord(
+    createdParticipationGate(group.bootstrap, group.peerId),
+    group.identityRecorded);
   group.appliedIndex = BigInt(RAFT_RS_INITIAL_APPLIED);
   return null;
 }
@@ -1359,7 +1366,17 @@ function gatedCommandRefusal(group, command, expectedGeneration) {
     participationGateClosed();
 }
 
+// While the opening's prior-existence fact is not durable (verifier N3) the
+// core is entered for a status read only: no tick (a founder would campaign
+// and vote for itself), no proposal, campaign, transfer or probe.
+const COMMANDS_BEFORE_IDENTITY_RECORD = new Set([
+  RUNTIME_COMMAND.READ_STATUS, RUNTIME_COMMAND.DRAIN_INBOUND]);
+
 function performCommand(group, command, expectedGeneration) {
+  if (!group.identityRecorded &&
+      !COMMANDS_BEFORE_IDENTITY_RECORD.has(command.type)) {
+    return identityUnrecorded();
+  }
   if (Object.hasOwn(COMMAND_OPERATION, command.type)) {
     return COMMAND_OPERATION[command.type](group, command, expectedGeneration);
   }
@@ -1397,6 +1414,11 @@ function performCommand(group, command, expectedGeneration) {
 }
 
 function drainInbound(group, expectedGeneration, continuation) {
+  if (!group.identityRecorded) {
+    // Nothing delivered before the prior-existence fact is durable is ever
+    // stepped (enqueueStep drops it; this keeps the drain to that rule).
+    group.inbound.length = 0;
+  }
   if (group.inbound.length === 0) {
     return continuation();
   }
@@ -1527,6 +1549,10 @@ function createRuntimeDispatcher(request) {
     replicaIdentity: request.replicaIdentity,
     peerId: request.peerId,
     bootstrap: request.bootstrap,
+    // Whether the opening's prior-existence fact is durable: false only for
+    // an opening whose host writes that fact after the port opened (a
+    // CREATE_REPLICA target), until recordIdentity is asked.
+    identityRecorded: request.identityRecordPending !== true,
     gate: null,
     appliedIndex: null,
     gateOpen: false,
@@ -1604,11 +1630,22 @@ function createRuntimeDispatcher(request) {
       if (group.reseedHold !== null) {
         return recordReseedHold(group);
       }
+      // Before the prior-existence fact is durable a delivery is a lost
+      // message: dropped unstepped, answered as no refusal (its sender sees
+      // an unreachable peer, never a hostile or held one).
+      if (!group.identityRecorded) {
+        return outcome(CORE_OK, {
+          reason: PARTICIPATION_GATE.INBOUND_DROPPED_IDENTITY_UNRECORDED});
+      }
       group.inbound.push(snapshotEnvelope(envelope));
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
     }),
     execute: Object.freeze((command) => executeCommand(group, command)),
+    // The acknowledgement that the opening's prior-existence fact is
+    // durable: taken in the group's turn, so no turn sees it change.
+    recordIdentity: Object.freeze(() =>
+      enqueue(group, () => recordIdentity(group))),
     participationGateOpen: Object.freeze(() => group.gateOpen === true),
     configureTiming: Object.freeze((timing) => {
       group.timing = deepFreeze({...group.timing, ...timing});

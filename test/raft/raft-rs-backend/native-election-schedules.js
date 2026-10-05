@@ -104,6 +104,10 @@ class GuardedSchedule {
     return Number(this.status(name).term);
   }
 
+  applied(name) {
+    return Number(this.status(name).appliedIndex);
+  }
+
   join(leader, name) {
     // The committed read answers once the leader applied an entry of its
     // own term.
@@ -207,6 +211,10 @@ class PlainSchedule {
 
   term(name) {
     return Number(this.status(name).term);
+  }
+
+  applied(name) {
+    return Number(this.status(name).applied);
   }
 
   join(leader, name) {

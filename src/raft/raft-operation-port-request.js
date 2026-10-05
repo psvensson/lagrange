@@ -27,6 +27,15 @@ const RAFT_OPERATION_PORT_REQUEST = Object.freeze({
   // every bootstrap source (the open-time rule, 2026-10-05). Absent is no
   // such proof - a first opening.
   IDENTITY_EXISTED: 'identityExisted',
+  // The acknowledgement that this opening's prior-existence fact is durable:
+  // a promise the opening host settles once the fact it writes AFTER the
+  // port opened (a CREATE_REPLICA target's SYNCING services row) is
+  // durable. Present, the participation gate stays closed for everything -
+  // no delivered envelope is stepped, no tick, proposal or campaign enters
+  // the core - until it resolves (verifier N3: a crash before that write
+  // leaves a core that never voted); a rejection never releases it. Absent,
+  // the fact is already durable or not this opening's to write.
+  IDENTITY_RECORDED: 'identityRecorded',
   // The replica's own durable storage handle. rs-raft keeps a hard state, an
   // applied position, a configuration state and a snapshot beside its
   // entries, so it needs the storage itself, inside whose transactions the

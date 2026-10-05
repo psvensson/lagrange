@@ -11,6 +11,16 @@
 // open when the replica's applied index reaches max(bootstrapIndex,
 // admissionIndex); it holds on the applied index alone, whatever the commit
 // index says, and never delegates to the core's own campaign guard.
+//
+// One more state closes it whatever the indices say: `identityRecorded`
+// false - the opening's prior-existence fact (the CREATE_REPLICA target's
+// SYNCING services row) is not yet durable (verifier N3, the open-to-SYNCING
+// window). Until it is, the replica steps no delivered envelope (no vote or
+// pre-vote grant, no append, nothing that writes its hard state or log; a
+// delivery is dropped as a lost message, never refused to its sender) and
+// enters the core for nothing but a status read, so a crash before that
+// write leaves a core that never voted. Only the acknowledgement of the
+// durable write releases it (an event, never a timer).
 
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
@@ -56,6 +66,19 @@ function createdParticipationGate(bootstrap, peerId) {
 }
 
 /**
+ * The gate an opening establishes, with the group's identity record state
+ * (which no durable record carries: it is the opening host's, and survives
+ * a runtime reconstruction on the group).
+ * @param {Object} gate - {bootstrapIndex, admissionIndex}.
+ * @param {boolean} identityRecorded - Whether the prior-existence fact is
+ *   durable.
+ * @return {Object} {bootstrapIndex, admissionIndex, identityRecorded}.
+ */
+function withIdentityRecord(gate, identityRecorded) {
+  return {...gate, identityRecorded: identityRecorded === true};
+}
+
+/**
  * The gate a durable record restores. A record without a bootstrap index or
  * without an admission index restores closed: nothing in it proves the
  * replica's role.
@@ -92,7 +115,7 @@ function participationGateIndex(gate) {
  * @return {boolean} Whether the replica may participate.
  */
 function participationGateOpen(gate, appliedIndex) {
-  if (gate === null) {
+  if (gate === null || gate.identityRecorded === false) {
     return false;
   }
   const gateIndex = participationGateIndex(gate);
@@ -137,7 +160,41 @@ function participationObservation(gate, appliedIndex) {
     bootstrapIndex: Number(gate.bootstrapIndex),
     admissionIndex: gate.admissionIndex === null ? null :
       Number(gate.admissionIndex),
+    identityRecorded: gate.identityRecorded !== false,
   };
+}
+
+/**
+ * The prior-existence fact became durable (the acknowledgement of its
+ * write): the group's gate may open now, and GATE_OPENED is emitted when it
+ * does. Idempotent.
+ * @param {Object} group - The runtime group.
+ * @return {Object} Frozen CORE_OK outcome.
+ */
+function recordIdentity(group) {
+  group.identityRecorded = true;
+  if (group.gate !== null) {
+    group.gate = withIdentityRecord(group.gate, true);
+    settleParticipationGate(group);
+  }
+  return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+    reason: PARTICIPATION_GATE.IDENTITY_RECORDED});
+}
+
+/**
+ * The typed refusal of every command but a status read while the opening's
+ * prior-existence fact is not durable: retryable, the group stays usable,
+ * and nothing entered the core.
+ * @return {Object} Frozen CORE_REFUSED outcome.
+ */
+function identityUnrecorded() {
+  return deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    reason: PARTICIPATION_GATE.IDENTITY_UNRECORDED,
+    phase: PARTICIPATION_GATE_PHASE,
+    retryable: true,
+    recoveryRequired: false,
+  });
 }
 
 /**
@@ -292,11 +349,14 @@ export {
   admitsReplica,
   createdParticipationGate,
   durableRecordIncompatible,
+  identityUnrecorded,
   openingWithoutRecordRefusal,
   participationGateClosed,
   participationGateColumns,
   participationObservation,
   recordAppliedEntry,
+  recordIdentity,
   restoredParticipationGate,
   settleParticipationGate,
+  withIdentityRecord,
 };

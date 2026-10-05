@@ -26,10 +26,14 @@
 // cutover/design-r3-r4-message-groups-worker-wasm-2026-09-23.md), and the
 // scenario's starved seed loses every group to a joiner whose timeout
 // elapses, so neither the charging transcript nor the charged totals repeat
-// exactly from run to run. Runs are compared on what ambient ancestry could
-// corrupt and the core does not decide: no attributed segment opens without
-// an execution node, the same owners run on the same nodes, and every node
-// charges the same owners.
+// exactly from run to run. Under native check_quorum the leader of each group
+// after a lease, and with it which node hosts the leader-side owners (and a
+// joiner's apply), is drawn by that same randomness (owner 2026-10-05:
+// "narrow the tests", no crate fork). Runs are therefore compared on what
+// ambient ancestry could corrupt and the core does not decide: no attributed
+// segment opens without an execution node (per run), the same set of owners
+// runs (node stripped from owner@node), the same nodes are charged, and the
+// same set of owners is charged across them.
 import {AsyncResource} from 'node:async_hooks';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -68,24 +72,39 @@ function withTranscript(body) {
   });
 }
 
-// Attributed segments opened with no node, and which owner ran on which node.
+// Attributed segments opened with no node, and which owners ran (the node
+// they ran on is leadership-dependent and stripped).
 function attributionShape(entries) {
   const attributed = entries.filter((entry) =>
     !entry.startsWith(`${FORMATION_OWNER.UNATTRIBUTED}${OWNER_NODE_SEPARATOR}`));
   return {
     unbound: attributed.filter((entry) =>
       entry.endsWith(`${OWNER_NODE_SEPARATOR}null`)).length,
-    ownersOnNodes: [...new Set(attributed)].sort(),
+    owners: [...new Set(attributed.map((entry) =>
+      entry.slice(0, entry.lastIndexOf(OWNER_NODE_SEPARATOR))))].sort(),
   };
 }
 
-// Which owners each node was charged for, read from the report.
-function chargingShape(report) {
-  return JSON.stringify(report.formationMetrics.nodes.map((node) => ({
+// Which nodes were charged and which owners were charged across them, read
+// from per-node owner lists ({nodeId, owners}); which node a leader-side
+// owner was charged on is leadership-dependent and not compared.
+function chargingShapeOfNodes(nodes) {
+  return JSON.stringify({
+    nodeIds: nodes.map((node) => node.nodeId),
+    owners: [...new Set(nodes.flatMap((node) => node.owners))].sort(),
+  });
+}
+
+function chargedNodesOf(report) {
+  return report.formationMetrics.nodes.map((node) => ({
     nodeId: node.nodeId,
     owners: Object.keys(node.ownerSegments)
       .filter((owner) => node.ownerSegments[owner] > 0).sort(),
-  })));
+  }));
+}
+
+function chargingShape(report) {
+  return chargingShapeOfNodes(chargedNodesOf(report));
 }
 
 async function sampleShapes(entries, invoke) {
@@ -97,10 +116,10 @@ async function sampleShapes(entries, invoke) {
 function assertSameShapes(observed, reference, name) {
   assert.equal(observed.attribution.unbound, 0,
     `${name}: attributed work opened with no execution node`);
-  assert.deepEqual(observed.attribution.ownersOnNodes,
-    reference.attribution.ownersOnNodes, `${name}: owners ran on other nodes`);
+  assert.deepEqual(observed.attribution.owners,
+    reference.attribution.owners, `${name}: another set of owners ran`);
   assert.equal(observed.charging, reference.charging,
-    `${name}: nodes were charged for other owners`);
+    `${name}: other nodes or other owners were charged`);
 }
 
 test('A. three same-seed runs in one process share one attribution shape',
@@ -114,7 +133,7 @@ test('A. three same-seed runs in one process share one attribution shape',
       for (let run = 0; run < samples.length; run += 1) {
         assertSameShapes(samples[run], samples[0], `run ${run + 1}`);
       }
-      assert.ok(samples[0].attribution.ownersOnNodes.length > 0,
+      assert.ok(samples[0].attribution.owners.length > 0,
         'the transcript is not empty');
     });
   });
@@ -156,7 +175,7 @@ test('D. one generation never supplies identity to the next', async () => {
     const b = await sampleShapes(entries, () => simulate(SEED));
     assertSameShapes(a, a, 'generation A');
     assertSameShapes(b, a, 'generation B');
-    assert.ok(b.attribution.ownersOnNodes.length > 0);
+    assert.ok(b.attribution.owners.length > 0);
   });
 });
 
@@ -203,7 +222,7 @@ test('B. the same seed charges the same owners under plain node and under node -
     const plainNode = execFileSync(
       process.execPath, ['--input-type=module', '-e', script],
       {cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 1 << 24});
-    assert.equal(plainNode, inProcess,
+    assert.equal(chargingShapeOfNodes(JSON.parse(plainNode)), inProcess,
       'the test runner\'s own async activity changed which owners were charged');
   });
 

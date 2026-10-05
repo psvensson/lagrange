@@ -259,13 +259,22 @@ t.test('the real-quorum publication fail-back is deterministic and holds across 
   async (t) => {
     const a = await runQuorumFailback(5);
     const b = await runQuorumFailback(5);
+    // Same seed: the first election, v1 and the healed state are seed-determined; the failover
+    // winner is drawn by raft-rs's own randomness under check_quorum (owner 2026-10-05: narrow
+    // the tests, no crate fork), and vB is keyed by it, so per run only its shape is asserted.
     t.same(
-      {leaderA: a.leaderA, leaderB: a.leaderB,
-        vA: a.afterPublishV1.versions, vB: a.afterFailback.versions, vC: a.afterHeal.versions},
-      {leaderA: b.leaderA, leaderB: b.leaderB,
-        vA: b.afterPublishV1.versions, vB: b.afterFailback.versions, vC: b.afterHeal.versions},
-      'same seed -> identical election, real-quorum fail-back, and convergence',
+      {leaderA: a.leaderA, vA: a.afterPublishV1.versions, vC: a.afterHeal.versions},
+      {leaderA: b.leaderA, vA: b.afterPublishV1.versions, vC: b.afterHeal.versions},
+      'same seed -> identical election, v1 publication and convergence',
     );
+    for (const [name, m] of [['run a', a], ['run b', b]]) {
+      t.ok(IDS.filter((id) => id !== m.leaderA).includes(m.leaderB),
+        `${name}: the failover leader is one of the first leader's followers`);
+      t.equal(m.afterFailback.versions[m.leaderB], 2,
+        `${name}: the failover leader committed v2`);
+      t.equal(m.afterFailback.versions[m.leaderA], 1,
+        `${name}: the partitioned old leader stayed at v1`);
+    }
 
     const survivors = new Set();
     for (let seed = 0; seed < 10; seed += 1) {

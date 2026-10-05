@@ -137,6 +137,14 @@ const COMMITTED_MEMBERSHIP_ANSWER_FIELD = Object.freeze({
 const PARTICIPATION_GATE = Object.freeze({
   GATE_CLOSED: 'participation-gate-closed',
   GATE_OPENED: 'participation gate opened',
+  // The opening's prior-existence fact is not durable yet (verifier N3):
+  // every command but a status read is refused, every delivery dropped.
+  IDENTITY_UNRECORDED: 'participation-gate-identity-unrecorded',
+  // The acknowledgement of that fact's durable write released it.
+  IDENTITY_RECORDED: 'participation-gate-identity-recorded',
+  // A delivery dropped while the fact is not durable: a lost message to its
+  // sender, never a refusal.
+  INBOUND_DROPPED_IDENTITY_UNRECORDED: 'inbound-dropped-identity-unrecorded',
 });
 
 // Where a refusal of the gate was decided (its phase).

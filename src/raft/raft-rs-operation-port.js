@@ -188,6 +188,9 @@ function createRaftRsOperationPort(request) {
       listener(...args.map((value) => deepFreeze(value)));
     }
   };
+  const identityRecorded =
+    request[RAFT_OPERATION_PORT_REQUEST.IDENTITY_RECORDED];
+  const identityRecordPending = typeof identityRecorded?.then === 'function';
   const timers = resolveTimeSource(
     request[RAFT_OPERATION_PORT_REQUEST.SUBSTRATE] || {});
   let tickIntervalMs = tickIntervalOf(timing);
@@ -199,6 +202,7 @@ function createRaftRsOperationPort(request) {
     replicaIdentity,
     peerId,
     bootstrap,
+    identityRecordPending,
     timing,
     timers,
     sendToPeer: required(
@@ -381,6 +385,14 @@ function createRaftRsOperationPort(request) {
     },
   });
   registerRuntimeLifecycle(port, lifecycle);
+  // The release of a pending identity record is its acknowledgement alone:
+  // resolved, the gate may open; rejected (the fact never became durable),
+  // nothing is released and the host closes the port.
+  if (identityRecordPending && dispatcher !== null) {
+    Promise.resolve(identityRecorded).then(
+      () => dispatch(() => dispatcher.recordIdentity()),
+      () => undefined).catch(() => undefined);
+  }
   if (request[RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION] !== true &&
       lifecycle.active) {
     startScheduling();

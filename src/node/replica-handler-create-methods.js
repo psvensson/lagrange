@@ -20,7 +20,7 @@ import {REPLICA_CLEANUP_ERROR_CODE} from
 import {observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
-import {observeReplicaIdentityExisted} from './replica-prior-existence.js';
+import * as priorExistence from './replica-prior-existence.js';
 import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_EVENT,
@@ -476,7 +476,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       let partitionService = null;
       try {
         this.throwIfShuttingDown();
-        const existed = await observeReplicaIdentityExisted(this, replicaId);
+        const {existed, record: identityRecord} = await priorExistence
+          .observeReplicaIdentity(this, replicaId, skipLifecycleStatusPersistence);
         if (!skipLifecycleStatusPersistence) {
           const initialStatusPersisted =
             await this.persistReplicaCreateInitialStatus({
@@ -550,6 +551,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           isJoiningExistingGroup,
           bootstrapMembership: context.bootstrapMembership,
           identityExisted: existed,
+          identityRecorded: identityRecord?.recorded,
           deferCdcPropagationHandshake,
           // Start as learner if joining existing group
           suppressLifecycleLogs: true,
@@ -583,9 +585,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           stage: ReplicaStatus.SYNCING,
         });
         if (!skipLifecycleStatusPersistence) {
-          await this.updateReplicaStatus(replicaId, ReplicaStatus.SYNCING, {
-            partitionId,
-          });
+          await priorExistence.recordReplicaIdentity(this, replicaId, partitionId, identityRecord);
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,

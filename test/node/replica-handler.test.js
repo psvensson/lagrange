@@ -39,6 +39,8 @@ import {
   registerReplicaHandlerCreateTopologyTests,
 } from './replica-handler-create-topology-test-cases.js';
 import {registerReplicaHandlerTailTests} from './replica-handler-tail-test-cases.js';
+import {registerReplicaHandlerIdentityRecordTests} from
+  './replica-handler-identity-record-test-cases.js';
 import {createReplicaLifecycleStateMachineFixture} from
   '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from
@@ -1231,5 +1233,14 @@ test('ReplicaHandler', async (t) => {
     applyGatewayMutationToCache,
     waitForReplicaEvent,
     tempDir,
+  });
+  await registerReplicaHandlerIdentityRecordTests({
+    t,
+    ReplicaHandler,
+    OperationType,
+    ReplicaStatus,
+    ReplicaStateMachine,
+    createMockCDCService,
+    createSeededCache,
   });
 });

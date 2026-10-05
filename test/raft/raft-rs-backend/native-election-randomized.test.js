@@ -13,30 +13,51 @@
 //      leader loss runs on production ports and on raft-rs alone with the
 //      same pre_vote / check_quorum settings (native-election-schedules.js);
 //      wherever plain raft-rs ends with one agreed leader among the live
-//      voters, the guarded stack does too.
+//      voters, the guarded stack does too; and, over EVERY run (no trace
+//      match needed), wherever a quorum of the newest configuration is live
+//      and connected for the final phase, the guarded stack elects within
+//      LIVENESS_BOUND_TIMEOUTS election timeouts of it.
+//
+// RANDOMIZED_RUNS widens a run by hand and RANDOMIZED_SEED_OFFSET moves
+// every seed (fresh seeds without editing the file).
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {
+  PARTITION_TIMING,
+  PartitionNodeCluster,
+} from './partition-node-cluster.js';
 import {durableLog} from './committed-membership-oracles.js';
 import {capturingErrors, lifecycleRow} from './identity-reuse-harness.js';
 import {
   RAFT_RS_CONF_CHANGE_TYPE,
   SCHEDULE_KIND,
 } from './native-election-schedules.js';
+import {tuningOf} from '../../../src/raft/raft-rs-runtime-tuning.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 
 const RUNS = Number(process.env.RANDOMIZED_RUNS || 12);
+const SEED_OFFSET = Number(process.env.RANDOMIZED_SEED_OFFSET || 0);
 const SAFETY_STEPS = 120;
 const HEAL_ROUNDS = 300;
 const LIVENESS_OPS = 6;
 const OP_ROUNDS = 60;
 const FINAL_ROUNDS = 400;
 const LEADER = 'leader';
+// The guarded replicas' election timeout in ticks (one round ticks every live
+// replica once). raft-rs draws each randomized timeout from [et, 2et); a
+// follower's check-quorum lease lasts et ticks after the last leader message.
+// With a quorum live and connected, the first pre-campaign starts within 2et
+// of the phase, its pre-vote and vote take a few delivery rounds, and each
+// split pre-vote or vote costs at most one more randomized timeout (< 2et):
+// ten timeouts leave room for four consecutive splits.
+const ELECTION_TICKS = tuningOf(PARTITION_TIMING).electionTick;
+const LIVENESS_BOUND_TIMEOUTS = 10;
+const LIVENESS_BOUND_ROUNDS = LIVENESS_BOUND_TIMEOUTS * ELECTION_TICKS;
 
 function rng(seed) {
   let state = seed >>> 0 || 1;
@@ -55,7 +76,8 @@ function pick(random, list) {
 }
 
 function seeds(base) {
-  return Array.from({length: RUNS}, (_, index) => base + index * 7919);
+  return Array.from({length: RUNS},
+    (_, index) => base + SEED_OFFSET + index * 7919);
 }
 
 // One step of the adversarial-but-correct network: deliver a random subset
@@ -243,24 +265,46 @@ function livenessRun(Kind, seed) {
       schedule.run(live(), OP_ROUNDS);
       schedule.onlyHeartbeatsTo.clear();
     }
-    const elected = schedule.run(live(), FINAL_ROUNDS, () => {
-      // The live voters (each by its own configuration) agree on one
-      // leader; a learner, or a joiner removed before its admission (a
-      // learner of its own C_j for good, as plain raft-rs's joiner is a
-      // non-member of its own), takes no part in an election.
-      const leader = schedule.leaderOf(live().filter((name) =>
-        schedule.voters(name).includes(name)));
-      return leader !== null;
-    });
-    // The configuration the most advanced live replica holds, and whether a
-    // quorum of it is live: then a correct Raft must elect.
+    // The live voters (each by its own configuration) agree on one leader;
+    // a learner, or a joiner removed before its admission (a learner of its
+    // own C_j for good, as plain raft-rs's joiner is a non-member of its
+    // own), takes no part in an election. The final phase keeps every live
+    // replica connected; electedAt is its round count when that first holds.
+    const standingLeader = () => schedule.leaderOf(live().filter((name) =>
+      schedule.voters(name).includes(name)));
+    // Half the schedules lose their leader as the final phase begins, so
+    // the bound is measured on an election, not only on a leader that
+    // already stands; the decision is part of the compared trace.
+    const standing = standingLeader();
+    const finalLoss = standing !== null && random() < 0.5;
+    trace.push(['final', standing, finalLoss]);
+    if (finalLoss) {
+      schedule.lost.add(standing);
+    }
+    const agreed = () => standingLeader() !== null;
+    let electedAt = null;
+    for (let round = 0; round <= FINAL_ROUNDS; round += 1) {
+      if (agreed()) {
+        electedAt = round;
+        break;
+      }
+      if (round < FINAL_ROUNDS) {
+        schedule.tick(live());
+      }
+    }
+    const elected = electedAt !== null;
+    // The configuration the live replica with the highest applied index
+    // holds (the newest committed configuration the live replicas know; a
+    // replica's term says nothing about which configuration it applied),
+    // and whether a quorum of its voters is live: then a correct Raft must
+    // elect.
     const newest = live().reduce((best, name) =>
-      best === null || schedule.term(name) > schedule.term(best) ? name :
-        best, null);
+      best === null || schedule.applied(name) > schedule.applied(best) ?
+        name : best, null);
     const config = newest === null ? [] : schedule.voters(newest);
     const quorumLive = config.filter((name) => live().includes(name))
       .length > config.length / 2;
-    return {elected, quorumLive, trace: JSON.stringify(trace),
+    return {elected, electedAt, quorumLive, trace: JSON.stringify(trace),
       terms: live().map((name) => schedule.term(name))};
   } finally {
     schedule.dispose();
@@ -286,13 +330,28 @@ test(`L: ${RUNS} seeded conf-change schedules - the guarded stack never ` +
     (guarded.trace === plain.trace && plain.elected && !guarded.elected) ||
     (guarded.quorumLive && !guarded.elected));
   assert.deepEqual(lockedOut, [], JSON.stringify(lockedOut));
+  // Trace-free liveness over every run: a quorum of the newest
+  // configuration live and connected for the final phase elects within the
+  // bound.
+  const beyondBound = (run) => run.quorumLive &&
+    (!run.elected || run.electedAt > LIVENESS_BOUND_ROUNDS);
+  const unbounded = outcomes.filter(({guarded}) => beyondBound(guarded));
+  assert.deepEqual(unbounded, [], JSON.stringify(unbounded));
   const matched = outcomes.filter(({guarded, plain}) =>
     guarded.trace === plain.trace).length;
   assert.ok(matched >= RUNS / 4, `too few matched schedules: ${matched}`);
   context.diagnostic(JSON.stringify({runs: RUNS, matched,
     plainElected: outcomes.filter(({plain}) => plain.elected).length,
     guardedElected: outcomes.filter(({guarded}) => guarded.elected).length,
-    quorumLive: outcomes.filter(({guarded}) => guarded.quorumLive).length}));
+    quorumLive: outcomes.filter(({guarded}) => guarded.quorumLive).length,
+    boundRounds: LIVENESS_BOUND_ROUNDS,
+    guardedBeyondBound: unbounded.length,
+    plainBeyondBound: outcomes.filter(({plain}) => beyondBound(plain)).length,
+    guardedFinalElections: outcomes.filter(({guarded}) =>
+      guarded.quorumLive && guarded.electedAt > 0).length,
+    guardedMaxElectedAt: Math.max(0, ...outcomes
+      .filter(({guarded}) => guarded.quorumLive && guarded.elected)
+      .map(({guarded}) => guarded.electedAt))}));
   assert.ok(outcomes.filter(({plain}) => plain.elected).length >= RUNS / 2,
     `too few schedules elect at all: ${JSON.stringify(outcomes)}`);
 });

@@ -337,6 +337,13 @@ const CATALOGUE = Object.freeze({
         'is answered',
       build: (run) => craft(run, {to: A, from: B, msgType: 17,
         term: run.driver.status(A).term})},
+    {predicate: 'leader, higher term (crafted)',
+      requester: A, decisions: ['D1'],
+      ignored: 'a higher-term pre-vote request at a leader inside its ' +
+        'check-quorum lease is ignored (raft.rs step, in_lease): no answer, ' +
+        'no term or role move',
+      build: (run) => craft(run, {to: A, from: B, msgType: 17,
+        term: run.driver.status(A).term + 1})},
   ],
   MsgRequestPreVoteResponse: [
     {predicate: 'sender with progress, higher-term rejection (crafted)',
@@ -550,7 +557,8 @@ function eventCells(enumerations) {
           family: 'event', types: [name], predicate: entry.predicate,
           decision, requester: entry.requester, build: entry.build,
           moves: entry.moves, refusedFrom: entry.refusedFrom,
-          control: entry.control, timeoutDriven: entry.timeoutDriven,
+          control: entry.control ?? entry.ignored ?? null,
+          ignored: entry.ignored ?? null, timeoutDriven: entry.timeoutDriven,
           form: entry.form, entry}));
       }
     }
