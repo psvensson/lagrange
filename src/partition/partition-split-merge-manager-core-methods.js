@@ -436,6 +436,10 @@ class PartitionSplitMergeManagerCoreMethods {
     const medianResult = await partitionService.executeQuery(
       SPLIT_MERGE_SQL.selectMedian(primaryKeyColumn, tableName),
       [medianOffset],
+      // Median selection is routing metadata, not a general query result.
+      // Preserve SQLite INTEGER values exactly so 9007199254740993 and
+      // neighboring keys cannot collapse through JavaScript Number.
+      {safeIntegers: true},
     );
 
     if (!medianResult.rows || medianResult.rows.length === 0) {
