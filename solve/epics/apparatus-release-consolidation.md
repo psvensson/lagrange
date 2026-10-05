@@ -33,6 +33,7 @@ quests:
   - fleet-capability-discovery
   - test-placement
   - lab-readiness-by-dependency-graph
+  - src-changes-land-through-the-solver
 authorizes:
   - scripts
   - test
@@ -45,6 +46,7 @@ authorizes:
   - RELEASE.md
   - CHANGELOG.md
   - CLAUDE.md
+  - AGENTS.md
   - package.json
   - package-lock.json
   - src/raft
@@ -636,6 +638,46 @@ Keep and seal a `doneWhen` or close: `developer-velocity-maintainability-and-pro
 `lagrange-devops-onboarding`, `pilot-readiness-and-public-proof` (the outside-user
 proof belongs here — seal it, do not duplicate it). Each disposition is a
 `decision` finding in `epic-board-curation`.
+
+## Follow-up quests (owner decisions 2026-10-04, recorded only)
+
+Named here and started after PR #73 merges; neither is implemented yet.
+
+- **gate-authority-landing-required** - "the proof must ensure a proposed gate
+  cannot self-authorize its own weakening." The gate-authority set
+  (`scripts/solve/guards.js` and its import closure, `.githooks/pre-push`,
+  `test/manifests/pre-push-stages.json`, and the production-surface definition
+  `PRODUCTION_SURFACE` in `guards.js`) is landing-required: a change to it
+  reaches main only as a landing with its own independent verification, judged
+  by the gate code already on the remote main, never by the proposed code.
+  Done when witnesses show a push that weakens the gate and relies on the
+  weakened gate is refused, in one push and across two (the weakening pushed
+  first and alone is itself refused as an unlanded gate-authority change).
+- **stale-branch-authority-drift** - materially stale integration branches
+  need explicit current-owner authorization; "define the semantic trigger as
+  authority drift rather than age alone." A merge drifts when the governing
+  quest is closed or its approval predates commits the merge brings; when the
+  gate or rule set, the production-surface definition or the governing epic
+  changed on main since the branch's approvals; or when it brings
+  production-surface commits no landing covers. Such a merge is admitted only
+  with the owner's exact-SHA authorization under existing governance (owner
+  ruling 2026-10-05; no new machinery, nothing added to
+  `scripts/action-authority.js`): (i) an append-only decision finding on the
+  governing quest's log, committed on top of the merge, naming the exact merge
+  sha, the PR head sha and the receipt id (`node scripts/solve.js note --id
+  <governing quest> --finding "owner authorizes merge of PR #<n>: merge sha
+  <M>, head <H>, receipt <id>" --kind decision`), plus (ii) the owner's
+  authenticated GitHub approval of the PR as the identity witness (`gh pr view
+  <n> --json reviewDecision,reviews`), which the merge runner checks and
+  records in the finding - the offline hook cannot see it. "If the GitHub
+  approval is not present when admission reaches that point, leave the merge
+  pending rather than inventing an alternative authority." The admission
+  already checks (i) for every receipt-route merge
+  (`src-changes-land-through-the-solver`); this quest adds the drift trigger
+  and asks the owner whether an undrifted merge may go without (i). Done when
+  witnesses show a drifted merge without that authorization refused, one
+  authorized for its exact sha admitted, one authorized for another sha
+  refused, and the owner's answer on undrifted merges witnessed.
 
 ## Guardrails
 

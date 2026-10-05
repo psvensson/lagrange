@@ -1,0 +1,50 @@
+{
+  "schema": "solve-quest/2",
+  "id": "src-changes-land-through-the-solver",
+  "epic": "apparatus-release-consolidation",
+  "statement": "Owner decision 2026-10-04: every change under src/ reaches the shared main branch only as a solver landing - a sealed quest landed with solve land, its change cone run and, as land already requires for src/, an independent verification; docs, tests, scripts and generated metadata may still be committed directly with a named witness. The work-unit threshold says so where it is owned (AGENTS.md Choose The Work Unit, solver-quests.md Choosing the unit, the runbook's commit-on-completion paragraph, R15's invariant text with its sealed id, slug and owner unchanged). It is enforced at the main push: every commit the pushed main sha brings over the remote main sha (the ancestry cut-off - nothing already on main is judged) whose own change touches a path under src/ (renames into or out of src/, deletions, type changes and the src entry itself included) must be a single-parent commit that appends to one quest log a terminal solved entry binding that commit's exact src/ raw diff (written by land's existing terminal-entry writer, append-only) in a log recording a seal and a current approving verification, or be brought by a merge admitted by an exact-SHA corpus-full-v1 or release-full-v1 receipt for the merge commit itself plus a Quest: trailer naming a sealed quest whose log at the merge records a current approving verification; a merge's own src/ change is what differs from every parent. Typed Quest/Epic/Sealed-At trailers admit nothing. The check is git plumbing (plus a receipt lookup only for a merge that needs one), runs in the pre-push hook first among the content stages and only for a push that updates main, and names each refused commit with its src/ paths; a branch push stays a free preservation action. Land also judges the landing quest's own record before any proof: the closed-quest composition as if closed (refusing each file the sealed claim does not require) and the append-only history of every quest log it would commit, leaving the index untouched on refusal. Witnessed red-first on the real solve CLI, the real land and the real hook over scratch repositories.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/src-changes-land-through-the-solver/evidence/receipt.json",
+      "requiredReceipts": [
+        "direct-src-commit-refused",
+        "forged-landing-signals-refused",
+        "landing-log-without-approval-refused",
+        "real-landing-admitted",
+        "non-src-direct-commit-admitted",
+        "long-lived-merge-admission",
+        "merge-of-landings-and-hand-resolved-merge",
+        "src-path-shapes-judged",
+        "ancestry-cut-off",
+        "main-push-runs-the-admission-first",
+        "non-main-push-not-admitted",
+        "land-refuses-unrequired-quest-file",
+        "land-refuses-rewritten-quest-log"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-new-apparatus",
+      "statement": "No script or workflow is added: the admission is a function of the quest-lifecycle owner (scripts/solve/guards.js) reached through the existing solve CLI and run by the existing pre-push hook; ratchets move one way only."
+    },
+    {
+      "id": "land-not-weakened",
+      "statement": "Nothing land requires today is removed or relaxed; the terminal entry gains one field, and the verification predicate moves to the guard owner unchanged."
+    },
+    {
+      "id": "binding-not-trailers",
+      "statement": "A landing is recognised from the commit's own tree (a terminal entry new in that commit binding its exact src/ change, in a sealed and verified log), never from message text."
+    },
+    {
+      "id": "preservation-stays-free",
+      "statement": "A push that does not update main never runs the admission."
+    },
+    {
+      "id": "ancestry-not-date",
+      "statement": "The cut-off is the remote main sha the push fast-forwards: commits already reachable from it are never judged; there is no date boundary and no leniency for an older entry shape."
+    }
+  ],
+  "sealedAt": "d60c309216ccc86712a26766b83c97b0583ab919"
+}
