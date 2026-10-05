@@ -36,6 +36,8 @@ const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
 const stringTrim = Function.call.bind(String.prototype.trim);
 const CONJUNCTIVE_AND_PATTERN = /\s+AND\s+/gi;
 const EQUALITY_COLUMN_PATTERN = /^(\w+)\s*=/u;
+const OUTER_PAREN_OPEN = '(';
+const OUTER_PAREN_CLOSE = ')';
 
 function splitConjunctiveParts(value) {
   const parts = [];
@@ -55,8 +57,8 @@ function splitConjunctiveParts(value) {
 function stripOuterParens(value) {
   let start = 0;
   let end = value.length;
-  while (start < end && value[start] === '(') start += 1;
-  while (end > start && value[end - 1] === ')') end -= 1;
+  while (start < end && value[start] === OUTER_PAREN_OPEN) start += 1;
+  while (end > start && value[end - 1] === OUTER_PAREN_CLOSE) end -= 1;
   return stringSlice(value, start, end);
 }
 
