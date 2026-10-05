@@ -271,9 +271,9 @@ describe('a run that left no verifiable evidence resets the streak (B3)',
       assert.equal(result.done, false);
       assert.equal(result.invalidSamples[0].startedScenario, SCENARIO);
       const line = formatCertificationRecord(describeCertificationRun(
-        failed.dir), 'zero-liferaft-active-runtime');
+        failed.dir), 'certification-quest');
       assert.equal(line, 'node scripts/solve.js note --id ' +
-        'zero-liferaft-active-runtime --kind evidence --finding ' +
+        'certification-quest --kind evidence --finding ' +
         `"certification-run scenario=${SCENARIO} sha=${SHA} start=${at('11')} ` +
         'outcome=interrupted manifest=none (no manifest: interrupted)"');
       assert.deepEqual(parseCertificationRecords([line]), [{

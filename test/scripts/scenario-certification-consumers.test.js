@@ -21,6 +21,7 @@ import {
   prepareCertificationRun,
   runHarness,
 } from '../../scripts/lab/harness.js';
+import {parseHostAnswer} from '../../scripts/lab/certification-preflight.js';
 import {renderTrendSummary} from '../../scripts/checks/formation-health.js';
 import {
   runFormationSeedBudgetGate,
@@ -279,7 +280,7 @@ test('lab certification (B3): the run directory and its started.json ' +
     hold: () => {
       seen.push(readdirSync(join(root, SHA)));
       throw new Error('hold lost');
-    }, quest: 'zero-liferaft-active-runtime'}, (text) => {
+    }, quest: 'certification-quest'}, (text) => {
     output += text;
   }), /hold lost/u);
   const [runName] = readdirSync(join(root, SHA));
@@ -292,7 +293,7 @@ test('lab certification (B3): the run directory and its started.json ' +
   assert.equal(started.hostSet.length, 5);
   assert.equal(started.controller.pid, process.pid);
   assert.match(output, new RegExp('node scripts/solve\\.js note --id ' +
-    'zero-liferaft-active-runtime --kind evidence --finding ' +
+    'certification-quest --kind evidence --finding ' +
     `"certification-run scenario=${SCENARIO} sha=${SHA} ` +
     `start=${started.runStartedAt} outcome=interrupted ` +
     'manifest=none \\(no manifest: interrupted\\)"', 'u'));
@@ -300,6 +301,16 @@ test('lab certification (B3): the run directory and its started.json ' +
   writeFileSync(blocked, 'not a directory');
   await assert.rejects(labRun({dryRun: false, evidenceRoot: join(blocked, 'x'),
     hold: NEVER_HOLD}), /ENOTDIR/u);
+});
+
+test('lab certification pre-flight parses a host answer, a clock read as ' +
+  'seconds with any fraction width (uutils date on carinas-windows)', () => {
+  const answer = parseHostAnswer('BOOT be32\nCLOCK 1791195512.3914937\n' +
+    'DOCKER 29.1.3\nDISK 6438752\nBASE node:22-slim sha256:a\n' +
+    'BASE gcr.io/d missing\n');
+  assert.deepEqual(answer, {baseImages: {'gcr.io/d': 'missing',
+    'node:22-slim': 'sha256:a'}, bootId: 'be32', clockMs: 1791195512391,
+  docker: '29.1.3', freeKib: 6438752});
 });
 
 test('lab certification (S5): a sixth listed machine gets no node, so it ' +

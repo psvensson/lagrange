@@ -53,6 +53,7 @@ const MARK = Object.freeze({BOOT: 'BOOT', CLOCK: 'CLOCK', DOCKER: 'DOCKER',
 const MISSING = 'missing';
 const UNREACHABLE = 'unreachable';
 const WORD = /\s+/u;
+const MS_PER_SECOND = 1000;
 const TEXT = Object.freeze({
   PASS: 'PASS',
   FAIL: 'FAIL',
@@ -84,7 +85,9 @@ function hostScript(baseImages) {
     `2>/dev/null || echo ${MISSING})`).join(TEXT.CLAUSE);
   return [
     `echo ${MARK.BOOT} $(cat /proc/sys/kernel/random/boot_id)`,
-    `echo ${MARK.CLOCK} $(date +%s%3N)`,
+    // Seconds with a fraction: `%3N` is not portable (uutils date, as on
+    // carinas-windows, prints more digits for it).
+    `echo ${MARK.CLOCK} $(date +%s.%N)`,
     `echo ${MARK.DOCKER} $(docker info --format '{{.ServerVersion}}' 2>/dev/null ` +
       `|| echo ${UNREACHABLE})`,
     `echo ${MARK.DISK} $(df -Pk "$(docker info --format '{{.DockerRootDir}}' ` +
@@ -99,7 +102,7 @@ export function parseHostAnswer(text) {
   for (const line of String(text).split(TEXT.LINE)) {
     const [mark, first, second] = line.trim().split(WORD);
     if (mark === MARK.BOOT) answer.bootId = first || null;
-    if (mark === MARK.CLOCK) answer.clockMs = Number(first);
+    if (mark === MARK.CLOCK) answer.clockMs = Math.round(Number(first) * MS_PER_SECOND);
     if (mark === MARK.DOCKER) answer.docker = first || null;
     if (mark === MARK.DISK) answer.freeKib = Number(first);
     if (mark === MARK.BASE && first) answer.baseImages[first] = second || MISSING;
