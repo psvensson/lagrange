@@ -11,6 +11,7 @@ name: a1-v13-attempt
 # compatibility-pinned to zero-Liferaft head 0f53e8342449
 # retry after parser trailing-whitespace cleanup
 # retry after candidate-created file cleanup
+# retry after authoritative-head CAS preservation
 on:
   push:
     branches:
@@ -128,6 +129,12 @@ jobs:
             test/partition/merge-auto-execution.test.js \
             test/partition/partition-split-routing.test.js
           rm -f src/partition/partition-split-merge-evaluation-context.js
+          git fetch origin quest/0-3-queryable-core-foundation
+          remote_sha="$(git rev-parse origin/quest/0-3-queryable-core-foundation)"
+          if [ "$remote_sha" != "$GITHUB_SHA" ]; then
+            echo "::error::authoritative #74 branch advanced from $GITHUB_SHA to $remote_sha; refusing stale attempt preservation"
+            exit 1
+          fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add solve/quests/partition-key-ordering-owner-completion-v13/log.ndjson
