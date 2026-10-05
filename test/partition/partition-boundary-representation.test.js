@@ -83,3 +83,25 @@ t.test('persisted numeric-looking TEXT round-trips without numeric coercion', (t
   t.equal(typeof restartedBoundary, 'string');
   t.end();
 });
+
+t.test('range routing decodes persisted INTEGER boundaries with the same authority', (t) => {
+  const resolver = new PartitionResolver();
+  const partition = {
+    partition_key_start: '9007199254740993',
+    partition_key_end: '9007199254741000',
+    partition_key_type: 'INTEGER',
+  };
+  t.equal(resolver.rangeOverlaps(partition, {
+    low: 9007199254740994n,
+    high: 9007199254740995n,
+    lowInclusive: true,
+    highInclusive: true,
+  }), true);
+  t.equal(resolver.rangeOverlaps(partition, {
+    low: 9007199254741001n,
+    high: 9007199254741002n,
+    lowInclusive: true,
+    highInclusive: true,
+  }), false);
+  t.end();
+});
