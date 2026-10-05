@@ -24,8 +24,8 @@ import {
 import {measure} from './probes.js';
 import {
   SOLVE_PREFIX, approvalProblems, canonicalImportGraphProblem, changedPaths,
-  coupledPairProblems, epicScopeProblems, git, headSha, stageablePaths, stagedSourceChange,
-  staticQualityProblems,
+  coupledPairProblems, epicScopeProblems, git, headSha, readVerificationRecord, stageablePaths,
+  stagedSourceChange, staticQualityProblems, workingChangeSet, workingTreeReader,
 } from './guards.js';
 import {compositionOffences} from '../checks/check-closed-quest-shape.js';
 import {workingTreeOffences} from '../checks/check-quest-log-append-only.js';
@@ -221,6 +221,11 @@ function note(root, options) {
   if (problems.length > 0) refuse(`note: ${problems.join(PROBLEM_SEPARATOR)}`);
   if (entry.type === ENTRY_TYPE.TERMINAL && entry.status === QUEST_STATUS.SOLVED) {
     refuse(MESSAGE.SOLVED_BY_LAND);
+  }
+  if (entry.type === ENTRY_TYPE.VERIFICATION && options.evidence !== undefined) {
+    const loaded = readVerificationRecord(root, options.evidence);
+    if (loaded.problems.length > 0) refuse(`note: ${loaded.problems.join(PROBLEM_SEPARATOR)}`);
+    entry.record = loaded.record;
   }
   if (entry.type === ENTRY_TYPE.ATTEMPT && !state.seal) {
     refuse(`quest ${quest.id} is not sealed; run start first`);
@@ -451,7 +456,8 @@ function land(root, options) {
       `${measured.target} (${measured.reason})`);
   }
   const paths = pathsOutsideQuest(root, quest.id);
-  problems.push(...approvalProblems(log, paths));
+  problems.push(...approvalProblems(log, workingChangeSet(root, paths),
+    workingTreeReader(root)));
   problems.push(...altitudeProblems(state));
   problems.push(...epicScopeProblems(quest, epic, paths));
   problems.push(...coupledPairProblems(root, paths));

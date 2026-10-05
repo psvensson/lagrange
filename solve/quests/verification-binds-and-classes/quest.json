@@ -1,0 +1,51 @@
+{
+  "schema": "solve-quest/2",
+  "id": "verification-binds-and-classes",
+  "class": "fix",
+  "epic": "apparatus-release-consolidation",
+  "statement": "Work is accepted systemically, not locally (owner list 2026-10-04, items 4, 7, 8 and item 1's steering text). Item 4: an approving verification of a quest whose change set touches src/ is an approval only with a record (note --verification ... --evidence <record.json>, embedded in the entry) that names at least one verification template whose id is a front-matter category of a file in docs/development/verification-templates (no retyped list), carries per named template its red-on-revert (reverted path in the quest's src/ change, what was reverted, the witness file - existing and in the change set or the quest's receipts - the behavioural assertion, and evidence by plain path or path:line that exists and names that assertion), carries every field the template's front-matter evidence list demands (whatChanged for retry-loops and sweep-timer), names every template whose trigger matches the change's added src/ lines, and carries a sample of the author's census and history pass or a locality proof with its census file; land refuses otherwise naming exactly what is missing, note refuses an unknown template id, and a quest touching no src/ path keeps today's behaviour. v1 enforced this through solver-verifier-verdict/1 (scripts/solve/verifier-verdict.js at 5271defb5^), lost in the v2 cutover. Item 7: the closure ledger gains mechanism classes MC-001..MC-004 (proxy signal, removal by key after an await, capture-then-wait, optimistic credit for work in flight) in the record form, and its --check-state audit holds them to the record checks plus definition, detection question and resolving commit, quest and path references; the design-note template and the quest guidance each point at the class list in one line. Item 8: AGENTS.md tells the receiver of a handoff that a claim naming no exact commit and suites is unproven. Item 1 (steering only): R04's body says a wait that reaches its bound is such a failure, logged with what was awaited and the last observed state, never an outcome or a normal exit. The always-loaded steering stays at 360 lines.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/verification-binds-and-classes/evidence/receipt.json",
+      "requiredReceipts": [
+        "src-landing-requires-the-record",
+        "approval-without-template-refused",
+        "template-without-red-on-revert-refused",
+        "unknown-template-refused",
+        "admissible-set-is-the-template-files",
+        "red-on-revert-binds-the-change",
+        "census-sample-or-locality-required",
+        "retry-change-names-what-changed",
+        "complete-src-verification-lands",
+        "rejection-then-complete-approval-lands",
+        "non-src-quest-unchanged",
+        "mechanism-classes-audited",
+        "handoff-line-and-spent-wait"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-new-apparatus",
+      "statement": "No script, workflow or audit is added: the record check lives in the existing landing guard, the class check in the existing closure-ledger audit; the receipt is produced by the existing harness runtime from a scratch declaration; ratchets move one way only."
+    },
+    {
+      "id": "templates-are-the-authority",
+      "statement": "The admissible template ids, the fields a template demands and its trigger are read from the template files' front-matter; no code or test carries a second list of real template ids."
+    },
+    {
+      "id": "not-boilerplate",
+      "statement": "The guard checks every reference it mechanically can (template exists, reverted path in the src/ change, witness exists and is bound, evidence exists and names the assertion); what it cannot check - that the revert was run and reached the assertion through the intended path - is stated in the template INDEX and stays the independent verifier's to prove."
+    },
+    {
+      "id": "non-src-unchanged",
+      "statement": "A quest whose change set touches no src/ path lands exactly as before; a rejection needs no record; REJECTION_STANDS and the staleness rule are unchanged."
+    },
+    {
+      "id": "steering-budget",
+      "statement": "The always-loaded steering stays at or below 360 lines: the AGENTS.md handoff line replaces tightened wording, and R04's body keeps its line count, id, slug and owner (the rule-set manifest binds those, not the body)."
+    }
+  ],
+  "sealedAt": "d60c309216ccc86712a26766b83c97b0583ab919"
+}

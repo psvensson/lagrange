@@ -28,7 +28,7 @@
   "censusSize": 2285,
   "digest": "fnv1a32-72594200",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4fe33997",
+  "observationDigest": "fnv1a32-f3e51a7e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -10908,7 +10908,15 @@
       ]
     },
     "test/scripts/closure-ledger-state.test.js": {
+      "files": [
+        "docs/development/verification-templates/design-note-template.md",
+        "docs/steering/workflow-guidelines/solver-quests.md",
+        "scripts/closure-ledger-state.js",
+        "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger.md"
+      ],
       "directories": [
+        "scripts",
+        "solve/quests",
         "solve/specs/membership-lifecycle-placement-hard-cutover"
       ]
     },
@@ -11255,6 +11263,7 @@
       ],
       "directories": [
         "data/releases",
+        "docs/development/verification-templates",
         "scripts",
         "scripts/checks",
         "solve",
@@ -11808,6 +11817,7 @@
         "architecture",
         "data/releases",
         "docs",
+        "docs/development/verification-templates",
         "docs/steering",
         "docs/steering/generated",
         "scripts",
@@ -12503,6 +12513,7 @@
       "directories": [
         "data/releases",
         "docs",
+        "docs/development/verification-templates",
         "scripts",
         "scripts/checks",
         "solve",
@@ -12547,6 +12558,7 @@
       ],
       "directories": [
         "data/releases",
+        "docs/development/verification-templates",
         "scripts",
         "scripts/checks",
         "solve",

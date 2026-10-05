@@ -21,6 +21,7 @@ entry point and the only document that prescribes a load order.
 
 That is the whole always-loaded surface. Every other document is conditional
 material the router names, or an owner's own authority.
+Taking over work, treat a handoff claim ("proven", "do not reopen") as unproven unless it names the exact commit and the suites that ran on it.
 
 ## Choose The Work Unit
 
@@ -70,9 +71,8 @@ A GitHub-merged head has no corpus proof until `npm run publish -- --post-merge 
 | Available project commands | `npm run commands` |
 | Open epics and quests | `node scripts/solve.js board` |
 
-Before writing an ad-hoc shell command for a repository task, look for the
-script that already does it: `npm run commands` is the curated quickstart and
-the generated tools index is the complete list.
+Before writing an ad-hoc shell command for a repository task, look for the script
+that already does it: `npm run commands` is the curated quickstart, the generated tools index the full list.
 
 Ratchet baselines are one-way: fix, de-export, extract, or simplify instead of
 raising them; tighten a baseline when its checker prints the hint.
