@@ -185,6 +185,38 @@ test('PostgresWireAdapter - closeSession removes session', async (t) => {
   t.end();
 });
 
+test('PostgresWireAdapter - closing a session with its transaction open ' +
+  'rolls the engine transaction back; a failure is logged', async (t) => {
+  const mock = createMockSqlCore();
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
+  await adapter.authenticate('sess-open', {tenantId: 'tenant-a'});
+  await adapter.authenticate('sess-idle', {tenantId: 'tenant-a'});
+  adapter.closeSession('sess-open', {transactionOpen: true});
+  adapter.closeSession('sess-idle', {transactionOpen: false});
+  await new Promise((resolve) => setImmediate(resolve));
+  t.same(mock.calls.map((request) => [request.sessionId, request.statement]),
+    [['sess-open', 'ROLLBACK']], 'one ROLLBACK, for the open session only');
+  t.notOk(adapter.hasSession('sess-open'), 'the session is released');
+
+  const warnings = [];
+  const failing = createTestPostgresWireAdapter({
+    sqlCore: {async executeRequest(request) {
+      return request.sessionId === 'gone' ?
+        {success: false, errorCode: 'NO_TRANSACTION'} :
+        {success: false, errorCode: 'ROLLBACK_FAILED', error: 'broke'};
+    }},
+    logger: {debug() {}, info() {}, error() {},
+      warn: (message, fields) => warnings.push(fields)},
+  });
+  await failing.authenticate('gone', {tenantId: 'tenant-a'});
+  await failing.authenticate('broken', {tenantId: 'tenant-a'});
+  failing.closeSession('gone', {transactionOpen: true});
+  failing.closeSession('broken', {transactionOpen: true});
+  await new Promise((resolve) => setImmediate(resolve));
+  t.same(warnings, [{sessionId: 'broken', error: 'broke'}],
+    'only a real rollback failure is logged (NO_TRANSACTION: already ended)');
+});
+
 test('PostgresWireAdapter - closeSession is idempotent', (t) => {
   const mock = createMockSqlCore();
   const adapter = createTestPostgresWireAdapter({sqlCore: mock});

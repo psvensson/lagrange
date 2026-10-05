@@ -1,8 +1,14 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
+  STATEMENT_ADMISSION,
+  admitExpectedTransaction,
+} from './sql-query-engine-statement-admission.js';
+import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.js';
+import {COMMIT_POINT_REACHED_FIELD} from
+  './distributed/distributed-transaction-commit-point.js';
 import {createSQLQueryEngineTableRoutingMethods} from './sql-query-engine-table-routing-methods.js';
 
 const LOCAL_STR_SHA1 = 'sha1';
@@ -344,6 +350,23 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
   }
 
   /**
+   * BEGIN for a session that may expect to be inside a transaction already:
+   * when the engine no longer holds the expected one, BEGIN is refused
+   * rather than opening a fresh transaction under the client's old block.
+   * @param {string} sessionId - Session ID.
+   * @param {Object} options - Query options (expectedTransactionId).
+   * @return {Promise<Object>} Transaction result.
+   * @private
+   */
+  async handleAdmittedBegin(sessionId, options = {}) {
+    const admission = admitExpectedTransaction(this.transactionCoordinator,
+      sessionId, options.expectedTransactionId);
+    return admission.state === STATEMENT_ADMISSION.REFUSED ?
+      admission.failure :
+      this.handleBeginTransaction(sessionId);
+  }
+
+  /**
    * Handle BEGIN TRANSACTION.
    * @param {string} sessionId - Session ID for tracking.
    * @return {Object} Transaction result.
@@ -368,7 +391,19 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       participants: txState?.participants || [],
     });
 
-    const result = await this.transactionCoordinator.commit(sessionId);
+    let result;
+    try {
+      result = await this.transactionCoordinator.commit(sessionId);
+    } catch (error) {
+      // A COMMIT that threw is answered as a failed COMMIT carrying the
+      // coordinator's commit-point fact (absent: unknown).
+      return {
+        ...this.buildCaughtQueryExecutionFailure(error),
+        ...(typeof error?.[COMMIT_POINT_REACHED_FIELD] === LOCAL_STR_BOOLEAN ?
+          {[COMMIT_POINT_REACHED_FIELD]: error[COMMIT_POINT_REACHED_FIELD]} :
+          {}),
+      };
+    }
     if (!result.success && !result.errorCode) {
       return {
         ...result,

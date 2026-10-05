@@ -80,8 +80,10 @@ const RATCHET_TARGETS = [
     // keeps-evidence, checker hint); the lower value here supersedes it.
     // 2026-10-04: tightened 49/1559 -> 48/1512 on the checker's hint
     // (spent-waits wiring replaced duplicated expiry log blocks).
+    // 2026-10-05: tightened 48/1512 -> 48/1510 on the checker's hint (the
+    // write paths open their transaction in one two-line call).
     baselineCloneGroupCount: 48,
-    baselineDuplicatedLineCount: 1512,
+    baselineDuplicatedLineCount: 1510,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

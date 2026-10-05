@@ -25,7 +25,10 @@ import {
   PG_HANDLER_LOG,
   PG_BUFFER_LIMIT,
 } from './pgwire-protocol-constants.js';
-import {PgWireSession} from './pgwire-session.js';
+import {
+  PGWIRE_STATEMENT_ADMISSION,
+  PgWireSession,
+} from './pgwire-session.js';
 import {
   buildAuthOk,
   buildAuthCleartextPassword,
@@ -43,6 +46,10 @@ import {
   buildEmptyQueryResponse,
 } from './pgwire-message-builders.js';
 import {
+  answerFailedStatement,
+  takeTransactionEndNotice,
+} from './pgwire-transaction-outcome.js';
+import {
   parseStartupParams,
   parseQueryMessage,
   parseParseMessage,
@@ -55,7 +62,11 @@ import {
   deriveCommandTag,
   extractColumns,
   extractRowValues,
+  isEmptyStatementResult,
 } from './pgwire-result-mapper.js';
+import {readExecutedStatementType} from
+  '../query/application-database-result.js';
+import {AST_TYPE} from '../query/parser-constants.js';
 import {
   writeCString,
   readCString,
@@ -68,9 +79,8 @@ import {upgradePgwireSocketToTls} from './pgwire-tls-context.js';
 import {PgWireExtendedQueryHandler} from
   './pgwire-extended-query-handler.js';
 
-const LOCAL_STR_BEGIN = 'BEGIN';
-const LOCAL_STR_COMMIT = 'COMMIT';
-const LOCAL_STR_ROLLBACK = 'ROLLBACK';
+// Executed transaction-end kinds: a successful one leaves the session idle.
+const TRANSACTION_END_STATEMENTS = new Set([AST_TYPE.COMMIT, AST_TYPE.ROLLBACK]);
 const LOCAL_NUM_INT32_MAX = 0x7FFFFFFF;
 const LOCAL_STR_DATA = 'data';
 const LOCAL_STR_ERROR = 'error';
@@ -159,7 +169,13 @@ class PgWireProtocolHandler {
     this._socket.removeListener(LOCAL_STR_CLOSE, this._onClose);
     if (this._session && !this._session.isClosed()) {
       const sid = this._session.sessionId;
-      this._adapter.closeSession(sid);
+      // A connection closed inside a transaction block: the engine
+      // transaction is rolled back now (PostgreSQL), not left holding its
+      // partitions until the budget sweep.
+      this._adapter.closeSession(sid, {
+        transactionOpen: this._session.getTransactionState() !==
+          PG_TRANSACTION_STATE.IDLE,
+      });
       this._session.close();
     }
     this._pendingAuth = null;
@@ -562,24 +578,23 @@ class PgWireProtocolHandler {
       return;
     }
 
-    // Check for failed transaction state
-    if (this._session.isInFailedTransaction()) {
-      const upper = query.trimStart().toUpperCase();
-      if (!upper.startsWith(LOCAL_STR_ROLLBACK)) {
-        this._sendError(
-          PG_SEVERITY.ERROR,
-          PG_ERROR_CODE.IN_FAILED_TRANSACTION,
-          LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS +
-            LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK,
-        );
-        this._socket.write(
-          buildReadyForQuery(this._session.getTransactionState()),
-        );
-        return;
-      }
+    // A failed transaction block admits only its end (ROLLBACK, or COMMIT
+    // answered as ROLLBACK).
+    const admission = this._session.admitStatement(query);
+    if (admission.state !== PGWIRE_STATEMENT_ADMISSION.ADMITTED) {
+      this._sendError(
+        PG_SEVERITY.ERROR,
+        PG_ERROR_CODE.IN_FAILED_TRANSACTION,
+        LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS +
+          LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK,
+      );
+      this._socket.write(
+        buildReadyForQuery(this._session.getTransactionState()),
+      );
+      return;
     }
 
-    await this._executeAndSend(query, []);
+    await this._executeAndSend(admission.statement, []);
 
     this._socket.write(
       buildReadyForQuery(this._session.getTransactionState()),
@@ -591,21 +606,21 @@ class PgWireProtocolHandler {
   /**
    * Execute a query through the adapter and send result messages.
    *
-   * Updates transaction state based on query type and result.
-   * Sends RowDescription + DataRow* + CommandComplete on success,
-   * or ErrorResponse on failure.
+   * Updates the session transaction state from the statement kind the
+   * engine executed (never from the query text, so a statement the engine
+   * refused changes no state). Sends RowDescription + DataRow* +
+   * CommandComplete on success, EmptyQueryResponse when the text held no
+   * statement, or ErrorResponse on failure.
    *
    * @param {string} query - SQL query text.
    * @param {unknown[]} params - Bind parameters.
    * @private
    */
   async _executeAndSend(query, params) {
-    const upper = query.trimStart().toUpperCase();
-    this._applyTransactionStart(upper);
-
+    const stateBefore = this._session.getTransactionState();
     try {
       const result = await this._adapter.execute(
-        this._session.sessionId, query, params,
+        this._session.sessionId, query, params, this._executionOptions(),
       );
       if (
         result?.provisioningDeadlineExpired === true &&
@@ -618,6 +633,10 @@ class PgWireProtocolHandler {
           retry_after_ms: result.retryAfterMs || 0,
         };
         throw error;
+      }
+      if (isEmptyStatementResult(result)) {
+        this._socket.write(buildEmptyQueryResponse());
+        return;
       }
       if (result?.success === false) {
         const error = new Error(
@@ -638,47 +657,59 @@ class PgWireProtocolHandler {
         }
       }
 
-      const tag = deriveCommandTag(result, query);
+      const tag = deriveCommandTag(result);
+      const statementType = readExecutedStatementType(result);
+      const notice = takeTransactionEndNotice(this._session, statementType);
+      if (notice) this._socket.write(notice);
       this._socket.write(buildCommandComplete(tag));
 
-      this._applyTransactionCompletion(upper);
+      this._applyTransactionOutcome(statementType, result);
     } catch (err) {
-      this._applyTransactionFailure();
-      this._sendError(
-        PG_SEVERITY.ERROR,
-        typeof err.sqlState === 'string' ?
-          err.sqlState : PG_ERROR_CODE.INTERNAL_ERROR,
-        err.message,
-        err.detail || null,
-      );
+      this._answerFailure(err, stateBefore);
     }
   }
 
-  /** @private */
-  _applyTransactionStart(upperQuery) {
-    if (upperQuery.startsWith(LOCAL_STR_BEGIN)) {
-      this._session.setTransactionState(PG_TRANSACTION_STATE.IN_TRANSACTION);
-    }
+  /**
+   * Engine options for a statement: inside a transaction block, the engine
+   * transaction the block is in (the engine refuses the statement when it
+   * no longer holds it, instead of running it outside the block).
+   * @return {Object}
+   * @private
+   */
+  _executionOptions() {
+    const transactionId = this._session.transactionId;
+    return transactionId ? {expectedTransactionId: transactionId} : {};
   }
 
-  /** @private */
-  _applyTransactionCompletion(upperQuery) {
-    if (
-      upperQuery.startsWith(LOCAL_STR_COMMIT) ||
-      upperQuery.startsWith(LOCAL_STR_ROLLBACK)
-    ) {
+  /**
+   * Move the session transaction state for a statement the engine executed.
+   * @param {?string} statementType - The executed statement kind.
+   * @param {Object} result - The engine result (BEGIN carries its
+   *   transaction id).
+   * @private
+   */
+  _applyTransactionOutcome(statementType, result) {
+    if (statementType === AST_TYPE.BEGIN_TRANSACTION) {
+      this._session.enterTransaction(result?.transactionId);
+    } else if (TRANSACTION_END_STATEMENTS.has(statementType)) {
       this._session.setTransactionState(PG_TRANSACTION_STATE.IDLE);
     }
   }
 
-  /** @private */
-  _applyTransactionFailure() {
-    if (
-      this._session.getTransactionState() ===
-      PG_TRANSACTION_STATE.IN_TRANSACTION
-    ) {
-      this._session.setTransactionState(PG_TRANSACTION_STATE.FAILED);
-    }
+  /**
+   * Answer a failed statement; the session state follows the engine
+   * (pgwire-transaction-outcome owns the rule).
+   * @param {Error} err - The failure (engine result fields assigned).
+   * @param {number} stateBefore - Session state when the statement ran.
+   * @private
+   */
+  _answerFailure(err, stateBefore) {
+    answerFailedStatement({
+      failure: err,
+      stateBefore,
+      session: this._session,
+      write: (message) => this._socket.write(message),
+    });
   }
 
   // --- Error sending ---
@@ -744,7 +775,6 @@ export {
   parseExecuteMessage,
   parseCloseMessage,
   // Helpers (exported for testing)
-  deriveCommandTag,
   extractColumns,
   extractRowValues,
   writeCString,

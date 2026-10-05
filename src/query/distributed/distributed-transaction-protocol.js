@@ -19,6 +19,7 @@ import {
   readWaitClock,
   reportWaitBoundSpent,
 } from '../../logging/wait-bound-spent.js';
+import {noteCommitPoint} from './distributed-transaction-commit-point.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const TRANSACTION_BUDGET_WAIT = Object.freeze({
@@ -206,6 +207,7 @@ const distributedTransactionProtocolMethods = {
   async setTransactionStatus(tx, status) {
     const previousStatus = tx.status;
     const previousUpdatedAt = tx.updatedAt;
+    noteCommitPoint(tx, status);
     tx.status = status;
     tx.updatedAt = this.now();
     try {
@@ -409,6 +411,7 @@ const distributedTransactionProtocolMethods = {
 
     await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
     this.transactionsBySession.delete(tx.sessionId);
+    this.endedTransactions?.record(tx);
     return {
       success: true,
       operation: QUERY_OPERATION.COMMIT,
@@ -482,6 +485,7 @@ const distributedTransactionProtocolMethods = {
     } else {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
       this.transactionsBySession.delete(tx.sessionId);
+      this.endedTransactions?.record(tx);
     }
 
     return {

@@ -1,4 +1,5 @@
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
 
 const LOCAL_STR_COLUMN_REF = 'column_ref';
 const LOCAL_STR_EMPTY = '';
@@ -64,10 +65,15 @@ const sqlParserSchemaMutationMethods = {
     if (isReturningStar(columns)) {
       return STAR_VALUE;
     }
-    const names = columns
-      .map(resolveReturningColumnName)
-      .filter((name) => typeof name === LOCAL_STR_STRING);
-    return names.length > 0 ? names : null;
+    const names = columns.map(resolveReturningColumnName);
+    if (names.some((name) => typeof name !== LOCAL_STR_STRING)) {
+      // A RETURNING expression this AST cannot carry: refused, never
+      // dropped (a dropped clause would read as no RETURNING at all).
+      const error = new Error(QUERY_ERROR_MSG.RETURNING_UNSUPPORTED);
+      error.code = QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE;
+      throw error;
+    }
+    return names;
   },
 
   convertAlter(ast) {

@@ -4,6 +4,7 @@ import {
 } from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const LOCAL_STR_TRANSACTION_ID_TYPE = 'string';
 const MIGRATION_CUTOVER_RETRY_WAIT = Object.freeze({
   wait: 'MIGRATION_DEFAULT.MAX_RETRY_COUNT',
   awaited: 'migration cutover transaction committed',
@@ -503,7 +504,15 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
       const targetSchema = targetPayload?.schema || targetPayload || {};
 
       try {
-        await this.executeSql(LOCAL_STR_BEGIN, [], {sessionId});
+        const begun = await this.executeSql(LOCAL_STR_BEGIN, [], {sessionId});
+        // Every cutover statement is sent for the transaction BEGIN opened:
+        // once the engine no longer holds it (budget expiry) a statement is
+        // refused instead of running as autocommit outside it.
+        const inTransaction = {
+          sessionId,
+          ...(typeof begun?.transactionId === LOCAL_STR_TRANSACTION_ID_TYPE ?
+            {expectedTransactionId: begun.transactionId} : {}),
+        };
         await this.executeSql(
           MIGRATION_SQL.UPDATE_TABLE_SCHEMA_BY_ID,
           [
@@ -511,7 +520,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
             updatedAt,
             migrationRow.table_id,
           ],
-          {sessionId},
+          inTransaction,
         );
 
         for (const row of partitionRows || []) {
@@ -526,7 +535,7 @@ function createMigrationCoordinatorStageMethods(deps = {}) {
               migrationId,
               row?.partition_id,
             ],
-            {sessionId},
+            inTransaction,
           );
         }
 

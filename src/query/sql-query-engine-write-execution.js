@@ -1,6 +1,10 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineTransactionRecoveryMethods} from './sql-query-engine-transaction-recovery-methods.js';
 import {
+  STATEMENT_ADMISSION,
+  admitExpectedTransaction,
+} from './sql-query-engine-statement-admission.js';
+import {
   SERVICE_PARTITION_ACCESS_KIND,
   TRANSACTION_MODE,
 } from '../constants/index.js';
@@ -74,7 +78,25 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       WRITE_TRANSACTION_OWNERSHIP.STATEMENT_AUTOCOMMIT;
   }
 
-  async openWriteTransaction(sessionId, writePlan) {
+  async openWriteTransaction(sessionId, writePlan, queryOptions = {}) {
+    // Decided in the same turn as the ownership: a write the session sent
+    // for a transaction the engine no longer holds is refused, never run as
+    // autocommit.
+    const admission = admitExpectedTransaction(
+      this.transactionCoordinator,
+      sessionId,
+      queryOptions.expectedTransactionId,
+    );
+    return admission.state === STATEMENT_ADMISSION.REFUSED ?
+      {
+        ownership: WRITE_TRANSACTION_OWNERSHIP.EXPLICIT,
+        sessionId,
+        failure: admission.failure,
+      } :
+      this.openAdmittedWriteTransaction(sessionId, writePlan);
+  }
+
+  async openAdmittedWriteTransaction(sessionId, writePlan) {
     const transactionState =
       this.transactionCoordinator.getTransaction(sessionId);
     const ownership = this.resolveWriteTransactionOwnership(
@@ -188,10 +210,8 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
 
     const writePartitions = Array.from(writePlan.partitionStatements.keys());
-    const writeTransaction = await this.openWriteTransaction(
-      sessionId,
-      writePlan,
-    );
+    const writeTransaction =
+      await this.openWriteTransaction(sessionId, writePlan, queryOptions);
     const txState = writeTransaction.transactionState;
     let result;
     const executionStartTimeMs = Date.now();
@@ -356,10 +376,8 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
     const writePartitions = Array.from(writePlan.partitionStatements.keys());
 
-    const writeTransaction = await this.openWriteTransaction(
-      sessionId,
-      writePlan,
-    );
+    const writeTransaction =
+      await this.openWriteTransaction(sessionId, writePlan, queryOptions);
     const txState = writeTransaction.transactionState;
 
     // Execute update on resolved partitions
@@ -524,10 +542,8 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
     const writePartitions = Array.from(writePlan.partitionStatements.keys());
 
-    const writeTransaction = await this.openWriteTransaction(
-      sessionId,
-      writePlan,
-    );
+    const writeTransaction =
+      await this.openWriteTransaction(sessionId, writePlan, queryOptions);
     const txState = writeTransaction.transactionState;
 
     // Execute delete on resolved partitions

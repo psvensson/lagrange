@@ -54,6 +54,11 @@ import {
   calculateParticipantRetryDelay,
 } from './distributed-transaction-protocol.js';
 import {
+  createEndedTransactionRecords,
+  stampThrownCommitPoint,
+  withCommitPoint,
+} from './distributed-transaction-commit-point.js';
+import {
   persistTransactionRecord,
   persistParticipants,
   persistParticipantRecord,
@@ -183,6 +188,9 @@ class DistributedTransactionCoordinator {
         now: this.now,
       });
     this.transactionsBySession = this.workflowCoordinator.workflowsByOwnerKey;
+    // Each session's last ended transaction: a COMMIT that finds none reads
+    // whether that transaction reached its commit point from here.
+    this.endedTransactions = createEndedTransactionRecords();
     this.transactionOperationTailBySession = new Map();
     this.recoveredTransactionIds = new Set();
   }
@@ -464,6 +472,7 @@ class DistributedTransactionCoordinator {
         success: false,
         error: QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT,
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
+        ...this.endedTransactions.commitPointFor(sessionId),
       };
     }
     if (tx.participantSetState === PARTICIPANT_SET_STATE.OPEN) {
@@ -491,7 +500,11 @@ class DistributedTransactionCoordinator {
         throw error;
       }
     }
-    return this.runCommitProtocol(tx);
+    try {
+      return withCommitPoint(await this.runCommitProtocol(tx), tx);
+    } catch (error) {
+      throw stampThrownCommitPoint(error, tx);
+    }
   }
 
   /**
