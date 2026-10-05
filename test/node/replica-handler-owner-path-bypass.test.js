@@ -1058,28 +1058,24 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
             null,
             'redrive can reconstruct participant lifecycle after restart',
           );
+          // K3 (verify-identity-5): this learner reached SYNCING - it was
+          // released and may have voted or acked - before it FAILED, so the
+          // re-drive never reuses its replica id (a lost disk would reopen
+          // it empty): refused typed and terminal; the FAILED-target cleanup
+          // removes it and a re-plan mints a fresh id.
           const redriveSettled = new Promise((resolve) => {
             const onOutcome = (outcome) => {
-              if (
-                outcome.operationId !== operationId ||
-                ![
-                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
-                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
-                ].includes(outcome.outcomeType)
-              ) {
+              if (outcome.operationId !== operationId ||
+                  outcome.outcomeType !==
+                    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED) {
                 return;
               }
               emitter.off(OUTCOME_EVENT_NAME, onOutcome);
-              resolve(
-                outcome.outcomeType ===
-                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE ?
-                  'created' :
-                  'failed',
-              );
+              resolve(outcome);
             };
             emitter.on(OUTCOME_EVENT_NAME, onOutcome);
           });
-          const redriveResponse = await handler.handleMessage(buildEnvelope(
+          await handler.handleMessage(buildEnvelope(
             ReplicaOperationMessageType.CREATE_REPLICA,
             {
               operationId,
@@ -1088,32 +1084,13 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
               replicaId,
             },
           ));
-          t.equal(
-            redriveResponse.status,
-            ReplicaOperationResponseStatus.INITIATED,
-            'the durable owner can re-dispatch the same retryable CREATE',
-          );
-          t.equal(
-            await redriveSettled,
-            'created',
-            'the retryable CREATE redrive reaches success from participant ' +
-              'lifecycle state',
-          );
-          t.equal(
-            factoryCount,
-            2,
-            'redrive creates exactly one clean replacement runtime',
-          );
-          t.equal(
-            maxLiveRuntimeCount,
-            1,
-            'redrive never overlaps the failed and replacement runtimes',
-          );
-          t.equal(
-            handler.getTrackedService(replicaId),
-            partitionService,
-            'successful redrive tracks only the replacement runtime',
-          );
+          const refused = await redriveSettled;
+          t.equal(refused.errorCode, 'REPLICA_OPENED_IDENTITY_RESTART_REFUSED',
+            'the re-drive of an opened identity is refused typed');
+          t.notOk(refused.deferRetry, 'the refusal is terminal');
+          t.equal(factoryCount, 1, 'the re-drive opens no runtime');
+          t.equal(handler.getTrackedService(replicaId), null,
+            'nothing is tracked for the refused identity');
         }
 
         await handler.shutdown();

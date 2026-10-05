@@ -150,7 +150,9 @@ test('ReplicaHandler idempotency property tests', async (t) => {
      * cache row and whether a tracked local runtime service exists.
      *
      * - ACTIVE cache-only status → INITIATED repair response
-     * - CREATING/SYNCING status → IN_PROGRESS response
+     * - CREATING status → IN_PROGRESS response
+     * - SYNCING status with no runtime tracked here → INITIATED (the
+     *   ack-loss wedge is re-driven at its own row, F3 (c))
      * - No cache entry → INITIATED response (new replica)
      */
 
@@ -215,12 +217,19 @@ test('ReplicaHandler idempotency property tests', async (t) => {
             ReplicaOperationResponseStatus.INITIATED,
             `ACTIVE cache-only replica should return INITIATED for repair (replicaId: ${replicaId})`,
           );
-        } else if (status === ReplicaStatus.CREATING || status === ReplicaStatus.SYNCING) {
+        } else if (status === ReplicaStatus.CREATING) {
           if (refusal) return false;
           t.equal(
             response.status,
             ReplicaOperationResponseStatus.IN_PROGRESS,
             `${status} replica should return IN_PROGRESS (replicaId: ${replicaId})`,
+          );
+        } else if (status === ReplicaStatus.SYNCING) {
+          if (refusal) return false;
+          t.equal(
+            response.status,
+            ReplicaOperationResponseStatus.INITIATED,
+            `SYNCING replica with no tracked runtime is re-driven (replicaId: ${replicaId})`,
           );
         } else if (status === ReplicaStatus.FAILED) {
           if (refusal) return false;

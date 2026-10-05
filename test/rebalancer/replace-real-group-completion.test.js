@@ -88,6 +88,9 @@ const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'rebalance-coordinator-owner-facade.js': 1,
   'operation-workflow-replace-owner.js': 1,
   'operation-workflow-dispatch-response-reconcile.js': 2,
+  // M2: a refused failure of a partition ADD whose target is live completes
+  // it (never a REPLACE: its post-intent refusal completes nothing).
+  'operation-workflow-transition-persistence.js': 1,
 });
 const FAIL_OPERATION_CALLER_FILES = Object.freeze([
   'operation-workflow-dispatch-epoch-gate.js',
