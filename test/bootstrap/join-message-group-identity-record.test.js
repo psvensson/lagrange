@@ -10,6 +10,9 @@
 //   M2  a first join's replica steps nothing (no campaign, no vote) until its
 //       services row is durably registered - the identity record released by
 //       the registration alone;
+//   M4  a first join whose services-row registration fails never releases
+//       the record: it is abandoned (the spent wait logged once) and the
+//       port never steps (verifier Z14);
 //   M3  the verifier's randomized W1 shape with the request the production
 //       message-group port builds: a bridging GENESIS founder wiped and
 //       reopened (same replica id) inside the window never yields two leaders
@@ -50,9 +53,10 @@ const ROUTER = Object.freeze({
   deliver: async () => ({acknowledged: true}),
 });
 
-function joinPhase(directory, services) {
+function joinPhase(directory, services, delegates = {}) {
   return new CreateMessageGroupPhase({nodeId: NODE_ID, delegates: {
     getLogger: () => QUIET,
+    ...delegates,
     getMessageGroupServices: () => services,
     getSleep: () => async () => {},
     getMessageRouter: () => ROUTER,
@@ -129,6 +133,43 @@ test('M2: a first-join replica steps nothing until its services row is ' +
       5000), true, 'the registration releases it and it leads');
   } finally {
     for (const service of services.values()) await service.shutdown();
+    fs.rmSync(directory, {recursive: true, force: true});
+  }
+});
+
+test('M4: a first join whose services-row registration fails abandons ' +
+  'the record: the port never steps', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'join-mg-fail-'));
+  const services = new Map();
+  const warnings = [];
+  try {
+    const phase = joinPhase(directory, services, {
+      getLogger: () => ({...QUIET,
+        warn: (message, context) => warnings.push({message, context})}),
+      getNow: () => Date.now,
+      getConfig: () => ({}),
+      getSeedNodeAddress: () => 'http://seed.invalid',
+      getSeedNodeId: () => NODE_ID,
+      upsertJoinServiceRowWithRetry: async () => ({success: false,
+        error: 'services row refused'}),
+    });
+    await phase.createJoinMessageGroupReplica(
+      {replicaOptions: replicaOptions(phase, [])});
+    const service = services.get(REPLICA_ID);
+    await assert.rejects(phase.registerMessageGroupService(GROUP_ID,
+      REPLICA_ID, service, {status: 'stopped'}));
+    const port = service.raft;
+    assert.equal(port.readStatus().identityRecorded, false, 'not released');
+    const early = await port.campaign();
+    assert.equal(early?.reason, 'participation-gate-identity-unrecorded');
+    assert.equal(await within(() => port.readStatus().role === 'leader',
+      600), false, 'never leads');
+    const spent = warnings.filter((line) =>
+      line.context?.wait === 'message-group-identity-record');
+    assert.equal(spent.length, 1, 'the spent wait is logged once');
+    assert.equal(spent[0].context.event, 'wait_bound_spent');
+  } finally {
+    for (const value of services.values()) await value.shutdown();
     fs.rmSync(directory, {recursive: true, force: true});
   }
 });

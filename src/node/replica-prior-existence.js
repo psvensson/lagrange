@@ -9,23 +9,82 @@
  * Canonical output: a boolean the partition hands its port as
  * IDENTITY_EXISTED; the participation gate's opening admission decides.
  * Prohibited: no absence is read as a first opening - an unreadable row
- * defers the create.
+ * defers the create; a FAILED identity that ever opened is never re-driven
+ * under the same replica id (K3: it may have voted or acked, and a wiped
+ * record would reopen empty).
  */
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 import {
+  REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_TYPEOF,
 } from './replica-handler-constants.js';
 
 const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
+const OPENED_IDENTITY_RESTART_REFUSED_CODE =
+  'REPLICA_OPENED_IDENTITY_RESTART_REFUSED';
 // The SERVICES statuses the target writes only after its partition port
 // opened (createReplicaAsync: SYNCING right after the open, ACTIVE after
 // it): a row of this replica on this node in one of them is an earlier
 // incarnation that opened its raft record.
 const OPENED_REPLICA_STATUSES = new Set([
   ReplicaStatus.SYNCING, ReplicaStatus.ACTIVE]);
+// The sources a FAILED row may name and still be re-driven under its id: it
+// failed before its SYNCING write, so its port never stepped anything. The
+// state machine carries the fact as the row's previous_state (the CAS'd
+// source of the FAILED write); a FAILED row is left only by this re-drive or
+// by REMOVING, and the re-drive is refused for every other source, so the
+// fact is never overwritten for an identity that opened (sticky).
+const NEVER_OPENED_FAILED_SOURCES = new Set([
+  ReplicaStatus.PENDING, ReplicaStatus.CREATING]);
+// The identity waits this module owns (spent-wait reporting, see
+// reportIdentityWaitSpent).
+const IDENTITY_WAIT = Object.freeze({
+  REPLICA_IDENTITY_RECORD: 'replica-identity-record',
+  CREATE_SYNCING_DEFERRAL: 'replica-create-syncing-deferral',
+  MESSAGE_GROUP_IDENTITY_RECORD: 'message-group-identity-record',
+});
+// What each identity wait awaits (the spent line's `awaited`).
+const IDENTITY_WAIT_AWAITED = Object.freeze({
+  CREATE_SYNCING_DEFERRAL: 'the authoritative services row becomes readable',
+  MESSAGE_GROUP_IDENTITY_RECORD:
+    'the replica services row is durably registered',
+});
+const WAIT_BOUND_SPENT_EVENT = 'wait_bound_spent';
+const WAIT_SITE_OBSERVED_NOTHING = 'site_observed_nothing';
+
+/**
+ * The one structured line of a spent identity wait, in the shape of the
+ * finalize branch's reportWaitBoundSpent (wait, awaited, boundMs,
+ * elapsedMs, lastObserved, scope) so the merge repoints each site to it.
+ * @param {Object} logger - The site's logger.
+ * @param {string} message - The site's log message.
+ * @param {Object} report - {wait, awaited, boundMs, elapsedMs, lastObserved,
+ *   scope}.
+ * @return {void}
+ */
+function reportIdentityWaitSpent(logger, message, report) {
+  logger?.warn?.(message, {
+    event: WAIT_BOUND_SPENT_EVENT,
+    wait: report.wait,
+    awaited: report.awaited,
+    boundMs: report.boundMs ?? null,
+    elapsedMs: report.elapsedMs ?? null,
+    lastObserved: report.lastObserved ?? WAIT_SITE_OBSERVED_NOTHING,
+    scope: report.scope ?? null,
+  });
+}
+
+function openedIdentityRestartRefusal(replicaId, row) {
+  const error = new Error(`Replica ${replicaId} is FAILED after it opened ` +
+    `(previous state ${row.previous_state ?? 'unknown'}): it is never ` +
+    're-driven under the same replica id; remove it and re-plan a new one');
+  error.code = OPENED_IDENTITY_RESTART_REFUSED_CODE;
+  error.errorCode = OPENED_IDENTITY_RESTART_REFUSED_CODE;
+  return error;
+}
 
 /**
  * Whether this replica identity existed on this node before (the open-time
@@ -33,7 +92,11 @@ const OPENED_REPLICA_STATUSES = new Set([
  * this create writes any status, names this node in a status written only
  * after an earlier open. A row that cannot be read authoritatively defers
  * the create (absence is never read as a first opening); a handler with no
- * lifecycle authority wired reads nothing and proves nothing.
+ * lifecycle authority wired reads nothing and proves nothing. A FAILED row
+ * of this node whose source was not PENDING/CREATING (it opened, may have
+ * voted or acked) is refused typed before any write (K3): the operation
+ * fails terminally, the FAILED-target cleanup removes it and a re-plan mints
+ * a new replica id.
  * @param {Object} handler - The replica handler.
  * @param {string} replicaId - The replica.
  * @return {Promise<boolean>}
@@ -53,8 +116,14 @@ async function observeReplicaIdentityExisted(handler, replicaId) {
     throw error;
   }
   const row = observation.row;
-  return row?.node_id === handler.nodeId &&
-    OPENED_REPLICA_STATUSES.has(row?.status);
+  if (row?.node_id !== handler.nodeId) {
+    return false;
+  }
+  if (row.status === ReplicaStatus.FAILED &&
+      !NEVER_OPENED_FAILED_SOURCES.has(row.previous_state)) {
+    throw openedIdentityRestartRefusal(replicaId, row);
+  }
+  return OPENED_REPLICA_STATUSES.has(row.status);
 }
 
 /**
@@ -107,18 +176,21 @@ async function recordReplicaIdentity(handler, replicaId, partitionId,
     // A create resumed on its own durable SYNCING row: the fact is written.
     return;
   }
+  const startedAt = Date.now();
   try {
     await handler.persistReplicaStatusWithRetry(replicaId,
       ReplicaStatus.SYNCING, {partitionId});
   } catch (error) {
     if (record !== null) {
-      handler.logger.warn(REPLICA_HANDLER_LOG_MSG.IDENTITY_RECORD_WAIT_SPENT, {
-        replicaId,
-        partitionId,
-        awaited: ReplicaStatus.SYNCING,
-        lastObserved: error?.message ?? null,
-        nodeId: handler.nodeId,
-      });
+      reportIdentityWaitSpent(handler.logger,
+        REPLICA_HANDLER_LOG_MSG.IDENTITY_RECORD_WAIT_SPENT, {
+          wait: IDENTITY_WAIT.REPLICA_IDENTITY_RECORD,
+          awaited: ReplicaStatus.SYNCING,
+          boundMs: REPLICA_HANDLER_DEFAULT.STATUS_WRITE_RETRY_TIMEOUT_MS,
+          elapsedMs: Date.now() - startedAt,
+          lastObserved: error?.message ?? null,
+          scope: {replicaId, partitionId, nodeId: handler.nodeId},
+        });
       record.abandon(error);
     }
     throw error;
@@ -142,8 +214,10 @@ async function observeReplicaIdentity(handler, replicaId,
 }
 
 export {
+  IDENTITY_WAIT,
+  IDENTITY_WAIT_AWAITED,
   observeReplicaIdentity,
-  observeReplicaIdentityExisted,
   pendingReplicaIdentityRecord,
   recordReplicaIdentity,
+  reportIdentityWaitSpent,
 };

@@ -87,6 +87,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   // create fails (verifier N3).
   IDENTITY_RECORD_WAIT_SPENT:
     'Replica identity record never became durable; the replica never participated',
+  CREATE_SYNCING_DEFERRAL_SPENT:
+    'Replica SYNCING write outcome stayed unresolved: the authoritative row was unreadable through the retry bound',
   UPDATE_STATUS_RETRY:
     'Retrying replica status persistence after retryable control-plane failure',
   CDC_UNAVAILABLE: 'CDC integration service not available',

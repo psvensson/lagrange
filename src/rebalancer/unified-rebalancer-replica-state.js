@@ -13,6 +13,7 @@ import {
   UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
 } from './unified-rebalancer-topology-drain-methods.js';
 import {readGlobalTopologyBlockingInFlightOperations} from './global-topology-blocking-operation-view.js';
+import {isLiveCreateTargetStatus} from './replica-status.js';
 const {
   COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -620,9 +621,8 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    * group's configuration as a voter whose port the failed create closed (the
    * ack-loss wedge: its FAILED write may never land). Surface those target
    * replica IDs to the planner as cleanup removals (the FAILED_REPLICA cure:
-   * REMOVE -> REMOVING -> the row-driven RemoveNode), so a failed create can
-   * neither hold the partition above target nor leave a closed voter in it.
-   *
+   * REMOVE -> REMOVING -> the row-driven RemoveNode). A live target (its row
+   * ACTIVE, M2) is never one: removing it would undo a healthy voter.
    * @return {Set<string>}
    * @private
    */
@@ -647,7 +647,9 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     );
     for (const operation of operations) {
       const targetReplicaId = this.getReplicaIdFromOperationRow(operation);
-      if (targetReplicaId.length > 0) {
+      if (targetReplicaId.length > 0 && !isLiveCreateTargetStatus(this
+        .systemTableCache.get?.(SYSTEM_TABLE_NAME.SERVICES, targetReplicaId)
+        ?.status)) {
         failedTargetReplicaIds.add(targetReplicaId);
       }
     }

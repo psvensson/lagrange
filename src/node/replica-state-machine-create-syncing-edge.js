@@ -47,13 +47,26 @@ function isCreateSyncingEdge(replicaState, previousState) {
     replicaState?.state === ReplicaState.SYNCING;
 }
 
+const CREATE_SYNCING_DEFERRAL = Symbol('createSyncingDeferral');
+
 function deferredSyncingResolution(replicaState, cause) {
   const error = durableTransitionNotAppliedError(
     replicaState.replicaId, replicaState.state, {deferRetry: true});
+  error[CREATE_SYNCING_DEFERRAL] = true;
   if (cause) {
     error.cause = cause;
   }
   return error;
+}
+
+/**
+ * Whether an error is this edge's retryable deferral (the row unreadable):
+ * the status owner's bound spent on it is the create-SYNCING deferral wait.
+ * @param {*} error - A thrown write outcome.
+ * @return {boolean}
+ */
+function isCreateSyncingDeferral(error) {
+  return error?.[CREATE_SYNCING_DEFERRAL] === true;
 }
 
 /**
@@ -118,6 +131,7 @@ async function settleUnappliedLifecycleWrite(stateMachine, replicaState,
 }
 
 export {
+  isCreateSyncingDeferral,
   isCreateSyncingEdge,
   resolveCreateSyncingEdge,
   settleUnappliedLifecycleWrite,

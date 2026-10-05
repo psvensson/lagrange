@@ -189,6 +189,8 @@ const JOINING_LOG_MSG = Object.freeze({
   MESSAGE_GROUP_REGISTERED: 'Message group service registered in cluster',
   MESSAGE_GROUP_REGISTER_RETRYING: 'Retrying message group service registration in cluster',
   MESSAGE_GROUP_REGISTER_FAILED: 'Failed to register message group service in cluster',
+  MESSAGE_GROUP_IDENTITY_RECORD_WAIT_SPENT:
+    'Message group replica identity record never became durable; the replica never participated',
   WAITING_LEADERSHIP: 'Waiting for message group leadership',
   LEADERSHIP_ESTABLISHED: 'Message group leadership established',
   WS_SELF_CONNECTED: 'WebSocket server started and self-connection established',

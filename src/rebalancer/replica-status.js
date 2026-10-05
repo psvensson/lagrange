@@ -241,7 +241,17 @@ function isPeerRowStatusAdmissible(status) {
   return !PEER_ROW_EXCLUDED_STATUSES.has(status || ReplicaStatus.ACTIVE);
 }
 
+// The post-intent boundary of a create (an ADD or REPLACE target), M2: its
+// authoritative services row is ACTIVE - the replica opened, caught up and
+// serves. Past it a create is never failed (the operation owner completes it
+// instead) and its target is never a failed-target cleanup candidate. A
+// target admitted but closed never wrote ACTIVE, so the cure still removes it.
+function isLiveCreateTargetStatus(status) {
+  return status === ReplicaStatus.ACTIVE;
+}
+
 export {
+  isLiveCreateTargetStatus,
   isPeerRowStatusAdmissible,
   createOperation,
   getAllStatusValues,

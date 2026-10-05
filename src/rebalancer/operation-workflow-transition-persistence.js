@@ -8,7 +8,7 @@ import {
   isPartitionReplace,
 } from './operation-workflow-replace-owner.js';
 import {
-  admitReplaceTerminalFailure,
+  admitCreateTerminalFailure,
 } from './operation-workflow-replace-terminal-admission.js';
 import {
   OperationWorkflowTransitionOrchestration,
@@ -59,8 +59,8 @@ const ALREADY_TERMINAL_TRANSITION_OUTCOME = Object.freeze({
   disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
 });
 
-// A failure of anything but a partition REPLACE: no D2 admission applies.
-const NON_REPLACE_FAILURE_ADMISSION = Object.freeze({
+// A failure no post-intent boundary applies to: written as it is.
+const UNBOUNDED_FAILURE_ADMISSION = Object.freeze({
   refused: false,
   persistOptions: Object.freeze({}),
 });
@@ -485,36 +485,42 @@ class OperationWorkflowTransitionPersistence
   }
 
   /**
-   * D2: after a partition REPLACE's DURABLE removal intent, only target
-   * death with the source still a voter may end it FAILED; every
-   * elapsed-time or heuristic failure is refused (typed) by failOperation,
-   * and logged here. An admitted REPLACE failure carries the durable step it
-   * was admitted against, for the terminal write's CAS.
+   * The one post-intent no-fail guard of a create (D2; M2): after a
+   * partition REPLACE's DURABLE removal intent only target death with the
+   * source still a voter may end it FAILED; after a partition ADD's target
+   * went live (its authoritative row ACTIVE) nothing may - it is completed
+   * instead. Every elapsed-time or heuristic failure past the intent is
+   * refused (typed) by failOperation, and logged here. An admitted REPLACE
+   * failure carries the durable step it was admitted against, for the
+   * terminal write's CAS.
    * @param {Object} operation
    * @param {string} errorMessage
    * @param {Object} options
-   * @return {Promise<Object>} Frozen {refused, persistOptions}.
+   * @return {Promise<Object>} Frozen {refused, persistOptions,
+   *   completeInstead}.
    */
   async admitOperationFailure(operation, errorMessage, options) {
-    if (!isPartitionReplace(operation)) {
-      return NON_REPLACE_FAILURE_ADMISSION;
-    }
-    const admission = await admitReplaceTerminalFailure(
+    const admission = await admitCreateTerminalFailure(
       this, operation, options);
     if (admission.admitted) {
-      return Object.freeze({refused: false, persistOptions: {
-        expectedWorkflowStep: admission.expectedWorkflowStep}});
+      return admission.expectedWorkflowStep === null ?
+        UNBOUNDED_FAILURE_ADMISSION :
+        Object.freeze({refused: false, persistOptions: {
+          expectedWorkflowStep: admission.expectedWorkflowStep}});
     }
     this.logger.warn(
       REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILURE_REFUSED_AFTER_INTENT,
       {
         operationId: operation.operationId,
+        type: operation.type,
         partitionId: operation.partitionId,
-        workflowStep: admission.expectedWorkflowStep,
+        workflowStep: admission.expectedWorkflowStep ??
+          operation.workflowStep,
         errorMessage: this.normalizeErrorMessage(errorMessage, null),
       },
     );
-    return Object.freeze({refused: true, persistOptions: {}});
+    return Object.freeze({refused: true, persistOptions: {},
+      completeInstead: admission.completeInstead});
   }
 
   /**
@@ -537,7 +543,8 @@ class OperationWorkflowTransitionPersistence
     const failureAdmission =
       await this.admitOperationFailure(operation, errorMessage, options);
     if (failureAdmission.refused) {
-      return buildReplaceFailureRefusal();
+      return failureAdmission.completeInstead ?
+        this.completeOperation(operation) : buildReplaceFailureRefusal();
     }
     const normalizedError = this.normalizeErrorMessage(
       errorMessage,

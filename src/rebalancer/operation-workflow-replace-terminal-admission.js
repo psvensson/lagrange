@@ -1,12 +1,16 @@
 /**
  * Owner contract:
- * Owner: the REPLACE owner's admission of terminal writes (quest
- * replace-source-removal-owner; D2, R11, A11.1).
- * Inputs: the operation's durable step (authoritative read), the owner's
- * R-1a verdict, and the options a terminal was admitted with.
- * Canonical output: whether a FAILED of a partition REPLACE is admitted and
- * the step CAS its write carries; whether the terminal-transition repair may
- * re-assert a retained REPLACE terminal.
+ * Owner: the post-intent admission of terminal writes of a create (quest
+ * replace-source-removal-owner; D2, R11, A11.1; M2 for ADD) - the ONE
+ * no-fail guard both create kinds share: past its intent a create is never
+ * failed by a timer or a heuristic.
+ * Inputs: the operation's durable step (authoritative read), the ADD
+ * target's authoritative row, the owner's R-1a verdict, and the options a
+ * terminal was admitted with.
+ * Canonical output: whether a FAILED of a partition REPLACE or ADD is
+ * admitted, the step CAS its write carries, and whether a refused ADD is
+ * completed instead; whether the terminal-transition repair may re-assert a
+ * retained REPLACE terminal.
  * Prohibited: no terminal is decided or written here.
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
@@ -18,8 +22,37 @@ import {
   isReplaceRemovalIntentDurable,
 } from './operation-workflow-replace-owner.js';
 
-const {OPERATION_WORKFLOW_OWNER_LITERAL, WORKFLOW_STEP} =
-  OPERATION_WORKFLOW_OWNER_SHARED;
+import {isLiveCreateTargetStatus} from './replica-status.js';
+
+const {
+  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+  OPERATION_WORKFLOW_OWNER_LITERAL,
+  OperationType,
+  SERVICE_TYPE,
+  WORKFLOW_STEP,
+} = OPERATION_WORKFLOW_OWNER_SHARED;
+
+// The ADD target's liveness is read from the authority only: a cache row
+// that lags is no evidence either way, and absence of evidence admits the
+// failure exactly as before.
+const ADD_TARGET_LIVENESS_READ = Object.freeze({
+  ...EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+  allowCacheFallback: false,
+});
+
+// A failure no post-intent boundary applies to (not a partition create).
+const NO_INTENT_FAILURE_ADMISSION = Object.freeze({
+  admitted: true,
+  expectedWorkflowStep: null,
+  completeInstead: false,
+});
+
+function isPartitionAdd(operation) {
+  return operation?.type === OperationType.ADD &&
+    (operation?.entityType === undefined ||
+      operation?.entityType === null ||
+      operation?.entityType === SERVICE_TYPE.PARTITION);
+}
 
 /**
  * The step the operation's durable row holds, from the authoritative read;
@@ -57,7 +90,49 @@ async function admitReplaceTerminalFailure(owner, operation, options = {}) {
     {...operation, workflowStep: durableStep}) ||
     options?.replacePostIntentFailure ===
       REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED;
-  return Object.freeze({admitted, expectedWorkflowStep: durableStep});
+  return Object.freeze({admitted, expectedWorkflowStep: durableStep,
+    completeInstead: false});
+}
+
+/**
+ * M2: an ADD's intent is its target going live - the authoritative row
+ * ACTIVE (isLiveCreateTargetStatus). An ADD failed after that (the SYNCING
+ * step timer firing after the promotion, a lost completion answer) would
+ * leave a healthy voter as a failed target: it is refused and completed
+ * instead, as the operation completes on that same evidence.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<Object>} Frozen {admitted, expectedWorkflowStep,
+ *   completeInstead}.
+ */
+async function admitAddTerminalFailure(owner, operation) {
+  const observation = typeof owner.repository?.getActualReplicaObservation ===
+    OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
+    await owner.repository.getActualReplicaObservation(operation.replicaId,
+      operation.partitionId, operation.targetNodeId,
+      ADD_TARGET_LIVENESS_READ) : null;
+  const live = observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL
+    .OBSERVED && isLiveCreateTargetStatus(observation.lifecycleStatus);
+  return Object.freeze({admitted: !live, expectedWorkflowStep: null,
+    completeInstead: live});
+}
+
+/**
+ * The one post-intent failure admission of a create, for both kinds.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {Object} options - failOperation options.
+ * @return {Promise<Object>} Frozen {admitted, expectedWorkflowStep,
+ *   completeInstead}.
+ */
+function admitCreateTerminalFailure(owner, operation, options = {}) {
+  if (isPartitionReplace(operation)) {
+    return admitReplaceTerminalFailure(owner, operation, options);
+  }
+  if (isPartitionAdd(operation)) {
+    return admitAddTerminalFailure(owner, operation);
+  }
+  return Promise.resolve(NO_INTENT_FAILURE_ADMISSION);
 }
 
 /**
@@ -103,6 +178,6 @@ async function admitReplaceTerminalRepair(owner, projectedOperation,
 }
 
 export {
-  admitReplaceTerminalFailure,
+  admitCreateTerminalFailure,
   admitReplaceTerminalRepair,
 };

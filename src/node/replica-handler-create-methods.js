@@ -63,6 +63,10 @@ const REPLICA_CREATE_PENDING_DECISION = Object.freeze({
   REPORT_IN_PROGRESS: 'report_in_progress',
   RESTART_CREATE: 'restart_create',
 });
+// Rows a create re-drives when nothing runs for them in this process: PENDING
+// never opened; SYNCING is the ack-loss wedge, resumed at its own row (F3 c).
+const RESTARTABLE_CREATE_STATUSES = new Set([
+  ReplicaStatus.PENDING, ReplicaStatus.SYNCING]);
 
 function rowMatchesActiveStorageAdmission(row, handler, replicaId,
   partitionId, version) {
@@ -229,26 +233,17 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           existingReplica.status === ReplicaStatus.SYNCING
         ) {
           const pendingDecision = this.resolvePendingReplicaCreateDecision(
-            existingReplica,
-            replicaId,
-          );
+            existingReplica, replicaId);
           if (
             pendingDecision === REPLICA_CREATE_PENDING_DECISION.RESTART_CREATE
           ) {
-            this.logger.info(
-              REPLICA_HANDLER_LOG_MSG.CREATE_RESTARTING_PENDING,
-              {
-                replicaId: existingReplica.replicaId,
-                status: existingReplica.status,
-                nodeId: this.nodeId,
-              },
-            );
+            this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_RESTARTING_PENDING, {
+              replicaId: existingReplica.replicaId,
+              status: existingReplica.status,
+              nodeId: this.nodeId,
+            });
             this.trackReplicaCreateOperation(
-              operationId,
-              partitionId,
-              replicaId,
-              tableName,
-            );
+              operationId, partitionId, replicaId, tableName);
             this.startCreateReplicaAsync(createRequest);
             return this.buildReplicaOperationResponse(
               ReplicaOperationResponseStatus.INITIATED,
@@ -345,7 +340,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
      */
     resolvePendingReplicaCreateDecision(existingReplica, replicaId) {
       const snapshot = {
-        hasPendingStatus: existingReplica?.status === ReplicaStatus.PENDING,
+        hasPendingStatus:
+          RESTARTABLE_CREATE_STATUSES.has(existingReplica?.status),
         hasInProgressCreate: this.hasInProgressReplicaCreation(replicaId),
         hasTrackedService: Boolean(this.getTrackedService(replicaId)),
       };

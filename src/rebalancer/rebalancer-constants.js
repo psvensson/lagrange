@@ -247,7 +247,7 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_COMPLETED: 'Operation completed',
   OPERATION_FAILED: 'Operation failed',
   OPERATION_FAILURE_REFUSED_AFTER_INTENT:
-    'REPLACE failure refused after durable source-removal intent',
+    'Create failure refused after its intent (REPLACE durable source-removal intent; ADD target live)',
   REPLACE_SOURCE_REMOVAL_WAITING: 'REPLACE source removal waiting',
   OPERATION_BLOCKED_BY_SAFETY_POLICY: 'Operation blocked by safety policy',
   OPERATION_DEFERRED_BY_SAFETY_POLICY: 'Operation deferred by safety policy',

@@ -207,8 +207,10 @@ const RATCHET_TARGETS = [
     // after the message-group MOVE_REPLICA tests were deleted.
     // 2026-10-04: tightened 713/27072 -> 713/27050 on the checker's hint
     // after the handler's CREATE acceptance cases became refusal cases (C3).
-    baselineCloneGroupCount: 713,
-    baselineDuplicatedLineCount: 27050,
+    // 2026-10-05: tightened 713/27050 -> 712/27025 on the checker's hint
+    // after the identity-record witnesses shared their fixtures.
+    baselineCloneGroupCount: 712,
+    baselineDuplicatedLineCount: 27025,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

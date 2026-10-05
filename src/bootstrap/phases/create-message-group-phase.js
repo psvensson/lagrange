@@ -10,8 +10,12 @@ import {
   DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
 } from '../replication-target-authority.js';
 import {NodeService} from '../../node/node-service.js';
-import {pendingReplicaIdentityRecord} from
-  '../../node/replica-prior-existence.js';
+import {
+  IDENTITY_WAIT,
+  IDENTITY_WAIT_AWAITED,
+  pendingReplicaIdentityRecord,
+  reportIdentityWaitSpent,
+} from '../../node/replica-prior-existence.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../message-group-assignment.js';
@@ -197,11 +201,21 @@ class CreateMessageGroupPhase {
       this.identityRecordByReplicaId.delete(replicaId);
       return {identityExisted: true, identityRecorded: null};
     }
-    this.identityRecordByReplicaId.set(replicaId, record);
+    this.identityRecordByReplicaId.set(replicaId,
+      {...record, startedAt: Date.now()});
     return {identityExisted: false, identityRecorded: record.recorded};
   }
 
-  settleJoinReplicaIdentityRecord(replicaId, error = null) {
+  /**
+   * Release a first-join replica's identity record on its durable
+   * registration, or abandon it (the spent wait logged once) when the
+   * registration ended without one.
+   * @param {string} replicaId - The replica.
+   * @param {Error|null} error - Why the registration ended without a row.
+   * @param {number|null} boundMs - The registration's bound, if any.
+   * @return {void}
+   */
+  settleJoinReplicaIdentityRecord(replicaId, error = null, boundMs = null) {
     const record = this.identityRecordByReplicaId.get(replicaId);
     if (!record) {
       return;
@@ -209,9 +223,18 @@ class CreateMessageGroupPhase {
     this.identityRecordByReplicaId.delete(replicaId);
     if (error === null) {
       record.release();
-    } else {
-      record.abandon(error);
+      return;
     }
+    reportIdentityWaitSpent(this.delegates.getLogger(),
+      JOINING_LOG_MSG.MESSAGE_GROUP_IDENTITY_RECORD_WAIT_SPENT, {
+        wait: IDENTITY_WAIT.MESSAGE_GROUP_IDENTITY_RECORD,
+        awaited: IDENTITY_WAIT_AWAITED.MESSAGE_GROUP_IDENTITY_RECORD,
+        boundMs,
+        elapsedMs: Date.now() - record.startedAt,
+        lastObserved: error.message ?? null,
+        scope: {replicaId, nodeId: this.nodeId},
+      });
+    record.abandon(error);
   }
 
   /**
@@ -592,7 +615,7 @@ class CreateMessageGroupPhase {
         retryTimeoutMs,
       ),
     );
-    this.settleJoinReplicaIdentityRecord(replicaId, error);
+    this.settleJoinReplicaIdentityRecord(replicaId, error, retryTimeoutMs);
     logger.error(
       JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_FAILED,
       {

@@ -47,7 +47,7 @@ function addressOf(replicaId) {
 
 // The partition factory: one real port per create, from the handler's own
 // options; a refused opening throws as PartitionService.initialize does.
-function portRequest(options, db) {
+function portRequest(options, db, overrides = {}) {
   return {
     [REQUEST.GROUP_ID]: options.partitionId,
     [REQUEST.PEER_ID]: options.replicaId,
@@ -64,13 +64,16 @@ function portRequest(options, db) {
     [REQUEST.RESOLVE_PEER_ADDRESS]: addressOf,
     [REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
     [REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
+    ...overrides,
   };
 }
 
-function realPortFactory(directory, opened) {
+// overridesFor(options) - request fields a scenario replaces (a founding
+// membership with a second voter and its transport).
+function realPortFactory(directory, opened, overridesFor = () => ({})) {
   return async (options) => {
     const db = new Database(path.join(directory, `${options.replicaId}.db`));
-    const request = portRequest(options, db);
+    const request = portRequest(options, db, overridesFor(options));
     const entry = {options, port: null, refusal: null, closed: false};
     opened.push(entry);
     try {
@@ -96,6 +99,65 @@ function realPortFactory(directory, opened) {
       },
       async syncFromLeader() {},
     }, options);
+  };
+}
+
+// A services row of this node for the replica, in `status`.
+function openedRow(replicaId, status) {
+  return {
+    service_id: replicaId,
+    service_type: 'partition',
+    partition_id: PARTITION_ID,
+    node_id: NODE_ID,
+    replica_id: replicaId,
+    status,
+    address: `${NODE_ID}/partition/${replicaId}`,
+    created_at: 1,
+    state_entered_at: 1,
+    updated_at: 1,
+  };
+}
+
+// A durable record that never voted: no hard state beyond term 0 / vote 0,
+// no log entry, the opening configuration at applied index 0.
+function readRecord(directory, replicaId) {
+  const db = new Database(path.join(directory, `${replicaId}.db`),
+    {readonly: true});
+  try {
+    return {
+      hardState: db.prepare('SELECT term, vote, commit_index FROM ' +
+        '_raft_rs_hard_state WHERE group_id = ?').get(PARTITION_ID) ?? null,
+      entries: db.prepare('SELECT COUNT(*) AS n FROM _raft_rs_log ' +
+        'WHERE group_id = ?').get(PARTITION_ID).n,
+      applied: db.prepare('SELECT applied_index FROM ' +
+        '_raft_rs_applied_state WHERE group_id = ?').get(PARTITION_ID),
+    };
+  } finally {
+    db.close();
+  }
+}
+
+function isVirgin(record) {
+  return record.entries === 0 &&
+    Number(record.applied?.applied_index ?? 0) === 0 &&
+    (record.hardState === null || (Number(record.hardState.term) === 0 &&
+      Number(record.hardState.vote) === 0));
+}
+
+// An earlier attempt of this create left its record and its durable
+// SYNCING row: gated (virgin) or, for the control, one that led.
+function leaveEarlierAttempt(replicaId, {voted}) {
+  return (directory) => {
+    const db = new Database(path.join(directory, `${replicaId}.db`));
+    const pending = Promise.withResolvers();
+    pending.promise.catch(() => undefined);
+    const port = createRaftRsOperationPort(portRequest({
+      partitionId: PARTITION_ID, replicaId, identityExisted: false,
+      ...(voted ? {} : {identityRecorded: pending.promise}),
+    }, db));
+    port.campaign();
+    port.close();
+    db.close();
   };
 }
 
@@ -269,19 +331,6 @@ export async function registerReplicaHandlerIdentityRecordTests({
     }
   });
 
-  const openedRow = (replicaId, status) => ({
-    service_id: replicaId,
-    service_type: 'partition',
-    partition_id: PARTITION_ID,
-    node_id: NODE_ID,
-    replica_id: replicaId,
-    status,
-    address: `${NODE_ID}/partition/${replicaId}`,
-    created_at: 1,
-    state_entered_at: 1,
-    updated_at: 1,
-  });
-
   for (const [name, status, request] of [
     ['runtime repair (no status write)', ReplicaStatus.ACTIVE,
       {skipLifecycleStatusPersistence: true}],
@@ -351,72 +400,41 @@ export async function registerReplicaHandlerIdentityRecordTests({
     }
   });
 
-  t.test('R5b: a lost answer is never resolved by a SYNCING row of another ' +
-    'incarnation: the record stays unreleased and the create fails',
-  async (t) => {
-    let released = null;
-    const run = await driveCreate({
-      replicaId: 'r5b-target',
-      beforeMutation: (mutation, opened, store) => {
-        if (!syncingWrite(mutation, ReplicaStatus.SYNCING)) return;
-        store.setApplyThenThrowStatus(ReplicaStatus.SYNCING);
-        store.setBeforeAuthoritativeRead((_table, _params, durable) => {
-          const row = durable.services.get('r5b-target');
-          if (row?.status === ReplicaStatus.SYNCING) {
-            durable.services.set('r5b-target', {...row, created_at: 999});
-          }
-          released = recordStateAt(opened[0]);
-        });
-      },
+  // R5b/R5c (verifier Z1, Z2): the incarnation the lost answer is resolved
+  // against includes created_at and node_id - the same replica id on another
+  // incarnation's or another node's row is never adopted.
+  for (const [label, field, value] of [
+    ['another incarnation', 'created_at', 999],
+    ['another node', 'node_id', 'other-node'],
+  ]) {
+    t.test(`R5${field === 'node_id' ? 'c' : 'b'}: a lost answer is never ` +
+      `resolved by a SYNCING row of ${label}: the record stays unreleased ` +
+      'and the create fails', async (t) => {
+      const replicaId = `r5-${field}-target`;
+      let released = null;
+      const run = await driveCreate({
+        replicaId,
+        beforeMutation: (mutation, opened, store) => {
+          if (!syncingWrite(mutation, ReplicaStatus.SYNCING)) return;
+          store.setApplyThenThrowStatus(ReplicaStatus.SYNCING);
+          store.setBeforeAuthoritativeRead((_table, _params, durable) => {
+            const row = durable.services.get(replicaId);
+            if (row?.status === ReplicaStatus.SYNCING) {
+              durable.services.set(replicaId, {...row, [field]: value});
+            }
+            released = recordStateAt(opened[0]);
+          });
+        },
+      });
+      try {
+        t.ok(run.failure, 'the create fails');
+        t.equal(released, false, 'unreleased when the row was read');
+        t.ok(run.warnings.some((line) => line.message ===
+          REPLICA_HANDLER_LOG_MSG.IDENTITY_RECORD_WAIT_SPENT), 'spent wait');
+      } finally {
+        await run.finish();
+      }
     });
-    try {
-      t.ok(run.failure, 'the create fails');
-      t.equal(released, false, 'unreleased when the row was read');
-      t.ok(run.warnings.some((line) => line.message ===
-        REPLICA_HANDLER_LOG_MSG.IDENTITY_RECORD_WAIT_SPENT), 'spent wait');
-    } finally {
-      await run.finish();
-    }
-  });
-
-  // A durable record that never voted: no hard state beyond term 0 / vote 0,
-  // no log entry, the opening configuration at applied index 0.
-  function readRecord(directory, replicaId) {
-    const db = new Database(path.join(directory, `${replicaId}.db`),
-      {readonly: true});
-    try {
-      return {
-        hardState: db.prepare('SELECT term, vote, commit_index FROM ' +
-          '_raft_rs_hard_state WHERE group_id = ?').get(PARTITION_ID) ?? null,
-        entries: db.prepare('SELECT COUNT(*) AS n FROM _raft_rs_log ' +
-          'WHERE group_id = ?').get(PARTITION_ID).n,
-        applied: db.prepare('SELECT applied_index FROM ' +
-          '_raft_rs_applied_state WHERE group_id = ?').get(PARTITION_ID),
-      };
-    } finally {
-      db.close();
-    }
-  }
-  const isVirgin = (record) => record.entries === 0 &&
-    Number(record.applied?.applied_index ?? 0) === 0 &&
-    (record.hardState === null || (Number(record.hardState.term) === 0 &&
-      Number(record.hardState.vote) === 0));
-
-  // An earlier attempt of this create left its record and its durable
-  // SYNCING row: gated (virgin) or, for the control, one that led.
-  function leaveEarlierAttempt(replicaId, {voted}) {
-    return (directory) => {
-      const db = new Database(path.join(directory, `${replicaId}.db`));
-      const pending = Promise.withResolvers();
-      pending.promise.catch(() => undefined);
-      const port = createRaftRsOperationPort(portRequest({
-        partitionId: PARTITION_ID, replicaId, identityExisted: false,
-        ...(voted ? {} : {identityRecorded: pending.promise}),
-      }, db));
-      port.campaign();
-      port.close();
-      db.close();
-    };
   }
 
   for (const voted of [false, true]) {
@@ -454,3 +472,15 @@ export async function registerReplicaHandlerIdentityRecordTests({
     });
   }
 }
+
+export {
+  NODE_ID,
+  PARTITION_ID,
+  addressOf,
+  portRequest,
+  isVirgin,
+  leaveEarlierAttempt,
+  openedRow,
+  readRecord,
+  realPortFactory,
+};

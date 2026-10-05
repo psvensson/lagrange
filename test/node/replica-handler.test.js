@@ -41,6 +41,8 @@ import {
 import {registerReplicaHandlerTailTests} from './replica-handler-tail-test-cases.js';
 import {registerReplicaHandlerIdentityRecordTests} from
   './replica-handler-identity-record-test-cases.js';
+import {registerReplicaHandlerIdentityEntryTests} from
+  './replica-handler-identity-entry-test-cases.js';
 import {createReplicaLifecycleStateMachineFixture} from
   '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from
@@ -1142,10 +1144,14 @@ test('ReplicaHandler', async (t) => {
 
       handler.initialize();
 
+      // A SYNCING replica whose runtime this process still runs: the create
+      // is in progress. (A SYNCING row with nothing running here is the
+      // ack-loss wedge and is re-driven - replica-handler-identity-entry.)
       handler.localReplicas.set(TEST_IN_PROGRESS_REPLICA_ID, {
         replicaId: TEST_IN_PROGRESS_REPLICA_ID,
         partitionId: TEST_IN_PROGRESS_PARTITION_ID,
         status: ReplicaStatus.SYNCING,
+        service: {async shutdown() {}},
       });
 
       const request = {
@@ -1234,7 +1240,7 @@ test('ReplicaHandler', async (t) => {
     waitForReplicaEvent,
     tempDir,
   });
-  await registerReplicaHandlerIdentityRecordTests({
+  const identityFixtures = {
     t,
     ReplicaHandler,
     OperationType,
@@ -1242,5 +1248,7 @@ test('ReplicaHandler', async (t) => {
     ReplicaStateMachine,
     createMockCDCService,
     createSeededCache,
-  });
+  };
+  await registerReplicaHandlerIdentityRecordTests(identityFixtures);
+  await registerReplicaHandlerIdentityEntryTests(identityFixtures);
 });

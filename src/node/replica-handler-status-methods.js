@@ -20,6 +20,13 @@ import {settlePartitionServiceActiveAdmission} from
   '../bootstrap/shared/partition-service-activation.js';
 import {isReplicaServiceHandlerBound} from
   './replica-transport-handler-identity.js';
+import {isCreateSyncingDeferral} from
+  './replica-state-machine-create-syncing-edge.js';
+import {
+  IDENTITY_WAIT,
+  IDENTITY_WAIT_AWAITED,
+  reportIdentityWaitSpent,
+} from './replica-prior-existence.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -39,6 +46,7 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
       newStatus,
       additionalData = {},
     ) {
+      const startedAt = Date.now();
       return runRetryableControlPlaneWrite(
         () => this.updateReplicaStatus(replicaId, newStatus, additionalData),
         {
@@ -66,7 +74,21 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
             });
           },
         },
-      );
+      ).catch((error) => {
+        if (isCreateSyncingDeferral(error)) {
+          reportIdentityWaitSpent(this.logger,
+            REPLICA_HANDLER_LOG_MSG.CREATE_SYNCING_DEFERRAL_SPENT, {
+              wait: IDENTITY_WAIT.CREATE_SYNCING_DEFERRAL,
+              awaited: IDENTITY_WAIT_AWAITED.CREATE_SYNCING_DEFERRAL,
+              boundMs: REPLICA_HANDLER_DEFAULT.STATUS_WRITE_RETRY_TIMEOUT_MS,
+              elapsedMs: Date.now() - startedAt,
+              lastObserved: error.cause?.message ?? error.message,
+              scope: {replicaId, partitionId: additionalData.partitionId ??
+                null, nodeId: this.nodeId},
+            });
+        }
+        throw error;
+      });
     }
     /**
      * Update replica status through the replica lifecycle state machine.
