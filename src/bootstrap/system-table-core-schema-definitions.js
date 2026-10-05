@@ -53,6 +53,9 @@ const PARTITIONS_SCHEMA = {
     {name: 'table_name', type: COLUMN_TYPE.TEXT},
     {name: 'partition_key_start', type: COLUMN_TYPE.TEXT},
     {name: 'partition_key_end', type: COLUMN_TYPE.TEXT},
+    // Declared primary-key type that owns decoding of persisted boundaries.
+    // Null marks legacy rows as ambiguous; routing must revalidate/fail closed.
+    {name: 'partition_key_type', type: COLUMN_TYPE.TEXT},
     {
       name: 'partition_version',
       type: COLUMN_TYPE.INTEGER,
