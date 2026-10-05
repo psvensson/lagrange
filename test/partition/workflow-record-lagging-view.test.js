@@ -9,7 +9,7 @@
  * The owner's provisioning-mark flip lands but its acknowledgement is lost;
  * at that moment the owner's view lags: it shows (a) this owner's own
  * earlier record (registration), or (b) the record before this owner's
- * claim (another owner's, lapsed). Neither a false rebuild nor a false
+ * claim (the table with no transition yet). Neither a false rebuild nor a false
  * loss follows: the lost acknowledgement is recognised, the create is sent,
  * the step continues to backfilling, the owner keeps the workflow, no WARN.
  *
@@ -82,23 +82,12 @@ const isFirstFlip = (write) => write.writer === 'A' && write.changes === 1 &&
   typeof value === 'string' && value.includes(`":"${DISPATCHED}"`)) &&
   !String(write.params.at(-2) ?? '').includes(`":"${DISPATCHED}"`);
 
-// Seed the record with a lapsed claim of another owner (case b's view).
-function seedLapsedForeignClaim(store) {
-  store.db.prepare('UPDATE tables SET partition_transition_state = ?, ' +
-    'partition_transition_metadata = ? WHERE table_id = ?')
-    .run('deferred', JSON.stringify({workflowId: 'wf-previous',
-      workflowOwnerId: 'owner-Z', workflowFenceToken: 7,
-      workflowLeaseExpiresAt: 1}), store.tableId);
-}
 
 for (const family of Object.keys(FAMILY)) {
   for (const lag of ['own-earlier-record', 'record-before-the-claim']) {
     test(`S3 ${family}: a lost acknowledgement while the view shows the ` +
       `${lag}: no false rebuild, no false loss`, async (t) => {
       const store = FAMILY[family].store();
-      if (lag === 'record-before-the-claim') {
-        seedLapsedForeignClaim(store);
-      }
       const clock = {now: 1000};
       const sent = [];
       let lagging = null;
@@ -149,29 +138,29 @@ for (const family of Object.keys(FAMILY)) {
   test(`S3c ${family}: a lagging authoritative read is never a false loss`,
     async (t) => {
       const store = FAMILY[family].store();
-      seedLapsedForeignClaim(store);
+      // The record before this owner's claim: the table with no transition.
       const before = store.tablesRow();
       const clock = {now: 1000};
       const a = owner(family, store, 'A', {now: () => clock.now,
         provisionInitialTablePartition: async () => {}});
-      let lagOnce = false;
-      a.workflow.readAuthoritativeWorkflowRecord = async () => {
-        if (lagOnce) {
-          lagOnce = false;
-          return before;
-        }
-        return store.tablesRow();
-      };
+      // From the refused flip until the step settled, every authoritative
+      // read lags (it shows the record before this owner's claim).
+      let lagging = false;
+      a.workflow.readAuthoritativeWorkflowRecord = async () =>
+        (lagging ? before : store.tablesRow());
       // The first DISPATCHED flip is refused (zero rows: a racing write is
       // modelled by refusing it once) while the authoritative read lags.
       let refused = false;
-      const cdc = a.workflow.getCDCIntegrationService();
-      const update = cdc.updateSystemTableRow.bind(cdc);
-      cdc.updateSystemTableRow = async (tableName, where, data, options) => {
+      // Refused at the record store's own seam (the gateway's compare-and-
+      // swap answers zero rows).
+      const gateway = a.workflow.getControlPlaneSystemTableGateway();
+      const update = gateway.updateSystemTableRow.bind(gateway);
+      gateway.updateSystemTableRow = async (tableName, where, data,
+        options) => {
         if (!refused && String(data?.partition_transition_metadata ?? '')
           .includes(`":"${DISPATCHED}"`)) {
           refused = true;
-          lagOnce = true;
+          lagging = true;
           return {success: true, affectedRows: 0};
         }
         return update(tableName, where, data, options);
@@ -179,6 +168,7 @@ for (const family of Object.keys(FAMILY)) {
       const result = await FAMILY[family].start(a).then((value) => value,
         (error) => ({threw: error.message}));
       await turns(50);
+      lagging = false;
       t.ok(refused, 'setup: the flip was refused while the read lagged');
       t.ok(result?.threw || result?.success === false,
         'the step failed on the unconfirmed flip (nothing sent)');
