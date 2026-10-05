@@ -13,6 +13,7 @@ import {
 
 const SPLIT_KEY_TYPE = Object.freeze({
   NUMBER: 'number',
+  BIGINT: 'bigint',
   STRING: 'string',
   BUFFER: 'buffer',
 });
@@ -21,9 +22,12 @@ const COMPARISON_RESULT = Object.freeze({
   RIGHT: 1,
   EQUAL: 0,
 });
-const SUPPORTED_KEY_TYPE_LIST = 'number/string/buffer';
+const SUPPORTED_KEY_TYPE_LIST = 'number/bigint/string/buffer';
 
 function resolveSplitKeyType(value) {
+  if (typeof value === SPLIT_KEY_TYPE.BIGINT) {
+    return SPLIT_KEY_TYPE.BIGINT;
+  }
   if (typeof value === SPLIT_KEY_TYPE.NUMBER && Number.isFinite(value)) {
     return SPLIT_KEY_TYPE.NUMBER;
   }
@@ -112,6 +116,7 @@ function isTextEncodedNumber(value) {
 function compareWithinType(keyType, a, b) {
   if (keyType === SPLIT_KEY_TYPE.BUFFER) return Buffer.compare(a, b);
   if (keyType === SPLIT_KEY_TYPE.NUMBER) return a - b;
+  if (keyType === SPLIT_KEY_TYPE.BIGINT) return a < b ? -1 : a > b ? 1 : 0;
   return a.localeCompare(b);
 }
 
@@ -129,6 +134,12 @@ function compareAbsentKeys(a, b) {
 }
 
 function compareNumberWithTextEncodedNumber(a, b, aType, bType) {
+  if (aType === SPLIT_KEY_TYPE.BIGINT && typeof b === SPLIT_KEY_TYPE.NUMBER && Number.isSafeInteger(b)) {
+    return compareWithinType(SPLIT_KEY_TYPE.BIGINT, a, BigInt(b));
+  }
+  if (bType === SPLIT_KEY_TYPE.BIGINT && typeof a === SPLIT_KEY_TYPE.NUMBER && Number.isSafeInteger(a)) {
+    return compareWithinType(SPLIT_KEY_TYPE.BIGINT, BigInt(a), b);
+  }
   if (aType === SPLIT_KEY_TYPE.NUMBER && isTextEncodedNumber(b)) {
     return a - Number(b);
   }
