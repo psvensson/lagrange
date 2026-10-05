@@ -496,6 +496,11 @@ class ManagedSplitWorkflowPersistenceMethods {
       existing.partition_key_end ?? existing.partitionKeyEnd ?? null,
     );
     compareField(
+      'partition_key_type',
+      expected.partition_key_type ?? null,
+      existing.partition_key_type ?? existing.partitionKeyType ?? null,
+    );
+    compareField(
       LOCAL_STR_PARTITION_VERSION,
       expected.partition_version,
       existing.partition_version ?? existing.partitionVersion ?? null,
