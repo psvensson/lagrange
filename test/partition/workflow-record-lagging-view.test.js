@@ -130,6 +130,13 @@ for (const family of Object.keys(FAMILY)) {
   }
 }
 
+// A record write's options name no replayable write identity (a replayed
+// answer of an earlier CAS would read as this change's lost acknowledgement).
+function carriesNoWriteIdentity(options) {
+  return !Object.hasOwn(options || {}, 'writeIdentity') &&
+    !Object.hasOwn(options || {}, 'idempotencyKey');
+}
+
 // S3c the AUTHORITATIVE read itself lags (a table-partition leader change
 // before the new leader applied): it shows the record before this owner's
 // claim. A refused change is then UNCONFIRMED - nothing decided, nothing
@@ -155,8 +162,12 @@ for (const family of Object.keys(FAMILY)) {
       // swap answers zero rows).
       const gateway = a.workflow.getControlPlaneSystemTableGateway();
       const update = gateway.updateSystemTableRow.bind(gateway);
+      // O3 (replay-branch merge obligation): a record compare-and-swap
+      // never carries a held named write identity, only its own CAS.
+      const casOptions = [];
       gateway.updateSystemTableRow = async (tableName, where, data,
         options) => {
+        casOptions.push(options);
         if (!refused && String(data?.partition_transition_metadata ?? '')
           .includes(`":"${DISPATCHED}"`)) {
           refused = true;
@@ -170,6 +181,8 @@ for (const family of Object.keys(FAMILY)) {
       await turns(50);
       lagging = false;
       t.ok(refused, 'setup: the flip was refused while the read lagged');
+      t.ok(casOptions.length > 0 && casOptions.every(carriesNoWriteIdentity),
+        'no record compare-and-swap carries a write identity');
       t.ok(result?.threw || result?.success === false,
         'the step failed on the unconfirmed flip (nothing sent)');
       t.equal(a.log.lines.filter((line) => line.level === 'warn' &&
