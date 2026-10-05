@@ -23,12 +23,14 @@ node scripts/solve.js land  --id <id>       # guards, tests, commits; never push
 Two more exist: `evidence add <path> --quest <id>` uploads a file too large for
 git and records it only after re-download and re-hash, and `board` lists open
 epics and quests. There are no others; anything else you have seen written down
-is a retired v1 operation.
+is a retired v1 operation. The landing guard itself answers, read-only, whether
+every production-surface (`src/`, `vendor/`) change a range brings is a solver landing, which is what the main
+push gate asks: `node scripts/solve/guards.js admit --base <sha> --head <sha>`.
 
 `note` takes exactly one of `--finding`, `--attempt`, `--verification`,
 `--blocked`, `--exhausted` or `--superseded`. A verification also takes
-`--verifier subagent:<id>` and `--verdict approve|reject`. Changes under `src/`
-cannot land without an approving verification newer than the last attempt.
+`--verifier subagent:<id>` and `--verdict approve|reject`. Production-surface
+changes cannot land without an approving verification newer than the last attempt.
 
 ## After A Rejection
 
@@ -71,7 +73,9 @@ Completion" and must-not #16 stated it. It applies to ad-hoc work as much as to
 a quest, so it needs a home that ad-hoc work reaches.
 
 When a unit of work is complete and coherent - a quest terminal, a bug fix, a
-docs or tooling change, anything you would report as done - commit it. Do not
+docs or tooling change, anything you would report as done - commit it. A
+production-surface change (`src/`, `vendor/`) is committed only by `land`, however small: the main push
+gate refuses a direct one, naming the commit and its paths. Do not
 leave finished work sitting uncommitted waiting to be asked. Committing
 completed work is durably authorised; a never-before-authorised push or publish
 is not, and stays an authority boundary under R16.
@@ -228,6 +232,22 @@ a driver `npm run hooks:install` configures: a merge keeps ours instead of
 conflicting, and the merged tree owes `npm run -s test:metadata:refresh` and
 `node scripts/generate-global-owner-debt-inventory.js` (`--refresh` when its
 inputs are absent) before it is pushed.
+
+A merge that brings unlanded production-surface commits to `main`, or changes
+that surface itself (anything but a path only the other side changed), needs an
+exact-commit receipt for the merge commit BEFORE the push: build the merge locally, run
+`npm run check:release` on it, and record what it prints,
+`node scripts/proof-authority.js record release-full-v1 <merge sha>`. That is
+the only honest producer for a sha not yet on `main`; the publisher records
+after a push. An emergency revert of a red `main` is no exception: it is a
+quest whose probe is the red witness, landed with the revert as its change.
+The code on the remote `main` judges a main push; if that code itself fails,
+every main push is refused, and the one way past is the documented emergency
+`git push --no-verify` (it skips every stage) with the owner's authorisation,
+pushing the repair. An exact-SHA owner authorisation for a materially stale
+branch merge has no recording owner yet: `scripts/action-authority.js` decides
+registered actions and writes no record, and registers no merge action (the
+follow-up quest `stale-branch-authority-drift` adds it).
 
 `solve land` proves the quest delta, not the branch: its `npm test` runs with
 the change-proof base pinned to `HEAD` (the index it is about to commit
