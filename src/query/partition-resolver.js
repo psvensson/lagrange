@@ -6,6 +6,8 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {compareRoutingKeys} from '../partition/split-key-comparator.js';
+import {decodePartitionBoundaryValue} from
+  '../partition/partition-boundary-representation.js';
 import {TABLES} from '../constants/index.js';
 import {
   QUERY_AST_NODE,
@@ -650,24 +652,27 @@ class PartitionResolver {
       partition.partition_key_start : partition.keyRange?.start;
     const end = 'partition_key_end' in partition ?
       partition.partition_key_end : partition.keyRange?.end;
+    const keyType = partition.partition_key_type ?? partition.partitionKeyType;
+    const decodedStart = decodePartitionBoundaryValue(start, keyType);
+    const decodedEnd = decodePartitionBoundaryValue(end, keyType);
 
     // NULL/undefined start means unbounded lower (negative infinity)
     // NULL/undefined end means unbounded upper (positive infinity)
-    if ((start === null || start === undefined) &&
-        (end === null || end === undefined)) {
+    if ((decodedStart === null || decodedStart === undefined) &&
+        (decodedEnd === null || decodedEnd === undefined)) {
       return true;
     }
 
-    if (start === null || start === undefined) {
-      return this.compareValues(value, end) < 0;
+    if (decodedStart === null || decodedStart === undefined) {
+      return this.compareValues(value, decodedEnd) < 0;
     }
 
-    if (end === null || end === undefined) {
-      return this.compareValues(value, start) >= 0;
+    if (decodedEnd === null || decodedEnd === undefined) {
+      return this.compareValues(value, decodedStart) >= 0;
     }
 
-    return this.compareValues(value, start) >= 0 &&
-           this.compareValues(value, end) < 0;
+    return this.compareValues(value, decodedStart) >= 0 &&
+           this.compareValues(value, decodedEnd) < 0;
   }
 
   /**
