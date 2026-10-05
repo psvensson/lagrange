@@ -202,7 +202,16 @@ function attachGroupRetirementResume(owner, spec) {
       resume(row, RESUME_TRIGGER.RECORD_CHANGED).catch(failed);
     }
   });
-  for (const tableInfo of owner.listTableInfos?.() || []) {
+  // The owner-start scan reads the view; a view that cannot list its
+  // records yet (construction before hydration) is a logged failure, and
+  // the next record change resumes it.
+  let startRecords = [];
+  try {
+    startRecords = owner.listTableInfos?.() || [];
+  } catch (error) {
+    failed(error);
+  }
+  for (const tableInfo of startRecords) {
     resume(tableInfo, RESUME_TRIGGER.OWNER_START).catch(failed);
   }
   return resume;
