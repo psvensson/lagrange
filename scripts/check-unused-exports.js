@@ -44,7 +44,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // deleted.
 // (origin/main 2026-10-03 tightened 1434 -> 1433: renderRunSummary gained
 // its first importer; superseded by the lower value here.)
-const BASELINE_UNUSED_EXPORT_COUNT = 1424;
+// 2026-10-05: tightened 1424 -> 1420 per checker hint: the one participant
+// failure builder retired the executor's duplicate helpers.
+const BASELINE_UNUSED_EXPORT_COUNT = 1420;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
