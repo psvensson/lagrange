@@ -434,6 +434,10 @@ test('mutation view reads each gateway data field exactly once', (t) => {
     'root:pressureAction': 1,
     'nested:affectedRows': 1,
     'root:affectedRows': 1,
+    // The settled-replay state (PARTITION_SETTLED_REPLAY) is a gateway data
+    // field too, read once on the root and once on the partition result.
+    'root:settledReplay': 1,
+    'nested:settledReplay': 1,
   });
   t.end();
 });
@@ -462,6 +466,7 @@ test('mutation view accepts null prototypes and ignores inherited accessors',
       'completionState',
       'visibilityState',
       'pressureAction',
+      'settledReplay',
     ];
     const savedDescriptors = new Map();
     let inheritedAccessorCalls = 0;
