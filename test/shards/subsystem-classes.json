@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 156,
+    "storage-partition": 157,
     "storage-raft": 99,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2214,
-  "digest": "fnv1a32-40b76613",
+  "censusSize": 2215,
+  "digest": "fnv1a32-f0d95d7e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9d4c34dc",
+  "observationDigest": "fnv1a32-0b5c10bd",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1277,6 +1277,7 @@
     "test/partition/table-partition-structure.property.test.js": "storage-partition",
     "test/partition/timeout-cleanup.property.test.js": "storage-partition",
     "test/partition/workflow-fencing-wiring.test.js": "storage-partition",
+    "test/partition/workflow-record-change-preconditions.test.js": "storage-partition",
     "test/partition/workflow-record-interleaving.property.test.js": "storage-partition",
     "test/partition/workflow-record-lagging-view.test.js": "storage-partition",
     "test/partition/workflow-record-projection-drop.test.js": "storage-partition",
@@ -8078,6 +8079,12 @@
     "test/partition/workflow-fencing-wiring.test.js": {
       "files": [
         "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/workflow-record-change-preconditions.test.js": {
+      "files": [
+        "src/partition/partition-constants.js",
+        "src/partition/target-provisioning-mark.js"
       ]
     },
     "test/partition/workflow-record-interleaving.property.test.js": {
