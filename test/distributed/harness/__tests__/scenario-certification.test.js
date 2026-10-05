@@ -259,7 +259,10 @@ function fakeCluster(config, plan, counters) {
         if (plan.stageWaitThrows && options === undefined) {
           throw new Error('convergence wait timed out');
         }
-        return {voterTargets: voterVerdict(plan, options)};
+        // rawVoterState: a verdict that names no partition set at all.
+        return {voterTargets: plan.rawVoterState ?
+          {state: plan.rawVoterState} :
+          voterVerdict(plan, options)};
       }),
   };
   return cluster;
@@ -526,6 +529,13 @@ describe('certification-grade verdict (owner rulings 5 and 6)', () => {
     const empty = await runFixture({policyPartitionIds: []});
     assert.deepEqual(empty.entry.certification.failures,
       [CERTIFICATION_FAILURE.VOTERS]);
+    // A voters_at_target verdict that records no partitions read is not a
+    // full claim either.
+    const unnamed = await runFixture({rawVoterState: 'voters_at_target'});
+    assert.deepEqual(unnamed.entry.certification.failures,
+      [CERTIFICATION_FAILURE.VOTERS]);
+    assert.match(conditionOf(unnamed.entry.certification, 'voters_at_target')
+      .evidence.problems.join('\n'), /expected set empty/u);
   });
 
   it('host spread: a node-unit gate, a missing gate or a node without a ' +
@@ -701,6 +711,8 @@ describe('certification-grade verdict (owner rulings 5 and 6)', () => {
       [{}, {request: {image: {postBuildContext: {digest: 'changed'}}}},
         /build context changed during the build/u],
       [{}, {request: {build: {refusal: 'checkout is dirty'}}}, /build refused/u],
+      [{}, {request: {image: {postBuildIdentity: cleanIdentity({dirty: true,
+        dirtyPathCount: 1})}}}, /after the build: checkout is dirty/u],
     ];
     for (const [plan, options, pattern] of cases) {
       const run = await runFixture(plan, options);

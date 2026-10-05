@@ -95,9 +95,12 @@ describe('durable certification evidence (S4)', () => {
       'boot:0,boot:1,boot:2,boot:3,boot:4');
     assert.match(archived.dir, new RegExp(`${SHA}/2026-10-05T10-00-00-000Z$`,
       'u'));
-    // Evidence is never overwritten.
+    // Evidence is never overwritten, not even partly.
+    const entryBytes = readFileSync(join(archived.dir, EVIDENCE_FILE.ENTRY));
     await assert.rejects(archiveRun(join(dir, 'cert'), outputDir,
-      '2026-10-05T10:00:00.000Z'), /EEXIST/u);
+      '2026-10-05T10:00:00.000Z', false), /EEXIST/u);
+    assert.deepEqual(readFileSync(join(archived.dir, EVIDENCE_FILE.ENTRY)),
+      entryBytes);
   });
 
   it('three certified runs at one sha make the streak; an uncertified ' +
