@@ -1,3 +1,4 @@
+// probe: re-run this file on lenovo-laptop at 13d772ae1e886df6668135702b85b92b7c63e7d5 (combined-head red comparison); comment only.
 // The formation attribution census says what it means, and its classification
 // is checked rather than trusted.
 //
