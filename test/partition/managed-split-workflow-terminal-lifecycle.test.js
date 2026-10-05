@@ -1,3 +1,4 @@
+import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
@@ -82,7 +83,7 @@ async (t) => {
     updatedAt: 1000,
     participants: new Map(),
   };
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const ownershipClaim = await workflow.claimSplitWorkflowOwnership(
     workflowId,
   );

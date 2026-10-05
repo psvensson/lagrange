@@ -54,6 +54,17 @@ import {
   WORKFLOW_ID,
 } from './group-retirement-liveness-world.js';
 
+// The record's ownership lease, lapsed (a dead owner renews nothing).
+function expireRecordLease(world) {
+  const record = world.tablesRows.get(TABLE_ID);
+  const metadata = JSON.parse(record.partition_transition_metadata);
+  if (Object.hasOwn(metadata, 'workflowLeaseExpiresAt')) {
+    metadata.workflowLeaseExpiresAt = 0;
+    world.setTablesRow({...record,
+      partition_transition_metadata: JSON.stringify(metadata)});
+  }
+}
+
 for (const [label, aborted] of [['L1 split source', false],
   ['L2 aborted split child', true]]) {
   test(`${label}: the owner restarts with a lone member left; its durable ` +
@@ -68,8 +79,11 @@ for (const [label, aborted] of [['L1 split source', false],
     await drive(first, shape);
     await settle(world);
     t.same(world.exitsOf(lone), [], 'setup: the lone member never retired');
-    // The owner process ends; its in-memory re-drive ends with it.
+    // The owner process ends; its in-memory re-drive ends with it. Its
+    // lease (renewed when it deleted a finished group's row) has lapsed by
+    // the time the restarted process looks (L1b covers a live one).
     first.kill();
+    expireRecordLease(world);
     world.dropDeliveryTo.delete(lone);
     // The restarted owner recovers the workflow from the durable record
     // through its family's PRODUCTION recovery (no stubbed state).

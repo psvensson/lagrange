@@ -1,3 +1,4 @@
+import {RESUME_TRIGGER} from './group-retirement-resume.js';
 import {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
@@ -32,6 +33,7 @@ const LOCAL_STR_PARTITION_MERGE_WORKFLOW = 'partition:merge:workflow';
 const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
 const LOCAL_STR_CONTROL_PLANE_BACKPRESSURE = 'control_plane_backpressure';
 const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_FUNCTION = 'function';
 
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const MANAGED_MERGE_MUTATION_OPTIONS = Object.freeze({
@@ -355,38 +357,39 @@ class ManagedMergeWorkflowExecutionGateMethods {
    * @private
    */
   /**
-   * Claim durable ownership at merge start (new fence epoch, mirrors
-   * the split owner) and return the refusal outcome when another owner
-   * holds the live lease. Exactly one node holds the lease; a refused
-   * claim is a typed outcome — this node must not drive the workflow.
+   * The typed outcome of a merge whose start-time claim was refused (claim
+   * before register: nothing was written, nothing is registered): a live
+   * foreign lease, or a registration compare-and-swap another owner's write
+   * beat. This node must not drive the workflow; a retiring record is handed
+   * to the durable resume (it waits for that lease's expiry).
    * @param {string} workflowId
-   * @param {string[]} sourcePartitionIds - Merge sources (log context).
-   * @return {Promise<Object|null>} Refusal result, or null when claimed.
+   * @param {string[]} sourcePartitionIds - Log context.
+   * @param {Object} registration - registerWorkflowWithClaim's refusal.
+   * @param {Object|null} tableInfo - The record as read.
+   * @return {Object} Refusal result.
    * @private
    */
-  async claimMergeWorkflowAtStart(workflowId, sourcePartitionIds) {
-    const ownershipClaim = await this.claimMergeWorkflowOwnership(
+  refuseMergeOwnershipAtStart(workflowId, sourcePartitionIds, registration,
+    tableInfo) {
+    this.logger.info(MANAGED_MERGE_LOG_MSG.OWNERSHIP_CLAIM_REFUSED, {
       workflowId,
-    );
-    if (ownershipClaim.accepted !== true) {
-      this.logger.info(MANAGED_MERGE_LOG_MSG.OWNERSHIP_CLAIM_REFUSED, {
-        workflowId,
-        sourcePartitionIds,
-        result: ownershipClaim.result,
-      });
-      return {
-        success: false,
-        sourcePartitionIds,
-        workflowId,
-        ownership: ownershipClaim.result,
-      };
-    }
-    this.logger.info(MANAGED_MERGE_LOG_MSG.OWNERSHIP_CLAIMED, {
-      workflowId,
-      fenceToken: ownershipClaim.workflow.fenceToken,
-      ownerId: this.workflowOwnerId,
+      sourcePartitionIds,
+      result: registration.refusal,
+      recordOwnerId: registration.recordOwnerId ?? null,
+      recordLeaseExpiresAt: registration.recordLeaseExpiresAt ?? null,
     });
-    return null;
+    const tableId = String(tableInfo?.table_id ?? '');
+    const current = (this.listTableInfos?.() || []).find((row) =>
+      String(row?.table_id ?? '') === tableId) || tableInfo;
+    if (current && typeof this.resumeGroupRetirement === LOCAL_STR_FUNCTION) {
+      this.resumeGroupRetirement(current, RESUME_TRIGGER.START_REFUSED).catch(() => {});
+    }
+    return {
+      success: false,
+      sourcePartitionIds,
+      workflowId,
+      ownership: registration.refusal,
+    };
   }
 
   async renewMergeWorkflowOwnership(workflowId) {

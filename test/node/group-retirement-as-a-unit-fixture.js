@@ -343,12 +343,14 @@ function pick(prototype, names) {
 const PRODUCTION_RECOVERY = Object.freeze({
   split: pick(ManagedSplitWorkflowStateMethods.prototype, [
     'resolveWorkflowState', 'recoverWorkflowState',
+    'rebuildSplitWorkflowFromRecord', 'resyncWorkflowFromRecord',
     'restoreParticipantsFromMetadata', 'cloneTransitionValue']),
   merge: {
     ...pick(ManagedMergeWorkflowStateMethods.prototype, [
       'resolveWorkflowState', 'recoverWorkflowState',
       'findDurableMergeTransition', 'rebuildWorkflowFromDurableTransition',
-      'isMergeWorkflowStateUnavailable', 'buildMergeOwnerKey']),
+      'resyncWorkflowFromRecord', 'isMergeWorkflowStateUnavailable',
+      'buildMergeOwnerKey']),
     ...pick(ManagedSplitWorkflowStateMethods.prototype, [
       'restoreParticipantsFromMetadata', 'cloneTransitionValue']),
   },
@@ -363,15 +365,19 @@ function membersModule() {
 // The production re-drive. The module is imported by path so a witness of
 // it still loads (and goes red on its assertions) on a tree without it,
 // where the owner methods never consult a re-drive.
-async function createOwnerRedrive(owner, scheduler) {
+async function createOwnerRedrive(owner, scheduler, leaseScheduler) {
   const module = await import('../../src/partition/group-retirement-redrive.js')
     .catch(() => null);
   if (!module) {
     return {exclusive: (_key, step) => step(), report() {}, settle() {},
       unacknowledged: () => [], isDriving: () => false};
   }
+  // The lease renewal runs on its own clock (world.leaseScheduler): it is
+  // a renewal, never a re-drive or an exit, so the re-drive's timers stay
+  // countable on their own.
   return module.createGroupRetirementRedrive(owner,
-    {groupRetirementScheduler: scheduler});
+    {groupRetirementScheduler: scheduler,
+      groupRetirementLeaseScheduler: leaseScheduler});
 }
 
 // The PRODUCTION durable resume (attached as the workflow constructors
@@ -467,7 +473,10 @@ async function createWorkflowOwner(world, {family, workflow,
     now: () => (typeof owner.now === 'function' ? owner.now() : 1),
   });
   if (!recover) {
+    // The driving owner holds the record's claim (its row deletes prove it
+    // at apply time, managed-workflow-ownership-core.js).
     await coordinator.registerWorkflow({...workflow,
+      workflowOwnerId: `owner-${world.ownerCount}`, leaseExpiresAt: 60001,
       ownerKey: workflow.tableId, participants: undefined});
     for (const participant of workflow.participants || []) {
       await coordinator.upsertParticipant(workflow.workflowId, {
@@ -583,7 +592,12 @@ async function createWorkflowOwner(world, {family, workflow,
       'ensureCanonicalMergeParticipants'](workflow.workflowId,
       workflow.metadata);
   }
-  owner.groupRetirementRedrive = await createOwnerRedrive(owner, scheduler);
+  world.leaseScheduler ??= createFakeScheduler();
+  owner.groupRetirementRedrive = await createOwnerRedrive(owner, scheduler,
+    {setTimeout: (fn, ms) => world.leaseScheduler.setTimeout(() => {
+      if (!owner.dead) fn();
+    }, ms),
+    clearTimeout: (timer) => world.leaseScheduler.clearTimeout(timer)});
   if (resume) {
     await attachOwnerResume(owner, family, scheduler);
   }

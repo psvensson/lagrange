@@ -13,6 +13,9 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
 } from './partition-constants.js';
 
+const WORKFLOW_RECORD_NOT_HELD = 'Workflow record not held by this owner ' +
+  'at apply time; the irreversible step is refused for ';
+
 /**
  * Stamp the durable ownership claim triple (fence token, owner id,
  * lease expiry) onto one transition metadata object, clearing the
@@ -134,9 +137,105 @@ async function renewWorkflowOwnershipCore(
   };
 }
 
+/**
+ * Claim before register (owner ruling 2026-10-05): from the record AS READ,
+ * whether this owner may take the workflow, and the claim it takes. A live
+ * lease of another owner on the record refuses without any write; otherwise
+ * the claim is the next fence over the record's own, this owner, a fresh
+ * lease - and the witness the registration's compare-and-swap names (the
+ * record as read; an absent record is the compared state).
+ * @param {Object} owner - Workflow owner (workflowOwnerId, workflowLeaseMs,
+ *   now, parsePartitionTransition).
+ * @param {Object|null} tableInfo - The table's `tables` row as read.
+ * @param {Function} witnessOf - recordWitnessOf (the record store's).
+ * @return {Object} {refusal, recordOwnerId, recordLeaseExpiresAt} or
+ *   {claim: {fenceToken, workflowOwnerId, leaseExpiresAt, recordWitness}}.
+ */
+function claimFromRecordAsRead(owner, tableInfo, witnessOf) {
+  const recorded = durableOwnershipClaimOf(
+    owner.parsePartitionTransition?.(tableInfo)?.metadata);
+  const now = owner.now();
+  if (recorded.workflowOwnerId &&
+      recorded.workflowOwnerId !== owner.workflowOwnerId &&
+      Number.isFinite(recorded.leaseExpiresAt) &&
+      recorded.leaseExpiresAt > now) {
+    return {refusal: WORKFLOW_CLAIM_RESULT.ACTIVE_OWNER,
+      recordOwnerId: recorded.workflowOwnerId,
+      recordLeaseExpiresAt: recorded.leaseExpiresAt};
+  }
+  return {claim: {
+    fenceToken: (recorded.fenceToken ?? 0) + 1,
+    workflowOwnerId: owner.workflowOwnerId,
+    leaseExpiresAt: now + owner.workflowLeaseMs,
+    recordWitness: witnessOf(tableInfo),
+  }};
+}
+
+/**
+ * Register a workflow whose FIRST durable write is its ownership claim: the
+ * registration carries the claim (claimFromRecordAsRead) and lands as one
+ * compare-and-swap on the record as read. A live foreign lease writes
+ * nothing; a refused compare-and-swap (another owner's write landed since
+ * the read) is a typed refusal with nothing registered in memory.
+ * @param {Object} owner - Workflow owner (workflowCoordinator, logger).
+ * @param {Object} record - The registration record.
+ * @param {Object|null} tableInfo - The table's `tables` row as read.
+ * @param {Object} recordStore - The record store's recordWitnessOf and
+ *   beginWorkflowRecordLineage (managed-workflow-record-store.js).
+ * @return {Promise<Object>} {workflow} or {refusal, ...}.
+ */
+async function registerWorkflowWithClaim(owner, record, tableInfo,
+  recordStore) {
+  const decision = claimFromRecordAsRead(owner, tableInfo,
+    recordStore.recordWitnessOf);
+  if (decision.refusal) {
+    return decision;
+  }
+  recordStore.beginWorkflowRecordLineage(owner, record.workflowId);
+  try {
+    return {workflow: await owner.workflowCoordinator.registerWorkflow({
+      ...record, ...decision.claim, attemptCount: 1})};
+  } catch (error) {
+    if (typeof error?.recordWriteOutcome === 'string') {
+      return {refusal: WORKFLOW_CLAIM_RESULT.STORAGE_REJECTED,
+        recordWriteOutcome: error.recordWriteOutcome};
+    }
+    throw error;
+  }
+}
+
+/**
+ * Prove, at apply time, that this owner still holds the workflow's record in
+ * one of `states` before an irreversible effect (a retirement pass's first
+ * record write and REMOVE, a retired group's partitions row deleted): a
+ * lease renewal compare-and-swapped on the record
+ * as last read. Another owner's claim, another fence, a moved record or a
+ * state outside `states` refuses (typed, superseded) - and the renewal keeps
+ * the lease alive for the effect that follows.
+ * @param {Object} owner - Workflow owner.
+ * @param {string} workflowId
+ * @param {ReadonlySet<string>|null} [states] - Record states the effect
+ *   needs (null: any).
+ * @return {Promise<void>} Throws {superseded: true} on refusal.
+ */
+async function assertWorkflowRecordHeld(owner, workflowId, states = null) {
+  const workflow = owner.workflowCoordinator.getWorkflowById(workflowId);
+  const held = workflow &&
+    workflow.workflowOwnerId === owner.workflowOwnerId &&
+    (states === null || states.has(String(workflow.status))) &&
+    (await claimWorkflowOwnershipCore(owner, workflowId, {renew: true}))
+      .accepted === true;
+  if (!held) {
+    throw Object.assign(new Error(WORKFLOW_RECORD_NOT_HELD + workflowId), {
+      superseded: true, unacknowledged: [], acknowledgedReplicaIds: []});
+  }
+}
+
 export {
+  assertWorkflowRecordHeld,
   claimWorkflowOwnershipCore,
   durableOwnershipClaimOf,
+  registerWorkflowWithClaim,
   renewWorkflowOwnershipCore,
   stampOwnershipClaimMetadata,
 };

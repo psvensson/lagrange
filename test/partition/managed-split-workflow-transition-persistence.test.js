@@ -1,3 +1,4 @@
+import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
@@ -336,8 +337,7 @@ test('advanceSplitPhase rejects phases not in the owner-managed set ' +
   // so we need a fresh workflow with an active registration.
   const {workflow: freshWorkflow} = buildWorkflow();
   // Register a workflow manually to test advanceSplitPhase in isolation.
-  const wfCoordinator = freshWorkflow.workflowCoordinator;
-  const wfRecord = await wfCoordinator.registerWorkflow({
+  const wfRecord = await registerFromRecordAsRead(freshWorkflow, {
     workflowId: 'split-test-phase-reject',
     ownerKey: 'users-p1',
     tableId: 'tbl-users',
@@ -390,8 +390,7 @@ test('advanceSplitPhase persists the phase transition through the ' +
   const {workflow} = buildWorkflow({updateCalls});
 
   // Register a workflow to test advanceSplitPhase in isolation.
-  const wfCoordinator = workflow.workflowCoordinator;
-  await wfCoordinator.registerWorkflow({
+  await registerFromRecordAsRead(workflow, {
     workflowId: 'split-test-advance',
     ownerKey: 'users-p1',
     tableId: 'tbl-users',
@@ -511,7 +510,7 @@ test('persistWorkflowTransition includes participant state in ' +
 
   // Register a workflow and add participants via the coordinator.
   const wfCoordinator = workflow.workflowCoordinator;
-  const wfRecord = await wfCoordinator.registerWorkflow({
+  const wfRecord = await registerFromRecordAsRead(workflow, {
     workflowId: 'split-participant-persist',
     ownerKey: 'users-p1',
     tableId: 'tbl-users',
@@ -590,7 +589,7 @@ test('persistWorkflowTransition includes source checkpoint in ' +
   const {workflow} = buildWorkflow({updateCalls});
 
   const wfCoordinator = workflow.workflowCoordinator;
-  const wfRecord = await wfCoordinator.registerWorkflow({
+  const wfRecord = await registerFromRecordAsRead(workflow, {
     workflowId: 'split-checkpoint-persist',
     ownerKey: 'users-p1',
     tableId: 'tbl-users',

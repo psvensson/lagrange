@@ -717,8 +717,11 @@ async (t) => {
   holdCatchupWrite = false;
 
   // A fails while B's cutover write is in flight; the abort enqueues
-  // behind it on the FIFO owner lane.
-  await fixture.workflow.acknowledgeMergeSourceParticipant(
+  // behind it on the FIFO owner lane. The failure ack's own record write
+  // queues behind the in-flight write of the same owner (one owner's record
+  // writes run in order, managed-workflow-record-store.js), so it settles
+  // once that write is released.
+  const failureAckPromise = fixture.workflow.acknowledgeMergeSourceParticipant(
     result.workflowId,
     buildSourceAck(
       FIXTURE_LEFT_PARTITION_ID,
@@ -726,8 +729,10 @@ async (t) => {
       r1FenceToken,
     ),
   );
+  await new Promise((resolve) => setImmediate(resolve));
 
   releaseHeldWrite();
+  await failureAckPromise;
   const cutoverAckResult = await cutoverAckPromise;
   await fixture.workflow.settleMergeOwnerLaneForWorkflow(result.workflowId);
 

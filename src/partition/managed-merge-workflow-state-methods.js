@@ -15,6 +15,10 @@ import {
   MERGE_PARTICIPANT_PREFIX,
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
+import {
+  beginWorkflowRecordLineage,
+  recordWitnessOf,
+} from './managed-workflow-record-store.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
 
 /**
@@ -242,6 +246,22 @@ class ManagedMergeWorkflowStateMethods {
   }
 
   /**
+   * Rebuild the in-memory workflow from the record a refused write re-read
+   * when the record is this owner's own (managed-workflow-record-store.js):
+   * the record, not the in-memory copy, is then the truth.
+   * @param {string} workflowId
+   * @param {Object} tableInfo - The re-read `tables` row.
+   * @return {Object|symbol}
+   * @private
+   */
+  resyncWorkflowFromRecord(workflowId, tableInfo) {
+    const transition = this.parsePartitionTransition(tableInfo);
+    return transition?.metadata ? this.rebuildWorkflowFromDurableTransition(
+      workflowId, {tableInfo, transition}) :
+      MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
+  }
+
+  /**
    * Locate the durable tables transition row carrying one workflow id.
    * @param {string} workflowId
    * @return {{tableInfo: Object, transition: Object}|null}
@@ -302,6 +322,8 @@ class ManagedMergeWorkflowStateMethods {
       // CAS witnesses against it, and a recovered/resynced record that
       // dropped it would diverge from the durable row on the next renew.
       ...durableOwnershipClaimOf(transition.metadata),
+      // The record as read: the compare-and-swap witness of every write.
+      recordWitness: recordWitnessOf(tableInfo),
       createdAt: Number(resolveFirstDefinedValue(
         tableInfo, DURABLE_ROW_CREATED_AT_KEYS, this.now(),
       )),
@@ -309,6 +331,7 @@ class ManagedMergeWorkflowStateMethods {
         tableInfo, DURABLE_ROW_UPDATED_AT_KEYS, this.now(),
       )),
     });
+    beginWorkflowRecordLineage(this, workflowId);
     this.workflowCoordinator.setWorkflowState(workflow);
     if (workflow.step) {
       this.workflowCoordinator.markTransitionCommitted(

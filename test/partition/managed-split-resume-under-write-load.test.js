@@ -1,3 +1,4 @@
+import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {TABLES} from '../../src/constants/index.js';
@@ -425,7 +426,7 @@ async function driveCutoverWithDeniedRightLeader(options) {
   });
   const workflowId = options.workflowId;
   const record = buildBackfillingRecord(workflowId);
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(workflowId);
   workflow.ensureCanonicalSplitParticipants(workflowId, record.metadata);
   const fenceToken = claim.workflow.fenceToken;
@@ -589,7 +590,7 @@ async function driveHealthySplit() {
   // (the source's acks re-resolve it from the durable row); re-register
   // the durable snapshot the way the ack ingress does.
   const transition = parseTransitionFromRow(tableRow);
-  await workflow.workflowCoordinator.registerWorkflow({
+  await registerFromRecordAsRead(workflow, {
     workflowId,
     ownerKey: SOURCE_PARTITION_ID,
     tableId: TABLE_ID,

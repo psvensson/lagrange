@@ -44,6 +44,8 @@ import {
   SPLIT_ACK_STATUS,
   SPLIT_PARTICIPANT_PREFIX,
 } from '../../src/partition/split-ack-constants.js';
+import {claimWorkflowOwnershipCore} from
+  '../../src/partition/managed-workflow-ownership-core.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {
@@ -203,14 +205,16 @@ test('W4c an ownership change: the old fence is refused typed, the new ' +
   world.dropDeliveryTo.add(away);
   await oldOwner.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
   await settleTurns(world);
-  // A new owner claims the workflow: the record's fence advances (the
-  // claim rewrites only the fence; the frozen members and the answers the
-  // old owner recorded stay on the record).
+  // A new owner claims the workflow: the record's fence advances and names
+  // the new owner with its live lease (the claim rewrites only the claim
+  // triple; the frozen members and the answers the old owner recorded stay
+  // on the record). The new owner opened below is the world's second.
   const newFence = FENCE + 1;
   const claimed = world.tablesRows.get(TABLE_ID);
   world.setTablesRow({...claimed, partition_transition_metadata:
     JSON.stringify({...JSON.parse(claimed.partition_transition_metadata),
-      workflowFenceToken: newFence})});
+      workflowFenceToken: newFence, workflowOwnerId: 'owner-2',
+      workflowLeaseExpiresAt: 60001})});
   world.dropDeliveryTo.delete(away);
   // The old owner's event-driven re-drive still carries the old fence.
   world.emitNodeRow(readyNodeRow(`${away}-node`));
@@ -220,8 +224,9 @@ test('W4c an ownership change: the old fence is refused typed, the new ' +
   t.equal(world.exitsOf(away).length, 0, 'the old fence retired nothing');
   t.equal(world.cluster.node(away).readStatus().outcome,
     RAFT_OPERATION_OUTCOME.CORE_OK, 'the member keeps serving');
+  // Its re-run proves ownership at apply time before any record write or
+  // REMOVE (a renewal compare-and-swap): refused, it stops as superseded.
   t.ok(oldOwner.ownerLog.some((line) => line.level === 'warn' &&
-    line.fields?.unacknowledgedReplicaIds?.includes(away) &&
     /superseded/u.test(line.message)), 'the old owner stops as superseded');
   t.same(oldOwner.groupRetirementRedrive.unacknowledged(), [],
     'the old owner tracks nothing more');
@@ -271,7 +276,17 @@ test('W4d an owner restart mid-dissolution resumes from the durable record',
     // The restarted owner recovers the workflow from the record (PRODUCTION
     // recovery); the finished source re-delivers CLEANUP_COMPLETED on leader
     // activation (the DISSOLUTION_FAILED -> CLEANUP_COMPLETED edge).
+    // The dead process's lease (renewed at its pass's start) has lapsed.
+    const leased = world.tablesRows.get(TABLE_ID);
+    world.setTablesRow({...leased, partition_transition_metadata:
+      JSON.stringify({...JSON.parse(leased.partition_transition_metadata),
+        workflowLeaseExpiresAt: 0})});
     const restarted = await openSplitOwner(world, {recover: true});
+    // The restarted process (a new owner identity) claims the record before
+    // it drives: only the claim holder deletes a retired group's row.
+    restarted.resolveWorkflowState(WORKFLOW_ID);
+    t.equal((await claimWorkflowOwnershipCore(restarted, WORKFLOW_ID))
+      .accepted, true, 'the restarted owner claimed the record');
     const answer = await restarted.acknowledgeSourceParticipant(WORKFLOW_ID, {
       participantKey: SOURCE_KEY, status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
       fenceToken: FENCE});
@@ -304,6 +319,11 @@ test('W4g a record with no frozen set whose leader already retired: ' +
       workflowId: WORKFLOW_ID, fenceToken: FENCE, tableId: TABLE_ID}});
   await driveUntilRemoved(world, [first]);
   const restarted = await openSplitOwner(world, {recover: true});
+  // The restarted owner claims the record before it drives (only the claim
+  // holder retires a group).
+  restarted.resolveWorkflowState(WORKFLOW_ID);
+  t.equal((await claimWorkflowOwnershipCore(restarted, WORKFLOW_ID))
+    .accepted, true, 'setup: the restarted owner claimed the record');
   await restarted.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
   await settleTurns(world);
   t.same(restarted.groupRetirementRedrive.unacknowledged().map((entry) =>

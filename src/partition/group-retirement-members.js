@@ -21,6 +21,10 @@
  * participant's checkpoint through the coordinator's participant
  * persistence (the path every acknowledgement takes); completion is
  * required ⊆ dissolved and nothing else.
+ * Ownership: a pass starts only after this owner proves, at apply time, that
+ * it holds the workflow's record (managed-workflow-ownership-core.js); every
+ * checkpoint write is a compare-and-swap on the record as read
+ * (managed-workflow-record-store.js).
  * Prohibited: an empty or unreadable configuration is "membership
  * unavailable", never "no members" (only the durable never-provisioned mark
  * is); a member with no address is listed,
@@ -33,6 +37,7 @@ import {ReplicaOperationResponseStatus} from
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../raft/raft-committed-membership-constants.js';
 import {GROUP_RETIREMENT_REFUSAL} from './group-retirement-evidence.js';
+import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
 import {SPLIT_ACK_CHECKPOINT_FIELD} from './split-ack-constants.js';
 import {
   TARGET_PROVISIONING,
@@ -312,6 +317,10 @@ async function retireFrozenGroupMembers(owner, {workflowId, participantKey,
   if (!participant) {
     throw membershipUnavailableError(partitionId);
   }
+  // Only the record's current owner retires a group: proved at apply time
+  // (a renewal compare-and-swap) before any record write or REMOVE of this
+  // pass; anyone else stops here as superseded.
+  await assertWorkflowRecordHeld(owner, workflowId);
   const group = {workflow, participant, participantKey};
   const required = await frozenMembersOf(owner, group, partitionId);
   const dissolved = new Set(idsOf(participant.checkpoint,

@@ -216,6 +216,9 @@ function buildWorkflow(options = {}) {
     logger: options.logger || {info() {}, error() {}, warn() {}},
     now: options.now || (() => 1000),
     transactionCoordinator,
+    groupRetirementScheduler: options.groupRetirementScheduler,
+    groupRetirementLeaseScheduler: options.groupRetirementLeaseScheduler,
+    workflowLeaseMs: options.workflowLeaseMs,
   });
 
   // Expose the durable row so tests can drive the ownership claim

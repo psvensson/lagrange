@@ -17,6 +17,7 @@ import {OperationLane} from '../workflow/operation-lane.js';
 import {TimeoutPolicy} from '../workflow/timeout-policy.js';
 import {WorkflowStepRunner} from '../workflow/workflow-step-runner.js';
 import {
+  MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
@@ -51,6 +52,8 @@ import {
   ManagedSplitWorkflowOwnershipMethods,
 } from './managed-split-workflow-ownership-methods.js';
 import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
+import {registerWorkflowWithClaim} from './managed-workflow-ownership-core.js';
+import {WORKFLOW_RECORD_STORE} from './managed-workflow-record-store.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_MANAGED_SPLIT = 'managed_split';
@@ -145,7 +148,7 @@ class ManagedSplitWorkflow {
       });
     // The owner resumes, from the durable record, any whole-group
     // retirement step nobody drives (owner start, record changes).
-    attachGroupRetirementResume(this, {
+    this.resumeGroupRetirement = attachGroupRetirementResume(this, {
       family: WORKFLOW_FAMILY.SPLIT,
       claim: (workflowId) => this.claimSplitWorkflowOwnership(workflowId),
       finalize: (workflowId) =>
@@ -349,7 +352,10 @@ class ManagedSplitWorkflow {
         persistedSplitPlan,
       ),
     });
-    const workflow = await this.workflowCoordinator.registerWorkflow({
+    // Claim before register: the registration IS the ownership claim, one
+    // compare-and-swap on the record as read (a live foreign lease writes
+    // nothing; a refused swap registers nothing).
+    const registration = await registerWorkflowWithClaim(this, {
       workflowId,
       ownerKey: partitionId,
       tableId,
@@ -374,18 +380,15 @@ class ManagedSplitWorkflow {
       }),
       createdAt: now,
       updatedAt: now,
-    });
-
-    // Durable ownership claim (new fence epoch): exactly one node holds
-    // the live lease for this workflow. A refused claim is a typed
-    // outcome — this node must not drive the workflow.
-    const ownershipRefusal = await this.claimSplitWorkflowAtStart(
-      workflowId,
-      partitionId,
-    );
-    if (ownershipRefusal) {
-      return ownershipRefusal;
+    }, tableInfo, WORKFLOW_RECORD_STORE);
+    if (!registration.workflow) {
+      return this.refuseSplitOwnershipAtStart(workflowId, partitionId,
+        registration, tableInfo);
     }
+    const workflow = registration.workflow;
+    this.logger.info(MANAGED_SPLIT_LOG_MSG.OWNERSHIP_CLAIMED, {workflowId,
+      partitionId, fenceToken: workflow.fenceToken,
+      ownerId: this.workflowOwnerId});
 
     try {
       const admissionResult = await this.evaluateSplitAdmission({

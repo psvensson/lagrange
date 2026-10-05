@@ -41,6 +41,9 @@ const RESUME_TRIGGER = Object.freeze({
   OWNER_START: 'owner-start',
   RECORD_CHANGED: 'record-changed',
   LEASE_EXPIRED: 'lease-expired',
+  // The owner's own start of the workflow was refused (claim before
+  // register): the record it read is handed here.
+  START_REFUSED: 'start-refused',
 });
 const RESUME_LOG_MSG = Object.freeze({
   RESUMED: 'Group retirement resumed from the durable record by the ' +
@@ -241,4 +244,4 @@ function currentRecord(owner, tablesRow) {
     String(row?.table_id || '') === tableId) || tablesRow;
 }
 
-export {WORKFLOW_FAMILY, attachGroupRetirementResume};
+export {RESUME_TRIGGER, WORKFLOW_FAMILY, attachGroupRetirementResume};

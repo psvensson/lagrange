@@ -57,6 +57,8 @@ import {
   bindTopologyMethod,
 } from './managed-merge-workflow-topology-bindings.js';
 import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
+import {registerWorkflowWithClaim} from './managed-workflow-ownership-core.js';
+import {WORKFLOW_RECORD_STORE} from './managed-workflow-record-store.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -226,7 +228,7 @@ class ManagedMergeWorkflow {
     this.mergeOwnerLaneTailByOwnerKey = new Map();
     // The owner resumes, from the durable record, any whole-group
     // retirement step nobody drives (owner start, record changes).
-    attachGroupRetirementResume(this, {
+    this.resumeGroupRetirement = attachGroupRetirementResume(this, {
       family: WORKFLOW_FAMILY.MERGE,
       claim: (workflowId) => this.claimMergeWorkflowOwnership(workflowId),
       finalize: (workflowId) =>
@@ -432,7 +434,10 @@ class ManagedMergeWorkflow {
    */
   async runRegisteredMergeExecution(input) {
     const {workflowId, sourcePartitionIds, tableId, tableName} = input;
-    const workflow = await this.workflowCoordinator.registerWorkflow({
+    // Claim before register: the registration IS the ownership claim, one
+    // compare-and-swap on the record as read (a live foreign lease writes
+    // nothing; a refused swap registers nothing).
+    const registration = await registerWorkflowWithClaim(this, {
       workflowId,
       ownerKey: this.buildMergeOwnerKey(sourcePartitionIds),
       tableId,
@@ -460,18 +465,14 @@ class ManagedMergeWorkflow {
       }),
       createdAt: input.now,
       updatedAt: input.now,
-    });
-
-    // Durable ownership claim (new fence epoch, mirrors the split
-    // owner): exactly one node holds the live lease for this workflow;
-    // a refused claim is a typed outcome.
-    const ownershipRefusal = await this.claimMergeWorkflowAtStart(
-      workflowId,
-      sourcePartitionIds,
-    );
-    if (ownershipRefusal) {
-      return ownershipRefusal;
+    }, input.tableInfo, WORKFLOW_RECORD_STORE);
+    if (!registration.workflow) {
+      return this.refuseMergeOwnershipAtStart(workflowId, sourcePartitionIds,
+        registration, input.tableInfo);
     }
+    const workflow = registration.workflow;
+    this.logger.info(MANAGED_MERGE_LOG_MSG.OWNERSHIP_CLAIMED, {workflowId,
+      fenceToken: workflow.fenceToken, ownerId: this.workflowOwnerId});
 
     try {
       return await this.runAdmittedMergeExecution({

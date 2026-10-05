@@ -1,3 +1,4 @@
+import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
 import {SERVICE_TYPE} from '../constants/index.js';
 import {
   ReplicaOperationField,
@@ -57,6 +58,15 @@ function resolveMergeSourceParticipantStatus(workflow, partitionId) {
  * source raft-group removal (reusing the rebalancer REMOVE_REPLICA node
  * handler), aborted-target teardown, and the terminal transition clear.
  */
+// The record states in which a retired group's partitions row may be
+// deleted: a merge source after its cutover; an aborted target.
+const MERGE_SOURCE_RETIRING_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
+]));
+const ABORTED_RECORD_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.FAILED,
+]));
+
 class ManagedMergeWorkflowDissolutionMethods {
   /**
    * Dissolve both retired source partitions once every source participant
@@ -175,6 +185,10 @@ class ManagedMergeWorkflowDissolutionMethods {
           workflow,
         }),
       );
+      // The row delete is irreversible: this owner proves, at apply time,
+      // that it still holds the record (a renewal compare-and-swap).
+      await assertWorkflowRecordHeld(this, workflowId,
+        MERGE_SOURCE_RETIRING_STATES);
       const deleteWitness =
         await this.deleteSourcePartitionMetadata(sourcePartitionId);
       if (!this.isDissolutionWitnessPersisted(deleteWitness)) {
@@ -379,6 +393,8 @@ class ManagedMergeWorkflowDissolutionMethods {
               kind: GROUP_RETIREMENT_KIND.MERGE_ABORTED_TARGET,
               workflow,
             }));
+          await assertWorkflowRecordHeld(this, workflowId,
+            ABORTED_RECORD_STATES);
           await this.deleteSourcePartitionMetadata(targetPartitionId);
           this.groupRetirementRedrive.settle(workflowId, targetPartitionId);
         } catch (error) {

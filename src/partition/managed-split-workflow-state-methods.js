@@ -13,6 +13,10 @@ import {
   isRetryableManagedSplitTransition,
 } from './managed-split-retry-policy.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
+import {
+  beginWorkflowRecordLineage,
+  recordWitnessOf,
+} from './managed-workflow-record-store.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_DEFERRED = 'deferred';
@@ -125,62 +129,93 @@ class ManagedSplitWorkflowStateMethods {
       if (persistedWorkflowId !== workflowId) {
         continue;
       }
-
-      const partitionId = String(
-        transition.metadata[
-          PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID
-        ] || '',
-      );
-      if (!partitionId) {
-        return null;
-      }
-
-      const workflow = this.workflowCoordinator.createWorkflowRecord({
-        workflowId,
-        ownerKey: partitionId,
-        tableId: tableInfo?.table_id || tableInfo?.tableId || null,
-        tableName: tableInfo?.table_name || tableInfo?.tableName || null,
-        partitionId,
-        step: transition.state,
-        status: transition.state,
-        metadata: this.cloneTransitionValue(transition.metadata),
-        participants: this.restoreParticipantsFromMetadata(
-          workflowId,
-          transition.metadata,
-        ),
-        // The durable ownership claim triple (one decode with the merge
-        // owner): the claim and fenced-transition CAS witness against it.
-        ...durableOwnershipClaimOf(transition.metadata),
-        createdAt: Number(
-          tableInfo?.created_at ??
-            tableInfo?.createdAt ??
-            tableInfo?.updated_at ??
-            tableInfo?.updatedAt ??
-            this.now(),
-        ),
-        updatedAt: Number(
-          tableInfo?.updated_at ??
-            tableInfo?.updatedAt ??
-            tableInfo?.created_at ??
-            tableInfo?.createdAt ??
-            this.now(),
-        ),
-      });
-      this.workflowCoordinator.setWorkflowState(workflow);
-      if (workflow.step) {
-        this.workflowCoordinator.markTransitionCommitted(
-          workflow.workflowId,
-          workflow.step,
-        );
-      }
-      this.ensureCanonicalSplitParticipants(
-        workflow.workflowId,
-        workflow.metadata,
-      );
-      return workflow;
+      return this.rebuildSplitWorkflowFromRecord(workflowId, tableInfo,
+        transition);
     }
 
     return null;
+  }
+
+  /**
+   * Rebuild the in-memory workflow from the record a refused write re-read
+   * when the record is this owner's own (managed-workflow-record-store.js):
+   * the record, not the in-memory copy, is then the truth.
+   * @param {string} workflowId
+   * @param {Object} tableInfo - The re-read `tables` row.
+   * @return {Object|null}
+   * @private
+   */
+  resyncWorkflowFromRecord(workflowId, tableInfo) {
+    const transition = this.parsePartitionTransition(tableInfo);
+    return transition?.metadata ? this.rebuildSplitWorkflowFromRecord(
+      workflowId, tableInfo, transition) : null;
+  }
+
+  /**
+   * Build and register one split workflow from its durable record: the
+   * record's state, metadata, participants and ownership claim triple, and
+   * the record AS READ as the witness every later write compares against.
+   * @param {string} workflowId
+   * @param {Object} tableInfo - The `tables` row.
+   * @param {Object} transition - Its parsed transition.
+   * @return {Object|null}
+   * @private
+   */
+  rebuildSplitWorkflowFromRecord(workflowId, tableInfo, transition) {
+    const partitionId = String(
+      transition.metadata[
+        PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID
+      ] || '',
+    );
+    if (!partitionId) {
+      return null;
+    }
+
+    const workflow = this.workflowCoordinator.createWorkflowRecord({
+      workflowId,
+      ownerKey: partitionId,
+      tableId: tableInfo?.table_id || tableInfo?.tableId || null,
+      tableName: tableInfo?.table_name || tableInfo?.tableName || null,
+      partitionId,
+      step: transition.state,
+      status: transition.state,
+      metadata: this.cloneTransitionValue(transition.metadata),
+      participants: this.restoreParticipantsFromMetadata(
+        workflowId,
+        transition.metadata,
+      ),
+      // The durable ownership claim triple (one decode with the merge
+      // owner), and the record as read: the compare-and-swap witness.
+      ...durableOwnershipClaimOf(transition.metadata),
+      recordWitness: recordWitnessOf(tableInfo),
+      createdAt: Number(
+        tableInfo?.created_at ??
+          tableInfo?.createdAt ??
+          tableInfo?.updated_at ??
+          tableInfo?.updatedAt ??
+          this.now(),
+      ),
+      updatedAt: Number(
+        tableInfo?.updated_at ??
+          tableInfo?.updatedAt ??
+          tableInfo?.created_at ??
+          tableInfo?.createdAt ??
+          this.now(),
+      ),
+    });
+    beginWorkflowRecordLineage(this, workflowId);
+    this.workflowCoordinator.setWorkflowState(workflow);
+    if (workflow.step) {
+      this.workflowCoordinator.markTransitionCommitted(
+        workflow.workflowId,
+        workflow.step,
+      );
+    }
+    this.ensureCanonicalSplitParticipants(
+      workflow.workflowId,
+      workflow.metadata,
+    );
+    return workflow;
   }
 
   /**

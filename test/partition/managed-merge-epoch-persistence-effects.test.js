@@ -1,3 +1,4 @@
+import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   MANAGED_MERGE_ERROR_MSG,
@@ -34,7 +35,7 @@ test('merge transition persistence fails closed when no CDC bridge is ' +
   'wired — in-memory status must not silently advance', async (t) => {
   const {workflow} = buildMergeWorkflow();
   const record = buildMergeWorkflowRecord('merge-no-cdc');
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   workflow.getCDCIntegrationService = () => null;
 
   // The unfenced persist contract throws TRANSITION_PERSIST_UNAVAILABLE
@@ -85,6 +86,11 @@ test('merge sibling promotion refuses a zero-row partition epoch ' +
 test('merge terminal transition clear refuses a zero-row tables ' +
   'update', async (t) => {
   const {workflow} = buildMergeWorkflow({
+    // The record as the owner sees it: still in transition.
+    durableTableRow: {table_id: 'tbl-users', table_name: 'users',
+      partition_key: 'id', active_partition_version: 2,
+      partition_transition_state: 'split_source_dissolving',
+      partition_transition_metadata: '{}'},
     cdcIntegrationService: {
       async updateSystemTableRow() {
         return {success: true, affectedRows: 0};
@@ -102,8 +108,10 @@ test('merge terminal transition clear refuses a zero-row tables ' +
     workflow.persistTerminalTransitionClear({
       workflowId: 'merge-terminal-clear',
       tableId: 'tbl-users',
+      // The record as read (the clear compares against it).
+      recordWitness: {metadata: '{}', state: 'split_source_dissolving'},
     }),
-    /did not take effect/,
+    /compare-and-swap refused/,
     'a terminal clear that lands zero rows would wedge the table in ' +
     'transition state forever — it must throw',
   );

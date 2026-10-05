@@ -1,3 +1,4 @@
+import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
@@ -64,9 +65,10 @@ test('split cutover transition refuses to advance in-memory status ' +
   await t.rejects(
     workflow.persistWorkflowTransition({
       ...record,
+      recordWitness: {metadata: null, state: null},
       status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
     }),
-    /did not take effect/,
+    /compare-and-swap refused/,
     'a zero-row epoch flip must throw, not advance the workflow',
   );
 });
@@ -103,7 +105,7 @@ test('split cutover transition disallows pending visibility on the ' +
   const updateCalls = [];
   const {workflow} = buildWorkflow({updateCalls});
   const record = buildCutoverWorkflowRecord('split-epoch-options');
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   // Claim durable ownership so the fenced advance path holds a live
   // lease (the claim lands its own durable write through the same row).
   await workflow.claimSplitWorkflowOwnership(record.workflowId);
@@ -145,7 +147,7 @@ test('split transition persistence fails closed when no CDC bridge is ' +
   const updateCalls = [];
   const {workflow} = buildWorkflow({updateCalls});
   const record = buildCutoverWorkflowRecord('split-no-cdc');
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   await workflow.claimSplitWorkflowOwnership(record.workflowId);
 
   // Simulate a lost CDC bridge AFTER the claim: the durable write
@@ -201,6 +203,11 @@ test('split sibling promotion refuses a zero-row partition epoch ' +
 test('split terminal transition clear refuses a zero-row tables ' +
   'update', async (t) => {
   const {workflow} = buildWorkflow({
+    // The record as the owner sees it: still in transition.
+    durableTableRows: [{table_id: 'tbl-users', table_name: 'users',
+      partition_key: 'id', active_partition_version: 2,
+      partition_transition_state: 'split_source_dissolving',
+      partition_transition_metadata: '{}'}],
     cdcIntegrationService: {
       async updateSystemTableRow() {
         return {success: true, affectedRows: 0};
@@ -218,8 +225,10 @@ test('split terminal transition clear refuses a zero-row tables ' +
     workflow.persistTerminalTransitionClear({
       workflowId: 'split-terminal-clear',
       tableId: 'tbl-users',
+      // The record as read (the clear compares against it).
+      recordWitness: {metadata: '{}', state: 'split_source_dissolving'},
     }),
-    /did not take effect/,
+    /compare-and-swap refused/,
     'a terminal clear that lands zero rows would wedge the table in ' +
     'transition state forever — it must throw',
   );
@@ -230,7 +239,7 @@ test('split FAILED transition withdraws the pending partition epoch ' +
   const updateCalls = [];
   const {workflow} = buildWorkflow({updateCalls});
   const record = buildCutoverWorkflowRecord('split-failed-withdrawal');
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   await workflow.claimSplitWorkflowOwnership(record.workflowId);
 
   await workflow.advanceSplitPhase(
@@ -282,7 +291,7 @@ test('split cutover sets partition_count to target + sibling count ' +
     ...buildCutoverWorkflowRecord('split-cutover-partition-count'),
     participants: new Map(),
   };
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const ownershipClaim = await workflow.claimSplitWorkflowOwnership(
     record.workflowId,
   );

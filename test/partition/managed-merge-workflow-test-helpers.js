@@ -331,6 +331,9 @@ function buildMergeWorkflow(options = {}) {
     transactionCoordinator: opt(
       'transactionCoordinator', createTransactionCoordinator(now),
     ),
+    groupRetirementScheduler: opt('groupRetirementScheduler', undefined),
+    groupRetirementLeaseScheduler: opt('groupRetirementLeaseScheduler',
+      undefined),
   });
 
   return {

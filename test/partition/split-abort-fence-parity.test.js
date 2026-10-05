@@ -1,3 +1,4 @@
+import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
@@ -45,7 +46,7 @@ function buildAbortingRecord() {
 
 async function registerClaimedWorkflow(workflow) {
   const record = buildAbortingRecord();
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const ownershipClaim = await workflow.claimSplitWorkflowOwnership(
     WORKFLOW_ID,
   );
@@ -158,7 +159,7 @@ test('cross-process-abort-cutover-exclusion: a stale-fenced abort ' +
 async (t) => {
   const {workflow, durableRow} = buildWorkflow({});
   const record = buildAbortingRecord();
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(WORKFLOW_ID);
   const supersededFence = claim.workflow.fenceToken;
 
@@ -220,7 +221,7 @@ test('cross-process-abort-cutover-exclusion: the abort step carries the ' +
 async (t) => {
   const {workflow} = buildWorkflow({});
   const record = buildAbortingRecord();
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(WORKFLOW_ID);
   const supersededFence = claim.workflow.fenceToken;
 

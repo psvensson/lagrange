@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 148,
+    "storage-partition": 151,
     "storage-raft": 99,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2203,
-  "digest": "fnv1a32-c4d786da",
+  "censusSize": 2206,
+  "digest": "fnv1a32-b67ab60f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-273b379b",
+  "observationDigest": "fnv1a32-1633aa9f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1273,6 +1273,9 @@
     "test/partition/table-partition-structure.property.test.js": "storage-partition",
     "test/partition/timeout-cleanup.property.test.js": "storage-partition",
     "test/partition/workflow-fencing-wiring.test.js": "storage-partition",
+    "test/partition/workflow-record-reconcile.test.js": "storage-partition",
+    "test/partition/workflow-record-stale-owner.test.js": "storage-partition",
+    "test/partition/workflow-record-two-owners.test.js": "storage-partition",
     "test/partition/write-path-epoch-fencing.test.js": "storage-partition",
     "test/policy/policy-driven-adjustment.property.test.js": "control-plane",
     "test/policy/table-policy-application.property.test.js": "control-plane",
@@ -7589,6 +7592,31 @@
         "test/partition/fixtures/critical-spread-transition-authority/recorded-guard-shapes.json"
       ]
     },
+    "test/partition/managed-merge-epoch-persistence-effects.test.js": {
+      "files": [
+        "src/partition/managed-workflow-record-store.js"
+      ]
+    },
+    "test/partition/managed-split-epoch-persistence-effects.test.js": {
+      "files": [
+        "src/partition/managed-workflow-record-store.js"
+      ]
+    },
+    "test/partition/managed-split-resume-under-write-load.test.js": {
+      "files": [
+        "src/partition/managed-workflow-record-store.js"
+      ]
+    },
+    "test/partition/managed-split-workflow-terminal-lifecycle.test.js": {
+      "files": [
+        "src/partition/managed-workflow-record-store.js"
+      ]
+    },
+    "test/partition/managed-split-workflow-transition-persistence.test.js": {
+      "files": [
+        "src/partition/managed-workflow-record-store.js"
+      ]
+    },
     "test/partition/partition-admission-redrive-wakes.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -7900,9 +7928,19 @@
         "test/partition/partition-rs-raft-restart-fixture.js"
       ]
     },
+    "test/partition/split-abort-fence-parity.test.js": {
+      "files": [
+        "src/partition/managed-workflow-record-store.js"
+      ]
+    },
     "test/partition/split-cutover-owner-delegation.test.js": {
       "files": [
         "src/partition/partition-service.js"
+      ]
+    },
+    "test/partition/split-dissolution-durable-proof.test.js": {
+      "files": [
+        "src/partition/managed-workflow-record-store.js"
       ]
     },
     "test/partition/split-execution-state-reconstruction.test.js": {
@@ -7935,6 +7973,22 @@
     "test/partition/sql-statement-parser-coverage-matrix.test.js": {
       "files": [
         "src/storage/sqlite-store-constants.js"
+      ]
+    },
+    "test/partition/workflow-fencing-wiring.test.js": {
+      "files": [
+        "src/partition/managed-workflow-record-store.js"
+      ]
+    },
+    "test/partition/workflow-record-reconcile.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js"
+      ]
+    },
+    "test/partition/workflow-record-stale-owner.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/partition-constants.js"
       ]
     },
     "test/query/application-database.test.js": {

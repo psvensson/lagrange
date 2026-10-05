@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2186,
+    "ordinary": 2189,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2203,
-  "digest": "fnv1a32-f210341e",
+  "censusSize": 2206,
+  "digest": "fnv1a32-440f9b59",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1253,6 +1253,9 @@
     "test/partition/table-partition-structure.property.test.js": "ordinary",
     "test/partition/timeout-cleanup.property.test.js": "ordinary",
     "test/partition/workflow-fencing-wiring.test.js": "ordinary",
+    "test/partition/workflow-record-reconcile.test.js": "ordinary",
+    "test/partition/workflow-record-stale-owner.test.js": "ordinary",
+    "test/partition/workflow-record-two-owners.test.js": "ordinary",
     "test/partition/write-path-epoch-fencing.test.js": "ordinary",
     "test/policy/policy-driven-adjustment.property.test.js": "ordinary",
     "test/policy/table-policy-application.property.test.js": "ordinary",

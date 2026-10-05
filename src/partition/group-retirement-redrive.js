@@ -57,12 +57,21 @@
  * silent). A member that never answers stays listed with its alarm: the
  * only future exit for it is an explicit durable operator retirement fact,
  * which does not exist yet.
+ * Lease: while a workflow has an incomplete retirement tracked here, its
+ * owner renews its ownership lease every third of the lease term (a
+ * compare-and-swap on the record, managed-workflow-ownership-core.js): a
+ * healthy owner driving a retirement longer than its lease is never
+ * superseded mid-step; a dead owner renews nothing and loses the lease at
+ * its expiry. A refused renewal is a lost workflow: this owner abandons it
+ * (WARN). This timer is a renewal, never an exit: nothing completes on it.
  * Prohibited: no step is completed here; a superseded owner (its evidence
- * refused for workflow or fence) stops re-driving.
+ * refused for workflow or fence, its record write refused, its renewal
+ * refused) stops re-driving.
  */
 
 import {wasNodeRecordReadyWhenWritten} from '../node/node-readiness-policy.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {claimWorkflowOwnershipCore} from './managed-workflow-ownership-core.js';
 
 const REDRIVE_TRIGGER = Object.freeze({
   FAILED_ACK: 'failed-ack',
@@ -85,7 +94,13 @@ const REDRIVE_LOG_MSG = Object.freeze({
     'was refused as superseded',
   STALLED: 'Group retirement re-run returned without completing or ' +
     'reporting; the fallback is armed',
+  RENEWAL_REFUSED: 'Group retirement re-drive stopped: this owner\'s lease ' +
+    'renewal was refused (another owner holds the workflow record)',
+  RENEWAL_FAILED: 'Group retirement lease renewal did not answer; retrying ' +
+    'at the next renewal interval',
 });
+const LEASE_RENEWALS_PER_TERM = 3;
+const RENEWAL_UNCONFIRMED = 'Workflow lease renewal not confirmed for ';
 
 const REDRIVE_DEFAULT = Object.freeze({
   BACKOFF_BASE_MS: 1000,
@@ -117,14 +132,25 @@ class GroupRetirementRedrive {
    *   operation, row)) => unsubscribe; delivers system-row changes.
    * @param {Function} [options.isNodeRowReady] - (row) => boolean.
    * @param {Object} [options.scheduler] - {setTimeout, clearTimeout}.
+   * @param {Function} [options.renew] - async (workflowId) => whether this
+   *   owner still holds the workflow (its lease renewed).
+   * @param {number} [options.leaseMs] - The ownership lease term.
+   * @param {Object} [options.leaseScheduler] - {setTimeout, clearTimeout}
+   *   of the lease renewal (default: scheduler).
    */
   constructor({logger, observeSystemRows = null,
-    isNodeRowReady = () => false, scheduler = globalThis}) {
+    isNodeRowReady = () => false, scheduler = globalThis, renew = null,
+    leaseMs = null, leaseScheduler = null}) {
     this.logger = logger;
     this.observeSystemRows = observeSystemRows;
     this.isNodeRowReady = isNodeRowReady;
     this.scheduler = scheduler;
+    this.leaseScheduler = leaseScheduler || scheduler;
+    this.renew = renew;
+    this.renewIntervalMs = Number.isFinite(leaseMs) && leaseMs > 0 ?
+      Math.floor(leaseMs / LEASE_RENEWALS_PER_TERM) : null;
     this.entries = new Map();
+    this.renewals = new Map();
     this.unsubscribe = null;
     this.inFlight = new Map();
   }
@@ -191,6 +217,7 @@ class GroupRetirementRedrive {
     entry.redrive = redrive;
     entry.attempts += 1;
     this.entries.set(key, entry);
+    this.armRenewal(workflowId);
     this.logger.warn(REDRIVE_LOG_MSG.INCOMPLETE,
       {...fields, attempt: entry.attempts});
     this.subscribeNodeRows();
@@ -213,10 +240,72 @@ class GroupRetirementRedrive {
       this.scheduler.clearTimeout(entry.timer);
       this.entries.delete(key);
     }
+    this.releaseIfIdle(workflowId);
+  }
+
+  /**
+   * This owner lost the workflow (its record write or lease renewal was
+   * refused): forget every tracked retirement of it - it stops re-driving.
+   * @param {string} workflowId
+   */
+  abandon(workflowId) {
+    for (const entry of [...this.entries.values()]) {
+      if (entry.workflowId === workflowId) {
+        this.scheduler.clearTimeout(entry.timer);
+        this.entries.delete(entry.key);
+      }
+    }
+    this.releaseIfIdle(workflowId);
+  }
+
+  /** @private */
+  releaseIfIdle(workflowId) {
+    if (!this.tracks(workflowId)) {
+      this.leaseScheduler.clearTimeout(this.renewals.get(workflowId));
+      this.renewals.delete(workflowId);
+    }
     if (this.entries.size === 0 && this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
+  }
+
+  /** @private */
+  tracks(workflowId) {
+    return [...this.entries.values()].some((entry) =>
+      entry.workflowId === workflowId);
+  }
+
+  /**
+   * Renew the workflow's lease every third of its term while a retirement of
+   * it is tracked (see the owner contract).
+   * @private
+   */
+  armRenewal(workflowId) {
+    if (typeof this.renew !== 'function' || this.renewIntervalMs === null ||
+        this.renewals.has(workflowId)) {
+      return;
+    }
+    const timer = this.leaseScheduler.setTimeout(() => {
+      this.renewals.delete(workflowId);
+      if (!this.tracks(workflowId)) {
+        return;
+      }
+      Promise.resolve().then(() => this.renew(workflowId)).then((held) => {
+        if (held === true) {
+          this.armRenewal(workflowId);
+          return;
+        }
+        this.logger.warn(REDRIVE_LOG_MSG.RENEWAL_REFUSED, {workflowId});
+        this.abandon(workflowId);
+      }, (error) => {
+        this.logger.warn(REDRIVE_LOG_MSG.RENEWAL_FAILED, {workflowId,
+          error: error?.message || String(error)});
+        this.armRenewal(workflowId);
+      });
+    }, this.renewIntervalMs);
+    timer?.unref?.();
+    this.renewals.set(workflowId, timer);
   }
 
   /**
@@ -394,7 +483,8 @@ function observeSystemRows(cache, listener) {
  * encoded a ready heartbeat at write time.
  * @param {Object} workflow - The workflow owner.
  * @param {Object} options - Its constructor options
- *   (groupRetirementScheduler: {setTimeout, clearTimeout}).
+ *   (groupRetirementScheduler, groupRetirementLeaseScheduler: {setTimeout,
+ *   clearTimeout}).
  * @return {GroupRetirementRedrive}
  */
 function createGroupRetirementRedrive(workflow, options) {
@@ -403,7 +493,35 @@ function createGroupRetirementRedrive(workflow, options) {
     observeSystemRows: (listener) => workflow.observeSystemRows(listener),
     isNodeRowReady: (row) => wasNodeRecordReadyWhenWritten(row),
     scheduler: options.groupRetirementScheduler || globalThis,
+    renew: (workflowId) => renewHeldWorkflowLease(workflow, workflowId),
+    leaseMs: workflow.workflowLeaseMs,
+    leaseScheduler: options.groupRetirementLeaseScheduler || null,
   });
+}
+
+/**
+ * Renew the lease of a workflow this owner holds in memory (a
+ * compare-and-swap on its record); false when it does not hold it.
+ * @param {Object} owner - The workflow owner.
+ * @param {string} workflowId
+ * @return {Promise<boolean>}
+ */
+async function renewHeldWorkflowLease(owner, workflowId) {
+  const live = owner.workflowCoordinator?.getWorkflowById?.(workflowId);
+  if (!live || live.workflowOwnerId !== owner.workflowOwnerId) {
+    return false;
+  }
+  const claim = await claimWorkflowOwnershipCore(owner, workflowId,
+    {renew: true});
+  if (claim?.accepted === true) {
+    return true;
+  }
+  // A refusal that did not relinquish the workflow (the record store keeps
+  // it on an unconfirmed or own-record outcome) is retried, not a loss.
+  if (owner.workflowCoordinator.getWorkflowById(workflowId)) {
+    throw new Error(RENEWAL_UNCONFIRMED + workflowId);
+  }
+  return false;
 }
 
 export {

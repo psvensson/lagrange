@@ -17,6 +17,11 @@ import {
   stampOwnershipClaimMetadata,
 } from './managed-workflow-ownership-core.js';
 import {
+  updateRecordAdoptingOwnWrite,
+  writeWorkflowRecord,
+  writeWorkflowRecordOrThrow,
+} from './managed-workflow-record-store.js';
+import {
   isRetryableManagedSplitExecutionFailure,
   resolveRetryableManagedSplitExecutionDecisionType,
 } from './managed-split-retry-policy.js';
@@ -28,7 +33,6 @@ const LOCAL_STR_MERGE_EXECUTION_DEFERRED = 'merge_execution_deferred';
 const LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE =
   'merge_source_execution_failure';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
-const LOCAL_STR_TABLE_ID = 'table_id';
 const LOCAL_STR_EPOCH_EFFECT_DETAIL =
   ': expected exactly 1 row update for workflow ';
 const POST_ADMISSION_EXECUTION_FAILURE_OUTCOME = Object.freeze({
@@ -92,10 +96,10 @@ class ManagedMergeWorkflowPersistenceMethods {
         typeof error.timeoutClassification === LOCAL_STR_OBJECT ?
           error.timeoutClassification :
           null;
-      await this.workflowCoordinator.updateWorkflow(workflowId, {
+      await updateRecordAdoptingOwnWrite(this, workflowId, (current) => ({
         status: PARTITION_TRANSITION_STATE.FAILED,
         metadata: {
-          ...(workflow.metadata || {}),
+          ...(current.metadata || {}),
           [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
             classification: LOCAL_STR_MERGE_EXECUTION_FAILURE,
             message: error?.message || MANAGED_MERGE_ERROR_MSG.START_FAILED,
@@ -103,7 +107,7 @@ class ManagedMergeWorkflowPersistenceMethods {
             ...(timeoutClassification ? {timeoutClassification} : {}),
           },
         },
-      });
+      }));
     } catch (persistError) {
       this.logger.error(MANAGED_MERGE_LOG_MSG.PERSIST_FAILURE_FAILED, {
         workflowId,
@@ -247,30 +251,24 @@ class ManagedMergeWorkflowPersistenceMethods {
         MANAGED_MERGE_ERROR_MSG.TRANSITION_PERSIST_UNAVAILABLE,
       );
     }
-
-    const {
-      updatePayload,
-      serializedMetadata,
-      isEpochTransition,
-    } = this.buildMergeTransitionUpdatePayload(workflow);
-    const mutationResult = await this.getControlPlaneSystemTableGateway()
-      .submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: TABLES.TABLES,
-        whereClause: {[LOCAL_STR_TABLE_ID]: workflow.tableId},
+    // The one record writer: a compare-and-swap on the record as read
+    // (managed-workflow-record-store.js); a refusal throws, typed.
+    await writeWorkflowRecordOrThrow(this, workflow, (candidate) => {
+      const {updatePayload, serializedMetadata, isEpochTransition} =
+        this.buildMergeTransitionUpdatePayload(candidate);
+      return {
         data: updatePayload,
-      }, this.buildManagedMergeMutationOptions({
-        allowPendingVisibility: !isEpochTransition,
-        expectedCacheFields: {
-          pending_partition_version:
-            updatePayload.pending_partition_version,
-          partition_transition_state: workflow.status,
-          partition_transition_metadata: serializedMetadata,
-        },
-      }));
-    if (isEpochTransition) {
-      assertManagedMergeEpochMutationEffect(mutationResult, workflow);
-    }
+        options: this.buildManagedMergeMutationOptions({
+          allowPendingVisibility: !isEpochTransition,
+          expectedCacheFields: {
+            pending_partition_version:
+              updatePayload.pending_partition_version,
+            partition_transition_state: candidate.status,
+            partition_transition_metadata: serializedMetadata,
+          },
+        }),
+      };
+    });
   }
 
   /**
@@ -342,104 +340,54 @@ class ManagedMergeWorkflowPersistenceMethods {
 
   /**
    * Durable claim persistence for the ownership machinery (mirrors the
-   * split owner): the claim lands through the tables transition row
-   * write, compare-and-swapped on the previously persisted transition
-   * metadata so two nodes claiming concurrently can never both succeed.
+   * split owner): the claim (or renewal) is a compare-and-swap on the record
+   * as read (managed-workflow-record-store.js).
    * @param {Object} workflow - Claim candidate.
-   * @param {Object} [context] - ({previousWorkflow}).
    * @return {Promise<Object>} {accepted: boolean, workflow}.
    * @private
    */
-  async persistMergeWorkflowClaim(workflow, context = {}) {
-    const gateway = this.getControlPlaneSystemTableGateway();
-    if (!gateway ||
-        typeof gateway.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
-      return {accepted: false, workflow};
-    }
-    const previousWorkflow = context.previousWorkflow || {};
-    const expectedSerializedMetadata = JSON.stringify(
-      this.buildPersistedTransitionMetadata(previousWorkflow),
-    );
-    const serializedMetadata = JSON.stringify(
-      this.buildPersistedTransitionMetadata(workflow),
-    );
-    const mutationResult = await gateway.updateSystemTableRow(
-      TABLES.TABLES,
-      {
-        [LOCAL_STR_TABLE_ID]: workflow.tableId,
-        partition_transition_metadata: expectedSerializedMetadata,
+  async persistMergeWorkflowClaim(workflow) {
+    const write = await writeWorkflowRecord(this, workflow, (candidate) => ({
+      data: {
+        partition_transition_metadata: JSON.stringify(
+          this.buildPersistedTransitionMetadata(candidate)),
+        updated_at: candidate.updatedAt,
       },
-      {
-        partition_transition_metadata: serializedMetadata,
-        updated_at: workflow.updatedAt,
-      },
-      // Claim/renew writes are not epoch transitions: they tolerate
-      // pending cache visibility like every other routine transition
-      // write (the CAS witness carries the race guarantee).
-      this.buildManagedMergeMutationOptions({
+      // Claim/renew writes are not epoch transitions: they tolerate pending
+      // cache visibility (the compare-and-swap carries the race guarantee).
+      options: this.buildManagedMergeMutationOptions({
         allowPendingVisibility: true,
       }),
-    );
-    if (mutationResult?.success === false) {
-      return {accepted: false, workflow};
-    }
-    const affectedRows = Number(
-      mutationResult?.partitionResult?.affectedRows ??
-        mutationResult?.affectedRows,
-    );
-    return {accepted: affectedRows === 1, workflow};
+    }));
+    return {accepted: write.accepted, workflow};
   }
 
   /**
    * Durable transition persistence for the ownership machinery (mirrors
    * the split owner): a fenced workflow transition lands with the FULL
-   * transition payload (epoch fields included) compare-and-swapped on
-   * the previously persisted transition metadata. Returns the storage-
-   * hook shape ({accepted}); the machinery throws STALE_FENCE_TOKEN on
-   * rejection.
+   * transition payload (epoch fields included) as a compare-and-swap on the
+   * record as read. Returns the storage-hook shape ({accepted}); the
+   * machinery throws STALE_FENCE_TOKEN on rejection.
    * @param {Object} workflow - Transition candidate.
-   * @param {Object} [context] - ({previousWorkflow}).
    * @return {Promise<Object>} {accepted: boolean, workflow}.
    * @private
    */
-  async persistMergeWorkflowTransitionFence(workflow, context = {}) {
-    const gateway = this.getControlPlaneSystemTableGateway();
-    if (!gateway ||
-        typeof gateway.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
-      return {accepted: false, workflow};
-    }
-    const previousWorkflow = context.previousWorkflow || {};
-    const expectedSerializedMetadata = JSON.stringify(
-      this.buildPersistedTransitionMetadata(previousWorkflow),
-    );
-    const {
-      updatePayload,
-      serializedMetadata,
-      isEpochTransition,
-    } = this.buildMergeTransitionUpdatePayload(workflow);
-    const mutationResult = await gateway.updateSystemTableRow(
-      TABLES.TABLES,
-      {
-        [LOCAL_STR_TABLE_ID]: workflow.tableId,
-        partition_transition_metadata: expectedSerializedMetadata,
-      },
-      updatePayload,
-      this.buildManagedMergeMutationOptions({
-        allowPendingVisibility: !isEpochTransition,
-        expectedCacheFields: {
-          partition_transition_state: workflow.status,
-          partition_transition_metadata: serializedMetadata,
-        },
-      }),
-    );
-    if (mutationResult?.success === false) {
-      return {accepted: false, workflow};
-    }
-    const affectedRows = Number(
-      mutationResult?.partitionResult?.affectedRows ??
-        mutationResult?.affectedRows,
-    );
-    return {accepted: affectedRows === 1, workflow};
+  async persistMergeWorkflowTransitionFence(workflow) {
+    const write = await writeWorkflowRecord(this, workflow, (candidate) => {
+      const {updatePayload, serializedMetadata, isEpochTransition} =
+        this.buildMergeTransitionUpdatePayload(candidate);
+      return {
+        data: updatePayload,
+        options: this.buildManagedMergeMutationOptions({
+          allowPendingVisibility: !isEpochTransition,
+          expectedCacheFields: {
+            partition_transition_state: candidate.status,
+            partition_transition_metadata: serializedMetadata,
+          },
+        }),
+      };
+    });
+    return {accepted: write.accepted, workflow};
   }
 
   /**
@@ -542,7 +490,6 @@ class ManagedMergeWorkflowPersistenceMethods {
         },
         updatedAt: this.now(),
       },
-      {previousWorkflow: workflow},
     );
     if (persistence?.accepted !== true) {
       throw new Error(
@@ -624,25 +571,23 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @private
    */
   async persistTerminalTransitionClear(workflow) {
-    const mutationResult = await this.getControlPlaneSystemTableGateway()
-      .submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: TABLES.TABLES,
-        whereClause: {[LOCAL_STR_TABLE_ID]: workflow.tableId},
-        data: {
-          partition_transition_state: null,
-          partition_transition_metadata: null,
-          pending_partition_version: null,
-          updated_at: this.now(),
-        },
-      }, this.buildManagedMergeMutationOptions({
+    // The completion is the record's last write: a compare-and-swap on the
+    // record this owner last wrote or read.
+    await writeWorkflowRecordOrThrow(this, workflow, () => ({
+      data: {
+        partition_transition_state: null,
+        partition_transition_metadata: null,
+        pending_partition_version: null,
+        updated_at: this.now(),
+      },
+      options: this.buildManagedMergeMutationOptions({
         allowPendingVisibility: false,
         expectedCacheFields: {
           partition_transition_state: null,
           partition_transition_metadata: null,
         },
-      }));
-    assertManagedMergeEpochMutationEffect(mutationResult, workflow);
+      }),
+    }));
     this.logger.info(MANAGED_MERGE_LOG_MSG.TERMINAL_TRANSITION_CLEARED, {
       workflowId: workflow.workflowId,
       tableId: workflow.tableId,

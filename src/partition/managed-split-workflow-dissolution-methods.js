@@ -1,3 +1,4 @@
+import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
 import {SERVICE_TYPE} from '../constants/index.js';
 import {
   ReplicaOperationField,
@@ -66,6 +67,16 @@ function splitChildParticipantKey(workflow, childPartitionId) {
  * become authoritative, and an abort keeps the source while tearing
  * down the never-authoritative children.
  */
+// The record states in which a retired group's partitions row may be
+// deleted: a split source after its cutover; an aborted child.
+const SPLIT_SOURCE_RETIRING_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+  PARTITION_TRANSITION_STATE.SPLIT_SOURCE_DISSOLVING,
+]));
+const ABORTED_RECORD_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.FAILED,
+]));
+
 class ManagedSplitWorkflowDissolutionMethods {
   /**
    * Resolve the non-participating sibling partitions of one split: every
@@ -306,6 +317,10 @@ class ManagedSplitWorkflowDissolutionMethods {
           workflow,
         }),
       );
+      // The row delete is irreversible: this owner proves, at apply time,
+      // that it still holds the record (a renewal compare-and-swap).
+      await assertWorkflowRecordHeld(this, workflowId,
+        SPLIT_SOURCE_RETIRING_STATES);
       const deleteWitness =
         await this.deletePartitionMetadata(sourcePartitionId);
       if (!this.isDissolutionWitnessPersisted(deleteWitness)) {
@@ -438,6 +453,8 @@ class ManagedSplitWorkflowDissolutionMethods {
               workflow,
             }),
           );
+          await assertWorkflowRecordHeld(this, workflowId,
+            ABORTED_RECORD_STATES);
           await this.deletePartitionMetadata(childPartitionId);
           this.groupRetirementRedrive.settle(workflowId, childPartitionId);
         } catch (error) {
