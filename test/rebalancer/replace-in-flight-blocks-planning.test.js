@@ -18,15 +18,30 @@
  *   W5  supersede of the SAME operation: re-planning its intent returns it
  *       (no refusal, no second row); a failed operation is terminal and a
  *       new one is then admitted;
- *   W6  the terminal event wakes the partition's planner (no timer fires).
+ *   W6  the terminal event wakes the partition's planner (no timer fires);
+ *   W7  D2 target death at STOPPING: terminal FAILED, source retained, the
+ *       planner woken by the event, planning resumes;
+ *   W8  a missing assessment never opens the critical create lane;
+ *   W9  the COORDINATION_MISMATCH exemption as it stands (pinned);
+ *   R1  the cluster ADD budget predicate equals base's answer over the
+ *       assessment cross product.
  *
  * Every step is driven through the real RebalanceCoordinator and its
- * operation workflow owner; the transport is the REPLACE witness double and
- * the census is the real derived priority partition summary over the
- * fixture's services rows.
+ * operation workflow owner: SYNCING reconcile, the real remove-safety SAFE
+ * answer, the STOPPING compare-and-swap, the STOPPING owner waiting on the
+ * witness and completing (W2/W3) or failing (W7). The doubles: the
+ * transport (the REPLACE witness double answers the committed
+ * configuration), the census (the real derived priority partition summary
+ * over the fixture's services rows, supplied as the planning and the
+ * remove-safety snapshot), the owner's decision snapshot (absent), and the
+ * services rows the test moves the way the replicas would.
+ *
+ * Not covered: owner death mid-REPLACE on a priority partition (the fenced
+ * orphan adoption excludes priority/system partitions; its exit is the drain
+ * settlement, which needs a second coordinator over a shared store).
  */
 import {test} from '../../src/test-helpers/tap.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {MESSAGE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -34,6 +49,16 @@ import {
 import {
   REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {
+  ReplicaOperationField,
+  ReplicaOperationResponseStatus,
+} from '../../src/rebalancer/replica-operation-constants.js';
+import {
+  OPERATION_WORKFLOW_OWNER_SHARED,
+} from '../../src/rebalancer/operation-workflow-owner-shared.js';
+import {
+  isReplaceRemovalIntentDurable,
+} from '../../src/rebalancer/operation-workflow-replace-intent.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
   buildDerivedPriorityPartitionSummary,
@@ -64,6 +89,8 @@ import {
   deliveredReplaceWitnessResponse,
 } from './replace-witness-fixture.js';
 
+const {REMOVE_SAFETY_EVALUATION_CLASSIFICATION} =
+  OPERATION_WORKFLOW_OWNER_SHARED;
 const PARTITION_ID = 'schema_operations-p1';
 const OTHER_PARTITION_ID = 'sql_transactions-p1';
 const NODE_A = 'node-a';
@@ -172,12 +199,14 @@ function captureSpentWaits(...loggers) {
 async function createWorld({seed}) {
   const witness = createReplaceWitness({addressedLeads: true});
   const heldTimers = [];
+  const deliveries = [];
   const coordinator = createTestCoordinator({
     nodeId: NODE_B,
     enableTimeouts: false,
     replaceWitness: false,
     messageRouter: {
       async deliver(_target, payload) {
+        deliveries.push(payload?.[ReplicaOperationField.TYPE] ?? null);
         const answered = witness.answer(payload);
         if (answered) {
           return deliveredReplaceWitnessResponse(answered);
@@ -220,7 +249,9 @@ async function createWorld({seed}) {
     replicaId: SOURCE_REPLICA_ID,
     enforceConcurrentOperationBudget: true,
   });
-  return {coordinator, owner, witness, operation, heldTimers, spentWaits};
+  return {
+    coordinator, owner, witness, operation, heldTimers, spentWaits, deliveries,
+  };
 }
 
 function persisted(world) {
@@ -379,17 +410,14 @@ async function assertEveryAdmissionRefuses(t, world, label) {
     `${label}: another partition is admitted (the invariant is per partition)`);
 }
 
-async function driveEndToEnd(t, {seed, targetCountedAtRemoveDispatch}) {
-  const world = await createWorld({seed});
-  const {coordinator, owner, witness, operation} = world;
-  const targetReplicaId = operation.replicaId;
-  const target = (status, role) =>
-    replicaRow(targetReplicaId, NODE_B, role, status);
+// The partition's planner, woken only by events: every timer it could arm is
+// held and never run, so a recorded wake cannot have come from a timer.
+function bindPlannerWakes(world) {
   const wakes = [];
   const rebalancer = createTestRebalancer({
     entityId: PARTITION_ID,
     nodeId: NODE_B,
-    systemTableCache: coordinator.systemTableCache,
+    systemTableCache: world.coordinator.systemTableCache,
     setTimeoutFn(fn, delayMs) {
       const handle = {fn, delayMs, unref() {}};
       world.heldTimers.push(handle);
@@ -403,116 +431,187 @@ async function driveEndToEnd(t, {seed, targetCountedAtRemoveDispatch}) {
     return true;
   };
   rebalancer.enqueueMembershipPublicationReconcile = () => true;
-  rebalancer.bindCoordinatorProgressListeners(coordinator);
+  rebalancer.bindCoordinatorProgressListeners(world.coordinator);
+  return {
+    wakes,
+    async release() {
+      rebalancer.unbindCoordinatorProgressListeners();
+      await rebalancer.shutdown();
+      await world.coordinator.shutdown();
+    },
+  };
+}
+
+function targetRow(world, status, role) {
+  return replicaRow(world.operation.replicaId, NODE_B, role, status);
+}
+
+// The real remove-safety evaluation, observed (called through, never
+// answered by the test): its census is the derived summary over the rows.
+function observeRemoveSafety(world) {
+  const {coordinator, owner} = world;
+  const classifications = [];
+  owner.readAuthoritativePriorityRecoveryPlanningSnapshotForRemoveSafety =
+    async () => planningSnapshot(coordinator);
+  const evaluate = owner.evaluateRemoveSafety.bind(owner);
+  owner.evaluateRemoveSafety = async (operation) => {
+    const evaluation = await evaluate(operation);
+    classifications.push(evaluation?.classification || null);
+    return evaluation;
+  };
+  return classifications;
+}
+
+// PENDING -> CREATING -> target learner -> target voter-ready, every
+// admission refusing a second operation at each step.
+async function driveToTargetVoterReady(t, world, seed) {
+  const {coordinator, operation} = world;
+  await assertEveryAdmissionRefuses(t, world, 'created (PENDING)');
+
+  await coordinator.executeOperation(operation);
+  t.equal((await persisted(world)).workflowStep, WORKFLOW_STEP.CREATING,
+    'the owner dispatched the target create');
+  await assertEveryAdmissionRefuses(t, world, 'CREATING');
+
+  coordinator.systemTableCache.upsert('services',
+    targetRow(world, ReplicaStatus.SYNCING, ROLE_LEARNER));
+  const learnerCompletion = buildPriorityRecoveryCompletion({
+    assessment: assessment(world, await persisted(world)),
+    targetReplicaCount: TARGET_REPLICA_COUNT,
+    activeVoterCount: seed.length,
+    learnerCount: 1,
+    priorityRecoveryActive: hasPriorityRecoverySpreadGap(
+      census(coordinator)),
+  });
+  const promotion = evaluateLearnerPromotionCountCheck({
+    targetReplicaCount: TARGET_REPLICA_COUNT,
+    activeVoterCount: seed.length,
+    learnerCount: 1,
+    isJoiningExistingGroup: true,
+    hasOwnedAddLikeOperation: true,
+    isCriticalSystemPartition: true,
+    temporaryOverflowVoterBudget:
+      learnerCompletion.temporaryOverflowVoterBudget,
+  });
+  t.not(promotion.refusalReason, WOULD_EXCEED,
+    'the target learner promotion is never refused as over target');
+
+  coordinator.systemTableCache.upsert('services',
+    targetRow(world, ReplicaStatus.ACTIVE, ROLE_FOLLOWER));
+}
+
+// SYNCING -> the owner's reconcile -> the real remove-safety SAFE answer ->
+// the STOPPING compare-and-swap with the removal intent.
+async function driveToStopping(t, world) {
+  const classifications = observeRemoveSafety(world);
+  const syncing = await persisted(world);
+  syncing.workflowStep = WORKFLOW_STEP.SYNCING;
+  syncing.status = ReplicaStatus.SYNCING;
+  await world.coordinator.reconcileSyncingOperation(syncing);
+  t.ok(classifications.length > 0 && classifications.every((classification) =>
+    classification === REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE),
+  `the real remove-safety evaluation answered SAFE (${
+    classifications.join(',')})`);
+  const stopping = await persisted(world);
+  t.equal(stopping.workflowStep, WORKFLOW_STEP.STOPPING,
+    'the removal-effect boundary compare-and-swapped the REPLACE into ' +
+    'STOPPING');
+  t.ok(isReplaceRemovalIntentDurable(stopping),
+    'the STOPPING row carries the durable removal intent');
+  t.ok(world.deliveries.includes(MESSAGE_TYPE.REMOVE_REPLICA),
+    'the source removal effect was sent after the intent');
+  return stopping;
+}
+
+function assertStoppingSpread(t, world, stopping, targetCounted) {
+  const {coordinator} = world;
+  if (!targetCounted) {
+    // The target's row lags its voter state (the ACTIVE/learner window):
+    // the census does not count it yet; the REPLACE holds the grace.
+    coordinator.systemTableCache.upsert('services',
+      targetRow(world, ReplicaStatus.ACTIVE, ROLE_LEARNER));
+  }
+  const graceAssessment = assessment(world, stopping);
+  if (targetCounted) {
+    t.same(partitionCensus(coordinator)?.readyReplicaCountByNodeId,
+      {[NODE_A]: 3, [NODE_B]: 1},
+      'the census already counts the target ({A:3,B:1})');
+    t.not(graceAssessment.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+      'a counted target is not credited again');
+    return;
+  }
+  t.equal(graceAssessment.semanticState,
+    PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+    'the uncounted target holds the remove-dispatch grace at STOPPING (R1)');
+  t.equal(doesPriorityRecoveryOperationHoldAddBudget(graceAssessment),
+    false, 'the grace still releases the cross-partition ADD budget');
+}
+
+// W6 + planning resumes: the terminal event itself wakes the partition's
+// planner (timers held), nothing unresolved is left, and the gates that
+// refused a second operation admit the next one.
+async function assertPlanningResumes(t, world, terminalWakes, label) {
+  const {coordinator} = world;
+  t.ok(terminalWakes.includes(RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS),
+    `W6: the ${label} terminal event enqueues the partition planner`);
+  t.equal(unresolvedOperations(coordinator).length, 0,
+    'no unresolved operation is left on the partition');
+  for (const lane of [
+    'ensureCriticalPartitionCreateLaneAvailable',
+    'ensureEntityAddLikeCreateLaneAvailable',
+  ]) {
+    t.equal(await refusal(coordinator[lane](
+      laneContext(OperationType.ADD, PARTITION_ID, {nodeId: NODE_D}))),
+    null, `planning resumes after the ${label} terminal event: ${lane} admits`);
+  }
+  t.equal(await refusal(coordinator.ensurePriorityControlPlaneRemoveLaneAvailable(
+    laneContext(OperationType.REMOVE, PARTITION_ID, {
+      nodeId: NODE_A,
+      replicaId: `${PARTITION_ID}-r1`,
+    }))), null,
+  `planning resumes after the ${label} terminal event: the remove lane admits`);
+  t.same(world.spentWaits, [], 'no wait bound was spent');
+}
+
+// Owner-driven end to end through STOPPING: every step is the real owner;
+// the witness double answers the committed configuration and the census is
+// the derived summary over the rows.
+async function driveEndToEnd(t, {seed, targetCounted}) {
+  const world = await createWorld({seed});
+  const {coordinator, owner, witness} = world;
+  const planner = bindPlannerWakes(world);
   try {
-    await assertEveryAdmissionRefuses(t, world, 'created (PENDING)');
+    await driveToTargetVoterReady(t, world, seed);
+    const stopping = await driveToStopping(t, world);
+    assertStoppingSpread(t, world, stopping, targetCounted);
+    await assertEveryAdmissionRefuses(t, world, 'STOPPING');
 
-    await coordinator.executeOperation(operation);
-    t.equal((await persisted(world)).workflowStep, WORKFLOW_STEP.CREATING,
-      'the owner dispatched the target create');
-    await assertEveryAdmissionRefuses(t, world, 'CREATING');
+    // The STOPPING owner while the source is still a voter: it waits.
+    const waiting = await owner.runReplaceStoppingOwner(
+      await persisted(world));
+    t.equal(waiting?.status, ReplicaOperationResponseStatus.IN_PROGRESS,
+      'the STOPPING owner waits while the witness counts the source');
+    await assertEveryAdmissionRefuses(t, world, 'STOPPING (owner waiting)');
 
-    coordinator.systemTableCache.upsert('services',
-      target(ReplicaStatus.SYNCING, ROLE_LEARNER));
-    const learnerCompletion = buildPriorityRecoveryCompletion({
-      assessment: assessment(world, await persisted(world)),
-      targetReplicaCount: TARGET_REPLICA_COUNT,
-      activeVoterCount: seed.length,
-      learnerCount: 1,
-      priorityRecoveryActive: hasPriorityRecoverySpreadGap(
-        census(coordinator)),
-    });
-    const promotion = evaluateLearnerPromotionCountCheck({
-      targetReplicaCount: TARGET_REPLICA_COUNT,
-      activeVoterCount: seed.length,
-      learnerCount: 1,
-      isJoiningExistingGroup: true,
-      hasOwnedAddLikeOperation: true,
-      isCriticalSystemPartition: true,
-      temporaryOverflowVoterBudget:
-        learnerCompletion.temporaryOverflowVoterBudget,
-    });
-    t.not(promotion.refusalReason, WOULD_EXCEED,
-      'the target learner promotion is never refused as over target');
-
-    // Target voter-ready: the owner moves the REPLACE into source removal.
-    coordinator.systemTableCache.upsert('services',
-      target(ReplicaStatus.ACTIVE, ROLE_FOLLOWER));
-    const syncing = await persisted(world);
-    syncing.workflowStep = WORKFLOW_STEP.SYNCING;
-    syncing.status = ReplicaStatus.SYNCING;
-    await coordinator.reconcileSyncingOperation(syncing);
-    const removeDispatch = await persisted(world);
-    t.ok(coordinator.isReplaceRemoveDispatchPhase(removeDispatch),
-      'the owner reached the REPLACE remove-dispatch phase');
-    if (!targetCountedAtRemoveDispatch) {
-      // The target's row lags its voter state (the ACTIVE/learner window):
-      // the census does not count it yet; the REPLACE holds the grace.
-      coordinator.systemTableCache.upsert('services',
-        target(ReplicaStatus.ACTIVE, ROLE_LEARNER));
-    }
-    const graceAssessment = assessment(world, removeDispatch);
-    if (targetCountedAtRemoveDispatch) {
-      t.same(partitionCensus(coordinator)?.readyReplicaCountByNodeId,
-        {[NODE_A]: 3, [NODE_B]: 1},
-        'the census already counts the target ({A:3,B:1})');
-      t.not(graceAssessment.semanticState,
-        PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-        'a counted target is not credited again');
-    } else {
-      t.equal(graceAssessment.semanticState,
-        PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-        'the uncounted target holds the remove-dispatch grace (R1)');
-      t.equal(doesPriorityRecoveryOperationHoldAddBudget(graceAssessment),
-        false, 'the grace still releases the cross-partition ADD budget');
-    }
-    await assertEveryAdmissionRefuses(t, world, 'remove-dispatch');
-
-    // The source removal commits; the owner completes the REPLACE.
+    // The source removal commits; the STOPPING owner completes the REPLACE.
     const holdersBeforeTrim = distinctHolderCount(coordinator);
     witness.commitRemoval();
     coordinator.systemTableCache.upsert('services',
-      target(ReplicaStatus.ACTIVE, ROLE_FOLLOWER));
+      targetRow(world, ReplicaStatus.ACTIVE, ROLE_FOLLOWER));
     coordinator.systemTableCache.delete('services', SOURCE_REPLICA_ID);
     t.ok(distinctHolderCount(coordinator) >= Math.min(holdersBeforeTrim,
       TARGET_REPLICA_COUNT), 'the source trim keeps the spread floor');
-    const wakesBeforeTerminal = wakes.length;
-    await owner.completeOperation(await persisted(world));
+    const wakesBeforeTerminal = planner.wakes.length;
+    await owner.runReplaceStoppingOwner(await persisted(world));
     const terminal = await persisted(world);
     t.equal(terminal.workflowStep, WORKFLOW_STEP.REMOVED,
-      'the owner drove the REPLACE to its terminal state');
+      'the STOPPING owner drove the REPLACE to REMOVED');
     t.ok(coordinator.isOperationTerminal(terminal), 'terminal by its status');
-
-    // W6: the terminal event itself wakes the partition's planner. Every
-    // timer in this world is held and never run, so the wake cannot have
-    // come from a timer.
-    t.ok(wakes.slice(wakesBeforeTerminal).includes(
-      RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS),
-    'W6: the terminal event enqueues the partition planner');
-
-    // Planning resumes: nothing unresolved is left on the partition, and the
-    // gates that refused a second operation now admit the next one.
-    t.equal(unresolvedOperations(coordinator).length, 0,
-      'no unresolved operation is left on the partition');
-    for (const lane of [
-      'ensureCriticalPartitionCreateLaneAvailable',
-      'ensureEntityAddLikeCreateLaneAvailable',
-    ]) {
-      t.equal(await refusal(coordinator[lane](
-        laneContext(OperationType.ADD, PARTITION_ID, {nodeId: NODE_D}))),
-      null, `planning resumes after the terminal event: ${lane} admits`);
-    }
-    t.equal(await refusal(coordinator.ensurePriorityControlPlaneRemoveLaneAvailable(
-      laneContext(OperationType.REMOVE, PARTITION_ID, {
-        nodeId: NODE_A,
-        replicaId: `${PARTITION_ID}-r1`,
-      }))), null,
-    'planning resumes after the terminal event: the remove lane admits');
-    t.same(world.spentWaits, [], 'no wait bound was spent');
+    await assertPlanningResumes(t, world,
+      planner.wakes.slice(wakesBeforeTerminal), 'REMOVED');
   } finally {
-    rebalancer.unbindCoordinatorProgressListeners();
-    await rebalancer.shutdown();
-    await coordinator.shutdown();
+    await planner.release();
   }
 }
 
@@ -563,27 +662,36 @@ test('W1: the R1 state blocks a second operation on its partition only',
     }
   });
 
-test('W1b: spread satisfied never opens the create lane for a second ' +
-  'operation on the partition of an unresolved operation', async (t) => {
-  const addOperationId = 'unresolved-add-r3';
+// One unresolved ADD (SYNCING, target node-d) on a partition whose rows
+// already read its spread.
+async function createUnresolvedAddWorld({
+  partitionId,
+  snapshotAvailable = true,
+  eligibleNodeIds = NODES,
+  seed = [
+    seedRow(1, NODE_A, ROLE_LEADER),
+    seedRow(2, NODE_C, ROLE_FOLLOWER),
+    seedRow(3, NODE_D, ROLE_FOLLOWER),
+  ],
+}) {
   const now = Date.now();
+  const rowsOn = (rows) => rows.map((row) => ({...row,
+    service_id: row.service_id.replace(PARTITION_ID, partitionId),
+    replica_id: row.replica_id.replace(PARTITION_ID, partitionId),
+    partition_id: partitionId}));
   const coordinator = createTestCoordinator({
     nodeId: NODE_B,
     enableTimeouts: false,
     cacheData: {
       nodes: NODES.map(readyNode),
-      services: [
-        seedRow(1, NODE_A, ROLE_LEADER),
-        seedRow(2, NODE_C, ROLE_FOLLOWER),
-        seedRow(3, NODE_D, ROLE_FOLLOWER),
-      ],
+      services: rowsOn(seed),
       replicaOperations: [{
-        operation_id: addOperationId,
+        operation_id: `unresolved-add-${partitionId}`,
         type: OperationType.ADD,
-        partition_id: PARTITION_ID,
+        partition_id: partitionId,
         entity_type: ENTITY_PARTITION,
-        entity_id: PARTITION_ID,
-        replica_id: `${PARTITION_ID}-r3`,
+        entity_id: partitionId,
+        replica_id: `${partitionId}-r3`,
         source_node_id: NODE_A,
         target_node_id: NODE_D,
         status: ReplicaStatus.SYNCING,
@@ -603,7 +711,22 @@ test('W1b: spread satisfied never opens the create lane for a second ' +
   owner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
     async () => null;
   owner.readAvailablePriorityRecoveryPlanningSnapshotForOperation =
-    async () => planningSnapshot(coordinator);
+    async () => (snapshotAvailable ? {
+      ...planningSnapshot(coordinator),
+      publishedActiveNodeIds: eligibleNodeIds,
+      projectedServingNodeIds: eligibleNodeIds,
+      locallyEligibleNodeIds: eligibleNodeIds,
+    } : null);
+  const add = await coordinator.getOperation(
+    `unresolved-add-${partitionId}`);
+  return {coordinator, add};
+}
+
+test('W1b: spread satisfied never opens the create lane for a second ' +
+  'operation on the partition of an unresolved operation', async (t) => {
+  const {coordinator, add: unresolvedAdd} =
+    await createUnresolvedAddWorld({partitionId: PARTITION_ID});
+  const addOperationId = unresolvedAdd.operationId;
   try {
     const add = await coordinator.getOperation(addOperationId);
     t.notOk(coordinator.isOperationTerminal(add), 'the ADD is unresolved');
@@ -629,6 +752,9 @@ test('W1b: spread satisfied never opens the create lane for a second ' +
     t.equal(await coordinator.shouldIgnoreCriticalAddBudgetOperation(add),
       true, 'its satisfied spread still releases the cross-partition ' +
       'ADD budget slot (a resource answer, not a planning answer)');
+    t.same(await coordinator.filterConcurrentAddBudgetOperations([add]), [],
+      'the partition-level budget count releases it too (the partition ' +
+      'assessment asks the budget answer, never the planning answer)');
     t.equal(await refusal(
       coordinator.ensureCriticalPartitionCreateLaneAvailable(
         laneContext(OperationType.ADD, OTHER_PARTITION_ID, {nodeId: NODE_B}))),
@@ -742,7 +868,7 @@ async (t) => {
       seedRow(2, NODE_A, ROLE_FOLLOWER),
       seedRow(3, NODE_A, ROLE_FOLLOWER),
     ],
-    targetCountedAtRemoveDispatch: true,
+    targetCounted: true,
   });
 });
 
@@ -754,9 +880,113 @@ test('W3: owner-driven REPLACE with a not-yet-counted target (the grace) - ' +
       seedRow(2, NODE_A, ROLE_FOLLOWER),
       seedRow(3, NODE_C, ROLE_FOLLOWER),
     ],
-    targetCountedAtRemoveDispatch: false,
+    targetCounted: false,
   });
 });
+
+test('W7: D2 target death at STOPPING - terminal FAILED, the source ' +
+  'retained, the planner woken by the event and planning resumes',
+async (t) => {
+  const seed = [
+    seedRow(1, NODE_A, ROLE_LEADER),
+    seedRow(2, NODE_A, ROLE_FOLLOWER),
+    seedRow(3, NODE_A, ROLE_FOLLOWER),
+  ];
+  const world = await createWorld({seed});
+  const {coordinator, owner} = world;
+  const planner = bindPlannerWakes(world);
+  try {
+    await driveToTargetVoterReady(t, world, seed);
+    await driveToStopping(t, world);
+    await assertEveryAdmissionRefuses(t, world, 'STOPPING');
+    coordinator.systemTableCache.upsert('services',
+      targetRow(world, ReplicaStatus.FAILED, ROLE_FOLLOWER));
+    await assertEveryAdmissionRefuses(t, world,
+      'STOPPING (target dead, not yet decided)');
+    const wakesBeforeTerminal = planner.wakes.length;
+    await owner.runReplaceStoppingOwner(await persisted(world));
+    const terminal = await persisted(world);
+    t.equal(terminal.workflowStep, WORKFLOW_STEP.FAILED,
+      'D2: the STOPPING owner failed the REPLACE');
+    t.ok(coordinator.isOperationTerminal(terminal), 'terminal by its status');
+    t.ok(servicesOf(coordinator).some((row) =>
+      row.replica_id === SOURCE_REPLICA_ID &&
+      row.status === ReplicaStatus.ACTIVE), 'the source is retained');
+    await assertPlanningResumes(t, world,
+      planner.wakes.slice(wakesBeforeTerminal), 'FAILED');
+  } finally {
+    await planner.release();
+  }
+});
+
+// M8: an unresolved add-like operation whose priority-recovery assessment
+// is missing - a system partition outside the priority control plane, or a
+// priority partition with no planning snapshot - keeps the critical create
+// lane closed; a missing answer never admits a second add-like operation.
+test('W8: a missing assessment never opens the critical create lane',
+  async (t) => {
+    for (const {label, partitionId, snapshotAvailable} of [
+      {label: 'non-priority system partition', partitionId: 'services-p1',
+        snapshotAvailable: true},
+      {label: 'priority partition without a planning snapshot',
+        partitionId: PARTITION_ID, snapshotAvailable: false},
+    ]) {
+      const {coordinator, add} = await createUnresolvedAddWorld({
+        partitionId, snapshotAvailable,
+      });
+      try {
+        t.equal(await coordinator.readPriorityRecoveryOperationAssessment(add),
+          null, `${label}: the assessment is missing`);
+        const lane = await refusal(
+          coordinator.ensureCriticalPartitionCreateLaneAvailable(
+            laneContext(OperationType.ADD, partitionId, {nodeId: NODE_B})));
+        t.equal(lane?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          `${label}: the critical create lane refuses a second ADD (typed)`);
+        t.equal(lane?.conflictingOperationId, add.operationId,
+          `${label}: the refusal names the unresolved ADD`);
+      } finally {
+        await coordinator.shutdown();
+      }
+    }
+  });
+
+// M9: today's COORDINATION_MISMATCH exemption, pinned so that changing it is
+// a deliberate decision (owner 2026-10-05: replaced by an explicit supersede
+// in the follow-up quest single-unresolved-operation-owner). An unresolved
+// add-like operation whose target left the eligible cohort does not block
+// planning, and the critical create lane does not count it.
+test('W9: the COORDINATION_MISMATCH exemption as it stands (pinned)',
+  async (t) => {
+    const excluded = NODES.filter((nodeId) => nodeId !== NODE_D);
+    const {coordinator, add} = await createUnresolvedAddWorld({
+      partitionId: PARTITION_ID,
+      snapshotAvailable: true,
+      eligibleNodeIds: excluded,
+      // The spread is not yet satisfied (two holders), so the cohort
+      // mismatch is what the assessment reads.
+      seed: [
+        seedRow(1, NODE_A, ROLE_LEADER),
+        seedRow(2, NODE_A, ROLE_FOLLOWER),
+        seedRow(4, NODE_C, ROLE_FOLLOWER),
+      ],
+    });
+    try {
+      const mismatch =
+        await coordinator.readPriorityRecoveryOperationAssessment(add);
+      t.equal(mismatch?.semanticState,
+        PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH,
+        'the ADD whose target left the cohort reads coordination_mismatch');
+      t.equal(shouldPriorityRecoveryOperationBlockPlanning(mismatch), false,
+        'the planning predicate exempts it');
+      t.equal(await refusal(
+        coordinator.ensureCriticalPartitionCreateLaneAvailable(
+          laneContext(OperationType.ADD, PARTITION_ID, {nodeId: NODE_C}))),
+      null, 'the critical create lane does not count it');
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
 
 test('W5: supersede of the same operation is not a second operation',
   async (t) => {
