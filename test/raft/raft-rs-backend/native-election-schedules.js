@@ -25,7 +25,6 @@ import {RAFT_RS_MESSAGE_TYPE} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 
 const LEADER_STATE = 2;
-const NO_LEADER = '0';
 const LEADER = 'leader';
 const PLAIN_ID_BASE = 11;
 const SETTLE_AFTER_ELECTION_ROUNDS = 50;
@@ -235,7 +234,6 @@ const SCHEDULE_KIND = Object.freeze({
 });
 
 export {
-  NO_LEADER,
   RAFT_RS_CONF_CHANGE_TYPE,
   SCHEDULE_KIND,
 };
