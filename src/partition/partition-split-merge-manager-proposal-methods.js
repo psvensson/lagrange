@@ -37,10 +37,38 @@ const LOCAL_STR_CONSTRUCTOR = 'constructor';
  * if any: a retryable split transition (one source partition; a merge
  * names several) per the one retryable-transition classifier.
  * @param {Object} transition - Parsed {state, metadata} of the tables row.
- * @param {Object} context - {tableId, nowMs?}.
+ * @param {Object} context - {tableId, nowMs}.
  * @return {Object|null} Proposal descriptor (without localLeader).
  */
 function describeOutstandingSplitProposal(transition, context) {
+  const partitionId = resolveOutstandingSplitSourceId(transition);
+  if (!partitionId) {
+    return null;
+  }
+  const metadata = transition.metadata;
+  const retry = metadata[PARTITION_TRANSITION_METADATA_FIELD.RETRY] || {};
+  const admission = metadata[PARTITION_TRANSITION_METADATA_FIELD.ADMISSION];
+  return {
+    partitionId,
+    tableId: context.tableId || null,
+    workflowId:
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || null,
+    state: transition.state,
+    attemptCount: Number(retry.attemptCount) || 0,
+    nextAttemptAt: retry.nextAttemptAt || null,
+    retryDue: resolveProposalRetryDue(retry.nextAttemptAt, context.nowMs),
+    blockingReasons: Array.isArray(admission?.blockingReasons) ?
+      [...admission.blockingReasons] :
+      [],
+  };
+}
+
+/**
+ * The source partition id of a retryable split transition, else null.
+ * @param {Object|null} transition - Parsed {state, metadata}.
+ * @return {string|null}
+ */
+function resolveOutstandingSplitSourceId(transition) {
   const metadata = transition?.metadata;
   if (!metadata || typeof metadata !== LOCAL_STR_OBJECT ||
       !isRetryableManagedSplitTransition(transition)) {
@@ -48,28 +76,19 @@ function describeOutstandingSplitProposal(transition, context) {
   }
   const partitionId =
     metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID];
-  if (!partitionId) {
-    return null;
-  }
-  const retry = metadata[PARTITION_TRANSITION_METADATA_FIELD.RETRY] || {};
-  const nextAttemptAtMs = Date.parse(String(retry.nextAttemptAt || ''));
-  const admission = metadata[PARTITION_TRANSITION_METADATA_FIELD.ADMISSION];
-  return {
-    partitionId: String(partitionId),
-    tableId: context.tableId || null,
-    workflowId:
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || null,
-    state: transition.state,
-    attemptCount: Number(retry.attemptCount) || 0,
-    nextAttemptAt: retry.nextAttemptAt || null,
-    // Without a clock the due-ness is not decided here (null).
-    retryDue: Number.isFinite(context.nowMs) ?
-      !Number.isFinite(nextAttemptAtMs) || nextAttemptAtMs <= context.nowMs :
-      null,
-    blockingReasons: Array.isArray(admission?.blockingReasons) ?
-      [...admission.blockingReasons] :
-      [],
-  };
+  return partitionId ? String(partitionId) : null;
+}
+
+/**
+ * Whether a proposal's retry is due. A record without a parseable schedule
+ * is due.
+ * @param {string|undefined} nextAttemptAt - Persisted schedule.
+ * @param {number} nowMs - Clock reading.
+ * @return {boolean}
+ */
+function resolveProposalRetryDue(nextAttemptAt, nowMs) {
+  const nextAttemptAtMs = Date.parse(String(nextAttemptAt || ''));
+  return !Number.isFinite(nextAttemptAtMs) || nextAttemptAtMs <= nowMs;
 }
 
 const OUTSTANDING_SPLIT_PROPOSAL_WAIT = Object.freeze({

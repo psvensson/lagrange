@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 416263,
-        "sha256": "ed2de1ba97e6b8603b911a57be123a639bb28fc85db8082fa571235337cd467c"
+        "bytes": 416018,
+        "sha256": "f4e0559c07421c3401fa91cde2fcb8416817b2d8a55082d763ef914c0e54ad67"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2674820,
-        "sha256": "6c5d913fd7b0bd25779d947850969692fe8ec3bef3edf518274a0f27e8b3a274"
+        "sha256": "ec9a16306884b62b5a3505f14ebd9a02ec3e2c465d7baa6e124e4f4477494ee5"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "47ef2cffe5d3ca2cb3d2e0c429fed09423992ac91944ed0e8e993b54524b572e"
+        "sha256": "9923518a067086125975d6f7f4aa95bfea1e91229c9844ad31668073b5c04b29"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "3c4a6c0c2bca2c4e02094279e850350d6ab244643935aad6eb88155651f3e49e"
+    "inputDigest": "a6e6de10d9415a1bf7bd6fa1c0d124f3d5de5003ad3c0dbe05a19e1dc95e58e8"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 416263,
-        "sha256": "ed2de1ba97e6b8603b911a57be123a639bb28fc85db8082fa571235337cd467c"
+        "bytes": 416018,
+        "sha256": "f4e0559c07421c3401fa91cde2fcb8416817b2d8a55082d763ef914c0e54ad67"
       },
-      "declaredCount": 1761,
-      "observedCount": 1761,
-      "assignedCount": 1761
+      "declaredCount": 1760,
+      "observedCount": 1760,
+      "assignedCount": 1760
     },
     "cognitive": {
       "identity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "47ef2cffe5d3ca2cb3d2e0c429fed09423992ac91944ed0e8e993b54524b572e"
+          "sha256": "9923518a067086125975d6f7f4aa95bfea1e91229c9844ad31668073b5c04b29"
         },
         "cloneGroups": 48,
         "duplicatedLines": 1512,
@@ -168,34 +168,34 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 2674820,
-        "sha256": "6c5d913fd7b0bd25779d947850969692fe8ec3bef3edf518274a0f27e8b3a274"
+        "sha256": "ec9a16306884b62b5a3505f14ebd9a02ec3e2c465d7baa6e124e4f4477494ee5"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "c94216297f1ea44888998c568dcc1bb3f295166f14b59606fcff59b91e91c75b",
+      "sourceDigest": "6661043df0f341b351c944aec0de7feb48ae2a0c1a055cd386a9a266c4bb1b7e",
       "moduleCount": 5091,
       "edgeCount": 25111,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2510,
-    "assignedSignalCount": 2510,
-    "uniqueAssignmentCount": 2510,
-    "digest": "9de6a90e1e61053fdb8c6f0d651adf416c7fdf8d49bf5fc05cbb59a16aee52e0"
+    "sourceSignalCount": 2509,
+    "assignedSignalCount": 2509,
+    "uniqueAssignmentCount": 2509,
+    "digest": "fb52124d92bc04bc1dbf8f19c71622ea9253604f9317bfa868456ad0ca61cf11"
   },
   "signalCounts": {
     "cognitive": 152,
-    "complexity": 1761,
+    "complexity": 1760,
     "duplication": 510,
     "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1287,
+    "filesWithDebt": 1286,
     "rankedBoundaryCount": 113,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 93,
@@ -819,34 +819,6 @@
       ]
     },
     {
-      "key": "area:src/partition",
-      "owner": null,
-      "boundary": "src/partition",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/partition"
-      ],
-      "fileCount": 17,
-      "signalCount": 30,
-      "complexity": 24,
-      "cognitive": 4,
-      "oversizedFiles": 0,
-      "duplicatedLines": 50,
-      "cloneTouches": 2,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 58,
-      "importOut": 96,
-      "score": 133,
-      "topPaths": [
-        "src/partition/partition-sql-parser.js",
-        "src/partition/managed-split-workflow-state-methods.js",
-        "src/partition/partition-cdc-delivery.js",
-        "src/partition/partition-cdc-generator.js",
-        "src/partition/partition-split-merge-manager-evaluation-methods.js"
-      ]
-    },
-    {
       "key": "semantic:system_table_gateway_owner/control_plane_system_table_gateway",
       "owner": "system_table_gateway_owner",
       "boundary": "control_plane_system_table_gateway",
@@ -872,6 +844,34 @@
         "src/control-plane/control-plane-system-table-gateway-query-execution.js",
         "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js"
+      ]
+    },
+    {
+      "key": "area:src/partition",
+      "owner": null,
+      "boundary": "src/partition",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/partition"
+      ],
+      "fileCount": 16,
+      "signalCount": 29,
+      "complexity": 23,
+      "cognitive": 4,
+      "oversizedFiles": 0,
+      "duplicatedLines": 50,
+      "cloneTouches": 2,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 54,
+      "importOut": 93,
+      "score": 129,
+      "topPaths": [
+        "src/partition/partition-sql-parser.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/partition-cdc-delivery.js",
+        "src/partition/partition-cdc-generator.js",
+        "src/partition/partition-split-merge-manager-evaluation-methods.js"
       ]
     },
     {

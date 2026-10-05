@@ -247,7 +247,7 @@ const SPLIT_MERGE_COORDINATION_METHODS = Object.freeze({
   requestOutstandingSplitProposalEvaluation(tableRow, sourcePartitionId) {
     const proposal = describeOutstandingSplitProposal(
       parseTablePartitionTransition(tableRow),
-      {tableId: this.resolveTableId(tableRow)},
+      {tableId: this.resolveTableId(tableRow), nowMs: Date.now()},
     );
     if (!proposal ||
         (sourcePartitionId !== null &&
