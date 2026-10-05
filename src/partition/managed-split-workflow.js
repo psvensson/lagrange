@@ -51,6 +51,10 @@ const LOCAL_STR_MANAGED_SPLIT_WORKFLOW = 'managed-split-workflow';
 const LOCAL_STR_COMMA = ',';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
+const LOCAL_STR_PARTITION_KEY_TYPE = 'partition_key_type';
+const LOCAL_STR_BOUNDARY_TYPE_AUTHORITY_MISSING =
+  'Partition boundary type authority is missing; revalidate legacy partition ';
+
 const ACTIVE_PARTITION_STATE = 'NORMAL';
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
@@ -490,8 +494,8 @@ class ManagedSplitWorkflow {
         null;
       if (!sourcePartitionKeyType) {
         throw new Error(
-          'Partition boundary type authority is missing; revalidate legacy ' +
-          `partition ${partitionId} before split`,
+          LOCAL_STR_BOUNDARY_TYPE_AUTHORITY_MISSING +
+          `${partitionId} before split`,
         );
       }
 
@@ -501,7 +505,7 @@ class ManagedSplitWorkflow {
         table_name: tableName,
         partition_key_start: splitPlan.leftPartition.keyRange.start,
         partition_key_end: splitPlan.leftPartition.keyRange.end,
-        partition_key_type: sourcePartitionKeyType,
+        [LOCAL_STR_PARTITION_KEY_TYPE]: sourcePartitionKeyType,
         partition_version: targetVersion,
         replica_count: replicaCount,
         size_bytes: 0,
@@ -516,7 +520,7 @@ class ManagedSplitWorkflow {
         table_name: tableName,
         partition_key_start: splitPlan.rightPartition.keyRange.start,
         partition_key_end: splitPlan.rightPartition.keyRange.end,
-        partition_key_type: sourcePartitionKeyType,
+        [LOCAL_STR_PARTITION_KEY_TYPE]: sourcePartitionKeyType,
         partition_version: targetVersion,
         replica_count: replicaCount,
         size_bytes: 0,
