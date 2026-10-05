@@ -19,9 +19,9 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - run: npm ci
-      - name: A2 sealed metric
-        run: node scripts/checks/partition-boundary-representation.js
       - name: A2 focused witnesses
         run: npm run test:file -- test/partition/partition-boundary-representation.test.js
+      - name: A2 sealed metric
+        run: node scripts/checks/partition-boundary-representation.js
       - name: A1 comparator preservation
         run: npm run test:file -- test/partition/routing-key-comparator.test.js
