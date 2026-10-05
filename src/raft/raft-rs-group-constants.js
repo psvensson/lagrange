@@ -1,20 +1,25 @@
 // How a raft-rs group is created and restored, and the tuning the core is
 // given.
 //
-// pre_vote and check_quorum are not decided here. §11 of the owner's binding
-// direction requires failure scenarios to settle them; those scenarios now
-// exist, and the recommendation they derive lives with its evidence in
-// raft-rs-election-safety.js (`recommendedElectionSettings`). The values
-// below stay the core's own off state, which is what every scenario measured
-// so far ran on: turning them on is a change to what those measurements
-// mean, and it belongs to the phase that re-measures them, not to the
-// constant.
+// pre_vote and check_quorum are ON for every group the port opens
+// (partitions, system partitions, message groups; tuningOf in
+// raft-rs-runtime-tuning.js is the one place a core's config is built). They
+// are the disruptive-server requirement of the cutover (owner ruling
+// 2026-10-05, a closing condition of the raft-rs-full-cutover epic): a
+// replica that heard a leader within its election timeout ignores a
+// higher-term vote or pre-vote request, a pre-vote never moves a term, and a
+// leader that hears no quorum within an election timeout steps down, so a
+// stale leader never pins a follower a new configuration needs. Their lease
+// counts the core's own ticks: every opened replica is ticked (a gated joiner
+// is a learner of its own configuration and is ticked too), so no lease
+// freezes. A leadership transfer's election (MsgTimeoutNow, context
+// CAMPAIGN_TRANSFER) bypasses both, as raft-rs defines it.
 
 const RAFT_RS_GROUP_TUNING = Object.freeze({
   ELECTION_TICK: 10,
   HEARTBEAT_TICK: 3,
-  PRE_VOTE: false,
-  CHECK_QUORUM: false,
+  PRE_VOTE: true,
+  CHECK_QUORUM: true,
 });
 
 // A fresh group's applied index. The durable record starts at the origin, so

@@ -244,8 +244,9 @@ test('timing: the effective heartbeat and election window of the ' +
   assert.deepEqual(tuningOf({...productionTiming(0, 3),
     electionMaxMs: RAFT.electionTimeoutMaxMs * 2}), tuning,
   'the configured maximum (3.0 s) is not consumed by the tuning');
-  assert.equal(tuning.preVote, false);
-  assert.equal(tuning.checkQuorum, false);
+  // The cutover's closing condition: native pre-vote and check-quorum.
+  assert.equal(tuning.preVote, true);
+  assert.equal(tuning.checkQuorum, true);
 });
 
 test('timing: I3 (re-arm), I8 (first campaign), I4/B13 (transfer abort ' +

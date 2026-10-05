@@ -29,6 +29,7 @@ import {
 } from './committed-membership-oracles.js';
 import {
   RAFT_EVENT,
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
@@ -134,8 +135,10 @@ const PENDING_KINDS = Object.freeze({
     return A;
   },
   // B holds an entry it does not know committed (its deliveries carry a
-  // capped commit index), A goes away, B is elected: its conservative
-  // pending index is its last index, above what it applied.
+  // capped commit index), A hands its leadership to B and goes away: B's
+  // conservative pending index is its last index, above what it applied.
+  // (A transfer, not a campaign of B's own: C heard A within its election
+  // timeout, and under check_quorum it ignores any other election.)
   'post-election conservative index': ({cluster, cap}) => {
     cap.value = Number(cluster.coreStatus(B).commit ??
       durableAppliedState(cluster.replica(B).dbFile, cluster.partitionId)
@@ -145,14 +148,15 @@ const PENDING_KINDS = Object.freeze({
     const lastOf = (replicaId) => durableLog(cluster.replica(replicaId).dbFile,
       cluster.partitionId).at(-1).index;
     cluster.settle(() => lastOf(B) === lastOf(A), {rounds: 60});
-    cluster.isolate(A);
-    cap.value = Number.POSITIVE_INFINITY;
-    assert.equal(cluster.node(B).campaign().outcome,
-      RAFT_OPERATION_OUTCOME.CORE_OK);
+    assert.equal(cluster.node(A).transferLeadership({
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+      replicaIdentity: B}).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     cluster.tickers = [];
     const elected = cluster.settle(() =>
       cluster.node(B).readStatus().role === RAFT_ROLE.LEADER, {rounds: 20});
     assert.ok(elected, 'setup: B is elected');
+    cluster.isolate(A);
+    cap.value = Number.POSITIVE_INFINITY;
     return B;
   },
 });

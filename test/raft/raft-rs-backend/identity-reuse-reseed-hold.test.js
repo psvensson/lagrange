@@ -20,10 +20,15 @@
 //       names the group, the sender, the message type and the reason.
 //   W2  no second leader (verification S3, S2): with both moved identities
 //       held, neither campaigns nor grants a vote; with the seed cut off no
-//       leader is elected below its commit; after healing exactly one
-//       leader holds term 1 and the committed log is intact.
+//       leader is elected below its commit; after healing no leader other
+//       than the seed at term 1 ever exists and the committed log is intact
+//       (with two of three held the seed has no quorum: check_quorum steps
+//       it down, and pre-vote keeps its term at 1 - nothing can commit
+//       without a quorum, so no leader is the correct state).
 //   W3  liveness of the guard (S5/S6): held replicas never depose the
-//       legitimate leader - no term inflation while every replica ticks.
+//       legitimate leader - no term inflation while every replica ticks
+//       (one held: the leader keeps its quorum and leads; two held: it has
+//       none, steps down under check_quorum, and still no term moves).
 //   W6  durability: the held replica restarted from the same file is still
 //       held and still does not vote.
 
@@ -60,6 +65,17 @@ const ISOLATED_ROUNDS = 200;
 const ALL_TICK_ROUNDS = 150;
 const RETIRED_FOR_RESEED = Object.freeze({
   state: 'retired', reason: RESEED_REQUIRED});
+
+// Every leader any port reports is `seed` at `term`, and `seed` is still at
+// `term`: no other identity led and no term moved (with a quorum held the
+// seed itself may have stepped down under check_quorum).
+function assertOnlySeedLed(cluster, seed, term) {
+  for (const [replicaId, leaderTerm] of leadersByTerm(cluster)) {
+    assert.deepEqual([replicaId, leaderTerm], [seed, term]);
+  }
+  assert.equal(cluster.node(seed).readStatus().term, term,
+    `${seed}'s term moved`);
+}
 
 function assertHeld(cluster, replicaId) {
   const answer = cluster.node(replicaId).readStatus();
@@ -166,7 +182,7 @@ test('W2 (S3): held identities neither campaign nor grant a vote; one ' +
       'a held replica granted a vote');
     cluster.tickers = ['w2-a', 'w2-b', 'w2-c'];
     cluster.settle(() => false, {rounds: ALL_TICK_ROUNDS});
-    assert.deepEqual(leadersByTerm(cluster), [['w2-a', 1]]);
+    assertOnlySeedLed(cluster, 'w2-a', 1);
   } finally {
     cluster.dispose();
   }
@@ -199,7 +215,7 @@ test('W2 (S2): the seed cut off, two held identities elect no leader; ' +
     cluster.heal('w2s-a');
     cluster.tickers = ['w2s-a'];
     cluster.settle(() => false, {rounds: HEARTBEAT_ROUNDS});
-    assert.deepEqual(leadersByTerm(cluster), [['w2s-a', 1]]);
+    assertOnlySeedLed(cluster, 'w2s-a', 1);
     assert.ok(Number(cluster.node('w2s-a').readStatus().commitIndex) >=
       seedCommit);
     assert.deepEqual(durableLog(cluster.dbFileOf('w2s-a'),
@@ -229,7 +245,11 @@ for (const moved of [['w3-c'], ['w3-b', 'w3-c']]) {
         assertHeld(cluster, replicaId);
       }
       assert.equal(createNodeCount(cluster, entriesAfterReopen), 0);
-      assert.deepEqual(leadersByTerm(cluster), [['w3-a', term]]);
+      if (moved.length === 1) {
+        assert.deepEqual(leadersByTerm(cluster), [['w3-a', term]]);
+      } else {
+        assertOnlySeedLed(cluster, 'w3-a', term);
+      }
       for (const replicaId of ['w3-a', 'w3-b', 'w3-c']) {
         if (!moved.includes(replicaId)) {
           assert.equal(cluster.node(replicaId).readStatus().term, term,

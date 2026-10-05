@@ -218,21 +218,27 @@ test('a peer that is no longer a voter cannot participate in an election',
       assert.equal(guard.refusal, RAFT_RS_ELECTION_REFUSAL.LEARNER);
       assert.equal(withLearner.status(LEARNER).promotable, false);
       // Reproduce the round-3 finding under this backend: reached without
-      // the guard, the core lets the learner campaign.
+      // the guard, the core lets the learner campaign. With pre_vote on (the
+      // group default) the campaign is a pre-campaign: it reaches the core
+      // (the learner becomes a pre-candidate) but moves no term, and the
+      // voters in lease never grant it, so it never leads.
       const before = withLearner.status(LEARNER);
       withLearner.core.campaign(withLearner.peer(LEARNER).handle);
+      assert.equal(RAFT_RS_CORE_ROLE_STATE[
+        withLearner.status(LEARNER).raftState],
+      RAFT_RS_NODE_STATE.PRE_CANDIDATE,
+      'the unguarded campaign must have reached the core, or there is ' +
+        'nothing for the guard to prevent');
       withLearner.settle(
         (current) => current.status(LEARNER).raftState ===
           Number(Object.keys(RAFT_RS_CORE_ROLE_STATE).find((role) =>
             RAFT_RS_CORE_ROLE_STATE[role] === RAFT_RS_NODE_STATE.LEADER)),
         {rounds: SETTLE_ROUNDS, tickOnly: [LEARNER]});
       const after = withLearner.status(LEARNER);
-      assert.ok(
-        BigInt(after.term) > BigInt(before.term) ||
-        RAFT_RS_CORE_ROLE_STATE[after.raftState] !==
-          RAFT_RS_CORE_ROLE_STATE[before.raftState],
-        'the unguarded campaign must have had an effect, or there is ' +
-        'nothing for the guard to prevent');
+      assert.equal(after.term, before.term,
+        'pre-vote: the learner\'s campaign moved no term');
+      assert.notEqual(RAFT_RS_CORE_ROLE_STATE[after.raftState],
+        RAFT_RS_NODE_STATE.LEADER, 'the learner never leads');
     } finally {
       disposeQuietly(withLearner);
     }
@@ -259,9 +265,16 @@ test('a peer that is no longer a voter cannot participate in an election',
         'what only Lagrange knows is what refuses it');
       unaware.heal(REMOVED);
       unguardedRun = driveTicking(unaware, REMOVED, () => true);
-      assert.ok(unguardedRun.trapped !== null || unguardedRun.disturbed,
-        'the removed peer that keeps ticking must be measured disturbing ' +
-        'the cluster, or the invariant has nothing to protect');
+      // With pre_vote and check_quorum on (the group default) raft-rs itself
+      // is the disruptive-server rule: the removed peer keeps pre-campaigning
+      // (it believes it is a voter), and the leader in lease ignores it.
+      assert.equal(unguardedRun.trapped, null);
+      assert.equal(unguardedRun.ticks, DISTURB_ROUNDS);
+      assert.equal(roleOf(unaware, REMOVED), RAFT_RS_NODE_STATE.PRE_CANDIDATE,
+        'the removed peer must be measured campaigning, or the native rule ' +
+        'has nothing to protect');
+      assert.equal(unguardedRun.disturbed, false,
+        'pre_vote + check_quorum: the removed peer never disturbs the leader');
     } finally {
       disposeQuietly(unaware);
     }

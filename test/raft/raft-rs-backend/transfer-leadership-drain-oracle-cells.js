@@ -22,6 +22,8 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
+import {RAFT_RS_MESSAGE_TYPE} from
+  '../../../src/raft/raft-rs-ingress-constants.js';
 import {
   SEND_MODE,
   TIMING_MODE,
@@ -49,6 +51,9 @@ const INPUT = Object.freeze({
   CATCHUP: 'transferee catch-up',
 });
 const HIDDEN_INPUTS = Object.freeze([INPUT.TRANSFER, INPUT.CATCHUP]);
+// The context of a transfer election (raft.rs CAMPAIGN_TRANSFER,
+// b"CampaignTransfer", base64 as the binding carries it).
+const CAMPAIGN_TRANSFER = Buffer.from('CampaignTransfer').toString('base64');
 
 // ---------------------------------------------------------------- decisions
 
@@ -90,10 +95,21 @@ function byRaftId(driver, replicaIds) {
   });
 }
 
+// B stands for the next term in the election a leadership transfer starts
+// (MsgTimeoutNow; raft-rs campaigns with CAMPAIGN_TRANSFER, no pre-vote): the
+// one election a leader and its followers do not ignore inside their
+// check-quorum lease. A's MsgTimeoutNow is delivered to B only, so B's vote
+// requests are pending at A and C, and A still leads its term.
+async function transferCampaignOfB(run) {
+  await run.act(() =>
+    run.driver.port(A).transferLeadership(namedSuccessor(B)));
+  await run.deliverOnly([B]);
+}
+
 // B wins the next term with C while its vote request to A is lost, so A is
 // a stale leader and B's first append as leader is on its way to A.
 async function newLeaderAppendAtStaleA(run) {
-  await run.act(() => run.driver.port(B).campaign());
+  await transferCampaignOfB(run);
   assert.ok(run.driver.loseInTransit(A) > 0,
     'setup: the vote request is lost');
   await run.deliverOnly([C]);
@@ -103,14 +119,16 @@ async function newLeaderAppendAtStaleA(run) {
 // A is cut off while B wins the next term, then reconnected still leading;
 // B's heartbeat is on its way to A.
 async function newLeaderHeartbeatAtStaleA(run) {
+  await transferCampaignOfB(run);
   run.driver.isolate(A);
-  assert.equal(await run.elect(B), true, 'setup: B leads the next term');
+  await run.deliver();
+  assert.equal(run.leads(B), true, 'setup: B leads the next term');
   run.driver.heal(A);
   await run.tickUntilHeartbeat(B, A);
 }
 
 async function higherTermVoteAtA(run) {
-  await run.act(() => run.driver.port(B).campaign());
+  await transferCampaignOfB(run);
 }
 
 // Only the higher-id follower acknowledges the last write.
@@ -168,7 +186,7 @@ async function leaderSelfRemoved(run) {
 
 // B stands for election and every vote request is lost.
 async function candidateB(run) {
-  await run.act(() => run.driver.port(B).campaign());
+  await transferCampaignOfB(run);
   run.driver.loseInTransit(A);
   run.driver.loseInTransit(C);
   assert.equal(run.inputsOf(B).role, RAFT_ROLE.CANDIDATE,
@@ -283,7 +301,7 @@ const CATALOGUE = Object.freeze({
     {predicate: 'sender with progress, candidate collects the votes',
       requester: B, decisions: ['D1'], target: B, moves: [INPUT.ROLE],
       build: async (run) => {
-        await run.act(() => run.driver.port(B).campaign());
+        await transferCampaignOfB(run);
         await run.deliverOnly([A, C]);
       }},
   ],
@@ -309,12 +327,16 @@ const CATALOGUE = Object.freeze({
         run.driver.port(A).transferLeadership(namedSuccessor(C)))},
   ],
   MsgRequestPreVote: [
-    {predicate: 'leader, higher term (crafted; pre-vote is off)',
+    // A higher-term pre-vote at a leader is ignored inside its check-quorum
+    // lease (raft.rs step, in_lease) and answers nothing; a peer one term
+    // behind pre-votes for the leader's own term, and that is answered.
+    {predicate: 'leader, its own term (crafted: a peer one term behind)',
       requester: A, decisions: ['D1'],
-      control: 'a pre-vote request never moves the receiver\'s term or ' +
-        'role (raft.rs 1363-1374); it is answered',
+      control: 'a pre-vote request for the leader\'s own term is rejected ' +
+        '(raft.rs step: can_vote is false) and moves no term or role; it ' +
+        'is answered',
       build: (run) => craft(run, {to: A, from: B, msgType: 17,
-        term: run.driver.status(A).term + 1})},
+        term: run.driver.status(A).term})},
   ],
   MsgRequestPreVoteResponse: [
     {predicate: 'sender with progress, higher-term rejection (crafted)',
@@ -407,13 +429,13 @@ const PAIR_BUILDS = Object.freeze({
   'MsgRequestVote>MsgPropose@follower without a leader': {
     requester: A, decision: 'D3', refusedFrom: C,
     build: async (run) => {
-      await run.act(() => run.driver.port(B).campaign());
+      await transferCampaignOfB(run);
       await run.act(() => run.driver.port(C).propose({forwardedBy: C}));
     }},
   'MsgRequestVote>MsgTransferLeader@follower without a leader': {
     requester: A, decision: 'D1', moves: [INPUT.ROLE],
     build: async (run) => {
-      await run.act(() => run.driver.port(B).campaign());
+      await transferCampaignOfB(run);
       await run.act(() =>
         run.driver.port(C).transferLeadership(namedSuccessor(C)));
     }},
@@ -434,13 +456,13 @@ const PAIR_BUILDS = Object.freeze({
     }},
   'MsgRequestVote>MsgAppend@leader identity (announcement)': {
     requester: A, decision: 'D1', moves: [INPUT.ROLE], build: async (run) => {
-      await run.act(() => run.driver.port(B).campaign());
+      await transferCampaignOfB(run);
       await run.deliverOnly([C]);
       await run.deliverOnly([B]);
     }},
   'MsgRequestVote>MsgHeartbeat@leader identity (announcement)': {
     requester: A, decision: 'D1', moves: [INPUT.ROLE], build: async (run) => {
-      await run.act(() => run.driver.port(B).campaign());
+      await transferCampaignOfB(run);
       await run.deliverOnly([C]);
       await run.deliverOnly([B]);
       await run.tickUntilHeartbeat(B, A);
@@ -622,8 +644,15 @@ function midTurnCells() {
         run.driver.port(A).propose({acknowledged: 'mid-turn'}));
       await run.deliverOnly([B, C]);
     },
-    midTurn: ({driver}) => {
-      driver.port(B).campaign();
+    // A leader in its check-quorum lease steps only a transfer election's
+    // higher-term vote request; B's, as raft.rs campaign writes it under
+    // CAMPAIGN_TRANSFER (a port's own campaign is a pre-vote A ignores).
+    midTurn: (run) => {
+      const candidate = run.driver.status(B);
+      craft(run, {to: A, from: B, msgType: RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE,
+        term: run.driver.status(A).term + 1,
+        index: String(candidate.commitIndex),
+        logTerm: String(candidate.term), context: CAMPAIGN_TRANSFER});
     }}));
 }
 

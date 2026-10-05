@@ -311,7 +311,12 @@ async () => {
     port.subscribe(RAFT_EVENT.LEADER_CHANGE, (leaderId) => {
       projection.leaderId = leaderId;
     });
-    await cluster.node(B).campaign();
+    // B's transfer election (CAMPAIGN_TRANSFER): under check_quorum the
+    // only higher-term vote request a leader in its lease steps.
+    await cluster.node(A).transferLeadership({
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+      replicaIdentity: B});
+    processAt(cluster, B);
     processAt(cluster, C);
     processAt(cluster, B);
     const envelopes = takeInbox(cluster, A);
