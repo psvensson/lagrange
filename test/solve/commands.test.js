@@ -33,7 +33,13 @@ import {
   OUTCOME, PROOF, RESOLUTION, buildReceipt, buildTagBody, identityRef, proofRef, resolveProof,
 } from '../../scripts/proof-authority.js';
 import {computeReleaseProofIdentity} from '../../scripts/release-proof-identity.js';
-import {stagedSourceChange} from '../../scripts/solve/guards.js';
+import {
+  readVerificationRecord, stagedSourceChange, verificationRecordProblems,
+} from '../../scripts/solve/guards.js';
+import {
+  TEMPLATE_DIR, completeRecord as fixtureCompleteRecord, recordEvidence,
+  redOnRevert as fixtureRedOnRevert, verify, writeTemplateFiles, writeVerificationTemplates,
+} from './verification-record-fixture.js';
 
 const QUEST_ID = 'demo';
 const EPIC_ID = 'demo-epic';
@@ -67,7 +73,8 @@ function repo(t, {metric = 1, legacy = false} = {}) {
   write(root, 'solve/epics/demo-epic.md', ['---', `id: ${EPIC_ID}`, 'status: open',
     'proof: deterministic', legacy ? 'legacy: true' : 'doneWhen:',
     ...(legacy ? [] : ['  probe: oracle', '  args:', `    file: ${ORACLE}`]),
-    'quests:', `  - ${QUEST_ID}`, 'authorizes:', '  - src/**', '  - docs/**', '---', '',
+    'quests:', `  - ${QUEST_ID}`, 'authorizes:', '  - src/**', '  - docs/**', '  - test/**',
+    '---', '',
     '# Demo', ''].join('\n'));
   write(root, `solve/quests/${QUEST_ID}/quest.json`, JSON.stringify({
     schema: QUEST_SCHEMA, id: QUEST_ID, statement: STATEMENT, epic: EPIC_ID,
@@ -87,6 +94,52 @@ function refuses(fn, pattern) {
 
 function goGreen(root) {
   write(root, ORACLE, JSON.stringify({metric: 0, target: 0}));
+}
+
+// --- the verification record of a src/ approval ---------------------------------
+const WITNESS_FILE = 'test/thing.test.js';
+const ASSERTION = 'dispatch reads the routable set after the wait';
+const CHANGE = Object.freeze({reverted: SRC_FILE, witness: WITNESS_FILE, assertion: ASSERTION});
+
+function templates(root) {
+  writeVerificationTemplates(root);
+}
+
+// A scratch file outside the repository, as a verifier's scratchpad is.
+function scratch(t, name, content) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-v2-verifier-'));
+  t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+  const file = path.join(directory, name);
+  fs.writeFileSync(file, content);
+  return file;
+}
+
+function logEvidence(root, output) {
+  return recordEvidence(root, QUEST_ID, output);
+}
+
+function redOnRevert(root, overrides = {}) {
+  return fixtureRedOnRevert(root, QUEST_ID, CHANGE, overrides);
+}
+
+function completeRecord(root, overrides = {}) {
+  return fixtureCompleteRecord(root, QUEST_ID, CHANGE, overrides);
+}
+
+function approve(t, root, record, verdict = VERDICT.APPROVE) {
+  return verify(root, QUEST_ID, record, {verifier: VERIFIER, verdict, text: TEXT});
+}
+
+// A sealed, green quest whose attempt changes src/ and adds its witness.
+function sourceQuest(t, source = TEXT) {
+  const root = repo(t);
+  templates(root);
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, SRC_FILE, source);
+  write(root, WITNESS_FILE, TEXT);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  return root;
 }
 
 test('start refuses a green or non-measuring probe; a red one seals', (t) => {
@@ -131,6 +184,7 @@ test('note: attempts need a seal; findings, verifications and blocked entries re
 
 test('land: red probe, standing rejection, src without verification, altitude, scope', (t) => {
   const root = repo(t);
+  templates(root);
   start(root, {id: QUEST_ID});
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /not green/u);
   goGreen(root);
@@ -152,15 +206,367 @@ test('land: red probe, standing rejection, src without verification, altitude, s
   write(root, OUTSIDE_FILE, TEXT);
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /outside epic/u);
   fs.unlinkSync(path.join(root, OUTSIDE_FILE));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /names no verification template/u);
+  write(root, WITNESS_FILE, TEXT);
+  approve(t, root, completeRecord(root));
   const landed = land(root, {id: QUEST_ID, skipProof: true});
   assert.match(landed.commit, /^[0-9a-f]{40}$/u);
-  assert.deepEqual(landed.paths, [SRC_FILE]);
+  assert.deepEqual(landed.paths, [SRC_FILE, WITNESS_FILE]);
   assert.equal(git(root, ['status', '--porcelain']).trim(), '', 'everything committed');
   assert.match(git(root, ['log', '-1', '--format=%B']), new RegExp(`Quest: ${QUEST_ID}`, 'u'));
   const state = readLog(root, QUEST_ID).at(-1);
   assert.equal(state.type, ENTRY_TYPE.TERMINAL);
   assert.equal(state.status, QUEST_STATUS.SOLVED);
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /solved/u);
+});
+
+test('a src/ approval that names no verification template is refused, naming it', (t) => {
+  const root = sourceQuest(t);
+  approve(t, root);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /approving verification names no verification template.*admissible: harness-fidelity, retry-loops/u);
+  approve(t, root, {sampled: completeRecord(root).sampled});
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /names no verification template/u);
+  assert.equal(probe(root, {id: QUEST_ID}).status, QUEST_STATUS.OPEN, 'an approve is not an approval');
+});
+
+test('a src/ approval naming a template without its red-on-revert is refused, naming it', (t) => {
+  const root = sourceQuest(t);
+  approve(t, root, completeRecord(root, {templates: [{id: 'harness-fidelity'}]}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /carries no red-on-revert .*for template harness-fidelity/u);
+  const partial = redOnRevert(root);
+  delete partial.assertion;
+  delete partial.what;
+  approve(t, root, completeRecord(root, {templates: [{id: 'harness-fidelity', redOnRevert: partial}]}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /red-on-revert of harness-fidelity lacks what, assertion/u);
+});
+
+test('an unknown template id is refused at note, and at land once its template is gone', (t) => {
+  const root = sourceQuest(t);
+  const vibes = completeRecord(root, {templates: [{id: 'vibes', redOnRevert: redOnRevert(root)}]});
+  const before = readLog(root, QUEST_ID).length;
+  refuses(() => approve(t, root, vibes), /unknown verification template vibes; admissible: /u);
+  assert.equal(readLog(root, QUEST_ID).length, before, 'nothing is recorded');
+  refuses(() => approve(t, root, {templates: ['harness-fidelity', 'gut-feel']}),
+    /unknown verification template gut-feel/u);
+});
+
+test('the admissible templates are the template files themselves', (t) => {
+  const root = sourceQuest(t);
+  const owner = {templates: [{id: 'owner-interaction', redOnRevert: redOnRevert(root)}]};
+  refuses(() => approve(t, root, completeRecord(root, owner)),
+    /unknown verification template owner-interaction/u);
+  write(root, `${TEMPLATE_DIR}/owner-interaction.md`,
+    '---\ncategories: [owner-interaction]\n---\n# O\n');
+  approve(t, root, completeRecord(root, owner));
+  fs.unlinkSync(path.join(root, `${TEMPLATE_DIR}/owner-interaction.md`));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /unknown verification template owner-interaction; admissible: harness-fidelity, retry-loops$/mu);
+  fs.unlinkSync(path.join(root, `${TEMPLATE_DIR}/harness-fidelity.md`));
+  write(root, `${TEMPLATE_DIR}/owner-interaction.md`,
+    '---\ncategories: [owner-interaction]\n---\n# O\n');
+  approve(t, root, completeRecord(root, owner));
+  refuses(() => approve(t, root, completeRecord(root)), /unknown verification template harness-fidelity/u);
+  catalogFailsClosed(t);
+  repositoryCatalogIsClean();
+});
+
+test('a red-on-revert must bind the quest\'s own change, witness and evidence', (t) => {
+  const root = sourceQuest(t);
+  const scratchRun = scratch(t, 'revert.out', `not ok 1 - ${ASSERTION}\n`);
+  const cases = [
+    [{reverted: 'src/elsewhere.js'}, /reverted path is not in the quest's production-surface change set: src\/elsewhere\.js/u],
+    [{witness: 'test/ghost.test.js'}, /witness is not a file in the tree: test\/ghost\.test\.js/u],
+    [{witness: '.gitkeep'}, /witness is neither in the quest's change set nor in its receipts: \.gitkeep/u],
+    [{evidence: scratchRun}, /evidence is not a file in the tree .*revert\.out/u],
+    [{evidence: '../outside/revert.out'}, /evidence is not a file in the tree/u],
+    [{evidence: `/${logEvidence(root, `not ok 1 - ${ASSERTION}`)}`}, /evidence is not a file in the tree/u],
+    [{evidence: logEvidence(root, 'exit status 1')}, /evidence does not name the assertion/u],
+  ];
+  for (const [override, pattern] of cases) {
+    approve(t, root, completeRecord(root, {templates: [{id: 'harness-fidelity',
+      redOnRevert: redOnRevert(root, override)}]}));
+    refuses(() => land(root, {id: QUEST_ID, skipProof: true}), pattern);
+  }
+  const header = logEvidence(root, 'header line of the reverted run');
+  approve(t, root, completeRecord(root, {templates: [{id: 'harness-fidelity',
+    redOnRevert: redOnRevert(root, {evidence: header})}]}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /does not name the assertion/u);
+  approve(t, root, completeRecord(root, {templates: [{id: 'harness-fidelity',
+    redOnRevert: redOnRevert(root, {evidence: `solve/quests/${QUEST_ID}/log.ndjson:9999`})}]}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /evidence has no such line/u);
+  approve(t, root, completeRecord(root));
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+  cheapFakesAreRefused(t);
+  blankFieldsAndOutsidePathsAreRefused(t);
+});
+
+test('a src/ approval samples the author\'s census and history or proves locality', (t) => {
+  const root = sourceQuest(t);
+  approve(t, root, completeRecord(root, {sampled: undefined}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /neither a sample of the author's census/u);
+  approve(t, root, completeRecord(root, {sampled: {census: ['row'], history: [], found: 'x'}}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /neither a sample/u);
+  approve(t, root, completeRecord(root, {sampled: undefined,
+    local: {proof: 'no sibling', census: scratch(t, 'census.txt', 'grep: 1 hit\n')}}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /locality census: evidence is not a file in the tree/u);
+  // A census cited by a line that holds nothing (past the last row's newline).
+  write(root, 'docs/census.md', 'grep -rn: 1 hit, this one\n');
+  approve(t, root, completeRecord(root, {sampled: undefined,
+    local: {proof: 'no sibling', census: 'docs/census.md:2'}}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /locality census: evidence has no such line: docs\/census\.md:2/u);
+  fs.unlinkSync(path.join(root, 'docs/census.md'));
+  approve(t, root, completeRecord(root, {sampled: undefined,
+    local: {proof: 'no sibling', census: logEvidence(root, 'grep -rn: 1 hit, this one')}}));
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('a change adding a retry names the retry template and what changed between attempts', (t) => {
+  const root = sourceQuest(t, 'scheduleRetry(operation, backoffMs);\n');
+  approve(t, root, completeRecord(root));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /does not name template retry-loops, whose trigger the change's added code matches/u);
+  const retry = {id: 'retry-loops', redOnRevert: redOnRevert(root)};
+  approve(t, root, completeRecord(root, {templates: [...completeRecord(root).templates, retry]}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /template retry-loops lacks whatChanged \(its template demands it/u);
+  approve(t, root, completeRecord(root, {templates: [{...retry,
+    whatChanged: 'the second attempt reads the row the owner wrote after the first failed'}]}));
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+  triggerMatchesCodeOnly(t);
+});
+
+function cheapFakesAreRefused(t) {
+  const root = sourceQuest(t);
+  write(root, WITNESS_FILE, `test('${ASSERTION}', ...)\n`);
+  write(root, SRC_FILE, `// ${ASSERTION}\n`);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  const harness = (revert) => completeRecord(root, {templates: [{id: 'harness-fidelity',
+    redOnRevert: redOnRevert(root, revert)}]});
+  const refusedWith = (record, pattern) => {
+    approve(t, root, record);
+    refuses(() => land(root, {id: QUEST_ID, skipProof: true}), pattern);
+  };
+  refusedWith(harness({evidence: WITNESS_FILE}), /evidence is the witness itself: test\/thing\.test\.js/u);
+  refusedWith(harness({evidence: `${WITNESS_FILE}:1`}), /evidence is the witness itself/u);
+  refusedWith(harness({evidence: SRC_FILE}), /evidence is a production-surface file: src\/thing\.js/u);
+  refusedWith(harness({witness: SRC_FILE}), /witness is a production-surface file, not a test: src\/thing\.js/u);
+  const log = `solve/quests/${QUEST_ID}/log.ndjson`;
+  refusedWith(harness({evidence: log}), /evidence cites a whole quest log/u);
+  // The verification's own line: its embedded record carries the assertion.
+  const selfCiting = harness({});
+  const ownLine = readLog(root, QUEST_ID).length + 1;
+  selfCiting.templates[0].redOnRevert.evidence = `${log}:${ownLine}`;
+  refusedWith(selfCiting,
+    /quest log line that is not an evidence finding recorded before this verification/u);
+  assert.equal(readLog(root, QUEST_ID)[ownLine - 1].type, ENTRY_TYPE.VERIFICATION,
+    'the cited line is the verification entry itself');
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.FINDING, text: `not ok 1 - ${ASSERTION}`,
+    kind: FINDING_KIND.DECISION});
+  refusedWith(harness({evidence: `${log}:${readLog(root, QUEST_ID).length}`}),
+    /not an evidence finding recorded before this verification/u);
+  // An evidence finding recorded after the verification cannot support it.
+  const later = harness({});
+  later.templates[0].redOnRevert.evidence = `${log}:${readLog(root, QUEST_ID).length + 2}`;
+  approve(t, root, later);
+  logEvidence(root, `not ok 1 - ${ASSERTION}`);
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /not an evidence finding recorded before this verification/u);
+  // In another quest's log, "before" is the timestamp.
+  const other = 'solve/quests/other/log.ndjson';
+  const otherEntry = (ts) => `${JSON.stringify({ts, type: ENTRY_TYPE.FINDING,
+    kind: FINDING_KIND.EVIDENCE, text: `not ok 1 - ${ASSERTION}`})}\n`;
+  write(root, other, `${otherEntry('2999-01-01T00:00:00.000Z')}${otherEntry('2000-01-01T00:00:00.000Z')}`);
+  git(root, ['add', other]);
+  git(root, ['commit', '-q', '-m', 'another quest\'s log', '--', other]);
+  refusedWith(harness({evidence: `${other}:1`}), /not an evidence finding recorded before/u);
+  approve(t, root, harness({evidence: `${other}:2`}));
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+}
+
+function blankFieldsAndOutsidePathsAreRefused(t) {
+  const root = sourceQuest(t);
+  approve(t, root, completeRecord(root, {templates: [{id: 'harness-fidelity',
+    redOnRevert: redOnRevert(root, {what: '   ', witness: ' \t '})}]}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /red-on-revert of harness-fidelity lacks what, witness/u);
+  approve(t, root, completeRecord(root, {sampled: {census: ['row'], history: ['h'], found: '  '}}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /neither a sample/u);
+  // A file outside the tree that does name the assertion, reached by '..'.
+  const outside = scratch(t, 'revert.out', `not ok 1 - ${ASSERTION}\n`);
+  const climbing = path.relative(root, outside);
+  assert.ok(climbing.startsWith('..'), climbing);
+  approve(t, root, completeRecord(root, {templates: [{id: 'harness-fidelity',
+    redOnRevert: redOnRevert(root, {evidence: climbing})}]}));
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /evidence is not a file in the tree/u);
+}
+
+function catalogFailsClosed(t) {
+  const root = sourceQuest(t);
+  approve(t, root, completeRecord(root));
+  write(root, `${TEMPLATE_DIR}/zz-dup.md`, '---\ncategories: [zz-new, retry-loops]\n---\n# Z\n');
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /verification template id declared by two files: retry-loops \(docs\/development\/verification-templates\/retry-loops\.md and docs\/development\/verification-templates\/zz-dup\.md\)/u);
+  fs.unlinkSync(path.join(root, `${TEMPLATE_DIR}/zz-dup.md`));
+  write(root, `${TEMPLATE_DIR}/zz-bad.md`, '---\ncategories: [zz-bad]\ntrigger: (unclosed\n---\n# Z\n');
+  refuses(() => land(root, {id: QUEST_ID, skipProof: true}),
+    /invalid trigger: docs\/development\/verification-templates\/zz-bad\.md/u);
+  refuses(() => approve(t, root, completeRecord(root)), /invalid trigger: .*zz-bad\.md/u);
+  fs.unlinkSync(path.join(root, `${TEMPLATE_DIR}/zz-bad.md`));
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+}
+
+function repositoryCatalogIsClean() {
+  const record = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'solve-v2-catalog-')), 'r.json');
+  fs.writeFileSync(record, JSON.stringify({templates: [{id: 'retry-loops'}, {id: 'sweep-timer'},
+    {id: 'harness-fidelity'}]}));
+  assert.deepEqual(readVerificationRecord(process.cwd(), record).problems, []);
+  fs.rmSync(path.dirname(record), {recursive: true, force: true});
+}
+
+function triggerMatchesCodeOnly(t) {
+  const root = sourceQuest(t, ['// retry once the owner republishes', ' * backoff noted here',
+    'const reason = \'retry later\';', 'const count = 1; // retry'].join('\n'));
+  approve(t, root, completeRecord(root));
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u,
+    'words in comments and strings do not trip the trigger');
+  const coded = sourceQuest(t, 'await scheduleRetry(operation);\n');
+  approve(t, coded, completeRecord(coded));
+  refuses(() => land(coded, {id: QUEST_ID, skipProof: true}), /does not name template retry-loops/u);
+  for (const placeholder of ['n/a', ' NONE ', '-', '  ']) {
+    const retry = {id: 'retry-loops', whatChanged: placeholder, redOnRevert: redOnRevert(coded)};
+    approve(t, coded, completeRecord(coded, {templates: [retry]}));
+    refuses(() => land(coded, {id: QUEST_ID, skipProof: true}), /retry-loops lacks whatChanged/u);
+  }
+}
+
+// The main admission judges a commit, not a working tree: the tree is the
+// commit's blobs (`git ls-tree` answers full paths), the change set the
+// commit's paths and the `+` lines of `git diff --unified=0 <parent> <commit>`
+// over the production surface (src/ and vendor/), and a merge passes the
+// paths it really changes against its first parent.
+const RECORD_VENDOR_FILE = 'vendor/lib/thing.js';
+const PRODUCTION_PATHSPEC = ['--', 'src', 'vendor'];
+
+function commitTree(root, commit) {
+  return {
+    read: (file) => {
+      try {
+        return git(root, ['show', `${commit}:${file}`]);
+      } catch {
+        return null;
+      }
+    },
+    list: (directory) => git(root, ['ls-tree', '--name-only', commit, `${directory}/`])
+      .split('\n').filter(Boolean),
+  };
+}
+
+function judgeCommit(root, parent, commit, paths = null) {
+  const changed = paths ?? git(root, ['diff', '--name-only', parent, commit]).split('\n')
+    .filter(Boolean);
+  const addedSourceLines = git(root, ['diff', '--no-color', '--unified=0', parent, commit,
+    ...PRODUCTION_PATHSPEC]).split('\n')
+    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+    .map((line) => line.slice(1));
+  const log = git(root, ['show', `${commit}:solve/quests/${QUEST_ID}/log.ndjson`])
+    .split('\n').filter(Boolean).map((line) => JSON.parse(line));
+  return verificationRecordProblems(log, {paths: changed, addedSourceLines},
+    commitTree(root, commit));
+}
+
+test('the record check judges a commit and a merge over src/ and vendor/', (t) => {
+  const root = sourceQuest(t);
+  const base = git(root, ['rev-parse', 'HEAD']).trim();
+  write(root, RECORD_VENDOR_FILE, 'scheduleRetry(operation);\n');
+  const vendorChange = {...CHANGE, reverted: RECORD_VENDOR_FILE};
+  approve(t, root, completeRecord(root));
+  const plain = commitAll(root, 'quest change');
+  assert.match(judgeCommit(root, base, plain).join('\n'),
+    /does not name template retry-loops, whose trigger the change's added code matches/u,
+    'a vendor/ line the commit adds trips a trigger');
+  assert.match(judgeCommit(root, base, plain, [RECORD_VENDOR_FILE]).join('\n'),
+    /names no verification template|does not name template retry-loops/u,
+    'a vendor/-only change needs the record');
+  const witnessInVendor = fixtureCompleteRecord(root, QUEST_ID, {...vendorChange,
+    witness: RECORD_VENDOR_FILE});
+  approve(t, root, witnessInVendor);
+  assert.match(judgeCommit(root, base, commitAll(root, 'vendor witness')).join('\n'),
+    /witness is a production-surface file, not a test: vendor\/lib\/thing\.js/u);
+  const retry = {id: 'retry-loops', whatChanged: 'the second attempt re-reads the owner row',
+    redOnRevert: fixtureRedOnRevert(root, QUEST_ID, vendorChange)};
+  approve(t, root, completeRecord(root, {templates: [retry]}));
+  const complete = commitAll(root, 'complete record');
+  assert.deepEqual(judgeCommit(root, base, complete), [], 'full ls-tree paths; a commit lands');
+  // A merge: the quest's branch merged after main moved on.
+  git(root, ['checkout', '-q', '-b', 'quest']);
+  git(root, ['checkout', '-q', base]);
+  write(root, DOC_FILE, TEXT);
+  const moved = commitAll(root, 'main moves on');
+  git(root, ['merge', '-q', '--no-ff', '-m', 'merge quest', 'quest']);
+  const merge = git(root, ['rev-parse', 'HEAD']).trim();
+  assert.deepEqual(judgeCommit(root, moved, merge), [], 'a merge judged on its real paths');
+  assert.match(judgeCommit(root, moved, merge, ['src/']).join('\n'),
+    /reverted path is not in the quest's production-surface change set: vendor\/lib\/thing\.js/u,
+    'a surface literal in place of the merge\'s paths cannot bind the reverted path');
+});
+
+test('a complete src/ approval lands, and its record rides in the log', (t) => {
+  const root = sourceQuest(t);
+  approve(t, root, completeRecord(root));
+  const landed = land(root, {id: QUEST_ID, skipProof: true});
+  assert.deepEqual(landed.paths, [SRC_FILE, WITNESS_FILE]);
+  const verification = readLog(root, QUEST_ID).findLast((entry) =>
+    entry.type === ENTRY_TYPE.VERIFICATION);
+  assert.equal(verification.record.templates[0].id, 'harness-fidelity');
+});
+
+test('a rejection, a newer attempt and a complete approval land', (t) => {
+  const root = sourceQuest(t);
+  const refusal = () => {
+    try {
+      land(root, {id: QUEST_ID, skipProof: true});
+    } catch (error) {
+      return error.message;
+    }
+    return assert.fail('land did not refuse');
+  };
+  approve(t, root, undefined, VERDICT.REJECT);
+  const rejected = refusal();
+  assert.match(rejected, /newest verification is a rejection/u);
+  assert.doesNotMatch(rejected, /verification template/u, 'a rejection needs no record');
+  approve(t, root, completeRecord(root), VERDICT.REJECT);
+  assert.match(refusal(), /newest verification is a rejection/u);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  approve(t, root);
+  assert.match(refusal(), /names no verification template/u);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  const stale = refusal();
+  assert.match(stale, /newer than the last attempt/u);
+  assert.doesNotMatch(stale, /verification template/u, 'a stale approval is judged stale only');
+  approve(t, root, completeRecord(root));
+  assert.match(land(root, {id: QUEST_ID, skipProof: true}).commit, /^[0-9a-f]{40}$/u);
+});
+
+test('a quest touching no src/ path lands on a bare approval, as before', (t) => {
+  const root = repo(t);
+  const base = headOf(root);
+  start(root, {id: QUEST_ID});
+  goGreen(root);
+  write(root, DOC_FILE, TEXT);
+  write(root, WITNESS_FILE, TEXT);
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
+  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
+    verdict: VERDICT.APPROVE});
+  const landed = land(root, {id: QUEST_ID, skipProof: true});
+  assert.deepEqual(landed.paths, [DOC_FILE, WITNESS_FILE]);
+  assert.equal(readLog(root, QUEST_ID).at(-1).status, QUEST_STATUS.SOLVED);
+  const run = admitRange(root, base);
+  assert.equal(run.status, 0, `the main admission does not judge it either: ${run.output}`);
 });
 
 test('a legacy epic carries no scope; docs-only landings need no verifier', (t) => {
@@ -454,6 +860,20 @@ function assertRefused(run, commit, pattern) {
   assert.match(block, pattern);
 }
 
+// A production-surface landing approves the way a real verifier must: the
+// templates in the tree, a witness test file in the change, the reverted run
+// recorded as an evidence finding, and a complete record naming them.
+function witnessFor(id) {
+  return `test/${id}.test.js`;
+}
+
+function approveWithRecord(root, id, reverted) {
+  writeTemplateFiles(root);
+  write(root, witnessFor(id), `${id} witness\n`);
+  return verify(root, id, fixtureCompleteRecord(root, id,
+    {reverted, witness: witnessFor(id), assertion: ASSERTION}), {verifier: VERIFIER, text: TEXT});
+}
+
 function landedSourceQuest(t) {
   const root = repo(t);
   const base = headOf(root);
@@ -461,8 +881,7 @@ function landedSourceQuest(t) {
   goGreen(root);
   write(root, SRC_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, SRC_FILE);
   return {root, base, landed: land(root, {id: QUEST_ID, skipProof: true}).commit};
 }
 
@@ -525,8 +944,7 @@ test('admit refuses a correctly bound terminal entry whose log records no curren
   goGreen(root);
   write(root, SRC_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, SRC_FILE);
   land(root, {id: QUEST_ID, skipProof: true});
   // Rebuild the same commit without the verification entry: same binding,
   // no recorded verdict.
@@ -546,6 +964,49 @@ test('admit admits a real solver landing of a src/ change', (t) => {
   assert.deepEqual(run.result.admitted,
     [{commit: landed, admission: 'solver landing', coveredBy: null}]);
   assert.deepEqual(run.result.refused, []);
+});
+
+// The record check runs from the one approval predicate land uses, so the main
+// admission judges a landing commit's approval record over that commit's own
+// change set and tree: the same landing with its record stripped is refused.
+function relandWithVerification(root, edit) {
+  const logPath = path.join(root, `solve/quests/${QUEST_ID}/log.ndjson`);
+  const entries = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean)
+    .map((line) => JSON.parse(line));
+  git(root, ['reset', '-q', '--soft', 'HEAD~1']);
+  fs.writeFileSync(logPath, `${entries.map((entry) => JSON.stringify(
+    entry.type === ENTRY_TYPE.VERIFICATION ? edit(entry) : entry)).join('\n')}\n`);
+  return commitAll(root, 'the landing, its verification record edited');
+}
+
+test('admit judges a landing\'s approval record in the landing commit\'s tree', (t) => {
+  const {root, base, landed} = landedSourceQuest(t);
+  const complete = admitRange(root, base);
+  assert.equal(complete.status, 0, complete.output);
+  assert.deepEqual(complete.result.admitted.map((entry) => entry.commit), [landed]);
+  const noRevert = relandWithVerification(root, (entry) => ({...entry, record: {...entry.record,
+    templates: entry.record.templates.map((template) => ({id: template.id}))}}));
+  assertRefused(admitRange(root, base), noRevert,
+    /carries no red-on-revert[\s\S]*for template harness-fidelity/u);
+  const bare = relandWithVerification(root, (entry) => ({...entry, record: undefined}));
+  assertRefused(admitRange(root, base), bare, /names no verification template/u);
+});
+
+// A receipt-route merge's governing quest is judged over the merge's real
+// paths: a red-on-revert of a path the merge does not carry binds nothing.
+test('admit judges a governing quest\'s record over the merge\'s real paths', (t) => {
+  for (const [reverted, admitted] of [[SRC_FILE, true], ['src/elsewhere.js', false]]) {
+    const merged = integrationMerge(t, {questTrailer: true, reverted});
+    recordReceipt(merged.root, PROOF.CORPUS_FULL, merged.merge);
+    note(merged.root, {id: QUEST_ID, type: ENTRY_TYPE.FINDING, kind: FINDING_KIND.DECISION,
+      text: `owner authorizes merge of PR #73: merge sha ${merged.merge}, head ${merged.tip}`});
+    const run = admitRange(merged.root, merged.base, commitAll(merged.root, 'the decision'));
+    if (admitted) assert.equal(run.status, 0, run.output);
+    else {
+      assertRefused(run, merged.merge,
+        /reverted path is not in the quest's production-surface change set: src\/elsewhere\.js/u);
+    }
+  }
 });
 
 test('admit admits direct commits that touch only docs, tests and scripts', (t) => {
@@ -622,7 +1083,7 @@ function recordReceipt(root, proofId, sha, identity = null) {
   if (identity) git(root, ['push', '-q', 'origin', `${tag}:${identityRef(proofId, identity.digest)}`]);
 }
 
-function integrationMerge(t, {questTrailer}) {
+function integrationMerge(t, {questTrailer, reverted = SRC_FILE}) {
   const root = repo(t, {legacy: true});
   remoteFor(t, root);
   const base = headOf(root);
@@ -635,8 +1096,7 @@ function integrationMerge(t, {questTrailer}) {
   git(root, ['checkout', '-q', mainBranch]);
   start(root, {id: QUEST_ID});
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, reverted);
   git(root, ['merge', '-q', '--no-ff', '--no-commit', 'integration']);
   git(root, ['add', '-A']);
   git(root, ['commit', '-q', '-m',
@@ -811,8 +1271,7 @@ test('admit admits a clean merge of two landings on different files with nothing
     write(root, oracle, JSON.stringify({metric: 0, target: 0}));
     write(root, file, TEXT);
     note(root, {id, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-    note(root, {id, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-      verdict: VERDICT.APPROVE});
+    approveWithRecord(root, id, file);
     return land(root, {id, skipProof: true}).commit;
   };
   git(root, ['checkout', '-q', '-b', 'side']);
@@ -865,8 +1324,7 @@ test('land and admit read src/ paths git would quote (non-ASCII, quote character
   write(root, 'src/"q".js', TEXT);
   fs.unlinkSync(path.join(root, 'src/gône.js'));
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, 'src/néw dîr/x y.js');
   const landed = land(root, {id: QUEST_ID, skipProof: true});
   assert.ok(landed.paths.includes('src/néw dîr/x y.js'), landed.paths.join(', '));
   assert.ok(landed.paths.includes('src/"q".js'), landed.paths.join(', '));
@@ -911,8 +1369,7 @@ function landQuest(root, id, file, content) {
   write(root, `solve/quests/${id}/evidence/oracle.json`, JSON.stringify({metric: 0, target: 0}));
   write(root, file, content);
   note(root, {id, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, id, file);
   return land(root, {id, skipProof: true}).commit;
 }
 
@@ -973,8 +1430,7 @@ test('admit admits a landing over an order-preserving union of the quest log', (
   const mainBranch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).trim();
   start(root, {id: QUEST_ID});
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, SRC_FILE);
   const fork = commitAll(root, 'quest approved on main');
   const logPath = path.join(root, `solve/quests/${QUEST_ID}/log.ndjson`);
   const forkLog = fs.readFileSync(logPath, 'utf8');
@@ -998,8 +1454,10 @@ test('admit admits a landing over an order-preserving union of the quest log', (
     goGreen(root);
     write(root, SRC_FILE, TEXT);
     note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-    note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-      verdict: VERDICT.APPROVE});
+    approveWithRecord(root, QUEST_ID, SRC_FILE);
+    // The witness main already holds changes in the landing (a test file:
+    // not bound by the approval).
+    write(root, witnessFor(QUEST_ID), 'the witness the landing changes\n');
     return land(root, {id: QUEST_ID, skipProof: true}).commit;
   };
   merged(`${sideLog}${mainLine}`);
@@ -1102,13 +1560,22 @@ function syntheticLanding(root, id, change) {
   change();
   datedGit(root, ['add', '-A']);
   const source = stagedSourceChange(root);
+  const [reverted] = datedGit(root, ['diff', '--cached', '--name-only', '-z', 'HEAD', '--',
+    'src', 'vendor']).split('\0');
+  writeTemplateFiles(root);
+  write(root, witnessFor(id), `${id} witness\n`);
+  const evidence = `solve/quests/${id}/log.ndjson:3`;
+  const record = {templates: [{id: 'harness-fidelity', redOnRevert: {reverted,
+    what: 'the landing undone', witness: witnessFor(id), assertion: ASSERTION, evidence}}],
+  sampled: {census: ['c'], history: ['h'], found: 'none alike'}};
   write(root, `solve/quests/${id}/quest.json`, '{}');
   write(root, `solve/quests/${id}/log.ndjson`, `${[
     {ts: '1', type: 'finding', kind: 'decision', text: 's', seal: {sealedAt: 'x'}},
     {ts: '2', type: 'attempt', text: 'a'},
-    {ts: '3', type: 'verification', text: 'v', verifier: VERIFIER, verdict: 'approve',
+    {ts: '3', type: 'finding', kind: 'evidence', text: `reverted run: not ok 1 - ${ASSERTION}`},
+    {ts: '4', type: 'verification', text: 'v', verifier: VERIFIER, verdict: 'approve', record,
       reviewedSource: source},
-    {ts: '4', type: 'terminal', status: 'solved', text: 't', source},
+    {ts: '5', type: 'terminal', status: 'solved', text: 't', source},
   ].map((entry) => JSON.stringify(entry)).join('\n')}\n`);
   datedGit(root, ['add', '-A']);
   datedGit(root, ['commit', '-q', '-m', `${LANDING_SUBJECT}${id}`]);
@@ -1265,8 +1732,7 @@ test('a vendor/ change lands only with a current approval and enters main only a
   write(root, VENDOR_FILE, TEXT);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}), /need a verification entry/u);
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, VENDOR_FILE);
   const landed = land(root, {id: QUEST_ID, skipProof: true}).commit;
   const run = admitRange(root, base);
   assert.equal(run.status, 0, run.output);
@@ -1495,8 +1961,7 @@ test('admit covers a long-lived branch\'s commits whichever parent the merge lis
   const base = headOf(root);
   start(root, {id: QUEST_ID});
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, SRC_FILE);
   const mainBranch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).trim();
   commitAll(root, 'the governing quest on main');
   git(root, ['checkout', '-q', '-b', 'integration', base]);
@@ -1526,8 +1991,7 @@ test('admit does not cover a direct commit that every merge parent already holds
   const shared = commitAll(root, 'direct commit before the fork');
   start(root, {id: QUEST_ID});
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, SRC_FILE);
   commitAll(root, 'the governing quest on main');
   const mainBranch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).trim();
   git(root, ['checkout', '-q', '-b', 'integration']);
@@ -1600,8 +2064,7 @@ function approvedChange(t, files = {[SRC_FILE]: TEXT}) {
   goGreen(root);
   for (const [file, content] of Object.entries(files)) write(root, file, content);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, Object.keys(files)[0]);
   return {root, base};
 }
 
@@ -1677,10 +2140,9 @@ test('a new attempt and a new approval over the changed production diff land', (
   write(root, ADDED_AFTER, TEXT);
   refuses(() => land(root, {id: QUEST_ID, skipProof: true}), STALE_REVIEW);
   note(root, {id: QUEST_ID, type: ENTRY_TYPE.ATTEMPT, text: TEXT});
-  note(root, {id: QUEST_ID, type: ENTRY_TYPE.VERIFICATION, text: TEXT, verifier: VERIFIER,
-    verdict: VERDICT.APPROVE});
+  approveWithRecord(root, QUEST_ID, SRC_FILE);
   const landed = land(root, {id: QUEST_ID, skipProof: true});
-  assert.deepEqual(landed.paths, [ADDED_AFTER, SRC_FILE]);
+  assert.ok(landed.paths.includes(ADDED_AFTER) && landed.paths.includes(SRC_FILE));
   const run = admitRange(root, base);
   assert.equal(run.status, 0, run.output);
 });

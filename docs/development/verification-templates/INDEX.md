@@ -34,6 +34,51 @@ overlapping questions. Do not include unrelated templates merely to make the
 checklist longer, and do not defer an already-applicable template until after the
 first verdict.
 
+## The verification record (enforced by `land` and the main admission)
+
+An approval of a quest whose change set touches the production surface
+(`src/`, `vendor/`) is an approval only with a record: `note --verification "<summary>"
+--verifier subagent:<id> --verdict approve --evidence <record.json>` embeds the
+JSON in the log entry, and `land` refuses, naming what is missing, until it
+holds; the main push admission refuses a landing commit (or a receipt-route
+merge's governing quest) whose approval lacks it. A quest touching no production path needs no record; a rejection needs
+none. The template ids are the front-matter `categories` of the files here; the
+table above only links them, and an id declared by two files, or a trigger that
+is not a valid pattern, refuses every landing until fixed. A template's
+`evidence: [...]` names fields its entry must carry (a placeholder such as
+"n/a" or "none" is no answer), and its `trigger:` pattern, matched against the
+code the change adds (comment lines, string literals and trailing comments
+removed), makes it required.
+
+```json
+{"templates": [{"id": "<category>", "whatChanged": "<when the template demands it>",
+  "redOnRevert": {"reverted": "src/<path in the change>", "what": "<the fix undone>",
+    "witness": "<test file in the change or its receipts>",
+    "assertion": "<the behavioural assertion that failed>",
+    "evidence": "<tree path or path:line of the reverted run naming that assertion>"}}],
+ "sampled": {"census": ["<author census rows re-checked>"],
+   "history": ["<history rows re-checked>"], "found": "<what the sample showed>"}}
+```
+
+`sampled` may instead be `"local": {"proof": "<why no sibling exists>",
+"census": "<tree path>"}`. Evidence is a path in the tree the verdict lands
+with, never a scratch path: record the reverted run's output as a finding
+(`note --finding "<output>" --kind evidence`) and cite
+`solve/quests/<id>/log.ndjson:<line>`. The check reads only the quest log, the
+change set and that tree, so `land` (the working tree) and the main admission
+(the landing commit's tree) judge the same record. Both check that
+each id exists, each demanded field is a real answer, the reverted path is in
+the quest's production change, the witness exists, is not production code and
+is in the change or its receipts, and the evidence exists in the tree, is
+neither the witness nor production code, cites a quest log only by the line of
+an evidence finding recorded before the verification, and names the assertion
+(on the cited line, if one is cited). It cannot check that the revert was run,
+that the run reached the assertion through the intended path (harness-fidelity
+item 1), that the evidence finding is the verifier's own observation rather
+than text typed to fit, or that the named template is the relevant one: those
+are the verifier's to prove.
+Closed quests are not re-judged; a quest in flight lands only on a record.
+
 **Category-complete rounds:** a verifier must enumerate ALL findings and group
 them by category; a rejection round must be category-complete — never stop at
 the first defect. One defect per round turned an 11-item checklist into 11

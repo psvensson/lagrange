@@ -5,8 +5,8 @@
     "usage": "node scripts/solve.js start --id <quest> [--json]"
   },
   "note": {
-    "summary": "Append one log entry: a finding (kinds theory, altitude-check, decision, ruled-out, evidence), an attempt (records HEAD and the changed paths), a verification (verifier subagent:<id>, verdict approve|reject), or a terminal entry other than solved (blocked with a next owner, exhausted, superseded).",
-    "usage": "node scripts/solve.js note --id <quest> (--finding \"<text>\" [--kind <kind>] [--status <status>] [--evidence <ref>] | --attempt \"<what changed>\" | --verification \"<summary>\" --verifier subagent:<id> --verdict approve|reject | --blocked \"<why>\" --next-owner judgment|verification|authorization | --exhausted \"<why>\" | --superseded \"<why>\" [--by <quest>]) [--json]"
+    "summary": "Append one log entry: a finding (kinds theory, altitude-check, decision, ruled-out, evidence), an attempt (records HEAD and the changed paths), a verification (verifier subagent:<id>, verdict approve|reject; an approval of a production-surface change carries --evidence <record.json>: the verification templates it applied, each with its red-on-revert, and its census sample, embedded in the entry and checked by land and the main admission - docs/development/verification-templates/INDEX.md), or a terminal entry other than solved (blocked with a next owner, exhausted, superseded).",
+    "usage": "node scripts/solve.js note --id <quest> (--finding \"<text>\" [--kind <kind>] [--status <status>] [--evidence <ref>] | --attempt \"<what changed>\" | --verification \"<summary>\" --verifier subagent:<id> --verdict approve|reject [--evidence <record.json>] | --blocked \"<why>\" --next-owner judgment|verification|authorization | --exhausted \"<why>\" | --superseded \"<why>\" [--by <quest>]) [--json]"
   },
   "probe": {
     "summary": "Measure a quest's doneWhen (or an epic's with --epic): metric, target, done, whether it measured, the delta from the seal-time value, and the last three log entries.",

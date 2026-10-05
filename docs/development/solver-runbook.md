@@ -30,7 +30,14 @@ push gate asks: `node scripts/solve/guards.js admit --base <sha> --head <sha>`.
 `note` takes exactly one of `--finding`, `--attempt`, `--verification`,
 `--blocked`, `--exhausted` or `--superseded`. A verification also takes
 `--verifier subagent:<id>` and `--verdict approve|reject`. Production-surface
-changes cannot land without an approving verification newer than the last attempt.
+changes cannot land without an approving verification newer than the last attempt,
+and that approval carries its record (`--evidence <record.json>`: the templates
+applied, each with its red-on-revert, and the census sample; shape and checks
+in [`verification-templates/INDEX.md`](verification-templates/INDEX.md)).
+Bootstrap: closed quests are not re-judged, but a quest in flight when the
+record became required lands only after a verification in the new shape.
+`land` and the main push admission apply the same check (to the working tree
+and to the landing commit's tree).
 An approval records the digest of the production-surface change it reviewed
 (`reviewedSource`), and `land` and `admit` refuse a src/ or vendor/ change that
 differs from it (tests, docs and scripts are not bound), so stage the change
@@ -53,6 +60,7 @@ attempt is newer than it; there is no separate corrective verb.
 | `outside the scope of <epic>` | a staged path is not authorised by the epic; widen the epic explicitly or leave the change out |
 | a verification entry is required | an independent verifier has not approved this tree |
 | `the newest verification is a rejection` | repair and record a newer attempt first |
+| `the approving verification names ...` / `lacks ...` | the approval's record is missing a template, a red-on-revert or a census sample, or a reference in it does not resolve in the tree; the verifier records a new verification with the complete record |
 
 None of these is worked around. Each names the thing to fix.
 

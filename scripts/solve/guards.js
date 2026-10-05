@@ -16,6 +16,9 @@ import {
 import {
   IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH, PROOF_CONE_CONTRACTS_PATH,
 } from '../checks/impact-proof-cone-constants.js';
+import {
+  isApproval, isQuestLogPath, parseFrontMatter, questState, verdictOf,
+} from './store.js';
 import {waitForLoadHeadroomSync} from '../checks/wait-for-load-headroom.js';
 import {
   importGraphResolverStateDigest, javascriptSourceDigest,
@@ -26,7 +29,6 @@ import {changedPathsBetween} from '../checks/quest-record-transitions.js';
 import {
   ENTRY_TYPE, EPICS_DIR, FINDING_KIND, LOG_FILE, QUESTS_DIR, QUEST_FILE, QUEST_STATUS, VERDICT,
 } from './schema.js';
-import {isQuestLogPath, questState, verdictOf} from './store.js';
 
 const TEXT_ENCODING = 'utf8';
 const LINE_SEPARATOR = '\n';
@@ -145,7 +147,7 @@ function requiresVerification(paths) {
 
 // --- verification -----------------------------------------------------------
 // One predicate for "the recorded verdicts admit a production-surface change":
-// approvalProblems(entries, changeSet). land asks it of the live log and the
+// approvalProblems(entries, changeSet, tree). land asks it of the live log and the
 // change it would commit, the main admission of the log a landing commit
 // carries and that commit's change - log entries, paths and the digest of the
 // production-surface change under judgement (changeSet.source), never the
@@ -250,17 +252,23 @@ function reviewedSourceProblems(state, changeSet) {
 
 /**
  * The extension point: what a quest's recorded log lacks before the change
- * set may land on main. Both `land` and the main admission call it.
+ * set may land on main - the verdicts, whether the approval reviewed exactly
+ * this production-surface change (reviewedSourceProblems), and the approving
+ * verification's record (verificationRecordProblems). Both `land` (the working tree) and the
+ * main admission (a commit's tree) call it, so a stricter rule tightens both.
  * @param {Array<Object>} entries the quest's log entries
- * @param {{paths: string[], source: ?Object}} changeSet the change set's paths
- *   and the record of its production-surface change (land: the change it
- *   would commit; admit: the commit's)
+ * @param {{paths: string[], addedSourceLines: string[], source: ?Object}} changeSet
+ *   full paths, the lines it adds on the production surface, and the record of
+ *   its production-surface change (land: the change it would commit; admit:
+ *   the commit's)
+ * @param {{read: Function, list: Function}} tree
  * @return {string[]}
  */
-function approvalProblems(entries, changeSet) {
+function approvalProblems(entries, changeSet, tree) {
   const state = questState(entries);
   return [...verificationProblems(state, changeSet.paths),
-    ...reviewedSourceProblems(state, changeSet)];
+    ...reviewedSourceProblems(state, changeSet),
+    ...verificationRecordProblems(entries, changeSet, tree)];
 }
 
 // --- static quality ------------------------------------------------------------
@@ -301,6 +309,412 @@ function staticQualityProblems(root, paths) {
     .sort();
   if (jsPaths.length === 0) return [];
   return CHECKERS.flatMap((checker) => runChecker(root, checker, jsPaths));
+}
+
+// --- verification record ---------------------------------------------------------
+// A production-surface approval is an approval only when it names the
+// verification templates it applied and carries what each demands, at
+// minimum the red-on-revert. v1 enforced a verdict file
+// (solver-verifier-verdict/1: scripts/solve/verifier-verdict.js and
+// review-request.js at 5271defb5^); the v2 cutover recorded verifications as
+// free text and nothing read a template again. The admissible ids are the
+// templates' own front-matter `categories`; a template may declare
+// `evidence: [<field>]` (what its entry must carry) and `trigger: <pattern>`
+// (code the change adds that makes it required). The check is a pure function
+// of the quest log, the change set and a tree reader, so the same predicate
+// judges a working tree (land) and a commit (the main admission): every file
+// it names is a full repository path in that tree. It checks references, not
+// that a revert was really run: the independent verifier stays the control.
+
+const TEMPLATE_DIR = 'docs/development/verification-templates';
+const TEMPLATE_SUFFIX = '.md';
+const TRIGGER_FLAGS = 'u';
+const REVERT_FIELDS = Object.freeze(['reverted', 'what', 'witness', 'assertion', 'evidence']);
+// A demanded answer that says nothing is not an answer.
+const PLACEHOLDER_ANSWERS = Object.freeze(['n/a', 'na', 'none', '-', 'tbd', 'todo', 'unknown']);
+const EVIDENCE_LINE = /^(.+):(\d+)$/u;
+const PARENT_SEGMENT = '..';
+const ADDED_LINE = '+';
+const ADDED_FILE_HEADER = '+++';
+const PATHSPEC_END = '--';
+const SOURCE_DIFF = Object.freeze(['diff', '--no-color', '--unified=0', 'HEAD', PATHSPEC_END]);
+const COMMIT_SOURCE_DIFF = Object.freeze(['diff', '--no-color', '--unified=0']);
+const LS_TREE_NAMES = Object.freeze(['ls-tree', '-z', '--name-only', '--full-tree']);
+// What a trigger is matched against: code, never comments or string text.
+const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/u;
+const STRING_LITERAL = /'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`/gu;
+const EMPTY_STRING_LITERAL = '""';
+const TRAILING_COMMENT = /\/\/.*$/u;
+const RECORD = Object.freeze({
+  PREFIX: 'the approving verification ',
+  NO_TEMPLATE: 'names no verification template (note --verification ... --evidence ' +
+    '<record.json> with {"templates": [{"id", "redOnRevert"}]}); admissible: ',
+  UNKNOWN: 'names unknown verification template ',
+  ADMISSIBLE: '; admissible: ',
+  NO_REVERT: 'carries no red-on-revert {reverted, what, witness, assertion, evidence} ' +
+    'for template ',
+  LACKS: ' lacks ',
+  DEMANDED: ' (its template demands it; a placeholder is no answer)',
+  REVERT_OF: 'red-on-revert of ',
+  NOT_SOURCE: ': reverted path is not in the quest\'s production-surface change set: ',
+  NO_WITNESS: ': witness is not a file in the tree: ',
+  PRODUCTION_WITNESS: ': witness is a production-surface file, not a test: ',
+  UNBOUND_WITNESS: ': witness is neither in the quest\'s change set nor in its receipts: ',
+  TRIGGERED_PREFIX: 'does not name template ',
+  TRIGGERED_SUFFIX: ', whose trigger the change\'s added code matches',
+  NO_SAMPLE: 'carries neither a sample of the author\'s census and history pass ' +
+    '(sampled: {census: [rows], history: [rows], found}) nor a locality proof ' +
+    '(local: {proof, census: <tree path>})',
+  LOCAL_CENSUS: 'locality census: ',
+  NO_EVIDENCE: 'names no evidence',
+  MISSING_EVIDENCE: 'evidence is not a file in the tree (cite a tree path or a quest ' +
+    'log line, path:line): ',
+  WITNESS_EVIDENCE: 'evidence is the witness itself: ',
+  PRODUCTION_EVIDENCE: 'evidence is a production-surface file: ',
+  WHOLE_LOG: 'evidence cites a whole quest log; cite the evidence entry\'s line: ',
+  NOT_EVIDENCE_ENTRY: 'evidence cites a quest log line that is not an evidence finding ' +
+    'recorded before this verification: ',
+  NO_LINE: 'evidence has no such line: ',
+  UNNAMED: 'evidence does not name the assertion ',
+  DUPLICATE_TEMPLATE: 'verification template id declared by two files: ',
+  AND: ' and ',
+  BAD_TRIGGER: 'verification template declares an invalid trigger: ',
+  NOT_JSON: 'is not a JSON object: ',
+  NO_FILE: 'verification record not found: ',
+  FILE_PREFIX: 'verification record ',
+});
+
+function nonEmptyText(value) {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function isAnswer(value) {
+  return nonEmptyText(value) && !PLACEHOLDER_ANSWERS.includes(value.trim().toLowerCase());
+}
+
+function isRecordObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function nonEmptyList(value) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+// A repository-relative path that stays inside the tree, or null.
+function treePath(value) {
+  if (!nonEmptyText(value) || path.isAbsolute(value)) return null;
+  const normalized = path.posix.normalize(value);
+  return normalized.split(PATH_SEGMENT).includes(PARENT_SEGMENT) ? null : normalized;
+}
+
+/**
+ * The tree reader `land` judges with: the working tree under `root`. `read`
+ * takes a full repository path and answers its text or null; `list` takes a
+ * directory and answers the FULL repository paths of the files in it (what
+ * `git ls-tree --name-only <commit> <dir>/` answers for a commit).
+ * @param {string} root
+ * @return {{read: function(string): ?string, list: function(string): string[]}}
+ */
+function workingTreeReader(root) {
+  return {
+    read: (relative) => {
+      const file = treePath(relative) && path.join(root, treePath(relative));
+      return file && fs.existsSync(file) && fs.statSync(file).isFile() ?
+        fs.readFileSync(file, TEXT_ENCODING) : null;
+    },
+    list: (relative) => {
+      const directory = path.join(root, relative);
+      return fs.existsSync(directory) ? fs.readdirSync(directory).sort()
+        .map((name) => `${relative}${PATH_SEGMENT}${name}`) : [];
+    },
+  };
+}
+
+/**
+ * The change set `land` judges: its paths and the lines it adds on the
+ * production surface (tracked changes against HEAD, plus whole untracked
+ * files). For a commit the same shape is the commit's paths and the `+` lines
+ * of `git diff --unified=0 <parent> <commit> -- <surface>`.
+ * @param {string} root
+ * @param {string[]} paths
+ * @return {{paths: string[], addedSourceLines: string[]}}
+ */
+function addedLines(diff) {
+  return lines(diff)
+    .filter((line) => line.startsWith(ADDED_LINE) && !line.startsWith(ADDED_FILE_HEADER))
+    .map((line) => line.slice(ADDED_LINE.length));
+}
+
+function workingChangeSet(root, paths) {
+  const sourcePaths = paths.filter(isProductionPath);
+  if (sourcePaths.length === 0) return {paths, addedSourceLines: []};
+  const added = addedLines(git(root, [...SOURCE_DIFF, ...sourcePaths]));
+  const untracked = nulPaths(git(root, [...GIT_ARGUMENTS.UNTRACKED, PATHSPEC_END,
+    ...sourcePaths]))
+    .flatMap((file) => fs.readFileSync(path.join(root, file), TEXT_ENCODING)
+      .split(LINE_SEPARATOR));
+  return {paths, addedSourceLines: [...added, ...untracked]};
+}
+
+/**
+ * The tree reader the main admission judges with: the tree of `commit`, with
+ * the same full-path shape as workingTreeReader.
+ * @param {string} root
+ * @param {string} commit
+ * @return {{read: function(string): ?string, list: function(string): string[]}}
+ */
+function commitTreeReader(root, commit) {
+  return {
+    read: (relative) => {
+      const file = treePath(relative);
+      const blob = file === null ? null : gitBlob(root, commit, file);
+      return blob === null ? null : blob.toString(TEXT_ENCODING);
+    },
+    list: (relative) => nulPaths(git(root, [...LS_TREE_NAMES, commit, PATHSPEC_END,
+      `${relative}${PATH_SEGMENT}`], {allowFailure: true})).sort(),
+  };
+}
+
+/**
+ * The change set a commit carries from `from`: every path that differs, plus
+ * `extraPaths`, and the `+` lines of its production-surface diff.
+ * @param {string} root
+ * @param {{from: string, to: string, extraPaths?: string[]}} range
+ * @return {{paths: string[], addedSourceLines: string[]}}
+ */
+function commitChangeSet(root, {from, to, extraPaths = []}) {
+  const paths = new Set([...changedPathsBetween(root, from, to).map((change) => change.path),
+    ...extraPaths]);
+  return {paths: [...paths].sort(), addedSourceLines: addedLines(git(root,
+    [...COMMIT_SOURCE_DIFF, from, to, PATHSPEC_END, ...PRODUCTION_SURFACE]))};
+}
+
+function templateTrigger(file, pattern, problems) {
+  if (!nonEmptyText(pattern)) return null;
+  try {
+    return new RegExp(pattern, TRIGGER_FLAGS);
+  } catch (error) {
+    problems.push(`${RECORD.BAD_TRIGGER}${file}: ${error.message}`);
+    return null;
+  }
+}
+
+function listOf(value) {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+/**
+ * The admissible verification templates, read from the template files in the
+ * tree: each front-matter category is an id; there is no second list. A
+ * duplicate id or an invalid trigger fails closed, naming the files.
+ * @param {{read: Function, list: Function}} tree
+ * @return {{catalog: Map<string, Object>, problems: string[]}}
+ */
+function verificationTemplates(tree) {
+  const catalog = new Map();
+  const problems = [];
+  for (const file of tree.list(TEMPLATE_DIR).filter((name) => name.endsWith(TEMPLATE_SUFFIX))) {
+    const content = tree.read(file);
+    const front = content === null ? null : parseFrontMatter(content).front;
+    if (!front) continue;
+    const declared = {file, evidence: listOf(front.evidence),
+      trigger: templateTrigger(file, front.trigger, problems)};
+    for (const id of listOf(front.categories)) {
+      if (catalog.has(id)) {
+        problems.push(`${RECORD.DUPLICATE_TEMPLATE}${id} (${catalog.get(id).file}` +
+          `${RECORD.AND}${file})`);
+      } else {
+        catalog.set(id, declared);
+      }
+    }
+  }
+  return {catalog, problems};
+}
+
+function admissibleList(catalog) {
+  return [...catalog.keys()].join(LIST_SEPARATOR);
+}
+
+// A cited quest-log line must be an evidence finding recorded before the
+// verification it supports: neither the verification's own line nor a
+// statement the verifier wrote as a decision. In this quest's own log
+// "before" is the entry order; in another quest's log, the timestamp.
+function logLineProblem(scope, reference, judged) {
+  let entry = null;
+  try {
+    entry = JSON.parse(scope);
+  } catch (error) {
+    return `${RECORD.NOT_EVIDENCE_ENTRY}${reference} (${error.message})`;
+  }
+  const own = judged.entries.findIndex((candidate) => JSON.stringify(candidate) === scope);
+  const earlier = own === -1 ?
+    typeof entry?.ts === 'string' && entry.ts < String(judged.verification?.ts) :
+    own < judged.entries.lastIndexOf(judged.verification);
+  return entry?.type === ENTRY_TYPE.FINDING && entry.kind === FINDING_KIND.EVIDENCE && earlier ?
+    null : `${RECORD.NOT_EVIDENCE_ENTRY}${reference}`;
+}
+
+// The file part of an evidence reference must be a tree file that is neither
+// the witness nor production code.
+function evidenceFileProblem(file, reference, witness) {
+  if (witness && file === witness) return `${RECORD.WITNESS_EVIDENCE}${reference}`;
+  return isProductionPath(file) ? `${RECORD.PRODUCTION_EVIDENCE}${reference}` : null;
+}
+
+// A tree path, or path:line, whose content - the cited line when one is
+// cited - names the assertion when one is given: exit status alone is not a
+// red-on-revert (harness-fidelity item 1).
+function evidenceProblem(tree, reference, {assertion = null, witness = null,
+  judged = {entries: [], verification: null}} = {}) {
+  if (!nonEmptyText(reference)) return RECORD.NO_EVIDENCE;
+  const cited = EVIDENCE_LINE.exec(reference);
+  const file = treePath(cited ? cited[1] : reference);
+  const content = file === null ? null : tree.read(file);
+  if (content === null) return `${RECORD.MISSING_EVIDENCE}${reference}`;
+  const misplaced = evidenceFileProblem(file, reference, witness);
+  if (misplaced) return misplaced;
+  if (!cited && isQuestLogPath(file)) return `${RECORD.WHOLE_LOG}${reference}`;
+  const scope = cited ? content.split(LINE_SEPARATOR)[Number(cited[2]) - 1] : content;
+  if (scope === undefined || (cited && scope === '')) return `${RECORD.NO_LINE}${reference}`;
+  const logProblem = isQuestLogPath(file) ? logLineProblem(scope, reference, judged) : null;
+  if (logProblem) return logProblem;
+  return assertion && !scope.includes(assertion) ?
+    `${RECORD.UNNAMED}"${assertion}": ${reference}` : null;
+}
+
+function witnessProblem(context, label, witness) {
+  if (context.tree.read(witness) === null) return `${label}${RECORD.NO_WITNESS}${witness}`;
+  if (isProductionPath(witness)) return `${label}${RECORD.PRODUCTION_WITNESS}${witness}`;
+  return context.changed.has(witness) || context.receipts.has(witness) ? null :
+    `${label}${RECORD.UNBOUND_WITNESS}${witness}`;
+}
+
+function revertProblems(context, id, revert) {
+  if (!isRecordObject(revert)) return [`${RECORD.NO_REVERT}${id}`];
+  const label = `${RECORD.REVERT_OF}${id}`;
+  const missing = REVERT_FIELDS.filter((field) => !nonEmptyText(revert[field]));
+  if (missing.length > 0) return [`${label}${RECORD.LACKS}${missing.join(LIST_SEPARATOR)}`];
+  const problems = [];
+  if (!context.sourcePaths.includes(revert.reverted)) {
+    problems.push(`${label}${RECORD.NOT_SOURCE}${revert.reverted}`);
+  }
+  const witness = witnessProblem(context, label, revert.witness);
+  if (witness) problems.push(witness);
+  const evidence = evidenceProblem(context.tree, revert.evidence, {assertion: revert.assertion,
+    witness: revert.witness, judged: context.judged});
+  if (evidence) problems.push(`${label}: ${evidence}`);
+  return problems;
+}
+
+function templateEntryProblems(context, entry) {
+  const id = isRecordObject(entry) ? entry.id : entry;
+  const template = context.catalog.get(id);
+  if (!template) {
+    return [`${RECORD.UNKNOWN}${id}${RECORD.ADMISSIBLE}${admissibleList(context.catalog)}`];
+  }
+  return [...template.evidence.filter((field) => !isAnswer(entry[field]))
+    .map((field) => `template ${id}${RECORD.LACKS}${field}${RECORD.DEMANDED}`),
+  ...revertProblems(context, id, entry.redOnRevert)];
+}
+
+// The code of an added line: nothing on a comment line, string literals
+// emptied, a trailing comment cut, so a trigger matches constructs, not words.
+function codeOf(line) {
+  if (COMMENT_LINE.test(line)) return '';
+  return line.replace(STRING_LITERAL, EMPTY_STRING_LITERAL).replace(TRAILING_COMMENT, '');
+}
+
+function triggeredProblems(context, named, addedSourceLines) {
+  const code = addedSourceLines.map(codeOf).join(LINE_SEPARATOR);
+  return [...context.catalog]
+    .filter(([id, template]) => template.trigger && !named.has(id) &&
+      template.trigger.test(code))
+    .map(([id]) => `${RECORD.TRIGGERED_PREFIX}${id}${RECORD.TRIGGERED_SUFFIX}`);
+}
+
+function sampleProblems(context, record) {
+  const sampled = record.sampled;
+  if (isRecordObject(sampled) && nonEmptyList(sampled.census) &&
+    nonEmptyList(sampled.history) && nonEmptyText(sampled.found)) return [];
+  const local = record.local;
+  if (!isRecordObject(local) || !nonEmptyText(local.proof)) return [RECORD.NO_SAMPLE];
+  const census = evidenceProblem(context.tree, local.census, {judged: context.judged});
+  return census ? [`${RECORD.LOCAL_CENSUS}${census}`] : [];
+}
+
+// The witness files the quest's sealed receipts name (seal doneWhen args.file).
+function receiptWitnesses(state, tree) {
+  const file = treePath(state.seal?.seal?.doneWhen?.args?.file);
+  const content = file === null ? null : tree.read(file);
+  const parsed = content === null ? null : JSON.parse(content);
+  const receipts = Array.isArray(parsed?.receipts) ? parsed.receipts : [];
+  return new Set(receipts.map((receipt) => receipt?.testFile).filter(nonEmptyText));
+}
+
+/**
+ * What the current approval of a production-surface change lacks in its
+ * record: the named templates (each admissible, each with its demanded fields
+ * and a red-on-revert bound to this change and tree), every triggered
+ * template, and the census sample or locality proof. Empty when the change
+ * touches no production path or the current verdict is not an approval
+ * (verificationProblems owns those). Pure over its inputs: land passes the
+ * working tree, the main admission a commit (see workingTreeReader and
+ * workingChangeSet for the shapes).
+ * @param {Array<Object>} logEntries the quest's log
+ * @param {{paths: string[], addedSourceLines: string[]}} changeSet full paths
+ * @param {{read: Function, list: Function}} tree
+ * @return {string[]}
+ */
+function verificationRecordProblems(logEntries, changeSet, tree) {
+  const state = questState(logEntries);
+  const last = state.lastVerification;
+  if (!changeSet.paths.some(isProductionPath) || !state.verificationIsCurrent ||
+    !isApproval(last)) return [];
+  const {catalog, problems} = verificationTemplates(tree);
+  if (problems.length > 0) return problems.map((problem) => `${RECORD.PREFIX}${problem}`);
+  const record = isRecordObject(last.record) ? last.record : {};
+  if (!nonEmptyList(record.templates)) {
+    return [`${RECORD.PREFIX}${RECORD.NO_TEMPLATE}${admissibleList(catalog)}`];
+  }
+  const context = {tree, catalog, judged: {entries: logEntries, verification: last},
+    sourcePaths: changeSet.paths.filter(isProductionPath),
+    changed: new Set(changeSet.paths), receipts: receiptWitnesses(state, tree)};
+  const named = new Set(record.templates.map((entry) => entry?.id));
+  return [...record.templates.flatMap((entry) => templateEntryProblems(context, entry)),
+    ...triggeredProblems(context, named, changeSet.addedSourceLines),
+    ...sampleProblems(context, record)]
+    .map((problem) => `${RECORD.PREFIX}${problem}`);
+}
+
+/**
+ * Read the record `note --verification ... --evidence <file>` embeds in the
+ * entry: a JSON object whose named templates are all admissible now (an
+ * unknown id is refused here, before anyone lands on it; land checks the rest
+ * against the change it lands). The record file itself may live anywhere.
+ * @param {string} root
+ * @param {string} file
+ * @return {{record: ?Object, problems: string[]}}
+ */
+function readVerificationRecord(root, file) {
+  const absolute = path.resolve(root, String(file));
+  if (!fs.existsSync(absolute)) return {record: null, problems: [`${RECORD.NO_FILE}${file}`]};
+  let record;
+  try {
+    record = JSON.parse(fs.readFileSync(absolute, TEXT_ENCODING));
+  } catch (error) {
+    return {record: null,
+      problems: [`${RECORD.FILE_PREFIX}${file} ${RECORD.NOT_JSON}${error.message}`]};
+  }
+  if (!isRecordObject(record)) {
+    return {record: null,
+      problems: [`${RECORD.FILE_PREFIX}${file} ${RECORD.NOT_JSON}${typeof record}`]};
+  }
+  const {catalog, problems} = verificationTemplates(workingTreeReader(root));
+  const unknown = (Array.isArray(record.templates) ? record.templates : [])
+    .map((entry) => (isRecordObject(entry) ? entry.id : entry))
+    .filter((id) => !catalog.has(id));
+  return {record, problems: [...problems, ...unknown.map((id) =>
+    `${RECORD.UNKNOWN}${id}${RECORD.ADMISSIBLE}${admissibleList(catalog)}`)]};
 }
 
 // --- coupled pairs (ported from the v1 terminal audit) -----------------------
@@ -544,6 +958,7 @@ const QUEST_TRAILER_FORMAT = '--format=%(trailers:key=Quest,valueonly,separator=
 const SUBJECT_FORMAT = '--format=%s';
 const EMPTY_TREE = Object.freeze(['hash-object', '-t', 'tree', '/dev/null']);
 const MERGE_BASES = Object.freeze(['merge-base', '--all']);
+const MERGE_BASE_ONE = Object.freeze(['merge-base']);
 const IS_ANCESTOR = Object.freeze(['merge-base', '--is-ancestor']);
 const VERIFY_COMMIT = Object.freeze(['rev-parse', '--verify', '--quiet']);
 const COMMIT_PEEL = '^{commit}';
@@ -724,9 +1139,11 @@ function isSolvedTerminal(entry) {
   return entry?.type === ENTRY_TYPE.TERMINAL && entry.status === QUEST_STATUS.SOLVED;
 }
 
-function recordedLogProblem(log, changeSet) {
+// The log a commit carries, judged by the one approval predicate land uses,
+// over that commit's change set and tree.
+function recordedLogProblem(log, changeSet, tree) {
   if (!questState(log).seal) return ADMISSION_PROBLEM.UNSEALED;
-  const problems = approvalProblems(log, changeSet);
+  const problems = approvalProblems(log, changeSet, tree);
   return problems.length > 0 ? problems.join(PROBLEM_SEPARATOR) : null;
 }
 
@@ -772,13 +1189,16 @@ function landingProblem(root, {parent, commit, rangeBase}, entries) {
     if (!terminal) continue;
     const prior = parseLogLines(String(before || ''));
     // The log's integrity first (bound, open, main's entries kept), then what
-    // its approval records over this commit's change: the approval must have
-    // reviewed that change (judged from the commit, never from the entry).
+    // its approval records over this commit's change and tree: the approval
+    // must have reviewed that change (judged from the commit, never from the
+    // entry).
     problem = terminalBindingProblem(terminal, entries) ||
       (!prior || questState(prior).terminal ? ADMISSION_PROBLEM.CLOSED : null) ||
       rebasedLogProblem(root, rangeBase, file, before) ||
       recordedLogProblem(parseLogLines(after.toString(TEXT_ENCODING)),
-        {paths: entries.map((entry) => entry.path), source: judgedSourceChange(entries)});
+        {...commitChangeSet(root, {from: parent, to: commit}),
+          source: judgedSourceChange(entries)},
+        commitTreeReader(root, commit));
     if (!problem) return null;
   }
   return problem;
@@ -829,7 +1249,16 @@ function ownerAuthorisationProblem(root, {sha, head}, logFile) {
     null : ADMISSION_PROBLEM.UNAUTHORISED;
 }
 
-function governingQuestProblem(root, row) {
+// What a merge carries onto main: its diff from where it meets the remote
+// base, with its own surface paths and those of the unlanded commits it brings
+// (real paths, never the literal surface).
+function mergeChangeSet(root, row, broughtPaths) {
+  const from = git(root, [...MERGE_BASE_ONE, row.base, row.sha], {allowFailure: true}).trim() ||
+    git(root, [...EMPTY_TREE]).trim();
+  return commitChangeSet(root, {from, to: row.sha, extraPaths: [...row.paths, ...broughtPaths]});
+}
+
+function governingQuestProblem(root, row, broughtPaths) {
   const id = git(root, [...ONE_COMMIT_LOG, QUEST_TRAILER_FORMAT, row.sha]).trim();
   if (!id) return ADMISSION_PROBLEM.NO_QUEST;
   const directory = `${QUESTS_DIR}${PATH_SEGMENT}${id}${PATH_SEGMENT}`;
@@ -837,13 +1266,16 @@ function governingQuestProblem(root, row) {
   if (!gitBlob(root, row.sha, `${directory}${QUEST_FILE}`) || !log) {
     return `${ADMISSION_PROBLEM.UNKNOWN_QUEST} (${id})`;
   }
-  const problem = recordedLogProblem(log, {paths: [...PRODUCTION_SURFACE], source: MERGE_ROUTE}) ||
+  const problem = recordedLogProblem(log,
+    {...mergeChangeSet(root, row, broughtPaths), source: MERGE_ROUTE},
+    commitTreeReader(root, row.sha)) ||
     ownerAuthorisationProblem(root, row, `${directory}${LOG_FILE}`);
   return problem ? `${problem} (${id})` : null;
 }
 
-function mergeAdmissionProblem(root, row, resolve) {
-  return exactReceiptProblem(root, row.sha, resolve) || governingQuestProblem(root, row);
+function mergeAdmissionProblem(root, row, {resolve, broughtPaths}) {
+  return exactReceiptProblem(root, row.sha, resolve) ||
+    governingQuestProblem(root, row, broughtPaths);
 }
 
 // The commits in the push this merge brings: reachable from some parent and
@@ -862,7 +1294,8 @@ function admitMerges(root, verdicts, resolve) {
     const unlanded = broughtCommits(root, verdict, inRange)
       .filter((sha) => verdicts.get(sha).problem);
     if (!verdict.problem && unlanded.length === 0) continue;
-    const problem = mergeAdmissionProblem(root, verdict, resolve);
+    const problem = mergeAdmissionProblem(root, verdict, {resolve,
+      broughtPaths: unlanded.flatMap((sha) => verdicts.get(sha).paths)});
     if (problem) {
       verdict.problem = unlanded.length === 0 ? problem : `${ADMISSION_PROBLEM.BRINGS_PREFIX}` +
         `${unlanded.length}${ADMISSION_PROBLEM.BRINGS_SUFFIX}${problem}`;
@@ -994,6 +1427,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 export {
   SOLVE_PREFIX, approvalProblems, canonicalImportGraphProblem,
   changedPaths, coupledPairProblems, epicScopeProblems, git, headSha, pendingSourceChange,
-  requiresVerification, reviewedSourceRecord, stageablePaths, stagedSourceChange,
-  staticQualityProblems,
+  readVerificationRecord, requiresVerification, reviewedSourceRecord, stageablePaths,
+  stagedSourceChange, staticQualityProblems, verificationRecordProblems, workingChangeSet,
+  workingTreeReader,
 };
