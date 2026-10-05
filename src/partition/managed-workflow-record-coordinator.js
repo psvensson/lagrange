@@ -50,7 +50,14 @@ const REFUSED_ENTRY = Object.freeze({
   UPSERT_PARTICIPANT: 'upsertParticipant',
   EXECUTE_PARTICIPANT_STAGE: 'executeParticipantStage',
 });
+// The answers under which an owner-recorded outcome is on the record.
+const OWNER_OUTCOME_LANDED = Object.freeze(new Set([
+  PARTICIPANT_ACK_RESULT.ACCEPTED,
+  PARTICIPANT_ACK_RESULT.DUPLICATE,
+]));
 const COORDINATOR_ERROR_MSG = Object.freeze({
+  OUTCOME_REFUSED: 'Owner-recorded workflow outcome refused by the record; ' +
+    'the step is not complete and stays re-drivable',
   ACK_NOT_LANDED: 'Participant acknowledgement did not land for ',
   PRE_BUILT: 'Workflow record mutation refused: pass a change function of ' +
     'the stored record, never a pre-built update (',
@@ -298,6 +305,37 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
       recordChangeOutcome: write.outcome,
       superseded: write.outcome === RECORD_CHANGE_OUTCOME.SUPERSEDED,
       unacknowledged: [], acknowledgedReplicaIds: []});
+  }
+
+  /**
+   * An owner-recorded outcome (dissolved, dissolution failed, target
+   * provisioned): an owned acknowledgement whose answer is CHECKED. Accepted,
+   * or a duplicate of the recorded status, lands; any other answer is typed
+   * and loud - one ERROR naming the workflow, the fences and the reason, and
+   * a thrown error the step treats as incomplete (never dispatched-and-done).
+   * @param {string} workflowId
+   * @param {Object} ack
+   * @return {Promise<Object>} The accepted acknowledgement result.
+   */
+  async acknowledgeOwnerOutcome(workflowId, ack) {
+    const result = await this.acknowledgeParticipant(workflowId, ack,
+      {owned: true});
+    if (OWNER_OUTCOME_LANDED.has(result?.result)) {
+      return result;
+    }
+    const fields = {workflowId,
+      participantKey: ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY],
+      status: ack[PARTICIPANT_ACK_FIELD.STATUS], result: result?.result,
+      reason: result?.reason ?? null,
+      receivedFenceToken: ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] ?? null,
+      currentFenceToken: result?.currentFenceToken ?? null,
+      currentStatus: result?.currentStatus ?? null};
+    this.recordOwner.logger?.error?.(COORDINATOR_ERROR_MSG.OUTCOME_REFUSED,
+      fields);
+    throw Object.assign(new Error(COORDINATOR_ERROR_MSG.OUTCOME_REFUSED +
+      ` (${workflowId}: ${fields.status} ${fields.result})`), {
+      acknowledgementRefused: fields, superseded: false, unacknowledged: [],
+      acknowledgedReplicaIds: []});
   }
 
   // The typed rejection (and its diagnostic) of a refused acknowledgement.

@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417790,
-        "sha256": "c1f24b166caa82331bbda18c129bf4ed9707e187014a2cba695d6b57383f41b6"
+        "bytes": 418245,
+        "sha256": "e2d0e4adb6022bf264c3c62d611be405c233955671258d0efabaa28628bb2e3c"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2647381,
-        "sha256": "ba4e04befd608b942bdf1d8d3f24dffc733cd77fc9841d69e9afa7b38a73f559"
+        "bytes": 2648943,
+        "sha256": "e12a3d7b51f2bad8dc2e8d7e26760342a4c2fd8896d76d267eec8cb298951660"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "d031ef6740a3ad5267520a7439a251af610e6522361e47096126937abc762128"
+    "inputDigest": "09a52687aacc8671827ad636a4913bcd2e53f047bf09fc0ba748b75d10df80f6"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417790,
-        "sha256": "c1f24b166caa82331bbda18c129bf4ed9707e187014a2cba695d6b57383f41b6"
+        "bytes": 418245,
+        "sha256": "e2d0e4adb6022bf264c3c62d611be405c233955671258d0efabaa28628bb2e3c"
       },
-      "declaredCount": 1768,
-      "observedCount": 1768,
-      "assignedCount": 1768
+      "declaredCount": 1770,
+      "observedCount": 1770,
+      "assignedCount": 1770
     },
     "cognitive": {
       "identity": {
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2647381,
-        "sha256": "ba4e04befd608b942bdf1d8d3f24dffc733cd77fc9841d69e9afa7b38a73f559"
+        "bytes": 2648943,
+        "sha256": "e12a3d7b51f2bad8dc2e8d7e26760342a4c2fd8896d76d267eec8cb298951660"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "436fce66a0764b4e3f83184a0acc6812d55145cd6093692c7c9f692fe65b87f2",
-      "moduleCount": 5045,
-      "edgeCount": 24867,
+      "sourceDigest": "832596e04ec5eabfd8f78df48fbc131fd6922e688fc49af4910ec8c30e336144",
+      "moduleCount": 5047,
+      "edgeCount": 24884,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2522,
-    "assignedSignalCount": 2522,
-    "uniqueAssignmentCount": 2522,
-    "digest": "f4eb81e11d5b8a18d74b4ee66b31912ceb16a88170a4fbe63c950db1db7df35d"
+    "sourceSignalCount": 2524,
+    "assignedSignalCount": 2524,
+    "uniqueAssignmentCount": 2524,
+    "digest": "dde979feb86fdf7361484ae691044c66e0cc45d1218598fd8f105122dd2f4557"
   },
   "signalCounts": {
     "cognitive": 153,
-    "complexity": 1768,
+    "complexity": 1770,
     "duplication": 515,
     "fileSize": 47,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1291,
+    "filesWithDebt": 1293,
     "rankedBoundaryCount": 114,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 94,
@@ -735,6 +735,34 @@
       ]
     },
     {
+      "key": "area:test/partition",
+      "owner": null,
+      "boundary": "test/partition",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/partition"
+      ],
+      "fileCount": 26,
+      "signalCount": 28,
+      "complexity": 7,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 1273,
+      "cloneTouches": 45,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 49,
+      "importOut": 177,
+      "score": 155.3,
+      "topPaths": [
+        "test/partition/median-split-point.property.test.js",
+        "test/partition/cdc-generation.property.test.js",
+        "test/partition/extracted-module-api-equivalence.property.test.js",
+        "test/partition/raft-leadership-stability.property.test.js",
+        "test/partition/complete-peer-list.property.test.js"
+      ]
+    },
+    {
       "key": "semantic:message_router_owner/message_router_workflow",
       "owner": "message_router_owner",
       "boundary": "message_router_workflow",
@@ -760,34 +788,6 @@
         "src/transport/message-router-outbound-delivery-registry.js",
         "src/transport/message-router-stats-shutdown.js",
         "src/transport/message-router-connection-authority.js"
-      ]
-    },
-    {
-      "key": "area:test/partition",
-      "owner": null,
-      "boundary": "test/partition",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/partition"
-      ],
-      "fileCount": 25,
-      "signalCount": 27,
-      "complexity": 6,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 1273,
-      "cloneTouches": 45,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 46,
-      "importOut": 169,
-      "score": 151.3,
-      "topPaths": [
-        "test/partition/median-split-point.property.test.js",
-        "test/partition/cdc-generation.property.test.js",
-        "test/partition/extracted-module-api-equivalence.property.test.js",
-        "test/partition/raft-leadership-stability.property.test.js",
-        "test/partition/complete-peer-list.property.test.js"
       ]
     },
     {
@@ -854,18 +854,18 @@
       "ownerAreas": [
         "src/partition"
       ],
-      "fileCount": 16,
-      "signalCount": 26,
-      "complexity": 20,
+      "fileCount": 17,
+      "signalCount": 27,
+      "complexity": 21,
       "cognitive": 4,
       "oversizedFiles": 0,
       "duplicatedLines": 50,
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 56,
-      "importOut": 104,
-      "score": 117,
+      "importIn": 59,
+      "importOut": 108,
+      "score": 121,
       "topPaths": [
         "src/partition/partition-sql-parser.js",
         "src/partition/partition-cdc-delivery.js",

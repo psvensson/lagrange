@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 154,
+    "storage-partition": 156,
     "storage-raft": 99,
     "test-infrastructure": 139,
     "transactions": 15,
     "transport-messaging": 85,
     "wasm-toolchain": 57
   },
-  "censusSize": 2212,
-  "digest": "fnv1a32-cc331b17",
+  "censusSize": 2214,
+  "digest": "fnv1a32-40b76613",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-dda0f97b",
+  "observationDigest": "fnv1a32-9d4c34dc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -992,6 +992,7 @@
     "test/integration/leader-routable-system-writes.integration.test.js": "query-sql",
     "test/integration/load-channel-resilience.integration.test.js": "transport-messaging",
     "test/integration/managed-split-admission-reliability.integration.test.js": "storage-partition",
+    "test/integration/managed-split-writes-after-cutover.integration.test.js": "storage-partition",
     "test/integration/membership-consistency.integration.test.js": "bootstrap-membership",
     "test/integration/message-group-multi-join-formation.integration.test.js": "transport-messaging",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "services-runtime",
@@ -1278,6 +1279,7 @@
     "test/partition/workflow-fencing-wiring.test.js": "storage-partition",
     "test/partition/workflow-record-interleaving.property.test.js": "storage-partition",
     "test/partition/workflow-record-lagging-view.test.js": "storage-partition",
+    "test/partition/workflow-record-projection-drop.test.js": "storage-partition",
     "test/partition/workflow-record-reconcile.test.js": "storage-partition",
     "test/partition/workflow-record-same-owner-race.test.js": "storage-partition",
     "test/partition/workflow-record-stale-owner.test.js": "storage-partition",
@@ -6640,6 +6642,18 @@
         "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
+    "test/integration/managed-split-writes-after-cutover.integration.test.js": {
+      "files": [
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/embedded-lagrange.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "wit"
+      ]
+    },
     "test/integration/membership-consistency.integration.test.js": {
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js",
@@ -8077,6 +8091,11 @@
     "test/partition/workflow-record-lagging-view.test.js": {
       "files": [
         "src/partition/managed-workflow-ownership-core.js"
+      ]
+    },
+    "test/partition/workflow-record-projection-drop.test.js": {
+      "files": [
+        "src/workflow/workflow-constants.js"
       ]
     },
     "test/partition/workflow-record-reconcile.test.js": {

@@ -197,7 +197,7 @@ class ManagedMergeWorkflowDissolutionMethods {
       if (!this.isDissolutionWitnessPersisted(deleteWitness)) {
         throw new Error(MANAGED_MERGE_LOG_MSG.DISSOLUTION_WITNESS_MISSING);
       }
-      await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
+      await this.workflowCoordinator.acknowledgeOwnerOutcome(workflowId, {
         [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
           buildMergeSourceParticipantKey(sourcePartitionId),
         [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
@@ -205,7 +205,7 @@ class ManagedMergeWorkflowDissolutionMethods {
         // participant checkpoint (group-retirement-members.js), kept as is.
         [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.SOURCE_DISSOLVED,
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
-      }, {owned: true});
+      });
       this.groupRetirementRedrive.settle(workflowId, sourcePartitionId);
       this.logger.info(MANAGED_MERGE_LOG_MSG.DISSOLUTION_DISPATCHED, {
         workflowId,
@@ -224,13 +224,19 @@ class ManagedMergeWorkflowDissolutionMethods {
       // A superseded owner records nothing (the record is another owner's):
       // its re-drive is told so and stops.
       if (error?.superseded !== true) {
-        await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
+        await this.workflowCoordinator.acknowledgeOwnerOutcome(workflowId, {
           [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
             buildMergeSourceParticipantKey(sourcePartitionId),
           [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
           [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.DISSOLUTION_FAILED,
           [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
-        }, {owned: true});
+        }).catch((ackError) => {
+          // Not recorded (typed and logged by the coordinator, or the
+          // workflow is gone): the re-drive below still runs.
+          this.logger.error(MANAGED_MERGE_LOG_MSG.DISSOLUTION_FAILED, {workflowId,
+            sourcePartitionId, failureUnrecorded: true,
+            error: ackError?.message || ackError});
+        });
       }
       this.reportIncompleteMergeRetirement(workflowId, sourcePartitionId,
         error, () => this.finalizeMergeDissolutionIfReady(workflowId));

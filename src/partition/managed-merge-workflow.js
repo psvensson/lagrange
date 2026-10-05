@@ -693,12 +693,12 @@ class ManagedMergeWorkflow {
       routingReadinessDimension:
         MERGE_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
     });
-    await this.workflowCoordinator.acknowledgeParticipant(input.workflowId, {
+    await this.workflowCoordinator.acknowledgeOwnerOutcome(input.workflowId, {
       [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
         MERGE_PARTICIPANT_PREFIX.MERGED_TARGET,
       [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.TARGET_PROVISIONED,
       [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
-    }, {owned: true});
+    });
 
     const backfilling = await this.workflowCoordinator.updateWorkflow(
       input.workflowId, (current) => ({...current,

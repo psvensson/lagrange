@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2195,
+    "ordinary": 2197,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2212,
-  "digest": "fnv1a32-5bc09bfc",
+  "censusSize": 2214,
+  "digest": "fnv1a32-6820cd14",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -972,6 +972,7 @@
     "test/integration/leader-routable-system-writes.integration.test.js": "ordinary",
     "test/integration/load-channel-resilience.integration.test.js": "ordinary",
     "test/integration/managed-split-admission-reliability.integration.test.js": "ordinary",
+    "test/integration/managed-split-writes-after-cutover.integration.test.js": "ordinary",
     "test/integration/membership-consistency.integration.test.js": "ordinary",
     "test/integration/message-group-multi-join-formation.integration.test.js": "ordinary",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "ordinary",
@@ -1258,6 +1259,7 @@
     "test/partition/workflow-fencing-wiring.test.js": "ordinary",
     "test/partition/workflow-record-interleaving.property.test.js": "ordinary",
     "test/partition/workflow-record-lagging-view.test.js": "ordinary",
+    "test/partition/workflow-record-projection-drop.test.js": "ordinary",
     "test/partition/workflow-record-reconcile.test.js": "ordinary",
     "test/partition/workflow-record-same-owner-race.test.js": "ordinary",
     "test/partition/workflow-record-stale-owner.test.js": "ordinary",

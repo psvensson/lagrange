@@ -120,6 +120,22 @@ from a decoded record. Nothing durable is derived from the projection for a
 write: callers may read it (plans, logs, in-memory early exits) but every
 write is a change applied to the record at its turn.
 
+The in-memory workflow may therefore be DROPPED AT ANY TIME without
+affecting any write: execute() releasing it in `finally`, a restart, a
+relinquish, or any test dropping it between steps. Every later change starts
+from the acknowledged record (or, with no lineage, a read that only a CAS can
+confirm), so the fence, owner, lease, marks, participants and checkpoints a
+write carries always come from the record. Witnesses:
+workflow-record-projection-drop.test.js (a healthy split and merge driven
+with the projection dropped before every step write the identical durable
+sequence and reach the terminal clear) and the recovery-between-every-
+acknowledgement case of managed-split-workflow-terminal-lifecycle.test.js.
+The lost-fence defect of the writes-after-split diagnosis (recovery dropped
+the claim triple; SOURCE_DISSOLVED was stamped fence 0 and silently refused)
+cannot recur: no write takes a fence from memory, and every owner-recorded
+outcome's answer is checked (acknowledgeOwnerOutcome: a refusal is one typed
+ERROR and an incomplete, re-drivable step).
+
 ## Writers (all converted)
 
 | Writer | Change and precondition |
@@ -130,7 +146,8 @@ write is a change applied to the record at its turn.
 | updateWorkflow (deferral, admission denied, PREPARING, BACKFILLING, failure, post-admission deferral, merge provisioning) | TRANSITION: owner = me at fence; delta merged onto the record's metadata |
 | provisioning mark flip | TRANSITION: owned; DISPATCHED already = UNCHANGED; else mark -> DISPATCHED |
 | transitionStep (phase advance, cutover, abort) | TRANSITION: record fence/owner = the step's renewed ownership, lease live; the step's own precondition (predecessor states, every source caught up for the cutover) re-evaluated on the record |
-| acknowledgeParticipant (owner and non-owner) | TRANSITION: this workflow; participant exists in the record; fence/duplicate/graph checks against the RECORD's participant |
+| acknowledgeParticipant (a participant's own ack) | TRANSITION: this workflow; participant exists in the record; fence/duplicate/graph checks against the RECORD's participant |
+| owner-recorded outcomes (SOURCE_DISSOLVED, DISSOLUTION_FAILED, TARGET_PROVISIONED) | the same, OWNED (owner at its fence); answer checked: anything but accepted/duplicate is a typed ERROR and an incomplete step |
 | group-retirement progress (frozen set, answered ids, never-provisioned) | TRANSITION: owned; participant fence rule; frozen set immutable once written; answered/dissolved ids only grow; never-provisioned sticky |
 | terminal clear | CLEAR: owned at fence, state is the terminal state the caller cleared from |
 | merge owned-abort fallback, same-owner resync retry | DELETED (they existed for the same-owner race the queue removes) |
