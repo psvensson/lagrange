@@ -210,17 +210,22 @@ function isToleratedUnderReplication(underTarget, tolerance) {
     (entry) => entry.voters >= tolerance.minVoters);
 }
 
-// Partitions the policy read knows (a target, or a row without one) that
-// the caller did not claim: named in the record, never silently dropped.
-function collectUnclaimedPartitionIds(input) {
+// Every partition the policy read knows (a target, or a row without one).
+function collectPolicyPartitionIds(input) {
   const known = new Set(input.policyPartitionIds || []);
   if (input.voterTargets instanceof Map) {
     for (const partitionId of input.voterTargets.keys()) {
       known.add(partitionId);
     }
   }
-  return arraySort(arrayFilter([...known],
-    (partitionId) => !input.expectedPartitionIds.has(partitionId)));
+  return arraySort([...known]);
+}
+
+// Partitions the policy read knows that the caller did not claim: named in
+// the record, never silently dropped.
+function collectUnclaimedPartitionIds(input) {
+  return arrayFilter(collectPolicyPartitionIds(input),
+    (partitionId) => !input.expectedPartitionIds.has(partitionId));
 }
 
 function decideVoterTargetState(findings, input) {
@@ -255,7 +260,8 @@ function decideVoterTargetState(findings, input) {
  *   policyPartitionIds?: every partition id the policy read returned}
  * @return {Object} frozen {state, satisfied, underTarget, overTarget,
  *   overCeiling, evidenceAbsent, voterCeiling, toleranceReason,
- *   toleranceMinVoters, unclaimedPartitionIds}
+ *   toleranceMinVoters, unclaimedPartitionIds, claimedPartitionIds,
+ *   policyPartitionIds}
  */
 function classifyVoterTargets(input) {
   const normalized = {
@@ -269,6 +275,10 @@ function classifyVoterTargets(input) {
   const tolerated = state === VOTER_TARGET_STATE.TOLERATED;
   return Object.freeze({
     ...findings,
+    // The two sets the verdict covers: what it judged, and everything the
+    // authoritative partitions read returned (certification compares them).
+    claimedPartitionIds: arraySort([...normalized.expectedPartitionIds]),
+    policyPartitionIds: collectPolicyPartitionIds(normalized),
     satisfied: SATISFIED_STATES.has(state),
     state,
     toleranceMinVoters: tolerated ? input.tolerance.minVoters : null,

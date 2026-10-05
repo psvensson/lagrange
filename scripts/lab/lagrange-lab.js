@@ -11,6 +11,7 @@ import {
 } from './state.js';
 import {commandExists, run} from './process.js';
 import {doctorHarnessNodes, runHarness} from './harness.js';
+import {keepCertificationEvidence} from './certification-preflight.js';
 import {initK3sServer, joinK3sNode, k3sKubectl, syncK3sLabels} from './k3s.js';
 import {configureRunner, runnerLabels} from './runner.js';
 import {
@@ -54,7 +55,11 @@ const USAGE = [
   '  lab runner configure NAME --repo OWNER/PRIVATE-LAB-REPO [--service]\n',
   '  lab harness doctor [--nodes a,b,c]\n',
   '  lab harness run [SCENARIO] [--base CONFIG] [--nodes a,b,c] ',
-  '[--nodes-per-host N] [--dry-run] [-- ...harness args]\n',
+  '[--nodes-per-host N] [--certify SHA [--quest ID]] [--dry-run] [-- ...harness args]\n',
+  '      (--certify SHA: a certification run - one node per distinct ',
+  'machine, a clean checkout at SHA; with --dry-run its pre-flight; see ',
+  'docs/development/home-lab.md)\n',
+  '  lab harness keep-evidence RUN_DIR [--to DIR]\n',
   '  lab k3s init-server NAME [--version VERSION]\n',
   '  lab k3s join NAME --server SERVER\n',
   '  lab k3s status --server SERVER\n',
@@ -105,6 +110,7 @@ const ACTION = Object.freeze({
   CORDON: 'cordon',
   UNCORDON: 'uncordon',
   DRAIN: 'drain',
+  KEEP_EVIDENCE: 'keep-evidence',
 });
 const FLAG = Object.freeze({
   PREFIX: '--',
@@ -113,6 +119,9 @@ const FLAG = Object.freeze({
   K3S_NODE: 'k3s-node',
   NODES_PER_HOST: 'nodes-per-host',
   DRY_RUN: 'dry-run',
+  CERTIFY: 'certify',
+  QUEST: 'quest',
+  TO: 'to',
 });
 const FLAG_PREFIX_LENGTH = 2;
 const ARGV_COMMAND_OFFSET = 2;
@@ -150,6 +159,7 @@ const ERROR_TEXT = Object.freeze({
   NO_LANE_FILES: ' has no files in lane ',
   SPLIT_OR_ON: '--split spreads over every ready machine and --on names one: take one or the other',
   UNKNOWN_FLAG: 'unknown flag --',
+  NO_CERTIFY_SHA: '--certify needs the full commit sha it certifies',
   FLAGS_TAKEN: ': lab test takes --',
 });
 // How the corpus profile's npm script reads: `node <runner> <lane filters>`.
@@ -420,11 +430,18 @@ async function commandRunner(action, args) {
 }
 
 async function commandHarness(action, args) {
+  if (action === ACTION.KEEP_EVIDENCE) {
+    await keepCertificationEvidence({runDir: args.positional[POSITIONAL.NAME],
+      to: typeof args.flags[FLAG.TO] === 'string' ? args.flags[FLAG.TO] : undefined});
+    return;
+  }
   const state = await loadState();
   const nodes = selectNodesByRole(state, ROLE.HARNESS, csv(args.flags.nodes));
   if (action === ACTION.DOCTOR) return doctorHarnessNodes(nodes);
   if (action !== ACTION.RUN) throw new Error(`Unknown harness action: ${action}`);
   const scenario = args.positional[POSITIONAL.NAME] || null;
+  const certify = args.flags[FLAG.CERTIFY];
+  if (certify === true) throw new Error(ERROR_TEXT.NO_CERTIFY_SHA);
   await runHarness({
     nodes,
     scenario,
@@ -434,6 +451,8 @@ async function commandHarness(action, args) {
       undefined,
     dryRun: args.flags[FLAG.DRY_RUN] === true,
     extraArgs: args.passthrough,
+    certify: typeof certify === 'string' ? certify : null,
+    quest: typeof args.flags[FLAG.QUEST] === 'string' ? args.flags[FLAG.QUEST] : null,
   });
 }
 

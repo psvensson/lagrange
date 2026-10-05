@@ -11,6 +11,7 @@ import {tmpdir} from 'node:os';
 import {basename, dirname, join} from 'node:path';
 
 import {
+  CLI,
   DISTRIBUTED_EXECUTION_ENV,
   DISTRIBUTED_EXECUTION_TARGET,
   DISTRIBUTED_MATRIX_PROFILE,
@@ -31,6 +32,9 @@ import {
   outcomeOfRunnerExit,
   resolveRunExitCode,
 } from '../test/distributed/harness/scenario-outcome.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../test/distributed/harness/certification-evidence-statement.js';
 
 const MATRIX_RUNNER = 'test/distributed/run.js';
 const MATRIX_SUMMARIZER = 'scripts/summarize-harness-runs.js';
@@ -73,10 +77,14 @@ const MATRIX_FLAG = Object.freeze({
   DRY_RUN: '--dry-run',
   HELP: '--help',
 });
+// The matrix never certifies: a certification run is one scenario through
+// `lab harness run --certify SHA` (scenario-certification.js), so the
+// runner's --certify is reserved here and refused as a passthrough.
 const MATRIX_RESERVED_PASSTHROUGH = Object.freeze([
   MATRIX_RUNNER_FLAG_CONFIG,
   MATRIX_RUNNER_FLAG_SCENARIO,
   MATRIX_RUNNER_FLAG_OUTPUT,
+  CLI.ARG_CERTIFY,
 ]);
 const MATRIX_USAGE = [
   'Distributed scenario matrix\n\n',
@@ -433,6 +441,11 @@ async function main() {
       `Distributed matrix: ${passed} passed, ${failed.length} failed, ` +
       `${refused.length} refused (not run), ` +
       `${plan.length} total${MATRIX_NEWLINE}`,
+    );
+    // The matrix never requests certification (--certify): say so.
+    process.stdout.write(
+      `Distributed matrix: ${NOT_CERTIFICATION_EVIDENCE.statement}` +
+      MATRIX_NEWLINE,
     );
     if (!args.dryRun) {
       await summarize(reportDirectory);

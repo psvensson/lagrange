@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2672137,
-        "sha256": "c9be9b5546158c49a5992c61a85e250acdaec51cc3334b91fc447ddaf5e538a3"
+        "bytes": 2681513,
+        "sha256": "452c603e2820d72157c14cf19acd00fb72d732ede24aee55e8134cd721ac3bed"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "d19954354d2ec31d837bd13496a588cbd28e1be0a2926dcf3c15a721b9de0dd1"
+    "inputDigest": "0ae7fde1a1bfd1f074e794f3f9cfbb6018d1fc8b96399e086b092cefcf068a37"
   },
   "reconciliation": {
     "complexity": {
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2672137,
-        "sha256": "c9be9b5546158c49a5992c61a85e250acdaec51cc3334b91fc447ddaf5e538a3"
+        "bytes": 2681513,
+        "sha256": "452c603e2820d72157c14cf19acd00fb72d732ede24aee55e8134cd721ac3bed"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "6b8118ab2734d073f8a348e14cacb56a2a440fd7a0e8360b9add0a21c2de83ef",
-      "moduleCount": 5086,
-      "edgeCount": 25082,
+      "sourceDigest": "86ec25e129feb8249ab85547f3490deaff448b90a3d92c5c53ca451945b91fad",
+      "moduleCount": 5097,
+      "edgeCount": 25200,
       "unresolvedCount": 36
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2510,
     "assignedSignalCount": 2510,
     "uniqueAssignmentCount": 2510,
-    "digest": "94fc5ee84992eb656517c4dff0edadbdf8e1a457faefadebc2a4aec733f417c4"
+    "digest": "7b7d0b00effc8f5de2f2e190393fb9564def6bc3a1a691ec846b6276e8222d3f"
   },
   "signalCounts": {
     "cognitive": 152,
@@ -219,8 +219,8 @@
       "cloneTouches": 307,
       "cycleGroups": 0,
       "lintExclusions": 10,
-      "importIn": 356,
-      "importOut": 617,
+      "importIn": 364,
+      "importOut": 620,
       "score": 2855.1,
       "topPaths": [
         "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
@@ -387,7 +387,7 @@
       "cloneTouches": 8,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 72,
+      "importIn": 73,
       "importOut": 139,
       "score": 561.4,
       "topPaths": [
@@ -1644,7 +1644,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 1,
-      "importOut": 3,
+      "importOut": 5,
       "score": 32,
       "topPaths": [
         "test/distributed/run-runtime-helpers.js"
@@ -2186,8 +2186,8 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 3,
-      "importOut": 22,
+      "importIn": 4,
+      "importOut": 24,
       "score": 12,
       "topPaths": [
         "test/distributed/run.js"
@@ -2964,7 +2964,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 1,
+      "importIn": 2,
       "importOut": 0,
       "score": 4,
       "topPaths": [

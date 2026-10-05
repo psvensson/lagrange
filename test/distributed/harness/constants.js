@@ -806,6 +806,12 @@ const DEBUG_LOGS_ENV_VAR = 'LAGRANGE_DEBUG_LOGS';
 // unperturbed behavior.
 const ARG_CAPTURE_LOGS = '--capture-logs';
 const CAPTURE_LOGS_ENV_VAR = 'LAGRANGE_CAPTURE_LOGS';
+// Request a CERTIFICATION verdict for the exact commit named by the value
+// (40 hex digits): test/distributed/harness/scenario-certification.js.
+const ARG_CERTIFY = '--certify';
+// The certification run directory the lab harness created (with its
+// started.json) before holding any node: certification-evidence-archive.js.
+const ARG_CERTIFY_RUN_DIR = '--certify-run-dir';
 
 const CLI = Object.freeze({
   DEFAULT_CONFIG: DEFAULT_CONFIG_PATH,
@@ -822,6 +828,8 @@ const CLI = Object.freeze({
   DEBUG_LOGS_ENV_VAR,
   ARG_CAPTURE_LOGS,
   CAPTURE_LOGS_ENV_VAR,
+  ARG_CERTIFY,
+  ARG_CERTIFY_RUN_DIR,
 });
 
 // --- Exit Codes ---
@@ -831,11 +839,16 @@ const EXIT_FAILURE = 1;
 // config's host topology cannot carry its claim). Never 0: a refused run
 // is not a pass; never 1: it is not a failure (scenario-outcome.js).
 const EXIT_REFUSED = 3;
+// Nothing failed or was refused, but a run that REQUESTED certification
+// (--certify) did not obtain `certified: true` for every scenario
+// (scenario-certification.js). Never 0: a pass is not certification.
+const EXIT_NOT_CERTIFIED = 4;
 
 const EXIT_CODES = Object.freeze({
   SUCCESS: EXIT_SUCCESS,
   FAILURE: EXIT_FAILURE,
   REFUSED: EXIT_REFUSED,
+  NOT_CERTIFIED: EXIT_NOT_CERTIFIED,
 });
 
 export {

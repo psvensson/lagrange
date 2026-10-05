@@ -1,4 +1,5 @@
 import {SCENARIO_OUTCOME, scenarioOutcomeOf} from './scenario-outcome.js';
+import {NOT_CERTIFICATION_EVIDENCE} from './certification-evidence-statement.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -755,6 +756,9 @@ function assessShipReadiness(summary, options = {}) {
   );
 
   return {
+    // Ship readiness measures load SLOs over validation runs; it is not
+    // certification (scenario-certification.js) and says so.
+    certification: NOT_CERTIFICATION_EVIDENCE,
     decision: failedCriteria.length === ZERO ? 'ship' : 'no-ship',
     verdict: rule.verdict,
     verdictReason: rule.reason,

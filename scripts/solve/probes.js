@@ -5,14 +5,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {CHECKS_DIR, PROBE} from './schema.js';
+import {CHECKS_DIR, ENTRY_TYPE, FINDING_KIND, PROBE} from './schema.js';
 import {
   SCENARIO_OUTCOME,
   scenarioOutcomeOf,
 } from '../../test/distributed/harness/scenario-outcome.js';
+import {
+  evaluateCertificationStreakFromEvidence,
+  parseCertificationRecords,
+} from '../../test/distributed/harness/certification-evidence-streak.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../../test/distributed/harness/certification-evidence-statement.js';
 
 const TEXT_ENCODING = 'utf8';
 const REPORT_DIR = 'test-output/reports';
+const CERTIFICATION_EVIDENCE_DIR = 'test-output/certification';
+const LOG_LINE_SEPARATOR = '\n';
 const REPORT_SUFFIX = '.report.json';
 const RECEIPT_SCHEMA = 'test-receipt/1';
 const RECEIPT_PASS = 'pass';
@@ -45,6 +54,7 @@ const REASON = Object.freeze({
   RECEIPT_EMPTY: 'receipt file carries no receipts',
   REQUIRED_MISSING: 'probe args name no required receipts',
   NO_REPORTS: 'no report for the scenario',
+  NO_CERTIFICATION_EVIDENCE: 'no archived certification evidence for the scenario',
   REFUSED_NOT_RUN: 'refused_not_run',
   ORACLE_MISSING: 'oracle file missing or malformed',
   SCRIPT_OUTSIDE_CHECKS: `script probes live under ${CHECKS_DIR}/`,
@@ -231,6 +241,60 @@ function listRuns(dir, scenario, limit) {
     .localeCompare(String(left.data.timestamp || '')));
 }
 
+// `certification: true`: the streak counts only `certified: true` runs at
+// ONE identical sha, read from the durable, digest-verified certification
+// evidence (certification-evidence-streak.js: refused = not a sample, an
+// uncertified pass = not a certification sample; a FAIL, a failed
+// certification, or a run directory that does not verify (interrupted,
+// partial, edited) resets; another sha ends it; one run never counts
+// twice). `recordedLog` names the quest log whose `solve note --kind
+// evidence` certification-run lines are cross-checked: a recorded run
+// whose directory is gone or whose digest differs fails, an unrecorded
+// certified run is not counted, and without the log the probe is never
+// done. `logsByDigest: true` reads committed copies (verdict files only).
+function readRecordedCertificationRuns(root, recordedLog) {
+  if (!recordedLog) return null;
+  let text;
+  try {
+    text = fs.readFileSync(path.resolve(root, String(recordedLog)), TEXT_ENCODING);
+  } catch (_error) {
+    return null;
+  }
+  const findings = [];
+  for (const line of text.split(LOG_LINE_SEPARATOR)) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry?.type === ENTRY_TYPE.FINDING && entry.kind === FINDING_KIND.EVIDENCE) {
+        findings.push(entry.text);
+      }
+    } catch (_error) {
+      // A torn or blank line carries no record.
+    }
+  }
+  return parseCertificationRecords(findings);
+}
+
+function measureCertificationStreak(root, args, scenario, consecutive) {
+  const evidenceRoot = path.resolve(root,
+    String(args.evidenceDir || CERTIFICATION_EVIDENCE_DIR));
+  const streak = evaluateCertificationStreakFromEvidence({consecutive,
+    logsByDigest: args.logsByDigest === true,
+    recorded: readRecordedCertificationRuns(root, args.recordedLog),
+    root: evidenceRoot, scenario});
+  if (streak.samples === 0 && streak.invalidSamples.length === 0) {
+    return {...notMeasuring(REASON.NO_CERTIFICATION_EVIDENCE),
+      detail: {certification: streak}};
+  }
+  return {
+    ...measured(Math.max(0, consecutive - streak.count), TARGET_ZERO,
+      streak.newest ? path.relative(root, path.join(evidenceRoot, streak.newest.dir)) :
+        path.relative(root, evidenceRoot),
+      {detail: {certification: streak, consecutive}}),
+    done: streak.done,
+    invalidSample: false,
+  };
+}
+
 function measureScenarioHarness(root, args) {
   const scenario = String(args.scenario || '');
   if (UNSUPPORTED_METRICS.includes(args.metric)) {
@@ -238,6 +302,9 @@ function measureScenarioHarness(root, args) {
   }
   const consecutive = Number(args.consecutive) || DEFAULT_CONSECUTIVE;
   const kind = metricKindOf(args);
+  if (args.certification === true) {
+    return measureCertificationStreak(root, args, scenario, consecutive);
+  }
   const dir = path.resolve(root, String(args.reportDir || REPORT_DIR));
   const runs = listRuns(dir, scenario, consecutive + NON_MEASURING_SKIP_BUFFER);
   if (runs.length === 0) return notMeasuring(REASON.NO_REPORTS);
@@ -250,7 +317,10 @@ function measureScenarioHarness(root, args) {
   const evidence = path.relative(root, latest.file);
   const detail = {runs: runs.length, consecutive,
     passingStreak: recent.filter((run) => scenarioPassed(run.data, scenario)).length,
-    verdictReason: verdictReasonOf(latest.data, scenario)};
+    verdictReason: verdictReasonOf(latest.data, scenario),
+    // A pass streak without `certification: true` counts passes, not
+    // certified runs: it says so.
+    certification: NOT_CERTIFICATION_EVIDENCE};
   if (isNonMeasuringRun(latest.data, scenario) || readMetric(latest.data, kind) === null) {
     return {...notMeasuring(nonMeasuringReasonOf(latest.data, scenario), evidence),
       invalidSample: true, detail};

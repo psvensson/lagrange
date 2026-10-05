@@ -9,7 +9,7 @@
     "cli-tooling": 96,
     "control-plane": 212,
     "convergence-topology": 83,
-    "distributed-harness": 174,
+    "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 258,
@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 148,
     "storage-raft": 107,
-    "test-infrastructure": 141,
+    "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2246,
-  "digest": "fnv1a32-07dda79c",
+  "censusSize": 2250,
+  "digest": "fnv1a32-942f89cc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7b0a4457",
+  "observationDigest": "fnv1a32-3a225910",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -804,6 +804,8 @@
     "test/distributed/harness/__tests__/benchmark-whole-topology-resource-accounting-adversarial.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/benchmark-whole-topology-resource-accounting.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/boundary-transition-scenarios.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/certification-evidence-archive.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/certification-image-identity.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/chaos.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/cluster-active-gate-admin-probe-timeout-projection.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/cluster-active-gate-load-selected-timeout-owner-recovery.test.js": "distributed-harness",
@@ -920,6 +922,7 @@
     "test/distributed/harness/__tests__/run.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scale-certification-receipt-freshness.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/scenario-certification.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-config.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-ground-truth.test.js": "distributed-harness",
@@ -2037,6 +2040,7 @@
     "test/scripts/run-live-repetitions.test.js": "test-infrastructure",
     "test/scripts/run-test-ci.test.js": "test-infrastructure",
     "test/scripts/run-test-files.test.js": "test-infrastructure",
+    "test/scripts/scenario-certification-consumers.test.js": "test-infrastructure",
     "test/scripts/scenario-refused-outcome-consumers.test.js": "test-infrastructure",
     "test/scripts/select-change-tests.test.js": "test-infrastructure",
     "test/scripts/selection-golden-corpus.test.js": "test-infrastructure",
@@ -4923,6 +4927,34 @@
         "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js"
       ]
     },
+    "test/distributed/harness/__tests__/certification-evidence-archive.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ]
+    },
+    "test/distributed/harness/__tests__/certification-image-identity.test.js": {
+      "files": [
+        ".gitignore",
+        "Dockerfile",
+        "package.json",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "src"
+      ]
+    },
     "test/distributed/harness/__tests__/chaos.test.js": {
       "files": [
         "Dockerfile",
@@ -4945,6 +4977,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -4964,6 +4999,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -4985,6 +5023,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5005,6 +5046,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5024,6 +5068,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5077,6 +5124,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5099,6 +5149,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5118,6 +5171,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5139,6 +5195,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5158,6 +5217,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5190,6 +5252,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5209,6 +5274,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5230,6 +5298,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5249,6 +5320,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5270,6 +5344,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5289,6 +5366,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5310,6 +5390,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5329,6 +5412,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5350,6 +5436,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5370,6 +5459,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5389,6 +5481,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5411,6 +5506,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5431,6 +5529,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5450,6 +5551,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5577,6 +5681,7 @@
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
@@ -5610,17 +5715,25 @@
     "test/distributed/harness/__tests__/failure-bundle.test.js": {
       "files": [
         "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-diagnostics-contract-reexport.js",
         "test/distributed/harness/failure-bundle-foundation.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ]
     },
     "test/distributed/harness/__tests__/full-node-log-capture.test.js": {
@@ -5708,6 +5821,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -5728,6 +5844,7 @@
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
         "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -5740,6 +5857,7 @@
         "test/distributed/run.js"
       ],
       "directories": [
+        "solve/epics/raft-rs-full-cutover",
         "test/distributed/config",
         "test/distributed/scenarios"
       ],
@@ -5777,6 +5895,9 @@
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -5990,6 +6111,7 @@
       ],
       "directories": [
         "examples/call-binding-account-summary",
+        "solve/epics/raft-rs-full-cutover",
         "test/fixtures/scenario-ground-truth"
       ]
     },
@@ -6023,33 +6145,57 @@
     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": {
       "files": [
         "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/report-writer-optimization-summary.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ]
     },
     "test/distributed/harness/__tests__/report-writer.property.test.js": {
       "files": [
         "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/report-writer-optimization-summary.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ]
     },
     "test/distributed/harness/__tests__/report-writer.test.js": {
       "files": [
         "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/report-writer-optimization-summary.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ]
     },
     "test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js": {
@@ -6067,6 +6213,9 @@
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -6106,6 +6255,7 @@
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
         "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/__fixtures__/failing-partial-result-scenario.js",
         "test/distributed/harness/__fixtures__/failing-scenario.js",
@@ -6121,7 +6271,43 @@
         "test/distributed/scenarios/public-path-multinode-baseline.js"
       ],
       "directories": [
+        "solve/epics/raft-rs-full-cutover",
         "src",
+        "test/distributed/config",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "LAGRANGE_CAPTURE_LOGS",
+        "LAGRANGE_DEBUG_LOGS",
+        "TAP"
+      ]
+    },
+    "test/distributed/harness/__tests__/scenario-certification.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/__fixtures__/certification-scenario.js",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
+        "test/distributed/harness/priority-recovery-summary-normalization.js",
+        "test/distributed/harness/publication-evidence-contract.js",
+        "test/distributed/harness/report-writer-optimization-summary.js",
+        "test/distributed/harness/startup-readiness-evidence.js",
+        "test/distributed/run.js",
+        "test/distributed/scenarios/table-bootstrap-core-helpers.js",
+        "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
+        "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover",
         "test/distributed/config",
         "test/distributed/scenarios"
       ],
@@ -6161,6 +6347,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -6181,6 +6370,7 @@
       ],
       "directories": [
         "examples/call-binding-account-summary",
+        "solve/epics/raft-rs-full-cutover",
         "test/distributed/config"
       ]
     },
@@ -6202,6 +6392,7 @@
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
         "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -6209,6 +6400,9 @@
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
@@ -6417,6 +6611,9 @@
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
       ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
+      ],
       "env": [
         "LAGRANGE_CAPTURE_LOGS",
         "LAGRANGE_DEBUG_LOGS"
@@ -6434,12 +6631,16 @@
         "test/distributed/scenarios/table-bootstrap-core-helpers.js",
         "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
         "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover"
       ]
     },
     "test/distributed/harness/__tests__/validation-matrix.test.js": {
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json"
       ]
     },
@@ -10442,12 +10643,18 @@
       "files": [
         "Dockerfile",
         "scripts/solve/probes.js",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "scripts/checks",
         "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
         "solve/quests"
       ]
     },
@@ -10824,6 +11031,7 @@
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/global-owner-debt-inventory/constants.js",
         "scripts/run-test-files.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/manifests/ci-resource-plan.json",
         "test/manifests/pre-push-stages.json",
         "test/manifests/project-hardening-proof-postpush-manifest.json",
@@ -11368,12 +11576,18 @@
       "files": [
         "Dockerfile",
         "README.md",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "scripts/checks",
         "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
         "solve/quests"
       ]
     },
@@ -11507,6 +11721,8 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/test-helpers/probe-guard.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/harness/certification-evidence-statement.js",
         "test/distributed/harness/gcp-provisioner.js",
         "test/shards/impact-graph-seal.json"
       ],
@@ -11584,16 +11800,22 @@
         "scripts/lab.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/run.js"
       ],
       "directories": [
         "scripts",
         "scripts/lab",
+        "solve/epics/raft-rs-full-cutover",
         "src",
-        "test"
+        "test",
+        "test/distributed/scenarios"
       ],
       "env": [
         "APPDATA",
@@ -11765,17 +11987,23 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/run.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
         "data",
+        "solve/epics/raft-rs-full-cutover",
         "solve/quests",
         "src/test-helpers",
-        "test"
+        "test",
+        "test/distributed/scenarios"
       ],
       "env": [
         "APPDATA",
@@ -12370,15 +12598,21 @@
         "scripts/checks/formation-release-handoff-gcp-analysis.js",
         "scripts/solve/probes.js",
         "scripts/solve/store.js",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/formation-release-handoff-contract.js",
         "src/control-plane/formation-release-handoff-identity.js",
         "src/diagnostics/source-fingerprint.js",
-        "test/distributed/config/local.json"
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "scripts/checks",
         "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
         "solve/quests",
         "src"
       ]
@@ -12391,7 +12625,8 @@
         "scripts/solve/store.js",
         "src/control-plane/formation-release-handoff-contract.js",
         "src/control-plane/formation-release-handoff-identity.js",
-        "src/diagnostics/source-fingerprint.js"
+        "src/diagnostics/source-fingerprint.js",
+        "test/distributed/config/convergence-sealed-bars.json"
       ],
       "directories": [
         "scripts/checks",
@@ -12409,7 +12644,8 @@
         "scripts/solve/store.js",
         "src/control-plane/formation-release-handoff-contract.js",
         "src/control-plane/formation-release-handoff-identity.js",
-        "src/diagnostics/source-fingerprint.js"
+        "src/diagnostics/source-fingerprint.js",
+        "test/distributed/config/convergence-sealed-bars.json"
       ],
       "directories": [
         "scripts/checks",
@@ -12425,7 +12661,8 @@
         "scripts/solve/store.js",
         "src/control-plane/formation-release-handoff-contract.js",
         "src/control-plane/formation-release-handoff-identity.js",
-        "src/diagnostics/source-fingerprint.js"
+        "src/diagnostics/source-fingerprint.js",
+        "test/distributed/config/convergence-sealed-bars.json"
       ],
       "directories": [
         "scripts/checks",
@@ -12437,7 +12674,8 @@
     "test/scripts/run-formation-seed-budget.test.js": {
       "files": [
         "examples/service-data-affinity/run-affinity-demo.js",
-        "scripts/checks/wait-for-thermal-headroom.js"
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "test/distributed/config/convergence-sealed-bars.json"
       ]
     },
     "test/scripts/run-live-repetitions.test.js": {
@@ -12445,12 +12683,18 @@
         "Dockerfile",
         "examples/service-data-affinity/run-affinity-demo.js",
         "examples/service-data-affinity/run-formation-probe.js",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "scripts/checks",
         "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
         "solve/quests",
         "src"
       ]
@@ -12469,6 +12713,45 @@
     "test/scripts/run-test-files.test.js": {
       "directories": [
         "test/scripts/__fixtures__/run-test-files"
+      ]
+    },
+    "test/scripts/scenario-certification-consumers.test.js": {
+      "files": [
+        "Dockerfile",
+        "data/formation-health/trend.ndjson",
+        "examples/service-data-affinity/run-affinity-demo.js",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/certification-verdict.js",
+        "scripts/checks/run-formation-release-handoff-gcp-streak.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-distributed-matrix.js",
+        "scripts/select-change-tests.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/priority-recovery-summary-normalization.js",
+        "test/distributed/harness/report-writer-optimization-summary.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
       ]
     },
     "test/scripts/scenario-refused-outcome-consumers.test.js": {
@@ -12502,7 +12785,9 @@
       "directories": [
         "scripts/checks",
         "solve/epics",
-        "solve/quests"
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "test/distributed/scenarios"
       ],
       "env": [
         "APPDATA",
@@ -12601,8 +12886,13 @@
         "solve/epics/solve-v2.md",
         "solve/epics/solve-v2/migration-report.md",
         "solve/quests/rolling-restart-core-stability/log.ndjson",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "architecture",
@@ -12614,6 +12904,7 @@
         "solve",
         "solve/changes",
         "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
         "solve/epics/solve-v2",
         "solve/oracle",
         "solve/quests",
@@ -13097,8 +13388,13 @@
         "scripts/inventory-ordinal-segments.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
         "test/shards/impact-contracts.json",
         "test/shards/impact-graph-seal.json",
         "test/shards/primary-classes.json",
@@ -13110,6 +13406,7 @@
         "scripts/checks",
         "solve",
         "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
         "solve/quests",
         "src",
         "src/test-helpers",
@@ -13178,12 +13475,18 @@
     "test/solve/probes.test.js": {
       "files": [
         "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
         "scripts/checks",
         "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
         "solve/quests"
       ],
       "env": [

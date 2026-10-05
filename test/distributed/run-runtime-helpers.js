@@ -2,8 +2,19 @@ import {
   buildUnexpectedNodeExitFailure,
 } from './harness/unexpected-node-exit.js';
 import {
+  buildCertificationTopologyRefusal,
+  evaluateScenarioCertificationTopology,
   evaluateScenarioTopologyRequirement,
 } from './harness/scenario-host-topology.js';
+import {
+  captureCertificationNodes,
+  certifyScenarioRun,
+  certifyUnstartedScenario,
+  runCertificationStage,
+} from './harness/scenario-certification.js';
+import {
+  archiveReportedCertification,
+} from './harness/certification-evidence-archive.js';
 import {
   SCENARIO_OUTCOME,
   SCENARIO_RESULT_LABEL,
@@ -430,6 +441,26 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     });
     let hasFailures = false;
     let hasRefusals = false;
+    // A run that requested certification (--certify) gets a certification
+    // verdict per scenario (scenario-certification.js); every other run
+    // keeps today's behaviour and says it is not certification evidence.
+    const certification = options?.certification?.requested === true ?
+      options.certification :
+      null;
+    let hasUncertified = false;
+    // Every certification-requesting entry is archived as durable evidence
+    // (certification-evidence-archive.js); an unarchived one never certifies.
+    const archiveCertification = async (scenarioName, runStartedAt,
+      extra = {}) => {
+      if (certification === null) {
+        return;
+      }
+      const archived = await archiveReportedCertification({config, report,
+        root: options.certificationEvidenceRoot, runStartedAt, scenarioName,
+        runDir: options.certificationRunDir ?? undefined,
+        write: options.certificationEvidenceWrite, ...extra});
+      hasUncertified = hasUncertified || archived.error !== null;
+    };
     const dockerOperationSink = typeof options?.dockerOperationSink === 'function' ?
       options.dockerOperationSink :
       null;
@@ -455,24 +486,33 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       // A module that fails to load fails THIS scenario only, named; the
       // run continues with the next one.
       const topology = await checkScenarioTopology(config, scenario,
-        startedAt, startMs);
+        startedAt, startMs, certification);
       if (topology.loadFailure !== null) {
         hasFailures = true;
+        topology.loadFailure.certification = certifyUnstartedScenario(
+          certification, topology.loadFailure, null);
+        hasUncertified = hasUncertified || certification !== null;
         report.addResult(scenario.name, topology.loadFailure);
+        await archiveCertification(scenario.name, startedAt);
         continue;
       }
       const refusal = topology.refusal;
       if (refusal !== null) {
         hasRefusals = true;
+        refusal.certification = certifyUnstartedScenario(certification,
+          refusal, topology.certificationTopology);
+        hasUncertified = hasUncertified || certification !== null;
         if (options.verbose) {
           process.stdout.write(SCENARIO_RESULT_LABEL[SCENARIO_OUTCOME.REFUSED] +
             ' ' + scenario.name + ': ' + refusal.error + '\n');
         }
         report.addResult(scenario.name, refusal);
+        await archiveCertification(scenario.name, startedAt);
         continue;
       }
 
       let cluster = null;
+      let certificationStage = null;
       try {
         const clusterConfig = dockerOperationSink ?
           {...config, dockerOperationSink} :
@@ -504,6 +544,13 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         const scenarioPayload = normalizeScenarioPayload(
           await scenarioModule.run(cluster),
         );
+        // Certification observes REAL publication convergence and a strict
+        // convergence wait after the scenario, before teardown; it never
+        // changes the scenario's own outcome.
+        if (certification !== null) {
+          certificationStage = await runCertificationStage(cluster,
+            certification.clock);
+        }
 
         // Run log analysis before teardown
         const analyzer = cluster.getLogAnalyzer();
@@ -654,6 +701,9 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         let playback = null;
         let playbackWarning = null;
         let trace = null;
+        const certificationNodes = certification !== null && cluster ?
+          captureCertificationNodes(cluster) :
+          [];
         if (cluster) {
           try {
             await cluster.stop();
@@ -772,30 +822,54 @@ function createDistributedRunRuntimeBundle(deps = {}) {
             hasFailures = true;
           }
         }
+        // Decided last, on the final outcome, after teardown made the full
+        // node logs final.
+        scenarioResult.certification = await certifyScenarioRun({
+          certification, cluster, config, nodes: certificationNodes,
+          scenarioName: scenario.name, scenarioResult,
+          stage: certificationStage,
+          topology: topology.certificationTopology,
+        });
+        hasUncertified = hasUncertified || (certification !== null &&
+          scenarioResult.certification.certified !== true);
         report.addResult(scenario.name, scenarioResult);
+        await archiveCertification(scenario.name, startedAt,
+          {cluster, nodes: certificationNodes});
       }
     }
 
-    return {report, hasFailures, hasRefusals};
+    return {report, hasFailures, hasRefusals, hasUncertified};
   }
 
-  async function refuseScenarioTopology(config, scenario) {
+  // The scenario's ordinary topology refusal; for a certification run also
+  // its certification topology (one node per machine), refused when unmet.
+  async function refuseScenarioTopology(config, scenario, certification) {
     const scenarioModule = await loadScenarioModule(scenario.path);
     const refusal = evaluateScenarioTopologyRequirement(
       scenarioModule?.SCENARIO_TOPOLOGY_REQUIREMENT, config);
-    return refusal === null ?
-      null :
-      buildRefusedScenarioResult(refusal, new Date().toISOString());
+    const certificationTopology = certification === null ? null :
+      evaluateScenarioCertificationTopology(
+        scenarioModule?.SCENARIO_CERTIFICATION_REQUIREMENT, config);
+    const refused = refusal ?? (certificationTopology?.met === false ?
+      buildCertificationTopologyRefusal(certificationTopology) :
+      null);
+    return {
+      certificationTopology,
+      refusal: refused === null ? null :
+        buildRefusedScenarioResult(refused, new Date().toISOString()),
+    };
   }
 
   // The topology check, isolated per scenario: a module import error is a
   // failed result for that scenario (named), never an abort of the run.
-  async function checkScenarioTopology(config, scenario, startedAt, startMs) {
+  async function checkScenarioTopology(config, scenario, startedAt, startMs,
+    certification = null) {
     try {
       return {loadFailure: null,
-        refusal: await refuseScenarioTopology(config, scenario)};
+        ...await refuseScenarioTopology(config, scenario, certification)};
     } catch (error) {
       return {
+        certificationTopology: null,
         loadFailure: {
           passed: false,
           duration: Date.now() - startMs,

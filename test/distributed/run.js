@@ -42,6 +42,14 @@ import {formatLogEntry} from './harness/log-collector.js';
 import {analyzeMemoryLeakFromPlayback} from './harness/memory-leak-analyzer.js';
 import {buildPerformanceDiagnostics} from './harness/performance-diagnostics.js';
 import {resolveRunExitCode} from './harness/scenario-outcome.js';
+import {
+  certifyArgumentProblem,
+  completeCertificationBuild,
+  prepareCertificationBuild,
+} from './harness/certification-image-identity.js';
+import {
+  openRunnerCertificationRun,
+} from './harness/certification-evidence-archive.js';
 import {writeFailureBundlesForReport} from './harness/failure-bundle.js';
 import {
   formatStateMachinePressurePreflightSummary,
@@ -1055,6 +1063,19 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  // `--certify` without a full 40-hex sha is an error, never an ordinary run.
+  const certifyProblem = certifyArgumentProblem(args.certify);
+  if (certifyProblem !== null) {
+    process.stderr.write(certifyProblem + '\n');
+    process.exit(EXIT_CODES.FAILURE);
+  }
+  // A certification run's directory (started.json) exists before anything
+  // is built; one that cannot be created aborts the run.
+  const certificationRun = args.certify === null ? null :
+    await openRunnerCertificationRun(args).catch((error) => {
+      process.stderr.write(`certification run not started: ${error.message}\n`);
+      process.exit(EXIT_CODES.FAILURE);
+    });
   // --debug-logs is delivered to node containers via the LAGRANGE_* env
   // auto-forward in the cluster's node-env builder. Setting it here (rather than
   // threading a flag through cluster construction) also lets an operator opt in
@@ -1108,7 +1129,10 @@ async function main() {
     if (isLocalDockerConfig(runConfig)) {
       runConfig = await applyScenarioArtifactBind(runConfig);
     }
-    if (resolveFastLocalMode(args, runConfig)) {
+    // A certification run never bind-mounts live source or reuses
+    // containers: it runs the image it builds fresh.
+    if (resolveFastLocalMode(args.certify === null ? args :
+      {...args, fastLocal: false}, runConfig)) {
       runConfig = await applyFastLocalConfig(runConfig);
       if (args.verbose) {
         process.stdout.write(FAST_LOCAL_LOG_PREFIX);
@@ -1174,6 +1198,13 @@ async function main() {
       process.stdout.write(RUNNER_STAGE_SCENARIO_DISCOVERY);
     }
 
+    // A certification run observes the checkout and the build context the
+    // images are built from BEFORE the build (certification-image-identity).
+    const certification = args.certify === null ? null :
+      await prepareCertificationBuild({dockerfile: runConfig.dockerfile,
+        requestedSha: args.certify,
+        srcFingerprint: runConfig?.docker?.srcFingerprint ?? null});
+
     // Build Docker image before running scenarios
     const dockerOperationSink = createDockerOperationSink(args.verbose);
     let imageResult = null;
@@ -1182,7 +1213,7 @@ async function main() {
         runConfig,
         args.verbose,
         dockerOperationSink,
-        {extractBuildProgressLine},
+        {extractBuildProgressLine, certification: certification?.build},
       );
     } catch (err) {
       runStatusContext.milestones.failedAt = new Date().toISOString();
@@ -1267,18 +1298,20 @@ async function main() {
     );
 
     runPhaseTiming.setupEndMs = Date.now();
-    const {report, hasFailures, hasRefusals} = await runScenarios(
-      runConfig,
-      scenarios,
-      {
+    if (certification !== null) {
+      await completeCertificationBuild(certification, imageResult);
+    }
+    const {report, hasFailures, hasRefusals, hasUncertified} =
+      await runScenarios(runConfig, scenarios, {
         output: args.output,
         verbose: args.verbose,
         historyReports: historicalReports,
         dockerOperationSink,
         reportMetadata,
         stateMachinePressurePreflight,
-      },
-    );
+        certification,
+        certificationRunDir: certificationRun?.dir ?? null,
+      });
     runPhaseTiming.scenarioEndMs = Date.now();
 
     const reportPreview = {
@@ -1360,9 +1393,11 @@ async function main() {
     const hasRunFailures = hasFailures || gateFailed;
     // Failures win; else any refused (not run) scenario exits REFUSED,
     // never 0 - no exit-code reader may read a refusal as a pass.
+    // A certification run that is not certified never exits 0.
     const runExitCode = resolveRunExitCode({
       hasFailures: hasRunFailures,
       hasRefusals,
+      hasUncertified,
     });
     runStatusContext.milestones.reportWrittenAt = new Date().toISOString();
     await writeRunnerStatus(RUN_STATUS_STATE_REPORT_WRITTEN, {

@@ -330,6 +330,109 @@ leaders on the shared host → truthful pass).
 local configs and claims nothing about hosts or failure domains. Host-aware
 user-table leader placement is a separate placement-owner quest.
 
+**Certification (owner rulings 5 and 6, 2026-10-05).** Startup readiness
+admits nodes while saying `publication_convergence_not_claimed_startup`: that
+is enough to RUN the system and never enough to CERTIFY it. A run is
+certification evidence only when it requests it (`--certify <40-hex sha>` on
+`test/distributed/run.js`, or `lab harness run ... --certify <sha>`) and its
+report entry's `certification` block says `certified: true`. Every other
+run's entry carries the explicit `certification_not_requested` record (not
+certification evidence; publication convergence not claimed at startup), and
+consumers that are not certification say so (`health:formation`,
+`check:formation`, ship readiness, the distributed matrix, a quest pass
+streak without `certification: true`). The one owner is
+`test/distributed/harness/scenario-certification.js`; each condition is
+recorded with the evidence observed in that run, and absent evidence is a
+named failure, never a pass:
+
+| Condition | Observed from | Named failure |
+| --- | --- | --- |
+| `scenario_passed` | the scenario's own outcome | `certification_scenario_not_passed` |
+| `no_refusal` | the outcome is not `refused` | `certification_refused_outcome` |
+| `topology` (unit host) | the scenario's `SCENARIO_CERTIFICATION_REQUIREMENT` (`maxNodesPerHost: 1`, `minNodes: 5` for the formation acceptance) on the config, AND every placed node's declared machine identity | `certification_topology_not_one_node_per_machine`; on the config this REFUSES the scenario before it runs (`refused_certification_topology`) |
+| `publication_convergence` | after the scenario and before teardown, a WINDOW of load-mode probes (`_probeClusterActiveState` in mode `load`): `CERTIFICATION_PUBLICATION_WAIT.CONSECUTIVE_READY` (3) polls in a row, each with every node active, complete snapshot coverage and the publication gate `ready === true` with `claimState: publication_convergence_claimed_load`, held for at least the harness's load-readiness stable window (`_resolveLoadReadinessStableWindowMs`, 5 s by default) and never less than the certification floor `CERTIFICATION_PUBLICATION_WAIT.MIN_STABLE_WINDOW_MS` (5 s, whatever `timeouts.loadReadinessStableWindowMs` says; the configured and the effective window are both recorded); any other poll restarts the window; the startup admission never counts; bounded by `CERTIFICATION_PUBLICATION_WAIT` (120 s), an expiry is recorded as a spent wait with what was awaited, the last observed gate and the window | `certification_publication_convergence_not_observed` |
+| `voters_at_target` | every `cluster.waitForConvergence` of the run (the scenario's and the certification stage's own strict wait) ended `voters_at_target` with no under-replication tolerance declared, over a claimed set equal to every partition its authoritative `partitions` read returned (system, priority and user-table partitions, split children included); each wait records `expectedPartitionIds`, `claimedPartitionIds` and `unclaimedPartitionIds`. The stage's strict wait ends only on an observation with voters at target AND nothing unclaimed (a split parent whose dissolution is still pending is unclaimed), re-checked within ONE budget, `CERTIFICATION_CONVERGENCE_WAIT` = the single wait's own settle bound (`CONVERGENCE_DEFAULTS.settleTimeoutMs`, 30 s, never lengthened); only its last observation decides (earlier ones are recorded `supersededByStage`), and an expiry is recorded as a spent wait. The expected set is cross-checked against every live node's own `partitions` read: at least 2 nodes must answer and each must name the same set (the tables catalog is not read) | `certification_convergence_not_voters_at_target` (also when a partition is unclaimed, the expected set is empty, the stage wait expired, or a node's partitions read disagrees, naming the extra and missing ids) |
+| `host_spread` (unit host) | the scenario's named spread gate (`split-leader-host-spread`) passed with `spreadUnit: 'host'` on declared machine facts | `certification_host_spread_not_observed` |
+| `spent_waits` | every `event: 'wait_bound_spent'` line of every node's full log (`.full-logs/<scenario>/<node>.log.gz`; both reporter sinks, the logger's error and `logConsoleOnly`, write through the node's one pino destination, its stdout, which the streaming capture writes there), grouped by `wait` and classified by the census `solve/epics/raft-rs-full-cutover/census-bounded-waits-2026-10-04.md` | `certification_unexpected_spent_wait` (any wait outside its "Known findings (owner)" table); `certification_known_finding_spent_wait` (any known finding, reported with its owner: the one constant `CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY` is FAIL, because a fully spent timeout always hides a bug; today a run in which SWIM declared a node DEAD (`swimSuspicionTimeoutMs`) or the 60 s voter-ready wait expired (`REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS`) cannot certify; only the owner relaxes it); `certification_spent_wait_evidence_incomplete` (a node log missing, unreadable, empty or without the node's boot provenance line; any line naming `wait_bound_spent` that is not the reporter's JSON record (pretty-printed, prefixed, inspect-style); an incomplete capture; file-logging capture, which does not hold the node's stdout; or the census unreadable) |
+| `commit_identity` | OBSERVED, never inferred (`test/distributed/harness/certification-image-identity.js`): the checkout is clean (`git status --porcelain`, plus `--ignored` over the Dockerfile's context roots, so an ignored file the build would send cannot hide) with `HEAD` equal to the requested sha; the image is built FRESH on every docker host (never reused by label) with the labels `ddb.certify.sha` (full sha), `ddb.certify.clean`, `ddb.certify.context-digest` (SHA-256 of every file the build context sends), `ddb.certify.src-fingerprint` and a per-run `ddb.certify.build-id`, read back from each host; the context is re-observed after the build; every node's container runs an image carrying those labels (docker inspect through the node's provider), and every node's full log carries its boot provenance line with the certified src fingerprint (the node fingerprints `/app/src` only; vendor/, package*.json and the Dockerfile are attested by the container's image labels); after the build every host's base images (each `FROM` image of the Dockerfile) are read back by image id (`docker image inspect`) and must be present and identical on every host, recorded in the evidence (the Dockerfile does not pin them by digest) | `certification_commit_identity_not_exact` |
+
+The scenario's outcome and the report verdict are unchanged by
+certification; a run that requested certification and is not certified exits
+`4` (`NOT_CERTIFIED`). `--certify` without a full 40-hex sha is an error
+(exit 1), never an ordinary run, and a certification run never uses
+fast-local (live source bind, container reuse). The block repeats the spread
+unit on each spread claim and lists what a certified run still does not
+certify (committed raft-rs ConfState is not observed; the node attests
+`/app/src` only).
+
+**Durable evidence.** A certification run's directory
+`test-output/certification/<requested sha>/<run start>/` is created, with
+`started.json` (scenario, sha, run start, host set, run identity, controller
+pid and host), BEFORE the formation starts: by `lab harness run` before any
+machine is held, or by `run.js --certify` before anything is built (passed
+between them as `--certify-run-dir`); a run that cannot create it aborts.
+`run.js --certify` names exactly one `--scenario`. After the scenario the
+runner adds `report-entry.json`, `certification.json`, `gates.json`,
+`logs/<node>.log.gz` and `manifest.json` (scenario, sha, certified, outcome,
+run start, host set, run identity, and the SHA-256 of every file including
+`started.json`), plus `manifest.json.sha256`; every file is created
+exclusively, never overwritten, and no harness archive or prune touches the
+tree. The runner prints `certification evidence: <dir> manifest sha256
+<digest>`; a run whose evidence could not be archived exits `4`.
+
+Every certification run's outcome, certified or not, refused, aborted or
+interrupted, is printed as a ready-to-run record line (the lab harness
+prints it whatever happened; a direct `run.js --certify` prints it on exit):
+
+```bash
+node scripts/solve.js note --id <quest> --kind evidence --finding "certification-run scenario=<s> sha=<sha> start=<run start> outcome=<certified|not-certified|refused|interrupted|unverifiable> manifest=<digest|none (no manifest: interrupted)>"
+```
+
+**What the streak counts.** The quest probe counts a certification streak
+only with `certification: true` in its args, only from these directories
+(never from report files), newest first by run start, and only with
+`recordedLog: solve/quests/<id>/log.ndjson` (without it the probe is never
+done):
+
+- a directory whose manifest verifies is its entry: certified at ONE sha
+  counts; an uncertified certification run or a FAIL resets; a refused run
+  is not a sample; a certified run at another sha ends the streak; one run
+  (run start + sha + host set) counts once;
+- a directory that does NOT verify, whatever the reason (no manifest because
+  the run was interrupted, killed mid-archive or crashed; only
+  `started.json`; a file that does not match its digest; a partial copy), is
+  a FAILED sample at its directory name (the run start): it RESETS the streak
+  and is listed by name in `invalidSamples`;
+- against the recorded lines: a recorded run whose directory is gone, or
+  whose manifest digest differs from the recorded one, is a FAILED sample at
+  its recorded run start (`missingRecordedRuns`,
+  `recordedDigestMismatches`); a certified run whose digest is not recorded
+  is `unrecorded` and not counted.
+
+What stays undetectable: a run directory deleted before anyone recorded its
+line. The operating rule is therefore: **record the printed line after EVERY
+certification run**, before anything else.
+
+**Retention (owner decision 2026-10-05, option 1).** The small verdict files
+of EVERY run (`started.json`, `report-entry.json`, `certification.json`,
+`gates.json`, `manifest.json`, `manifest.json.sha256`) are committed;
+the node logs stay outside git, bound by their digests in the manifest:
+
+```bash
+node scripts/lab.js harness keep-evidence test-output/certification/<sha>/<run start>
+# -> solve/epics/raft-rs-full-cutover/evidence/certification/<sha>/<run start>/ (commit it)
+#    and prints where the node logs are and their sha256 digests
+```
+
+The probe re-derives the streak from the committed copies with
+`evidenceDir: solve/epics/raft-rs-full-cutover/evidence/certification` and
+`logsByDigest: true` (a listed log absent from the copy is bound by its
+digest; every verdict file must still match).
+
+Witnesses: `test/distributed/harness/__tests__/scenario-certification.test.js`,
+`certification-image-identity.test.js`, `certification-evidence-archive.test.js`
+and `test/scripts/scenario-certification-consumers.test.js`.
+
 `public-seam-durability` is the provider-neutral durability scenario at the
 public seam: it writes an image-like object (`objects` BYTEA row plus an
 `object_history` row, one transaction) through a node's PostgreSQL-wire

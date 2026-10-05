@@ -67,6 +67,7 @@ const ZERO = 0;
 const ONE = 1;
 const MIN_PARTITION_COUNT = 2;
 const MIN_DISTINCT_LEADER_HOSTS = 2;
+const CERTIFICATION_FORMATION_NODES = 5;
 const SPLIT_SPREAD_GATE = 'split-leader-host-spread';
 // What the scenario claims to prove (module docstring, quest statement and
 // the formation handoff criteria "RF=3 committed membership, leaders
@@ -94,6 +95,22 @@ const SPLIT_SPREAD_CLAIM = Object.freeze({
  */
 export const SCENARIO_TOPOLOGY_REQUIREMENT = Object.freeze({
   minDistinctHosts: MIN_DISTINCT_LEADER_HOSTS,
+  spreadUnit: SPREAD_UNIT.HOST,
+});
+
+/**
+ * The topology a CERTIFICATION run of this scenario needs - the five-node
+ * formation acceptance (owner ruling 5, 2026-10-05): five nodes, one per
+ * distinct machine, with the split/leader spread gate passing in the HOST
+ * unit. A `--certify` run on any other placement (five nodes on four
+ * machines) is REFUSED for certification; the same placement still RUNS as
+ * an ordinary run, where two child leaders on one machine stay a real
+ * failure of the host gate.
+ */
+export const SCENARIO_CERTIFICATION_REQUIREMENT = Object.freeze({
+  maxNodesPerHost: ONE,
+  minNodes: CERTIFICATION_FORMATION_NODES,
+  spreadGate: SPLIT_SPREAD_GATE,
   spreadUnit: SPREAD_UNIT.HOST,
 });
 const DEFAULT_INVOCATION_COUNT = 60;
