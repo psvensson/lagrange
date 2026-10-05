@@ -4,6 +4,7 @@ import {
 import {
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from './raft-committed-membership-constants.js';
+import {commitDurably} from './raft-rs-durable-store.js';
 
 const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 const LIFECYCLE_STATE = Object.freeze({
@@ -191,9 +192,11 @@ class RaftRsReplicaLifecycleOwner {
       RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.RESEED_REQUIRED);
   }
 
-
+  // The row the open-time refusal reads, synced to disk before the hold or
+  // the retirement is reported (owner decision O4): a power loss must not
+  // bring the replica back active.
   #writeRetired(reason) {
-    this.#db.prepare(`
+    commitDurably(this.#db, () => this.#db.prepare(`
       UPDATE ${LIFECYCLE_TABLE}
       SET state = 'retired', reason = ?, changed_at = ?
       WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
@@ -203,7 +206,7 @@ class RaftRsReplicaLifecycleOwner {
       this.#groupId,
       this.#peerId,
       this.#replicaIdentity,
-    );
+    ));
   }
 
   #release() {

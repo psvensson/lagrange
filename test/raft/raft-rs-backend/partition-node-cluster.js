@@ -84,7 +84,7 @@ class PartitionNodeCluster {
    */
   constructor({partitionId, replicaIds, substrateFor = null,
     sendFor = null, resolveFor = null, applyFor = null,
-    wrapDatabase = null, timingFor = null}) {
+    wrapDatabase = null, timingFor = null, tempRoot = os.tmpdir()}) {
     this.partitionId = partitionId;
     this.replicaIds = [...replicaIds];
     this.substrateFor = substrateFor;
@@ -95,7 +95,7 @@ class PartitionNodeCluster {
     this.timingFor = timingFor;
     this.coreEntries = [];
     this.isolated = new Set();
-    this.directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
+    this.directory = fs.mkdtempSync(path.join(tempRoot, TEMP_PREFIX));
     setActualCoreEntryObserver((observation) => {
       this.coreEntries.push(observation);
     });

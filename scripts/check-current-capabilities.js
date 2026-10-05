@@ -34,6 +34,7 @@ const CHART_VALUES_PATH = 'charts/lagrange-node/values.yaml';
 const PARTITIONING_ARCHITECTURE_PATH = 'architecture/process-partitioning.md';
 const REPLICATION_ARCHITECTURE_PATH = 'architecture/process-replication.md';
 const TRANSPORT_SERVER_PATH = 'src/transport/router-server-manager.js';
+const RAFT_STORE_CONSTANTS_PATH = 'src/raft/raft-rs-durable-store-constants.js';
 const HTTP_AUTHENTICATOR_PATH =
   'src/service/request-cell-http-authenticator.js';
 
@@ -42,6 +43,7 @@ const EXPECTED_STATUS = Object.freeze({
   SQLITE_SNAPSHOT: 'active_sqlite_partition_path',
   MESSAGE_GROUP_COMPACTION: 'unsupported',
   LEARNER_PROMOTION: 'time_based_not_progress_based',
+  RAFT_PERSIST_DURABILITY: 'raft_promises_synced_before_send',
   NODE_TRANSPORT: 'plain_websocket_trusted_network_only',
   HTTP_AUTHENTICATION: 'basic_against_configured_pgwire_credentials',
   BACKUP_RESTORE_PITR: 'unsupported',
@@ -55,6 +57,10 @@ const AUDIT_MARKER = Object.freeze({
   SQLITE_BOUNDED: 'SQLite partition logs are bounded',
   MESSAGE_GROUP_UNBOUNDED: 'message-group logs still grow without bound',
   LEARNER_TIME_BASED: 'time-based, not progress-based',
+  RAFT_SYNCED_BEFORE_SENT: 'synced to disk before they are sent',
+  RAFT_SYNC_SOURCE: 'SET_FULL: \'synchronous = FULL\'',
+  RAFT_DURABILITY_CONTRADICTION:
+    'Raft persist durability no longer matches the durable store',
   REPLICATION_CONTRADICTION:
     'replication capability fields contradict the active snapshot path',
   WEBSOCKET_SERVER: 'new WebSocketServer(serverOptions)',
@@ -192,6 +198,13 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
       capabilities.replication.learnerPromotion ===
         EXPECTED_STATUS.LEARNER_PROMOTION,
     AUDIT_MARKER.REPLICATION_CONTRADICTION);
+  addProblem(problems,
+    capabilities.replication.raftPersistDurability ===
+      EXPECTED_STATUS.RAFT_PERSIST_DURABILITY &&
+      replication.includes(AUDIT_MARKER.RAFT_SYNCED_BEFORE_SENT) &&
+      readText(RAFT_STORE_CONSTANTS_PATH, root)
+        .includes(AUDIT_MARKER.RAFT_SYNC_SOURCE),
+    AUDIT_MARKER.RAFT_DURABILITY_CONTRADICTION);
 
   const transportServer = readText(TRANSPORT_SERVER_PATH, root);
   addProblem(problems,
