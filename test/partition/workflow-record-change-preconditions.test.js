@@ -154,3 +154,111 @@ test('the answered ids only grow: an answer recorded from an older ' +
   t.same([...(leftCheckpoint(store).dissolvedReplicaIds || [])].sort(),
     ['r1', 'r2'], 'both answers are on the record');
 });
+
+// Land a foreign change of the record's state or a participant's status.
+function landForeign(store, {state, participant}) {
+  const metadata = store.metadata();
+  if (participant) {
+    metadata.participants[participant.key] = {
+      ...metadata.participants[participant.key], ...participant.fields};
+  }
+  store.db.prepare('UPDATE tables SET partition_transition_metadata = ?, ' +
+    'partition_transition_state = COALESCE(?, partition_transition_state) ' +
+    'WHERE table_id = ?').run(JSON.stringify(metadata), state ?? null,
+    store.tableId);
+}
+
+test('a pre-built update is refused: updateWorkflow takes only a change ' +
+  'function', async (t) => {
+  const {store, workflow, workflowId} = await ownerOf('split_preparing',
+    {[LEFT]: 'none', [RIGHT]: 'none'});
+  const before = store.tablesRow();
+  await t.rejects(workflow.workflowCoordinator.updateWorkflow(workflowId,
+    {status: 'split_backfilling'}), TypeError, 'refused typed');
+  t.same(store.tablesRow(), before, 'nothing was written');
+});
+
+test('an owner-recorded outcome is the owner\'s: a stale owner records ' +
+  'nothing on another owner\'s record', async (t) => {
+  const {store, workflow, workflowId} = await ownerOf('split_preparing',
+    {[LEFT]: 'none', [RIGHT]: 'none'});
+  // Another owner claimed the record (fence 2); this owner's copy is at 1.
+  const metadata = store.metadata();
+  metadata.workflowOwnerId = 'owner-B';
+  metadata.workflowFenceToken = 2;
+  store.db.prepare('UPDATE tables SET partition_transition_metadata = ? ' +
+    'WHERE table_id = ?').run(JSON.stringify(metadata), store.tableId);
+  const before = store.tablesRow();
+  await t.rejects(workflow.workflowCoordinator.acknowledgeOwnerOutcome(
+    workflowId, {participantKey: LEFT_KEY, status: 'child_provisioned',
+      fenceToken: 1, acknowledgedAt: 1000}), 'refused');
+  t.same(store.tablesRow(), before, 'the other owner\'s record is untouched');
+});
+
+test('an acknowledgement is checked against the RECORD\'s participant, not ' +
+  'the projection', async (t) => {
+  const {store, workflow, workflowId} = await ownerOf('split_backfilling',
+    {[LEFT]: 'dispatched', [RIGHT]: 'dispatched'});
+  // The source's start landed on the record under this owner.
+  landForeign(store, {participant: {key: 'source-partition',
+    fields: {status: 'snapshot_started', acknowledgedAt: 999}}});
+  const result = await workflow.workflowCoordinator.acknowledgeParticipant(
+    workflowId, {participantKey: 'source-partition',
+      status: 'backfill_progress', fenceToken: 1, acknowledgedAt: 1000});
+  t.equal(result.result, 'accepted',
+    'snapshot_started -> backfill_progress is valid on the record');
+  t.equal(store.metadata().participants['source-partition'].status,
+    'backfill_progress', 'and it is on the record');
+});
+
+test('the terminal clear clears only the state its caller finished in',
+  async (t) => {
+    const {store, workflow, workflowId} = await ownerOf(
+      'split_source_dissolving', {[LEFT]: 'dispatched',
+        [RIGHT]: 'dispatched'});
+    const projection = workflow.resolveWorkflowState(workflowId);
+    landForeign(store, {state: 'failed'});
+    await t.rejects(workflow.persistTerminalTransitionClear(projection),
+      /refused/u, 'refused typed');
+    t.equal(store.tablesRow().partition_transition_state, 'failed',
+      'the record is not cleared');
+  });
+
+test('the cutover re-checks its precondition on the record: a source ' +
+  'failure that lands after the step\'s own check refuses it', async (t) => {
+  const store = openRecordStore({partitions: [SOURCE, 'users-p3'].map(
+    (partitionId) => ({partition_id: partitionId}))});
+  const view = openView(store);
+  const {workflow} = buildWorkflow({cdcIntegrationService: store.cdcFor('A'),
+    getTableInfo: () => view.row(), listTableInfos: () => view.list(),
+    getPartitionInfo: (id) => store.partitionRow(id),
+    parsePartitionTransition, topologyAdapter: null, now: () => 1000,
+    listTablePartitionRows: () => store.partitionIds()
+      .map((id) => store.partitionRow(id)),
+    logger: {debug() {}, info() {}, warn() {}, error() {}},
+    groupRetirementScheduler: NO_TIMERS,
+    groupRetirementLeaseScheduler: NO_TIMERS});
+  workflow.workflowOwnerId = 'owner-A';
+  readAuthoritativelyFrom(workflow, store);
+  const {workflowId} = await workflow.execute(SOURCE);
+  const fence = store.metadata().workflowFenceToken;
+  const ack = (status) => workflow.acknowledgeSourceParticipant(workflowId, {
+    participantKey: 'source-partition', status, fenceToken: fence,
+    acknowledgedAt: 1000});
+  // Between the step's own (projection) check and its CUTOVER change - the
+  // sibling carry-forward - the source's failure lands on the record.
+  const promote = workflow.promoteSiblingPartitionVersion.bind(workflow);
+  let promoted = 0;
+  workflow.promoteSiblingPartitionVersion = async (...args) => {
+    promoted += 1;
+    landForeign(store, {participant: {key: 'source-partition',
+      fields: {status: 'backfill_failed'}}});
+    return promote(...args);
+  };
+  await ack('snapshot_started');
+  await ack('catchup_ready');
+  await turns(50);
+  t.ok(promoted >= 1, 'setup: the step reached the sibling carry-forward');
+  t.not(store.tablesRow().partition_transition_state, 'split_cutover_active',
+    'the cutover never lands on a failed source');
+});

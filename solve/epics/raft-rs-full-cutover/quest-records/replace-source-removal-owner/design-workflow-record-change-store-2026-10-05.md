@@ -93,6 +93,10 @@ promise queue). At its turn:
      this workflow) and the SAME change function is applied to it again: its
      own precondition decides (REFUSED / SUPERSEDED / UNCHANGED =
      ALREADY_APPLIED / a new CAS). Bounded: 3 CAS attempts per change.
+   A precondition refusal decided on an unconfirmed base (the acknowledged
+   record or a view, possibly older than the record) is confirmed the same
+   way once: the authoritative record, when it moved past the base, gets the
+   change re-applied - a refusal never rests on a stale copy alone.
    There is no rebase, no "resynced" outcome, no adoption from the local
    view, and no path that writes bytes derived from a record other than the
    one compared.

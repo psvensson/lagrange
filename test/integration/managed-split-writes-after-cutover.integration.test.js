@@ -1,9 +1,10 @@
 /**
  * Writes after a managed split, on the real path (one embedded runtime,
  * real SQL engine and partitions, the public application-database
- * facade). RED REPRODUCTION WITNESS - committed red on purpose: the
- * repair belongs to the split-workflow record/claim owner (see the
- * finding on quest zero-liferaft-active-runtime, 2026-10-05).
+ * facade). Reproduction witness (red at 3626bdf43 and origin/main
+ * 60fe53f69; green once every record write is a change of the stored record
+ * and owner-recorded outcomes are checked - managed-workflow-record-store.js,
+ * 2026-10-05).
  *
  * Mechanism the witness pins (observed at cabd5f3f5, 3626bdf43 and
  * origin/main 60fe53f69 alike):

@@ -45,7 +45,10 @@
  *     record is not this workflow, or the change refused it as another
  *     owner's: this owner stops driving it, drops its copy, logs ONE WARN),
  *     ALREADY_APPLIED (RECORD_UNCHANGED), or a new compare-and-swap.
- *   Bounded: MAX_COMPARE_AND_SWAP_ATTEMPTS per change.
+ *   Bounded: MAX_COMPARE_AND_SWAP_ATTEMPTS per change. A precondition
+ *   refusal decided on an unconfirmed base is confirmed the same way once:
+ *   the authoritative record, when it moved past the base, gets the change
+ *   re-applied (a refusal never rests on a stale copy alone).
  * Prohibited: a write whose bytes derive from a record other than the one
  * compared; adopting the local view on a refusal; an unconditional UPDATE of
  * these columns; treating a refused write as landed without the
@@ -544,6 +547,26 @@ function decideRefusedWrite(owner, workflowId, attempt) {
 }
 
 /**
+ * The authoritative record when it moved past `base` (adopted as the new
+ * base and projection), else null (no answer, the same record, or a read
+ * that lags the base: the base stands).
+ * @param {Object} owner
+ * @param {string} workflowId
+ * @param {string} tableId
+ * @param {Object|null} base
+ * @return {Promise<Object|null>}
+ */
+async function movedRecordOf(owner, workflowId, tableId, base) {
+  const reread = await authoritativeRecordOf(owner, tableId);
+  if (reread === undefined ||
+      rereadLagsBase(owner, workflowId, reread, base)) {
+    return null;
+  }
+  adoptAuthoritative(owner, workflowId, reread);
+  return reread;
+}
+
+/**
  * One change at its turn (see the owner contract).
  * @param {Object} owner
  * @param {string} workflowId
@@ -558,11 +581,22 @@ async function runChange(owner, workflowId, change, options) {
     (Object.hasOwn(options, READ_BASE_OPTION) ? options.readBase :
       viewRecordOf(owner, tableId));
   let submitError = null;
+  let confirmed = false;
   for (let attempt = 0; attempt < MAX_COMPARE_AND_SWAP_ATTEMPTS;
     attempt += 1) {
     const applied = applyChangeTo(owner, workflowId, change, base);
     if (applied.refusal) {
-      return settleRefusal(owner, workflowId, applied.refusal, base);
+      // A refusal decided on an unconfirmed base (this owner's acknowledged
+      // record or a view) is confirmed against the authoritative record
+      // once: a record that moved past the base gets the change re-applied.
+      const moved = confirmed ? null :
+        await movedRecordOf(owner, workflowId, tableId, base);
+      confirmed = true;
+      if (!moved) {
+        return settleRefusal(owner, workflowId, applied.refusal, base);
+      }
+      base = moved;
+      continue;
     }
     if (applied.unchanged) {
       return settled(RECORD_CHANGE_OUTCOME.ALREADY_APPLIED, {
@@ -582,6 +616,7 @@ async function runChange(owner, workflowId, change, options) {
     if (decided.settled) {
       return decided.settled;
     }
+    confirmed = true;
     base = decided.base;
   }
   return settled(RECORD_CHANGE_OUTCOME.UNCONFIRMED, {submitError});
