@@ -223,7 +223,10 @@ test('B1 witness: called 3x/s for 1 h at 0 QPM then 3000 QPM, the provider ' +
       evaluationIntervalMs: EVALUATION_INTERVAL_MS,
     });
     let reading = null;
-    for (let second = 0; second < 3600 + 120; second += 1) {
+    // The step lands at second 3600; one window + one cadence step later
+    // every span lies wholly after it.
+    const readAtSecond = 3600 + (WINDOW_MS + CADENCE_MS) / 1000;
+    for (let second = 0; second <= readAtSecond; second += 1) {
       nowMs += 1000;
       if (second >= 3600) {
         state.count += 50;
@@ -232,9 +235,9 @@ test('B1 witness: called 3x/s for 1 h at 0 QPM then 3000 QPM, the provider ' +
         reading = provider('users-p1', ROW);
       }
     }
-    t.equal(Math.round(reading.queriesPerMinute), 3000,
-      `${callsPerSecond} calls/s: reads 3000 two windows after the step ` +
-      `(read ${reading.queriesPerMinute})`);
+    t.equal(reading.queriesPerMinute, 3000,
+      `${callsPerSecond} calls/s: reads 3000 one window + one cadence step ` +
+      `after the step (read ${reading.queriesPerMinute})`);
     t.ok(reading.trafficObservedMs >= WINDOW_MS &&
       reading.trafficObservedMs < WINDOW_MS + 2 * CADENCE_MS,
     `${callsPerSecond} calls/s: span ${reading.trafficObservedMs} ms is ` +
