@@ -20,8 +20,8 @@ function decodePartitionBoundaryValue(value, keyType) {
     if (typeof value === 'number' && Number.isSafeInteger(value)) {
       return BigInt(value);
     }
-    if (typeof value === 'string' && /^-?\d+$/u.test(value)) {
-      return BigInt(value);
+    if (typeof value === 'string' && /^-?\\d+(?:\\.0+)?$/u.test(value)) {
+      return BigInt(value.replace(/\\.0+$/u, ''));
     }
     throw new Error('Invalid INTEGER partition boundary representation');
   }
