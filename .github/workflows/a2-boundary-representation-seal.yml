@@ -1,9 +1,7 @@
 name: a2-boundary-representation-seal
 # trigger red seal measurement
 on:
-  push:
-    branches:
-      - quest/0-3-boundary-representation
+  workflow_dispatch: {}
 permissions:
   contents: write
 jobs:
