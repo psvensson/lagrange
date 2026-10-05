@@ -35,6 +35,7 @@ const {
   SERVICE_TYPE,
   buildPriorityRecoveryOperationAssessment,
   classifySystemPartition,
+  doesPriorityRecoveryOperationHoldAddBudget,
   resolvePriorityRecoveryActiveNodeCohort,
   shouldPriorityRecoveryOperationBlockPlanning,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -87,7 +88,10 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
 
   /**
    * Resolve the first priority add-like operation that should keep the
-   * critical create lane closed.
+   * critical create lane closed. The lane admits on the operation's OWN
+   * partition, so an unresolved operation keeps it closed whatever the
+   * spread reads (owner ruling 2026-10-05); only the planning answer may
+   * open it, never the cross-partition budget release.
    * @param {Array<Object>} operations
    * @return {Promise<Object|null>}
    * @private
@@ -100,7 +104,12 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
       if (!this.isConcurrentAddBudgetOperation(operation)) {
         continue;
       }
-      if (await this.shouldIgnoreCriticalAddBudgetOperation(operation)) {
+      const assessment =
+        await this.readPriorityRecoveryOperationAssessment(operation);
+      if (
+        assessment &&
+        !shouldPriorityRecoveryOperationBlockPlanning(assessment)
+      ) {
         continue;
       }
       return operation;
@@ -440,21 +449,23 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
   }
 
   /**
-   * Priority recovery rows that already satisfy spread or no longer target the
-   * current eligible cohort must not keep blocking the next add-like action.
+   * The priority-recovery assessment of one operation:
+   * the workflow owner's decision snapshot when it has one, else an
+   * assessment over the available planning snapshot; null when the
+   * operation is not on a priority partition or no snapshot is available.
    *
    * @param {Object} operation
-   * @return {Promise<boolean>}
+   * @return {Promise<Object|null>}
    * @private
    */
-  async shouldIgnoreCriticalAddBudgetOperation(operation) {
+  async readPriorityRecoveryOperationAssessment(operation) {
     if (
       !operation ||
       !classifySystemPartition({
         partitionId: operation.partitionId,
       }).priorityControlPlane
     ) {
-      return false;
+      return null;
     }
     if (
       typeof this.workflowOwner
@@ -465,30 +476,47 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
           operation,
         );
       if (decisionSnapshot && typeof decisionSnapshot === LOCAL_STR_OBJECT) {
-        return !shouldPriorityRecoveryOperationBlockPlanning(decisionSnapshot);
+        return decisionSnapshot;
       }
     }
     if (
       typeof this.workflowOwner
         ?.readAvailablePriorityRecoveryPlanningSnapshotForOperation !== LOCAL_STR_FUNCTION
     ) {
-      return false;
+      return null;
     }
     const planningSnapshot =
       await this.workflowOwner.readAvailablePriorityRecoveryPlanningSnapshotForOperation(
         operation,
       );
     if (!planningSnapshot || typeof planningSnapshot !== LOCAL_STR_OBJECT) {
-      return false;
+      return null;
     }
-    const assessment = buildPriorityRecoveryOperationAssessment({
+    return buildPriorityRecoveryOperationAssessment({
       operation,
       priorityPartitionSummary:
         planningSnapshot.priorityPartitionSummary || null,
       effectiveEligibleNodeIds:
         resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds,
     });
-    return !shouldPriorityRecoveryOperationBlockPlanning(assessment);
+  }
+
+  /**
+   * The cluster-wide priority ADD budget count: a priority-recovery row
+   * whose partition's spread is satisfied, or that no longer targets the
+   * eligible cohort, no longer holds a budget slot other partitions draw
+   * from. Never consulted for admission on the operation's own partition
+   * (findCriticalAddLikeConflictingOperation).
+   *
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async shouldIgnoreCriticalAddBudgetOperation(operation) {
+    const assessment =
+      await this.readPriorityRecoveryOperationAssessment(operation);
+    return assessment !== null &&
+      !doesPriorityRecoveryOperationHoldAddBudget(assessment);
   }
 
   /**
