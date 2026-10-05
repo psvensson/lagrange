@@ -3,10 +3,9 @@
  * number, one comparator owns routing order everywhere, and mixed key spaces
  * are refused with the typed outcome instead of coerced.
  *
- * Why a text boundary: the partitions system table declares
- * partition_key_start/end as TEXT, so a split's numeric median comes back as
- * '500' after any round trip through the table, while the routed key is the
- * JavaScript number the SQL AST carries. Before this quest both comparators
+ * The persisted boundary column is TEXT storage, but partition_key_type now
+ * declares INTEGER authority. Numeric-looking storage must therefore decode
+ * numerically rather than becoming TEXT key semantics. Before this quest both comparators
  * fell through to String(a).localeCompare(String(b)), so 1000 sorted left of
  * '500' and high integer keys were silently mis-routed.
  */
@@ -31,8 +30,8 @@ const MISMATCH_PATTERN = /type mismatch|mixed|mismatch/iu;
 
 function splitPartitions(boundary = TEXT_BOUNDARY) {
   return [
-    {partition_id: 'p1', partition_key_start: null, partition_key_end: boundary},
-    {partition_id: 'p2', partition_key_start: boundary, partition_key_end: null},
+    {partition_id: 'p1', partition_key_start: null, partition_key_end: boundary, partition_key_type: 'INTEGER'},
+    {partition_id: 'p2', partition_key_start: boundary, partition_key_end: null, partition_key_type: 'INTEGER'},
   ];
 }
 
