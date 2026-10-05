@@ -176,19 +176,18 @@ for (const [label, rebuildRow] of [['the same row', false],
         PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
         'answered from its outcome row: the original result');
       if (rebuildRow) {
-        // The rebuilt row is a new instance, issued after the first was
-        // resolved; its answer is its own (the row exists), never the
-        // first's.
-        assert.equal(redriven.length, 2, 'then the new instance, once');
-        assert.notEqual(redriven[1].entryId, firstEntry,
-          'under its own entry');
-        assert.ok(String(redriven[1].answer.error).includes('UNIQUE'),
-          'answered truthfully: the row exists');
+        // The rebuilt row is a new logical write of the name; the first
+        // instance applied, and the registration's owner says an applied
+        // instance settles it: the rebuilt row is not issued (it could only
+        // collide with the row the first wrote).
+        assert.equal(redriven.length, 1, 'nothing else is delivered');
+        assert.equal(redrive.observedRow, null,
+          'accepted on the pending instance, not on a read');
       } else {
         assert.equal(redriven.length, 1, 'the same instance: nothing else');
-        assert.ok(!JSON.stringify(deliveries.map((d) => d.answer))
-          .includes('UNIQUE'), 'no delivery was answered UNIQUE');
       }
+      assert.ok(!JSON.stringify(deliveries.map((d) => d.answer))
+        .includes('UNIQUE'), 'no delivery was answered UNIQUE');
       assert.deepEqual(rowsOf(surface.dbPath, TABLES.NODES, 'node_id'),
         [JOINER_ID], 'exactly one row (W6)');
     });
@@ -480,7 +479,8 @@ async () => {
     const mark = deliveries.length;
     engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
     // Created again: its timestamps are new, so it is a new logical write of
-    // the name - issued only after the first entry was resolved.
+    // the name. The first entry is resolved first; it applied, which settles
+    // a reservation birth: the new one is not issued, the authority answers.
     const again = await coordinator.createReservationForOperation(operation);
     assert.equal(again.outcome, 'already_active', 'answered by the ' +
       `authority: the first birth's reservation is ACTIVE (${JSON.stringify(
@@ -490,8 +490,9 @@ async () => {
       'the first entry is resolved first');
     assert.equal(redriven[0].answer.success, true,
       'answered applied from its outcome row');
-    assert.ok(redriven.slice(1).every((d) => d.entryId !== firstEntry),
-      'the new birth is never answered by the first entry');
+    assert.equal(redriven.length, 1, 'nothing else is delivered');
+    assert.ok(!JSON.stringify(deliveries.map((d) => d.answer))
+      .includes('UNIQUE'), 'never answered UNIQUE');
     assert.deepEqual(rowsOf(surface.dbPath, TABLES.STORAGE_RESERVATIONS,
       'reservation_id'), ['res-op-w5'], 'one row (W6)');
   });

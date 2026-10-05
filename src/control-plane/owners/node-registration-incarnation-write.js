@@ -160,9 +160,12 @@ function registrationWriteSubject(row) {
   return [TABLES.NODES, row[COLUMN.NODE_ID], row[COLUMN.BOOT_INCARNATION]];
 }
 
+// Every instance of a registration name writes this node's row at this
+// incarnation, so an applied one settles the write: a re-drive with new
+// content is then not issued (it could only collide with that row).
 function registrationWriteIdentity(row, ...verb) {
   return {writeIdentity: controlPlaneWriteIdentity(
-    ...registrationWriteSubject(row), ...verb)};
+    ...registrationWriteSubject(row), ...verb), pendingAppliedSettles: true};
 }
 
 // The one mutation an observation admits: birth when absent, one CAS on

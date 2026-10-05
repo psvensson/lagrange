@@ -35,6 +35,15 @@ import {
 //     resolved `pendingInstance`). An instance still unresolved answers the
 //     new write with the typed unknown outcome naming it: nothing is applied
 //     for content that was not written.
+//   * An owner whose logical write is settled by ANY applied instance of its
+//     name (a registration's birth or advance at its incarnation, a
+//     reservation's birth: every instance writes the same row's birth) says
+//     so (`pendingAppliedSettles`): when the resolved pending instance
+//     applied, the new content is not issued - it could only collide with
+//     the row its pending instance wrote - and the write is answered with
+//     the typed CONTROL_PLANE_WRITE_PENDING_INSTANCE_APPLIED carrying the
+//     pending instance, for the owner to classify (nothing of this content
+//     was applied).
 //   * An instance lives for exactly one logical write. It is released when
 //     an attempt settles its entry (applied, or a committed statement's
 //     failure), when its FIRST attempt is refused before it was proposed
@@ -52,6 +61,10 @@ const CONTROL_PLANE_WRITE_KEY_PREFIX = 'cpw-';
 const MAX_HELD_WRITE_INSTANCES = 4096;
 const CONTROL_PLANE_WRITE_IDENTITY_CAPACITY_CODE =
   'CONTROL_PLANE_WRITE_IDENTITY_CAPACITY';
+const CONTROL_PLANE_WRITE_PENDING_INSTANCE_APPLIED_CODE =
+  'CONTROL_PLANE_WRITE_PENDING_INSTANCE_APPLIED';
+const PENDING_INSTANCE_APPLIED_MESSAGE = 'An earlier instance of this ' +
+  'logical write applied; this content was not issued';
 const CAPACITY_RETRY_AFTER_MS = 1000;
 const CAPACITY_REFUSAL_MESSAGE = 'Control-plane write identities at capacity';
 const PENDING_INSTANCE_OUTCOME = Object.freeze({
@@ -271,7 +284,8 @@ function capacityRefusal(name) {
 
 // The held instance of a name, resolved under its own entry by re-delivering
 // its own content: the pending instance it was, or - still unresolved - the
-// typed unknown answer naming it.
+// answer naming it as the typed unknown (what the re-delivery threw is
+// thrown again, carrying the pending instance).
 async function resolvePendingInstance(record) {
   let answer;
   let thrown = false;
@@ -284,13 +298,17 @@ async function resolvePendingInstance(record) {
   if (heldInstances.get(record.name) === record) {
     const pendingInstance = describePendingInstance(record,
       PENDING_INSTANCE_OUTCOME.UNKNOWN, answer);
+    if (thrown) {
+      throw withPendingInstance(answer, pendingInstance);
+    }
     return {unresolved: {
+      ...answer,
       success: false,
-      error: ERRORS.WRITE_OUTCOME_UNKNOWN,
+      error: someLinkedAnswer(answer, isWriteOutcomeUnknown) ?
+        answer.error : ERRORS.WRITE_OUTCOME_UNKNOWN,
       failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
       entryId: pendingInstance.entryId,
       pendingInstance,
-      cause: answer,
     }};
   }
   const applied = !thrown && answer?.success !== false;
@@ -311,7 +329,19 @@ function withPendingInstance(answer, pendingInstance) {
   return {...answer, pendingInstance};
 }
 
-async function runNamedControlPlaneWrite(name, content, attempt) {
+// The answer of a write an applied pending instance settles (its owner
+// passed pendingAppliedSettles): not issued, named by the pending instance.
+function pendingInstanceAppliedAnswer(pendingInstance) {
+  return {
+    success: false,
+    error: PENDING_INSTANCE_APPLIED_MESSAGE,
+    errorCode: CONTROL_PLANE_WRITE_PENDING_INSTANCE_APPLIED_CODE,
+    pendingInstance,
+  };
+}
+
+async function runNamedControlPlaneWrite(options, content, attempt) {
+  const name = options.writeIdentity;
   const digest = digestWriteContent(content);
   let record = heldInstances.get(name);
   let pendingInstance = null;
@@ -321,11 +351,15 @@ async function runNamedControlPlaneWrite(name, content, attempt) {
       return resolution.unresolved;
     }
     pendingInstance = resolution.pendingInstance;
+    if (options.pendingAppliedSettles === true &&
+      pendingInstance.outcome === PENDING_INSTANCE_OUTCOME.APPLIED) {
+      return pendingInstanceAppliedAnswer(pendingInstance);
+    }
     record = heldInstances.get(name);
     if (record !== undefined && record.digest !== digest) {
       // Another write of the name took the slot meanwhile: resolve that
       // one too before this one is issued.
-      return runNamedControlPlaneWrite(name, content, attempt);
+      return runNamedControlPlaneWrite(options, content, attempt);
     }
   }
   if (record === undefined) {
@@ -359,7 +393,7 @@ function runControlPlaneWrite(options, content, attempt) {
   if (!isNonEmptyString(options?.writeIdentity)) {
     return attempt(mintControlPlaneWriteKey());
   }
-  return runNamedControlPlaneWrite(options.writeIdentity, content, attempt);
+  return runNamedControlPlaneWrite(options, content, attempt);
 }
 
 /**

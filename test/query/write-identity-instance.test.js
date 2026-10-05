@@ -302,6 +302,43 @@ for (const [label, pinClock, cdc] of [
   });
 }
 
+test('endpoint shape (birth left unresolved): a birth its owner could not ' +
+  'read back, its row then deleted by the stopped replica, born again with ' +
+  'identical content - the row exists', {timeout: TEST_TIMEOUT_MS},
+async () => {
+  await withSurface([TABLES.SERVICE_ENDPOINTS], async ({engine, gateway,
+    of}) => {
+    const surface = of(TABLES.SERVICE_ENDPOINTS);
+    const clock = pinnedStamps();
+    await withRuntimeEndpointOwner({engine, gateway, surface,
+      mutationContext: {...JOIN_WRITE_OPTIONS}},
+    async ({register, remove}) => {
+      const readable = gateway.readAuthoritativeRows;
+      gateway.readAuthoritativeRows = async () => ({success: false,
+        error: 'authority unavailable'});
+      clock.stamp();
+      const {first} = await spendFirstAttempt({engine, surface,
+        attempt: () => register(9001)});
+      assert.equal(first.registered, false, 'setup: the birth stays ' +
+        `unresolved (${first.result?.outcome ?? first.error?.message})`);
+      assert.ok(await appliedRow(surface, RUNTIME_ENDPOINT_ID),
+        'setup: it commits');
+      gateway.readAuthoritativeRows = readable;
+      engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
+      const removed = await remove();
+      assert.notEqual(removed?.success, false, 'setup: the row is deleted');
+      assert.deepEqual(rowsOf(surface.dbPath, TABLES.SERVICE_ENDPOINTS,
+        'endpoint_id'), [], 'setup: no endpoint row');
+      clock.stamp();
+      const reborn = await register(9001);
+      assert.equal(reborn.registered, true, 'ENDPOINT_REGISTERED ' +
+        `(${reborn.error?.message ?? reborn.result?.outcome})`);
+      assert.deepEqual(rowsOf(surface.dbPath, TABLES.SERVICE_ENDPOINTS,
+        'endpoint_id'), [RUNTIME_ENDPOINT_ID], 'and the row exists');
+    });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // B1, changed content: a same-incarnation refresh with a new port while the
 // previous refresh's outcome is unknown.

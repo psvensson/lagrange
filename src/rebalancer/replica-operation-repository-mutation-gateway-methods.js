@@ -687,6 +687,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         ...(coalescingKey ? {replacePendingKey: coalescingKey} : {}),
         ...(typeof options.writeIdentity === 'string' ?
           {writeIdentity: options.writeIdentity} : {}),
+        ...(options.pendingAppliedSettles === true ?
+          {pendingAppliedSettles: true} : {}),
       };
     }
 

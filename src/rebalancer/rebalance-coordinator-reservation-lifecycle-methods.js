@@ -270,6 +270,8 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         // ById).
         writeIdentity: controlPlaneWriteIdentity(
           ...reservationWriteSubject(reservationId), RESERVATION_BIRTH_VERB),
+        // An applied earlier birth settles this one: the authority answers.
+        pendingAppliedSettles: true,
       },
     );
 
