@@ -6,6 +6,8 @@ import {
   NUM,
   TIME_MS,
 } from '../../constants/index.js';
+import {mintControlPlaneWriteKey} from
+  '../../control-plane/control-plane-write-identity.js';
 
 const DEFAULT_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
 const DEFAULT_RETRY_BASE_DELAY_MS = NUM.HUNDRED;
@@ -88,11 +90,19 @@ async function runRetryableControlPlaneWrite(executor, options = {}) {
   const deadlineMs = now() + timeoutMs;
   let nextDelayMs = baseDelayMs;
   let attempt = 0;
+  // Every attempt is the same logical write: the executor delivers each
+  // under this one write identity (the caller's, or named once here), so an
+  // attempt after an unknown outcome is the same entry, never a second apply.
+  const attemptIdentity = Object.freeze({
+    writeIdentity: typeof options.writeIdentity === 'string' &&
+      options.writeIdentity.length > 0 ?
+      options.writeIdentity : mintControlPlaneWriteKey(),
+  });
 
   while (true) {
     attempt += 1;
     try {
-      const result = await executor();
+      const result = await executor(attemptIdentity);
       if (result?.success !== false) {
         return result;
       }

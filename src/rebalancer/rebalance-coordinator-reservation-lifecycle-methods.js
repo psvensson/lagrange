@@ -246,6 +246,11 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       {
         ownerId: operation.operationId,
         sessionId: options.sessionId,
+        // The reservation's birth is one logical write: an ensure after its
+        // answer was lost is the same entry (answered from its outcome row),
+        // never a second INSERT of the deterministic id.
+        writeIdentity: `${SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS}:` +
+          `${reservationId}:birth`,
       },
     );
 

@@ -1,4 +1,5 @@
 import {ERRORS} from '../constants/index.js';
+import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
 
 const QUERY_PARTITION_DELIVERY_PRE_SUBMISSION_ROUTE_UNAVAILABLE =
   'pre_submission_route_unavailable';
@@ -41,6 +42,7 @@ export function buildParticipantFailureEntry(result) {
     disposition: normalizeParticipantFailureString(result.disposition),
     logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
     entryId: normalizeParticipantFailureString(result.entryId),
+    ...(result?.spentWait ? {spentWait: result.spentWait} : {}),
     error: result.error || ERRORS.QUERY_FAILED,
     durationMs:
       Number.isFinite(result?.durationMs) ?
@@ -75,6 +77,9 @@ export function buildPartitionExecutionFailureResult({
   details = {},
 }) {
   return {
+    // The typed fields of the answer the delivery failed on (its code, its
+    // entryId): a typed outcome never degrades to its text at this hop.
+    ...pickTypedWriteAnswer(details),
     partitionId,
     success: false,
     error: errorMessage || ERRORS.QUERY_FAILED,

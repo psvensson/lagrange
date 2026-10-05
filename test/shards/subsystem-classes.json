@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 281,
+    "bootstrap-membership": 282,
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 205,
@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 17,
     "placement-rebalance": 255,
-    "query-sql": 165,
+    "query-sql": 166,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 144,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2205,
-  "digest": "fnv1a32-a125b7d3",
+  "censusSize": 2207,
+  "digest": "fnv1a32-652ca937",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-614a95bb",
+  "observationDigest": "fnv1a32-fe02dfb0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -172,6 +172,7 @@
     "test/bootstrap/dynamic-partition-cdc-subscription.test.js": "bootstrap-membership",
     "test/bootstrap/formation-readiness-owner-single-form.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": "bootstrap-membership",
+    "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js": "bootstrap-membership",
     "test/bootstrap/hydrate-system-cache-from-bootstrap.test.js": "bootstrap-membership",
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": "bootstrap-membership",
@@ -1415,6 +1416,7 @@
     "test/query/table-creation-service.test.js": "query-sql",
     "test/query/transaction-owned-commit-mode-guard.test.js": "query-sql",
     "test/query/transaction-recovery-poison-row-attribution.test.js": "query-sql",
+    "test/query/unknown-outcome-same-entry.test.js": "query-sql",
     "test/query/wasm-call-adapter.integration.test.js": "query-sql",
     "test/query/wasm-call-adapter.test.js": "query-sql",
     "test/query/write-path-internal-pacing.test.js": "query-sql",
@@ -2641,6 +2643,12 @@
         "src/control-plane/control-plane-error-classification.js",
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js"
+      ]
+    },
+    "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/raft/raft-rs-runtime-owner.js"
       ]
     },
     "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js": {
@@ -8093,6 +8101,25 @@
       "files": [
         "src/query/distributed/distributed-transaction-coordinator-constants.js",
         "src/query/distributed/distributed-transaction-coordinator.js"
+      ]
+    },
+    "test/query/unknown-outcome-same-entry.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-runtime-bundle.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/owners/endpoint-incarnation-authority.js",
+        "src/control-plane/owners/membership-publication-runtime-owner.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/query/write-path-internal-pacing.test.js": {

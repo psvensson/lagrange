@@ -5,6 +5,8 @@ import {
 import {isReroutableWriteError} from '../constants/errors.js';
 import {isReroutableWriteFailureCode} from
   '../partition/partition-write-kernel.js';
+import {mintControlPlaneWriteKey} from
+  '../control-plane/control-plane-write-identity.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
@@ -12,6 +14,16 @@ const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_PREFIX =
   'control-plane:write';
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_SEPARATOR = ':';
+
+// Every attempt of one retried mutation is one logical write: it is
+// delivered under the caller's write identity, or one named once for the
+// retry loop, so an attempt after an unknown outcome is the same entry.
+function withMutationWriteIdentity(options = {}) {
+  return typeof options.writeIdentity === 'string' &&
+    options.writeIdentity.length > 0 ?
+    options :
+    {...options, writeIdentity: mintControlPlaneWriteKey()};
+}
 
 function assignReplicaOperationRepositoryMutationGatewayMethods(
   ReplicaOperationRepository,
@@ -50,7 +62,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
   } = options;
 
   class ReplicaOperationRepositoryMutationGatewayMethods {
-    async executeOperationMutationWithRetry(sql, params, options = {}) {
+    async executeOperationMutationWithRetry(sql, params, callerOptions = {}) {
+      const options = withMutationWriteIdentity(callerOptions);
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
       while (true) {
@@ -165,9 +178,10 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
 
     async executeReplicaOperationGatewayMutationWithRetry(
       mutation,
-      options = {},
+      callerOptions = {},
       fallback = {},
     ) {
+      const options = withMutationWriteIdentity(callerOptions);
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
       let priorMutationDeliveryMayHaveBeenAttempted = false;
@@ -652,6 +666,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         ...(coalescingKey ? {coalescingKey} : {}),
         ...(deliverySource ? {deliverySource} : {}),
         ...(coalescingKey ? {replacePendingKey: coalescingKey} : {}),
+        ...(typeof options.writeIdentity === 'string' ?
+          {writeIdentity: options.writeIdentity} : {}),
       };
     }
 

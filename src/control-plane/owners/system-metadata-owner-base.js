@@ -424,7 +424,8 @@ class SystemMetadataOwnerBase {
     };
     try {
       const result = await runRetryableControlPlaneWrite(
-        () => executor(mutationOptions),
+        // The caller's own write identity, when it names one, wins.
+        (attemptIdentity) => executor({...attemptIdentity, ...mutationOptions}),
         retryOptions,
       );
       if (result?.success === false) {

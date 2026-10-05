@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2188,
+    "ordinary": 2190,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2205,
-  "digest": "fnv1a32-1d4a8270",
+  "censusSize": 2207,
+  "digest": "fnv1a32-868afe50",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -152,6 +152,7 @@
     "test/bootstrap/dynamic-partition-cdc-subscription.test.js": "ordinary",
     "test/bootstrap/formation-readiness-owner-single-form.test.js": "ordinary",
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": "ordinary",
+    "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": "ordinary",
     "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js": "ordinary",
     "test/bootstrap/hydrate-system-cache-from-bootstrap.test.js": "ordinary",
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": "ordinary",
@@ -1395,6 +1396,7 @@
     "test/query/table-creation-service.test.js": "ordinary",
     "test/query/transaction-owned-commit-mode-guard.test.js": "ordinary",
     "test/query/transaction-recovery-poison-row-attribution.test.js": "ordinary",
+    "test/query/unknown-outcome-same-entry.test.js": "ordinary",
     "test/query/wasm-call-adapter.integration.test.js": "ordinary",
     "test/query/wasm-call-adapter.test.js": "ordinary",
     "test/query/write-path-internal-pacing.test.js": "ordinary",

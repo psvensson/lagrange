@@ -16,18 +16,21 @@ const {
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
 
+function stringOrNull(value) {
+  return typeof value === LOCAL_STR_STRING ? value : null;
+}
+
 function copyParticipantDisposition(error, result) {
   Object.assign(error, {
-    failureCode: typeof result?.failureCode === LOCAL_STR_STRING ?
-      result.failureCode : null,
+    failureCode: stringOrNull(result?.failureCode),
     committed: result?.committed === true,
-    outcome: typeof result?.outcome === LOCAL_STR_STRING ?
-      result.outcome : null,
-    disposition: typeof result?.disposition === LOCAL_STR_STRING ?
-      result.disposition : null,
+    outcome: stringOrNull(result?.outcome),
+    disposition: stringOrNull(result?.disposition),
     logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
-    entryId: typeof result?.entryId === LOCAL_STR_STRING ?
-      result.entryId : null,
+    entryId: stringOrNull(result?.entryId),
+    // The redelivery owner's report of the wait it spent on an unknown
+    // outcome travels with the typed failure.
+    spentWait: result?.spentWait ?? null,
   });
 }
 

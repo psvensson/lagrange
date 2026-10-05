@@ -126,6 +126,50 @@ function isReroutableWriteFailureCode(code, {carriesEntryId = false} = {}) {
     (code !== REFUSAL.OUTCOME_UNKNOWN || carriesEntryId === true);
 }
 
+// The typed fields of a write answer that did not succeed: what is known of
+// the write - its code, the entry it was proposed under and that entry's log
+// index, the consensus state that answered it, whether a committed statement
+// failed - and, from the redelivery owner, the wait it spent on an unknown
+// outcome. Every hop between the partition and the write's caller carries
+// them as they are (R07: a typed outcome never degrades to its text).
+const TYPED_WRITE_ANSWER_FIELDS = Object.freeze([
+  'failureCode',
+  'entryId',
+  'logIndex',
+  'consensus',
+  'committed',
+  'outcome',
+  'spentWait',
+]);
+
+/**
+ * The typed fields a failed write answer carries (TYPED_WRITE_ANSWER_FIELDS),
+ * for a hop to carry on beside its text.
+ * @param {*} answer - A failed write answer, or a result built from one.
+ * @return {Object} The fields it carries (absent ones are left out).
+ */
+function pickTypedWriteAnswer(answer) {
+  const typed = {};
+  for (const field of TYPED_WRITE_ANSWER_FIELDS) {
+    const value = answer?.[field];
+    if (value !== undefined && value !== null) {
+      typed[field] = value;
+    }
+  }
+  return typed;
+}
+
+/**
+ * Whether a write answer says its write's outcome is not known: it was handed
+ * to consensus and may commit whatever this answer says. Only a re-delivery
+ * under the answer's own entryId resolves it.
+ * @param {*} answer - A write answer.
+ * @return {boolean} Whether it is the typed unknown outcome.
+ */
+function isWriteOutcomeUnknown(answer) {
+  return answer?.failureCode === REFUSAL.OUTCOME_UNKNOWN;
+}
+
 /**
  * Whether a write answer is a settled replay whose affected-row count is not
  * known (PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED): the write was
@@ -472,5 +516,7 @@ export {
   isPartitionWriteFailureCode,
   isReroutableWriteFailureCode,
   isRetryableWriteFailureCode,
+  isWriteOutcomeUnknown,
+  pickTypedWriteAnswer,
   resolvePartitionWriteCommitMode,
 };

@@ -45,6 +45,11 @@ const NODE_REGISTRATION_AUTHORITATIVE_READ = Object.freeze({
   workClass: 'critical',
 });
 
+const REGISTRATION_WRITE_VERB = Object.freeze({
+  BIRTH: 'birth',
+  ADVANCE_FROM: 'advance-from-',
+});
+
 const NODE_REGISTRATION_INCARNATION_REQUIRED =
   'NODE_REGISTRATION_INCARNATION_REQUIRED';
 const NODE_REGISTRATION_NOT_APPLIED = 'Node registration write not applied';
@@ -135,13 +140,25 @@ function failedResultError(result) {
   return error;
 }
 
+// The logical write a registration mutation is: this incarnation's birth,
+// or its advance from the exact incarnation observed. Every attempt of one
+// of them - the reread's retry, the join's re-drive after an unknown
+// outcome - is delivered under this identity, so it is the same committed
+// entry: answered applied with its original result, or run for the first
+// time; never a second birth that fails UNIQUE.
+function registrationWriteIdentity(row, verb) {
+  return {writeIdentity: `${TABLES.NODES}:${row[COLUMN.NODE_ID]}@` +
+    `${row[COLUMN.BOOT_INCARNATION]}:${verb}`};
+}
+
 // The one mutation an observation admits: birth when absent, one CAS on
 // the exact older incarnation observed, none otherwise.
 function planRegistration(options, row, observedRow, bootIncarnation) {
   const relation = classifyNodeIncarnationRelation(observedRow,
     bootIncarnation);
   if (relation === NODE_INCARNATION_RELATION.ABSENT) {
-    return () => options.insert(row);
+    return () => options.insert(row,
+      registrationWriteIdentity(row, REGISTRATION_WRITE_VERB.BIRTH));
   }
   if (relation !== NODE_INCARNATION_RELATION.OLDER) return null;
   const observedValue = observedRow[COLUMN.BOOT_INCARNATION];
@@ -149,7 +166,8 @@ function planRegistration(options, row, observedRow, bootIncarnation) {
     [COLUMN.NODE_ID]: row[COLUMN.NODE_ID],
     [COLUMN.BOOT_INCARNATION]: observedValue === undefined ?
       null : observedValue,
-  }, row);
+  }, row, registrationWriteIdentity(row,
+    `${REGISTRATION_WRITE_VERB.ADVANCE_FROM}${observedValue}`));
 }
 
 function classifyObservation(read, bootIncarnation, afterAttempt) {
@@ -177,8 +195,11 @@ function freezeOutcome(outcome, observedRow = null, error = null) {
  * @param {Object} options.row - NODES row (node_id required).
  * @param {number} options.bootIncarnation - This boot's reserved incarnation.
  * @param {Function} options.observe - () => {available, row} authoritative.
- * @param {Function} options.insert - (row) => mutation result (birth).
- * @param {Function} options.advance - (whereClause, row) => mutation result.
+ * @param {Function} options.insert - (row, identity) => mutation result
+ *   (birth); `identity` ({writeIdentity}) names the logical write for its
+ *   delivery options.
+ * @param {Function} options.advance - (whereClause, row, identity) =>
+ *   mutation result.
  * @return {Promise<Object>} Frozen {outcome, observedRow, error}; error is
  *   the failed attempt's own error when the outcome stays UNRESOLVED.
  */

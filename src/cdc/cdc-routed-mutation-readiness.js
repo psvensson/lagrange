@@ -1,3 +1,7 @@
+import {resolveControlPlaneWriteKey} from
+  '../control-plane/control-plane-write-identity.js';
+import {deriveParticipantEntryId} from
+  '../query/distributed/distributed-write-coordinator.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {submitRoutedMutationHop} from './cdc-terminal-gate.js';
@@ -61,6 +65,21 @@ const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
 const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
 const CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR = 'constructor';
 
+// The local-leader leg of a routed write is the same entry as its engine
+// attempts: its entryId is derived from the write's key and the partition
+// exactly as the engine's write plan derives it.
+function localLegWriteIdentity(idempotencyKey, partitionService) {
+  if (typeof idempotencyKey !== 'string' || idempotencyKey.length === 0 ||
+    typeof partitionService?.partitionId !== 'string') {
+    return {};
+  }
+  return {
+    idempotencyKey,
+    entryId: deriveParticipantEntryId(idempotencyKey,
+      partitionService.partitionId),
+  };
+}
+
 class CDCRoutedMutationReadiness {
   hasActiveSystemTableWriteMirror(tableName) {
     const sqlQueryEngine = this.sqlQueryEngine;
@@ -77,7 +96,8 @@ class CDCRoutedMutationReadiness {
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
   }
 
-  async tryExecuteLocalSystemTableWrite(sql, params = []) {
+  async tryExecuteLocalSystemTableWrite(sql, params = [],
+    idempotencyKey = null) {
     if (!sql || typeof sql !== 'string') {
       return {
         handled: false,
@@ -123,11 +143,17 @@ class CDCRoutedMutationReadiness {
         continue;
       }
       try {
+        const legIdentity =
+          localLegWriteIdentity(idempotencyKey, partitionService);
         const localResult = await submitRoutedMutationHop(this,
           CDC_TERMINAL_STAGE.LOCAL_LEADER_WRITE,
-          () => partitionService.executeQuery(sql, params), issued.answer);
+          () => partitionService.executeQuery(sql, params, legIdentity),
+          issued.answer);
         const result = this.normalizeLocalSystemTableWriteResult(localResult);
-        if (this.isLocalSystemTableWriteRoutedOn(result)) {
+        if (this.isLocalSystemTableWriteRoutedOn(result, {
+          carriesEntryId: typeof legIdentity.entryId === 'string' &&
+            result?.entryId === legIdentity.entryId,
+        })) {
           issued.answer = result;
           continue;
         }
@@ -154,17 +180,20 @@ class CDCRoutedMutationReadiness {
   /**
    * Whether the local partition's answer to a system-table write sends it on
    * to the next local service: a typed answer only when its code says it may
-   * be sent again without its entryId (never an unknown outcome: it may have
-   * committed here), an untyped one by its text.
+   * be sent again - an unknown outcome only when the leg carried the write's
+   * derived entryId, so every later leg and engine attempt is the same entry
+   * (it may have committed here) - an untyped one by its text.
    * @param {Object|null} result - The local partition's answer.
+   * @param {Object} [options] - {carriesEntryId}: the leg carried the entryId
+   *   the answer names.
    * @return {boolean} Whether the write is sent on.
    */
-  isLocalSystemTableWriteRoutedOn(result) {
+  isLocalSystemTableWriteRoutedOn(result, {carriesEntryId = false} = {}) {
     if (result && result.success !== false) {
       return false;
     }
     return isPartitionWriteFailureCode(result?.failureCode) ?
-      isReroutableWriteFailureCode(result.failureCode) :
+      isReroutableWriteFailureCode(result.failureCode, {carriesEntryId}) :
       this.isTransientCdcError(result);
   }
 
@@ -412,6 +441,12 @@ class CDCRoutedMutationReadiness {
     if (typeof sessionId === 'string' && sessionId.length > 0) {
       baseQueryOptions.sessionId = sessionId;
     }
+    // Every engine attempt of this routed write - each retry below - is
+    // delivered under one idempotency key (the caller's, or one minted for
+    // this write), so the engine plans each as the same entry: an attempt
+    // after an unknown outcome is answered from the first's outcome row.
+    baseQueryOptions.idempotencyKey =
+      resolveControlPlaneWriteKey({idempotencyKey: options?.idempotencyKey});
     if (options?.cancellationToken) {
       baseQueryOptions.cancellationToken = options.cancellationToken;
     }
@@ -459,6 +494,7 @@ class CDCRoutedMutationReadiness {
           const localWriteResult = await this.tryExecuteLocalSystemTableWrite(
             sql,
             params,
+            baseQueryOptions.idempotencyKey,
           );
           if (localWriteResult.handled) {
             return localWriteResult.result;

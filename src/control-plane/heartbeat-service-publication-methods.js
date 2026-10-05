@@ -300,9 +300,11 @@ class HeartbeatServicePublicationMethods {
       observe: async () => ({available: true, row: existingEp}),
       readback: () => readAuthoritativeEndpointRow(gateway, table,
         endpointRow[COLUMN.ENDPOINT_ID]),
-      insert: (row) => gateway.insertSystemTableRow(table, row, writeOptions),
-      update: (whereClause, data) =>
-        gateway.updateSystemTableRow(table, whereClause, data, writeOptions),
+      insert: (row, identity) => gateway.insertSystemTableRow(table, row,
+        {...writeOptions, ...identity}),
+      update: (whereClause, data, identity) =>
+        gateway.updateSystemTableRow(table, whereClause, data,
+          {...writeOptions, ...identity}),
     });
     if (isEndpointIncarnationOutcomeCompleted(outcome.outcome)) {
       return outcome.result || {success: true};

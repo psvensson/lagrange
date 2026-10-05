@@ -38,6 +38,12 @@ const ENDPOINT_INCARNATION_OUTCOME = Object.freeze({
   AUTHORITY_UNAVAILABLE: 'authority_unavailable',
 });
 
+const ENDPOINT_WRITE_IDENTITY_SCOPE = 'endpoint';
+const ENDPOINT_WRITE_VERB = Object.freeze({
+  BIRTH: 'birth',
+  CAS_FROM: 'cas-from-',
+});
+
 const COMPLETED_OUTCOMES = Object.freeze([
   ENDPOINT_INCARNATION_OUTCOME.APPLIED,
   ENDPOINT_INCARNATION_OUTCOME.RESOLVED_BY_READBACK,
@@ -210,13 +216,25 @@ function withoutEndpointId(row) {
   return data;
 }
 
+// The logical write an endpoint mutation is: this incarnation's birth of
+// the row, or its CAS from the exact incarnation observed. Every attempt of
+// one of them (a re-drive after an unknown outcome among them) is delivered
+// under this identity - the same committed entry, never a second birth.
+function endpointWriteIdentity(row, verb) {
+  return {writeIdentity: `${ENDPOINT_WRITE_IDENTITY_SCOPE}:` +
+    `${row[COLUMN.ENDPOINT_ID]}@${row[COLUMN.BOOT_INCARNATION]}:${verb}`};
+}
+
 function casFromObserved(options, row, observedRow) {
+  const observedIncarnation = endpointIncarnationOf(observedRow);
   return attemptWrite(() => options.update(
     {
       [COLUMN.ENDPOINT_ID]: row[COLUMN.ENDPOINT_ID],
-      [COLUMN.BOOT_INCARNATION]: endpointIncarnationOf(observedRow),
+      [COLUMN.BOOT_INCARNATION]: observedIncarnation,
     },
     withoutEndpointId(row),
+    endpointWriteIdentity(row,
+      `${ENDPOINT_WRITE_VERB.CAS_FROM}${observedIncarnation}`),
   ));
 }
 
@@ -224,7 +242,8 @@ function casFromObserved(options, row, observedRow) {
 // observed same-or-older incarnation, none for a newer owner.
 function planEndpointWrite(options, row, observed, bootIncarnation) {
   if (!observed.row) {
-    return () => attemptWrite(() => options.insert(row));
+    return () => attemptWrite(() => options.insert(row,
+      endpointWriteIdentity(row, ENDPOINT_WRITE_VERB.BIRTH)));
   }
   if (endpointIncarnationOf(observed.row) > bootIncarnation) return null;
   return () => casFromObserved(options, row, observed.row);
@@ -244,8 +263,11 @@ function planEndpointWrite(options, row, observed, bootIncarnation) {
  *   observation that selects the mutation; the CAS enforces it).
  * @param {Function} [options.readback] - Authoritative () => {available,
  *   row} for an uncertain outcome (defaults to observe).
- * @param {Function} options.insert - (stampedRow) => mutation result.
- * @param {Function} options.update - (whereClause, data) => mutation result.
+ * @param {Function} options.insert - (stampedRow, identity) => mutation
+ *   result; `identity` ({writeIdentity}) names the logical write for its
+ *   delivery options.
+ * @param {Function} options.update - (whereClause, data, identity) =>
+ *   mutation result.
  * @return {Promise<Object>} Frozen outcome.
  */
 async function writeEndpointAtIncarnation(options) {

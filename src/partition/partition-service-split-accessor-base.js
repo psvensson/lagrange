@@ -96,7 +96,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       this.rebalancer?.controlPlaneSystemTableGateway ||
       this.controlPlaneSystemTableGateway;
     const result = await runRetryableControlPlaneWrite(
-      () =>
+      (attemptIdentity) =>
         gateway.submitMutation(
           {
             operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
@@ -108,6 +108,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
             workClass: PRESSURE_WORK_CLASS.BACKGROUND,
             deliveryPriority: 'background',
             coalescingKey: `partitions:size:${this.partitionId}`,
+            ...attemptIdentity,
           },
         ),
       partitionSizeRetryOptions(this.timeSource),
