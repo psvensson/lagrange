@@ -119,6 +119,59 @@ test('W4b a lost acknowledgement of the current write: recognised on the ' +
     'no reconcile WARN: the write was simply recognised');
 });
 
+test('W4d a retry after a failed submission resubmits the SAME bytes: the ' +
+  'first submission landing late is recognised as this change\'s own',
+async (t) => {
+  const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+  // Every read of the clock moves it: a re-encoded retry would differ.
+  const clock = {value: 1000, get now() {
+    this.value += 1;
+    return this.value;
+  }};
+  const a = splitOwner(store, openView(store), 'A', clock);
+  const workflowId = 'split-late-landing';
+  await a.workflow.workflowCoordinator.registerWorkflowFromRead({workflowId,
+    ownerKey: SOURCE, tableId: store.tableId, tableName: 'users',
+    partitionId: SOURCE, status: 'split_backfilling',
+    metadata: {workflowId, sourcePartitionId: SOURCE,
+      targetPartitionVersion: 2, targetPartitionIds: [LEFT, RIGHT]},
+    createdAt: 1000, updatedAt: 1000}, store.tablesRow());
+  store.delayOnce(({writer, sql, params}) => writer === 'A' &&
+    /^UPDATE tables/u.test(sql) && params.includes('split_catchup'));
+  const advanced = await a.workflow.advanceSplitPhase(workflowId,
+    'split_catchup');
+  t.equal(store.delays.length, 0, 'setup: the submission failed and its ' +
+    'entry landed later');
+  t.equal(advanced, true, 'the landed step is reported landed (no false ' +
+    'refusal)');
+  t.equal(store.tablesRow().partition_transition_state, 'split_catchup',
+    'the record holds it');
+  t.equal(store.writes.filter((write) => write.changes > 0 &&
+    write.params.includes('split_catchup')).length, 1,
+  'it was applied once');
+});
+
+test('W4e a record whose table row is gone: the owner\'s change is ' +
+  'superseded (it stops driving), never left unconfirmed', async (t) => {
+  const store = openRecordStore({partitions: [{partition_id: SOURCE}]});
+  const a = splitOwner(store, openView(store), 'A', {now: 1000});
+  const workflowId = 'split-table-dropped';
+  await a.workflow.workflowCoordinator.registerWorkflowFromRead({workflowId,
+    ownerKey: SOURCE, tableId: store.tableId, tableName: 'users',
+    partitionId: SOURCE, status: 'split_backfilling',
+    metadata: {workflowId, sourcePartitionId: SOURCE,
+      targetPartitionVersion: 2}, createdAt: 1000, updatedAt: 1000},
+  store.tablesRow());
+  store.db.prepare('DELETE FROM tables WHERE table_id = ?').run(store.tableId);
+  const refused = await a.workflow.workflowCoordinator.updateWorkflow(
+    workflowId, (current) => ({...current, status: 'split_catchup'}))
+    .then(() => null, (error) => error);
+  t.equal(refused?.recordChangeOutcome, 'superseded',
+    'superseded: the owner relinquishes the workflow');
+  t.equal(a.workflow.workflowCoordinator.getWorkflowById(workflowId), null,
+    'and drops its copy');
+});
+
 test('W4c an earlier write of this owner landed while it saw a failure: ' +
   'nothing is sent on it, the record is adopted (never regressed), the ' +
   'abort is derived from it (no self-deadlock)', async (t) => {

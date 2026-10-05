@@ -291,6 +291,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     if (Number.isInteger(metadata.workflowFenceToken)) {
       ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] = metadata.workflowFenceToken;
     }
+    ack[PARTICIPANT_ACK_FIELD.ATTEMPT] = metadata.workflowAttempt ?? 0;
     if (checkpoint) {
       ack[PARTICIPANT_ACK_FIELD.CHECKPOINT] = checkpoint;
     }

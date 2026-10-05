@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2198,
+    "ordinary": 2199,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2215,
-  "digest": "fnv1a32-2b4d6899",
+  "censusSize": 2216,
+  "digest": "fnv1a32-7690dfbc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1258,6 +1258,7 @@
     "test/partition/timeout-cleanup.property.test.js": "ordinary",
     "test/partition/workflow-fencing-wiring.test.js": "ordinary",
     "test/partition/workflow-record-change-preconditions.test.js": "ordinary",
+    "test/partition/workflow-record-incarnation.test.js": "ordinary",
     "test/partition/workflow-record-interleaving.property.test.js": "ordinary",
     "test/partition/workflow-record-lagging-view.test.js": "ordinary",
     "test/partition/workflow-record-projection-drop.test.js": "ordinary",

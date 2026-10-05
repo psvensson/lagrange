@@ -9,6 +9,7 @@ import {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_OPERATION_TYPE,
 } from '../../src/rebalancer/storage-admission-constants.js';
+import {tablesColumnOf} from './tables-row-defaults.js';
 
 function createAdmissionResult(overrides = {}) {
   return {
@@ -85,7 +86,7 @@ function buildWorkflow(options = {}) {
         // conditional update would match zero rows.
         const matchesWhere = (row) => Object.entries(whereClause || {})
           .every(([column, expected]) => {
-            const actual = row?.[column];
+            const actual = tablesColumnOf(row, column);
             if (expected === null || expected === undefined) {
               return actual === null || actual === undefined;
             }

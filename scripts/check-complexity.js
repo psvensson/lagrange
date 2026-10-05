@@ -83,7 +83,9 @@ const TARGET_THRESHOLD = 12;
 // group-retired tombstone record's text fields go through one helper).
 // 2026-10-05: tightened 1769 -> 1768 on the checker's hint (the record
 // store's change functions and the split decoder extracted helpers).
-const BASELINE_COUNT = 1768;
+// 2026-10-05: tightened 1768 -> 1767 on the checker's hint (round 7: the
+// record store's turn and the SQLite witness world extracted helpers).
+const BASELINE_COUNT = 1767;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

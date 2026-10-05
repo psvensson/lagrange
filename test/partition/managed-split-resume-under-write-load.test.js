@@ -27,6 +27,7 @@ import {
   buildWorkflow,
   createAdmissionResult,
 } from './managed-split-workflow-test-helpers.js';
+import {tablesColumnOf} from './tables-row-defaults.js';
 
 // Deterministic witness for the MovieLens five-node live runs of
 // 2026-08-30 (HEAD 403a92853): the `ratings` user table is split while
@@ -108,7 +109,7 @@ function buildPlan(plan) {
 
 function matchesWhere(row, whereClause) {
   return Object.entries(whereClause || {}).every(([column, expected]) => {
-    const actual = row?.[column];
+    const actual = tablesColumnOf(row, column);
     if (expected === null || expected === undefined) {
       return actual === null || actual === undefined;
     }

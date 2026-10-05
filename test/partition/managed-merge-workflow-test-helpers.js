@@ -6,6 +6,7 @@ import {
   createAdmissionResult,
   createTransactionCoordinator,
 } from './managed-split-workflow-test-helpers.js';
+import {tablesColumnOf} from './tables-row-defaults.js';
 
 const FIXTURE_TABLE_ID = 'tbl-users';
 const FIXTURE_TABLE_NAME = 'users';
@@ -126,7 +127,7 @@ function createRecordingCdcIntegrationService(recorders) {
         // conditional update would match zero rows.
         const matchesWhere = Object.entries(whereClause || {})
           .every(([column, expected]) => {
-            const actual = durableTableRow?.[column];
+            const actual = tablesColumnOf(durableTableRow, column);
             if (expected === null || expected === undefined) {
               return actual === null || actual === undefined;
             }

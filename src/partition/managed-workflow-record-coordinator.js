@@ -25,21 +25,28 @@ import {
   RECORD_CHANGE_KIND,
   RECORD_CHANGE_OUTCOME,
   applyRecordChange,
-  applyRecordChangeOrThrow,
   forgetWorkflowRecord,
   recordBytesOf,
+  recordChangeRefusedError,
 } from './managed-workflow-record-store.js';
 import {
+  RECORD_CHANGE_REFUSAL,
   acknowledgementChange,
   clearChange,
+  executionOutcomeChange,
   freshClaimChange,
+  isCutoverOrLater,
   ownedChange,
+  phaseMonotonicChange,
   registrationChange,
   renewalChange,
   transitionChange,
 } from './managed-workflow-record-changes.js';
+import {workflowAttemptOf} from './partition-constants.js';
 
 const FUNCTION_TYPE = 'function';
+// An acknowledgement of another attempt (managed-workflow-record-changes).
+const ACK_ATTEMPT_MISMATCH = RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH;
 const OBJECT_TYPE = 'object';
 // The coordinator's refused entry points (named in their errors).
 const REFUSED_ENTRY = Object.freeze({
@@ -63,7 +70,46 @@ const COORDINATOR_ERROR_MSG = Object.freeze({
     'the stored record, never a pre-built update (',
   PERSIST_AS_IS: 'Workflow record mutation refused: the in-memory state is ' +
     'a projection of the record and is never persisted as it stands (',
+  POST_CUTOVER_INCIDENT: 'Workflow step failed after the cutover: recorded ' +
+    'as a post-cutover incident; the phase never moves backwards and the ' +
+    'workflow continues to its terminal',
 });
+
+/**
+ * The coordinator's one path to the store: every change - whichever entry
+ * it came from - passes the total phase guard (round 7, D4).
+ * @param {Object} owner
+ * @param {string} workflowId
+ * @param {Function} change
+ * @param {Object} options
+ * @return {Promise<Object>}
+ */
+function applyGuardedChange(owner, workflowId, change, options) {
+  return applyRecordChange(owner, workflowId, phaseMonotonicChange(change),
+    options);
+}
+
+// The guarded change of one that must land: throws when it did not.
+async function applyGuardedChangeOrThrow(owner, workflowId, change, options) {
+  const write = await applyGuardedChange(owner, workflowId, change, options);
+  if (!write.accepted) {
+    throw recordChangeRefusedError(workflowId, write);
+  }
+  return write;
+}
+
+// What a refused registration answers its caller (typed).
+function registrationRefusalOf(write) {
+  const refusal = write.refusal;
+  if (refusal?.reason === WORKFLOW_CLAIM_RESULT.ACTIVE_OWNER) {
+    return {refusal: WORKFLOW_CLAIM_RESULT.ACTIVE_OWNER,
+      recordOwnerId: refusal.details.recordOwnerId ?? null,
+      recordLeaseExpiresAt: refusal.details.recordLeaseExpiresAt ?? null};
+  }
+  return {refusal: WORKFLOW_CLAIM_RESULT.STORAGE_REJECTED,
+    recordChangeOutcome: write.outcome, reason: refusal?.reason ?? null,
+    details: refusal?.details ?? null};
+}
 
 // What a claim's refusal answers the claim machinery.
 function claimResultOf(write) {
@@ -165,7 +211,7 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
   // One change of a live workflow's record.
   applyLiveChange(workflowId, change, kind = RECORD_CHANGE_KIND.TRANSITION) {
     const live = this.requireWorkflow(workflowId);
-    return applyRecordChange(this.recordOwner, workflowId, change,
+    return applyGuardedChange(this.recordOwner, workflowId, change,
       {tableId: live.tableId, kind});
   }
 
@@ -175,26 +221,23 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
    * only while the record is still exactly that read.
    * @param {Object} record - The registration (no claim fields).
    * @param {Object|null} tableRowAsRead
+   * @param {Object} [options]
+   * @param {Function} [options.revalidate] - (registration, storedRow) =>
+   *   null | the input that moved: re-validates, at the change's turn, every
+   *   input the registration took from a row other than the compared record
+   *   (production registrations always pass it).
    * @return {Promise<Object>} {workflow} or {refusal, ...}.
    */
-  async registerWorkflowFromRead(record, tableRowAsRead) {
+  async registerWorkflowFromRead(record, tableRowAsRead, options = {}) {
     const registration = this.createWorkflowRecord(record);
     forgetWorkflowRecord(this.recordOwner, registration.workflowId);
-    const write = await applyRecordChange(this.recordOwner,
+    const write = await applyGuardedChange(this.recordOwner,
       registration.workflowId, registrationChange(this.recordOwner,
-        registration, recordBytesOf(tableRowAsRead)),
+        registration, recordBytesOf(tableRowAsRead),
+        options.revalidate ?? null),
       {tableId: registration.tableId, readBase: tableRowAsRead ?? null});
-    if (write.accepted) {
-      return {workflow: write.workflow};
-    }
-    if (write.refusal?.reason === WORKFLOW_CLAIM_RESULT.ACTIVE_OWNER) {
-      return {refusal: WORKFLOW_CLAIM_RESULT.ACTIVE_OWNER,
-        recordOwnerId: write.refusal.details.recordOwnerId ?? null,
-        recordLeaseExpiresAt:
-          write.refusal.details.recordLeaseExpiresAt ?? null};
-    }
-    return {refusal: WORKFLOW_CLAIM_RESULT.STORAGE_REJECTED,
-      recordChangeOutcome: write.outcome};
+    return write.accepted ? {workflow: write.workflow} :
+      registrationRefusalOf(write);
   }
 
   /**
@@ -216,10 +259,34 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
       throw new TypeError(`${COORDINATOR_ERROR_MSG.PRE_BUILT}updateWorkflow)`);
     }
     const live = this.requireWorkflow(workflowId);
-    const write = await applyRecordChangeOrThrow(this.recordOwner,
+    const write = await applyGuardedChangeOrThrow(this.recordOwner,
       workflowId, ownedChange(this.recordOwner, live.fenceToken, change),
       {tableId: live.tableId});
     return write.workflow ?? this.getWorkflowById(workflowId);
+  }
+
+  /**
+   * An execution outcome (failure, deferral, admission denial) of the
+   * workflow by its owner: the state change applies only to a pre-cutover
+   * record; a record at cutover-or-later keeps its phase and records the
+   * outcome as a typed post-cutover incident, logged as ONE ERROR naming the
+   * workflow, its attempt, the phase and the reason.
+   * @param {string} workflowId
+   * @param {Object} outcome - {status, delta, incident: {reason, ...}}.
+   * @return {Promise<Object>} {workflow, postCutoverIncident, state (what
+   *   the record holds after it)}.
+   */
+  async recordExecutionOutcome(workflowId, {status, delta, incident}) {
+    const workflow = await this.updateWorkflow(workflowId,
+      executionOutcomeChange(status, delta, incident));
+    const postCutoverIncident = isCutoverOrLater(workflow?.status ?? null);
+    if (postCutoverIncident) {
+      this.recordOwner.logger?.error?.(COORDINATOR_ERROR_MSG.POST_CUTOVER_INCIDENT,
+        {workflowId, attempt: workflowAttemptOf(workflow.metadata),
+          phase: workflow.status, outcome: status,
+          reason: incident?.reason ?? null});
+    }
+    return {workflow, postCutoverIncident, state: workflow?.status ?? status};
   }
 
   /**
@@ -329,8 +396,11 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
    * @return {Promise<Object>} The accepted acknowledgement result.
    */
   async acknowledgeOwnerOutcome(workflowId, ack) {
-    const result = await this.acknowledgeParticipant(workflowId, ack,
-      {owned: true});
+    // The owner's outcome is of the attempt its projection holds.
+    const attempt = workflowAttemptOf(
+      this.requireWorkflow(workflowId).metadata);
+    const result = await this.acknowledgeParticipant(workflowId,
+      {[PARTICIPANT_ACK_FIELD.ATTEMPT]: attempt, ...ack}, {owned: true});
     if (OWNER_OUTCOME_LANDED.has(result?.result)) {
       return result;
     }
@@ -347,6 +417,8 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
   respondToAckRejection(workflowId, refusal) {
     const {participant, key, status, fence} = refusal.details;
     switch (refusal.reason) {
+    case ACK_ATTEMPT_MISMATCH:
+      return this.rejectAckOfAnotherAttempt(workflowId, refusal.details);
     case PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND:
       return this.rejectAckParticipantNotFound(workflowId, key, status);
     case PARTICIPANT_ACK_RESULT.STALE_FENCE:
@@ -361,6 +433,24 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
   }
 
   /**
+   * The typed STALE_FENCE of an acknowledgement of another attempt of the
+   * workflow (round 7, D3), with its diagnostic.
+   * @param {string} workflowId
+   * @param {Object} details - The refusal's details.
+   * @return {Object}
+   */
+  rejectAckOfAnotherAttempt(workflowId, details) {
+    const fields = {currentAttempt: details.recordAttempt,
+      receivedAttempt: details.attempt, receivedFenceToken: details.fence};
+    this.emitAckRejectionDiagnostic(workflowId, details.key, {
+      rejectionResult: PARTICIPANT_ACK_RESULT.STALE_FENCE,
+      reason: ACK_ATTEMPT_MISMATCH, receivedStatus: details.status,
+      ...fields});
+    return {result: PARTICIPANT_ACK_RESULT.STALE_FENCE,
+      participantKey: details.key, reason: ACK_ATTEMPT_MISMATCH, ...fields};
+  }
+
+  /**
    * The terminal clear: the record of this owner at the fence it holds, in
    * one of `states`, is cleared.
    * @param {string} workflowId
@@ -369,7 +459,7 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
    */
   async clearWorkflowRecord(workflowId, states) {
     const live = this.requireWorkflow(workflowId);
-    await applyRecordChangeOrThrow(this.recordOwner, workflowId,
+    await applyGuardedChangeOrThrow(this.recordOwner, workflowId,
       clearChange(this.recordOwner, live.fenceToken, states),
       {tableId: live.tableId});
   }

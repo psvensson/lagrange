@@ -33,6 +33,13 @@
  * I6 an absent `tables` row never releases a tombstone (V8).
  * I7 a tombstone is written only from a retired row (V10).
  * I8 a tombstone without an incarnation is never a proof.
+ * I9 (round 7, P4) an earlier ATTEMPT of the same workflow id: the node
+ *    missed the clear and the deterministic id registered again; the
+ *    earlier attempt's tombstone never answers the new attempt's REMOVE, and
+ *    the record of the new attempt releases it.
+ * I10 (round 7, D3) REMOVE verification refuses evidence of another attempt
+ *    of the same workflow id, also at the same fence; the REMOVE of another
+ *    attempt is another operation.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -48,8 +55,14 @@ import {
   isTombstoneWorkflowCleared,
   listGroupRetiredTombstones,
   readGroupRetiredTombstone,
+  tombstoneProvesRetirement,
   writeGroupRetiredTombstone,
 } from '../../src/node/group-retired-tombstone-store.js';
+import {
+  GROUP_RETIREMENT_REFUSAL,
+  decideGroupRetirement,
+  groupRetirementOperationIdOf,
+} from '../../src/partition/group-retirement-evidence.js';
 import {genesisStampFor} from './replica-handler-bootstrap-stamps.js';
 import {
   TABLE_ID,
@@ -58,6 +71,7 @@ import {
   openGroupWorld,
 } from './group-retirement-as-a-unit-fixture.js';
 import {
+  ATTEMPT,
   FENCE,
   TOMBSTONE_DIR,
   WORKFLOW_ID,
@@ -80,8 +94,8 @@ function leftoverTombstone(world, replicaId, incarnation) {
   return writeGroupRetiredTombstone(handler.dataDir, {
     groupId: world.partitionId, replicaIdentity: replicaId, incarnation,
     lifecycleReason: 'group-retired',
-    evidence: {tableId: TABLE_ID, workflowId: WORKFLOW_ID, fenceToken: FENCE,
-      kind: 'split-source'}, retiredAt: 1});
+    evidence: {tableId: TABLE_ID, workflowId: WORKFLOW_ID, attempt: ATTEMPT,
+      fenceToken: FENCE, kind: 'split-source'}, retiredAt: 1});
 }
 
 function tombstoneOf(world, replicaId) {
@@ -357,4 +371,47 @@ test('I8 a tombstone without an incarnation is never a proof', async (t) => {
     evidence: {tableId: TABLE_ID, workflowId: WORKFLOW_ID, fenceToken: FENCE,
       kind: 'split-source'}, retiredAt: 1}), /malformed/u,
   'and none can be written');
+});
+
+test('I9 an earlier attempt of the same workflow id never answers the new ' +
+  'attempt, and the new attempt\'s record releases it', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'inc-i9', voters: 3});
+  const [first] = world.members;
+  await retireAllButLast(world);
+  deleteDatabase(world, first);
+  const handler = restart(world, first);
+  const tombstone = tombstoneOf(world, first);
+  t.equal(tombstone?.attempt, ATTEMPT, 'setup: the attempt\'s tombstone');
+  // The node missed the clear; the same deterministic workflow id
+  // registered again (a later generation, a fence of its own).
+  const next = ATTEMPT + 4;
+  const request = groupRemove(world, first, {attempt: next,
+    fenceToken: next});
+  t.equal(tombstoneProvesRetirement(tombstone, {partitionId:
+    world.partitionId, replicaId: first, evidence: request[
+    ReplicaOperationField.GROUP_RETIREMENT]}, {absent: true}), false,
+  'the earlier attempt\'s tombstone proves nothing for the new attempt');
+  world.setTablesRow(retiringRecord(world.partitionId, next, next));
+  t.not((await handler.handleRemoveReplica(request)).status, COMPLETED,
+    'the new attempt\'s REMOVE is never answered COMPLETED from it');
+  t.equal(isTombstoneWorkflowCleared(tombstone, {available: true,
+    tablesRow: retiringRecord(world.partitionId, next, next)}), true,
+  'a record of another attempt of the same workflow id releases it');
+});
+
+test('I10 REMOVE verification refuses evidence of another attempt of the ' +
+  'same workflow id, also at the same fence', async (t) => {
+  const evidence = groupRemove({partitionId: 'inc-i10'}, 'r1')[
+    ReplicaOperationField.GROUP_RETIREMENT];
+  t.equal(decideGroupRetirement(evidence, {partitionId: 'inc-i10',
+    tablesRow: retiringRecord('inc-i10')}).retire, true,
+  'setup: the attempt\'s own evidence verifies');
+  t.same(decideGroupRetirement(evidence, {partitionId: 'inc-i10',
+    tablesRow: retiringRecord('inc-i10', FENCE, ATTEMPT + 1)}),
+  {retire: false, refusal: GROUP_RETIREMENT_REFUSAL.ATTEMPT_MISMATCH},
+  'another attempt at the same fence is refused typed');
+  t.not(groupRetirementOperationIdOf(evidence, 'r1'),
+    groupRetirementOperationIdOf({...evidence, attempt: ATTEMPT + 1}, 'r1'),
+    'and its REMOVE is another operation (the operation id names the ' +
+    'attempt)');
 });

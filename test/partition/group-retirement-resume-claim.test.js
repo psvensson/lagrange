@@ -39,6 +39,7 @@ import {
   MERGE_ACK_STATUS,
   buildMergeSourceParticipantKey,
 } from '../../src/partition/merge-ack-constants.js';
+import {tablesColumnOf} from './tables-row-defaults.js';
 
 const TABLE_ID = 'tbl-claim';
 const WORKFLOW_ID = 'wf-claim-1';
@@ -86,7 +87,7 @@ function createStore() {
       await new Promise((resolve) => setImmediate(resolve));
       const row = store.rows.get(where.table_id);
       const ok = Boolean(row) && Object.entries(where)
-        .every(([key, value]) => row[key] === value);
+        .every(([key, value]) => tablesColumnOf(row, key) === value);
       store.writes.push({by: store.writer, ok});
       if (!ok) return {success: true, affectedRows: 0};
       Object.assign(row, update);

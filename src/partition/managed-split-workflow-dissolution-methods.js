@@ -12,6 +12,7 @@ import {
 import {
   GROUP_RETIREMENT_KIND,
   buildGroupRetirementEvidence,
+  groupRetirementOperationIdOf,
 } from './group-retirement-evidence.js';
 import {retireFrozenGroupMembers} from './group-retirement-members.js';
 import {
@@ -28,7 +29,6 @@ import {
 const LOCAL_STR_SPLIT_SOURCE_DISSOLUTION = 'split_source_dissolution';
 const LOCAL_NUM_DISSOLUTION_WITNESS_AFFECTED_ROWS = 1;
 const LOCAL_STR_SPLIT_ABORTED_CHILD_TEARDOWN = 'split_aborted_child_teardown';
-const LOCAL_STR_DISSOLVE_SEGMENT = ':dissolve:';
 const LOCAL_STR_NORMAL_PARTITION_STATE = 'NORMAL';
 
 /**
@@ -607,8 +607,8 @@ class ManagedSplitWorkflowDissolutionMethods {
     return {
       [ReplicaOperationField.TYPE]:
         ReplicaOperationMessageType.REMOVE_REPLICA,
-      [ReplicaOperationField.OPERATION_ID]:
-        options.workflowId + LOCAL_STR_DISSOLVE_SEGMENT + options.replicaId,
+      [ReplicaOperationField.OPERATION_ID]: groupRetirementOperationIdOf(
+        options.groupRetirement, options.replicaId),
       [ReplicaOperationField.OPERATION_TYPE]: OperationType.REMOVE,
       [ReplicaOperationField.PARTITION_ID]: options.partitionId,
       [ReplicaOperationField.REPLICA_ID]: options.replicaId,

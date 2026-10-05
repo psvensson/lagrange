@@ -228,11 +228,10 @@ class ManagedSplitWorkflowProvisioningMethods {
       },
     };
 
-    if (workflow) {
-      await this.workflowCoordinator.updateWorkflow(options.workflowId,
-        (current) => ({...current, status: deferredState,
-          metadata: {...current.metadata, ...deferredDelta}}));
-    }
+    const recorded = workflow ?
+      await this.workflowCoordinator.recordExecutionOutcome(
+        options.workflowId, {status: deferredState, delta: deferredDelta,
+          incident: {reason: errorMessage}}) : null;
 
     return {
       success: false,
@@ -241,7 +240,7 @@ class ManagedSplitWorkflowProvisioningMethods {
       tableName: options.tableName,
       workflowId: options.workflowId,
       targetVersion: options.targetVersion,
-      state: deferredState,
+      state: recorded?.state ?? deferredState,
       admission: options.admission,
       retry,
       error: errorMessage,

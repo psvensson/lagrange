@@ -139,7 +139,8 @@ async function renewWorkflowOwnershipCore(
  */
 function registerWorkflowWithClaim(owner, record, tableInfo) {
   return owner.workflowCoordinator.registerWorkflowFromRead(record,
-    tableInfo);
+    tableInfo, {revalidate: (registration, storedRow) =>
+      owner.registrationInputsRefusal(registration, storedRow)});
 }
 
 /**

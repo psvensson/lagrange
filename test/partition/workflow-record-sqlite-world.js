@@ -29,6 +29,7 @@ import {
 const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
 const SELECT = 'SELECT';
 const LOST_ACK = 'replicated write applied; its acknowledgement was lost';
+const SUBMIT_FAILED = 'replicated write submission failed (it lands later)';
 
 function parsePartitionTransition(tableInfo) {
   const state = tableInfo?.partition_transition_state ?? null;
@@ -39,6 +40,55 @@ function parsePartitionTransition(tableInfo) {
   } catch {
     return null;
   }
+}
+
+// The initial partitions rows of the table.
+function insertPartitions(db, {tableId, tableName}, partitions) {
+  const insertPartition = db.prepare('INSERT INTO partitions ' +
+    '(partition_id, table_id, table_name, partition_key_start, ' +
+    'partition_key_end, partition_version, replica_count, size_bytes, ' +
+    'leader_node_id, state, created_at, updated_at) VALUES ' +
+    '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  for (const row of partitions) {
+    insertPartition.run(row.partition_id, tableId, tableName,
+      row.partition_key_start ?? null, row.partition_key_end ?? null,
+      row.partition_version ?? 1, row.replica_count ?? 3,
+      row.size_bytes ?? 128, row.leader_node_id ?? 'node-a', 'NORMAL', 1, 1);
+  }
+}
+
+// One write applied to the shared database, observed at its apply.
+function applyWrite(store, {writer, sql, params}) {
+  const info = store.db.prepare(sql).run(...params);
+  const write = {writer, sql, params, changes: info.changes};
+  store.writes.push(write);
+  for (const observe of store.observers) {
+    observe(write);
+  }
+  return write;
+}
+
+// One submitted write: earlier delayed entries land first; a delayed one
+// fails its submission now and lands later; a lost acknowledgement applies
+// and answers a failure.
+function submitWrite(store, writer, sql, params) {
+  for (const late of store.delayed.splice(0)) {
+    applyWrite(store, late);
+  }
+  const delay = store.delays.findIndex((predicate) =>
+    predicate({writer, sql, params}));
+  if (delay >= 0) {
+    store.delays.splice(delay, 1);
+    store.delayed.push({writer, sql, params});
+    throw new Error(SUBMIT_FAILED);
+  }
+  const write = applyWrite(store, {writer, sql, params});
+  const lost = store.lostAcks.findIndex((predicate) => predicate(write));
+  if (lost >= 0) {
+    store.lostAcks.splice(lost, 1);
+    throw new Error(LOST_ACK);
+  }
+  return {success: true, affectedRows: write.changes, rows: []};
 }
 
 /**
@@ -59,18 +109,9 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
     .run(tableId, tableName, '{}', 'id', partitions.length || 1, 1, 1, 1);
   // observers: called after every applied write, at its apply (the record
   // and the partitions rows are then exactly what that write left).
-  const store = {db, tableId, writes: [], lostAcks: [], observers: []};
-  const insertPartition = db.prepare('INSERT INTO partitions ' +
-    '(partition_id, table_id, table_name, partition_key_start, ' +
-    'partition_key_end, partition_version, replica_count, size_bytes, ' +
-    'leader_node_id, state, created_at, updated_at) VALUES ' +
-    '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-  for (const row of partitions) {
-    insertPartition.run(row.partition_id, tableId, tableName,
-      row.partition_key_start ?? null, row.partition_key_end ?? null,
-      row.partition_version ?? 1, row.replica_count ?? 3,
-      row.size_bytes ?? 128, row.leader_node_id ?? 'node-a', 'NORMAL', 1, 1);
-  }
+  const store = {db, tableId, writes: [], lostAcks: [], delays: [],
+    delayed: [], observers: []};
+  insertPartitions(db, {tableId, tableName}, partitions);
   store.tablesRow = () => ({...db.prepare(
     'SELECT * FROM tables WHERE table_id = ?').get(tableId)});
   store.partitionRow = (partitionId) => {
@@ -85,6 +126,10 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
     store.tablesRow().partition_transition_metadata || '{}');
   // The next write matching `predicate` applies but answers a failure.
   store.loseAckOnce = (predicate) => store.lostAcks.push(predicate);
+  // The next write matching `predicate` answers a failed submission at once
+  // and LANDS LATER: it applies just before the next write submitted to the
+  // store (a log entry that commits after its proposer gave up on it).
+  store.delayOnce = (predicate) => store.delays.push(predicate);
   // One PRODUCTION CDC service per owner (each node has its own), all on
   // the one authoritative database.
   store.cdcFor = (writer) => {
@@ -94,18 +139,7 @@ function openRecordStore({tableId = 'tbl-users', tableName = 'users',
         if (sql.trim().toUpperCase().startsWith(SELECT)) {
           return {success: true, rows: db.prepare(sql).all(...params)};
         }
-        const info = db.prepare(sql).run(...params);
-        store.writes.push({writer, sql, params, changes: info.changes});
-        for (const observe of store.observers) {
-          observe({writer, sql, params, changes: info.changes});
-        }
-        const lost = store.lostAcks.findIndex((predicate) =>
-          predicate({writer, sql, params, changes: info.changes}));
-        if (lost >= 0) {
-          store.lostAcks.splice(lost, 1);
-          throw new Error(LOST_ACK);
-        }
-        return {success: true, affectedRows: info.changes, rows: []};
+        return submitWrite(store, writer, sql, params);
       },
     };
     const cdc = new CDCIntegrationService({nodeId: writer,
@@ -149,7 +183,9 @@ function openView(store) {
  * @return {void}
  */
 function readAuthoritativelyFrom(workflow, store) {
-  workflow.readAuthoritativeWorkflowRecord = async () => store.tablesRow();
+  // An absent row answers null, as the owner-RPC read does.
+  workflow.readAuthoritativeWorkflowRecord = async () => (store.db.prepare(
+    'SELECT * FROM tables WHERE table_id = ?').get(store.tableId) ?? null);
 }
 
 // A logger whose lines are kept by level.

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1936,
+    "unit": 1937,
     "integration": 79,
     "bootstrap": 193,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2215,
-  "digest": "fnv1a32-c4e495ad",
+  "censusSize": 2216,
+  "digest": "fnv1a32-13ea9750",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1259,6 +1259,7 @@
     "test/partition/timeout-cleanup.property.test.js": "unit",
     "test/partition/workflow-fencing-wiring.test.js": "unit",
     "test/partition/workflow-record-change-preconditions.test.js": "unit",
+    "test/partition/workflow-record-incarnation.test.js": "unit",
     "test/partition/workflow-record-interleaving.property.test.js": "unit",
     "test/partition/workflow-record-lagging-view.test.js": "unit",
     "test/partition/workflow-record-projection-drop.test.js": "unit",

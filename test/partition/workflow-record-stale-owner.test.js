@@ -10,8 +10,9 @@
  *
  * Shape: owner B started the split (attempt 0 deferred: marks NONE, B's
  * fence 1) and kept that version in memory; its lease lapsed; owner A
- * claimed (fence 2), provisioned both children (DISPATCHED), reached
- * backfilling and recorded the retirement facts on the source participant.
+ * claimed (a new attempt: its fence is that attempt, above B's),
+ * provisioned both children (DISPATCHED), reached backfilling and recorded
+ * the retirement facts on the source participant.
  * B then writes from its stale copy through the PRODUCTION paths.
  *
  * Real classes and a real store: workflow-record-sqlite-world.js.
@@ -81,6 +82,7 @@ async function staleOwnerWorld() {
   });
   await b.workflow.execute(SOURCE).catch(() => {});
   const workflowId = store.metadata().workflowId;
+  const bFence = store.metadata().workflowFenceToken;
   b.view.freeze();
   b.workflow.resolveWorkflowState(workflowId);
   clock.now += 2 * LEASE_MS;
@@ -97,7 +99,7 @@ async function staleOwnerWorld() {
         checkpoint: {...(source.checkpoint || {}), ...FACTS}});
       return {...current, participants};
     });
-  return {store, clock, a, b, workflowId, prepared};
+  return {store, clock, a, b, workflowId, prepared, bFence};
 }
 
 function factsOf(store) {
@@ -142,7 +144,11 @@ for (const [fact, write] of STALE_WRITES) {
     const before = store.tablesRow();
     const facts = factsOf(store);
     t.equal(facts.owner, 'owner-A', 'setup: A holds the record');
-    t.equal(facts.fence, 2, 'setup: at fence 2');
+    // A's registration is a new attempt: its fence is that attempt (the
+    // generation it wrote), above every fence of B's attempt (round 7).
+    t.equal(facts.fence, store.metadata().workflowAttempt,
+      'setup: A is at the fence of its attempt');
+    t.ok(facts.fence > world.bFence, 'setup: above B\'s fence');
     t.same(facts.marks, {[LEFT]: 'dispatched', [RIGHT]: 'dispatched'},
       'setup: both children DISPATCHED');
     t.same(facts.checkpoint, {...facts.checkpoint, ...FACTS},

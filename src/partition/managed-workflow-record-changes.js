@@ -16,6 +16,7 @@ import {
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
+  workflowAttemptOf,
 } from './partition-constants.js';
 import {
   RECORD_CHANGE_OUTCOME,
@@ -28,9 +29,22 @@ const LEASE_RENEW_FRACTION = 2;
 const WORKFLOW_ID_KEY = 'workflowId';
 const STATE = PARTITION_TRANSITION_STATE;
 
+// Typed refusal reasons of the record changes.
+const RECORD_CHANGE_REFUSAL = Object.freeze({
+  RECORD_GONE: 'record-gone',
+  RECORD_MOVED_SINCE_READ: 'record-moved-since-read',
+  REGISTRATION_INPUT_MOVED: 'registration-input-moved',
+  ATTEMPT_MISMATCH: 'attempt-mismatch',
+  STATE_NOT_EXPECTED: 'state-not-expected',
+  ...WORKFLOW_CLAIM_RESULT,
+});
+
 // The forward order of a split's or merge's phases: a change never moves the
 // record backwards in it. FAILED (the owner's abort) is left only by the
-// terminal clear; unranked states (deferred, blocked) are a retry's own.
+// terminal clear. Pre-cutover, the unranked states (deferred, blocked,
+// failed) are a retry's or an abort's own; from the cutover on, the order is
+// total (round 7, D4): only a phase of the same or a later rank, or the
+// clear.
 const PHASE_RANK = Object.freeze(new Map([
   [STATE.ADMISSION_PENDING, 0],
   [STATE.SPLIT_PREPARING, 1], [STATE.MERGE_PREPARING, 1],
@@ -40,8 +54,33 @@ const PHASE_RANK = Object.freeze(new Map([
   [STATE.SPLIT_SOURCE_DISSOLVING, 5],
 ]));
 
+const CUTOVER_RANK = PHASE_RANK.get(STATE.SPLIT_CUTOVER_ACTIVE);
+
 /**
- * Whether `next` moves the record's phase backwards (or out of FAILED).
+ * Whether a record in `state` is at its cutover or later (the target epoch
+ * promoted): a state no failure, deferral or retry may leave backwards.
+ * @param {string|null} state
+ * @return {boolean}
+ */
+function isCutoverOrLater(state) {
+  return PHASE_RANK.has(state) && PHASE_RANK.get(state) >= CUTOVER_RANK;
+}
+
+/**
+ * Whether `to` moves a record at cutover-or-later anything but forward: only
+ * a phase of the same or a later rank (the clear is not a status) keeps it.
+ * @param {string|null} from - The compared record's state.
+ * @param {string|null} to - The change's next status.
+ * @return {boolean}
+ */
+function isCutoverRegression(from, to) {
+  return isCutoverOrLater(from) &&
+    !(PHASE_RANK.has(to) && PHASE_RANK.get(to) >= PHASE_RANK.get(from));
+}
+
+/**
+ * Whether `next` moves the record's phase backwards (or out of FAILED, or
+ * a cutover-or-later record anywhere but forward).
  * @param {string|null} from
  * @param {string|null} to
  * @return {boolean}
@@ -50,17 +89,33 @@ function isPhaseRegression(from, to) {
   if (from === STATE.FAILED) {
     return to !== STATE.FAILED;
   }
+  if (isCutoverOrLater(from)) {
+    return isCutoverRegression(from, to);
+  }
   return PHASE_RANK.has(from) && PHASE_RANK.has(to) &&
     PHASE_RANK.get(to) < PHASE_RANK.get(from);
 }
 
-// Typed refusal reasons of the record changes.
-const RECORD_CHANGE_REFUSAL = Object.freeze({
-  RECORD_GONE: 'record-gone',
-  RECORD_MOVED_SINCE_READ: 'record-moved-since-read',
-  STATE_NOT_EXPECTED: 'state-not-expected',
-  ...WORKFLOW_CLAIM_RESULT,
-});
+/**
+ * The one phase guard every change passes (the coordinator wraps each
+ * change it hands the store with it, whichever entry it came from): a change
+ * whose next status would take a cutover-or-later record anywhere but
+ * forward refuses, whichever workflow the record holds.
+ * @param {Function} change - (workflow, stored) => next | sentinel.
+ * @return {Function}
+ */
+function phaseMonotonicChange(change) {
+  return (workflow, stored) => {
+    const next = change(workflow, stored);
+    if (isSentinelAnswer(next) ||
+        !isCutoverRegression(stored?.state ?? null, next.status)) {
+      return next;
+    }
+    return refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED,
+      {from: stored.state, to: next.status});
+  };
+}
+
 
 // The change's answer passes through untouched when it is not a record.
 function isSentinelAnswer(answer) {
@@ -131,20 +186,39 @@ function liveForeignLease(owner, stored) {
 }
 
 /**
+ * Whether a stored record is exactly the record a caller read: the same
+ * transition bytes AND the same generation (round 7: a cleared record of one
+ * generation is never the cleared record of another).
+ * @param {Object} stored - The decoded record.
+ * @param {Object} read - recordBytesOf(the caller's read).
+ * @return {boolean}
+ */
+function isRecordAsRead(stored, read) {
+  return stored.bytes.metadata === read.metadata &&
+    stored.bytes.state === read.state &&
+    stored.bytes.generation === read.generation;
+}
+
+/**
  * Claim before register (owner ruling 2026-10-05): the registration IS the
  * claim. Its content was derived from the record the caller read, so its
- * precondition is that the record is still exactly that read; a live lease of
- * another owner refuses; the fence is the record's own plus one.
+ * precondition is that the record is still exactly that read (bytes and
+ * generation: every `tables`-row input is covered), that every input it took
+ * from another row still holds against the compared record (`revalidate`,
+ * at the change's turn), and that no other owner holds a live lease. It
+ * mints the ATTEMPT (the generation it writes) and a fence above every
+ * earlier fence of the record and every earlier attempt.
  * @param {Object} owner
  * @param {Object} registration - The new workflow (no claim fields).
- * @param {Object} read - The compared bytes of the caller's read
- *   ({metadata, state}).
+ * @param {Object} read - The compared record of the caller's read
+ *   ({metadata, state, generation}).
+ * @param {Function|null} revalidate - (registration, storedRow) => null |
+ *   the name of the input that moved.
  * @return {Function}
  */
-function registrationChange(owner, registration, read) {
+function registrationChange(owner, registration, read, revalidate) {
   return (_workflow, stored) => {
-    if (stored.bytes.metadata !== read.metadata ||
-        stored.bytes.state !== read.state) {
+    if (!isRecordAsRead(stored, read)) {
       return refuseRecordChange(RECORD_CHANGE_REFUSAL.RECORD_MOVED_SINCE_READ,
         {superseded: stored.claim.workflowOwnerId !== owner.workflowOwnerId});
     }
@@ -153,8 +227,17 @@ function registrationChange(owner, registration, read) {
         recordOwnerId: stored.claim.workflowOwnerId,
         recordLeaseExpiresAt: stored.claim.leaseExpiresAt});
     }
+    const movedInput = typeof revalidate === 'function' ?
+      revalidate(registration, stored.row) : null;
+    if (movedInput) {
+      return refuseRecordChange(RECORD_CHANGE_REFUSAL.REGISTRATION_INPUT_MOVED,
+        {input: movedInput});
+    }
+    const attempt = stored.generation + 1;
     return {...registration,
-      fenceToken: (stored.claim.fenceToken ?? 0) + 1,
+      metadata: {...(registration.metadata || {}),
+        [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: attempt},
+      fenceToken: Math.max((stored.claim.fenceToken ?? 0) + 1, attempt),
       workflowOwnerId: owner.workflowOwnerId,
       leaseExpiresAt: owner.now() + owner.workflowLeaseMs,
       attemptCount: 1};
@@ -293,12 +376,13 @@ function acknowledgementChange(owner, ack, isAllowed) {
         {superseded: true});
     }
     const participant = workflow.participants.get(key);
-    const rejection = acknowledgementRejectionOf(participant, key, status,
-      fence, isAllowed);
+    const rejection = attemptRejectionOf(workflow, ack) ??
+      acknowledgementRejectionOf(participant, key, status, fence, isAllowed);
     if (rejection) {
       return refuseRecordChange(rejection,
         {participant: participant ? {...participant} : null, key, status,
-          fence});
+          fence, recordAttempt: workflowAttemptOf(workflow.metadata),
+          attempt: ack[PARTICIPANT_ACK_FIELD.ATTEMPT] ?? null});
     }
     const now = owner.now();
     const acknowledged = {...participant, status, acknowledgedAt: now,
@@ -311,6 +395,27 @@ function acknowledgementChange(owner, ack, isAllowed) {
     return renewLeaseRidingWrite(owner, {...workflow, participants,
       updatedAt: now});
   };
+}
+
+/**
+ * An acknowledgement of another attempt of the workflow than the record's
+ * (round 7, D3): its explicit attempt differs, or its fence is below the
+ * record's attempt (every fence of an attempt is at least its attempt;
+ * every fence of an earlier attempt is below it). Checked against the
+ * record the change is applied to.
+ * @param {Object} workflow - The decoded record.
+ * @param {Object} ack
+ * @return {string|null}
+ */
+function attemptRejectionOf(workflow, ack) {
+  const recordAttempt = workflowAttemptOf(workflow.metadata);
+  const attempt = ack[PARTICIPANT_ACK_FIELD.ATTEMPT];
+  const fence = ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN];
+  const otherAttempt = Number.isSafeInteger(attempt) &&
+    attempt !== recordAttempt;
+  const earlierFence = Number.isInteger(fence) && fence < recordAttempt;
+  return otherAttempt || earlierFence ?
+    RECORD_CHANGE_REFUSAL.ATTEMPT_MISMATCH : null;
 }
 
 function acknowledgementRejectionOf(participant, key, status, fence,
@@ -412,8 +517,41 @@ function abortChange(preCutoverStates, failure) {
   };
 }
 
+/**
+ * The change of an execution outcome (a failure, a deferral, an admission
+ * denial, a planning deferral) round 7, D4: from a pre-cutover record to
+ * `status` with `delta` merged onto its metadata; an aborted (FAILED)
+ * record is unchanged by a failure and refuses a deferral; a record at
+ * cutover-or-later keeps its phase and records the outcome as a typed
+ * post-cutover INCIDENT (the workflow continues forward to its terminal).
+ * @param {string} status - The outcome's state.
+ * @param {Object} delta - Metadata merged onto the record's.
+ * @param {Object} incident - {reason, ...} recorded after the cutover.
+ * @return {Function}
+ */
+function executionOutcomeChange(status, delta, incident) {
+  return (workflow) => {
+    if (workflow.status === STATE.FAILED) {
+      return status === STATE.FAILED ? RECORD_UNCHANGED :
+        refuseRecordChange(RECORD_CHANGE_REFUSAL.STATE_NOT_EXPECTED);
+    }
+    const metadata = workflow.metadata || {};
+    if (isCutoverOrLater(workflow.status)) {
+      const field = PARTITION_TRANSITION_METADATA_FIELD.POST_CUTOVER_INCIDENTS;
+      return {...workflow, metadata: {...metadata, [field]: [
+        ...(Array.isArray(metadata[field]) ? metadata[field] : []),
+        {...incident, phase: workflow.status, outcome: status}]}};
+    }
+    return {...workflow, status, metadata: {...metadata, ...delta}};
+  };
+}
+
 export {
+  RECORD_CHANGE_REFUSAL,
   abortChange,
+  executionOutcomeChange,
+  isCutoverOrLater,
+  phaseMonotonicChange,
   phaseChange,
   refusedStepAs,
   acknowledgementChange,

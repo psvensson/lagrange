@@ -16,11 +16,14 @@
  * every cleanup consumer reads as an unfinished cleanup; the boot
  * incarnation is a single-purpose counter.
  * Scope: the exact table id, group (partition) id, replica identity and its
- * raft-rs peer identity, the retiring workflow id and the fence and kind it
- * was retired under, and the INCARNATION of the lifecycle row it was written
+ * raft-rs peer identity, the retiring workflow ATTEMPT (workflow id and the
+ * record's workflowAttempt: the same workflow id registered again is
+ * another attempt, round 7) and the fence and kind it was retired under,
+ * and the INCARNATION of the lifecycle row it was written
  * from (owner decision 2026-10-05: the stamp the row's lifecycle owner
  * minted when that replica was born). A REMOVE is answered from it only for
- * that exact (table, group, replica identity, peer identity, workflow), and
+ * that exact (table, group, replica identity, peer identity, workflow
+ * attempt), and
  * only while this node holds no lifecycle row for the identity (its database
  * deleted) or holds exactly that retired incarnation: never beside a live
  * (non-retired) row, an unreadable one, or a row of another incarnation. A
@@ -36,13 +39,14 @@
  * database of another incarnation is deleted.
  * Lifetime: kept until the member observes, through the control plane's
  * authoritative read of the workflow's record, that the record no longer
- * belongs to that workflow (cleared, or a later workflow's): the workflow
+ * belongs to that attempt (cleared, a later workflow's, or a later attempt
+ * of the same workflow id): the attempt
  * durably recorded completion. An absent or unreadable record keeps it.
  * Bound: one small file per replica this node retired as part of a group
  * whose workflow it has not yet seen cleared (a dropped table's record is
  * absent: its tombstones stay - recorded follow-up).
  * Prohibited: a proof from absence; a proof for another identity, group,
- * workflow or incarnation; a proof beside a live row; releasing before the
+ * workflow, attempt or incarnation; a proof beside a live row; releasing before the
  * record is seen cleared.
  */
 import {createHash} from 'node:crypto';
@@ -56,12 +60,17 @@ import {
   writeAtomicDurable,
 } from '../runtime/oci-host-agent-durable-files.js';
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
-import {PARTITION_TRANSITION_METADATA_FIELD} from
-  '../partition/partition-constants.js';
+import {
+  PARTITION_TRANSITION_METADATA_FIELD,
+  workflowAttemptOf,
+} from '../partition/partition-constants.js';
 
 const TOMBSTONE_DIRNAME = 'group-retired-tombstones';
-// Version 2 carries the replica incarnation; a version 1 file is no proof.
-const TOMBSTONE_VERSION = 2;
+// Version 3 carries the workflow attempt (round 7); a version 2 file carries
+// the replica incarnation and reads as the legacy attempt 0; a version 1
+// file is no proof.
+const TOMBSTONE_VERSION = 3;
+const ATTEMPTLESS_TOMBSTONE_VERSION = 2;
 const TOMBSTONE_EXT = '.json';
 const UNREADABLE = 'GROUP_RETIRED_TOMBSTONE_UNREADABLE';
 // A tombstone directory that is missing, or whose place is taken, holds no
@@ -95,10 +104,19 @@ function isNonEmptyString(value) {
 }
 
 function isWellFormed(record) {
-  return record?.version === TOMBSTONE_VERSION &&
+  const attempted = record?.version === TOMBSTONE_VERSION &&
+    Number.isSafeInteger(record.attempt);
+  return (attempted || record?.version === ATTEMPTLESS_TOMBSTONE_VERSION) &&
     Object.values(TOMBSTONE_SCOPE_FIELD).every((field) =>
       isNonEmptyString(record[field])) &&
     Number.isInteger(record.fenceToken);
+}
+
+// The workflow attempt a tombstone was written for (0: the legacy attempt).
+function tombstoneAttemptOf(tombstone) {
+  return workflowAttemptOf({
+    [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: tombstone?.attempt,
+  });
 }
 
 /**
@@ -148,6 +166,9 @@ function tombstoneRecordOf({groupId, replicaIdentity, incarnation,
     replicaIdentity: identity,
     peerId: isNonEmptyString(identity) ? deriveRaftRsPeerId(identity) : '',
     workflowId: textOf(evidence?.workflowId),
+    attempt: workflowAttemptOf({
+      [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: evidence?.attempt,
+    }),
     fenceToken: evidence?.fenceToken,
     kind: textOf(evidence?.kind),
     incarnation: textOf(incarnation),
@@ -194,7 +215,7 @@ function isTombstoneOfRow(tombstone, lifecycle) {
 /**
  * Whether a tombstone proves the retirement a group-retirement REMOVE asks
  * about: the exact table, group, replica identity, peer identity and
- * workflow, and the incarnation this node holds for the identity - no row
+ * workflow ATTEMPT, and the incarnation this node holds for the identity - no row
  * any more (its database deleted), or exactly the retired row it was
  * written from. A live row, an unreadable database or a row of another
  * incarnation is never answered from a tombstone.
@@ -219,7 +240,8 @@ function tombstoneProvesRetirement(tombstone, {partitionId, replicaId,
     [TOMBSTONE_SCOPE_FIELD.WORKFLOW_ID]: String(evidence?.workflowId ?? ''),
   };
   return Object.entries(asked).every(([field, value]) =>
-    tombstone[field] === value);
+    tombstone[field] === value) &&
+    tombstoneAttemptOf(tombstone) === tombstoneAttemptOf(evidence);
 }
 
 /**
@@ -264,9 +286,9 @@ function deleteGroupRetiredTombstone(dataDir, tombstone) {
 
 /**
  * Whether the workflow's record, as the control plane's authoritative read
- * answered it, shows the tombstone's workflow finished: the record no longer
- * belongs to it (cleared, or a later workflow's). An unread or absent record
- * proves nothing.
+ * answered it, shows the tombstone's attempt finished: the record no longer
+ * belongs to it (cleared, a later workflow's, or another attempt of the same
+ * workflow id). An unread or absent record proves nothing.
  * @param {Object} tombstone
  * @param {Object} read - {available, tablesRow}.
  * @return {boolean}
@@ -282,7 +304,8 @@ function isTombstoneWorkflowCleared(tombstone, read) {
   try {
     const metadata = typeof raw === STRING_TYPE ? JSON.parse(raw) : raw;
     return String(metadata?.[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] ||
-      '') !== tombstone.workflowId;
+      '') !== tombstone.workflowId ||
+      workflowAttemptOf(metadata) !== tombstoneAttemptOf(tombstone);
   } catch (_error) {
     return false;
   }

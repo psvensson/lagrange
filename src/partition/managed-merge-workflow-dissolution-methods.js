@@ -16,6 +16,7 @@ import {
 import {
   GROUP_RETIREMENT_KIND,
   buildGroupRetirementEvidence,
+  groupRetirementOperationIdOf,
 } from './group-retirement-evidence.js';
 import {retireFrozenGroupMembers} from './group-retirement-members.js';
 import {
@@ -35,7 +36,6 @@ const LOCAL_STR_MERGE_SOURCE_DISSOLUTION = 'merge_source_dissolution';
 const LOCAL_NUM_DISSOLUTION_WITNESS_AFFECTED_ROWS = 1;
 const LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE =
   'merge_source_execution_failure';
-const LOCAL_STR_DISSOLVE_SEGMENT = ':dissolve:';
 
 const MERGE_SOURCES_DISSOLVED_STATUSES = Object.freeze(new Set([
   MERGE_ACK_STATUS.SOURCE_DISSOLVED,
@@ -482,8 +482,8 @@ class ManagedMergeWorkflowDissolutionMethods {
     return {
       [ReplicaOperationField.TYPE]:
         ReplicaOperationMessageType.REMOVE_REPLICA,
-      [ReplicaOperationField.OPERATION_ID]:
-        options.workflowId + LOCAL_STR_DISSOLVE_SEGMENT + options.replicaId,
+      [ReplicaOperationField.OPERATION_ID]: groupRetirementOperationIdOf(
+        options.groupRetirement, options.replicaId),
       [ReplicaOperationField.OPERATION_TYPE]: OperationType.REMOVE,
       [ReplicaOperationField.PARTITION_ID]: options.partitionId,
       [ReplicaOperationField.REPLICA_ID]: options.replicaId,

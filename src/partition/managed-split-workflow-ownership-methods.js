@@ -1,7 +1,12 @@
 import {RESUME_TRIGGER} from './group-retirement-resume.js';
 import {randomUUID} from 'node:crypto';
 
-import {MANAGED_SPLIT_LOG_MSG} from './partition-constants.js';
+import {
+  MANAGED_SPLIT_LOG_MSG,
+  PARTITION_TRANSITION_METADATA_FIELD,
+} from './partition-constants.js';
+import {registrationInputsRefusalOf} from
+  './managed-workflow-registration-inputs.js';
 import {
   WORKFLOW_DEFAULT_NODE_ID,
 } from '../workflow/workflow-constants.js';
@@ -106,6 +111,26 @@ class ManagedSplitWorkflowOwnershipMethods {
   }
 
   /**
+   * The registration's partitions-row inputs re-validated at its change's
+   * turn against the compared record (managed-workflow-registration-inputs).
+   * @param {Object} registration
+   * @param {Object|null} storedRow - The compared `tables` row.
+   * @return {string|null} The input that moved, or null.
+   * @private
+   */
+  registrationInputsRefusal(registration, storedRow) {
+    const metadata = registration.metadata || {};
+    const sourcePartitionId = String(metadata[
+      PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID] || '');
+    return registrationInputsRefusalOf(this, {registration, storedRow,
+      sourceIds: [sourcePartitionId],
+      deriveSiblings: (tableInfo) => this.resolveSplitSiblingPartitionIds({
+        tableId: registration.tableId, tableInfo, sourcePartitionId,
+        targetPartitionIds: metadata[
+          PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS] || []})});
+  }
+
+  /**
    * Explicit participant transition graph validator, wired into the
    * coordinator as isParticipantTransitionAllowed: only the split
    * source participant has a declared graph (owner-recorded child
@@ -183,7 +208,7 @@ class ManagedSplitWorkflowOwnershipMethods {
       success: false,
       partitionId,
       workflowId,
-      ownership: registration.refusal,
+      ownership: registration.refusal, reason: registration.reason ?? null,
     };
   }
 }

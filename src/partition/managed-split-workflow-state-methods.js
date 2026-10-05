@@ -594,9 +594,9 @@ class ManagedSplitWorkflowStateMethods {
     };
 
     if (workflow) {
-      await this.workflowCoordinator.updateWorkflow(options.workflowId,
-        (current) => ({...current, status: deniedState,
-          metadata: {...current.metadata, ...deniedDelta}}));
+      await this.workflowCoordinator.recordExecutionOutcome(
+        options.workflowId, {status: deniedState, delta: deniedDelta,
+          incident: {reason: failureMessage}});
     }
 
     return {
@@ -693,10 +693,10 @@ class ManagedSplitWorkflowStateMethods {
     };
 
     if (workflow) {
-      await this.workflowCoordinator.updateWorkflow(options.workflowId,
-        (current) => ({...current,
-          status: PARTITION_TRANSITION_STATE.DEFERRED,
-          metadata: {...current.metadata, ...deferredDelta}}));
+      await this.workflowCoordinator.recordExecutionOutcome(
+        options.workflowId, {status: PARTITION_TRANSITION_STATE.DEFERRED,
+          delta: deferredDelta, incident: {reason: deferredDelta[
+            PARTITION_TRANSITION_METADATA_FIELD.FAILURE].message}});
     }
 
     return {

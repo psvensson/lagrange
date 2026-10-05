@@ -49,7 +49,7 @@ async function ownerOf(status, marks) {
     metadata: {workflowId, sourcePartitionId: SOURCE,
       targetPartitionVersion: 2, targetPartitionIds: [LEFT, RIGHT],
       targetProvisioning: marks}, createdAt: 1000, updatedAt: 1000});
-  return {store, workflow, workflowId};
+  return {store, view, workflow, workflowId};
 }
 
 // Another writer's change lands on the record (the owner's projection does
@@ -209,6 +209,86 @@ test('an acknowledgement is checked against the RECORD\'s participant, not ' +
     'snapshot_started -> backfill_progress is valid on the record');
   t.equal(store.metadata().participants['source-partition'].status,
     'backfill_progress', 'and it is on the record');
+});
+
+test('R17 an acknowledgement is checked against the record the change is ' +
+  'applied to, never a projection recovered from a stale read',
+async (t) => {
+  const {store, view, workflow, workflowId} = await ownerOf(
+    'split_backfilling', {[LEFT]: 'dispatched', [RIGHT]: 'dispatched'});
+  landForeign(store, {participant: {key: 'source-partition',
+    fields: {status: 'snapshot_started', acknowledgedAt: 999}}});
+  const stale = store.tablesRow();
+  landForeign(store, {participant: {key: 'source-partition',
+    fields: {status: 'catchup_ready', acknowledgedAt: 1001}}});
+  // A restart: the in-memory workflow and its lineage are gone; recovery
+  // adopts a projection from a stale view (no lineage), then the view
+  // catches up.
+  workflow.workflowCoordinator.removeWorkflow(workflowId);
+  view.freeze(stale);
+  workflow.resolveWorkflowState(workflowId);
+  view.thaw();
+  t.equal(workflow.workflowCoordinator.getWorkflowById(workflowId)
+    .participants.get('source-partition').status, 'snapshot_started',
+  'setup: the recovered projection holds the older participant');
+  const result = await workflow.workflowCoordinator.acknowledgeParticipant(
+    workflowId, {participantKey: 'source-partition',
+      status: 'backfill_progress',
+      fenceToken: store.metadata().workflowFenceToken, acknowledgedAt: 1002});
+  t.not(result.result, 'accepted',
+    'refused: catchup_ready -> backfill_progress is no transition of the ' +
+    'record\'s participant');
+  t.equal(store.metadata().participants['source-partition'].status,
+    'catchup_ready', 'the record\'s participant never regresses');
+});
+
+test('an acknowledgement of another attempt is stale: its explicit attempt ' +
+  'differs, or its fence is below the record\'s attempt', async (t) => {
+  const {store, workflow, workflowId} = await ownerOf('split_backfilling',
+    {[LEFT]: 'dispatched', [RIGHT]: 'dispatched'});
+  const attempt = store.metadata().workflowAttempt;
+  t.ok(attempt >= 1, `setup: the record names its attempt (${attempt})`);
+  const before = store.tablesRow();
+  const ack = (fields) => workflow.workflowCoordinator.acknowledgeParticipant(
+    workflowId, {participantKey: 'source-partition',
+      status: 'snapshot_started', acknowledgedAt: 1000, ...fields});
+  t.equal((await ack({attempt: attempt + 1,
+    fenceToken: store.metadata().workflowFenceToken})).result, 'stale_fence',
+  'another explicit attempt is stale');
+  t.equal((await ack({fenceToken: attempt - 1})).result, 'stale_fence',
+    'a fence below the record\'s attempt is an earlier attempt\'s');
+  t.same(store.tablesRow(), before, 'nothing was written');
+  t.equal((await ack({attempt,
+    fenceToken: store.metadata().workflowFenceToken})).result, 'accepted',
+  'the attempt\'s own acknowledgement lands');
+});
+
+test('D4 the phase guard is total from the cutover on: no change - an ' +
+  'owner\'s, a deferral, a registration - moves the record back',
+async (t) => {
+  const {store, workflow, workflowId} = await ownerOf('split_cutover_active',
+    {[LEFT]: 'dispatched', [RIGHT]: 'dispatched'});
+  const before = store.tablesRow();
+  for (const status of ['split_backfilling', 'deferred', 'failed',
+    'admission_pending']) {
+    await t.rejects(workflow.workflowCoordinator.updateWorkflow(workflowId,
+      (current) => ({...current, status})), /refused/u,
+    `cutover -> ${status} is refused`);
+  }
+  const registration = await workflow.workflowCoordinator
+    .registerWorkflowFromRead({workflowId: 'split-over-a-cutover',
+      ownerKey: SOURCE, tableId: store.tableId, tableName: 'users',
+      partitionId: SOURCE, status: 'admission_pending',
+      metadata: {workflowId: 'split-over-a-cutover',
+        sourcePartitionId: SOURCE, targetPartitionVersion: 3},
+      createdAt: 1000, updatedAt: 1000}, store.tablesRow());
+  t.notOk(registration.workflow,
+    'a registration over the cutover record is refused');
+  t.same(store.tablesRow(), before, 'nothing was written');
+  await workflow.workflowCoordinator.updateWorkflow(workflowId,
+    (current) => ({...current, status: 'split_source_dissolving'}));
+  t.equal(store.tablesRow().partition_transition_state,
+    'split_source_dissolving', 'forward is allowed');
 });
 
 test('the terminal clear clears only the state its caller finished in',

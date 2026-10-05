@@ -25,6 +25,19 @@
  *  I6 every change a caller saw land holds in the final record (or the
  *     record moved past it: a later status in the acknowledgement graph);
  *     a refused change answered a typed outcome.
+ * Round 7 (the record is an incarnation), with registrations in the bursts,
+ * "clear + re-register" of the same workflow id and a whole competing
+ * workflow (register, abort, clear) completing during any await:
+ *  I7 the record generation strictly increases by one on every applied
+ *     write of the record (the clear included) and never repeats;
+ *  I8 no two attempts share an identity: an attempt is introduced by exactly
+ *     one write - its registration, at the generation it names - and a
+ *     (workflow id, attempt) is never introduced twice;
+ *  I9 no write moves a cutover-or-later record backwards;
+ *  I10 a registration lands only on the record its content was derived
+ *     from: the attempt it introduces is the generation its owner read,
+ *     plus one.
+ * I1-I6 compare consecutive records of the SAME attempt.
  */
 import {test} from '../../src/test-helpers/tap.js';
 import {claimWorkflowOwnershipCore} from
@@ -69,7 +82,18 @@ const SEEDS = Object.freeze({
   split: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597],
   merge: [4, 9, 16, 25, 36, 49, 64, 81],
 });
+// Round 7: seeds whose bursts also register (the same workflow id again,
+// after clears) and run whole competing workflows.
+const INCARNATION_SEEDS = Object.freeze({
+  split: [7, 11, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53],
+  merge: [59, 61, 67, 71, 73, 79, 83, 97],
+});
 const STEPS = 28;
+const GENERATION = 'partition_transition_generation';
+const CUTOVER_ORDER = Object.freeze([
+  PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+  PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
+  PARTITION_TRANSITION_STATE.SPLIT_SOURCE_DISSOLVING]);
 const PRE_CUTOVER_ORDER = Object.freeze({
   split: [PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
     PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
@@ -205,12 +229,44 @@ function reachableFrom(isAllowed, statuses, status) {
 function recordOf(store) {
   const row = store.tablesRow();
   return {state: row.partition_transition_state,
+    generation: row[GENERATION],
     metadata: row.partition_transition_metadata ?
       JSON.parse(row.partition_transition_metadata) : null};
 }
 
+// The attempt identity a record holds (null: no record).
+function attemptKeyOf(record) {
+  return record.metadata ? `${record.metadata.workflowId}#${
+    record.metadata.workflowAttempt}` : null;
+}
+
+// I7-I10 across the sequence of applied records (round 7).
+function checkIncarnation(ctx, {was, next, writer}, check) {
+  check(Number.isSafeInteger(next.generation) &&
+    next.generation === was.generation + 1,
+  `I7 generation ${was.generation} -> ${next.generation}`);
+  check(!ctx.generations.has(next.generation),
+    `I7 generation ${next.generation} repeated`);
+  ctx.generations.add(next.generation);
+  const wasRank = CUTOVER_ORDER.indexOf(was.state);
+  check(!(wasRank >= 0 && next.state !== null &&
+    CUTOVER_ORDER.indexOf(next.state) < wasRank),
+  `I9 ${was.state} -> ${next.state}`);
+  const key = attemptKeyOf(next);
+  if (!key || key === attemptKeyOf(was)) {
+    return;
+  }
+  check(next.metadata.workflowAttempt === next.generation,
+    `I8 attempt ${key} introduced at generation ${next.generation}`);
+  check(!ctx.attempts.has(key), `I8 attempt ${key} introduced twice`);
+  ctx.attempts.add(key);
+  check(ctx.registrationReads.has(`${writer}:${next.generation - 1}`),
+    `I10 attempt ${key} landed by ${writer} on generation ${
+      next.generation - 1} that no registration of its owner read`);
+}
+
 // The invariant checker over the records as each write applied.
-function watchInvariants(store, family, violations) {
+function watchInvariants(ctx, store, family, violations) {
   let previous = recordOf(store);
   const fenceOwners = new Map();
   const order = PRE_CUTOVER_ORDER[family];
@@ -238,7 +294,9 @@ function watchInvariants(store, family, violations) {
     const next = recordOf(store);
     const was = previous;
     previous = next;
-    if (!next.metadata || !was.metadata) return;
+    checkIncarnation(ctx, {was, next, writer: write.writer}, check);
+    if (!next.metadata || !was.metadata ||
+        attemptKeyOf(next) !== attemptKeyOf(was)) return;
     const fence = next.metadata.workflowFenceToken;
     const wasFence = was.metadata.workflowFenceToken;
     check(!(fence < wasFence), `I1 fence ${wasFence} -> ${fence}`);
@@ -336,7 +394,56 @@ function operation(ctx, owner) {
       return {kind: 'teardown'};
     },
   ];
+  if (ctx.incarnation) {
+    ops.push(...incarnationOperations(ctx, owner, workflowId));
+  }
   return rng.pick(ops)();
+}
+
+// The round-7 disturbances (only in the incarnation seeds).
+function incarnationOperations(ctx, owner, workflowId) {
+  return [
+    // A registration of the same workflow id from a read taken before an
+    // await (an attempt; a re-registration over a deferred or aborted
+    // record of it, or over its clear).
+    () => registerFrom(ctx, owner, workflowId),
+    // Clear + re-register: the owner clears an aborted record, then the
+    // same workflow id registers again.
+    async () => {
+      owner.workflow.resolveWorkflowState(workflowId);
+      await owner.workflow.workflowCoordinator.clearWorkflowRecord(workflowId,
+        new Set([PARTITION_TRANSITION_STATE.FAILED])).catch(() => null);
+      return registerFrom(ctx, owner, workflowId);
+    },
+    // A whole competing workflow (register, abort, clear) completing while
+    // the other owners' changes are awaiting.
+    () => competingWorkflow(ctx, owner),
+  ];
+}
+
+// A registration derived from the owner's read, landed after an await.
+async function registerFrom(ctx, owner, workflowId) {
+  const read = owner.view.row();
+  ctx.registrationReads.add(`${owner.name}:${Number(read[GENERATION] ?? 0)}`);
+  await turns(ctx.rng.int(10));
+  const registration = await owner.workflow.workflowCoordinator
+    .registerWorkflowFromRead(FAMILIES[ctx.family].record(workflowId), read)
+    .catch((error) => ({refusal: error.message}));
+  return {kind: 'register', accepted: Boolean(registration.workflow)};
+}
+
+async function competingWorkflow(ctx, owner) {
+  ctx.competitors = (ctx.competitors ?? 0) + 1;
+  const workflowId = `${ctx.family}-competitor-${ctx.competitors}`;
+  const registered = await registerFrom(ctx, owner, workflowId);
+  if (!registered.accepted) {
+    return {kind: 'compete', accepted: false};
+  }
+  await owner.workflow.persistExecutionFailure(workflowId,
+    new Error('competitor abort'));
+  await owner.workflow.workflowCoordinator.clearWorkflowRecord(workflowId,
+    new Set([PARTITION_TRANSITION_STATE.FAILED])).catch(() => null);
+  return {kind: 'compete', accepted: true};
 }
 
 function arrange(ctx, owner) {
@@ -354,7 +461,19 @@ function arrange(ctx, owner) {
     {status: 'completed'} : null);
 }
 
-async function runSeed(t, family, seed) {
+// The seed's first registration, and the incarnation bookkeeping it starts.
+async function registerFirst(ctx, owner, record) {
+  ctx.generations = new Set();
+  ctx.attempts = new Set();
+  ctx.registrationReads = new Set([`${owner.name}:${
+    Number(ctx.store.tablesRow()[GENERATION] ?? 0)}`]);
+  await registerFromRecordAsRead(owner.workflow, record);
+  const first = recordOf(ctx.store);
+  ctx.generations.add(first.generation);
+  ctx.attempts.add(attemptKeyOf(first));
+}
+
+async function runSeed(t, family, seed, incarnation = false) {
   const spec = FAMILIES[family];
   const rng = random(seed);
   const store = spec.store();
@@ -368,12 +487,12 @@ async function runSeed(t, family, seed) {
     readAuthoritativelyFrom(owner.workflow, store);
     return owner;
   });
-  const ctx = {rng, family, clock, store};
+  const ctx = {rng, family, clock, store, incarnation,
+    workflowId: `${family}-property-${seed}`};
   owners.forEach((owner) => arrange(ctx, owner));
-  const workflowId = `${family}-property-${seed}`;
-  ctx.workflowId = workflowId;
-  await registerFromRecordAsRead(owners[0].workflow, spec.record(workflowId));
-  watchInvariants(store, family, violations);
+  const workflowId = ctx.workflowId;
+  await registerFirst(ctx, owners[0], spec.record(workflowId));
+  watchInvariants(ctx, store, family, violations);
   const landed = [];
   const inFlight = [];
   for (let step = 0; step < STEPS; step += 1) {
@@ -410,7 +529,11 @@ async function runSeed(t, family, seed) {
   for (const owner of owners) {
     owner.view.thaw();
   }
-  checkPostconditions(store, spec, landed, violations);
+  if (ctx.attempts.size === 1) {
+    // (With another attempt registered, what callers saw land belongs to an
+    // attempt the final record no longer holds; I7-I10 cover those seeds.)
+    checkPostconditions(store, spec, landed, violations);
+  }
   t.same(violations, [], `seed ${seed}: ${landed.length} operations, ` +
     `${store.writes.filter((write) => write.changes > 0).length} writes ` +
     'applied, every invariant holds');
@@ -459,5 +582,16 @@ for (const family of Object.keys(FAMILIES)) {
     }
     t.comment(`${family}: ${SEEDS[family].length} seeds, ${operations} ` +
       'operations');
+  });
+
+  test(`S2-R7 ${family}: registrations, clear + re-register and whole ` +
+    'competing workflows in the bursts keep the record an incarnation ' +
+    '(I1-I10)', async (t) => {
+    let operations = 0;
+    for (const seed of INCARNATION_SEEDS[family]) {
+      operations += (await runSeed(t, family, seed, true)).length;
+    }
+    t.comment(`${family}: ${INCARNATION_SEEDS[family].length} incarnation ` +
+      `seeds, ${operations} operations`);
   });
 }

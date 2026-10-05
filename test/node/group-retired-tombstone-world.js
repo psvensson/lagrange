@@ -31,6 +31,9 @@ const GROUP_RETIRED = 'group-retired';
 const RESEED_REQUIRED = 'reseed-required';
 const WORKFLOW_ID = 'wf-tomb-1';
 const FENCE = 3;
+// The workflow attempt (round 7): the record generation its registration
+// wrote; every fence of the attempt is at least it.
+const ATTEMPT = 1;
 const SOURCE_KEY = SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION;
 const TOMBSTONE_DIR = 'group-retired-tombstones';
 
@@ -38,13 +41,15 @@ const TOMBSTONE_DIR = 'group-retired-tombstones';
  * The table's record while a split of `partitionId` retires it as a unit.
  * @param {string} partitionId
  * @param {number} [fence]
+ * @param {number} [attempt] - The record's workflow attempt.
  * @return {Object} The `tables` row.
  */
-function retiringRecord(partitionId, fence = FENCE) {
+function retiringRecord(partitionId, fence = FENCE, attempt = ATTEMPT) {
   return {table_id: TABLE_ID, active_partition_version: 2,
     partition_transition_state:
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
     partition_transition_metadata: JSON.stringify({workflowId: WORKFLOW_ID,
+      workflowAttempt: attempt,
       workflowFenceToken: fence, targetPartitionVersion: 2,
       sourcePartitionId: partitionId,
       targetPartitionIds: [`${partitionId}-l`, `${partitionId}-r`],
@@ -95,8 +100,8 @@ function groupRemove(world, replicaId, evidence = {}, partitionId = null) {
     [ReplicaOperationField.REPLICA_ID]: replicaId,
     [ReplicaOperationField.REASON]: 'split_source_dissolution',
     [ReplicaOperationField.GROUP_RETIREMENT]: {reason: GROUP_RETIRED,
-      kind: 'split-source', workflowId: WORKFLOW_ID, fenceToken: FENCE,
-      tableId: TABLE_ID, ...evidence},
+      kind: 'split-source', workflowId: WORKFLOW_ID, attempt: ATTEMPT,
+      fenceToken: FENCE, tableId: TABLE_ID, ...evidence},
   };
 }
 
@@ -174,6 +179,7 @@ function lifecycleRow(world, replicaId) {
 }
 
 export {
+  ATTEMPT,
   FENCE,
   GROUP_RETIRED,
   RESEED_REQUIRED,

@@ -100,7 +100,7 @@ class ReplicaHandlerGroupRetiredTombstoneMethods {
    * @private
    */
   writeTombstoneFromRow({partitionId, replicaId, lifecycle, evidence}) {
-    if (!evidence || !lifecycle.retired || !lifecycle.incarnation) {
+    if (!evidence || !lifecycle?.retired || !lifecycle.incarnation) {
       return false;
     }
     const record = writeGroupRetiredTombstone(this.dataDir, {
@@ -247,13 +247,16 @@ class ReplicaHandlerGroupRetiredTombstoneMethods {
       return;
     }
     let rowEvidence = lifecycle.retirementEvidence;
+    let row = lifecycle;
     if (!rowEvidence) {
       const decision = await verifyGroupRetirement(
         this.getControlPlaneSystemTableGateway(), evidence, partitionId);
       rowEvidence = decision?.retire === true ? evidence : null;
+      // The row as it is AFTER the await, and only the same incarnation.
+      row = this.sameRetiredRowAfterAwait(partitionId, replicaId, lifecycle);
     }
     try {
-      this.writeTombstoneFromRow({partitionId, replicaId, lifecycle,
+      this.writeTombstoneFromRow({partitionId, replicaId, lifecycle: row,
         evidence: rowEvidence});
     } catch (error) {
       // The lifecycle row still proves it (and the database stays until a
@@ -261,6 +264,22 @@ class ReplicaHandlerGroupRetiredTombstoneMethods {
       this.logger.warn(TOMBSTONE_LOG_MSG.WRITE_FAILED, {replicaId,
         partitionId, nodeId: this.nodeId, error: error?.message});
     }
+  }
+
+  /**
+   * The replica's durable lifecycle row read again after an await, when it
+   * is still the SAME incarnation, retired; else null (deleted, reborn, or
+   * live again: nothing may be written from the earlier read).
+   * @param {string} partitionId
+   * @param {string} replicaId
+   * @param {Object} before - The lifecycle read before the await.
+   * @return {Object|null}
+   * @private
+   */
+  sameRetiredRowAfterAwait(partitionId, replicaId, before) {
+    const after = this.durableLifecycleOf(partitionId, replicaId);
+    return after.retired && Boolean(after.incarnation) &&
+      after.incarnation === before.incarnation ? after : null;
   }
 
   /**
@@ -283,9 +302,16 @@ class ReplicaHandlerGroupRetiredTombstoneMethods {
     if (decision?.retire !== true) {
       return false;
     }
+    // The tombstone is written from the row as it is AFTER the await: the
+    // database may have been deleted and the identity reborn meanwhile.
+    const row = this.sameRetiredRowAfterAwait(partitionId, replicaId,
+      lifecycle);
+    if (!row) {
+      return false;
+    }
     try {
-      return this.writeTombstoneFromRow({partitionId, replicaId, lifecycle,
-        evidence});
+      return this.writeTombstoneFromRow({partitionId, replicaId,
+        lifecycle: row, evidence});
     } catch (error) {
       this.logger.warn(TOMBSTONE_LOG_MSG.WRITE_FAILED, {replicaId,
         partitionId, nodeId: this.nodeId, error: error?.message});

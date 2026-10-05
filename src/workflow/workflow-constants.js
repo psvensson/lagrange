@@ -65,6 +65,9 @@ const PARTICIPANT_ACK_FIELD = Object.freeze({
   STATUS: 'status',
   CHECKPOINT: 'checkpoint',
   ACKNOWLEDGED_AT: 'acknowledgedAt',
+  // The workflow attempt the participant was started under (the record's
+  // workflowAttempt): an acknowledgement of another attempt is stale.
+  ATTEMPT: 'attempt',
 });
 
 const WORKFLOW_ERROR_MSG = Object.freeze({

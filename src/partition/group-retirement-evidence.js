@@ -7,7 +7,8 @@
  * groups whose life ends at a durable workflow transition; none of them is
  * shrunk member by member, so none of them ever reaches a last voter.
  * Inputs: the evidence the workflow owner put on the REMOVE
- * ({kind, workflowId, fenceToken, tableId, reason: group-retired}) and the
+ * ({kind, workflowId, attempt, fenceToken, tableId, reason: group-retired};
+ * the attempt is the record's workflowAttempt - round 7, D3) and the
  * durable workflow record it names: the table's `tables` row
  * (partition_transition_state, partition_transition_metadata with the
  * workflow id, the workflow fence token, the source/target partition ids,
@@ -31,6 +32,7 @@ import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
+  workflowAttemptOf,
 } from './partition-constants.js';
 import {
   MERGE_ACK_MIRROR_REMOVED_SATISFIED_STATUSES,
@@ -55,6 +57,7 @@ const GROUP_RETIREMENT_REFUSAL = Object.freeze({
   RECORD_UNAVAILABLE: 'group-retirement-record-unavailable',
   RECORD_ABSENT: 'group-retirement-record-absent',
   WORKFLOW_MISMATCH: 'group-retirement-workflow-mismatch',
+  ATTEMPT_MISMATCH: 'group-retirement-attempt-mismatch',
   FENCE_MISMATCH: 'group-retirement-fence-mismatch',
   TRANSITION_STATE_MISMATCH: 'group-retirement-transition-state-mismatch',
   GROUP_NOT_NAMED: 'group-retirement-group-not-named',
@@ -157,7 +160,7 @@ const RETIREMENT_RULE_BY_KIND = Object.freeze({
  * @param {Object} options
  * @param {string} options.kind - GROUP_RETIREMENT_KIND.
  * @param {Object} options.workflow - The workflow snapshot (workflowId,
- *   fenceToken, tableId).
+ *   metadata (its workflowAttempt), fenceToken, tableId).
  * @return {Object} Frozen evidence.
  */
 function buildGroupRetirementEvidence({kind, workflow}) {
@@ -165,10 +168,31 @@ function buildGroupRetirementEvidence({kind, workflow}) {
     reason: GROUP_RETIREMENT_REASON,
     kind,
     workflowId: String(workflow?.workflowId || ''),
+    attempt: workflowAttemptOf(workflow?.metadata),
     fenceToken: Number.isInteger(workflow?.fenceToken) ?
       workflow.fenceToken : null,
     tableId: String(workflow?.tableId || ''),
   });
+}
+
+// The operation id of one group-retirement REMOVE: the workflow ATTEMPT
+// (round 7) and the replica - a later attempt of the same workflow id is
+// another operation. The legacy attempt 0 keeps the attemptless id.
+const DISSOLVE_OPERATION_SEGMENT = ':dissolve:';
+const ATTEMPT_SEPARATOR = '#';
+
+/**
+ * @param {Object} evidence - buildGroupRetirementEvidence's evidence.
+ * @param {string} replicaId
+ * @return {string}
+ */
+function groupRetirementOperationIdOf(evidence, replicaId) {
+  const attempt = workflowAttemptOf({
+    [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]: evidence?.attempt,
+  });
+  return String(evidence?.workflowId || '') +
+    (attempt > 0 ? `${ATTEMPT_SEPARATOR}${attempt}` : '') +
+    DISSOLVE_OPERATION_SEGMENT + String(replicaId);
 }
 
 function refusal(reason) {
@@ -180,6 +204,7 @@ function isWellFormedEvidence(evidence) {
     Object.hasOwn(RETIREMENT_RULE_BY_KIND, evidence.kind) &&
     typeof evidence.workflowId === STRING_TYPE &&
     evidence.workflowId.length > 0 &&
+    (evidence.attempt === undefined || Number.isSafeInteger(evidence.attempt)) &&
     Number.isInteger(evidence.fenceToken) &&
     typeof evidence.tableId === STRING_TYPE && evidence.tableId.length > 0;
 }
@@ -224,6 +249,11 @@ const RECORD_CHECKS = Object.freeze([
   [(evidence, rule, row, metadata) => String(
     metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || '') ===
       evidence.workflowId, GROUP_RETIREMENT_REFUSAL.WORKFLOW_MISMATCH],
+  // The attempt: the same workflow id registered again is another attempt
+  // (evidence without one is of the legacy attempt 0).
+  [(evidence, rule, row, metadata) => workflowAttemptOf(metadata) ===
+    workflowAttemptOf({[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT]:
+      evidence.attempt}), GROUP_RETIREMENT_REFUSAL.ATTEMPT_MISMATCH],
   [(evidence, rule, row, metadata) => metadata[
     PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN] ===
       evidence.fenceToken, GROUP_RETIREMENT_REFUSAL.FENCE_MISMATCH],
@@ -374,6 +404,7 @@ async function groupRetirementEvidenceFromRecord(gateway, tableId,
   }
   const workflow = {
     workflowId: metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID],
+    metadata,
     fenceToken:
       metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN],
     tableId,
@@ -407,7 +438,8 @@ function retiringWorkflowOf(tablesRow) {
     return NOT_RETIRING;
   }
   const family = workflowFamilyOf(metadata);
-  const workflow = {workflowId, tableId: String(tablesRow.table_id || ''),
+  const workflow = {workflowId, metadata,
+    tableId: String(tablesRow.table_id || ''),
     fenceToken: metadata[
       PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN]};
   const retiring = recordPartitionIdsOf(metadata, family)
@@ -468,7 +500,9 @@ export {
   RECORD_EVIDENCE_STATE,
   WORKFLOW_FAMILY,
   buildGroupRetirementEvidence,
+  decideGroupRetirement,
   groupRetirementEvidenceFromRecord,
+  groupRetirementOperationIdOf,
   isGroupRetiringInView,
   readGroupRetirementRecord,
   retiringSourceStatus,

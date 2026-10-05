@@ -25,6 +25,11 @@
  * R4 a tracked reseed-held member retired by the PRODUCTION dissolution:
  *    its removal writes the tombstone from its held row (the reason kept)
  *    and the restarted member answers from it once its database is gone.
+ * R5 (round 7, P5) the held member's proof re-reads its row AFTER the
+ *    verification await: when the reseed deleted the database and the same
+ *    identity was born again (a new incarnation, live) during that await,
+ *    the REMOVE is not answered COMPLETED and no tombstone of the old
+ *    incarnation is written.
  */
 import {test} from '../../src/test-helpers/tap.js';
 import {ReplicaOperationResponseStatus} from
@@ -156,4 +161,32 @@ test('R4 a tracked reseed-held member retired by the dissolution keeps its ' +
     groupRemove(world, held));
   t.equal(after.status, COMPLETED,
     'after its database is deleted and its node restarted: COMPLETED');
+});
+
+test('R5 the held member\'s proof is taken from its row after the ' +
+  'verification await, never from the read before it', async (t) => {
+  const {world, held, handler} = await openHeldWorld(t, 'held-r5');
+  const heldRow = lifecycleRow(world, held);
+  const gateway = handler.controlPlaneSystemTableGateway;
+  const read = gateway.readAuthoritativeRows;
+  let reseeded = false;
+  gateway.readAuthoritativeRows = async (...args) => {
+    if (!reseeded && args[0] === 'tables') {
+      reseeded = true;
+      // The reseed during the await: the database deleted, the same
+      // identity born again (a new incarnation, live).
+      deleteDatabase(world, held);
+      world.cluster.buildReplica(held, world.members);
+    }
+    return read(...args);
+  };
+  const answer = await handler.handleRemoveReplica(groupRemove(world, held));
+  t.ok(reseeded, 'setup: the reseed ran during the verification await');
+  const reborn = lifecycleRow(world, held);
+  t.not(reborn?.incarnation, heldRow.incarnation,
+    'setup: a new incarnation was born');
+  t.not(answer.status, COMPLETED,
+    'the live new incarnation is not answered COMPLETED');
+  t.notOk(tombstoneOf(world, held)?.incarnation === heldRow.incarnation,
+    'no tombstone of the old incarnation was written after the await');
 });

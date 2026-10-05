@@ -2,7 +2,8 @@
  * Owner contract:
  * Owner: every write of a split or merge workflow's durable record - the
  * table's `tables` row transition columns (partition_transition_state,
- * partition_transition_metadata and the epoch columns they carry). Owner
+ * partition_transition_metadata, the epoch columns they carry, and the
+ * record GENERATION partition_transition_generation). Owner
  * decision 2026-10-05 (option A): writes are functions of the stored
  * version. The store accepts only "apply this change to the record"; per
  * workflow, at its turn in a queue, each change is applied to the latest
@@ -21,8 +22,12 @@
  * workflow (the exact stored metadata bytes and state), or - with no
  * lineage yet - the row the caller read (a registration) or the owner's
  * view row (a read, never content);
- * next = change(decode(base)); encode; UPDATE ... WHERE metadata = base
- * bytes AND state = base state (proposed through the table partition's Raft
+ * next = change(decode(base)); encode; UPDATE ... SET ..., generation =
+ * base generation + 1 WHERE metadata = base bytes AND state = base state
+ * AND generation = base generation (round 7: the generation strictly
+ * increases on every accepted change, the terminal clear included, so a
+ * record - a cleared one too - never repeats; a row that predates the
+ * column reads 0) (proposed through the table partition's Raft
  * log, evaluated by SQLite at apply time, the proposer answered with that
  * apply's `changes`). One row: the acknowledged record becomes the written
  * bytes and the in-memory workflow is rebuilt from them (a projection)
@@ -34,11 +39,10 @@
  *   - it holds exactly the bytes this change wrote: a lost acknowledgement,
  *     ACCEPTED;
  *   - no answer: UNCONFIRMED (nothing decided, nothing adopted);
- *   - it lags the base (the base's own bytes; this workflow at a lower fence;
- *     or, while the base is this owner's record under a lease live by this
- *     owner's clock - no other owner can have replaced it - anything that is
- *     not this workflow at the base's fence or later): the base stands; the
- *     same compare-and-swap is retried after a failed submission (bounded),
+ *   - it lags the base (the base's own record, or a LOWER generation): the
+ *     base stands; the same compare-and-swap - the same bytes, encoded once
+ *     per base - is retried after a failed submission (bounded; a first
+ *     submission that lands late is then recognised as this change's own),
  *     else UNCONFIRMED;
  *   - otherwise it becomes the base (and the projection) and the SAME change
  *     is applied to it: its precondition decides - REFUSED, SUPERSEDED (the
@@ -72,6 +76,11 @@ const OBJECT_TYPE = 'object';
 const FUNCTION_TYPE = 'function';
 const MAX_COMPARE_AND_SWAP_ATTEMPTS = 3;
 const STATE_COLUMN = 'partition_transition_state';
+// The record generation (round 7): strictly increased by every accepted
+// change, the terminal clear included, and compared by every
+// compare-and-swap; it survives the clear, so a record never repeats. A row
+// that predates the column reads 0.
+const GENERATION_COLUMN = 'partition_transition_generation';
 const READ_BASE_OPTION = 'readBase';
 
 // What one record change came to.
@@ -148,22 +157,36 @@ function storedMetadataOf(raw) {
 }
 
 /**
- * The compared bytes of one `tables` row as READ (absent: null/null): what a
- * change's precondition may compare a record against. Never written.
+ * The record generation of one `tables` row: a non-negative integer, 0 for a
+ * row (or a view of it) that predates the column.
  * @param {Object|null} row
- * @return {{metadata: (string|null), state: (string|null)}}
+ * @return {number}
+ */
+function generationOf(row) {
+  const generation = Number(row?.[GENERATION_COLUMN] ?? 0);
+  return Number.isSafeInteger(generation) && generation > 0 ? generation : 0;
+}
+
+/**
+ * The compared record of one `tables` row as READ (absent: null/null/0):
+ * what a change's precondition may compare a record against. Never written.
+ * @param {Object|null} row
+ * @return {{metadata: (string|null), state: (string|null),
+ *   generation: number}}
  */
 function bytesOf(row) {
   return {
     metadata: storedMetadataOf(row?.partition_transition_metadata),
     state: row?.partition_transition_state ?? null,
+    generation: generationOf(row),
   };
 }
 
 function sameBytes(left, right) {
   const a = bytesOf(left);
   const b = bytesOf(right);
-  return a.metadata === b.metadata && a.state === b.state;
+  return a.metadata === b.metadata && a.state === b.state &&
+    a.generation === b.generation;
 }
 
 function parseMetadata(raw) {
@@ -189,6 +212,8 @@ function storedRecordOf(row) {
   const metadata = parseMetadata(bytes.metadata);
   return Object.freeze({
     bytes,
+    generation: bytes.generation,
+    row: row ?? null,
     exists: Boolean(row),
     workflowId: metadata ? String(metadata[
       PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || '') || null : null,
@@ -394,44 +419,34 @@ function relinquishFieldsOf(owner, workflowId, live, row) {
   };
 }
 
-// Whether a base row is this owner's record of the workflow under a lease
-// that is live by this owner's clock (no other owner can have replaced it).
-function isOwnLiveRecord(owner, workflowId, row) {
-  const stored = storedRecordOf(row);
-  return stored.workflowId === workflowId &&
-    stored.claim.workflowOwnerId === owner.workflowOwnerId &&
-    Number.isFinite(stored.claim.leaseExpiresAt) &&
-    stored.claim.leaseExpiresAt > owner.now();
-}
-
 /**
- * Whether the authoritative re-read lags the base (see the owner contract).
- * @param {Object} owner
- * @param {string} workflowId
+ * Whether the authoritative re-read lags the base: it holds the base's own
+ * record, or a record of a LOWER generation (generations only grow, so it
+ * is an older copy - a leader that has not applied the base yet). Anything
+ * else - an absent row included (the table is gone) - moved past the base.
  * @param {Object|null} reread
  * @param {Object|null} base
  * @return {boolean}
  */
-function rereadLagsBase(owner, workflowId, reread, base) {
-  if (sameBytes(reread, base)) {
-    return true;
-  }
-  const was = storedRecordOf(base);
-  const now = storedRecordOf(reread);
-  const baseFence = was.claim.fenceToken ?? 0;
-  const rereadFence = now.claim.fenceToken ?? 0;
-  if (was.workflowId === workflowId && now.workflowId === workflowId) {
-    return rereadFence < baseFence;
-  }
-  return isOwnLiveRecord(owner, workflowId, base);
+function rereadLagsBase(reread, base) {
+  return sameBytes(reread, base) ||
+    (reread !== null && generationOf(reread) < generationOf(base));
+}
+
+// Every accepted change advances the generation by one, in the same write
+// (the clear included): stamped here, so no encoder can omit it.
+function withNextGeneration(encoded, base) {
+  return {...encoded, data: {...encoded.data,
+    [GENERATION_COLUMN]: generationOf(base) + 1}};
 }
 
 // Encode one change's next record into the UPDATE's data and options.
 function encodeChange(owner, next, kind, base) {
   if (next === RECORD_CLEARED) {
-    return owner.encodeWorkflowRecordClear();
+    return withNextGeneration(owner.encodeWorkflowRecordClear(), base);
   }
-  const encoded = owner.encodeWorkflowRecord(next, kind);
+  const encoded = withNextGeneration(owner.encodeWorkflowRecord(next, kind),
+    base);
   if (!Object.hasOwn(encoded.data, STATE_COLUMN)) {
     // A claim leaves the state column alone: the written state is the base's.
     return {...encoded, writtenState: bytesOf(base).state};
@@ -442,6 +457,7 @@ function encodeChange(owner, next, kind, base) {
 function writtenRowOf(base, encoded, tableId) {
   return {
     ...(base || {table_id: tableId}),
+    ...encoded.data,
     partition_transition_metadata:
       encoded.data.partition_transition_metadata ?? null,
     partition_transition_state: encoded.writtenState ?? null,
@@ -457,6 +473,7 @@ async function compareAndSwap(owner, tableId, base, encoded) {
         table_id: tableId,
         partition_transition_metadata: compared.metadata,
         partition_transition_state: compared.state,
+        [GENERATION_COLUMN]: compared.generation,
       }, encoded.data, encoded.options);
     return {landed: result?.success !== false && affectedRowsOf(result) === 1,
       submitError: null};
@@ -538,7 +555,7 @@ function decideRefusedWrite(owner, workflowId, attempt) {
       lostAcknowledgement: true,
       workflow: acknowledge(owner, workflowId, reread, next)})};
   }
-  if (rereadLagsBase(owner, workflowId, reread, base)) {
+  if (rereadLagsBase(reread, base)) {
     return submitError && sameBytes(reread, base) ? {base} :
       {settled: settled(RECORD_CHANGE_OUTCOME.UNCONFIRMED, {submitError})};
   }
@@ -558,8 +575,7 @@ function decideRefusedWrite(owner, workflowId, attempt) {
  */
 async function movedRecordOf(owner, workflowId, tableId, base) {
   const reread = await authoritativeRecordOf(owner, tableId);
-  if (reread === undefined ||
-      rereadLagsBase(owner, workflowId, reread, base)) {
+  if (reread === undefined || rereadLagsBase(reread, base)) {
     return null;
   }
   adoptAuthoritative(owner, workflowId, reread);
@@ -575,51 +591,93 @@ async function movedRecordOf(owner, workflowId, tableId, base) {
  * @return {Promise<Object>} {outcome, accepted, workflow, refusal}.
  */
 async function runChange(owner, workflowId, change, options) {
-  const tableId = String(options.tableId);
-  const kind = options.kind || RECORD_CHANGE_KIND.TRANSITION;
-  let base = lineagesOf(owner).get(workflowId) ??
-    (Object.hasOwn(options, READ_BASE_OPTION) ? options.readBase :
-      viewRecordOf(owner, tableId));
+  const turn = {owner, workflowId, change, tableId: String(options.tableId),
+    kind: options.kind || RECORD_CHANGE_KIND.TRANSITION,
+    base: initialBaseOf(owner, workflowId, options), confirmed: false,
+    // The write of this turn, encoded ONCE per base: a retry of the same
+    // compare-and-swap after a failed submission resubmits the same bytes,
+    // so a first submission that lands late is recognised as this change's
+    // own.
+    write: null};
   let submitError = null;
-  let confirmed = false;
   for (let attempt = 0; attempt < MAX_COMPARE_AND_SWAP_ATTEMPTS;
     attempt += 1) {
-    const applied = applyChangeTo(owner, workflowId, change, base);
-    if (applied.refusal) {
-      // A refusal decided on an unconfirmed base (this owner's acknowledged
-      // record or a view) is confirmed against the authoritative record
-      // once: a record that moved past the base gets the change re-applied.
-      const moved = confirmed ? null :
-        await movedRecordOf(owner, workflowId, tableId, base);
-      confirmed = true;
-      if (!moved) {
-        return settleRefusal(owner, workflowId, applied.refusal, base);
-      }
-      base = moved;
+    const step = turn.write?.base === turn.base ? null :
+      await applyAtTurn(turn);
+    if (step?.settled) {
+      return step.settled;
+    }
+    if (step?.moved) {
       continue;
     }
-    if (applied.unchanged) {
-      return settled(RECORD_CHANGE_OUTCOME.ALREADY_APPLIED, {
-        workflow: owner.workflowCoordinator.getWorkflowById(workflowId)});
-    }
-    const encoded = encodeChange(owner, applied.next, kind, base);
-    const written = writtenRowOf(base, encoded, tableId);
-    const swap = await compareAndSwap(owner, tableId, base, encoded);
+    const {base, write} = turn;
+    const swap = await compareAndSwap(owner, turn.tableId, base, write.encoded);
     submitError = swap.submitError;
     if (swap.landed) {
       return settled(RECORD_CHANGE_OUTCOME.ACCEPTED, {
-        workflow: acknowledge(owner, workflowId, written, applied.next)});
+        workflow: acknowledge(owner, workflowId, write.written, write.next)});
     }
-    const reread = await authoritativeRecordOf(owner, tableId);
+    const reread = await authoritativeRecordOf(owner, turn.tableId);
     const decided = decideRefusedWrite(owner, workflowId,
-      {reread, base, written, next: applied.next, submitError});
+      {reread, base, written: write.written, next: write.next, submitError});
     if (decided.settled) {
       return decided.settled;
     }
-    confirmed = true;
-    base = decided.base;
+    turn.confirmed = true;
+    turn.base = decided.base;
   }
   return settled(RECORD_CHANGE_OUTCOME.UNCONFIRMED, {submitError});
+}
+
+// A change's first base: this owner's acknowledged record of the workflow,
+// else the row the caller read (a registration), else the owner's view row
+// (a read, never content).
+function initialBaseOf(owner, workflowId, options) {
+  if (lineagesOf(owner).has(workflowId)) {
+    return lineagesOf(owner).get(workflowId);
+  }
+  return Object.hasOwn(options, READ_BASE_OPTION) ? options.readBase :
+    viewRecordOf(owner, String(options.tableId));
+}
+
+/**
+ * Apply the turn's change to its base: settled (a confirmed refusal, or
+ * already applied), moved (a refusal decided on an unconfirmed base whose
+ * authoritative record moved past it: the change is applied again to that),
+ * or null with the turn's write encoded.
+ * @param {Object} turn - The change's turn (see runChange).
+ * @return {Promise<Object|null>}
+ */
+async function applyAtTurn(turn) {
+  const {owner, workflowId, base} = turn;
+  const applied = applyChangeTo(owner, workflowId, turn.change, base);
+  if (applied.refusal) {
+    // A refusal decided on an unconfirmed base (this owner's acknowledged
+    // record or a view) is confirmed against the authoritative record once.
+    const moved = turn.confirmed ? null :
+      await movedRecordOf(owner, workflowId, turn.tableId, base);
+    turn.confirmed = true;
+    if (!moved) {
+      return {settled: settleRefusal(owner, workflowId, applied.refusal,
+        base)};
+    }
+    turn.base = moved;
+    return {moved: true};
+  }
+  if (applied.unchanged) {
+    return {settled: settled(RECORD_CHANGE_OUTCOME.ALREADY_APPLIED, {
+      workflow: owner.workflowCoordinator.getWorkflowById(workflowId)})};
+  }
+  turn.write = encodedWriteOf(owner, applied.next,
+    {kind: turn.kind, base, tableId: turn.tableId});
+  return null;
+}
+
+// One change's write against `base`: its encoded UPDATE and the row it
+// leaves (what a lost acknowledgement's re-read must hold exactly).
+function encodedWriteOf(owner, next, {kind, base, tableId}) {
+  const encoded = encodeChange(owner, next, kind, base);
+  return {base, next, encoded, written: writtenRowOf(base, encoded, tableId)};
 }
 
 // One owner's changes of one workflow run one at a time, in order.
@@ -686,34 +744,16 @@ function recordChangeRefusedError(workflowId, write) {
   });
 }
 
-/**
- * applyRecordChange for a change that must land: throws
- * recordChangeRefusedError when it did not (ACCEPTED and ALREADY_APPLIED
- * land).
- * @param {Object} owner
- * @param {string} workflowId
- * @param {Function} change
- * @param {Object} options
- * @return {Promise<Object>} The landed change's answer.
- */
-async function applyRecordChangeOrThrow(owner, workflowId, change, options) {
-  const write = await applyRecordChange(owner, workflowId, change, options);
-  if (!write.accepted) {
-    throw recordChangeRefusedError(workflowId, write);
-  }
-  return write;
-}
-
 export {
   RECORD_CHANGE_KIND,
   RECORD_CHANGE_OUTCOME,
   RECORD_CLEARED,
   RECORD_UNCHANGED,
   applyRecordChange,
-  applyRecordChangeOrThrow,
   bytesOf as recordBytesOf,
   forgetWorkflowRecord,
   isRefusal as isRecordRefusal,
+  recordChangeRefusedError,
   storedTransitionOf,
   refuseRecordChange,
 };

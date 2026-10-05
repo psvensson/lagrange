@@ -17,6 +17,8 @@ import {
 } from './merge-ack-constants.js';
 import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
 import {storedTransitionOf} from './managed-workflow-record-store.js';
+import {registrationInputsRefusalOf} from
+  './managed-workflow-registration-inputs.js';
 
 /**
  * Build the durable ownership identity for a merge coordinator process:
@@ -142,6 +144,24 @@ class ManagedMergeWorkflowStateMethods {
     }
     return sourcePartitionIds.map((partitionId) =>
       String(partitionId || '')).filter((partitionId) => partitionId);
+  }
+
+  /**
+   * The registration's partitions-row inputs re-validated at its change's
+   * turn against the compared record (managed-workflow-registration-inputs).
+   * @param {Object} registration
+   * @param {Object|null} storedRow - The compared `tables` row.
+   * @return {string|null} The input that moved, or null.
+   * @private
+   */
+  registrationInputsRefusal(registration, storedRow) {
+    const metadata = registration.metadata || {};
+    const sourcePartitionIds = this.resolveMergeSourcePartitionIds(metadata);
+    return registrationInputsRefusalOf(this, {registration, storedRow,
+      sourceIds: sourcePartitionIds,
+      deriveSiblings: (tableInfo) => this.resolveMergeSiblingPartitionIds({
+        tableId: registration.tableId, tableInfo, sourcePartitionIds,
+        mergedPartitionId: this.resolveMergeTargetPartitionId(metadata)})});
   }
 
   /**

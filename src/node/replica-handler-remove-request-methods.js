@@ -11,10 +11,10 @@ import {
   GROUP_RETIREMENT_REFUSAL,
   RECORD_EVIDENCE_STATE,
   groupRetirementEvidenceFromRecord,
+  groupRetirementOperationIdOf,
   verifyGroupRetirement,
 } from '../partition/group-retirement-evidence.js';
 
-const DISSOLVE_OPERATION_SEGMENT = ':dissolve:';
 import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
@@ -163,7 +163,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         [ReplicaOperationField.TYPE]:
           ReplicaOperationMessageType.REMOVE_REPLICA,
         [ReplicaOperationField.OPERATION_ID]:
-          evidence.workflowId + DISSOLVE_OPERATION_SEGMENT + replicaId,
+          groupRetirementOperationIdOf(evidence, replicaId),
         [ReplicaOperationField.OPERATION_TYPE]: OperationType.REMOVE,
         [ReplicaOperationField.PARTITION_ID]: replica.partitionId,
         [ReplicaOperationField.REPLICA_ID]: replicaId,

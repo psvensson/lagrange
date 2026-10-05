@@ -212,7 +212,7 @@ overlap guard) reads "metadata/state null" as "no transition"; a retained
   repeat, so a cleared record of generation n never equals one of n+k.
 - Lag rule: a re-read whose generation is below the base's lags it (exact,
   replaces the fence/live-lease heuristics); same bytes = lags; anything else
-  moved.
+  - an absent row included (the table is gone) - moved.
 - Legacy: a row that predates the column reads generation 0 (the column is
   added `NOT NULL DEFAULT 0` by the tables-table column upgrade on open; a
   view row without the field decodes as 0) and gets 1 on its first write by
@@ -237,7 +237,7 @@ storedRow)`; production execute always passes it):
 | overlap guard (in-flight transitions' ranges) | tables row | generation (CAS) |
 | source partition row(s): existence, partition_version, key range | partitions rows | (a) re-validated at the turn: each source row, read again from the view at the change's turn, exists, is NORMAL, has partition_version = the compared record's active_partition_version and the key range the registration persisted |
 | sibling set (same-table partitions at the active epoch, carried forward at cutover) | partitions rows | (a) re-derived at the turn with the owner's own resolver against the compared record and compared as a set |
-| merged target id (fresh mint) / split children ids | registration | (a) a fresh id must not exist as a partitions row at the turn |
+| merged target id / split children ids | the existing transition (tables row) or a fresh mint | generation (CAS) for a reused id; a fresh mint is not a read input |
 | desired RF (source row policy), size bytes, leader, routable / discovered / candidate nodes, topology snapshot (`resolveTopologySnapshot`, awaited) | partitions / services / topology | advisory: not a safety input of the record. Each is re-checked by the step that acts on it (admission probe, child-provisioning precheck, provisioning convergence, cutover readiness); a stale value can only produce a deferral or a refused step, never a write over another record |
 
 (b) "immutable while the generation is unchanged" holds for the structural
@@ -263,8 +263,11 @@ repeats. Carried by:
 - owner-recorded outcomes (stamped with the projection's attempt; the owned
   change's fence check already pins the attempt);
 - group-retirement evidence (`attempt`), REMOVE verification
-  (ATTEMPT_MISMATCH refusal), the tombstone (version 3 carries `attempt`;
-  a version-2 tombstone reads as the legacy attempt 0) and its release (a
+  (ATTEMPT_MISMATCH refusal), the REMOVE's operation id
+  (`<workflowId>#<attempt>:dissolve:<replica>`, one builder for the split
+  owner, the merge owner and the member's own re-ask; the legacy attempt 0
+  keeps the attemptless id), the tombstone (version 3 carries `attempt`; a
+  version-2 tombstone reads as the legacy attempt 0) and its release (a
   record holding another attempt of the same workflow id releases it).
 
 ### D4 - phase monotonicity is total

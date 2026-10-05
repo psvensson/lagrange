@@ -37,6 +37,7 @@ import {
 } from '../../src/node/group-retired-tombstone-store.js';
 import {TABLE_ID, openGroupWorld} from './group-retirement-as-a-unit-fixture.js';
 import {
+  ATTEMPT,
   FENCE,
   TOMBSTONE_DIR,
   WORKFLOW_ID,
@@ -93,7 +94,8 @@ test('T2 the proof is exact: another workflow, group, table or peer ' +
   const tombstone = readGroupRetiredTombstone(handler.dataDir,
     world.partitionId, first);
   const request = {partitionId: world.partitionId, replicaId: first,
-    evidence: {tableId: TABLE_ID, workflowId: WORKFLOW_ID}};
+    evidence: {tableId: TABLE_ID, workflowId: WORKFLOW_ID,
+      attempt: ATTEMPT}};
   const gone = handler.durableLifecycleOf(world.partitionId, first);
   t.equal(gone.absent, true, 'setup: its lifecycle row is gone');
   t.equal(tombstoneProvesRetirement(tombstone, request, gone), true,

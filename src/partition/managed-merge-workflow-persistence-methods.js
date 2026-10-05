@@ -93,11 +93,13 @@ class ManagedMergeWorkflowPersistenceMethods {
         failedAt: new Date(this.now()).toISOString(),
         ...(timeoutClassification ? {timeoutClassification} : {}),
       };
-      await this.workflowCoordinator.updateWorkflow(workflowId,
-        (current) => ({...current,
-          status: PARTITION_TRANSITION_STATE.FAILED,
-          metadata: {...(current.metadata || {}),
-            [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: failure}}));
+      // Pre-cutover only: after the cutover the failure is a typed
+      // incident and the phase never moves backwards (round 7, D4).
+      await this.workflowCoordinator.recordExecutionOutcome(workflowId, {
+        status: PARTITION_TRANSITION_STATE.FAILED,
+        delta: {[PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: failure},
+        incident: {reason: failure.message,
+          classification: failure.classification}});
     } catch (persistError) {
       this.logger.error(MANAGED_MERGE_LOG_MSG.PERSIST_FAILURE_FAILED, {
         workflowId,
@@ -146,11 +148,10 @@ class ManagedMergeWorkflowPersistenceMethods {
       },
     };
 
-    if (workflow) {
-      await this.workflowCoordinator.updateWorkflow(options.workflowId,
-        (current) => ({...current, status: deferredState,
-          metadata: {...current.metadata, ...deferredDelta}}));
-    }
+    const recorded = workflow ?
+      await this.workflowCoordinator.recordExecutionOutcome(
+        options.workflowId, {status: deferredState, delta: deferredDelta,
+          incident: {reason: errorMessage}}) : null;
 
     return {
       success: false,
@@ -159,7 +160,7 @@ class ManagedMergeWorkflowPersistenceMethods {
       tableName: options.tableName,
       workflowId: options.workflowId,
       targetVersion: options.targetVersion,
-      state: deferredState,
+      state: recorded?.state ?? deferredState,
       admission: options.admission,
       retry,
       error: errorMessage,

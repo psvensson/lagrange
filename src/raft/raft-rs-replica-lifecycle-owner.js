@@ -193,15 +193,19 @@ class RaftRsReplicaLifecycleOwner {
     if (this.#activeCount > 0) {
       await new Promise((resolve) => this.#waiters.push(resolve));
     }
+    // The reason and the evidence are written by the one UPDATE (a merge
+    // that moves this UPDATE must carry `evidence` with it).
+    const retired = {reason: String(reason || LIFECYCLE_REASON.RETIRED),
+      evidence: evidence ? JSON.stringify(evidence) : null};
     this.#db.prepare(`
       UPDATE ${LIFECYCLE_TABLE}
       SET state = 'retired', reason = ?, changed_at = ?,
         retirement_evidence = ?
       WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
     `).run(
-      String(reason || LIFECYCLE_REASON.RETIRED),
+      retired.reason,
       new Date().toISOString(),
-      evidence ? JSON.stringify(evidence) : null,
+      retired.evidence,
       this.#groupId,
       this.#peerId,
       this.#replicaIdentity,

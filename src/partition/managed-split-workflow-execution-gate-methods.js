@@ -652,9 +652,9 @@ class ManagedSplitWorkflowExecutionGateMethods {
         [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
           deniedRetryMetadata,
       };
-      await this.workflowCoordinator.updateWorkflow(input.workflowId,
-        (current) => ({...current, status: deniedState,
-          metadata: {...current.metadata, ...deniedDelta}}));
+      await this.workflowCoordinator.recordExecutionOutcome(input.workflowId,
+        {status: deniedState, delta: deniedDelta,
+          incident: {reason: input.admissionResult.decisionType}});
       return this.buildBlockedExecutionGateOutcome(
         this.buildAdmissionDeniedExecutionResult({
           partitionId: input.partitionId,
