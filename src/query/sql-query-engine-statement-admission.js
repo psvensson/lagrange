@@ -20,6 +20,10 @@ const STATEMENT_ADMISSION = Object.freeze({
 // session's transaction after the attempt.
 const SESSION_TRANSACTION_ACTIVE_FIELD = 'sessionTransactionActive';
 
+// The statements that end a transaction block: they answer for a
+// transaction the engine no longer holds themselves (NO_TRANSACTION).
+const TRANSACTION_END_TYPES = new Set([AST_TYPE.COMMIT, AST_TYPE.ROLLBACK]);
+
 const WRITE_STATEMENT_TYPES = new Set([
   AST_TYPE.INSERT,
   AST_TYPE.UPDATE,
@@ -67,6 +71,32 @@ function admitExpectedTransaction(
 }
 
 /**
+ * Admit a parsed statement before it executes, for every caller of
+ * executeQuery (the PG-wire dispatch, the application-database facade,
+ * internal owners): its form (admitStatementForm), then the explicit
+ * transaction its session expects (admitExpectedTransaction) - a read or
+ * DDL for a transaction the engine dropped must not run outside it any more
+ * than a write. COMMIT and ROLLBACK answer for a missing transaction
+ * themselves.
+ *
+ * @param {Object} transactionCoordinator - The engine's coordinator.
+ * @param {string} sessionId - Session the statement runs for.
+ * @param {Object} ast - Parsed statement.
+ * @param {?string} expectedTransactionId - The expected transaction.
+ * @return {{state: string, failure?: Object}} STATEMENT_ADMISSION decision.
+ */
+function admitParsedStatement(
+  transactionCoordinator, sessionId, ast, expectedTransactionId,
+) {
+  const form = admitStatementForm(ast);
+  if (form.state === STATEMENT_ADMISSION.REFUSED) return form;
+  return TRANSACTION_END_TYPES.has(ast?.type) ?
+    ADMITTED :
+    admitExpectedTransaction(transactionCoordinator, sessionId,
+      expectedTransactionId);
+}
+
+/**
  * Refuse a write with a RETURNING clause: the partition write path answers
  * an affected-row count and no rows, so the clause would silently return
  * nothing (a client reading a generated id would get none).
@@ -110,7 +140,8 @@ function withSessionTransactionState(result, transactionCoordinator,
 export {
   SESSION_TRANSACTION_ACTIVE_FIELD,
   STATEMENT_ADMISSION,
+  TRANSACTION_END_TYPES,
   admitExpectedTransaction,
-  admitStatementForm,
+  admitParsedStatement,
   withSessionTransactionState,
 };

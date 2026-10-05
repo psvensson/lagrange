@@ -24,7 +24,7 @@ import {PARSER_DIALECT} from './pg/pg-compat-constants.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
 import {
   TRANSACTION_CONTROL_KIND,
-  classifyTransactionControlStatement,
+  resolveTransactionControlStatement,
 } from './sql-transaction-control-grammar.js';
 import {
   translateOnConflict,
@@ -161,6 +161,33 @@ function requireSingleStatement(statements) {
   return executable[0];
 }
 
+/**
+ * The transaction-control statement the text is, by the engine's grammar.
+ * @param {string} sql - Statement text.
+ * @return {?Object} {type} for a transaction-control statement; null when
+ *   the text is not one.
+ * @throws {Error} code TRANSACTION_CONTROL_SYNTAX_ERROR for a malformed one;
+ *   code UNSUPPORTED_SQL_FEATURE for a transaction mode the engine does not
+ *   provide (named in the message).
+ */
+function parseTransactionControl(sql) {
+  const {kind, unsupportedMode} = resolveTransactionControlStatement(sql);
+  if (kind === TRANSACTION_CONTROL_KIND.MALFORMED) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.TRANSACTION_CONTROL_SYNTAX_ERROR,
+      QUERY_ERROR_MSG.TRANSACTION_CONTROL_SYNTAX_ERROR,
+    );
+  }
+  if (kind === TRANSACTION_CONTROL_KIND.UNSUPPORTED_MODE) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+      QUERY_ERROR_MSG.TRANSACTION_MODE_UNSUPPORTED_PREFIX + unsupportedMode +
+        QUERY_ERROR_MSG.TRANSACTION_MODE_UNSUPPORTED_SUFFIX,
+    );
+  }
+  return kind === TRANSACTION_CONTROL_KIND.NONE ? null : {type: kind};
+}
+
 function extractCreateTableStorageOptions(sql) {
   if (
     typeof sql !== 'string' ||
@@ -265,16 +292,8 @@ class SQLParser {
   parse() {
     this.positionalParams = [];
     this.parameterCounter = 0;
-    const transactionControl = classifyTransactionControlStatement(this.sql);
-    if (transactionControl === TRANSACTION_CONTROL_KIND.MALFORMED) {
-      throw createTypedParseError(
-        QUERY_ERROR_CODE.TRANSACTION_CONTROL_SYNTAX_ERROR,
-        QUERY_ERROR_MSG.TRANSACTION_CONTROL_SYNTAX_ERROR,
-      );
-    }
-    if (transactionControl !== TRANSACTION_CONTROL_KIND.NONE) {
-      return {type: transactionControl};
-    }
+    const transactionControl = parseTransactionControl(this.sql);
+    if (transactionControl) return transactionControl;
 
     try {
       const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL ?

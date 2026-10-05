@@ -7,8 +7,13 @@
  * - ROLLBACK (or COMMIT, outside a block) with no transaction in progress
  *   answers its own tag plus a WARNING (25P01); the session is idle.
  * - A COMMIT always ends the block: when the engine no longer holds the
- *   transaction the session is idle and the client is told plainly that
- *   nothing was committed.
+ *   transaction the session is idle. The client is told that nothing was
+ *   committed ONLY when the engine's answer establishes it (the typed
+ *   commitPointReached: false). When the commit point may have been reached
+ *   (true, or the answer does not say) the answer is 08007
+ *   transaction_resolution_unknown, and the ROLLBACK that ends a block left
+ *   failed by it carries a WARNING that the outcome is unknown (never an
+ *   unqualified claim that the transaction rolled back).
  * - Inside a block, a statement for a transaction the engine dropped is an
  *   error and the block is failed until ROLLBACK (never run outside it).
  *
@@ -19,6 +24,8 @@ import {readExecutedStatementType} from
   '../query/application-database-result.js';
 import {AST_TYPE} from '../query/parser-constants.js';
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
+import {COMMIT_POINT_REACHED_FIELD} from
+  '../query/distributed/distributed-transaction-commit-point.js';
 import {SESSION_TRANSACTION_ACTIVE_FIELD} from
   '../query/sql-query-engine-statement-admission.js';
 import {
@@ -43,6 +50,10 @@ const PGWIRE_TRANSACTION_OUTCOME_KIND = Object.freeze({
 });
 
 const NO_TRANSACTION_WARNING = 'there is no transaction in progress';
+const OUTCOME_UNKNOWN_MESSAGE = 'the transaction\'s outcome is unknown; ' +
+  'some changes may have been committed';
+const PREVIOUS_OUTCOME_UNKNOWN_WARNING = 'the previous transaction\'s ' +
+  'outcome is unknown; some changes may have been committed';
 const NOTHING_COMMITTED = '; no changes were committed';
 // Engine reasons a COMMIT found its transaction rolled back, not committed.
 const ROLLED_BACK_BEFORE_COMMIT_MESSAGE = new Map([
@@ -92,10 +103,22 @@ function rolledBackError(failure, message, state) {
   };
 }
 
+function outcomeUnknownError(failure, state) {
+  return {
+    kind: PGWIRE_TRANSACTION_OUTCOME_KIND.ERROR,
+    sqlState: PG_ERROR_CODE.TRANSACTION_RESOLUTION_UNKNOWN,
+    message: OUTCOME_UNKNOWN_MESSAGE,
+    detail: {...engineDetail(failure), engine_stage: failure.stage ?? null},
+    state,
+    outcomeUnknown: true,
+  };
+}
+
 /**
  * The outcome of a failed COMMIT inside a block: the block is over unless
  * the engine still holds the transaction (then it is failed, recoverable by
- * ROLLBACK).
+ * ROLLBACK). Only an answer the engine typed commitPointReached: false may
+ * say that nothing was committed; any other is outcome-unknown (08007).
  * @param {Object} failure - The failed engine result.
  * @param {Function} engineHoldsTransaction - () => boolean, engine truth.
  * @return {Object} The outcome (ENGINE_ERROR: the engine's own error answer,
@@ -105,6 +128,9 @@ function failedCommitOutcome(failure, engineHoldsTransaction) {
   const state = engineHoldsTransaction() ?
     PG_TRANSACTION_STATE.FAILED :
     PG_TRANSACTION_STATE.IDLE;
+  if (failure?.[COMMIT_POINT_REACHED_FIELD] !== false) {
+    return outcomeUnknownError(failure, state);
+  }
   const rolledBack = ROLLED_BACK_BEFORE_COMMIT_MESSAGE.get(failure.errorCode);
   if (rolledBack) return rolledBackError(failure, rolledBack, state);
   return engineError(state);
@@ -187,15 +213,24 @@ function engineHoldsSessionTransaction(failure) {
  * @param {Function} input.write - (Buffer) => void, the socket write.
  */
 function answerFailedStatement({failure, stateBefore, session, write}) {
+  const statementType = readExecutedStatementType(failure);
   const outcome = resolveFailedStatementOutcome({
     stateBefore,
-    statementType: readExecutedStatementType(failure),
+    statementType,
     failure,
     engineHoldsTransaction: () => engineHoldsSessionTransaction(failure),
   });
+  const previousOutcomeUnknown = TAG_BY_TRANSACTION_END.has(statementType) &&
+    session.takeTransactionOutcomeUnknown();
   session.setTransactionState(outcome.state);
+  if ((outcome.outcomeUnknown || previousOutcomeUnknown) &&
+      outcome.state === PG_TRANSACTION_STATE.FAILED) {
+    session.markTransactionOutcomeUnknown();
+  }
   if (outcome.kind === PGWIRE_TRANSACTION_OUTCOME_KIND.COMPLETE) {
-    if (outcome.warning) {
+    if (previousOutcomeUnknown) {
+      write(buildPreviousOutcomeUnknownNotice());
+    } else if (outcome.warning) {
       write(buildNoticeResponse(PG_SEVERITY.WARNING, outcome.warning.code,
         outcome.warning.message));
     }
@@ -211,7 +246,29 @@ function answerFailedStatement({failure, stateBefore, session, write}) {
     failure.message, failure.detail || null));
 }
 
+function buildPreviousOutcomeUnknownNotice() {
+  return buildNoticeResponse(PG_SEVERITY.WARNING,
+    PG_ERROR_CODE.TRANSACTION_RESOLUTION_UNKNOWN,
+    PREVIOUS_OUTCOME_UNKNOWN_WARNING);
+}
+
+/**
+ * The WARNING a successful transaction end carries when it ends a block
+ * whose COMMIT was answered outcome-unknown (08007): the ROLLBACK tag must
+ * not read as a claim that nothing was committed.
+ * @param {Object} session - PgWireSession.
+ * @param {?string} statementType - The executed statement kind.
+ * @return {?Buffer} The NoticeResponse, or null.
+ */
+function takeTransactionEndNotice(session, statementType) {
+  if (!TAG_BY_TRANSACTION_END.has(statementType)) return null;
+  return session.takeTransactionOutcomeUnknown() ?
+    buildPreviousOutcomeUnknownNotice() :
+    null;
+}
+
 export {
   answerFailedStatement,
   resolveFailedStatementOutcome,
+  takeTransactionEndNotice,
 };

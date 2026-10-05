@@ -30,6 +30,8 @@ import {
 } from '../sql-adapter-constants.js';
 
 const ANONYMOUS_PRINCIPAL = 'anonymous';
+const CLOSED_SESSION_ROLLBACK_STATEMENT = 'ROLLBACK';
+const NO_TRANSACTION_ERROR_CODE = 'NO_TRANSACTION';
 
 function resolvePgWireWallTimeLimitMs(options = {}) {
   const requested = Number(options?.budgets?.WALL_TIME_LIMIT_MS);
@@ -261,16 +263,46 @@ class PostgresWireAdapter {
   }
 
   /**
-   * Close a protocol session and release resources.
+   * Close a protocol session and release resources. A session closed with
+   * its transaction block open (the client disconnected mid-block) has its
+   * engine transaction rolled back now, best effort, so it does not hold
+   * its partitions' transaction slot until the budget sweep.
    *
    * @param {string} sessionId - Session identifier.
+   * @param {Object} [options]
+   * @param {boolean} [options.transactionOpen] - The session's transaction
+   *   block was open when it closed.
    */
-  closeSession(sessionId) {
+  closeSession(sessionId, options = {}) {
     const session = this.sessions.get(sessionId);
+    if (session && options.transactionOpen === true) {
+      this.rollbackClosedSessionTransaction(sessionId);
+    }
     if (session) {
       session.state = PG_SESSION_STATE.CLOSED;
       this.sessions.delete(sessionId);
     }
+  }
+
+  /**
+   * Roll back the engine transaction of a session being closed. The
+   * request is built before the session is released; its answer is only
+   * logged (NO_TRANSACTION: the engine had already ended it).
+   * @param {string} sessionId - Session identifier.
+   * @private
+   */
+  rollbackClosedSessionTransaction(sessionId) {
+    const logFailure = (error) => this.logger.warn(
+      ADAPTER_LOG_MSG.CLOSED_SESSION_ROLLBACK_FAILED, {sessionId, error});
+    this.execute(sessionId, CLOSED_SESSION_ROLLBACK_STATEMENT).then(
+      (result) => {
+        if (result?.success === false &&
+            result.errorCode !== NO_TRANSACTION_ERROR_CODE) {
+          logFailure(result.error ?? result.errorCode);
+        }
+      },
+      (error) => logFailure(error?.message ?? String(error)),
+    );
   }
 
   /**

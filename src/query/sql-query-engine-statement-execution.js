@@ -10,7 +10,7 @@ import {
 } from './application-database-statement-policy.js';
 import {
   STATEMENT_ADMISSION,
-  admitStatementForm,
+  admitParsedStatement,
   withSessionTransactionState,
 } from './sql-query-engine-statement-admission.js';
 import {
@@ -450,9 +450,10 @@ class SQLQueryEngineStatementExecution extends
     if (applicationStatementDecision.allowed !== true) {
       return applicationStatementDecision.failure;
     }
-    const formAdmission = admitStatementForm(ast);
-    if (formAdmission.state === STATEMENT_ADMISSION.REFUSED) {
-      return formAdmission.failure;
+    const admission = admitParsedStatement(this.transactionCoordinator,
+      sessionId, ast, options.expectedTransactionId);
+    if (admission.state === STATEMENT_ADMISSION.REFUSED) {
+      return admission.failure;
     }
 
     try {

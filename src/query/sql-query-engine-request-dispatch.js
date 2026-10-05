@@ -8,18 +8,15 @@ import {SQLQueryEngineLifecycleAndCallbackDispatch} from
   './sql-query-engine-lifecycle-and-callback-dispatch.js';
 import {SERVICE_LIFECYCLE_EXECUTION_DISPOSITION} from
   './service-lifecycle-sql-contract.js';
-import {AST_TYPE} from './parser-constants.js';
 import {classifyTransactionControlStatement} from
   './sql-transaction-control-grammar.js';
 import {
   STATEMENT_ADMISSION,
+  TRANSACTION_END_TYPES,
   admitExpectedTransaction,
 } from './sql-query-engine-statement-admission.js';
 
 const STATEMENT_LOG_LIMIT = 100;
-// The statements that end a transaction block: they answer for a
-// transaction the engine no longer holds themselves (NO_TRANSACTION).
-const TRANSACTION_END_TYPES = new Set([AST_TYPE.COMMIT, AST_TYPE.ROLLBACK]);
 
 const {
   ADAPTER_ERROR_MSG,

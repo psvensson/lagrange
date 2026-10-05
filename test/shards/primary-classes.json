@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1966,
+    "unit": 1967,
     "integration": 79,
     "bootstrap": 198,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2250,
-  "digest": "fnv1a32-272f7273",
+  "censusSize": 2251,
+  "digest": "fnv1a32-ed1b4610",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1844,6 +1844,7 @@
     "test/runtime/oci-host-agent-tpm-counter.test.js": "unit",
     "test/runtime/oci-registry-policy.test.js": "unit",
     "test/runtime/pgwire-auth-handler.test.js": "unit",
+    "test/runtime/pgwire-commit-outcome-coordinator.test.js": "unit",
     "test/runtime/pgwire-cutover-guard.test.js": "unit",
     "test/runtime/pgwire-descriptor.test.js": "unit",
     "test/runtime/pgwire-metrics.test.js": "unit",

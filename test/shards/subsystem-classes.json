@@ -11,7 +11,7 @@
     "convergence-topology": 83,
     "distributed-harness": 174,
     "examples-e2e": 7,
-    "pgwire-compat": 20,
+    "pgwire-compat": 21,
     "placement-rebalance": 258,
     "query-sql": 166,
     "release-packaging": 15,
@@ -25,10 +25,10 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2250,
-  "digest": "fnv1a32-562d443d",
+  "censusSize": 2251,
+  "digest": "fnv1a32-daddf67f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f5f42a19",
+  "observationDigest": "fnv1a32-797a023b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1863,6 +1863,7 @@
     "test/runtime/oci-host-agent-tpm-counter.test.js": "services-runtime",
     "test/runtime/oci-registry-policy.test.js": "services-runtime",
     "test/runtime/pgwire-auth-handler.test.js": "pgwire-compat",
+    "test/runtime/pgwire-commit-outcome-coordinator.test.js": "pgwire-compat",
     "test/runtime/pgwire-cutover-guard.test.js": "pgwire-compat",
     "test/runtime/pgwire-descriptor.test.js": "pgwire-compat",
     "test/runtime/pgwire-metrics.test.js": "pgwire-compat",
@@ -7312,6 +7313,11 @@
         "src"
       ]
     },
+    "test/migration/migration-coordinator-core.test.js": {
+      "files": [
+        "src/migration/migration-coordinator.js"
+      ]
+    },
     "test/migration/migration-retry-wait-bound-spent.test.js": {
       "files": [
         "src/logging/wait-bound-spent.js"
@@ -10510,6 +10516,13 @@
     "test/runtime/pgwire-auth-handler.test.js": {
       "files": [
         "src/runtime/pgwire-auth-handler.js"
+      ]
+    },
+    "test/runtime/pgwire-commit-outcome-coordinator.test.js": {
+      "files": [
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/runtime/pgwire-protocol-constants.js",
+        "src/runtime/pgwire-transaction-outcome.js"
       ]
     },
     "test/runtime/pgwire-password-authentication-cutover.test.js": {

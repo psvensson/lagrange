@@ -34,13 +34,10 @@ const SPELLINGS = Object.freeze([
   ['begin;', 'BEGIN_TRANSACTION'],
   ['BEGIN WORK', 'BEGIN_TRANSACTION'],
   ['BEGIN TRANSACTION', 'BEGIN_TRANSACTION'],
-  ['BEGIN ISOLATION LEVEL SERIALIZABLE', 'BEGIN_TRANSACTION'],
-  ['BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY',
-    'BEGIN_TRANSACTION'],
-  ['BEGIN READ WRITE NOT DEFERRABLE', 'BEGIN_TRANSACTION'],
+  ['BEGIN READ WRITE', 'BEGIN_TRANSACTION'],
+  ['begin transaction read write;', 'BEGIN_TRANSACTION'],
   ['START TRANSACTION', 'BEGIN_TRANSACTION'],
-  ['start transaction isolation level repeatable read',
-    'BEGIN_TRANSACTION'],
+  ['START TRANSACTION READ WRITE', 'BEGIN_TRANSACTION'],
   ['COMMIT', 'COMMIT'],
   ['COMMIT WORK', 'COMMIT'],
   ['COMMIT TRANSACTION;', 'COMMIT'],
@@ -51,6 +48,37 @@ const SPELLINGS = Object.freeze([
   ['ROLLBACK TRANSACTION ; ;', 'ROLLBACK'],
   ['ABORT', 'ROLLBACK'],
   ['abort transaction', 'ROLLBACK'],
+  // Comments outside quotes are whitespace (PostgreSQL), including one
+  // holding a ';' or a statement keyword, and nested block comments.
+  ['BEGIN -- start', 'BEGIN_TRANSACTION'],
+  ['BEGIN /* trace */', 'BEGIN_TRANSACTION'],
+  ['-- leading\nBEGIN', 'BEGIN_TRANSACTION'],
+  ['/* a */ START /* b */ TRANSACTION -- c', 'BEGIN_TRANSACTION'],
+  ['BEGIN -- ; INSERT INTO t (id) VALUES (1)', 'BEGIN_TRANSACTION'],
+  ['BEGIN /* ; COMMIT */', 'BEGIN_TRANSACTION'],
+  ['BEGIN /* outer /* inner; ROLLBACK */ still comment */;',
+    'BEGIN_TRANSACTION'],
+  ['COMMIT -- x', 'COMMIT'],
+  ['COMMIT /* ROLLBACK */', 'COMMIT'],
+  ['END -- done\n', 'COMMIT'],
+  ['ROLLBACK /* x */', 'ROLLBACK'],
+  ['ROLLBACK -- ; COMMIT', 'ROLLBACK'],
+  ['ABORT/* x */WORK', 'ROLLBACK'],
+]);
+// Modes the engine does not provide: refused by name (0A000 on the wire),
+// never accepted unenforced.
+const UNSUPPORTED_MODES = Object.freeze([
+  ['START TRANSACTION READ ONLY', 'READ ONLY'],
+  ['BEGIN READ ONLY', 'READ ONLY'],
+  ['BEGIN ISOLATION LEVEL SERIALIZABLE', 'ISOLATION LEVEL SERIALIZABLE'],
+  ['BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE',
+    'ISOLATION LEVEL READ COMMITTED'],
+  ['BEGIN READ WRITE, ISOLATION LEVEL REPEATABLE READ',
+    'ISOLATION LEVEL REPEATABLE READ'],
+  ['start transaction isolation level read uncommitted',
+    'ISOLATION LEVEL READ UNCOMMITTED'],
+  ['BEGIN READ WRITE NOT DEFERRABLE', 'NOT DEFERRABLE'],
+  ['BEGIN DEFERRABLE -- x', 'DEFERRABLE'],
 ]);
 // A transaction keyword followed by anything that is not part of the
 // statement: a syntax error, nothing executes (never the keyword's
@@ -69,12 +97,22 @@ const MALFORMED = Object.freeze([
   'END TRANSACTION t',
   'ROLLBACK TO SAVEPOINT s',
   'ABORT WORK now',
+  'BEGIN -- x\nINSERT INTO t (id) VALUES (1)',
+  'BEGIN /* unterminated',
+  'COMMIT /* x */ DELETE FROM t',
+  'BEGIN "-- quoted"',
+  'ROLLBACK \'/* quoted */\'',
 ]);
 const NOT_TRANSACTION_CONTROL = Object.freeze([
   'SELECT 1',
   'BEGINNING',
   'BEGIN; INSERT INTO t (id) VALUES (1)',
   'COMMIT; DELETE FROM t',
+  'BEGIN -- x\n; INSERT INTO t (id) VALUES (1)',
+  'SELECT \'BEGIN -- x\'',
+  // A comment marker inside quotes is text, not a comment: the `;` after
+  // it still makes this two statements.
+  'BEGIN \'/*\'; SELECT 1 -- */',
   '',
 ]);
 
@@ -89,6 +127,15 @@ test('transaction control is recognised only as a whole statement',
         TRANSACTION_CONTROL_KIND.MALFORMED, sql);
       t.throws(() => new SQLParser(sql, PG).parse(),
         {code: 'TRANSACTION_CONTROL_SYNTAX_ERROR'}, `refused: ${sql}`);
+    }
+    for (const [sql, mode] of UNSUPPORTED_MODES) {
+      t.equal(classifyTransactionControlStatement(sql),
+        TRANSACTION_CONTROL_KIND.UNSUPPORTED_MODE, sql);
+      t.throws(() => new SQLParser(sql, PG).parse(),
+        {code: 'UNSUPPORTED_SQL_FEATURE',
+          message: `transaction mode ${mode} is not supported (the engine ` +
+            'does not provide or enforce it; only READ WRITE is accepted); ' +
+            'nothing was executed'}, `refused: ${sql}`);
     }
     for (const sql of NOT_TRANSACTION_CONTROL) {
       t.equal(classifyTransactionControlStatement(sql),
@@ -208,6 +255,54 @@ test('a statement for a transaction the engine no longer holds is refused, ' +
     t.equal(ended.errorCode, 'NO_TRANSACTION', `${end} answers itself`);
     t.equal(ended.sessionTransactionActive, false,
       `${end}: the engine says it holds no transaction`);
+  }
+});
+
+test('executeQuery itself refuses any statement for a transaction the ' +
+  'engine no longer holds (the facade and internal owners call it ' +
+  'directly, past the request dispatch)', async (t) => {
+  const {engine, delivered} = createRecordingEngine();
+  const sessionId = 'direct-session';
+  const begun = await engine.executeQuery('BEGIN', [], {sessionId});
+  await engine.transactionCoordinator.rollback(sessionId);
+  for (const statement of [
+    'SELECT id FROM users',
+    'CREATE TABLE late_tbl (id INTEGER PRIMARY KEY)',
+    'INSERT INTO users (id) VALUES (\'late\')',
+    'DELETE FROM users',
+  ]) {
+    const refused = await engine.executeQuery(statement, [], {sessionId,
+      expectedTransactionId: begun.transactionId});
+    t.equal(refused.errorCode, 'NO_TRANSACTION', statement);
+    t.equal(refused.transactionId, begun.transactionId, statement);
+  }
+  for (const end of ['COMMIT', 'ROLLBACK']) {
+    const ended = await engine.executeQuery(end, [], {sessionId,
+      expectedTransactionId: begun.transactionId});
+    t.equal(ended.errorCode, 'NO_TRANSACTION', `${end} answers itself`);
+    t.equal(ended.statementType, end, `${end} executed`);
+  }
+  t.same(delivered, [], 'nothing ran outside the transaction');
+  const plain = await engine.executeQuery('SELECT id FROM users', [],
+    {sessionId: 'no-expectation'});
+  t.equal(plain.errorCode, undefined, 'no expectation: runs as before');
+});
+
+test('a COMMIT that throws is answered as a failed COMMIT carrying the ' +
+  'coordinator\'s commit-point fact', async (t) => {
+  const {engine} = createRecordingEngine();
+  for (const reached of [true, false, undefined]) {
+    engine.transactionCoordinator.commit = async () => {
+      const error = new Error('persist failed');
+      if (reached !== undefined) error.commitPointReached = reached;
+      throw error;
+    };
+    const result = await engine.executeQuery('COMMIT', [],
+      {sessionId: 'throwing-commit'});
+    t.equal(result.success, false);
+    t.equal(result.statementType, 'COMMIT', 'answered as the COMMIT');
+    t.equal(result.error, 'persist failed');
+    t.equal(result.commitPointReached, reached, `fact: ${reached}`);
   }
 });
 

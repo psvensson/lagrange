@@ -45,7 +45,10 @@ import {
   buildNoData,
   buildEmptyQueryResponse,
 } from './pgwire-message-builders.js';
-import {answerFailedStatement} from './pgwire-transaction-outcome.js';
+import {
+  answerFailedStatement,
+  takeTransactionEndNotice,
+} from './pgwire-transaction-outcome.js';
 import {
   parseStartupParams,
   parseQueryMessage,
@@ -166,7 +169,13 @@ class PgWireProtocolHandler {
     this._socket.removeListener(LOCAL_STR_CLOSE, this._onClose);
     if (this._session && !this._session.isClosed()) {
       const sid = this._session.sessionId;
-      this._adapter.closeSession(sid);
+      // A connection closed inside a transaction block: the engine
+      // transaction is rolled back now (PostgreSQL), not left holding its
+      // partitions until the budget sweep.
+      this._adapter.closeSession(sid, {
+        transactionOpen: this._session.getTransactionState() !==
+          PG_TRANSACTION_STATE.IDLE,
+      });
       this._session.close();
     }
     this._pendingAuth = null;
@@ -649,9 +658,12 @@ class PgWireProtocolHandler {
       }
 
       const tag = deriveCommandTag(result);
+      const statementType = readExecutedStatementType(result);
+      const notice = takeTransactionEndNotice(this._session, statementType);
+      if (notice) this._socket.write(notice);
       this._socket.write(buildCommandComplete(tag));
 
-      this._applyTransactionOutcome(readExecutedStatementType(result), result);
+      this._applyTransactionOutcome(statementType, result);
     } catch (err) {
       this._answerFailure(err, stateBefore);
     }

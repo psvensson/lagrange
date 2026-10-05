@@ -7,6 +7,8 @@ import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.js';
+import {COMMIT_POINT_REACHED_FIELD} from
+  './distributed/distributed-transaction-commit-point.js';
 import {createSQLQueryEngineTableRoutingMethods} from './sql-query-engine-table-routing-methods.js';
 
 const LOCAL_STR_SHA1 = 'sha1';
@@ -389,7 +391,19 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       participants: txState?.participants || [],
     });
 
-    const result = await this.transactionCoordinator.commit(sessionId);
+    let result;
+    try {
+      result = await this.transactionCoordinator.commit(sessionId);
+    } catch (error) {
+      // A COMMIT that threw is answered as a failed COMMIT carrying the
+      // coordinator's commit-point fact (absent: unknown).
+      return {
+        ...this.buildCaughtQueryExecutionFailure(error),
+        ...(typeof error?.[COMMIT_POINT_REACHED_FIELD] === LOCAL_STR_BOOLEAN ?
+          {[COMMIT_POINT_REACHED_FIELD]: error[COMMIT_POINT_REACHED_FIELD]} :
+          {}),
+      };
+    }
     if (!result.success && !result.errorCode) {
       return {
         ...result,

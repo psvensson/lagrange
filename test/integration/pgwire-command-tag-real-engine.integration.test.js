@@ -442,11 +442,23 @@ const SPELLING_BLOCKS = Object.freeze([
   ['BEGIN WORK', 'END', 'COMMIT', [3, 4]],
   ['BEGIN TRANSACTION', 'ROLLBACK WORK', 'ROLLBACK', [3, 4]],
   ['START TRANSACTION READ WRITE', 'ABORT', 'ROLLBACK', [3, 4]],
-  ['BEGIN ISOLATION LEVEL SERIALIZABLE', 'COMMIT TRANSACTION', 'COMMIT',
-    [3, 4, 5]],
+  ['BEGIN READ WRITE', 'COMMIT TRANSACTION', 'COMMIT', [3, 4, 5]],
+  // Comments are whitespace (PostgreSQL), a `;` or keyword inside included.
+  ['BEGIN /* trace */', 'COMMIT -- done; ROLLBACK', 'COMMIT',
+    [3, 4, 5, 6]],
+  ['BEGIN -- start', 'ROLLBACK /* x; COMMIT */', 'ROLLBACK', [3, 4, 5, 6]],
 ]);
 const FAILED_BLOCK_ENDS = Object.freeze([
   'ROLLBACK WORK', 'ROLLBACK TRANSACTION', 'ABORT', 'END', 'COMMIT WORK',
+  'ROLLBACK -- x', 'COMMIT /* end */',
+]);
+// Transaction modes the engine does not provide: refused by name, never
+// accepted unenforced (a READ ONLY block must not accept writes).
+const UNSUPPORTED_MODE_BEGINS = Object.freeze([
+  ['START TRANSACTION READ ONLY', /transaction mode READ ONLY/u],
+  ['BEGIN ISOLATION LEVEL SERIALIZABLE',
+    /transaction mode ISOLATION LEVEL SERIALIZABLE/u],
+  ['BEGIN TRANSACTION READ WRITE, DEFERRABLE', /transaction mode DEFERRABLE/u],
 ]);
 
 async function witnessTransactionSpellings(t, client) {
@@ -483,6 +495,16 @@ async function witnessTransactionSpellings(t, client) {
       `${end} in a failed block: the block's insert rolled back`);
     await managedSleep(t, EXPIRY_PACE_MS);
   }
+  for (const [begin, mode] of UNSUPPORTED_MODE_BEGINS) {
+    for (const values of [undefined, []]) {
+      const refused = await observe(client, begin, values);
+      t.equal(refused.error?.code, FEATURE_NOT_SUPPORTED,
+        `${begin}: refused 0A000`);
+      t.match(refused.error?.message, mode, `${begin}: names the mode`);
+      t.same(refused.tags, [], `${begin}: no CommandComplete`);
+      t.equal(refused.status, IDLE, `${begin}: no transaction block`);
+    }
+  }
 }
 
 // The engine's transaction budget, shortened for the expiry witness (the
@@ -506,21 +528,34 @@ const WARNING = 'WARNING';
  * @return {Promise<void>}
  */
 async function beginWriteAndExpire(t, {client, engine}, insert, values) {
-  const transactions = engine.transactionCoordinator.transactionsBySession;
-  const before = new Set(transactions.keys());
+  const opened = trackOpenedTransaction(engine);
   t.same((await observe(client, 'BEGIN')).tags, ['BEGIN'], 'BEGIN');
-  const [sessionKey] = [...transactions.keys()].filter((key) =>
-    !before.has(key));
+  const sessionKey = opened();
   t.ok(sessionKey, 'the BEGIN opened one engine transaction');
   await managedSleep(t, EXPIRY_PACE_MS);
   t.same((await observe(client, insert, values)).tags, ['INSERT 0 1'],
     'the write inside the block answered');
-  const deadline = Date.now() + WAIT_MS;
+  t.ok(await awaitEngineDrop(t, engine, sessionKey, WAIT_MS),
+    'the engine dropped the transaction once its budget was spent');
+}
+
+/**
+ * Track the engine transaction the next BEGIN opens.
+ * @param {object} engine - The real engine.
+ * @return {Function} () => the session key of the transaction opened since.
+ */
+function trackOpenedTransaction(engine) {
+  const transactions = engine.transactionCoordinator.transactionsBySession;
+  const before = new Set(transactions.keys());
+  return () => [...transactions.keys()].find((key) => !before.has(key));
+}
+
+async function awaitEngineDrop(t, engine, sessionKey, waitMs) {
+  const deadline = Date.now() + waitMs;
   while (engine.hasActiveTransaction(sessionKey) && Date.now() < deadline) {
     await managedSleep(t, POLL_MS);
   }
-  t.notOk(engine.hasActiveTransaction(sessionKey),
-    'the engine dropped the transaction once its budget was spent');
+  return !engine.hasActiveTransaction(sessionKey);
 }
 
 async function expiryRowIds(client) {
@@ -589,6 +624,102 @@ async function witnessStatementAfterExpiry(t, context, values) {
     `${label}: neither the expired insert nor the late one is present`);
 }
 
+// Every statement kind after a silent expiry is refused, never run outside
+// the block: DDL (the table must not be created), a read, and lifecycle SQL
+// (which the request dispatch admits before the SQL engine).
+const LATE_TABLE = 'late_expiry_rows';
+const LATE_STATEMENTS = Object.freeze([
+  ['CREATE TABLE', `CREATE TABLE ${LATE_TABLE} (id INTEGER PRIMARY KEY)`],
+  ['SELECT', `SELECT id, label FROM ${EXPIRY_TABLE}`],
+  ['SHOW SERVICES', 'SHOW SERVICES'],
+]);
+
+async function witnessKindsAfterExpiry(t, context) {
+  const {client} = context;
+  for (const [label, text] of LATE_STATEMENTS) {
+    await beginWriteAndExpire(t, context, `INSERT INTO ${EXPIRY_TABLE} ` +
+      '(id, label) VALUES (4, \'d\')');
+    const late = await observe(client, text);
+    t.equal(late.error?.code, TRANSACTION_TIMEOUT,
+      `${label} after expiry: refused 25P04 (never run outside the block)`);
+    t.same(late.tags, [], `${label} after expiry: nothing executed`);
+    t.equal(late.status, FAILED, `${label} after expiry: the block is failed`);
+    const ended = await observe(client, 'ROLLBACK');
+    t.same(ended.tags, ['ROLLBACK'], `${label}: ROLLBACK ends the block`);
+    t.equal(ended.status, IDLE, `${label}: idle`);
+  }
+  const lateTable = await observe(client, `SELECT id FROM ${LATE_TABLE}`);
+  t.not(lateTable.error, null, 'the late CREATE TABLE created nothing');
+  t.same(await expiryRowIds(client), [], 'no expired write is present');
+}
+
+// The embedded application-database facade: a statement of a
+// transaction(callback) after the engine dropped the transaction is refused
+// (never run as autocommit), and transaction() rejects typed.
+async function facadeAfterExpiry(t, {db, engine}, lateText) {
+  const opened = trackOpenedTransaction(engine);
+  let lateError = null;
+  const rejected = await db.transaction(async (tx) => {
+    await tx.query(`INSERT INTO ${EXPIRY_TABLE} (id, label) VALUES ` +
+      '(501, \'f-in\')');
+    t.ok(await awaitEngineDrop(t, engine, opened(), WAIT_MS),
+      'facade: the engine dropped the transaction');
+    lateError = await tx.query(lateText).then(() => null, (error) => error);
+  }).then(() => null, (error) => error);
+  return {lateError, rejected};
+}
+
+async function witnessFacadeAfterExpiry(t, context) {
+  for (const lateText of [
+    `INSERT INTO ${EXPIRY_TABLE} (id, label) VALUES (502, 'f-late')`,
+    `CREATE TABLE ${LATE_TABLE} (id INTEGER PRIMARY KEY)`,
+  ]) {
+    const {lateError, rejected} = await facadeAfterExpiry(t, context,
+      lateText);
+    t.equal(lateError?.code, 'NO_TRANSACTION',
+      `facade ${lateText}: refused NO_TRANSACTION, not autocommitted`);
+    t.equal(rejected?.code, 'NO_TRANSACTION',
+      `facade ${lateText}: transaction() rejects typed`);
+    await managedSleep(t, EXPIRY_PACE_MS);
+  }
+  t.same(await expiryRowIds(context.client), [],
+    'facade: neither the block\'s insert nor the late one is present');
+  t.not((await observe(context.client, `SELECT id FROM ${LATE_TABLE}`))
+    .error, null, 'facade: the late CREATE TABLE created nothing');
+}
+
+/**
+ * A client that disconnects inside a block: the engine transaction is
+ * rolled back at once (PostgreSQL), not held until the 60 s budget sweep,
+ * so another session's write to the same partition goes through.
+ * @param {object} t - Tap test.
+ * @param {object} context - {client, engine, endpoint}.
+ * @return {Promise<void>}
+ */
+async function witnessDisconnectInsideBlock(t, {client, engine, endpoint}) {
+  const doomed = await openConsumerSession({...endpoint, ...CREDENTIALS});
+  doomed.on('error', () => {});
+  const opened = trackOpenedTransaction(engine);
+  t.same((await observe(doomed, 'BEGIN')).tags, ['BEGIN'], 'doomed BEGIN');
+  const sessionKey = opened();
+  t.same((await observe(doomed, `INSERT INTO ${EXPIRY_TABLE} (id, label) ` +
+    'VALUES (700, \'doomed\')')).tags, ['INSERT 0 1'], 'doomed insert');
+  doomed.connection.stream.destroy();
+  t.ok(await awaitEngineDrop(t, engine, sessionKey,
+    scaleByMachineFactor(10_000)),
+  'disconnect: the engine transaction ended well inside the 60 s budget');
+  const other = await openConsumerSession({...endpoint, ...CREDENTIALS});
+  t.teardown(() => other.end());
+  t.same((await observe(other, 'BEGIN')).tags, ['BEGIN'], 'other BEGIN');
+  const write = await observe(other, `INSERT INTO ${EXPIRY_TABLE} ` +
+    '(id, label) VALUES (701, \'other\')');
+  t.same(write.error, null,
+    'another session writes the same partition in a block');
+  t.same((await observe(other, 'COMMIT')).tags, ['COMMIT'], 'other COMMIT');
+  t.same(await expiryRowIds(client), [701],
+    'the disconnected block\'s insert is absent; the other one committed');
+}
+
 /**
  * The session follows the engine's transaction truth: a transaction the
  * engine dropped (its budget spent) never wedges the session, a COMMIT of
@@ -618,9 +749,12 @@ async function witnessTransactionExpiry(t, context) {
     await witnessCommitAfterExpiry(t, context, []);
     await witnessStatementAfterExpiry(t, context);
     await witnessStatementAfterExpiry(t, context, []);
+    await witnessKindsAfterExpiry(t, context);
+    await witnessFacadeAfterExpiry(t, context);
   } finally {
     coordinator.transactionBudgetMs = configuredBudgetMs;
   }
+  await witnessDisconnectInsideBlock(t, context);
 }
 
 const COUNTED_COMMANDS = new Set(['INSERT', 'UPDATE', 'DELETE', 'SELECT']);
@@ -636,7 +770,7 @@ test('PG-wire command tags from the real engine through a real client',
     refuseUnderProbe(PROBE_GUARD_SUBJECT);
     reportOpenHandlesOnTeardown(t);
     const {client, db, endpoint, engine} = await startRuntime(t);
-    await witnessTransactionExpiry(t, {client, engine});
+    await witnessTransactionExpiry(t, {client, db, endpoint, engine});
     let last = null;
     for (const [label, text, values, tag] of TAG_CASES) {
       last = await observe(client, text, values);

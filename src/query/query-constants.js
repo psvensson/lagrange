@@ -112,9 +112,13 @@ const QUERY_ERROR_MSG = Object.freeze({
     'transaction budget expired); the statement was not executed',
   INSERT_SELECT_UNSUPPORTED: 'INSERT ... SELECT is not supported',
   RETURNING_UNSUPPORTED: 'RETURNING is not supported',
+  TRANSACTION_MODE_UNSUPPORTED_PREFIX: 'transaction mode ',
+  TRANSACTION_MODE_UNSUPPORTED_SUFFIX:
+    ' is not supported (the engine does not provide or enforce it; only ' +
+    'READ WRITE is accepted); nothing was executed',
   TRANSACTION_CONTROL_SYNTAX_ERROR:
     'syntax error: a transaction-control statement must be the whole ' +
-    'statement (BEGIN | START TRANSACTION [modes], COMMIT | END | ' +
+    'statement (BEGIN | START TRANSACTION [READ WRITE], COMMIT | END | ' +
     'ROLLBACK | ABORT [WORK | TRANSACTION]); nothing was executed',
   TRANSACTION_PARTICIPANTS_FROZEN:
     'Transaction participant set is frozen',

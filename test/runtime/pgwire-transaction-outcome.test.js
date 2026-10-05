@@ -57,11 +57,13 @@ describe('resolveFailedStatementOutcome', () => {
     assert.equal(idle.warning.code, '25P01');
   });
 
-  it('a COMMIT of a transaction the engine dropped: 25P04, nothing ' +
-    'committed, idle', () => {
-    for (const errorCode of [NO_TRANSACTION, 'TIMEOUT']) {
-      const failed = outcome(IN_TRANSACTION, 'COMMIT', {errorCode,
-        error: 'engine text'}, () => false);
+  it('a COMMIT the engine typed as before the commit point ' +
+    '(commitPointReached: false): 25P04, nothing committed, idle', () => {
+    for (const [errorCode, stage] of [[NO_TRANSACTION, undefined],
+      ['TIMEOUT', 'ACTIVE'], ['TIMEOUT', 'PREPARING'],
+      ['TIMEOUT', 'PREPARED']]) {
+      const failed = outcome(IN_TRANSACTION, 'COMMIT', {errorCode, stage,
+        error: 'engine text', commitPointReached: false}, () => false);
       assert.equal(failed.kind, 'error');
       assert.equal(failed.sqlState, '25P04');
       assert.match(failed.message, /no changes were committed/u);
@@ -70,16 +72,43 @@ describe('resolveFailedStatementOutcome', () => {
     }
   });
 
-  it('a COMMIT failure the engine still holds leaves the block failed',
+  it('a COMMIT that may have passed the commit point (true, or not ' +
+    'typed): 08007 outcome unknown, never "no changes were committed"',
+  () => {
+    for (const failure of [
+      {errorCode: 'TIMEOUT', stage: 'COMMITTING', commitPointReached: true},
+      {errorCode: NO_TRANSACTION, commitPointReached: true},
+      {errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE', stage: 'COMMITTING',
+        commitPointReached: true},
+      {errorCode: 'TIMEOUT', stage: 'COMMITTING'},
+      {errorCode: NO_TRANSACTION},
+      {errorCode: 'COMMIT_FAILED'},
+    ]) {
+      for (const holds of [false, true]) {
+        const unknown = outcome(IN_TRANSACTION, 'COMMIT', failure,
+          () => holds);
+        assert.equal(unknown.kind, 'error', JSON.stringify(failure));
+        assert.equal(unknown.sqlState, '08007');
+        assert.equal(unknown.message, 'the transaction\'s outcome is ' +
+          'unknown; some changes may have been committed');
+        assert.doesNotMatch(unknown.message, /no changes were committed/u);
+        assert.equal(unknown.detail.engine_error_code, failure.errorCode);
+        assert.equal(unknown.detail.engine_stage, failure.stage ?? null);
+        assert.equal(unknown.state, holds ? FAILED : IDLE);
+      }
+    }
+  });
+
+  it('a COMMIT failure before the commit point follows the engine hold',
     () => {
-      const held = outcome(IN_TRANSACTION, 'COMMIT', {
-        errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'}, () => true);
+      const failure = {errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+        stage: 'PREPARING', commitPointReached: false};
+      const held = outcome(IN_TRANSACTION, 'COMMIT', failure, () => true);
       assert.equal(held.kind, 'engine_error',
         'the engine error is answered as is');
       assert.equal(held.state, FAILED);
-      const gone = outcome(IN_TRANSACTION, 'COMMIT', {
-        errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'}, () => false);
-      assert.equal(gone.state, IDLE);
+      assert.equal(outcome(IN_TRANSACTION, 'COMMIT', failure,
+        () => false).state, IDLE);
     });
 
   it('a failed ROLLBACK follows the engine', () => {
@@ -160,6 +189,7 @@ class ScriptedAdapter {
   constructor(answers) {
     this.answers = answers;
     this.executions = [];
+    this.closed = [];
   }
   async execute(sessionId, sql, params, options) {
     this.executions.push({sql, options});
@@ -167,7 +197,9 @@ class ScriptedAdapter {
     if (!answer) throw new Error(`no scripted answer for ${sql}`);
     return answer;
   }
-  closeSession() {}
+  closeSession(sessionId, options) {
+    this.closed.push({sessionId, options});
+  }
 }
 
 function startedHandler(answers) {
@@ -245,7 +277,8 @@ describe('PgWireProtocolHandler follows the engine transaction truth', () => {
     'ROLLBACK then answers the WARNING', async () => {
     const {handler, socket} = startedHandler([
       begun, inserted,
-      noTransaction('COMMIT', {sessionTransactionActive: false}),
+      noTransaction('COMMIT', {sessionTransactionActive: false,
+        commitPointReached: false}),
       noTransaction('ROLLBACK', {sessionTransactionActive: false}),
     ]);
     await query(handler, socket, 'BEGIN');
@@ -261,23 +294,75 @@ describe('PgWireProtocolHandler follows the engine transaction truth', () => {
     assert.equal(rolledBack.status, 'I');
   });
 
-  it('a COMMIT failure the engine still holds: failed, ROLLBACK recovers',
-    async () => {
+  it('a COMMIT failure before the commit point the engine still holds: ' +
+    'failed, ROLLBACK recovers without a warning', async () => {
+    const {handler, socket} = startedHandler([
+      begun,
+      {success: false, errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+        error: 'participant failed', statementType: 'COMMIT',
+        sessionTransactionActive: true, commitPointReached: false},
+      {success: true, statementType: 'ROLLBACK'},
+    ]);
+    await query(handler, socket, 'BEGIN');
+    const committed = await query(handler, socket, 'COMMIT');
+    assert.equal(committed.errors[0].M, 'participant failed');
+    assert.equal(committed.status, 'E');
+    const rolledBack = await query(handler, socket, 'ROLLBACK');
+    assert.deepEqual(rolledBack.tags, ['ROLLBACK']);
+    assert.deepEqual(rolledBack.notices, []);
+    assert.equal(rolledBack.status, 'I');
+  });
+
+  it('a COMMIT whose outcome is unknown and the engine still holds: ' +
+    '08007, failed; the ROLLBACK (or COMMIT) that ends the block carries ' +
+    'the outcome-unknown WARNING', async () => {
+    for (const [end, answer] of [
+      ['ROLLBACK', {success: true, statementType: 'ROLLBACK'}],
+      ['COMMIT', {success: true, statementType: 'ROLLBACK'}],
+      ['ROLLBACK', noTransaction('ROLLBACK',
+        {sessionTransactionActive: false})],
+    ]) {
       const {handler, socket} = startedHandler([
         begun,
         {success: false, errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
           error: 'participant failed', statementType: 'COMMIT',
-          sessionTransactionActive: true},
+          stage: 'COMMITTING', sessionTransactionActive: true,
+          commitPointReached: true},
+        answer,
+        {success: true, statementType: 'BEGIN_TRANSACTION',
+          transactionId: 'next'},
         {success: true, statementType: 'ROLLBACK'},
       ]);
       await query(handler, socket, 'BEGIN');
       const committed = await query(handler, socket, 'COMMIT');
-      assert.equal(committed.errors[0].M, 'participant failed');
+      assert.equal(committed.errors[0].C, '08007');
+      assert.match(committed.errors[0].D, /COMMITTING/u);
       assert.equal(committed.status, 'E');
-      const rolledBack = await query(handler, socket, 'ROLLBACK');
-      assert.deepEqual(rolledBack.tags, ['ROLLBACK']);
-      assert.equal(rolledBack.status, 'I');
-    });
+      const ended = await query(handler, socket, end);
+      assert.deepEqual(ended.tags, ['ROLLBACK']);
+      assert.deepEqual(ended.notices.map((notice) => [notice.S, notice.C,
+        notice.M]), [['WARNING', '08007', 'the previous transaction\'s ' +
+        'outcome is unknown; some changes may have been committed']]);
+      assert.equal(ended.status, 'I');
+      await query(handler, socket, 'BEGIN');
+      const next = await query(handler, socket, 'ROLLBACK');
+      assert.deepEqual(next.notices, [], 'the warning is given once');
+    }
+  });
+
+  it('a COMMIT whose outcome is unknown and the engine no longer holds: ' +
+    '08007, idle', async () => {
+    const {handler, socket} = startedHandler([
+      begun,
+      {success: false, errorCode: 'TIMEOUT', error: 'Query timeout',
+        statementType: 'COMMIT', stage: 'COMMITTING',
+        sessionTransactionActive: false, commitPointReached: true},
+    ]);
+    await query(handler, socket, 'BEGIN');
+    const committed = await query(handler, socket, 'COMMIT');
+    assert.equal(committed.errors[0].C, '08007');
+    assert.equal(committed.status, 'I');
+  });
 
   it('a COMMIT failure whose answer does not say leaves the block failed',
     async () => {
@@ -287,7 +372,9 @@ describe('PgWireProtocolHandler follows the engine transaction truth', () => {
           statementType: 'COMMIT'},
       ]);
       await query(handler, socket, 'BEGIN');
-      assert.equal((await query(handler, socket, 'COMMIT')).status, 'E');
+      const committed = await query(handler, socket, 'COMMIT');
+      assert.equal(committed.errors[0].C, '08007');
+      assert.equal(committed.status, 'E');
     });
 
   it('a statement for a dropped transaction: 25P04, failed; COMMIT ends ' +
@@ -310,5 +397,23 @@ describe('PgWireProtocolHandler follows the engine transaction truth', () => {
     assert.deepEqual(ended.notices, [], 'no warning inside a block');
     assert.equal(ended.status, 'I');
     assert.equal(adapter.executions.at(-1).sql, 'ROLLBACK');
+  });
+
+  it('a connection closed inside a block asks the adapter to roll the ' +
+    'engine transaction back; an idle one does not', async () => {
+    for (const [answers, statements, open] of [
+      [[begun], ['BEGIN'], true],
+      [[begun, {success: false, errorCode: 'X', error: 'x',
+        statementType: 'INSERT'}], ['BEGIN', 'INSERT INTO t VALUES (1)'],
+      true],
+      [[begun, {success: true, statementType: 'COMMIT'}],
+        ['BEGIN', 'COMMIT'], false],
+    ]) {
+      const {handler, socket, adapter} = startedHandler(answers);
+      for (const text of statements) await query(handler, socket, text);
+      handler.destroy();
+      assert.deepEqual(adapter.closed, [{sessionId: 'session-under-test',
+        options: {transactionOpen: open}}], statements.join(' / '));
+    }
   });
 });

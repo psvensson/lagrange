@@ -73,6 +73,9 @@ class PgWireSession {
     // BEGIN answer); every statement of the block is sent for it, so the
     // engine refuses one for a transaction it no longer holds.
     this.transactionId = null;
+    // The block's COMMIT was answered outcome-unknown (08007) and the engine
+    // still held the transaction: the ROLLBACK that ends the block warns.
+    this.transactionOutcomeUnknown = false;
     this.createdAt = Date.now();
 
     /**
@@ -205,7 +208,27 @@ class PgWireSession {
    */
   setTransactionState(state) {
     this.txState = state;
-    if (state === PG_TRANSACTION_STATE.IDLE) this.transactionId = null;
+    if (state === PG_TRANSACTION_STATE.IDLE) {
+      this.transactionId = null;
+      this.transactionOutcomeUnknown = false;
+    }
+  }
+
+  /**
+   * Note that the block's COMMIT was answered outcome-unknown.
+   */
+  markTransactionOutcomeUnknown() {
+    this.transactionOutcomeUnknown = true;
+  }
+
+  /**
+   * Whether the block's COMMIT was answered outcome-unknown; clears it.
+   * @return {boolean}
+   */
+  takeTransactionOutcomeUnknown() {
+    const unknown = this.transactionOutcomeUnknown;
+    this.transactionOutcomeUnknown = false;
+    return unknown;
   }
 
   /**
