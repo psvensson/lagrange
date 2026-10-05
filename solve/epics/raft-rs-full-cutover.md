@@ -431,3 +431,22 @@ This epic closes only when:
   evidence with no conf change, and the 30 s consensus-exit backstop is an
   ERROR alarm only. Record:
   [`f2-amendment-group-retirement-2026-10-04.md`](raft-rs-full-cutover/quest-records/replace-source-removal-owner/f2-amendment-group-retirement-2026-10-04.md).
+
+## Upgrade notes
+
+- 2026-10-05, workflow record generation (quest zero-liferaft-active-runtime,
+  group retirement as a unit; design
+  [`design-workflow-record-change-store-2026-10-05.md`](raft-rs-full-cutover/quest-records/replace-source-removal-owner/design-workflow-record-change-store-2026-10-05.md),
+  "Round 7"). Durable-format change: the `tables` system row gains
+  `partition_transition_generation INTEGER NOT NULL DEFAULT 0`. On open, the
+  tables-table column upgrade adds it to an existing `tables` partition
+  database (existing rows read 0); a view/cache/CDC row image without the
+  field decodes as 0. The first managed split/merge record write after the
+  upgrade moves a row to 1; nothing ever writes 0 again. The record metadata
+  gains `workflowAttempt` (absent = legacy attempt 0) and records may carry
+  `postCutoverIncidents`; group-retirement evidence gains `attempt`;
+  group-retired tombstones are version 3 (`attempt`; a version-2 file reads
+  as attempt 0). Constraint: a node that predates the column fails to apply a
+  replicated `tables` UPDATE naming it, and neither advances nor compares
+  the generation - upgrade every node holding a `tables` replica before any
+  managed split or merge runs (quiesce split/merge during a rolling upgrade).

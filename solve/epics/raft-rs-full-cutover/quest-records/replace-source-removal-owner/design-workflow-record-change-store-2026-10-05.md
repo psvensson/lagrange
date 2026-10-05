@@ -172,3 +172,149 @@ on the record: the failure wins by ordering, assertion unchanged.
   driving and its lease lapses (liveness cost only; nothing is written).
 - Clock skew: "live by my clock" is this owner's judgement; another owner may
   judge it expired earlier and claim; the CAS orders the two.
+
+## Round 7: the record is an incarnation, not bytes (2026-10-05)
+
+Round-6 rejection (V6-A, same mechanism at the one content-taking entry):
+"the record" was identified by bytes that REPEAT. The compare covered only
+`partition_transition_metadata` + `partition_transition_state`; the terminal
+clear nulls both; workflow ids are deterministic (`split-...-v2`) and the
+fence restarted at 1 after a clear. So a cleared record of epoch n was
+indistinguishable from the cleared record of epoch n+k (ABA): owner A's
+registration derived from a pre-split read landed after owner B's whole split
+cleared. One workflow id/fence also named two attempts (the name standing in
+for an incarnation - the class behind the peer-id, tombstone and held-write
+identity defects of this week; residual P4). And registration's content
+depended on facts outside the compared bytes (`active_partition_version`, the
+partitions rows). V6-B (post-cutover failure writing FAILED / DEFERRED over
+SPLIT_CUTOVER_ACTIVE, and a re-drive re-registering the superseded source) is
+the same root at the phase level: an unranked state compared as "not a
+regression".
+
+### D1 - the record generation (one carrier)
+
+Carrier: a dedicated column on the `tables` row,
+`partition_transition_generation INTEGER NOT NULL DEFAULT 0`, compared in the
+same `UPDATE ... WHERE` as the transition columns. Not a retained minimal
+record in the metadata column: every reader of the transition columns
+(routing, epoch contract, group-retirement evidence, admin snapshots, the
+overlap guard) reads "metadata/state null" as "no transition"; a retained
+`{generation}` blob would change that meaning for all of them.
+
+- Every accepted change advances it by exactly one in the same atomic write:
+  registration, claim, renewal, every TRANSITION (phase, cutover promotion of
+  `active_partition_version`, FAILED's pending withdrawal, participants,
+  marks, progress) and the terminal clear. The store adds
+  `partition_transition_generation = base + 1` to every encoded change (one
+  place: the store's compare-and-swap), so no encoder can forget it.
+- The compared record is the triple (metadata, state, generation). A cleared
+  record is `{metadata: null, state: null, generation: n}`; generations never
+  repeat, so a cleared record of generation n never equals one of n+k.
+- Lag rule: a re-read whose generation is below the base's lags it (exact,
+  replaces the fence/live-lease heuristics); same bytes = lags; anything else
+  moved.
+- Legacy: a row that predates the column reads generation 0 (the column is
+  added `NOT NULL DEFAULT 0` by the tables-table column upgrade on open; a
+  view row without the field decodes as 0) and gets 1 on its first write by
+  the store. Any write leaves 0 behind for good, so the ABA cannot recur
+  across the upgrade. Mixed-version clusters: an old node neither advances
+  nor compares the column (see the epic's upgrade notes).
+
+### D2 - registration derives only from covered inputs
+
+Registration's change compares the caller's read by the full triple (so
+every `tables`-row input is covered by the generation) and, at the change's
+turn, re-validates every input taken from another row against the compared
+record's own committed facts (`owner.registrationInputsRefusal(registration,
+storedRow)`; production execute always passes it):
+
+| Input (split / merge) | Source | Cover |
+| --- | --- | --- |
+| active_partition_version -> targetVersion | tables row | generation (CAS) |
+| pending_partition_version, partition_count | tables row | generation (CAS) |
+| existing transition (retry plan, workflow id, retry metadata, persisted split key/children, merged target id) | tables row | generation (CAS) |
+| partition_key (primary key column), table id/name | tables row | generation (CAS); immutable after create |
+| overlap guard (in-flight transitions' ranges) | tables row | generation (CAS) |
+| source partition row(s): existence, partition_version, key range | partitions rows | (a) re-validated at the turn: each source row, read again from the view at the change's turn, exists, is NORMAL, has partition_version = the compared record's active_partition_version and the key range the registration persisted |
+| sibling set (same-table partitions at the active epoch, carried forward at cutover) | partitions rows | (a) re-derived at the turn with the owner's own resolver against the compared record and compared as a set |
+| merged target id (fresh mint) / split children ids | registration | (a) a fresh id must not exist as a partitions row at the turn |
+| desired RF (source row policy), size bytes, leader, routable / discovered / candidate nodes, topology snapshot (`resolveTopologySnapshot`, awaited) | partitions / services / topology | advisory: not a safety input of the record. Each is re-checked by the step that acts on it (admission probe, child-provisioning precheck, provisioning convergence, cutover readiness); a stale value can only produce a deferral or a refused step, never a write over another record |
+
+(b) "immutable while the generation is unchanged" holds for the structural
+partitions-row facts (existence, version, range) only because every split
+and merge of a table runs under that table's one record; it is NOT relied on
+alone, because the partitions view can lag the tables view (the lagging-view
+class): (a) is checked at the turn.
+
+### D3 - the attempt identity
+
+The registration change mints the attempt: `workflowAttempt` = the generation
+the registration writes (base + 1), stored in the record's metadata, never
+changed by later changes. Attempt id = (workflowId, workflowAttempt). The
+registration fence = max(record fence + 1, workflowAttempt); claims add one
+to both fence and generation, so post-upgrade every fence of attempt N is >=
+N and every fence of an earlier attempt is < N: (attempt, fence) never
+repeats. Carried by:
+- START_SPLIT_REPLICATION / START_MERGE_REPLICATION (the record metadata)
+  and every source acknowledgement (`attempt`, from that metadata);
+- the acknowledgement check: an ack whose attempt differs from the record's,
+  or whose fence is below the record's attempt, is STALE_FENCE; checked
+  against the record the change is applied to, never the projection;
+- owner-recorded outcomes (stamped with the projection's attempt; the owned
+  change's fence check already pins the attempt);
+- group-retirement evidence (`attempt`), REMOVE verification
+  (ATTEMPT_MISMATCH refusal), the tombstone (version 3 carries `attempt`;
+  a version-2 tombstone reads as the legacy attempt 0) and its release (a
+  record holding another attempt of the same workflow id releases it).
+
+### D4 - phase monotonicity is total
+
+One rule, applied by the coordinator to EVERY change it hands the store
+(registration, claims, owned changes, transitions, acknowledgements, the
+clear): with `from` the compared record's state (`stored.state`, whichever
+workflow it holds) and `to` the change's next status:
+- from FAILED: only FAILED (or the clear);
+- from cutover-or-later (SPLIT_CUTOVER_ACTIVE, SPLIT_SOURCE_DISSOLVING,
+  MERGE_CUTOVER_ACTIVE): only a phase of rank >= from's in that order (same
+  phase for in-phase updates) or the clear; FAILED, DEFERRED, BLOCKED,
+  ADMISSION_PENDING and every pre-cutover phase are refused;
+- pre-cutover: the ranked order never moves backwards; DEFERRED / BLOCKED /
+  FAILED are allowed from any pre-cutover state (they are pre-cutover only).
+The failure, deferral, admission-denied and planning-deferral changes are one
+change factory (`executionOutcomeChange`) with an explicit pre-cutover
+precondition like `abortChange`. A failure that meets a record at
+cutover-or-later is recorded as a typed post-cutover incident on the record
+(metadata `postCutoverIncidents`, phase unchanged) and logged as ONE ERROR
+naming workflow, attempt, phase and reason; the workflow continues forward
+(the source's acknowledgements drive dissolution and the clear); execute
+answers the step's failure.
+
+### Lost acknowledgement and byte-identical retry
+
+A retry of the same compare-and-swap after a failed submission resubmits the
+SAME encoded bytes (encoded once per turn, not re-applied with a new `now()`),
+so a first entry that lands late is the record the lost-acknowledgement rule
+recognises as this change's own (ACCEPTED, not a false REFUSED).
+
+### P5 - held member proof after an await
+
+`provesHeldMemberRetirement` and `tombstoneGroupRetiredRow` re-read the
+lifecycle row AFTER the `verifyGroupRetirement` await and write the
+tombstone only if the same incarnation is still retired.
+
+### R17
+
+The acknowledgement change reads the participant only from the record it is
+applied to (its argument); recovery's projection (adopted without lineage)
+is never consulted. Witness: a recovered stale projection beside a moved
+record.
+
+### Is D1-D4 sufficient?
+
+Residual (stated, not hidden): (1) during a rolling upgrade an old node's
+writes neither advance nor compare the generation; the upgrade note requires
+managed split/merge quiesced until every node runs this version. (2) A legacy
+in-flight record (attempt 0) whose pre-upgrade fences exceed the generation
+is distinguished from later attempts only by the explicit attempt field
+(acks from upgraded sources, evidence, tombstones), not by the fence order.
+(3) Advisory inputs are by design not covered (table above).
