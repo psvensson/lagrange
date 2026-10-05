@@ -372,6 +372,10 @@ async (t) => {
         queryTimeoutMs: service.resolveHeartbeatWriteQueryTimeoutMs(),
         skipCacheWait: true,
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        // The endpoint authority names the logical write (its birth at this
+        // incarnation), so a re-drive after an unknown outcome is one entry.
+        writeIdentity:
+          `endpoint:ep-${TEST_NODE_ID}-ws@${TEST_BOOT_INCARNATION}:birth`,
       },
       'endpoint upserts should reuse the same coalesced deferred write contract',
     );
