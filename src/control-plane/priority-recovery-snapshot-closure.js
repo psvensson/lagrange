@@ -271,8 +271,19 @@ function shouldPriorityRecoveryOperationBlockPlanning(assessment) {
 // so a long source-removal phase cannot monopolize the budget. A
 // cross-partition resource answer only: admission on the operation's own
 // partition asks shouldPriorityRecoveryOperationBlockPlanning.
+// Byte-for-byte the pre-ruling planning answer: a missing assessment or an
+// authoritatively deferred operation read keeps its slot BEFORE a satisfied
+// spread may give it back.
 function doesPriorityRecoveryOperationHoldAddBudget(assessment) {
-  if (assessment?.spreadCompletion?.satisfied === true) {
+  if (
+    !assessment ||
+    typeof assessment !== 'object' ||
+    assessment.completion?.state ===
+      PRIORITY_RECOVERY_COMPLETION_STATE.OPERATION_VISIBILITY_DEFERRED
+  ) {
+    return true;
+  }
+  if (assessment.spreadCompletion?.satisfied === true) {
     return false;
   }
   return shouldPriorityRecoveryOperationBlockPlanning(assessment);

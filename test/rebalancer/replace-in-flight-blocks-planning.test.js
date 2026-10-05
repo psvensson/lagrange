@@ -638,6 +638,101 @@ test('W1b: spread satisfied never opens the create lane for a second ' +
   }
 });
 
+// The base (13d772ae1) planning predicate, which the cluster-wide ADD budget
+// keeps byte-for-byte, stated as its truth table (nothing imported from base):
+//   1. no assessment object                         -> holds the slot
+//   2. completion.state === operation_visibility_deferred -> holds
+//      (an unread authoritative operation never gives its slot back, even
+//      when the spread reads satisfied)
+//   3. spreadCompletion.satisfied === true          -> releases
+//   4. semanticState === coordination_mismatch      -> releases
+//   5. otherwise                                    -> holds
+function baseBudgetHoldsSlot(assessment) {
+  if (!assessment || typeof assessment !== 'object') {
+    return true;
+  }
+  if (assessment.completion?.state === 'operation_visibility_deferred') {
+    return true;
+  }
+  if (assessment.spreadCompletion?.satisfied === true) {
+    return false;
+  }
+  return assessment.semanticState !== 'coordination_mismatch';
+}
+
+const ABSENT = Symbol('absent');
+const BUDGET_COMPLETIONS = Object.freeze([
+  ABSENT, {}, ...[
+    'converged', 'spread_satisfied_in_flight',
+    'temporary_over_target_allowed', 'operation_visibility_deferred',
+    'blocked', 'unknown_state',
+  ].map((state) => ({state})),
+]);
+const BUDGET_SPREADS = Object.freeze([
+  ABSENT, {satisfied: true}, {satisfied: false}, {satisfied: 'true'}, {},
+]);
+const BUDGET_SEMANTIC_STATES = Object.freeze([
+  ABSENT, ...Object.values(PRIORITY_RECOVERY_SEMANTIC_STATE),
+]);
+const BUDGET_OPERATION_SHAPES = Object.freeze([
+  OperationType.ADD, OperationType.REPLACE, OperationType.REMOVE,
+].flatMap((type) => [
+  WORKFLOW_STEP.PENDING, WORKFLOW_STEP.CREATING, WORKFLOW_STEP.STOPPING,
+].map((workflowStep) => ({type, workflowStep}))));
+
+function* budgetAssessmentCases() {
+  for (const nonObject of [null, undefined, 'assessment', 0, true]) {
+    yield {name: `non-object ${String(nonObject)}`, assessment: nonObject};
+  }
+  for (const completion of BUDGET_COMPLETIONS) {
+    for (const spreadCompletion of BUDGET_SPREADS) {
+      for (const semanticState of BUDGET_SEMANTIC_STATES) {
+        for (const operationContext of BUDGET_OPERATION_SHAPES) {
+          const assessment = {operationContext};
+          const parts = [];
+          for (const [key, value] of Object.entries(
+            {completion, spreadCompletion, semanticState})) {
+            if (value !== ABSENT) {
+              assessment[key] = value;
+            }
+            parts.push(`${key}=${value === ABSENT ? '-' : JSON.stringify(value)}`);
+          }
+          yield {
+            name: `${parts.join(' ')} ${operationContext.type}@${
+              operationContext.workflowStep}`,
+            assessment,
+          };
+        }
+      }
+    }
+  }
+}
+
+test('R1: the cluster ADD budget predicate is the base planning predicate ' +
+  'byte-for-byte (differential over the assessment cross product)', (t) => {
+  const differing = [];
+  let caseCount = 0;
+  for (const {name, assessment} of budgetAssessmentCases()) {
+    caseCount += 1;
+    const head = doesPriorityRecoveryOperationHoldAddBudget(assessment);
+    const base = baseBudgetHoldsSlot(assessment);
+    if (head !== base) {
+      differing.push({name, head, base});
+    }
+  }
+  t.equal(caseCount, 5 + BUDGET_COMPLETIONS.length * BUDGET_SPREADS.length *
+    BUDGET_SEMANTIC_STATES.length * BUDGET_OPERATION_SHAPES.length,
+  `the whole cross product ran (${caseCount} cases)`);
+  t.same(differing, [], 'no case differs from the base answer');
+  t.equal(doesPriorityRecoveryOperationHoldAddBudget({
+    completion: {state: 'operation_visibility_deferred'},
+    spreadCompletion: {satisfied: true},
+    semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+  }), true, 'an authoritatively deferred operation keeps its budget slot ' +
+    'even when its spread reads satisfied');
+  t.end();
+});
+
 test('W2: owner-driven REPLACE whose target the census already counts ' +
   '({A:3,B:1}, A->B) - no second operation from creation to terminal',
 async (t) => {
