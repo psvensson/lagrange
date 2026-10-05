@@ -103,12 +103,17 @@ function createEndedTransactionRecords() {
     /**
      * The commit-point fields for a COMMIT that found no transaction.
      * @param {string} sessionId - Session ID.
+     * @param {?string} [transactionId] - The COMMIT's own transaction, when
+     *   known: another transaction's record never answers for it.
      * @return {Object} {commitPointReached, transactionId} from the record,
-     *   or {} when there is none (unknown).
+     *   or {} when there is none or it is another transaction's (unknown).
      */
-    commitPointFor(sessionId) {
+    commitPointFor(sessionId, transactionId = null) {
       const ended = bySession.get(sessionId);
-      return ended ? {...ended} : {};
+      if (!ended || (transactionId && ended.transactionId !== transactionId)) {
+        return {};
+      }
+      return {...ended};
     },
   });
 }

@@ -381,10 +381,12 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
    * Handle COMMIT.
    * Routes through message router to the bound partition.
    * @param {string} sessionId - Session ID.
+   * @param {Object} [options] - Query options (expectedTransactionId: the
+   *   block's transaction, so a missing one is answered from its own record).
    * @return {Promise<Object>} Commit result.
    * @private
    */
-  async handleCommit(sessionId = QUERY_SESSION.DEFAULT) {
+  async handleCommit(sessionId = QUERY_SESSION.DEFAULT, options = {}) {
     const txState = this.transactionCoordinator.getTransaction(sessionId);
     this.logger.debug(QUERY_LOG_MSG.COMMIT, {
       sessionId,
@@ -393,7 +395,9 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
 
     let result;
     try {
-      result = await this.transactionCoordinator.commit(sessionId);
+      result = await this.transactionCoordinator.commit(sessionId, {
+        expectedTransactionId: options.expectedTransactionId ?? null,
+      });
     } catch (error) {
       // A COMMIT that threw is answered as a failed COMMIT carrying the
       // coordinator's commit-point fact (absent: unknown).

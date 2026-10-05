@@ -535,7 +535,7 @@ class SQLQueryEngineStatementExecution extends
       case QUERY_AST_TYPE.ROLLBACK:
         return withExecutedStatementType(withSessionTransactionState(
           ast.type === QUERY_AST_TYPE.COMMIT ?
-            await this.handleCommit(sessionId) :
+            await this.handleCommit(sessionId, options) :
             await this.handleRollback(sessionId),
           this.transactionCoordinator,
           sessionId,

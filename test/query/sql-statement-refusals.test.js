@@ -288,6 +288,23 @@ test('executeQuery itself refuses any statement for a transaction the ' +
   t.equal(plain.errorCode, undefined, 'no expectation: runs as before');
 });
 
+test('a COMMIT for a transaction the engine no longer holds is answered ' +
+  'from that transaction\'s own ended record only', async (t) => {
+  const {engine} = createRecordingEngine();
+  const sessionId = 'ended-record-session';
+  const begun = await engine.executeQuery('BEGIN', [], {sessionId});
+  await engine.transactionCoordinator.rollback(sessionId);
+  const own = await engine.executeQuery('COMMIT', [], {sessionId,
+    expectedTransactionId: begun.transactionId});
+  t.equal(own.errorCode, 'NO_TRANSACTION');
+  t.equal(own.commitPointReached, false, 'its own record: not reached');
+  const foreign = await engine.executeQuery('COMMIT', [], {sessionId,
+    expectedTransactionId: `${begun.transactionId}-another`});
+  t.equal(foreign.errorCode, 'NO_TRANSACTION');
+  t.equal(foreign.commitPointReached, undefined,
+    'another transaction\'s record: unknown');
+});
+
 test('a COMMIT that throws is answered as a failed COMMIT carrying the ' +
   'coordinator\'s commit-point fact', async (t) => {
   const {engine} = createRecordingEngine();

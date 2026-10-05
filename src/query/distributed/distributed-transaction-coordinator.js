@@ -112,6 +112,7 @@ class DistributedTransactionCoordinator {
         options.resolveParticipantCommitOutcome :
         null;
     this.now = options.now || (() => Date.now());
+    this.transactionIdSequence = 0;
     this.nextEpoch = Number.isFinite(options.initialEpoch) ?
       Math.floor(options.initialEpoch) :
       this.now();
@@ -456,23 +457,26 @@ class DistributedTransactionCoordinator {
   /**
    * Commit a distributed transaction across all enlisted participants.
    * @param {string} sessionId - Session ID.
+   * @param {Object} [options] - {expectedTransactionId}: the COMMIT's own
+   *   transaction, when the caller knows it.
    * @return {Promise<Object>} Commit result.
    */
-  async commit(sessionId) {
+  async commit(sessionId, options = {}) {
     return this.runTransactionOperation(
       sessionId,
-      () => this.commitOwned(sessionId),
+      () => this.commitOwned(sessionId, options.expectedTransactionId),
     );
   }
 
-  async commitOwned(sessionId) {
+  async commitOwned(sessionId, expectedTransactionId = null) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx) {
       return {
         success: false,
         error: QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT,
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
-        ...this.endedTransactions.commitPointFor(sessionId),
+        ...this.endedTransactions.commitPointFor(sessionId,
+          expectedTransactionId),
       };
     }
     if (tx.participantSetState === PARTICIPANT_SET_STATE.OPEN) {

@@ -161,4 +161,37 @@ describe('COMMIT outcome: real coordinator + real wire rule', () => {
     assert.equal(result.commitPointReached, undefined);
     assert.equal(wireOutcome(coordinator, result).sqlState, '08007');
   });
+
+  it('two transactions of one session begun within one clock tick get ' +
+    'distinct ids', async () => {
+    const {coordinator} = coordinatorUnderTest();
+    const first = await coordinator.begin(SESSION);
+    await coordinator.rollback(SESSION);
+    const second = await coordinator.begin(SESSION);
+    assert.equal(first.success, true);
+    assert.equal(second.success, true);
+    assert.equal(typeof first.transactionId, 'string');
+    assert.notEqual(second.transactionId, first.transactionId,
+      'the fixed clock does not repeat an id');
+  });
+
+  it('another transaction\'s ended record never answers for a COMMIT ' +
+    'whose own transaction is known: outcome unknown', async () => {
+    const {clock, coordinator} = coordinatorUnderTest();
+    await openTwoParticipants(coordinator);
+    const ownId = coordinator.getTransaction(SESSION).transactionId;
+    clock.now += LAPSE_MS;
+    await coordinator.runRecoverySweep();
+    const foreign = await coordinator.commit(SESSION,
+      {expectedTransactionId: `${ownId}-another`});
+    assert.equal(foreign.errorCode, 'NO_TRANSACTION');
+    assert.equal(foreign.commitPointReached, undefined,
+      'no "not committed" from another transaction\'s record');
+    assert.equal(wireOutcome(coordinator, foreign).sqlState, '08007');
+    const own = await coordinator.commit(SESSION,
+      {expectedTransactionId: ownId});
+    assert.equal(own.commitPointReached, false, 'its own record answers');
+    assert.equal(own.transactionId, ownId);
+    assert.equal(wireOutcome(coordinator, own).sqlState, '25P04');
+  });
 });
