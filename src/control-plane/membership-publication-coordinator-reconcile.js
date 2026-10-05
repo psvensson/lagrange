@@ -8,6 +8,7 @@ import {
   CONTROL_PLANE_CONVERGENCE_CLASS,
 } from './control-plane-error-classification.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
+import {hasPriorityRecoverySpreadGap} from './priority-recovery-planning-intent.js';
 import {
   MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL,
   MEMBERSHIP_PUBLICATION_STATUS,
@@ -54,6 +55,18 @@ import {buildPublicationActiveGateMembershipConvergence} from
 // membership reconcile on the partition leader. Each drive is timeout-bounded so a
 // slow/doomed reconcile can never wedge the in-flight guard.
 const OWNER_MEMBERSHIP_DRIVER_INTERVAL_MS = 5000;
+// Owner decision 2026-10-04 (decision 4): a decision held on a lagging durable
+// priority summary (the stale-member steady trim, the published-convergence
+// gate) takes ONE extra reconcile hop after the refresh write. That hop is
+// ended by the write itself, never by the owner-driver timer.
+const PRIORITY_SUMMARY_REFRESHED_REASON = 'priority_summary_refreshed';
+
+function hasPrioritySummaryRefreshClearedGap(latestPublicationRow, candidate) {
+  return hasPriorityRecoverySpreadGap(
+    normalizeControlPlanePublicationRow(latestPublicationRow)
+      ?.priorityPartitionSummary,
+  ) && !hasPriorityRecoverySpreadGap(candidate?.priorityPartitionSummary);
+}
 const OWNER_MEMBERSHIP_RECONCILE_TIMEOUT_MS = 15000;
 const OWNER_MEMBERSHIP_DRIVER_ERROR_MSG =
   'Owner-driven membership reconcile error';
@@ -522,9 +535,23 @@ class MembershipPublicationCoordinatorReconcile extends
                 refreshedRow,
                 convergenceOptions,
               );
+              const publicationRow =
+                normalizeControlPlanePublicationRow(persistedRow);
+              if (
+                hasPrioritySummaryRefreshClearedGap(
+                  latestPublicationRow,
+                  candidate,
+                ) &&
+                typeof this.enqueueClusterMembershipReconcile === 'function'
+              ) {
+                this.enqueueClusterMembershipReconcile(
+                  PRIORITY_SUMMARY_REFRESHED_REASON,
+                  {latestPublicationRow: publicationRow},
+                );
+              }
               return {
                 candidate,
-                publicationRow: normalizeControlPlanePublicationRow(persistedRow),
+                publicationRow,
                 workflow,
               };
             }

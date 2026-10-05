@@ -136,9 +136,9 @@ function buildPriorityRecoveryClosureWitnessFromObservation(
         prioritySpreadPending,
       } :
       {}),
-    ...(priorityPartitionSummary ?
-      {refreshedPriorityPartitionSummary: priorityPartitionSummary} :
-      {}),
+    // No refreshedPriorityPartitionSummary: since the one-spread-authority
+    // decision (2026-10-04) a witness never carries a summary; the gate reads
+    // the census summary passed beside it.
     ...(closureRecordId ? {closureRecordId} : {}),
     ...(closureWitnessClass ? {closureWitnessClass} : {}),
   };

@@ -83,7 +83,12 @@ const TARGET_THRESHOLD = 12;
 // message-group MOVE_REPLICA selection and execution were deleted.
 // 2026-10-04: tightened 1765 -> 1764 on the checker's hint (the convergence
 // snapshot classifier's voter checks moved into convergence-voter-targets).
-const BASELINE_COUNT = 1764;
+// 2026-10-04 (quest/one-spread-authority): tightened 1770 -> 1767 on the
+// checker's hint after the one-spread-authority deletion (closure synthesis,
+// D9 ranking, D3 latch).
+// 2026-10-05: merge of quest/one-spread-authority keeps the lower value,
+// then tightened 1764 -> 1761 on the checker's hint for the merged tree.
+const BASELINE_COUNT = 1761;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

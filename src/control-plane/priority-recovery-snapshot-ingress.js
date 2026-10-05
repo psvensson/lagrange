@@ -88,6 +88,70 @@ function isReplaceRemoveDispatchSpreadStalled(operationContext) {
   );
 }
 
+function readPriorityRecoveryCensusHolderCount(
+  readyReplicaCountByNodeId,
+  nodeId,
+) {
+  const count = Number(readyReplicaCountByNodeId?.[nodeId]);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+// Owner decision 2026-10-04 (narrowed M2): a REPLACE moves one replica from
+// its source to its target. When the census names the holders it credits the
+// REPLACE only if completing it can add a distinct holder: the source node's
+// census holding must survive the removal (a source whose ONLY counted
+// replica is the one being replaced turns {S} into {T} and can never close
+// the gap), and, at any open gap, a target the census already counts is not
+// counted again ({A:3, T:1} with REPLACE A->T reads a gap of one, not
+// satisfied; verifier A4 2026-10-05). Without holder identity (a summary
+// written before the census published it) the grace is unchanged.
+// The source node's census holding is lost when the replaced replica is its
+// only counted one.
+function isPriorityRecoveryReplaceSourceHoldingLost(operationContext, holders) {
+  const sourceNodeId = String(operationContext?.sourceNodeId || '').trim();
+  return sourceNodeId.length > 0 &&
+    sourceNodeId !== String(operationContext?.targetNodeId || '').trim() &&
+    readPriorityRecoveryCensusHolderCount(holders, sourceNodeId) === 1;
+}
+
+function isPriorityRecoveryReplaceTargetAlreadyCounted(
+  operationContext,
+  holders,
+  spreadGap,
+) {
+  const normalizedSpreadGap = normalizePriorityRecoveryInteger(spreadGap);
+  return Number.isFinite(normalizedSpreadGap) &&
+    normalizedSpreadGap >= 1 &&
+    readPriorityRecoveryCensusHolderCount(
+      holders,
+      String(operationContext?.targetNodeId || '').trim(),
+    ) > 0;
+}
+
+function canPriorityRecoveryReplaceAddCensusHolder(
+  operationContext,
+  options = {},
+) {
+  const holders =
+    options.readyReplicaCountByNodeId &&
+    typeof options.readyReplicaCountByNodeId === 'object' ?
+      options.readyReplicaCountByNodeId :
+      null;
+  return holders === null || (
+    !isPriorityRecoveryReplaceSourceHoldingLost(operationContext, holders) &&
+    !isPriorityRecoveryReplaceTargetAlreadyCounted(
+      operationContext,
+      holders,
+      options.spreadGap,
+    )
+  );
+}
+
+// The ONE remaining intent credit (owner decisions 2026-10-04): a REPLACE in
+// its REMOVE-dispatch phase keeps a bounded grace while its replacement
+// promotes. Nothing else an operation does - an ADD in any phase, a REPLACE
+// outside remove-dispatch, a completed or failed operation, a SYNCING-status
+// voter row - contributes to "is it spread?": the census alone answers that.
 function isPriorityRecoverySpreadSatisfyingOperationContext(
   operationContext,
   options = {},
@@ -99,51 +163,26 @@ function isPriorityRecoverySpreadSatisfyingOperationContext(
   const eligibleTargetNodeIds = new Set(
     normalizePriorityRecoveryStringList(options.eligibleTargetNodeIds),
   );
-  if (eligibleTargetNodeIds.size === 0) {
-    return false;
-  }
   if (!eligibleTargetNodeIds.has(targetNodeId)) {
     return false;
   }
+  if (!isReplaceRemoveDispatchPhase(operationContext)) {
+    return false;
+  }
+  if (!canPriorityRecoveryReplaceAddCensusHolder(operationContext, options)) {
+    return false;
+  }
+  // A STALLED replacement (target never reached voter-ready within the stall
+  // budget) stops certifying so the under-spread partition reports the
+  // honest blocker and the owner re-drives the wedged source-removal; a
+  // progressing one keeps its bounded grace.
   const targetVoterReady =
     operationContext?.targetVisibilityState ===
     PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL;
-  if (isReplaceRemoveDispatchPhase(operationContext)) {
-    // A REPLACE in its REMOVE-dispatch phase certifies priority spread while it is
-    // still progressing: a voter-ready target genuinely satisfies spread, and a
-    // not-yet-voter-ready replacement keeps a bounded grace window. But a STALLED
-    // replacement (target never reached voter-ready within the stall budget) stops
-    // certifying so the under-spread partition reports the honest blocker and the
-    // owner re-drives the wedged source-removal. Unconditional (no flag); the stall
-    // scope keeps transient progress optimistic so it is not falsely un-masked.
-    return (
-      targetVoterReady ||
-      !isReplaceRemoveDispatchSpreadStalled(operationContext)
-    );
-  }
-  return targetVoterReady;
-}
-
-function resolvePriorityRecoverySpreadSatisfyingReasonCode(
-  satisfyingOperationContexts = [],
-) {
-  if (
-    satisfyingOperationContexts.some((operationContext) =>
-      isReplaceRemoveDispatchPhase(operationContext),
-    )
-  ) {
-    return PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.REPLACE_REMOVE_DISPATCH_PHASE_ON_ELIGIBLE_TARGET;
-  }
-  if (
-    satisfyingOperationContexts.some(
-      (operationContext) =>
-        operationContext?.targetVisibilityState ===
-        PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL,
-    )
-  ) {
-    return PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE;
-  }
-  return PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.UNSATISFIED;
+  return (
+    targetVoterReady ||
+    !isReplaceRemoveDispatchSpreadStalled(operationContext)
+  );
 }
 
 function resolvePriorityRecoveryRequiredSatisfyingTargetCount(
@@ -166,7 +205,6 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
     options.eligibleTargetNodeIds,
   );
   const satisfyingOperationIds = [];
-  const satisfyingOperationContexts = [];
   const satisfyingTargetNodeIds = new Set();
   const blockingOperationIds = [];
   for (const operationContext of activeOperationContexts) {
@@ -177,10 +215,11 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
     if (
       isPriorityRecoverySpreadSatisfyingOperationContext(operationContext, {
         eligibleTargetNodeIds,
+        readyReplicaCountByNodeId: options.readyReplicaCountByNodeId,
+        spreadGap: options.plannerSpreadGap,
       })
     ) {
       satisfyingOperationIds.push(operationId);
-      satisfyingOperationContexts.push(operationContext);
       satisfyingTargetNodeIds.add(String(operationContext.targetNodeId).trim());
       continue;
     }
@@ -206,9 +245,9 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
   if (satisfyingTargetNodeIds.size >= requiredSatisfyingTargetCount) {
     return Object.freeze({
       satisfied: true,
-      reasonCode: resolvePriorityRecoverySpreadSatisfyingReasonCode(
-        satisfyingOperationContexts,
-      ),
+      reasonCode:
+        PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON
+          .REPLACE_REMOVE_DISPATCH_PHASE_ON_ELIGIBLE_TARGET,
       satisfyingOperationIds: Object.freeze([...satisfyingOperationIds]),
       satisfyingOperationCount: satisfyingOperationIds.length,
       blockingOperationIds: Object.freeze([...blockingOperationIds]),
@@ -607,5 +646,4 @@ export {
   resolvePriorityRecoveryOperationContextFreshnessMs,
   resolvePriorityRecoveryReasonCodesFromReadiness,
   resolvePriorityRecoverySemanticState,
-  resolvePriorityRecoverySpreadSatisfyingReasonCode,
 };

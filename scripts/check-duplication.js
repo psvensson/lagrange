@@ -209,11 +209,16 @@ const RATCHET_TARGETS = [
     // after the handler's CREATE acceptance cases became refusal cases (C3).
     // 2026-10-04: tightened 713/27072 -> 708/26760 on the checker's hint
     // (shared convergence stub policy targets in assertions-test-helpers).
+    // 2026-10-04 (quest/one-spread-authority): tightened 717/27288 ->
+    // 715/27221 on the checker's hint after the one-spread-authority deletion
+    // (shared replay assertion, the three-case admin spread-authority fixture).
     // 2026-10-05: merge of quest/scenario-gates-ground-truth keeps the lower
     // of both sides' tightened values, then tightened 708/26760 -> 708/26738
     // on the checker's hint for the merged tree.
-    baselineCloneGroupCount: 708,
-    baselineDuplicatedLineCount: 26738,
+    // 2026-10-05: merge of quest/one-spread-authority keeps the lower values,
+    // then tightened 708/26738 -> 706/26671 on the checker's hint.
+    baselineCloneGroupCount: 706,
+    baselineDuplicatedLineCount: 26671,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

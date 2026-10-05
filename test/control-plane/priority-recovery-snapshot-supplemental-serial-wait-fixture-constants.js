@@ -52,17 +52,20 @@ export const MIXED_SUMMARY_SERIAL_WAIT_REMOVED_COMPLETED_AT_MS = 8100;
 export const MIXED_SUMMARY_SERIAL_WAIT_TARGET_CAPTURED_AT_MS = 8400;
 export const MIXED_SUMMARY_SERIAL_WAIT_SOURCE_TABLE_NAME = 'sql_transactions';
 export const MIXED_SUMMARY_SERIAL_WAIT_REASON_UNSATISFIED = 'unsatisfied';
+// SUPERSEDED (owner decision 2026-10-04): the live sibling SENDING REPLACE
+// with an operational target used to "already satisfy spread" and was dropped
+// as a serial-wait source. An operation outside the REPLACE remove-dispatch
+// grace credits nothing, so it stays the serial-wait source until terminal.
 export const MIXED_SUMMARY_SPREAD_SATISFIED_SERIAL_WAIT_TEST_NAME =
-    'tracked priority recovery decision snapshots ignore mixed-summary ' +
-    'serial-wait sources when the sibling live operation already ' +
-    'satisfies spread';
+    'tracked priority recovery decision snapshots keep a live sibling ' +
+    'operation with an operational target as the serial-wait source';
 export const MIXED_SUMMARY_SPREAD_SATISFIED_SERIAL_WAIT_MESSAGE =
-    'mixed-summary serial-wait normalization should prefer the live ' +
-    'sibling operation context when the latest workflow-owned operation ' +
-    'already satisfies spread on an eligible target';
+    'mixed-summary serial-wait normalization should keep the live ' +
+    'sibling operation as the serial-wait source: an operational target ' +
+    'outside the remove-dispatch grace credits no spread';
 export const MIXED_SUMMARY_SPREAD_SATISFIED_SERIAL_WAIT_PROGRESS_MESSAGE =
-    'when the live sibling operation already satisfies spread, the ' +
-    'blocked partition should return to explicit scheduling ownership';
+    'while the live sibling operation is open, the blocked partition ' +
+    'waits on workflow progress instead of creating an operation';
 export const MIXED_SUMMARY_SPREAD_SATISFIED_SERIAL_WAIT_TARGET_CAPTURED_AT_MS =
     8500;
 export const MIXED_SUMMARY_SPREAD_SATISFIED_SERIAL_WAIT_SOURCE_TABLE_NAME =
@@ -101,15 +104,20 @@ export const SPREAD_SATISFIED_SIBLING_SERIAL_WAIT_REASON_REPLACE_REMOVE_DISPATCH
     'replace_remove_dispatch_phase_on_eligible_target';
 export const SPREAD_SATISFIED_SIBLING_SERIAL_WAIT_REASON_PRIORITY_PARTITION_MISSING =
     'priority_partition_missing';
+// SUPERSEDED (owner decision 2026-10-04): the retained carrier used to
+// "collapse to a spread-satisfied carrier" through its operational target and
+// release the serial wait. Outside the REPLACE remove-dispatch grace an open
+// operation credits nothing, so the carrier stays the serial-wait source
+// until it is terminal.
 export const RETAINED_CARRIER_SERIAL_WAIT_RELEASE_TEST_NAME =
-    'tracked priority recovery decision snapshots release stale serial-wait ' +
-    'blockers once the only source collapses to a spread-satisfied carrier';
+    'tracked priority recovery decision snapshots keep a retained carrier ' +
+    'with an operational target as the serial-wait source';
 export const RETAINED_CARRIER_SERIAL_WAIT_RELEASE_MESSAGE =
-    'stale serial-wait blockers should clear once their only remaining ' +
-    'source is a spread-satisfied retained carrier';
+    'the retained carrier stays the serial-wait source: its operational ' +
+    'target credits no spread outside the remove-dispatch grace';
 export const RETAINED_CARRIER_SERIAL_WAIT_RELEASE_PROGRESS_MESSAGE =
-    'when no live serial-wait source remains, the blocked partition ' +
-    'should return to explicit scheduling ownership';
+    'while the retained carrier is open, the blocked partition waits on ' +
+    'workflow progress instead of creating an operation';
 export const RETAINED_CARRIER_SERIAL_WAIT_PRESERVE_TEST_NAME =
     'tracked priority recovery decision snapshots preserve live serial-wait ' +
     'sources behind retained carriers';

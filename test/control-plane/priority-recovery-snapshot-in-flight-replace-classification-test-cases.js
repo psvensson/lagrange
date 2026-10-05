@@ -6,6 +6,7 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
     PRIORITY_RECOVERY_ACTUATION_STATE_NO_ACTION_NEEDED,
     PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
     PRIORITY_RECOVERY_COMPLETION_STATE,
+    PRIORITY_RECOVERY_CONVERGENCE_STATE_SPREAD_GAP,
     PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
     PRIORITY_RECOVERY_NODE_ID_A,
     PRIORITY_RECOVERY_NODE_ID_B,
@@ -33,7 +34,7 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
     PRIORITY_RECOVERY_RAFT_ROLE_FOLLOWER,
     PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
     PRIORITY_RECOVERY_READY_ELIGIBLE_NODE_COUNT,
-    PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
+    PRIORITY_RECOVERY_REASON_ACTIVE_OPERATION_STILL_BLOCKS_SPREAD,
     PRIORITY_RECOVERY_REASON_PLANNER_READY,
     PRIORITY_RECOVERY_REPLICA_ID_SYNCING,
     PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
@@ -492,8 +493,8 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
     });
 
   test(
-    'priority recovery decision snapshots treat cache-visible SYNCING replace work ' +
-    'with an operational target on an eligible node as spread-satisfied in flight',
+    'priority recovery decision snapshots keep cache-visible SYNCING replace work ' +
+    'with an operational target on an eligible node recovering in flight',
     async (t) => {
       const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
         capturedAt: 5000,
@@ -563,36 +564,41 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
         [],
         'operational target ownership should clear blocker reasons for stale cache-visible syncing work',
       );
+      // SUPERSEDED (owner decision 2026-10-04, "delete the second
+      // authority"). Before: the SYNCING REPLACE's operational target
+      // satisfied spread (operational_target_visible_on_eligible_node) and
+      // the partition read spread_satisfied_in_flight although the census
+      // still showed the gap. Now the operation contributes nothing to the
+      // spread answer: it is the open blocking operation, and the partition
+      // reads recovering_in_flight until the census counts the target.
       t.same(
         targetSnapshot.spreadCompletion,
         {
-          satisfied: true,
-          reasonCode:
-          PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
-          satisfyingOperationIds: ['op-replace-syncing-operational-target'],
-          satisfyingOperationCount: 1,
-          blockingOperationIds: [],
-          blockingOperationCount: 0,
+          satisfied: false,
+          reasonCode: PRIORITY_RECOVERY_REASON_ACTIVE_OPERATION_STILL_BLOCKS_SPREAD,
+          satisfyingOperationIds: [],
+          satisfyingOperationCount: 0,
+          blockingOperationIds: ['op-replace-syncing-operational-target'],
+          blockingOperationCount: 1,
         },
-        'operational target ownership should satisfy spread completion without waiting for a stale syncing row to replay into ACTIVE first',
+        'an operational target never satisfies spread on the operation\'s behalf',
       );
       t.equal(
         targetSnapshot.semanticState,
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
-        'stale cache-visible syncing work should use the canonical spread-satisfied semantic state once operational target ownership is visible',
+        PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        'stale cache-visible syncing work stays recovering in flight while the census shows the gap',
       );
-      t.equal(
+      t.not(
         targetSnapshot.completion?.state,
         PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-        'the canonical completion state should match the spread-satisfied semantic state',
+        'the completion state no longer claims spread',
       );
       t.same(
         targetSnapshot.observation,
         {
           workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
           visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
-          convergenceState:
-          PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+          convergenceState: PRIORITY_RECOVERY_CONVERGENCE_STATE_SPREAD_GAP,
           provenance: {
             capturedAt: 5000,
             workflowSource: 'system_table_cache',
@@ -600,13 +606,13 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
             semanticSource: 'priority_recovery_snapshot',
           },
         },
-        'observation should preserve cache visibility while still surfacing the canonical spread-satisfied convergence state',
+        'observation should preserve cache visibility while surfacing the recovering convergence state',
       );
     },
   );
 
   test(
-    'priority recovery decision snapshots treat syncing follower target rows with address as operational target evidence',
+    'priority recovery decision snapshots do not let syncing follower target rows bridge the status lag into spread',
     async (t) => {
       const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
         capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
@@ -686,25 +692,30 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
       );
 
       t.ok(targetSnapshot, 'target partition snapshot should exist');
+      // SUPERSEDED (owner decision 2026-10-04). Before: a SYNCING-status
+      // follower target row bridged the status-persistence lag and satisfied
+      // spread. That is "SYNCING as a second voter authority": the census
+      // excludes SYNCING rows, and the target's ACTIVE write is event-driven
+      // (persistReplicaStatusWithRetry), so nothing waits on a timer for it.
+      // Now the operation stays the open blocker until that write lands.
       t.same(
         targetSnapshot.spreadCompletion,
         {
-          satisfied: true,
-          reasonCode:
-          PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
-          satisfyingOperationIds: [
+          satisfied: false,
+          reasonCode: PRIORITY_RECOVERY_REASON_ACTIVE_OPERATION_STILL_BLOCKS_SPREAD,
+          satisfyingOperationIds: [],
+          satisfyingOperationCount: 0,
+          blockingOperationIds: [
             PRIORITY_RECOVERY_OPERATION_ID_SYNCING_FOLLOWER_TARGET,
           ],
-          satisfyingOperationCount: 1,
-          blockingOperationIds: [],
-          blockingOperationCount: 0,
+          blockingOperationCount: 1,
         },
-        'voter-ready syncing rows should satisfy spread while status persistence lags',
+        'a syncing follower row does not satisfy spread while status persistence lags',
       );
       t.equal(
         targetSnapshot.semanticState,
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
-        'syncing follower target evidence should not remain recovering in flight',
+        PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        'syncing follower target evidence remains recovering in flight',
       );
     },
   );

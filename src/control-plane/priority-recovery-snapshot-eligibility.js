@@ -184,9 +184,9 @@ function isPriorityRecoverySpreadProgressDecisionSnapshot(snapshot) {
     snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
       PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.OPERATION
     ] || {};
+  // Spread progress reads the partition's semantic state (the census answer
+  // plus the one remove-dispatch grace), never a bare spreadCompletion flag.
   return (
-    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SPREAD_COMPLETION]
-      ?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SATISFIED] === true ||
     semanticState ===
       PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT ||
     semanticState === PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED ||

@@ -264,3 +264,119 @@ test('D6: the terminal source fence is the node lifecycle owner\'s own ' +
   t.equal(isTerminalNodeLifecycleSource(null, TEST_BOOT_INCARNATION), false,
     'an unobserved row is not a terminal observation');
 });
+
+// V3a adoption (commit D, heartbeat-service-write-coalescing.js): before this
+// process's first endpoint write, the first heartbeat ADOPTS the endpoint row
+// this boot already published - same boot incarnation, same routing content,
+// updated_at inside the refresh interval - instead of rewriting it. Each
+// condition is load-bearing; the witnesses below pin them one by one.
+const ADOPTION_REFRESH_INTERVAL_MS = 300_000;
+
+function createAdoptionHeartbeat(world, now, bootIncarnation) {
+  return new HeartbeatService({
+    nodeId: NODE_ID,
+    nodeAddress: NODE_ADDRESS,
+    bootIncarnation,
+    systemTableCache: world.cache,
+    controlPlaneSystemTableGateway: world.gateway,
+    nodeLifecyclePublication: new NodeLifecyclePublication({
+      gateway: world.gateway,
+      leaseAuthority: new NodeReadyLeaseAuthority({readyLeaseMs: 15_000}),
+      now,
+    }),
+    endpointRefreshIntervalMs: ADOPTION_REFRESH_INTERVAL_MS,
+    nodeMetadataMinUpdateIntervalMs: MIN_UPDATE_INTERVAL_MS,
+    nodeMetadataMaxStalenessMs: MAX_STALENESS_MS,
+    now,
+  });
+}
+
+function createAdoptionWorld({endpointIncarnation, endpointUpdatedAt,
+  nodeIncarnation = endpointIncarnation}) {
+  const world = createDurableWorld();
+  world.rows[SYSTEM_TABLE_NAME.NODES] = {
+    ...world.rows[SYSTEM_TABLE_NAME.NODES],
+    [COLUMN.BOOT_INCARNATION]: nodeIncarnation,
+  };
+  world.rows[SYSTEM_TABLE_NAME.NODE_ENDPOINTS] = {
+    ...world.rows[SYSTEM_TABLE_NAME.NODE_ENDPOINTS],
+    [COLUMN.BOOT_INCARNATION]: endpointIncarnation,
+    [COLUMN.UPDATED_AT]: endpointUpdatedAt,
+  };
+  return world;
+}
+
+test('V3a adoption: the first heartbeat adopts the join-born endpoint row of ' +
+  'this boot (same incarnation, same content, fresh)', async (t) => {
+  initEnv();
+  const world = createAdoptionWorld({
+    endpointIncarnation: TEST_BOOT_INCARNATION,
+    endpointUpdatedAt: FIRST_TICK - 1_000,
+  });
+  const service = createAdoptionHeartbeat(world, () => FIRST_TICK,
+    TEST_BOOT_INCARNATION);
+  await service.sendHeartbeat(null, null);
+  t.same(world.endpointWrites, [], 'adopted: no endpoint rewrite');
+});
+
+test('V3a adoption: a restart with the same address and a NEW incarnation ' +
+  'never adopts the previous incarnation\'s row - it writes its endpoint',
+async (t) => {
+  initEnv();
+  const nextIncarnation = TEST_BOOT_INCARNATION + 1;
+  const world = createAdoptionWorld({
+    endpointIncarnation: TEST_BOOT_INCARNATION,
+    endpointUpdatedAt: FIRST_TICK - 1_000,
+    nodeIncarnation: nextIncarnation,
+  });
+  const service = createAdoptionHeartbeat(world, () => FIRST_TICK,
+    nextIncarnation);
+  await service.sendHeartbeat(null, null);
+  t.ok(world.endpointWrites.length > 0,
+    'the new incarnation writes its own endpoint row');
+  t.equal(
+    world.rows[SYSTEM_TABLE_NAME.NODE_ENDPOINTS][COLUMN.BOOT_INCARNATION],
+    nextIncarnation,
+    'the endpoint row now carries the new incarnation',
+  );
+});
+
+test('V3a adoption: a row of this boot older than the refresh interval is ' +
+  'not current - the first heartbeat refreshes it', async (t) => {
+  initEnv();
+  const world = createAdoptionWorld({
+    endpointIncarnation: TEST_BOOT_INCARNATION,
+    endpointUpdatedAt: FIRST_TICK - ADOPTION_REFRESH_INTERVAL_MS - 1,
+  });
+  const service = createAdoptionHeartbeat(world, () => FIRST_TICK,
+    TEST_BOOT_INCARNATION);
+  await service.sendHeartbeat(null, null);
+  t.equal(world.endpointWrites.length, 1, 'the stale row is rewritten');
+  t.equal(world.rows[SYSTEM_TABLE_NAME.NODE_ENDPOINTS][COLUMN.UPDATED_AT],
+    FIRST_TICK, 'refreshed at this tick');
+});
+
+test('V3a adoption happens only before this process\'s first endpoint write: ' +
+  'afterwards the refresh follows the process\'s own upsert record', async (t) => {
+  initEnv();
+  const world = createAdoptionWorld({
+    endpointIncarnation: TEST_BOOT_INCARNATION,
+    endpointUpdatedAt: FIRST_TICK - ADOPTION_REFRESH_INTERVAL_MS - 1,
+  });
+  let clock = FIRST_TICK;
+  const service = createAdoptionHeartbeat(world, () => clock,
+    TEST_BOOT_INCARNATION);
+  await service.sendHeartbeat(null, null);
+  t.equal(world.endpointWrites.length, 1, 'this process wrote once');
+  // Another writer at this incarnation touches the row with identical
+  // content; this process's own refresh falls due.
+  clock = FIRST_TICK + ADOPTION_REFRESH_INTERVAL_MS;
+  world.rows[SYSTEM_TABLE_NAME.NODE_ENDPOINTS] = {
+    ...world.rows[SYSTEM_TABLE_NAME.NODE_ENDPOINTS],
+    [COLUMN.UPDATED_AT]: clock - 1_000,
+  };
+  world.endpointWrites.length = 0;
+  await service.sendHeartbeat(null, null);
+  t.equal(world.endpointWrites.length, 1,
+    'the due refresh is written, not adopted from the touched row');
+});

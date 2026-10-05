@@ -560,7 +560,8 @@
       "tests": [
         "test/rebalancer/spread-cure-transition-authorization.test.js",
         "test/rebalancer/spread-cure-transition-authorization-row.test.js",
-        "test/partition/learner-promotion-count-check-inputs.test.js"
+        "test/partition/learner-promotion-count-check-inputs.test.js",
+        "test/partition/learner-promotion-count-check-budget-walk.test.js"
       ]
     },
     "partition-write-answer-retry-classification": {
@@ -1125,7 +1126,8 @@
       "witnessTests": [
         "test/rebalancer/spread-cure-transition-authorization.test.js",
         "test/rebalancer/spread-cure-transition-authorization-row.test.js",
-        "test/partition/learner-promotion-count-check-inputs.test.js"
+        "test/partition/learner-promotion-count-check-inputs.test.js",
+        "test/partition/learner-promotion-count-check-budget-walk.test.js"
       ]
     },
     "partition-session-transaction-store-persistence-admission": {

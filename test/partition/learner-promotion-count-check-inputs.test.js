@@ -42,9 +42,11 @@ import {
   LIFECYCLE_REASON,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {
-  INITIAL_PARTITION_IDS,
-  SYSTEM_TABLE_NAME,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
+  CRITICAL_PARTITION_ID,
+  FOLLOWER_ROLE,
+  LEADER_ROLE,
+  LEARNER_ROLE,
+} from './learner-promotion-count-check-shared-fixtures.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -55,11 +57,8 @@ if (!LoggingService.getInstance().isInitialized()) {
   LoggingService.getInstance().initialize({level: 'error'});
 }
 
-// The live shape: schema_operations-p1 is both bootstrap-critical and a
-// priority control-plane partition, so it is the partition whose learner the
-// nightlies refuse. users-p1 is neither.
-const CRITICAL_PARTITION_ID =
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS];
+// CRITICAL_PARTITION_ID (shared fixtures) is the live shape: bootstrap-critical
+// and a priority control-plane partition. users-p1 is neither.
 const ORDINARY_PARTITION_ID = 'users-p1';
 const LEARNER_REPLICA_ID = `${CRITICAL_PARTITION_ID}-r5`;
 const LEARNER_NODE_ID = 'node-2';
@@ -73,10 +72,10 @@ const DEFERRED_RECHECK = 'deferred_recheck';
 const TARGET_SOURCE_PARTITION_ROW = 'partition_row_replica_count';
 const TARGET_SOURCE_UNDECLARED = 'undeclared';
 const ORIGIN_UNSTATED = 'unstated';
-const SUMMARY_SOURCE_UNRECORDED = 'unrecorded';
-const LEARNER_ROLE = 'learner';
-const FOLLOWER_ROLE = 'follower';
-const LEADER_ROLE = 'leader';
+// SUPERSEDED (owner decision 2026-10-04, D7): the summary-source labels
+// (derived / closure_refreshed / unrecorded) and their owner are deleted with
+// the closure's synthesized summary; the guard's summary is the census.
+const SUMMARY_SOURCE_CENSUS = 'census';
 const IN_PROGRESS = 'in_progress';
 const ADD_REPLICA_STEP = 'ADD_REPLICA';
 const STEPS_HISTORY_READ = 'read:steps_history';
@@ -692,8 +691,8 @@ test('a count-check refusal logs the inputs the decision was made on', async () 
   assert.equal(recovery.prioritySummary.readyEligibleNodeCount, 3);
   assert.deepEqual(recovery.prioritySummary.blockedPartitionIds, []);
   assert.equal(recovery.prioritySummary.blockedPartitionIdsWithheld, 0);
-  assert.equal(recovery.prioritySummary.source, SUMMARY_SOURCE_UNRECORDED,
-    'a hand-built summary was chosen by nobody, and the guard says so');
+  assert.equal(recovery.prioritySummary.source, SUMMARY_SOURCE_CENSUS,
+    'the guard names the census, the one producer of the summary');
 
   assert.equal(recovery.planner.ready, true);
   assert.equal(recovery.planner.spreadGap, 0);

@@ -173,7 +173,6 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     'Priority recovery drain settled stale operation without ' +
     'source-retirement evidence',
   PRIORITY_SPREAD: 'priority spread',
-  PRIORITY_SPREAD_HAS_NOT_CONVERGED: ' priority spread has not converged',
   PROGRESS: 'progress',
   PROJECTED_VOTER_DASH_READY_SPREAD: 'projected voter-ready spread',
   PROJECTED_VOTER_DASH_READY_SPREAD_WOULD_FALL_BELOW_THE_PUBLISHED:

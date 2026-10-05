@@ -26,6 +26,17 @@ function buildPriorityRecoveryExclusionReasonCounts(partition) {
     {};
 }
 
+// The census's holder identities (node -> ready voter replica count), when
+// the summary carries them. Absent on a summary written before the census
+// published them: the consumer then has no holder identity, never an empty
+// holder set.
+function buildPriorityRecoveryReadyHolderCounts(partition) {
+  return partition?.readyReplicaCountByNodeId &&
+    typeof partition.readyReplicaCountByNodeId === 'object' ?
+    {readyReplicaCountByNodeId: {...partition.readyReplicaCountByNodeId}} :
+    {};
+}
+
 function buildPriorityRecoveryBlockedPartitionPlanner(partition) {
   const partitionId = String(partition?.partitionId || '').trim();
   if (partitionId.length === 0) {
@@ -49,6 +60,7 @@ function buildPriorityRecoveryBlockedPartitionPlanner(partition) {
       partition?.readyReplicaCount,
     ),
     ...buildPriorityRecoveryExclusionReasonCounts(partition),
+    ...buildPriorityRecoveryReadyHolderCounts(partition),
     spreadGap,
     ready: spreadGap === 0,
     reasons: buildPriorityRecoveryPlannerReasons(spreadGap),

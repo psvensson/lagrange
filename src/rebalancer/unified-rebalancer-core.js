@@ -3,6 +3,9 @@ import {UnifiedRebalancerRebalanceLoop} from './unified-rebalancer-rebalance-loo
 import {REBALANCER_EVALUATION_METHODS} from './rebalancer-evaluation-methods.js';
 import {REBALANCER_NODE_EVENT_METHODS} from './rebalancer-node-event-methods.js';
 import {REBALANCER_PLANNING_GATE_METHODS} from './rebalancer-planning-gate-methods.js';
+import {
+  REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS,
+} from './rebalancer-local-mutation-readiness-wake.js';
 import {REBALANCER_TRANSPORT_PRESSURE_METHODS} from './rebalancer-transport-pressure-methods.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as FOLLOW_UP_SHARED} from './unified-rebalancer-follow-up-shared.js';
 
@@ -104,6 +107,7 @@ class UnifiedRebalancerCore extends UnifiedRebalancerRebalanceLoop {
     this.cancelStabilizationTimer();
     this.unbindCoordinatorProgressListeners();
     this.unbindPriorityRecoveryVisibilityCacheListener();
+    this.disarmLocalMutationReadinessWake();
     this.releaseOwnedControlPlaneReadinessService();
     this.lastStateChangeTime = null;
     this.initialized = false;
@@ -118,6 +122,7 @@ class UnifiedRebalancerCore extends UnifiedRebalancerRebalanceLoop {
 Object.assign(
   UnifiedRebalancerCore.prototype,
   REBALANCER_PLANNING_GATE_METHODS,
+  REBALANCER_LOCAL_MUTATION_READINESS_WAKE_METHODS,
   REBALANCER_TRANSPORT_PRESSURE_METHODS,
   REBALANCER_EVALUATION_METHODS,
   REBALANCER_NODE_EVENT_METHODS,

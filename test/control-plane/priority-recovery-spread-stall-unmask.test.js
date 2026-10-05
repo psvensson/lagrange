@@ -22,7 +22,13 @@
  *  - a STALLED un-voter-ready remove-dispatch op no longer certifies, so
  *    buildPriorityRecoverySpreadCompletion flips satisfied:true → false;
  *  - a voter-ready (ACTIVE_OPERATIONAL) target certifies regardless of stall;
- *  - non-dispatch-phase ops certify iff voter-ready (unchanged);
+ *  - non-dispatch-phase ops never certify (owner decision 2026-10-04: the
+ *    census alone answers "is it spread?"; superseded the earlier "certify iff
+ *    voter-ready" row, which double-counted a target the census already holds);
+ *  - the kept remove-dispatch grace is narrowed by the census's holder
+ *    identity: no credit when the source's only counted replica is the one
+ *    being replaced, and no double count of an already-counted target at
+ *    any open gap;
  *  - the strict `plannerReady === true` path stays satisfied regardless.
  */
 
@@ -32,6 +38,18 @@ import {
   isPriorityRecoverySpreadSatisfyingOperationContext,
 } from '../../src/control-plane/priority-recovery-snapshot-ingress.js';
 import {buildPriorityRecoveryReplicaOperationContext} from '../../src/control-plane/priority-recovery-snapshot-rebalancer.js';
+import {
+  buildPriorityRecoveryDecisionSnapshot,
+  buildPriorityRecoveryDecisionSnapshots,
+  buildPriorityRecoveryOperationAssessment,
+  buildPriorityRecoveryOperationContextFromRecord,
+  buildPriorityRecoveryPartitionAssessment,
+  shouldPriorityRecoveryOperationBlockPlanning,
+} from '../../src/control-plane/priority-recovery-snapshot.js';
+import {
+  buildDerivedPriorityPartitionSummary,
+} from '../../src/control-plane/membership-publication-priority-partition-summary.js';
+import {OperationWorkflowRecoveryTimeout} from '../../src/rebalancer/operation-workflow-recovery-timeout.js';
 
 const ELIGIBLE = ['nodeB'];
 // Mirrors PRIORITY_RECOVERY_REPLACE_REMOVE_DISPATCH_SPREAD_STALL_BUDGET_MS (60s).
@@ -122,15 +140,28 @@ test('a voter-ready (ACTIVE_OPERATIONAL) remove-dispatch op certifies even when 
   t.end();
 });
 
-test('a non-dispatch-phase op certifies iff its target is ACTIVE_OPERATIONAL (stall-agnostic)', (t) => {
-  t.equal(
-    isPriorityRecoverySpreadSatisfyingOperationContext(
-      {operationId: 'add', type: 'ADD', workflowStep: 'SYNCING', targetNodeId: 'nodeB', targetVisibilityState: 'active_operational', stepAgeMs: STALLED_STEP_AGE_MS},
-      {eligibleTargetNodeIds: ELIGIBLE},
-    ),
-    true,
-    'active non-dispatch target certifies (even when stalled)',
-  );
+// SUPERSEDED (owner decision 2026-10-04, "delete the second authority"):
+// this test asserted that a non-dispatch op with an ACTIVE_OPERATIONAL target
+// certifies spread. That credit double-counted a target the census already
+// counts (the run-1 would_exceed_target_replica_count refusals). It now
+// asserts that no non-dispatch op certifies, in any visibility state.
+test('a non-dispatch-phase op never certifies spread, whatever its target visibility', (t) => {
+  for (const operationContext of [
+    {operationId: 'add', type: 'ADD', workflowStep: 'SYNCING', targetNodeId: 'nodeB', targetVisibilityState: 'active_operational', stepAgeMs: STALLED_STEP_AGE_MS},
+    {operationId: 'add-done', type: 'ADD', workflowStep: 'COMPLETED', status: 'completed', targetNodeId: 'nodeB', targetVisibilityState: 'active_operational'},
+    {operationId: 'replace-sync', type: 'REPLACE', workflowStep: 'SYNCING', targetNodeId: 'nodeB', targetVisibilityState: 'active_operational'},
+    {operationId: 'replace-done', type: 'REPLACE', workflowStep: 'COMPLETED', status: 'completed', targetNodeId: 'nodeB', targetVisibilityState: 'active_operational'},
+    {operationId: 'replace-failed', type: 'REPLACE', workflowStep: 'FAILED', status: 'failed', targetNodeId: 'nodeB', targetVisibilityState: 'active_operational'},
+  ]) {
+    t.equal(
+      isPriorityRecoverySpreadSatisfyingOperationContext(
+        operationContext,
+        {eligibleTargetNodeIds: ELIGIBLE},
+      ),
+      false,
+      `${operationContext.operationId} contributes nothing to spread`,
+    );
+  }
   t.equal(
     isPriorityRecoverySpreadSatisfyingOperationContext(
       {operationId: 'add', type: 'ADD', workflowStep: 'SYNCING', targetNodeId: 'nodeB', targetVisibilityState: 'non_active', stepAgeMs: PROGRESSING_STEP_AGE_MS},
@@ -269,6 +300,503 @@ test('spread completion covers the numeric gap with distinct eligible targets', 
     distinctTargetCoverage.satisfied,
     true,
     'two distinct eligible targets cover the two-node spread gap',
+  );
+  t.end();
+});
+
+// Narrowed M2 (owner decision 2026-10-04, decision 3). The census's holder
+// identity is the planner entry's readyReplicaCountByNodeId.
+test('narrowed grace: no credit when the REPLACE source is the census holder it would remove', (t) => {
+  const replaceFromSoleHolder = dispatchPhaseOpUnverified({
+    sourceNodeId: 'nodeA',
+    targetNodeId: 'nodeB',
+    targetVisibilityState: 'active_operational',
+  });
+  t.equal(
+    isPriorityRecoverySpreadSatisfyingOperationContext(replaceFromSoleHolder, {
+      eligibleTargetNodeIds: ['nodeA', 'nodeB'],
+      readyReplicaCountByNodeId: {nodeA: 1, nodeC: 1},
+      spreadGap: 1,
+    }),
+    false,
+    'a source whose only counted replica is replaced turns {A,C} into {B,C}: no credit',
+  );
+  const completion = buildPriorityRecoverySpreadCompletion({
+    activeOperationContexts: [replaceFromSoleHolder],
+    eligibleTargetNodeIds: ['nodeA', 'nodeB'],
+    readyReplicaCountByNodeId: {nodeA: 1, nodeC: 1},
+    plannerSpreadGap: 1,
+  });
+  t.equal(completion.satisfied, false, 'the gap stays open');
+  t.same(completion.blockingOperationIds, ['replace-dispatch-op'],
+    'the REPLACE is an honest blocking operation');
+  t.equal(
+    isPriorityRecoverySpreadSatisfyingOperationContext(replaceFromSoleHolder, {
+      eligibleTargetNodeIds: ['nodeA', 'nodeB'],
+      readyReplicaCountByNodeId: {nodeA: 3},
+      spreadGap: 2,
+    }),
+    true,
+    'a source node that keeps another counted replica can still gain a holder',
+  );
+  t.end();
+});
+
+test('narrowed grace: at a gap of two an already-counted target is not counted again', (t) => {
+  const countedTarget = dispatchPhaseOpUnverified({
+    operationId: 'replace-counted',
+    sourceNodeId: 'nodeD',
+    targetNodeId: 'nodeB',
+    targetVisibilityState: 'active_operational',
+  });
+  const newTarget = dispatchPhaseOpUnverified({
+    operationId: 'replace-new',
+    sourceNodeId: 'nodeD',
+    targetNodeId: 'nodeC',
+    targetVisibilityState: 'active_operational',
+  });
+  const completion = buildPriorityRecoverySpreadCompletion({
+    activeOperationContexts: [countedTarget, newTarget],
+    eligibleTargetNodeIds: ['nodeA', 'nodeB', 'nodeC'],
+    readyReplicaCountByNodeId: {nodeB: 1},
+    plannerSpreadGap: 2,
+  });
+  t.equal(completion.satisfied, false,
+    'one counted target plus one new target never covers a gap of two');
+  t.same(completion.satisfyingOperationIds, ['replace-new'],
+    'only the target the census does not already count is credited');
+  t.end();
+});
+
+// Verifier A4 (2026-10-05): the double count also arises at a CURRENT gap of
+// one (original gap two) - {A:3, T:1} with REPLACE A->T and T already a voter
+// the census counts. Seen live for replica_operations-p1 (runs 2 and 3). The
+// census is the one authority: an already-counted target is never counted again.
+test('narrowed grace: at a gap of one an already-counted target is not counted again', (t) => {
+  const countedVoterTarget = dispatchPhaseOpUnverified({
+    sourceNodeId: 'nodeA',
+    targetNodeId: 'nodeB',
+    targetVisibilityState: 'active_operational',
+  });
+  t.equal(
+    isPriorityRecoverySpreadSatisfyingOperationContext(countedVoterTarget, {
+      eligibleTargetNodeIds: ['nodeA', 'nodeB'],
+      readyReplicaCountByNodeId: {nodeA: 3, nodeB: 1},
+      spreadGap: 1,
+    }),
+    false,
+    '{A:3, B:1} REPLACE A->B: the counted target B earns no credit',
+  );
+  const completion = buildPriorityRecoverySpreadCompletion({
+    activeOperationContexts: [countedVoterTarget],
+    eligibleTargetNodeIds: ['nodeA', 'nodeB'],
+    readyReplicaCountByNodeId: {nodeA: 3, nodeB: 1},
+    plannerSpreadGap: 1,
+  });
+  t.equal(completion.satisfied, false, 'the census gap of one stays open');
+  t.same(completion.satisfyingOperationIds, [], 'no satisfying operation');
+  t.equal(
+    isPriorityRecoverySpreadSatisfyingOperationContext(
+      dispatchPhaseOpUnverified({
+        sourceNodeId: 'nodeA',
+        targetNodeId: 'nodeC',
+        targetVisibilityState: 'non_active',
+      }),
+      {
+        eligibleTargetNodeIds: ['nodeA', 'nodeC'],
+        readyReplicaCountByNodeId: {nodeA: 2, nodeB: 1},
+        spreadGap: 1,
+      },
+    ),
+    true,
+    'R1: {A:2, B:1} REPLACE A->C with C not yet counted keeps the grace',
+  );
+  t.end();
+});
+
+test('narrowed grace: a progressing un-voter-ready REPLACE target keeps its grace', (t) => {
+  const progressing = dispatchPhaseOpUnverified({
+    sourceNodeId: 'nodeD',
+    stepAgeMs: PROGRESSING_STEP_AGE_MS,
+  });
+  const completion = buildPriorityRecoverySpreadCompletion({
+    activeOperationContexts: [progressing],
+    eligibleTargetNodeIds: ELIGIBLE,
+    readyReplicaCountByNodeId: {nodeA: 1, nodeC: 1},
+    plannerSpreadGap: 1,
+  });
+  t.equal(completion.satisfied, true,
+    'a non-holder source and an uncounted progressing target keep the grace');
+  t.equal(completion.reasonCode, 'replace_remove_dispatch_phase_on_eligible_target');
+  t.end();
+});
+
+// Formation-shape witnesses (owner decision 2026-10-04, "delete the second
+// authority"; diagnosis ../diag-satisfied-summary, run-1 rows): five nodes,
+// schema_operations-p1 held by r1-r3 on A and r4 on B (ACTIVE follower),
+// r5 joining C (SYNCING learner); ADD r4->B done, ADD r5->C in flight. The
+// census shows two holders and a gap of one; no operation may close it.
+const FORMATION_NODES = ['node-a', 'node-b', 'node-c', 'node-d', 'node-e'];
+const FORMATION_PARTITION = 'schema_operations-p1';
+const FORMATION_OTHER_TABLES = [
+  'control_plane_publications',
+  'replica_operations',
+  'sql_transaction_participants',
+  'sql_transactions',
+  'sql_write_operations',
+];
+
+function formationServiceRow(replica, nodeId, status, role) {
+  return {
+    service_id: `${FORMATION_PARTITION}-${replica}`,
+    service_type: 'partition',
+    partition_id: FORMATION_PARTITION,
+    node_id: nodeId,
+    status,
+    raft_role: role,
+    address: `${nodeId}:1`,
+  };
+}
+
+function formationAddRow(id, replica, nodeId, status, step, completedAt) {
+  return {
+    operation_id: id,
+    type: 'ADD',
+    partition_id: FORMATION_PARTITION,
+    entity_type: 'partition',
+    entity_id: FORMATION_PARTITION,
+    replica_id: `${FORMATION_PARTITION}-${replica}`,
+    source_node_id: 'node-a',
+    target_node_id: nodeId,
+    status,
+    workflow_step: step,
+    created_at: 1000,
+    updated_at: 2000,
+    completed_at: completedAt,
+    steps_history: '[]',
+  };
+}
+
+function formationRows({
+  r4OpStatus = 'active',
+  r4Step = 'ACTIVE',
+  r4CompletedAt = 2000,
+  withR4Op = true,
+  withR5 = true,
+} = {}) {
+  const serviceRows = [
+    formationServiceRow('r1', 'node-a', 'active', 'leader'),
+    formationServiceRow('r2', 'node-a', 'active', 'follower'),
+    formationServiceRow('r3', 'node-a', 'active', 'follower'),
+    formationServiceRow('r4', 'node-b', 'active', 'follower'),
+  ];
+  if (withR5) {
+    serviceRows.push(formationServiceRow('r5', 'node-c', 'syncing', 'learner'));
+  }
+  for (const tableId of FORMATION_OTHER_TABLES) {
+    ['node-a', 'node-b', 'node-c'].forEach((nodeId, index) => {
+      serviceRows.push({
+        service_id: `${tableId}-p1-r${index + 1}`,
+        service_type: 'partition',
+        partition_id: `${tableId}-p1`,
+        node_id: nodeId,
+        status: 'active',
+        raft_role: index === 0 ? 'leader' : 'follower',
+        address: `${nodeId}:1`,
+      });
+    });
+  }
+  const partitionRows = [FORMATION_PARTITION, ...FORMATION_OTHER_TABLES.map(
+    (tableId) => `${tableId}-p1`,
+  )].map((partitionId) => ({
+    partition_id: partitionId,
+    table_id: partitionId.replace(/-p1$/, ''),
+    replica_count: 3,
+  }));
+  const replicaOperationRows = [];
+  if (withR4Op) {
+    replicaOperationRows.push(formationAddRow(
+      'op-r4', 'r4', 'node-b', r4OpStatus, r4Step, r4CompletedAt,
+    ));
+  }
+  if (withR5) {
+    replicaOperationRows.push(formationAddRow(
+      'op-r5', 'r5', 'node-c', 'syncing', 'SYNCING', null,
+    ));
+  }
+  return {serviceRows, partitionRows, replicaOperationRows};
+}
+
+function runFormationShape(options = {}) {
+  const rows = formationRows(options);
+  const census = buildDerivedPriorityPartitionSummary({
+    serviceRows: rows.serviceRows,
+    partitionRows: rows.partitionRows,
+    readinessByNodeId: {},
+    projectedServingNodeIds: FORMATION_NODES,
+    locallyEligibleNodeIds: FORMATION_NODES,
+    publishedActiveNodeIds: FORMATION_NODES,
+  });
+  const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+    capturedAt: 3000,
+    publicationConvergence: {
+      publicationEpoch: 8,
+      publicationStatus: 'PUBLISHED',
+      publishedActiveNodeIds: FORMATION_NODES,
+      pendingAckNodeIds: [],
+      priorityPartitionSummary: census,
+      recoveryActiveNodeIds: FORMATION_NODES,
+    },
+    readinessByNodeId: {},
+    workflowAdmissionsByWorkflowId: {},
+    replicaOperationRows: rows.replicaOperationRows,
+    serviceRows: rows.serviceRows,
+  });
+  const snapshot = decisionSnapshots.snapshots.find(
+    (entry) => entry.partitionId === FORMATION_PARTITION,
+  );
+  const r5Assessment = buildPriorityRecoveryOperationAssessment({
+    operation: {
+      operationId: 'op-r5',
+      type: 'ADD',
+      partitionId: FORMATION_PARTITION,
+      targetNodeId: 'node-c',
+      status: 'syncing',
+      workflowStep: 'SYNCING',
+      replicaId: `${FORMATION_PARTITION}-r5`,
+    },
+    priorityPartitionSummary: census,
+    effectiveEligibleNodeIds: FORMATION_NODES,
+    nowMs: 3000,
+  });
+  return {census, decisionSnapshots, snapshot, r5Assessment};
+}
+
+test('(a)-(c),(g) run-1 shape: the census gap stands, nothing credits it, the in-flight ADD holds planning', (t) => {
+  const {census, decisionSnapshots, snapshot, r5Assessment} =
+    runFormationShape();
+  const blocked = census.blockedPartitions.find(
+    (entry) => entry.partitionId === FORMATION_PARTITION,
+  );
+  t.equal(blocked.readyDistinctNodeCount, 2, '(a) two ready holders');
+  t.equal(blocked.spreadGap, 1, '(a) gap one');
+  t.same(blocked.readyReplicaCountByNodeId, {'node-a': 3, 'node-b': 1},
+    '(a) the census names its holders');
+  t.equal(snapshot.spreadCompletion.satisfied, false,
+    '(b) the completed ADD r4 does not satisfy spread');
+  t.same(snapshot.spreadCompletion.satisfyingOperationIds, [],
+    '(b) no satisfying operation');
+  t.equal(snapshot.semanticState, 'recovering_in_flight', '(b)');
+  t.equal(decisionSnapshots.closureWitness.state, 'closure_pending',
+    '(c) the closure stays pending');
+  t.notOk(
+    decisionSnapshots.closureWitness.refreshedPriorityPartitionSummary
+      ?.satisfied,
+    '(c) the closure never synthesizes a satisfied summary',
+  );
+  t.equal(shouldPriorityRecoveryOperationBlockPlanning(r5Assessment), true,
+    '(g) the in-flight ADD r5 blocks planning for its partition');
+  t.end();
+});
+
+test('(d) run-3 shape: r4 still SYNCING as an operation keeps the gap honest', (t) => {
+  const {snapshot, decisionSnapshots} = runFormationShape({
+    r4OpStatus: 'syncing',
+    r4Step: 'SYNCING',
+    r4CompletedAt: null,
+  });
+  t.equal(snapshot.spreadCompletion.satisfied, false);
+  t.equal(decisionSnapshots.closureWitness.state, 'closure_pending');
+  t.end();
+});
+
+test('(e) control without op-r4 reads the same as the run-1 shape', (t) => {
+  const {snapshot, decisionSnapshots} = runFormationShape({withR4Op: false});
+  t.equal(snapshot.semanticState, 'recovering_in_flight');
+  t.equal(decisionSnapshots.closureWitness.state, 'closure_pending');
+  t.end();
+});
+
+test('H5: a completed follow-up ADD with spread really reached reads converged', (t) => {
+  const rows = formationRows({withR5: false});
+  rows.serviceRows.push(formationServiceRow('r5', 'node-c', 'active', 'follower'));
+  rows.replicaOperationRows.push(formationAddRow(
+    'op-r5', 'r5', 'node-c', 'active', 'ACTIVE', 2500,
+  ));
+  const census = buildDerivedPriorityPartitionSummary({
+    serviceRows: rows.serviceRows,
+    partitionRows: rows.partitionRows,
+    readinessByNodeId: {},
+    projectedServingNodeIds: FORMATION_NODES,
+    locallyEligibleNodeIds: FORMATION_NODES,
+    publishedActiveNodeIds: FORMATION_NODES,
+  });
+  t.equal(census.satisfied, true, 'three distinct voter holders');
+  const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+    capturedAt: 3000,
+    publicationConvergence: {
+      publicationEpoch: 8,
+      publicationStatus: 'PUBLISHED',
+      publishedActiveNodeIds: FORMATION_NODES,
+      pendingAckNodeIds: [],
+      priorityPartitionSummary: census,
+      recoveryActiveNodeIds: FORMATION_NODES,
+    },
+    readinessByNodeId: {},
+    workflowAdmissionsByWorkflowId: {},
+    replicaOperationRows: rows.replicaOperationRows,
+    serviceRows: rows.serviceRows,
+  });
+  const snapshot = decisionSnapshots.snapshots.find(
+    (entry) => entry.partitionId === FORMATION_PARTITION,
+  );
+  t.equal(snapshot.semanticState, 'converged',
+    'not blocked_unclassified: the census itself is satisfied');
+  t.not(decisionSnapshots.closureWitness.state, 'closure_pending');
+  t.end();
+});
+
+test('H5b classification: a completed ADD with a census gap LEFT requests a follow-up', (t) => {
+  const {snapshot, decisionSnapshots} = runFormationShape({withR5: false});
+  t.equal(snapshot.semanticState, 'blocked_unclassified',
+    'a follow-up-requiring state, not converged');
+  t.ok(
+    decisionSnapshots.unresolvedSemanticStateIds.includes('blocked_unclassified'),
+    'the gap stays unresolved for the follow-up owner',
+  );
+  t.end();
+});
+
+// Verifier A4 consequence: without the credit, a PROGRESSING REPLACE onto an
+// already-counted target must stay the owner's in-flight operation - not a
+// stalled one to re-drive, cancel or time out, and not room for a second one.
+// The owner reads it through its own record contexts (steps_history), so the
+// state is recovering_in_flight; the drain holds it (in_flight, never stale by
+// step age at ACTIVE); planning stays blocked behind it. Its source removal is
+// admitted by the published-spread floor ({A:3,B:1} -> {A:2,B:1} keeps two
+// holders: priority-remove-safety-spread-nonregression.test.js, first case).
+test('a progressing REPLACE onto an already-counted target stays the owner\'s in-flight operation', (t) => {
+  const census = buildDerivedPriorityPartitionSummary({
+    serviceRows: formationRows({withR4Op: false, withR5: false}).serviceRows,
+    partitionRows: formationRows().partitionRows,
+    readinessByNodeId: {},
+    projectedServingNodeIds: FORMATION_NODES,
+    locallyEligibleNodeIds: FORMATION_NODES,
+    publishedActiveNodeIds: FORMATION_NODES,
+  });
+  const replace = {
+    operationId: 'op-replace-a-b',
+    type: 'REPLACE',
+    partitionId: FORMATION_PARTITION,
+    entityType: 'partition',
+    entityId: FORMATION_PARTITION,
+    replicaId: `${FORMATION_PARTITION}-r4`,
+    sourceNodeId: 'node-a',
+    targetNodeId: 'node-b',
+    status: 'active',
+    workflowStep: 'ACTIVE',
+    createdAt: 1000,
+    updatedAt: 2500,
+    stepsHistory: [
+      {step: 'PENDING', timestamp: 1000},
+      {step: 'CREATING', timestamp: 1500},
+      {step: 'SYNCING', timestamp: 2000},
+      {step: 'ACTIVE', timestamp: 2500},
+    ],
+  };
+  const drain = Object.create(OperationWorkflowRecoveryTimeout.prototype);
+  for (const nowMs of [3000, CLOSURE_NOW_MS * 10]) {
+    const context = buildPriorityRecoveryOperationContextFromRecord(replace, {
+      nowMs,
+    });
+    const snapshot = buildPriorityRecoveryDecisionSnapshot({
+      partitionId: FORMATION_PARTITION,
+      capturedAt: nowMs,
+      publicationConvergence: {
+        publicationEpoch: 8,
+        publicationStatus: 'PUBLISHED',
+        publishedActiveNodeIds: FORMATION_NODES,
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: census,
+        recoveryActiveNodeIds: FORMATION_NODES,
+      },
+      operationContexts: [context],
+      operationId: replace.operationId,
+      operationContext: context,
+    });
+    const at = `step age ${nowMs - 2500} ms`;
+    t.same(snapshot.spreadCompletion.satisfyingOperationIds, [],
+      `${at}: the counted target earns no credit`);
+    t.equal(snapshot.semanticState, 'recovering_in_flight',
+      `${at}: in flight, not operation_stalled`);
+    t.same(snapshot.blockerReasons, [], `${at}: no stall blocker reason`);
+    t.equal(snapshot.actuation.owner, 'operation_workflow_owner',
+      `${at}: the operation's own owner keeps it`);
+    t.equal(snapshot.progress.nextRequiredAction, 'wait_for_operation_progress',
+      `${at}: the owner waits on progress, no new operation is required`);
+    t.equal(
+      drain.resolvePriorityRecoveryOperationDrainState(
+        snapshot.completion,
+        {state: 'not_required'},
+        {remoteOwnerUnavailable: false},
+        replace,
+      ),
+      'in_flight',
+      `${at}: the drain holds it (no settle, no stale fail)`,
+    );
+  }
+  const {snapshot: openGap} = runFormationShape({withR4Op: false, withR5: false});
+  t.equal(openGap.spreadCompletion.satisfied, false,
+    'the census gap of one stays open while the REPLACE runs');
+  const assessment = buildPriorityRecoveryOperationAssessment({
+    operation: replace,
+    priorityPartitionSummary: census,
+    effectiveEligibleNodeIds: FORMATION_NODES,
+    nowMs: 3000,
+  });
+  t.equal(shouldPriorityRecoveryOperationBlockPlanning(assessment), true,
+    'the unresolved REPLACE blocks planning: no second operation opens');
+  t.end();
+});
+
+test('narrowed grace reaches every assessment consumer through the census planner entry', (t) => {
+  const replaceFromSoleHolder = dispatchPhaseOpUnverified({
+    partitionId: FORMATION_PARTITION,
+    sourceNodeId: 'node-a',
+    targetNodeId: 'node-b',
+    targetVisibilityState: 'active_operational',
+  });
+  const assess = (readyReplicaCountByNodeId) =>
+    buildPriorityRecoveryPartitionAssessment({
+      partitionId: FORMATION_PARTITION,
+      priorityPartitionSummary: {
+        satisfied: false,
+        requiredDistinctNodeCount: 3,
+        missingPartitionIds: [FORMATION_PARTITION],
+        blockedPartitions: [{
+          partitionId: FORMATION_PARTITION,
+          requiredDistinctNodeCount: 3,
+          readyDistinctNodeCount: 2,
+          spreadGap: 1,
+          ...(readyReplicaCountByNodeId ? {readyReplicaCountByNodeId} : {}),
+        }],
+      },
+      admission: {
+        effectiveEligibleNodeIds: FORMATION_NODES,
+        effectiveEligibleNodeCount: FORMATION_NODES.length,
+        ineligibleNodes: [],
+      },
+      operationContexts: [replaceFromSoleHolder],
+    });
+  t.equal(
+    assess({'node-a': 1, 'node-c': 1}).spreadCompletion.satisfied,
+    false,
+    'with the census holders the sole-holder source gets no credit',
+  );
+  t.equal(
+    assess(null).spreadCompletion.satisfied,
+    true,
+    'a summary without holder identity keeps the unnarrowed grace',
   );
   t.end();
 });

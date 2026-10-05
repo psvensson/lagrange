@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "6f99341bf4b5d4a8656663a2cf8fbce0fcec5a18cdd2c4fdaddcbec312f8e65f"
+    "sourceSha256": "8c6979be2d92b7495f108a6ad5dd2b2bf294be645fb8c71d76682a07e8b02ff3"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,10 +18,10 @@
   },
   "metrics": {
     "moduleCount": 68,
-    "publicExportCount": 755,
-    "importEdgeCount": 311,
-    "crossLayerEdgeCount": 93,
-    "layerDirectionViolationCount": 45,
+    "publicExportCount": 747,
+    "importEdgeCount": 314,
+    "crossLayerEdgeCount": 96,
+    "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
     "duplicateAuthoritySignalCount": 4,
     "confirmedDuplicateAuthorityCount": 0,
@@ -319,12 +319,10 @@
         "resolveObservationPriorityPartitionSummary",
         "resolveObservationPriorityRecoveryBlockedPartitionIds",
         "resolveObservationPriorityRecoveryClosureWitness",
-        "resolveObservationPriorityRecoveryReasonCodes",
         "resolveObservationPublicationConvergenceGate",
         "resolvePriorityRecoveryReasonCodes",
         "resolveProjectionDiagnostics",
-        "resolveSelectedMissingPublishedEvidence",
-        "shouldApplyObservationClosureWitness"
+        "resolveSelectedMissingPublishedEvidence"
       ],
       "localExports": [
         "buildSelectedMissingPublishedEvidence",
@@ -334,12 +332,10 @@
         "resolveObservationPriorityPartitionSummary",
         "resolveObservationPriorityRecoveryBlockedPartitionIds",
         "resolveObservationPriorityRecoveryClosureWitness",
-        "resolveObservationPriorityRecoveryReasonCodes",
         "resolveObservationPublicationConvergenceGate",
         "resolvePriorityRecoveryReasonCodes",
         "resolveProjectionDiagnostics",
-        "resolveSelectedMissingPublishedEvidence",
-        "shouldApplyObservationClosureWitness"
+        "resolveSelectedMissingPublishedEvidence"
       ]
     },
     {
@@ -638,26 +634,22 @@
       "layer": "owner_decision",
       "rationale": "owner policy or actuation surface",
       "exports": [
-        "buildPriorityRecoveryClosureSatisfiedPriorityPartitionSummary",
         "buildPriorityRecoveryClosureWitness",
         "buildPriorityRecoveryEmergencyBudgetOwnerIds",
         "buildPriorityRecoveryFilteredDecisionSnapshotSummary",
         "buildTrackedPriorityRecoveryDecisionSnapshots",
         "resolvePriorityPartitionSummaryFromPublication",
-        "resolvePriorityRecoveryClosureReadyEligibleNodeCount",
         "resolvePriorityRecoveryDecisionSummaryPartitionIds",
         "resolvePriorityRecoveryEmergencyBudgetOwnerId",
         "resolvePriorityRecoveryFilteredSnapshotCompletionStates",
         "resolvePriorityRecoveryFilteredSnapshotSemanticStates"
       ],
       "localExports": [
-        "buildPriorityRecoveryClosureSatisfiedPriorityPartitionSummary",
         "buildPriorityRecoveryClosureWitness",
         "buildPriorityRecoveryEmergencyBudgetOwnerIds",
         "buildPriorityRecoveryFilteredDecisionSnapshotSummary",
         "buildTrackedPriorityRecoveryDecisionSnapshots",
         "resolvePriorityPartitionSummaryFromPublication",
-        "resolvePriorityRecoveryClosureReadyEligibleNodeCount",
         "resolvePriorityRecoveryDecisionSummaryPartitionIds",
         "resolvePriorityRecoveryEmergencyBudgetOwnerId",
         "resolvePriorityRecoveryFilteredSnapshotCompletionStates",
@@ -794,9 +786,7 @@
         "LOCAL_EMPTY_LIST",
         "LOCAL_STR_EMPTY",
         "PRIORITY_RECOVERY_ACTUATION_DECISION",
-        "PRIORITY_RECOVERY_CLOSURE_RECORD_ID",
         "PRIORITY_RECOVERY_CLOSURE_SATISFIED_SEMANTIC_STATE_IDS",
-        "PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS",
         "PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE",
         "PRIORITY_RECOVERY_CONVERGENCE_STATE",
         "PRIORITY_RECOVERY_DECISION_SNAPSHOT_CONFLICT_STAGE",
@@ -850,9 +840,7 @@
         "LOCAL_EMPTY_LIST",
         "LOCAL_STR_EMPTY",
         "PRIORITY_RECOVERY_ACTUATION_DECISION",
-        "PRIORITY_RECOVERY_CLOSURE_RECORD_ID",
         "PRIORITY_RECOVERY_CLOSURE_SATISFIED_SEMANTIC_STATE_IDS",
-        "PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS",
         "PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE",
         "PRIORITY_RECOVERY_CONVERGENCE_STATE",
         "PRIORITY_RECOVERY_DECISION_SNAPSHOT_CONFLICT_STAGE",
@@ -990,8 +978,7 @@
         "readFirstStringField",
         "resolvePriorityRecoveryOperationContextFreshnessMs",
         "resolvePriorityRecoveryReasonCodesFromReadiness",
-        "resolvePriorityRecoverySemanticState",
-        "resolvePriorityRecoverySpreadSatisfyingReasonCode"
+        "resolvePriorityRecoverySemanticState"
       ],
       "localExports": [
         "buildPriorityRecoveryDecisionPartitionIdSet",
@@ -1008,8 +995,7 @@
         "readFirstStringField",
         "resolvePriorityRecoveryOperationContextFreshnessMs",
         "resolvePriorityRecoveryReasonCodesFromReadiness",
-        "resolvePriorityRecoverySemanticState",
-        "resolvePriorityRecoverySpreadSatisfyingReasonCode"
+        "resolvePriorityRecoverySemanticState"
       ]
     },
     {
@@ -1180,8 +1166,6 @@
         "PRIORITY_RECOVERY_ADMISSION_DECISION_REASON",
         "PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS",
         "PRIORITY_RECOVERY_ADMISSION_SOURCE",
-        "PRIORITY_RECOVERY_CLOSURE_RECORD_ID",
-        "PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS",
         "PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE",
         "PRIORITY_RECOVERY_EMERGENCY_PARTITION_TABLE_IDS",
         "buildPriorityRecoveryAdmissionPlan",
@@ -1540,7 +1524,6 @@
       "rationale": "owner policy or actuation surface",
       "exports": [
         "EMPTY_STRING",
-        "PRIORITY_CLOSURE_WITNESS_SUMMARY_STATE",
         "PUBLICATION_OWNER_STREAM_VALID_VALUES",
         "PUBLICATION_PRIORITY_SPREAD_AUTHORITATIVE_DECISION_SOURCE_SET",
         "PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE",
@@ -1551,7 +1534,6 @@
       ],
       "localExports": [
         "EMPTY_STRING",
-        "PRIORITY_CLOSURE_WITNESS_SUMMARY_STATE",
         "PUBLICATION_OWNER_STREAM_VALID_VALUES",
         "PUBLICATION_PRIORITY_SPREAD_AUTHORITATIVE_DECISION_SOURCE_SET",
         "PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE",
@@ -1705,11 +1687,15 @@
       "rationale": "owner policy or actuation surface",
       "exports": [
         "buildPrioritySpreadDecision",
-        "filterProvidedPriorityRecoveryReasonCodes"
+        "filterProvidedPriorityRecoveryReasonCodes",
+        "isPriorityRecoveryClosureWitnessPending",
+        "resolvePrioritySpreadPending"
       ],
       "localExports": [
         "buildPrioritySpreadDecision",
-        "filterProvidedPriorityRecoveryReasonCodes"
+        "filterProvidedPriorityRecoveryReasonCodes",
+        "isPriorityRecoveryClosureWitnessPending",
+        "resolvePrioritySpreadPending"
       ]
     },
     {
@@ -2567,6 +2553,16 @@
       "conformsToLayerDirection": false
     },
     {
+      "from": "src/control-plane/priority-recovery-observation-gate-resolution.js",
+      "specifier": "./publication-recovery-priority-spread.js",
+      "to": "src/control-plane/publication-recovery-priority-spread.js",
+      "targetModule": true,
+      "sourceLayer": "raw_observation",
+      "targetLayer": "owner_decision",
+      "crossLayer": true,
+      "conformsToLayerDirection": false
+    },
+    {
       "from": "src/control-plane/priority-recovery-observation-normalization.js",
       "specifier": "./membership-publication-priority-partition-canonical-data.js",
       "to": "src/control-plane/membership-publication-priority-partition-canonical-data.js",
@@ -2703,6 +2699,16 @@
       "targetModule": true,
       "sourceLayer": "raw_observation",
       "targetLayer": "canonical_snapshot_reducer",
+      "crossLayer": true,
+      "conformsToLayerDirection": false
+    },
+    {
+      "from": "src/control-plane/priority-recovery-observation-snapshot.js",
+      "specifier": "./publication-recovery-priority-spread.js",
+      "to": "src/control-plane/publication-recovery-priority-spread.js",
+      "targetModule": true,
+      "sourceLayer": "raw_observation",
+      "targetLayer": "owner_decision",
       "crossLayer": true,
       "conformsToLayerDirection": false
     },
@@ -2995,6 +3001,16 @@
       "targetLayer": "raw_observation",
       "crossLayer": false,
       "conformsToLayerDirection": true
+    },
+    {
+      "from": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+      "specifier": "./priority-recovery-planning-intent.js",
+      "to": "src/control-plane/priority-recovery-planning-intent.js",
+      "targetModule": true,
+      "sourceLayer": "raw_observation",
+      "targetLayer": "owner_decision",
+      "crossLayer": true,
+      "conformsToLayerDirection": false
     },
     {
       "from": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",

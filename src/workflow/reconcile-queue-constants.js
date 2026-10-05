@@ -44,6 +44,7 @@ const RECONCILE_REASON = Object.freeze({
   LEADER_ELECTED: 'leader_elected',
   PRIORITY_RECOVERY_PROGRESS: 'priority_recovery_progress',
   PRIORITY_SPREAD_RELEASE_WAKE: 'priority_spread_release_wake',
+  LOCAL_MUTATION_READINESS_WAKE: 'local_mutation_readiness_wake',
   RUNTIME_SERVICE_DESIRED_STATE: 'runtime_service_desired_state',
 
   // Rebalance: operation execution reasons

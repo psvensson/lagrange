@@ -21,8 +21,6 @@ export {DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS};
 export {PRIORITY_RECOVERY_ADMISSION_DECISION_REASON};
 export {PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS};
 export {PRIORITY_RECOVERY_ADMISSION_SOURCE};
-export {PRIORITY_RECOVERY_CLOSURE_RECORD_ID} from './priority-recovery-snapshot-contract.js';
-export {PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS} from './priority-recovery-snapshot-contract.js';
 export {PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE} from './priority-recovery-snapshot-contract.js';
 export {PRIORITY_RECOVERY_EMERGENCY_PARTITION_TABLE_IDS};
 export {buildTrackedPriorityRecoveryDecisionSnapshots} from './priority-recovery-snapshot-active-gate.js';

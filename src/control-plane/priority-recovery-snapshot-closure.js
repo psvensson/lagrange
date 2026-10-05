@@ -214,7 +214,6 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
     ...decisionSnapshotSummary,
     closureWitness: buildPriorityRecoveryClosureWitness({
       decisionSnapshots: decisionSnapshotSummary,
-      priorityPartitionSummary,
     }),
   };
 }

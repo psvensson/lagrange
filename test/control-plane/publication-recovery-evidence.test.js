@@ -41,7 +41,9 @@ const TEST_NODE_ID = Object.freeze({
 const TEST_CLOSURE_RECORD_ID = 'CL-003';
 const TEST_CLOSURE_WITNESS_CLASS =
   'publication_converged_priority_spread_pending';
+// A closure state recorded before 2026-10-04 (replayed as old evidence).
 const TEST_CLOSURE_WITNESS_STATE = 'closure_satisfied_stale_publication';
+const TEST_NON_PENDING_CLOSURE_WITNESS_STATE = 'closure_satisfied_fresh';
 const TEST_PUBLICATION_PENDING_REASON_CODE = 'publication_epoch_pending';
 const TEST_STALE_REASON_CODE = 'priority_partitions_not_spread';
 const TEST_STALE_PRESENTATION_REASON_CODE = Object.freeze({
@@ -236,7 +238,13 @@ function buildDecisionSnapshots() {
   };
 }
 
-test('buildCanonicalPublicationRecoveryEvidence closes stale spread metadata from the decision-layer closure witness',
+// SUPERSEDED (owner decision 2026-10-04, "delete the second authority").
+// Before: the decision-layer closure witness (stale-publication state) closed
+// the gap the publication summary still carried - gate ready, CL-003, a
+// synthesized satisfied summary, no reasons. A non-pending witness now never
+// clears a census gap: the canonical evidence keeps spread pending on the
+// publication's summary until the census refresh is written.
+test('buildCanonicalPublicationRecoveryEvidence keeps the census spread gap over a non-pending decision-layer witness',
   (t) => {
     const evidence = buildCanonicalPublicationRecoveryEvidence({
       publicationConvergence: {
@@ -269,43 +277,36 @@ test('buildCanonicalPublicationRecoveryEvidence closes stale spread metadata fro
       priorityRecoveryDecisionSnapshots: buildDecisionSnapshots(),
     });
 
-    t.equal(evidence.publicationConvergenceGate.ready, true);
-    t.equal(evidence.publicationConvergenceGate.prioritySpreadPending, false);
+    t.equal(evidence.publicationConvergenceGate.ready, false);
+    t.equal(evidence.publicationConvergenceGate.prioritySpreadPending, true);
+    t.notOk(evidence.publicationConvergenceGate.closureRecordId);
     t.equal(
-      evidence.publicationConvergenceGate.closureRecordId,
-      TEST_CLOSURE_RECORD_ID,
+      evidence.publicationConvergenceGate.priorityPartitionSummary?.satisfied,
+      false,
+      'the gate carries the census summary, never a synthesized one',
     );
-    t.equal(
-      evidence.publicationConvergenceGate.closureWitnessClass,
-      TEST_CLOSURE_WITNESS_CLASS,
-    );
-    t.same(
-      evidence.publicationConvergenceGate.priorityPartitionSummary,
-      TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
-    );
-    t.same(evidence.publicationConvergenceGate.reasonCodes, []);
-    t.equal(evidence.priorityRecoveryObservation.prioritySpreadPending, false);
+    t.ok(evidence.publicationConvergenceGate.reasonCodes.includes(
+      TEST_STALE_REASON_CODE,
+    ));
+    t.equal(evidence.priorityRecoveryObservation.prioritySpreadPending, true);
     t.equal(
       evidence.priorityRecoveryObservation.priorityRecoveryClosureState,
-      TEST_CLOSURE_WITNESS_STATE,
+      TEST_NON_PENDING_CLOSURE_WITNESS_STATE,
     );
     t.equal(
       evidence.priorityRecoveryObservation.priorityPartitionSummary?.satisfied,
-      true,
+      false,
     );
-    t.equal(
-      evidence.priorityRecoveryObservation.priorityPartitionSummary
-        ?.blockedPartitionCount,
-      0,
-    );
-    t.equal(evidence.publicationConvergence.prioritySpreadPending, false);
-    t.equal(
-      evidence.publicationConvergence.closureRecordId,
-      TEST_CLOSURE_RECORD_ID,
-    );
+    t.equal(evidence.publicationConvergence.prioritySpreadPending, true);
+    t.notOk(evidence.publicationConvergence.closureRecordId);
     t.end();
   });
 
+// SUPERSEDED sub-assertions (owner decision 2026-10-04): the gate no longer
+// carries closure record fields at all (before: null after the STALE->FRESH
+// conversion). The protected property - once the durable summary is
+// refreshed, stale spread reasons and the stale CL-003 diagnostics retire -
+// is asserted unchanged.
 test('buildCanonicalPublicationRecoveryEvidence retires stale closure diagnostics after durable spread metadata refreshes',
   (t) => {
     const evidence = buildCanonicalPublicationRecoveryEvidence({
@@ -338,8 +339,8 @@ test('buildCanonicalPublicationRecoveryEvidence retires stale closure diagnostic
 
     t.equal(evidence.publicationConvergenceGate.ready, true);
     t.same(evidence.publicationConvergenceGate.reasonCodes, []);
-    t.equal(evidence.publicationConvergenceGate.closureRecordId, null);
-    t.equal(evidence.publicationConvergenceGate.closureWitnessClass, null);
+    t.notOk(evidence.publicationConvergenceGate.closureRecordId);
+    t.notOk(evidence.publicationConvergenceGate.closureWitnessClass);
     t.equal(evidence.priorityRecoveryObservation.prioritySpreadPending, false);
     t.same(
       evidence.priorityRecoveryObservation.priorityRecoveryReasonCodes,
@@ -354,6 +355,13 @@ test('buildCanonicalPublicationRecoveryEvidence retires stale closure diagnostic
     t.end();
   });
 
+// SUPERSEDED (owner decision 2026-10-04). Before: decision snapshots whose
+// partition was spread_satisfied_in_flight closed the stale publication gap
+// through the closure's synthesized summary, and the stale observation was
+// rebuilt as spread. The observation is still rebuilt from the canonical gate
+// (the protected property), but the gate now reads the census: the
+// publication summary still shows the gap, so the rebuilt observation stays
+// spread-pending with its reason.
 test('buildCanonicalPublicationRecoveryEvidence rebuilds a stale observation from the canonical publication gate',
   (t) => {
     const evidence = buildCanonicalPublicationRecoveryEvidence({
@@ -374,24 +382,19 @@ test('buildCanonicalPublicationRecoveryEvidence rebuilds a stale observation fro
       priorityRecoveryDecisionSnapshots: buildDecisionSnapshots(),
     });
 
-    t.equal(evidence.publicationConvergenceGate.ready, true);
-    t.same(evidence.publicationConvergenceGate.reasonCodes, []);
-    t.equal(evidence.priorityRecoveryObservation.prioritySpreadPending, false);
-    t.same(
-      evidence.priorityRecoveryObservation.priorityRecoveryReasonCodes,
-      [],
+    t.equal(evidence.publicationConvergenceGate.ready, false);
+    t.equal(evidence.publicationConvergenceGate.prioritySpreadPending, true);
+    t.equal(evidence.priorityRecoveryObservation.prioritySpreadPending, true);
+    t.ok(
+      evidence.priorityRecoveryObservation.priorityRecoveryReasonCodes.includes(
+        TEST_STALE_REASON_CODE,
+      ),
     );
     t.equal(
       evidence.priorityRecoveryObservation.priorityPartitionSummary?.satisfied,
-      true,
+      false,
     );
-    t.equal(
-      evidence.priorityRecoveryObservation.priorityPartitionSummary
-        ?.blockedPartitionCount,
-      0,
-    );
-    t.equal(evidence.publicationConvergence.prioritySpreadPending, false);
-    t.same(evidence.publicationConvergence.priorityRecoveryReasonCodes, []);
+    t.equal(evidence.publicationConvergence.prioritySpreadPending, true);
     t.end();
   });
 

@@ -29,11 +29,10 @@ export function buildPublicationEvidenceReplayScenarioConstants(context) {
   const REPLAY_TEST_REPLICA_SEPARATOR = '-r';
   const REPLAY_TEST_ADDRESS_PARTITION_SEGMENT = '/partition/';
   const REPLAY_TEST_PARTITION_STATE_NORMAL = 'NORMAL';
-  const REPLAY_TEST_CLOSURE_RECORD_ID = 'CL-003';
-  const REPLAY_TEST_CLOSURE_WITNESS_CLASS =
-  'publication_converged_priority_spread_pending';
-  const REPLAY_TEST_CLOSURE_WITNESS_STATE =
-  'closure_satisfied_stale_publication';
+  // The runtime closure's one non-pending state (owner decision
+  // 2026-10-04 deleted the stale-publication state, CL-003 and its class).
+  const REPLAY_TEST_NON_PENDING_CLOSURE_WITNESS_STATE =
+  'closure_satisfied_fresh';
   const REPLAY_TEST_PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED = 'converged';
   const REPLAY_TEST_DURABLE_BLOCKED_PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
@@ -646,9 +645,7 @@ export function buildPublicationEvidenceReplayScenarioConstants(context) {
     REPLAY_TEST_REPLICA_SEPARATOR,
     REPLAY_TEST_ADDRESS_PARTITION_SEGMENT,
     REPLAY_TEST_PARTITION_STATE_NORMAL,
-    REPLAY_TEST_CLOSURE_RECORD_ID,
-    REPLAY_TEST_CLOSURE_WITNESS_CLASS,
-    REPLAY_TEST_CLOSURE_WITNESS_STATE,
+    REPLAY_TEST_NON_PENDING_CLOSURE_WITNESS_STATE,
     REPLAY_TEST_PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED,
     REPLAY_TEST_DURABLE_BLOCKED_PARTITION_ID,
     REPLAY_TEST_COMPARISON_LABEL_PATTERN,

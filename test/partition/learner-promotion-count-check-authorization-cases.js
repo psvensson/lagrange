@@ -92,8 +92,14 @@ const LEARNER_ROLE = 'learner';
 // file.
 const MAIN_ARITHMETIC_GRID_DIGEST =
   'b827943230027e1620d13224998b3982d34fb7a5f0da36b70eb12f2ac24e6a83';
+// SUPERSEDED digest (owner decision 2026-10-04, D7): the projection's
+// priorityRecovery.prioritySummary.source label is now 'census' (the
+// summary-source owner and its 'unrecorded' label are deleted). Every guard
+// decision in the grid is unchanged: setting the label back to 'unrecorded'
+// reproduces main's digest 022d8537f70187cd3f9060fe2f6a4d05f72c264158fb78c3c419b950b3c840c4
+// exactly.
 const MAIN_GUARD_GRID_DECISION_DIGEST =
-  '022d8537f70187cd3f9060fe2f6a4d05f72c264158fb78c3c419b950b3c840c4';
+  '29c5b680461a91ca034d4893026331c41785844e089ebcf9ac96dbf22d14ebb8';
 const DECISION_INPUT_KEYS = Object.freeze([
   'criticalSystemPartition', 'joining', 'allowances',
   'maxAllowedVotersAfterPromotion', 'membership', 'inFlightAddLike',

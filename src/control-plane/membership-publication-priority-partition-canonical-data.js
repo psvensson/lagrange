@@ -16,7 +16,6 @@ const EXPECTED_REPLICA_COUNT_PROPERTY_NAMES = Object.freeze([
   EXPECTED_REPLICA_COUNT_FIELD,
   'expected_replica_count',
 ]);
-const numberToExactInteger = BigInt;
 const isProxy = types.isProxy.bind(types);
 const numberIsSafeInteger = Number.isSafeInteger;
 const objectCreate = Object.create;
@@ -50,7 +49,6 @@ const WeakSetConstructor = WeakSet;
 const weakSetAdd = Function.call.bind(WeakSet.prototype.add);
 const weakSetHas = Function.call.bind(WeakSet.prototype.has);
 const objectFreeze = Object.freeze;
-const EXACT_NON_NEGATIVE_ZERO = numberToExactInteger(0);
 const canonicalDenseRecordArrays = new WeakSetConstructor();
 
 // One canonical strict copy per boundary crossing: a dense record array this
@@ -187,6 +185,22 @@ function copyExclusionCounts(value) {
   return copy;
 }
 
+const EXCLUSION_REASON_COUNTS_FIELD = 'exclusionReasonCounts';
+const READY_REPLICA_COUNT_BY_NODE_ID_FIELD = 'readyReplicaCountByNodeId';
+
+// An optional {key: non-negative count} record: absent reads as null, a
+// present but malformed record is invalid (fail closed).
+function readOptionalCountRecord(record, propertyNames) {
+  const entry = inspectOwnDataProperty(record, propertyNames);
+  if (entry.state === DATA_PROPERTY_STATE.ABSENT) {
+    return {valid: true, value: null};
+  }
+  const value = entry.state === DATA_PROPERTY_STATE.VALID ?
+    copyExclusionCounts(entry.value) :
+    null;
+  return {valid: value !== null, value};
+}
+
 function exclusionReasonCountsEqual(left, right) {
   const leftRecord = left && typeof left === 'object' ? left : null;
   const rightRecord = right && typeof right === 'object' ? right : null;
@@ -228,14 +242,6 @@ function normalizedBlockedPartitionsEqual(left, right) {
   for (let index = 0; index < left.length; index += 1) {
     const leftPartition = left[index];
     const rightPartition = right[index];
-    const leftExclusionReasonCounts = readOwnDataProperty(
-      leftPartition,
-      ['exclusionReasonCounts'],
-    );
-    const rightExclusionReasonCounts = readOwnDataProperty(
-      rightPartition,
-      ['exclusionReasonCounts'],
-    );
     if (!(leftPartition.partitionId === rightPartition.partitionId &&
       leftPartition.requiredDistinctNodeCount ===
         rightPartition.requiredDistinctNodeCount &&
@@ -246,15 +252,29 @@ function normalizedBlockedPartitionsEqual(left, right) {
       objectHasOwn(leftPartition, EXPECTED_REPLICA_COUNT_FIELD) ===
         objectHasOwn(rightPartition, EXPECTED_REPLICA_COUNT_FIELD) &&
       leftPartition.expectedReplicaCount === rightPartition.expectedReplicaCount &&
-      leftExclusionReasonCounts.found === rightExclusionReasonCounts.found &&
-      exclusionReasonCountsEqual(
-        leftExclusionReasonCounts.value,
-        rightExclusionReasonCounts.value,
+      ownCountRecordsEqual(
+        leftPartition,
+        rightPartition,
+        EXCLUSION_REASON_COUNTS_FIELD,
+      ) &&
+      // The census's holder identities are part of its answer: a holder set
+      // that changed at an unchanged count (A,B -> A,C) is a different summary.
+      ownCountRecordsEqual(
+        leftPartition,
+        rightPartition,
+        READY_REPLICA_COUNT_BY_NODE_ID_FIELD,
       ))) {
       return false;
     }
   }
   return true;
+}
+
+function ownCountRecordsEqual(leftPartition, rightPartition, fieldName) {
+  const left = readOwnDataProperty(leftPartition, [fieldName]);
+  const right = readOwnDataProperty(rightPartition, [fieldName]);
+  return left.found === right.found &&
+    exclusionReasonCountsEqual(left.value, right.value);
 }
 
 function normalizedPriorityPartitionSummariesEqual(left, right) {
@@ -264,36 +284,6 @@ function normalizedPriorityPartitionSummariesEqual(left, right) {
     left.totalPriorityPartitionCount === right.totalPriorityPartitionCount &&
     normalizedStringListsEqual(left.missingPartitionIds, right.missingPartitionIds) &&
     normalizedBlockedPartitionsEqual(left.blockedPartitions, right.blockedPartitions);
-}
-
-function priorityPartitionDiagnosticsEqual(left, right) {
-  if (left.blockedPartitions.length !== right.blockedPartitions.length) {
-    return false;
-  }
-  for (let index = 0; index < left.blockedPartitions.length; index += 1) {
-    const leftPartition = left.blockedPartitions[index];
-    const rightPartition = right.blockedPartitions[index];
-    const leftExclusionReasonCounts = readOwnDataProperty(
-      leftPartition,
-      ['exclusionReasonCounts'],
-    );
-    const rightExclusionReasonCounts = readOwnDataProperty(
-      rightPartition,
-      ['exclusionReasonCounts'],
-    );
-    if (!(leftPartition.partitionId === rightPartition.partitionId &&
-      objectHasOwn(leftPartition, EXPECTED_REPLICA_COUNT_FIELD) ===
-        objectHasOwn(rightPartition, EXPECTED_REPLICA_COUNT_FIELD) &&
-      leftPartition.expectedReplicaCount === rightPartition.expectedReplicaCount &&
-      leftExclusionReasonCounts.found === rightExclusionReasonCounts.found &&
-      exclusionReasonCountsEqual(
-        leftExclusionReasonCounts.value,
-        rightExclusionReasonCounts.value,
-      ))) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function normalizePrimitiveStringList(values, blockedPartitions = []) {
@@ -343,28 +333,14 @@ function buildStringSet(values) {
   return result;
 }
 
-function addExactNonNegativeInteger(total, value) {
-  return total + numberToExactInteger(value);
-}
-
-function compareExactValues(left, right) {
-  return left === right ? 0 : left > right ? 1 : -1;
-}
-
-function exactNonNegativeZero() {
-  return EXACT_NON_NEGATIVE_ZERO;
-}
-
 export {
   appendOwnArrayValue,
-  addExactNonNegativeInteger,
   buildStringSet,
   copyCanonicalDenseOwnDataRecordArray,
   copyDenseOwnDataArray,
   copyStrictOwnDataRecord,
   copyExclusionCounts,
   DATA_PROPERTY_STATE,
-  exactNonNegativeZero,
   inspectOwnDataProperty,
   MapConstructor,
   mapGet,
@@ -379,10 +355,10 @@ export {
   normalizedPriorityPartitionSummariesEqual,
   objectCreate as createNullRecord,
   objectDefineProperty as defineOwnDataProperty,
-  priorityPartitionDiagnosticsEqual,
-  compareExactValues,
   readOwnDataProperty,
+  READY_REPLICA_COUNT_BY_NODE_ID_FIELD,
   readExpectedReplicaCount,
+  readOptionalCountRecord,
   readOwnLowerPrimitiveString,
   readOwnPrimitiveString,
   setAdd,

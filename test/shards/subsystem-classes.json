@@ -7,28 +7,28 @@
     "bootstrap-membership": 281,
     "cdc-metadata": 58,
     "cli-tooling": 96,
-    "control-plane": 205,
+    "control-plane": 206,
     "convergence-topology": 83,
     "distributed-harness": 174,
     "examples-e2e": 7,
     "pgwire-compat": 17,
-    "placement-rebalance": 255,
+    "placement-rebalance": 256,
     "query-sql": 164,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 144,
     "solver-tooling": 7,
-    "storage-partition": 144,
+    "storage-partition": 145,
     "storage-raft": 106,
     "test-infrastructure": 141,
     "transactions": 15,
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2209,
-  "digest": "fnv1a32-ce9dc26f",
+  "censusSize": 2212,
+  "digest": "fnv1a32-92816967",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-bbd37a42",
+  "observationDigest": "fnv1a32-6e377f38",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -597,6 +597,7 @@
     "test/control-plane/priority-recovery-target-service-index.test.js": "control-plane",
     "test/control-plane/priority-recovery-tracked-summary-selection.test.js": "control-plane",
     "test/control-plane/priority-services-row-publication-census-contract.test.js": "control-plane",
+    "test/control-plane/priority-spread-pending-heartbeat-admission.test.js": "control-plane",
     "test/control-plane/projection-contract-source-allowlist.test.js": "control-plane",
     "test/control-plane/projection-freshness-guard.test.js": "control-plane",
     "test/control-plane/projection-planning-identity-memoization.test.js": "control-plane",
@@ -1012,6 +1013,7 @@
     "test/integration/pgwire-bootstrap.integration.test.js": "pgwire-compat",
     "test/integration/pgwire-rebalance.integration.test.js": "pgwire-compat",
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
+    "test/integration/priority-spread-one-authority-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/public-application-database-multinode.integration.test.js": "query-sql",
     "test/integration/public-application-database-transaction-facade.integration.test.js": "query-sql",
     "test/integration/public-binding-cell-invocation-seam.integration.test.js": "services-runtime",
@@ -1177,6 +1179,7 @@
     "test/partition/durable-voter-visibility-role-write.test.js": "storage-partition",
     "test/partition/extracted-module-api-equivalence.property.test.js": "storage-partition",
     "test/partition/key-range-manager.test.js": "storage-partition",
+    "test/partition/learner-promotion-count-check-budget-walk.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "storage-partition",
     "test/partition/managed-merge-workflow.test.js": "storage-partition",
@@ -3915,6 +3918,14 @@
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/priority-recovery-snapshot-observation.js",
         "test/control-plane/priority-recovery-snapshot-supplemental-serial-wait-fixture-constants.js"
+      ]
+    },
+    "test/control-plane/priority-spread-pending-heartbeat-admission.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/node-lifecycle-publication.js",
+        "src/control-plane/node-ready-lease-authority.js"
       ]
     },
     "test/control-plane/projection-planning-identity-memoization.test.js": {

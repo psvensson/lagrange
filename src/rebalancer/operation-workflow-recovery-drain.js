@@ -165,28 +165,9 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
     );
   }
 
-  isPriorityRecoveryAddOperationDrainTargetSatisfied(
-    operation,
-    priorityRecoveryContext,
-  ) {
+  isPriorityRecoveryAddOperationDrainTargetSatisfied(operation) {
     if (operation?.type !== OperationType.ADD) {
       return false;
-    }
-    const operationId = String(
-      operation.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
-    ).trim();
-    const satisfyingOperationIds = Array.isArray(
-      priorityRecoveryContext?.decisionSnapshot?.spreadCompletion
-        ?.satisfyingOperationIds,
-    ) ?
-      priorityRecoveryContext.decisionSnapshot.spreadCompletion
-        .satisfyingOperationIds :
-      [];
-    if (
-      operationId.length > 0 &&
-      satisfyingOperationIds.includes(operationId)
-    ) {
-      return true;
     }
     if (
       !this.repository ||
@@ -210,7 +191,6 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
   buildPriorityRecoveryAddOperationDrainSourceSnapshot(
     operation,
     completionState,
-    priorityRecoveryContext,
   ) {
     const completionAccepted =
       PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
@@ -218,10 +198,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       );
     const targetSatisfied =
       completionAccepted &&
-      this.isPriorityRecoveryAddOperationDrainTargetSatisfied(
-        operation,
-        priorityRecoveryContext,
-      );
+      this.isPriorityRecoveryAddOperationDrainTargetSatisfied(operation);
     return Object.freeze({
       state: targetSatisfied ?
         PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED :
@@ -230,6 +207,69 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       observationState: null,
       lifecycleStatus: null,
     });
+  }
+
+  /**
+   * A remote non-owner settles an intermediate priority ADD whose owner is
+   * unavailable when the operation's OWN target replica is read ACTIVE from
+   * the authoritative status (the orphan reconciler's evidence): an operation
+   * fact, decided without reading spread. Spread-accepted completions keep
+   * the cache-observed arm above; an available owner completes its own ADD.
+   * @param {Object} operation
+   * @param {string} completionState
+   * @return {Promise<boolean>}
+   */
+  async isPriorityRecoveryAddSettledByOperationFact(
+    operation,
+    completionState,
+  ) {
+    if (
+      operation?.type !== OperationType.ADD ||
+      PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
+        completionState,
+      ) ||
+      this.repository.isOperationLocallyOwned(operation) ||
+      !this.isPriorityRecoveryDrainOwnerUnavailable(
+        this.repository.resolveOperationOwnerNodeId(operation) || null,
+        operation,
+      )
+    ) {
+      return false;
+    }
+    try {
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES.has(
+        await this.getReconciledReplicaStatus(
+          operation.replicaId,
+          operation.partitionId,
+          operation.targetNodeId,
+        ),
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // The drain state, in precedence order: a superseded target, then the
+  // ADD operation fact, then the completion/source decision.
+  async resolvePriorityRecoveryOperationDrainSnapshotState(evidence) {
+    if (evidence.supersededTargetState) {
+      return evidence.supersededTargetState;
+    }
+    if (
+      await this.isPriorityRecoveryAddSettledByOperationFact(
+        evidence.operation,
+        evidence.completionState,
+      )
+    ) {
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE
+        .ADD_TARGET_ACTIVE_OWNER_UNAVAILABLE;
+    }
+    return this.resolvePriorityRecoveryOperationDrainState(
+      evidence.completion,
+      evidence.sourceSnapshot,
+      evidence.releaseEvidence,
+      evidence.operation,
+    );
   }
 
   resolvePriorityRecoveryPreSyncReplaceTargetState(operation) {
@@ -312,13 +352,11 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
   async buildPriorityRecoveryOperationDrainSourceSnapshot(
     operation,
     completionState,
-    priorityRecoveryContext = null,
   ) {
     if (operation?.type === OperationType.ADD) {
       return this.buildPriorityRecoveryAddOperationDrainSourceSnapshot(
         operation,
         completionState,
-        priorityRecoveryContext,
       );
     }
     if (
@@ -571,7 +609,6 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         await this.buildPriorityRecoveryOperationDrainSourceSnapshot(
           operation,
           completionState,
-          priorityRecoveryContext,
         );
     const releaseEvidence =
       this.buildPriorityRecoveryOperationDrainReleaseEvidence(
@@ -579,14 +616,14 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         completion,
         sourceSnapshot,
       );
-    const state =
-      supersededTargetState ||
-      this.resolvePriorityRecoveryOperationDrainState(
-        completion,
-        sourceSnapshot,
-        releaseEvidence,
-        operation,
-      );
+    const state = await this.resolvePriorityRecoveryOperationDrainSnapshotState({
+      operation,
+      completion,
+      completionState,
+      sourceSnapshot,
+      releaseEvidence,
+      supersededTargetState,
+    });
     const action =
       PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||
       OPERATION_LIFECYCLE_ACTION.NOOP;

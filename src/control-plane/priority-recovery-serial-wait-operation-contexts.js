@@ -1,5 +1,6 @@
 import {PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS} from './priority-recovery-admission-constants.js';
 import {normalizePriorityRecoveryStringList} from './priority-recovery-helpers.js';
+import {buildPriorityRecoveryPlannerEntry} from './priority-recovery-planning-intent.js';
 import {
   isReplaceRemoveDispatchPhase,
 } from '../rebalancer/replica-status.js';
@@ -122,15 +123,29 @@ function buildPriorityRecoverySerialWaitOperationContexts(options = {}) {
   const eligibleTargetNodeIds = normalizePriorityRecoveryStringList(
     options.eligibleTargetNodeIds,
   );
+  // The source operation's OWN partition's census entry decides its credit.
+  const isSourceSpreadSatisfying = (operationContext) => {
+    const sourcePlanner = buildPriorityRecoveryPlannerEntry(
+      operationContext?.partitionId,
+      options.priorityPartitionSummary,
+      options.plannerByPartitionId,
+    );
+    return isPriorityRecoverySpreadSatisfyingOperationContext(
+      operationContext,
+      {
+        eligibleTargetNodeIds,
+        readyReplicaCountByNodeId: sourcePlanner.readyReplicaCountByNodeId,
+        spreadGap: sourcePlanner.spreadGap,
+      },
+    );
+  };
   return (Array.isArray(options.serialLaneOperationContexts) ?
     options.serialLaneOperationContexts :
     []).filter((operationContext) =>
     isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
       operationContext,
     ) &&
-      isPriorityRecoverySpreadSatisfyingOperationContext(operationContext, {
-        eligibleTargetNodeIds,
-      }) !== true &&
+      isSourceSpreadSatisfying(operationContext) !== true &&
       String(operationContext.partitionId || LOCAL_STR_EMPTY).trim() !==
         partitionId,
   );

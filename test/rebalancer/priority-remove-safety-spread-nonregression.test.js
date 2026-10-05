@@ -160,3 +160,78 @@ test('spread-floor analyzer prose follows the protected local floor semantics',
     );
     t.end();
   });
+
+// Witness (k) (owner decision 2026-10-04): the blanket "priority spread has
+// not converged" defer for a blocked partition with an EMPTY recovery
+// projection is deleted. A count-neutral removal that keeps the spread floor
+// is SAFE; the spread floor alone still refuses a removal that would lose
+// spread. Before the deletion both shapes deferred on retry until the step
+// timeout (a timer-only unblock).
+function makeEmptyProjectionRemoveSafetyOwner() {
+  const owner = makeRemoveSafetyOwner();
+  owner.buildPriorityRecoveryAssessmentContextForOperation = () => ({
+    completion: {state: 'spread_pending'},
+    priorityPartitionSummary: {
+      satisfied: false,
+      requiredDistinctNodeCount: 3,
+      missingPartitionIds: [PARTITION_ID],
+      blockedPartitions: [{
+        partitionId: PARTITION_ID,
+        requiredDistinctNodeCount: 3,
+        readyDistinctNodeCount: 2,
+        spreadGap: 1,
+      }],
+    },
+  });
+  owner.resolvePriorityRemoveSafetyMembershipSnapshot = (
+    _planningSnapshot,
+    _priorityRecoveryContext,
+    projectedVoterReadyRows,
+  ) => ({
+    publishedActiveNodeIdsPresent: true,
+    recoveryProjectionNodeIds: [],
+    projectedVoterReadyNodeIds: [
+      ...new Set(projectedVoterReadyRows.map((row) => row.node_id)),
+    ],
+    membershipSource: 'published membership',
+    missingMembershipNodeIds: [],
+    useRecoveryProjectionMembership: false,
+  });
+  return owner;
+}
+
+test('(k) empty recovery projection: a count-neutral removal of a blocked ' +
+  'partition keeping the spread floor is SAFE', async (t) => {
+  const owner = makeEmptyProjectionRemoveSafetyOwner();
+  const evaluation =
+    await owner.evaluatePriorityPublishedMembershipRemoveSafety(
+      replaceOperation(),
+      rowsOnNodes(['node-seed', 'node-seed', 'node-target']),
+      rowsOnNodes(['node-seed', 'node-seed', 'node-seed', 'node-target']),
+    );
+  t.equal(
+    evaluation.classification,
+    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
+    'no blanket "priority spread has not converged" defer',
+  );
+  t.equal(evaluation.error, null);
+  t.end();
+});
+
+test('(k) empty recovery projection: the spread floor still refuses a ' +
+  'removal that loses spread', async (t) => {
+  const owner = makeEmptyProjectionRemoveSafetyOwner();
+  const evaluation =
+    await owner.evaluatePriorityPublishedMembershipRemoveSafety(
+      replaceOperation(),
+      rowsOnNodes(['node-seed', 'node-seed', 'node-seed']),
+      rowsOnNodes(['node-seed', 'node-seed', 'node-seed', 'node-target']),
+    );
+  t.equal(
+    evaluation.classification,
+    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+  );
+  t.match(evaluation.error, /protected per-operation requirement \(1\/2\)$/);
+  t.notMatch(evaluation.error || '', /priority spread has not converged/);
+  t.end();
+});

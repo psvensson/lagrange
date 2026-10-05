@@ -188,7 +188,6 @@ function buildPriorityRecoveryClosureEvidence(options = {}, helperFns = {}) {
         priorityRecoveryDecisionSnapshots?.closureWitness,
       ) || buildPriorityRecoveryClosureWitness({
         decisionSnapshots: priorityRecoveryDecisionSnapshots,
-        priorityPartitionSummary: options.priorityPartitionSummary,
       }),
   };
 }

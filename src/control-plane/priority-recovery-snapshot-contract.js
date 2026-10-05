@@ -250,24 +250,19 @@ const PRIORITY_RECOVERY_PROGRESS_EVIDENCE_SOURCE = Object.freeze({
   LAST_PROGRESS_TIMESTAMP: 'last_progress_timestamp',
 });
 
-const PRIORITY_RECOVERY_CLOSURE_RECORD_ID = Object.freeze({
-  PRIORITY_SPREAD: 'CL-003',
-});
-
-const PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS = Object.freeze({
-  PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING:
-    'publication_converged_priority_spread_pending',
-});
-
+// The closure witness has exactly two states: PENDING adds a blocker, and
+// the one non-pending state says nothing about spread (owner decision
+// 2026-10-04). The stale-publication state, its CL-003 record id and witness
+// class were the closure overriding a fresh census; they are deleted.
 const PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE = Object.freeze({
   PENDING: 'closure_pending',
   SATISFIED_FRESH: 'closure_satisfied_fresh',
-  SATISFIED_STALE_PUBLICATION: 'closure_satisfied_stale_publication',
 });
 
+// A partition the closure reports as settled: converged by the census. An
+// operation in flight never makes a partition closure-satisfied.
 const PRIORITY_RECOVERY_CLOSURE_SATISFIED_SEMANTIC_STATE_IDS = Object.freeze([
   PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED,
-  PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
 ]);
 
 const PRIORITY_RECOVERY_TERMINAL_OPERATION_STATUS_SET = new Set(
@@ -285,9 +280,7 @@ export {
   LOCAL_EMPTY_LIST,
   LOCAL_STR_EMPTY,
   PRIORITY_RECOVERY_ACTUATION_DECISION,
-  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
   PRIORITY_RECOVERY_CLOSURE_SATISFIED_SEMANTIC_STATE_IDS,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
   PRIORITY_RECOVERY_CONVERGENCE_STATE,
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_CONFLICT_STAGE,
