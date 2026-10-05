@@ -12,6 +12,15 @@ import {types as utilTypes} from 'node:util';
 // SqlCore.executeQuery); this module only copies the application's own row
 // data. A raw error THROWN by SqlCore is likewise reduced to primitive
 // `{code, message}` before it becomes an ApplicationDatabaseError cause.
+//
+// This module is also the ONE reader of a SqlCore result's affected-row
+// count for every public SQL surface (the application facade here, the
+// PostgreSQL wire command tags in src/runtime/pgwire-result-mapper.js). The
+// engine's canonical count field is `affectedRows`; the partition's own
+// `changes` and a client library's `rowCount` are not engine result fields.
+// The reader keeps "no count" (null) distinct from zero rows: each surface
+// decides what an absent count means for its statement, and a surface never
+// learns the field name on its own.
 
 const APPLICATION_DATABASE_RESULT_FIELD = Object.freeze({
   AFFECTED_ROWS: 'affectedRows',
@@ -22,6 +31,7 @@ const APPLICATION_DATABASE_CAUSE_FIELD = Object.freeze({
   MESSAGE: 'message',
 });
 const NO_AFFECTED_ROWS = 0;
+const NO_AFFECTED_ROW_COUNT = null;
 const NO_CAUSE_FIELD = null;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
@@ -85,14 +95,27 @@ function projectRows(result) {
   return projected;
 }
 
-function projectAffectedRows(result) {
+/**
+ * Read the affected-row count a SqlCore result reports.
+ * @param {Object} result - SqlCore result.
+ * @return {?number} The non-negative safe-integer count, or null when the
+ *   result carries no readable count (absent is never read as zero rows).
+ */
+function readAffectedRowCount(result) {
   const affectedRows = readOwnDataValue(
     result,
     APPLICATION_DATABASE_RESULT_FIELD.AFFECTED_ROWS,
   );
   return numberIsSafeInteger(affectedRows) && affectedRows >= NO_AFFECTED_ROWS ?
     affectedRows + NO_AFFECTED_ROWS :
-    NO_AFFECTED_ROWS;
+    NO_AFFECTED_ROW_COUNT;
+}
+
+function projectAffectedRows(result) {
+  const affectedRows = readAffectedRowCount(result);
+  return affectedRows === NO_AFFECTED_ROW_COUNT ?
+    NO_AFFECTED_ROWS :
+    affectedRows;
 }
 
 /**
@@ -137,4 +160,5 @@ function projectEngineFailureCause(thrown) {
 export {
   projectApplicationDatabaseResult,
   projectEngineFailureCause,
+  readAffectedRowCount,
 };

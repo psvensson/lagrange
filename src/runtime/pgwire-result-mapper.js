@@ -4,6 +4,9 @@
  * @module runtime/pgwire-result-mapper
  */
 
+import {readAffectedRowCount} from '../query/application-database-result.js';
+import {PG_ERROR_CODE} from './pgwire-protocol-constants.js';
+
 const LOCAL_STR_SELECT = 'SELECT';
 const LOCAL_STR_INSERT = 'INSERT';
 const LOCAL_STR_UPDATE = 'UPDATE';
@@ -19,12 +22,43 @@ const LOCAL_STR_OK = 'OK';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_COLUMN = 'column';
 
+// A DML result that carries no affected-row count has no truthful
+// PostgreSQL command tag (the protocol has no "unknown count" tag), so the
+// mapper refuses it as an internal error instead of reporting zero rows.
+const PGWIRE_RESULT_MAPPER_ERROR = Object.freeze({
+  MISSING_AFFECTED_ROW_COUNT: 'PGWIRE_MISSING_AFFECTED_ROW_COUNT',
+  MISSING_AFFECTED_ROW_COUNT_MESSAGE:
+    ' completed without an affected-row count in the engine result; ' +
+    'no truthful command tag can be reported',
+});
+
+/**
+ * The affected-row count of a DML result, read by the one result-count owner.
+ *
+ * @param {Object} result - SqlCore result.
+ * @param {string} command - INSERT, UPDATE or DELETE.
+ * @return {number} The engine-reported count.
+ * @throws {Error} code PGWIRE_MISSING_AFFECTED_ROW_COUNT, sqlState XX000,
+ *   when the result carries no count (never read as zero rows).
+ */
+function requireAffectedRowCount(result, command) {
+  const count = readAffectedRowCount(result);
+  if (count !== null) return count;
+  const error = new Error(
+    command + PGWIRE_RESULT_MAPPER_ERROR.MISSING_AFFECTED_ROW_COUNT_MESSAGE,
+  );
+  error.code = PGWIRE_RESULT_MAPPER_ERROR.MISSING_AFFECTED_ROW_COUNT;
+  error.sqlState = PG_ERROR_CODE.INTERNAL_ERROR;
+  throw error;
+}
+
 /**
  * Derive a command tag from a SQL result.
  *
  * @param {Object} result - SqlCore result.
  * @param {string} query - Original SQL query.
  * @return {string} PG command tag.
+ * @throws {Error} When a DML result carries no affected-row count.
  */
 function deriveCommandTag(result, query) {
   const upper = query.trimStart().toUpperCase();
@@ -34,15 +68,15 @@ function deriveCommandTag(result, query) {
     return `SELECT ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_INSERT)) {
-    const count = result?.changes ?? result?.rowCount ?? 0;
+    const count = requireAffectedRowCount(result, LOCAL_STR_INSERT);
     return `INSERT 0 ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_UPDATE)) {
-    const count = result?.changes ?? result?.rowCount ?? 0;
+    const count = requireAffectedRowCount(result, LOCAL_STR_UPDATE);
     return `UPDATE ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_DELETE)) {
-    const count = result?.changes ?? result?.rowCount ?? 0;
+    const count = requireAffectedRowCount(result, LOCAL_STR_DELETE);
     return `DELETE ${count}`;
   }
   if (upper.startsWith(LOCAL_STR_CREATE)) return LOCAL_STR_CREATE_TABLE;

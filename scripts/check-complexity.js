@@ -88,7 +88,10 @@ const TARGET_THRESHOLD = 12;
 // D9 ranking, D3 latch).
 // 2026-10-05: merge of quest/one-spread-authority keeps the lower value,
 // then tightened 1764 -> 1761 on the checker's hint for the merged tree.
-const BASELINE_COUNT = 1761;
+// 2026-10-05 (quest/pgwire-dml-row-counts): tightened 1761 -> 1760 on the
+// checker's hint (the PG-wire mapper's three `changes ?? rowCount ?? 0`
+// fallbacks became one call to the result-count owner).
+const BASELINE_COUNT = 1760;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2229,
+    "ordinary": 2231,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2246,
-  "digest": "fnv1a32-03bfa7b0",
+  "censusSize": 2248,
+  "digest": "fnv1a32-167b86c5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1007,6 +1007,7 @@
     "test/integration/node-join-replica-activation.integration.test.js": "ordinary",
     "test/integration/node-joining-rebalance.integration.test.js": "ordinary",
     "test/integration/pgwire-bootstrap.integration.test.js": "ordinary",
+    "test/integration/pgwire-command-tag-real-engine.integration.test.js": "ordinary",
     "test/integration/pgwire-rebalance.integration.test.js": "ordinary",
     "test/integration/preflight-critical-path-hops.integration.test.js": "ordinary",
     "test/integration/priority-spread-one-authority-rebalance.integration.test.js": "ordinary",
@@ -1848,6 +1849,7 @@
     "test/runtime/pgwire-port-allocator.test.js": "ordinary",
     "test/runtime/pgwire-protocol-handler.test.js": "ordinary",
     "test/runtime/pgwire-protocol-ordering.test.js": "ordinary",
+    "test/runtime/pgwire-result-mapper.test.js": "ordinary",
     "test/runtime/pgwire-runtime-module.test.js": "ordinary",
     "test/runtime/pgwire-schema-provisioning-job.test.js": "ordinary",
     "test/runtime/pgwire-session.test.js": "ordinary",

@@ -11,7 +11,7 @@
     "convergence-topology": 83,
     "distributed-harness": 174,
     "examples-e2e": 7,
-    "pgwire-compat": 17,
+    "pgwire-compat": 19,
     "placement-rebalance": 258,
     "query-sql": 165,
     "release-packaging": 15,
@@ -25,10 +25,10 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2246,
-  "digest": "fnv1a32-07dda79c",
+  "censusSize": 2248,
+  "digest": "fnv1a32-ea258a9f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-283073e8",
+  "observationDigest": "fnv1a32-485e3ec4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1027,6 +1027,7 @@
     "test/integration/node-join-replica-activation.integration.test.js": "bootstrap-membership",
     "test/integration/node-joining-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/pgwire-bootstrap.integration.test.js": "pgwire-compat",
+    "test/integration/pgwire-command-tag-real-engine.integration.test.js": "pgwire-compat",
     "test/integration/pgwire-rebalance.integration.test.js": "pgwire-compat",
     "test/integration/preflight-critical-path-hops.integration.test.js": "control-plane",
     "test/integration/priority-spread-one-authority-rebalance.integration.test.js": "placement-rebalance",
@@ -1868,6 +1869,7 @@
     "test/runtime/pgwire-port-allocator.test.js": "pgwire-compat",
     "test/runtime/pgwire-protocol-handler.test.js": "pgwire-compat",
     "test/runtime/pgwire-protocol-ordering.test.js": "pgwire-compat",
+    "test/runtime/pgwire-result-mapper.test.js": "pgwire-compat",
     "test/runtime/pgwire-runtime-module.test.js": "pgwire-compat",
     "test/runtime/pgwire-schema-provisioning-job.test.js": "pgwire-compat",
     "test/runtime/pgwire-session.test.js": "pgwire-compat",
@@ -3409,7 +3411,8 @@
     },
     "test/compatibility/pgwire-client-compat.test.js": {
       "files": [
-        "src/runtime/pgwire-runtime-module.js"
+        "src/runtime/pgwire-runtime-module.js",
+        "test/helpers/sqlite-partition-sql-engine.js"
       ]
     },
     "test/config/architecture-ownership-guardrails.test.js": {
@@ -7001,6 +7004,19 @@
         "src/bootstrap/shared/meta-service-definition-registration.js"
       ]
     },
+    "test/integration/pgwire-command-tag-real-engine.integration.test.js": {
+      "files": [
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/embedded-lagrange.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "src",
+        "wit"
+      ]
+    },
     "test/integration/pgwire-rebalance.integration.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -10504,6 +10520,13 @@
     "test/runtime/pgwire-protocol-ordering.test.js": {
       "files": [
         "src/runtime/pgwire-protocol-handler.js"
+      ]
+    },
+    "test/runtime/pgwire-result-mapper.test.js": {
+      "files": [
+        "src/query/pg/postgres-wire-adapter.js",
+        "src/runtime/pgwire-protocol-handler.js",
+        "test/helpers/sqlite-partition-sql-engine.js"
       ]
     },
     "test/runtime/pgwire-runtime-module.test.js": {

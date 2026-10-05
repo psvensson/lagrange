@@ -663,7 +663,7 @@ describe('pgwire-protocol-handler', () => {
     it('should handle INSERT result', async () => {
       const socket = new MockSocket();
       const adapter = new MockAdapter({
-        execResult: {changes: 3},
+        execResult: {affectedRows: 3},
       });
       const handler = new PgWireProtocolHandler({
         adapter, socket, logger: silentLogger,
@@ -1314,21 +1314,21 @@ describe('pgwire-protocol-handler', () => {
 
     it('deriveCommandTag should handle INSERT', () => {
       assert.equal(
-        deriveCommandTag({changes: 5}, 'INSERT INTO t VALUES(1)'),
+        deriveCommandTag({affectedRows: 5}, 'INSERT INTO t VALUES(1)'),
         'INSERT 0 5',
       );
     });
 
     it('deriveCommandTag should handle UPDATE', () => {
       assert.equal(
-        deriveCommandTag({changes: 3}, 'UPDATE t SET x=1'),
+        deriveCommandTag({affectedRows: 3}, 'UPDATE t SET x=1'),
         'UPDATE 3',
       );
     });
 
     it('deriveCommandTag should handle DELETE', () => {
       assert.equal(
-        deriveCommandTag({changes: 1}, 'DELETE FROM t'),
+        deriveCommandTag({affectedRows: 1}, 'DELETE FROM t'),
         'DELETE 1',
       );
     });

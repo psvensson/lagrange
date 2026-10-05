@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 416255,
-        "sha256": "b55ed8d2ead7db2e864d3323e2fb6fbd5d40c982464eade2d1ae6bfeb23c67d0"
+        "bytes": 416054,
+        "sha256": "85b4bda74053db0d11314020d85bc20394e545867739b150b6f2b5ecd89b3860"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2672114,
-        "sha256": "707eb836fba14d6e2dde4927e2d8b92d9bb24bf5e94b35d5a3efafb923711c4b"
+        "bytes": 2673997,
+        "sha256": "432b8cc0bf33c2651b54f09e2a5f2e663c09d42787f08205ecd5bc22cf02ae40"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "cfbcd3f02d04d4f9272e756b14982d555c16be756cc77e0424288b20d86a1a66"
+        "sha256": "579163f8522b91785e50bfc20eb2318def99d6e7970efe582edd375833ac20bd"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "5bd7defe8a7785e52e71db1897fff2b83ceda09ad446f47e8cde0ab2ab14c491"
+        "sha256": "45249d564f5082bb3b8276672c3706d1c2fa5690c8f1587c50a8d8b9ba922ba1"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "e5de13d75a30e8b4e71a9a16f038d53f6d19268a120daa0f3b0a6fbf1287b4da"
+    "inputDigest": "cda8f7edb32081cadea0953ce5519b425d400a01210d358e72a897d13a3af3b2"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 416255,
-        "sha256": "b55ed8d2ead7db2e864d3323e2fb6fbd5d40c982464eade2d1ae6bfeb23c67d0"
+        "bytes": 416054,
+        "sha256": "85b4bda74053db0d11314020d85bc20394e545867739b150b6f2b5ecd89b3860"
       },
-      "declaredCount": 1761,
-      "observedCount": 1761,
-      "assignedCount": 1761
+      "declaredCount": 1760,
+      "observedCount": 1760,
+      "assignedCount": 1760
     },
     "cognitive": {
       "identity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "cfbcd3f02d04d4f9272e756b14982d555c16be756cc77e0424288b20d86a1a66"
+          "sha256": "579163f8522b91785e50bfc20eb2318def99d6e7970efe582edd375833ac20bd"
         },
         "cloneGroups": 48,
         "duplicatedLines": 1512,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "5bd7defe8a7785e52e71db1897fff2b83ceda09ad446f47e8cde0ab2ab14c491"
+          "sha256": "45249d564f5082bb3b8276672c3706d1c2fa5690c8f1587c50a8d8b9ba922ba1"
         },
         "cloneGroups": 706,
         "duplicatedLines": 26671,
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2672114,
-        "sha256": "707eb836fba14d6e2dde4927e2d8b92d9bb24bf5e94b35d5a3efafb923711c4b"
+        "bytes": 2673997,
+        "sha256": "432b8cc0bf33c2651b54f09e2a5f2e663c09d42787f08205ecd5bc22cf02ae40"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "8260d304daa6de40417171265f62433a707113a61e9a5c56f71c17ec7966b0a6",
-      "moduleCount": 5086,
-      "edgeCount": 25081,
+      "sourceDigest": "02d3e8ecce70bf9ff955e556344810d6819e37b8a2bbfb8dd0db13d246bd64ea",
+      "moduleCount": 5089,
+      "edgeCount": 25104,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2510,
-    "assignedSignalCount": 2510,
-    "uniqueAssignmentCount": 2510,
-    "digest": "94fc5ee84992eb656517c4dff0edadbdf8e1a457faefadebc2a4aec733f417c4"
+    "sourceSignalCount": 2509,
+    "assignedSignalCount": 2509,
+    "uniqueAssignmentCount": 2509,
+    "digest": "a3e5e42dca98bdc978e64fb9849ee63cd94d477f87f005e0b081594afd8cec5e"
   },
   "signalCounts": {
     "cognitive": 152,
-    "complexity": 1761,
+    "complexity": 1760,
     "duplication": 510,
     "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1287,
+    "filesWithDebt": 1286,
     "rankedBoundaryCount": 113,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 93,
@@ -611,7 +611,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 106,
+      "importIn": 107,
       "importOut": 61,
       "score": 246.8,
       "topPaths": [
@@ -1321,34 +1321,6 @@
       ]
     },
     {
-      "key": "area:src/runtime",
-      "owner": null,
-      "boundary": "src/runtime",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/runtime"
-      ],
-      "fileCount": 10,
-      "signalCount": 12,
-      "complexity": 12,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 49,
-      "importOut": 52,
-      "score": 48,
-      "topPaths": [
-        "src/runtime/service-runtime-lifecycle-operation-methods.js",
-        "src/runtime/endpoint-sync-config.js",
-        "src/runtime/endpoint-sync-controller.js",
-        "src/runtime/endpoint-sync-k8s-client.js",
-        "src/runtime/endpoint-sync-source-query.js"
-      ]
-    },
-    {
       "key": "area:test/transaction",
       "owner": null,
       "boundary": "test/transaction",
@@ -1429,6 +1401,34 @@
         "src/migration/migration-coordinator-lifecycle-methods.js",
         "src/migration/migration-pipeline.js",
         "src/migration/migration-recovery-trigger.js"
+      ]
+    },
+    {
+      "key": "area:src/runtime",
+      "owner": null,
+      "boundary": "src/runtime",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/runtime"
+      ],
+      "fileCount": 9,
+      "signalCount": 11,
+      "complexity": 11,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 49,
+      "importOut": 52,
+      "score": 44,
+      "topPaths": [
+        "src/runtime/service-runtime-lifecycle-operation-methods.js",
+        "src/runtime/endpoint-sync-config.js",
+        "src/runtime/endpoint-sync-controller.js",
+        "src/runtime/endpoint-sync-k8s-client.js",
+        "src/runtime/endpoint-sync-source-query.js"
       ]
     },
     {
