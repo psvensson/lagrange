@@ -24,18 +24,27 @@ try {
   policy = null;
 }
 
-let metric = 0;
-metric += policy?.version === 1 ? 0 : 1;
-metric += policy?.integerEncoding === 'sqlite_integer_exact' ? 0 : 1;
-metric += policy?.typeAuthority === 'declared_primary_key_type' ? 0 : 1;
-metric += policy?.legacyAmbiguousBoundary === 'fail_closed_revalidate' ? 0 : 1;
-metric += policy?.globalSafeIntegerMode === false ? 0 : 1;
-metric += schema.includes('partition_key_type') ? 0 : 1;
-metric += split.includes('{safeIntegers: true}') &&
-  readPath.includes('stmt.safeIntegers(options.safeIntegers === true)') ? 0 : 1;
-metric += workflow.includes('partition_key_type: sourcePartitionKeyType') ? 0 : 1;
-metric += decoder.includes('BigInt(value)') &&
-  witness.includes('9007199254740993n') ? 0 : 1;
-
+const dimensions = {
+  policyVersion: policy?.version === 1,
+  integerEncoding: policy?.integerEncoding === 'sqlite_integer_exact',
+  typeAuthority: policy?.typeAuthority === 'declared_primary_key_type',
+  legacyRevalidation:
+    policy?.legacyAmbiguousBoundary === 'fail_closed_revalidate',
+  scopedSafeInteger: policy?.globalSafeIntegerMode === false,
+  schemaAuthority: schema.includes('partition_key_type'),
+  exactMedianRead: split.includes('{safeIntegers: true}') &&
+    readPath.includes('stmt.safeIntegers(options.safeIntegers === true)'),
+  splitPropagation:
+    workflow.includes('partition_key_type: sourcePartitionKeyType'),
+  exactLargeInteger: decoder.includes('BigInt(value)') &&
+    witness.includes('9007199254740993n'),
+};
+const failed = Object.entries(dimensions)
+  .filter(([, passed]) => !passed)
+  .map(([name]) => name);
+const metric = failed.length;
+if (failed.length > 0) {
+  process.stderr.write(`A2 failed dimensions: ${failed.join(', ')}\\n`);
+}
 process.stdout.write(String(metric) + '\n');
 process.exitCode = metric === 0 ? 0 : 1;
