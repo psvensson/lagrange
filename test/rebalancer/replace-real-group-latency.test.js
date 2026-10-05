@@ -28,6 +28,8 @@ import {
   runToQuiescence,
   settleTurns,
 } from './replace-real-group-harness.js';
+import {RAFT_RS_MESSAGE_TYPE} from
+  '../../src/raft/raft-rs-ingress-constants.js';
 
 const BACKSTOP_ADVANCE_MS = 61_000;
 
@@ -131,10 +133,12 @@ async (t) => {
     sourceLeads: false, sourceHandler: true});
   try {
     const leader = world.group.leader();
-    // The leader's inbox is held from here: it appends what R-1f proposes
-    // and replicates it, but its followers' acks never reach it (a leader
-    // whose node does not drain; check_quorum off keeps it leading).
-    world.group.holdInbox(leader);
+    // The leader's append acks are held from here: it appends what R-1f
+    // proposes and replicates it, but the acks never reach it. Its
+    // followers' heartbeat responses still do: under check_quorum a leader
+    // that hears no quorum for an election timeout steps down, and this
+    // scenario is a leader that keeps leading but cannot commit.
+    world.group.holdInbox(leader, [RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE]);
     await driveToIntent(world);
     await settleTurns();
     t.ok(world.retirements.length >= 1, 'R-1f proposed once');

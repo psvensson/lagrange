@@ -252,6 +252,9 @@ function gateForEpoch(pub, epoch) {
   return null;
 }
 
+const PHASE_B_DEADLINE_MS = 5000;
+const HEAL_WINDOW_MS = 1000;
+
 async function runAckFailback(seed) {
   const required = {version: 1};
   const ledger = new Map(); // per-run: committed publication_id -> Set of acking nodeIds
@@ -278,7 +281,12 @@ async function runAckFailback(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await host.runUntil(1600);
+  // Under check_quorum each follower ignores pre-votes for its own election
+  // timeout after A's last heartbeat (its leader lease): the fail-back is
+  // awaited as an event (a new leader whose v2 ack cycle closed).
+  await host.runUntilTrue(() => followers.some((id) => host.isLeader(id) &&
+    gateForEpoch(pubs.get(id), 2)?.ready === true),
+  {deadlineMs: PHASE_B_DEADLINE_MS});
   const leaderB = followers.find((id) => host.isLeader(id)) || null;
   const afterFailback = {
     leaderBGateV2: leaderB ? gateForEpoch(pubs.get(leaderB), 2) : null,
@@ -291,7 +299,7 @@ async function runAckFailback(seed) {
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await host.runUntil(2600);
+  await host.runUntil(net.now() + HEAL_WINDOW_MS);
   const afterHeal = Object.fromEntries(
     IDS.map((id) => [id, gateForEpoch(pubs.get(id), 2)]),
   );

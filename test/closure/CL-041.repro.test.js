@@ -1,6 +1,7 @@
 import t from 'tap';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
+import {RAFT_EVENT} from '../../src/raft/raft-operation-port-constants.js';
 
 // CL-041 — one vote per term, on real raft-rs operation ports
 // (solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md).
@@ -37,11 +38,18 @@ t.test('a voter grants at most one candidate per term (no two leaders in a term)
       {partitionId: PARTITION_ID, electionMinMs: ELECTION_WINDOW_MS});
     t.teardown(() => host.dispose());
     host.start();
+    const leadersByTerm = new Map();
+    const candidatesByTerm = new Map();
+    // With pre_vote a campaign is a pre-candidacy first; the real candidacy
+    // can begin and end between two samples, so the port's own CANDIDATE
+    // announcement records it (the term read at the announcement).
+    for (const id of IDS) {
+      host.cluster.node(id).subscribe(RAFT_EVENT.CANDIDATE, () =>
+        record(candidatesByTerm, Number(host.status(id).term), id));
+    }
 
     host.campaign('A');
     host.campaign('B');
-    const leadersByTerm = new Map();
-    const candidatesByTerm = new Map();
     for (let now = 1; now <= RUN_MS; now += 1) {
       await host.runUntil(now);
       for (const id of IDS) {

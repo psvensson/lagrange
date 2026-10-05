@@ -119,6 +119,9 @@ function hostPublisher(net, consensus, nodeId, store) {
   return {coordinator, counters};
 }
 
+const PHASE_B_DEADLINE_MS = 4000;
+const PHASE_SETTLE_MS = 500;
+
 async function runPublicationFailback(seed) {
   const store = {committedEpoch: 0, published: [], lastRow: null};
   const net = createVirtualNetwork();
@@ -147,13 +150,20 @@ async function runPublicationFailback(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await consensus.runUntil(1000, {stepMs: 5});
+  // Under check_quorum each follower ignores pre-votes for its own election
+  // timeout after A's last heartbeat (its leader lease), so the migration
+  // is awaited as an event, not at a fixed instant.
+  const newLeaderPublished = () => followers.some((id) =>
+    consensus.isLeader(id) && store.committedEpoch === consensus.term(id));
+  await consensus.runUntilTrue(newLeaderPublished,
+    {deadlineMs: PHASE_B_DEADLINE_MS, stepMs: 5});
+  await consensus.runUntil(net.now() + PHASE_SETTLE_MS, {stepMs: 5});
   const leaderB = followers.find((id) => consensus.isLeader(id)) || null;
   const termB = leaderB ? consensus.term(leaderB) : null;
   const afterPartition = {
     store: {...store},
     newLeaderCommits: leaderB ? pubs.get(leaderB).counters.commits : 0,
-    oldLeaderRejected: pubs.get(leaderA).counters.rejectedStaleWrites,
+    oldLeaderStillLeads: consensus.isLeader(leaderA),
     oldLeaderCommits: pubs.get(leaderA).counters.commits,
   };
 
@@ -161,7 +171,7 @@ async function runPublicationFailback(seed) {
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await consensus.runUntil(1500, {stepMs: 5});
+  await consensus.runUntil(net.now() + PHASE_SETTLE_MS, {stepMs: 5});
   const afterHeal = {
     store: {...store},
     oldLeaderIsLeader: consensus.isLeader(leaderA),
@@ -204,9 +214,11 @@ t.test('Phase B: after a migration the NEW leader re-publishes for its term (CL-
     'the new leader detected the stale epoch and RE-PUBLISHED — the fail-back');
   t.equal(m.afterPartition.store.committedEpoch, m.termB,
     'the published epoch advanced to the new leader\'s term');
-  t.ok(m.afterPartition.oldLeaderRejected > 0,
-    'the partitioned old leader kept trying to publish but its stale-term writes were rejected ' +
-    '(the stuck isolated owner that cannot commit)');
+  // check_quorum: the isolated old leader hears no quorum for an election
+  // timeout and steps down, so it stops acting as owner (any write it still
+  // tried before that was rejected at its stale term).
+  t.equal(m.afterPartition.oldLeaderStillLeads, false,
+    'the partitioned old leader stepped down (check_quorum): no stuck isolated owner');
   t.equal(m.afterPartition.oldLeaderCommits, m.afterElection.leaderCommits,
     'the partitioned old leader committed nothing further (frozen at its phase-A publication)');
 });
@@ -236,15 +248,17 @@ t.test('the publication fail-back is deterministic and holds across seeds', asyn
   for (let seed = 0; seed < 10; seed += 1) {
     const m = await runPublicationFailback(seed);
     // Phase A converged at the elected leader's term; Phase B re-published at a higher term
-    // (the fail-back); the old leader was a stuck owner; heal is stable.
+    // (the fail-back); the old leader stepped down under check_quorum; heal is
+    // stable.
     t.ok(m.afterElection.store.committedEpoch === m.termA &&
       m.afterElection.store.published.length === EXPECTED.length,
     `seed ${seed}: leader A published its term's epoch`);
     t.ok(m.termB > m.termA && m.afterPartition.store.committedEpoch === m.termB &&
       m.afterPartition.newLeaderCommits > 0,
     `seed ${seed}: the new leader re-published for its term (fail-back)`);
-    t.ok(m.afterPartition.oldLeaderRejected > 0,
-      `seed ${seed}: the partitioned old leader could not commit (stuck owner)`);
+    t.ok(!m.afterPartition.oldLeaderStillLeads &&
+      m.afterPartition.oldLeaderCommits === m.afterElection.leaderCommits,
+    `seed ${seed}: the partitioned old leader stepped down and committed nothing`);
     t.equal(m.afterHeal.store.committedEpoch, m.termB,
       `seed ${seed}: the migrated epoch is stable after heal`);
     survivors.add(m.leaderB);

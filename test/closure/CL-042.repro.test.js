@@ -1,6 +1,7 @@
 import t from 'tap';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
+import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
 
 // CL-042 — the election restriction against an empty-log higher-term candidate, on real raft-rs
 // operation ports (solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-042.md).
@@ -11,10 +12,12 @@ import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
 // node's current term, so an isolated empty-log node that inflated its term through failed
 // elections won the vote of a replica holding committed entries.
 //
-// That trigger is reachable under the production group tuning (raft-rs-group-constants.js: pre_vote
-// and check_quorum are off): the isolated node's own election timeouts raise its term, and on heal
-// its higher term makes the leader step down — an availability cost this witness does not claim
-// away. What must hold is safety: the raft-rs core compares the real last-log term (an empty log's
+// Under the production group tuning (raft-rs-group-constants.js: pre_vote and check_quorum on) the
+// isolated node's own election timeouts no longer raise its term (a pre-vote never does), which
+// this witness asserts. The trigger stays reachable through the one election raft-rs runs without
+// a pre-vote: a transfer election (MsgTimeoutNow, CAMPAIGN_TRANSFER), here delivered to the
+// isolated node while it is cut off; on heal its higher term makes the leader step down - an
+// availability cost this witness does not claim away. What must hold is safety: the raft-rs core compares the real last-log term (an empty log's
 // is 0), every replica holding the committed entry refuses it, it never leads, and the entry it
 // lacks is never overwritten. The test reads only port status and committed entries.
 
@@ -24,6 +27,7 @@ const ELECTION_WINDOW_MS = 150;
 const ISOLATED_UNTIL_MS = 1500;
 const HEALED_RUN_MS = 2500;
 const SAMPLE_MS = 5;
+const FORCED_ELECTIONS = 3;
 
 function committedTags(host, id) {
   return host.committedEntries(id)
@@ -63,6 +67,19 @@ t.test('replicas holding a committed entry refuse an empty-log higher-term candi
     t.ok(committedTags(host, 'L').includes('X') && committedTags(host, 'V').includes('X'),
       'the leader and its voter committed X');
     t.same(committedTags(host, 'C'), [], 'the isolated candidate holds no committed entry');
+    t.ok(host.term('C') <= host.term('L'),
+      'pre-vote: the isolated node\'s own failed elections never raised its term');
+    // Transfer elections bypass the pre-vote: each MsgTimeoutNow makes the
+    // isolated empty-log node a real candidate at the next term.
+    for (let forced = 0; forced < FORCED_ELECTIONS; forced += 1) {
+      const c = host.status('C');
+      await host.cluster.node('C').step({groupId: PARTITION_ID,
+        from: host.status('L').peerId, to: c.peerId,
+        message: {msgType: RAFT_RS_MESSAGE_TYPE.TIMEOUT_NOW,
+          from: host.status('L').peerId, to: c.peerId,
+          term: String(Math.max(c.term, host.term('L')))}});
+      await host.runUntil(net.now() + SAMPLE_MS);
+    }
     t.ok(host.term('C') > host.term('L'),
       'the trigger is reached: the empty-log candidate\'s failed elections raised its term ' +
       `(C=${host.term('C')}, L=${host.term('L')})`);
@@ -71,7 +88,8 @@ t.test('replicas holding a committed entry refuse an empty-log higher-term candi
     net.heal('C', 'L');
     net.heal('C', 'V');
     const violations = [];
-    for (let until = ISOLATED_UNTIL_MS + SAMPLE_MS; until <= ISOLATED_UNTIL_MS + HEALED_RUN_MS;
+    const healedAt = net.now();
+    for (let until = healedAt + SAMPLE_MS; until <= healedAt + HEALED_RUN_MS;
       until += SAMPLE_MS) {
       await host.runUntil(until);
       for (const id of IDS.filter((replica) => host.isLeader(replica))) {

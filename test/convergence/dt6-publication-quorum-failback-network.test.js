@@ -133,6 +133,9 @@ function hostQuorumPublisher(net, host, nodeId, required) {
   return {coordinator, state};
 }
 
+const PHASE_B_DEADLINE_MS = 5000;
+const HEAL_WINDOW_MS = 800;
+
 async function runQuorumFailback(seed) {
   const required = {version: 1};
   const net = createVirtualNetwork();
@@ -161,7 +164,12 @@ async function runQuorumFailback(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await host.runUntil(1400);
+  // Under check_quorum each follower ignores pre-votes for its own election
+  // timeout after A's last heartbeat (its leader lease): the fail-back is
+  // awaited as an event (a new leader that committed v2).
+  await host.runUntilTrue(() => followers.some((id) => host.isLeader(id) &&
+    pubs.get(id).state.committedVersion === 2),
+  {deadlineMs: PHASE_B_DEADLINE_MS});
   const leaderB = followers.find((id) => host.isLeader(id)) || null;
   const afterFailback = {
     versions: committedVersions(),
@@ -174,7 +182,7 @@ async function runQuorumFailback(seed) {
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await host.runUntil(2200);
+  await host.runUntil(net.now() + HEAL_WINDOW_MS);
   // Committed-log agreement: group every committed entry by index; any index with >1 distinct
   // {term, command} across nodes is a Raft safety violation (this is what CL-040 used to expose).
   const committedByIndex = new Map();
