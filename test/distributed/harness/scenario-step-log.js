@@ -10,6 +10,7 @@
  */
 
 import {PLAYBACK_EVENT_TYPE} from './constants.js';
+import {recordCertificationGate} from './scenario-certification.js';
 
 const SCENARIO_STEP_STATUS = Object.freeze({
   COMPLETED: 'completed',
@@ -25,12 +26,14 @@ function recordScenarioEvent(cluster, type, entityId, details) {
 }
 
 /**
- * Record one gate's structured record (pass or fail).
+ * Record one gate's structured record (pass or fail), in the playback
+ * stream and on the run's certification ledger.
  * @param {Object} cluster
  * @param {Object} record From scenario-ground-truth buildGateRecord.
  * @return {boolean} Whether the cluster accepted the event.
  */
 function recordScenarioGate(cluster, record) {
+  recordCertificationGate(cluster, record);
   return recordScenarioEvent(
     cluster, PLAYBACK_EVENT_TYPE.SCENARIO_GATE, record.gate, record);
 }

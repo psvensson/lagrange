@@ -66,7 +66,15 @@ const SPREAD_UNIT_FAILURE = Object.freeze({
 
 // The terminal scenario outcome for a topology that cannot carry the
 // scenario's claim: distinct from passed and from failed everywhere.
+// The CERTIFICATION_* reasons apply only to a run that requests
+// certification (scenario-certification.js): such a run on a topology that
+// cannot certify is REFUSED, never run-and-maybe-fail.
 const SCENARIO_REFUSAL = Object.freeze({
+  CERTIFICATION_REQUIREMENT_INVALID:
+    'refused_invalid_certification_requirement',
+  CERTIFICATION_REQUIREMENT_UNDECLARED:
+    'refused_certification_requirement_undeclared',
+  CERTIFICATION_TOPOLOGY: 'refused_certification_topology',
   INSUFFICIENT_HOST_TOPOLOGY: 'refused_insufficient_host_topology',
   INVALID_REQUIREMENT: 'refused_invalid_topology_requirement',
 });
@@ -208,6 +216,98 @@ function evaluateScenarioTopologyRequirement(requirement, config) {
   };
 }
 
+function isPositiveInteger(value) {
+  return Number.isSafeInteger(value) && value >= ONE;
+}
+
+function isValidCertificationRequirement(requirement) {
+  return isPositiveInteger(requirement.maxNodesPerHost) &&
+    isPositiveInteger(requirement.minNodes) &&
+    requirement.spreadUnit === SPREAD_UNIT.HOST;
+}
+
+// How many placed nodes share the most-loaded host (unknown hosts excluded).
+function maxNodesOnOneHost(nodes) {
+  const perHost = new Map();
+  let max = ZERO;
+  for (const node of nodes) {
+    if (node.hostId !== null) {
+      const count = (perHost.get(node.hostId) || ZERO) + ONE;
+      perHost.set(node.hostId, count);
+      max = Math.max(max, count);
+    }
+  }
+  return max;
+}
+
+function certificationTopologyShortfall(requirement, topology, maxOnOne) {
+  return topology.distinctHosts === null ||
+    topology.nodes.length < requirement.minNodes ||
+    maxOnOne > requirement.maxNodesPerHost;
+}
+
+/**
+ * The topology a CERTIFICATION run needs (owner ruling 5, 2026-10-05): the
+ * scenario declares `SCENARIO_CERTIFICATION_REQUIREMENT = {minNodes,
+ * maxNodesPerHost, spreadUnit: 'host'}`; the config must place at least
+ * minNodes nodes, each on a declared machine, never more than
+ * maxNodesPerHost on one machine (`maxNodesPerHost: 1` = one node per
+ * distinct machine). An undeclared or invalid requirement, or a topology
+ * that cannot carry it (a 5-node formation on 4 machines), is a named
+ * refusal. A NON-certification run never reads this.
+ * @param {Object|null|undefined} requirement
+ * @param {Object} config
+ * @return {Object} {met, reason|null, requirement, nodes, distinctHosts,
+ *   maxNodesOnOneHost, hostIds, missingReasons, spreadUnit}
+ */
+function evaluateScenarioCertificationTopology(requirement, config) {
+  if (requirement === null || requirement === undefined) {
+    return {met: false,
+      reason: SCENARIO_REFUSAL.CERTIFICATION_REQUIREMENT_UNDECLARED,
+      requirement: null, spreadUnit: null};
+  }
+  if (!isValidCertificationRequirement(requirement)) {
+    return {met: false,
+      reason: SCENARIO_REFUSAL.CERTIFICATION_REQUIREMENT_INVALID,
+      requirement: {...requirement}, spreadUnit: requirement.spreadUnit ?? null};
+  }
+  const topology = resolveConfigHostTopology(config);
+  const maxOnOne = maxNodesOnOneHost(topology.nodes);
+  const unmet = certificationTopologyShortfall(requirement, topology,
+    maxOnOne);
+  return {
+    distinctHosts: topology.distinctHosts,
+    hostIds: topology.hostIds,
+    maxNodesOnOneHost: maxOnOne,
+    met: !unmet,
+    missingReasons: topology.missingReasons,
+    nodes: topology.nodes,
+    reason: unmet ? SCENARIO_REFUSAL.CERTIFICATION_TOPOLOGY : null,
+    requirement: {...requirement},
+    spreadUnit: SPREAD_UNIT.HOST,
+  };
+}
+
+/**
+ * The refusal a certification run reports for a topology that cannot
+ * certify, in the shape every refusal reader knows (required vs available
+ * distinct hosts) plus the per-host bound.
+ * @param {Object} topology From evaluateScenarioCertificationTopology.
+ * @return {Object}
+ */
+function buildCertificationTopologyRefusal(topology) {
+  return {
+    available: topology.distinctHosts ?? null,
+    hostIds: topology.hostIds || [],
+    maxNodesOnOneHost: topology.maxNodesOnOneHost ?? null,
+    maxNodesPerHost: topology.requirement?.maxNodesPerHost ?? null,
+    missingReasons: topology.missingReasons || [],
+    reason: topology.reason,
+    required: topology.requirement?.minNodes ?? null,
+    spreadUnit: topology.spreadUnit,
+  };
+}
+
 /**
  * Evidence that states a spread count must state its unit; absent or
  * different = invalid evidence, a named failure, never a default.
@@ -231,9 +331,12 @@ function requireSpreadUnit(evidence, expectedUnit, label) {
 }
 
 export {
+  HOST_IDENTITY_SOURCE,
   SCENARIO_REFUSAL,
   SPREAD_UNIT,
+  buildCertificationTopologyRefusal,
   describeProviderMachine,
+  evaluateScenarioCertificationTopology,
   evaluateScenarioTopologyRequirement,
   isSpreadUnit,
   requireSpreadUnit,

@@ -10,6 +10,10 @@ import {
   SCENARIO_OUTCOME,
   scenarioOutcomeOf,
 } from '../../test/distributed/harness/scenario-outcome.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+  evaluateCertificationStreak,
+} from '../../test/distributed/harness/scenario-certification.js';
 
 const TEXT_ENCODING = 'utf8';
 const REPORT_DIR = 'test-output/reports';
@@ -231,6 +235,22 @@ function listRuns(dir, scenario, limit) {
     .localeCompare(String(left.data.timestamp || '')));
 }
 
+// `certification: true`: the streak counts only `certified: true` runs at
+// ONE identical sha (scenario-certification.js evaluateCertificationStreak:
+// refused = not a sample, an uncertified pass = not a certification sample,
+// a FAIL or a failed certification resets, another sha ends it).
+function measureCertificationStreak(root, runs, scenario, consecutive) {
+  const streak = evaluateCertificationStreak(
+    runs.map((run) => scenarioEntry(run.data, scenario)), consecutive);
+  return {
+    ...measured(Math.max(0, consecutive - streak.count), TARGET_ZERO,
+      path.relative(root, runs[0].file), {detail: {certification: streak,
+        consecutive, runs: runs.length}}),
+    done: streak.done,
+    invalidSample: false,
+  };
+}
+
 function measureScenarioHarness(root, args) {
   const scenario = String(args.scenario || '');
   if (UNSUPPORTED_METRICS.includes(args.metric)) {
@@ -241,6 +261,9 @@ function measureScenarioHarness(root, args) {
   const dir = path.resolve(root, String(args.reportDir || REPORT_DIR));
   const runs = listRuns(dir, scenario, consecutive + NON_MEASURING_SKIP_BUFFER);
   if (runs.length === 0) return notMeasuring(REASON.NO_REPORTS);
+  if (args.certification === true) {
+    return measureCertificationStreak(root, runs, scenario, consecutive);
+  }
   const latest = runs[0];
   const measuring = runs.filter((run) =>
     !isNonMeasuringRun(run.data, scenario) && readMetric(run.data, kind) !== null);
@@ -250,7 +273,10 @@ function measureScenarioHarness(root, args) {
   const evidence = path.relative(root, latest.file);
   const detail = {runs: runs.length, consecutive,
     passingStreak: recent.filter((run) => scenarioPassed(run.data, scenario)).length,
-    verdictReason: verdictReasonOf(latest.data, scenario)};
+    verdictReason: verdictReasonOf(latest.data, scenario),
+    // A pass streak without `certification: true` counts passes, not
+    // certified runs: it says so.
+    certification: NOT_CERTIFICATION_EVIDENCE};
   if (isNonMeasuringRun(latest.data, scenario) || readMetric(latest.data, kind) === null) {
     return {...notMeasuring(nonMeasuringReasonOf(latest.data, scenario), evidence),
       invalidSample: true, detail};

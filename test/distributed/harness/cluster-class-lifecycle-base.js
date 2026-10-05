@@ -1,6 +1,7 @@
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
 import {waitForState} from './wait-for-state.js';
+import {observeConvergenceWait} from './scenario-certification.js';
 import {SOURCE_FINGERPRINT_ENV_VAR} from '../../../src/diagnostics/source-fingerprint.js';
 import {
   createNodeLogStreamer,
@@ -1721,12 +1722,13 @@ class ClusterLifecycleBase {
       Number.isInteger(controlQueryTimeoutMs) && controlQueryTimeoutMs > 0 ?
         controlQueryTimeoutMs :
         undefined;
-    return waitForConvergence(nodes, {
-      ignoreStaleInFlightReplicaOperations: true,
-      noProgressTimeoutMs: TIMEOUTS.CONVERGENCE_NO_PROGRESS,
-      ...(snapshotTimeoutMs !== undefined ? {snapshotTimeoutMs} : {}),
-      ...(options || {}),
-    });
+    return observeConvergenceWait(this, options, () =>
+      waitForConvergence(nodes, {
+        ignoreStaleInFlightReplicaOperations: true,
+        noProgressTimeoutMs: TIMEOUTS.CONVERGENCE_NO_PROGRESS,
+        ...(snapshotTimeoutMs !== undefined ? {snapshotTimeoutMs} : {}),
+        ...(options || {}),
+      }));
   }
 
   async waitForAllActive(options = {}) {

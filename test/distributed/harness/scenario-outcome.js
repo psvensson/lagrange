@@ -40,8 +40,12 @@ function describeScenarioRefusal(refusal) {
   const available = refusal.available === null ?
     `unknown (${(refusal.missingReasons || []).join(', ') || 'no topology'})` :
     String(refusal.available);
+  const perHost = Number.isSafeInteger(refusal.maxNodesPerHost) ?
+    `; at most ${refusal.maxNodesPerHost} node(s) per host, config places ` +
+      `${refusal.maxNodesOnOneHost ?? 'unknown'} on one host` :
+    '';
   return `${refusal.reason}: requires >= ${refusal.required} distinct ` +
-    `host(s), config provides ${available}`;
+    `host(s), config provides ${available}${perHost}`;
 }
 
 /**
@@ -78,15 +82,24 @@ function scenarioOutcomeOf(entry) {
 }
 
 /**
- * The runner's exit status.
- * @param {{hasFailures: boolean, hasRefusals: boolean}} run
+ * The runner's exit status. A run that REQUESTED certification and did not
+ * get `certified: true` for every scenario exits NOT_CERTIFIED (never 0)
+ * even when every scenario passed: the scenario outcomes are unchanged, the
+ * certification verdict is its own artefact (scenario-certification.js).
+ * @param {{hasFailures: boolean, hasRefusals: boolean,
+ *   hasUncertified?: boolean}} run
  * @return {number}
  */
-function resolveRunExitCode({hasFailures, hasRefusals}) {
+function resolveRunExitCode({hasFailures, hasRefusals, hasUncertified}) {
   if (hasFailures) {
     return EXIT_CODES.FAILURE;
   }
-  return hasRefusals ? EXIT_CODES.REFUSED : EXIT_CODES.SUCCESS;
+  if (hasRefusals) {
+    return EXIT_CODES.REFUSED;
+  }
+  return hasUncertified === true ?
+    EXIT_CODES.NOT_CERTIFIED :
+    EXIT_CODES.SUCCESS;
 }
 
 /**

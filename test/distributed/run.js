@@ -42,6 +42,7 @@ import {formatLogEntry} from './harness/log-collector.js';
 import {analyzeMemoryLeakFromPlayback} from './harness/memory-leak-analyzer.js';
 import {buildPerformanceDiagnostics} from './harness/performance-diagnostics.js';
 import {resolveRunExitCode} from './harness/scenario-outcome.js';
+import {observeCommitIdentity} from './harness/scenario-certification.js';
 import {writeFailureBundlesForReport} from './harness/failure-bundle.js';
 import {
   formatStateMachinePressurePreflightSummary,
@@ -1174,6 +1175,14 @@ async function main() {
       process.stdout.write(RUNNER_STAGE_SCENARIO_DISCOVERY);
     }
 
+    // A certification run observes the checkout the images are built from
+    // BEFORE the build: its HEAD must be the requested sha, clean.
+    const certification = args.certify === null ? null : {
+      commitIdentity: observeCommitIdentity({requestedSha: args.certify}),
+      requested: true,
+      requestedSha: args.certify,
+    };
+
     // Build Docker image before running scenarios
     const dockerOperationSink = createDockerOperationSink(args.verbose);
     let imageResult = null;
@@ -1267,18 +1276,20 @@ async function main() {
     );
 
     runPhaseTiming.setupEndMs = Date.now();
-    const {report, hasFailures, hasRefusals} = await runScenarios(
-      runConfig,
-      scenarios,
-      {
+    if (certification !== null) {
+      certification.image = {gitDirty: imageResult?.gitDirty ?? null,
+        gitHash: imageResult?.gitHash ?? null};
+    }
+    const {report, hasFailures, hasRefusals, hasUncertified} =
+      await runScenarios(runConfig, scenarios, {
         output: args.output,
         verbose: args.verbose,
         historyReports: historicalReports,
         dockerOperationSink,
         reportMetadata,
         stateMachinePressurePreflight,
-      },
-    );
+        certification,
+      });
     runPhaseTiming.scenarioEndMs = Date.now();
 
     const reportPreview = {
@@ -1360,9 +1371,11 @@ async function main() {
     const hasRunFailures = hasFailures || gateFailed;
     // Failures win; else any refused (not run) scenario exits REFUSED,
     // never 0 - no exit-code reader may read a refusal as a pass.
+    // A certification run that is not certified never exits 0.
     const runExitCode = resolveRunExitCode({
       hasFailures: hasRunFailures,
       hasRefusals,
+      hasUncertified,
     });
     runStatusContext.milestones.reportWrittenAt = new Date().toISOString();
     await writeRunnerStatus(RUN_STATUS_STATE_REPORT_WRITTEN, {

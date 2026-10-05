@@ -21,6 +21,9 @@ import {fileURLToPath} from 'node:url';
 import {computeSourceFingerprint} from
   '../../src/diagnostics/source-fingerprint.js';
 import {readQuest} from '../solve/store.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../../test/distributed/harness/scenario-certification.js';
 
 const arrayIsArray = Array.isArray;
 const dateToISOString = Function.call.bind(Date.prototype.toISOString);
@@ -336,6 +339,10 @@ async function runBoundedStreak(options, dependencies) {
     executedRunCount: state.entries.length,
     passedRunCount,
     runs: state.entries,
+    // A streak of the GCP handoff analyzer's verdicts: it observes neither
+    // real publication convergence nor a one-node-per-machine topology, so
+    // it is not certification under the 2026-10-05 rulings, and says so.
+    certification: NOT_CERTIFICATION_EVIDENCE,
   };
   const streakPath = await writeStreakReport(streak, options.reportRoot);
   return {streak, streakPath};

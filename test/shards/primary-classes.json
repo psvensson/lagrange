@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1963,
+    "unit": 1965,
     "integration": 78,
     "bootstrap": 198,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2246,
-  "digest": "fnv1a32-0e6b532c",
+  "censusSize": 2248,
+  "digest": "fnv1a32-1e2b61fa",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -901,6 +901,7 @@
     "test/distributed/harness/__tests__/run.test.js": "unit",
     "test/distributed/harness/__tests__/scale-certification-receipt-freshness.test.js": "unit",
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "unit",
+    "test/distributed/harness/__tests__/scenario-certification.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-config.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "unit",
     "test/distributed/harness/__tests__/scenario-ground-truth.test.js": "unit",
@@ -2018,6 +2019,7 @@
     "test/scripts/run-live-repetitions.test.js": "unit",
     "test/scripts/run-test-ci.test.js": "unit",
     "test/scripts/run-test-files.test.js": "unit",
+    "test/scripts/scenario-certification-consumers.test.js": "unit",
     "test/scripts/scenario-refused-outcome-consumers.test.js": "unit",
     "test/scripts/select-change-tests.test.js": "unit",
     "test/scripts/selection-golden-corpus.test.js": "unit",

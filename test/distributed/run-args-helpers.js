@@ -4,7 +4,8 @@ export function createDistributedRunArgHelpers({CLI}) {
    * @param {Array<string>} argv - process.argv.slice(2)
    * @returns {{config: string, scenario: string|null,
    *   output: string, verbose: boolean, fastLocal: boolean|null,
-   *   deterministicDebug: boolean|null}}
+   *   deterministicDebug: boolean|null, certify: string|null}}
+   *   (`--certify SHA`: request a certification verdict for that commit)
    */
   function parseArgs(argv) {
     let config = CLI.DEFAULT_CONFIG;
@@ -16,6 +17,7 @@ export function createDistributedRunArgHelpers({CLI}) {
     let debugLogs = false;
     let captureLogs = false;
     let contract = null;
+    let certify = null;
 
     for (let i = 0; i < argv.length; i++) {
       const arg = argv[i];
@@ -41,6 +43,8 @@ export function createDistributedRunArgHelpers({CLI}) {
         captureLogs = true;
       } else if (arg === '--contract' && i + 1 < argv.length) {
         contract = argv[++i];
+      } else if (arg === CLI.ARG_CERTIFY && i + 1 < argv.length) {
+        certify = argv[++i];
       }
     }
 
@@ -54,6 +58,7 @@ export function createDistributedRunArgHelpers({CLI}) {
       debugLogs,
       captureLogs,
       contract,
+      certify,
     };
   }
 

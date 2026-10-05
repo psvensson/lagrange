@@ -330,6 +330,44 @@ leaders on the shared host → truthful pass).
 local configs and claims nothing about hosts or failure domains. Host-aware
 user-table leader placement is a separate placement-owner quest.
 
+**Certification (owner rulings 5 and 6, 2026-10-05).** Startup readiness
+admits nodes while saying `publication_convergence_not_claimed_startup`: that
+is enough to RUN the system and never enough to CERTIFY it. A run is
+certification evidence only when it requests it (`--certify <40-hex sha>` on
+`test/distributed/run.js`, or `lab harness run ... --certify <sha>`) and its
+report entry's `certification` block says `certified: true`. Every other
+run's entry carries the explicit `certification_not_requested` record (not
+certification evidence; publication convergence not claimed at startup), and
+consumers that are not certification say so (`health:formation`,
+`check:formation`, ship readiness, the distributed matrix, a quest pass
+streak without `certification: true`). The one owner is
+`test/distributed/harness/scenario-certification.js`; each condition is
+recorded with the evidence observed in that run, and absent evidence is a
+named failure, never a pass:
+
+| Condition | Observed from | Named failure |
+| --- | --- | --- |
+| `scenario_passed` | the scenario's own outcome | `certification_scenario_not_passed` |
+| `no_refusal` | the outcome is not `refused` | `certification_refused_outcome` |
+| `topology` (unit host) | the scenario's `SCENARIO_CERTIFICATION_REQUIREMENT` (`maxNodesPerHost: 1`, `minNodes: 5` for the formation acceptance) on the config, AND every placed node's declared machine identity | `certification_topology_not_one_node_per_machine`; on the config this REFUSES the scenario before it runs (`refused_certification_topology`) |
+| `publication_convergence` | after the scenario and before teardown, the load-mode publication gate (`_probeClusterActiveState` in mode `load`) is `ready === true` with `claimState: publication_convergence_claimed_load`; the startup admission never counts; bounded by `CERTIFICATION_PUBLICATION_WAIT` (120 s), an expiry is recorded as a spent wait with what was awaited and the last observed gate | `certification_publication_convergence_not_observed` |
+| `voters_at_target` | every `cluster.waitForConvergence` of the run (the scenario's and the certification stage's own strict wait) ended `voters_at_target` with no under-replication tolerance declared | `certification_convergence_not_voters_at_target` |
+| `host_spread` (unit host) | the scenario's named spread gate (`split-leader-host-spread`) passed with `spreadUnit: 'host'` on declared machine facts | `certification_host_spread_not_observed` |
+| `spent_waits` | every `event: 'wait_bound_spent'` line of every node's full log (`.full-logs/<scenario>/<node>.log.gz`), grouped by `wait` and classified by the census `solve/epics/raft-rs-full-cutover/census-bounded-waits-2026-10-04.md` | `certification_unexpected_spent_wait` (any wait outside its "Known findings (owner)" table); `certification_spent_wait_evidence_incomplete` (a node log missing or unreadable, an incomplete capture, or the census unreadable); known findings are listed with their owner and decided by the one constant `CERTIFICATION_KNOWN_FINDING_SPENT_WAIT_POLICY` (today: listed, not failing) |
+| `commit_identity` | the controller checkout observed before the image build: clean, `HEAD` equal to the requested sha; the image carries that commit; no node booted stale source | `certification_commit_identity_not_exact` |
+
+The scenario's outcome and the report verdict are unchanged by
+certification; a run that requested certification and is not certified exits
+`4` (`NOT_CERTIFIED`). The block repeats the spread unit on each spread
+claim and lists what a certified run still does not certify (committed
+raft-rs ConfState is not observed; known-finding spent waits). The quest
+probe counts a certification streak only with `certification: true` in its
+args: certified runs at ONE identical sha; a refused run is not a sample, a
+pass without certification is not a certification sample, a FAIL or a failed
+certification resets, a certified run at another sha ends the streak.
+Witnesses: `test/distributed/harness/__tests__/scenario-certification.test.js`
+and `test/scripts/scenario-certification-consumers.test.js`.
+
 `public-seam-durability` is the provider-neutral durability scenario at the
 public seam: it writes an image-like object (`objects` BYTEA row plus an
 `object_history` row, one transaction) through a node's PostgreSQL-wire

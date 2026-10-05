@@ -1,16 +1,27 @@
+import {existsSync} from 'node:fs';
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {spawn} from 'node:child_process';
+import {pathToFileURL} from 'node:url';
 import {LAB_HOLD, holdLabMachine, labHolderText} from './probe.js';
 import {capture, reserveLocalPort, run, waitForDockerPing} from './process.js';
 import {
+  CLI,
   DISTRIBUTED_EXECUTION_ENV,
   DISTRIBUTED_EXECUTION_TARGET,
+  EXIT_CODES,
 } from '../../test/distributed/harness/constants.js';
 import {
   SCENARIO_OUTCOME,
   outcomeOfRunnerExit,
 } from '../../test/distributed/harness/scenario-outcome.js';
+import {
+  commitIdentityProblem,
+  observeCommitIdentity,
+} from '../../test/distributed/harness/scenario-certification.js';
+import {
+  evaluateScenarioCertificationTopology,
+} from '../../test/distributed/harness/scenario-host-topology.js';
 
 const DEFAULT_BASE_CONFIG = 'test/distributed/config/local-three-node.json';
 const DEFAULT_DOCKER_SOCKET = '/var/run/docker.sock';
@@ -75,6 +86,32 @@ const MACHINE_OBSERVATION = Object.freeze({
 });
 const HARNESS_REFUSED_TEXT = 'harness: scenario REFUSED (not run) - the ' +
   'config\'s host topology cannot carry its claim; see the run report: ';
+const HARNESS_NOT_CERTIFIED_TEXT = 'harness: NOT CERTIFIED - the run ' +
+  'requested certification and its report\'s certification block is not ' +
+  '`certified: true` (scenario outcomes unchanged): ';
+// A certification run (`--certify SHA`): one node per distinct machine,
+// each machine observed by its boot id, from a clean checkout at SHA, for
+// a scenario that declares SCENARIO_CERTIFICATION_REQUIREMENT
+// (test/distributed/harness/scenario-certification.js). Every check runs
+// before any node is held; a failed check refuses the whole run.
+const CERTIFICATION_NODES_PER_HOST = 1;
+const UNKNOWN_COUNT = 'unknown';
+const ARG_SEPARATOR = ' ';
+const SCENARIO_DIR = 'test/distributed/scenarios';
+const SCENARIO_SUFFIX = '.js';
+const CERTIFICATION_REFUSED = 'harness: certification refused (nothing held, ' +
+  'nothing run): ';
+const CERTIFICATION_TEXT = Object.freeze({
+  NO_SCENARIO: 'certification names exactly one scenario',
+  NO_MODULE: 'no scenario module ',
+  UNDECLARED: ' declares no SCENARIO_CERTIFICATION_REQUIREMENT',
+  NODES_PER_HOST: 'certification places one node per machine; ' +
+    '--nodes-per-host must be 1 or omitted, got ',
+  SHARED_MACHINE: 'selected nodes share one machine (boot id ',
+  PASSTHROUGH: 'request certification with --certify SHA, not as a runner ' +
+    'passthrough argument',
+  TOPOLOGY: 'the generated config cannot certify: ',
+});
 
 const ERROR_TEXT = Object.freeze({
   MACHINE_ID: 'harness: no machine identity for node ',
@@ -118,12 +155,93 @@ async function stopTunnel(tunnel) {
   if (tunnel.child.exitCode === null) tunnel.child.kill(SIGNAL.KILL);
 }
 
-// A refused scenario is not a failed one: say so, keep the exit code.
+// A refused scenario is not a failed one, and an uncertified certification
+// run is neither: say so, keep the exit code.
 function nameRefusedRun(error) {
   if (outcomeOfRunnerExit(error?.exitCode) === SCENARIO_OUTCOME.REFUSED) {
     error.message = `${HARNESS_REFUSED_TEXT}${error.message}`;
+  } else if (error?.exitCode === EXIT_CODES.NOT_CERTIFIED) {
+    error.message = `${HARNESS_NOT_CERTIFIED_TEXT}${error.message}`;
   }
   throw error;
+}
+
+function refuseCertification(detail) {
+  throw new Error(`${CERTIFICATION_REFUSED}${detail}`);
+}
+
+async function loadCertificationRequirement(scenario) {
+  if (!scenario) refuseCertification(CERTIFICATION_TEXT.NO_SCENARIO);
+  const modulePath = resolve(SCENARIO_DIR, `${sanitizeName(scenario)}${SCENARIO_SUFFIX}`);
+  if (!existsSync(modulePath)) {
+    refuseCertification(`${CERTIFICATION_TEXT.NO_MODULE}${modulePath}`);
+  }
+  const requirement =
+    (await import(pathToFileURL(modulePath).href)).SCENARIO_CERTIFICATION_REQUIREMENT;
+  if (!requirement) refuseCertification(`${scenario}${CERTIFICATION_TEXT.UNDECLARED}`);
+  return requirement;
+}
+
+// Two selected nodes on one kernel (one boot id) are one machine.
+function refuseSharedMachines(nodes, machineIds) {
+  const byMachine = new Map();
+  machineIds.forEach((machineId, index) => {
+    byMachine.set(machineId, [...(byMachine.get(machineId) || []), nodes[index].name]);
+  });
+  for (const [machineId, names] of byMachine) {
+    if (names.length > 1) {
+      refuseCertification(`${CERTIFICATION_TEXT.SHARED_MACHINE}${machineId}): ` +
+        names.join(HOST_LIST_SEPARATOR));
+    }
+  }
+}
+
+/**
+ * Everything a certification run checks before any node is held: the
+ * checkout is clean at the requested sha, the scenario declares its
+ * certification topology, one node per machine, and every selected node's
+ * machine is observed (boot id) and distinct.
+ * @param {Object} input
+ * @return {Promise<{identity, requirement, machineIds}>}
+ */
+export async function prepareCertificationRun({nodes, scenario, certify,
+  nodesPerHost, extraArgs = [], observeMachine, readCommitIdentity = observeCommitIdentity}) {
+  if (extraArgs.includes(CLI.ARG_CERTIFY)) refuseCertification(CERTIFICATION_TEXT.PASSTHROUGH);
+  const identity = readCommitIdentity({requestedSha: certify});
+  const problem = commitIdentityProblem(identity);
+  if (problem !== null) refuseCertification(problem);
+  if (nodesPerHost !== undefined && nodesPerHost !== CERTIFICATION_NODES_PER_HOST) {
+    refuseCertification(`${CERTIFICATION_TEXT.NODES_PER_HOST}${nodesPerHost}`);
+  }
+  const requirement = await loadCertificationRequirement(scenario);
+  const machineIds = await observeMachineIdentities(nodes, observeMachine)
+    .catch((error) => refuseCertification(error.message));
+  refuseSharedMachines(nodes, machineIds);
+  return {identity, machineIds, requirement};
+}
+
+function refuseUncertifiableConfig(requirement, config) {
+  const topology = evaluateScenarioCertificationTopology(requirement, config);
+  if (!topology.met) {
+    refuseCertification(`${CERTIFICATION_TEXT.TOPOLOGY}${topology.reason} ` +
+      `(${topology.nodes?.length ?? 0} node(s), at most ` +
+      `${topology.maxNodesOnOneHost ?? UNKNOWN_COUNT} on one host, ` +
+      `${topology.distinctHosts ?? UNKNOWN_COUNT} distinct host(s))`);
+  }
+  return topology;
+}
+
+function printCertificationDryRun(write, nodes, prepared, topology, args) {
+  write(`Certification: sha ${prepared.identity.headSha} ` +
+    `(clean), scenario requirement ${JSON.stringify(prepared.requirement)}\n`);
+  nodes.forEach((node, index) => {
+    write(`  node ${index} -> ${node.name} (${node.ip}) ` +
+      `machine ${prepared.machineIds[index]}\n`);
+  });
+  write(`Certification topology: ${topology.nodes.length} ` +
+    `node(s) on ${topology.distinctHosts} distinct machine(s), at most ` +
+    `${topology.maxNodesOnOneHost} per machine: met\n`);
+  write(`Would run: node ${args.join(ARG_SEPARATOR)}\n`);
 }
 
 function observeBootId(node) {
@@ -283,10 +401,22 @@ export async function runHarness({
   environment = process.env,
   // Injectable boot-id observer; observeMachineIdentities defaults it.
   observeMachine,
+  // `--certify SHA`: a certification run (see prepareCertificationRun).
+  certify = null,
+  readCommitIdentity,
+  write = (text) => process.stdout.write(text),
 }) {
   validateHarnessNodes(nodes);
   if (nodes.length < MIN_PHYSICAL_HOSTS) {
     throw new Error(ERROR_TEXT.TOO_FEW_HOSTS);
+  }
+  if (certify === null && extraArgs.includes(CLI.ARG_CERTIFY)) {
+    refuseCertification(CERTIFICATION_TEXT.PASSTHROUGH);
+  }
+  if (certify !== null) {
+    return runCertificationHarness({nodes, scenario, baseConfig, nodesPerHost,
+      verbose, extraArgs, dryRun, hold, environment, observeMachine, certify,
+      readCommitIdentity, write});
   }
   const absoluteBase = resolve(baseConfig);
   const timestamp = new Date().toISOString().replace(/[:.]/gu, NAME_SEPARATOR);
@@ -312,14 +442,7 @@ export async function runHarness({
   const tunnels = [];
   try {
     const machineIds = await observeMachineIdentities(nodes, observeMachine);
-    for (let index = 0; index < nodes.length; index += 1) {
-      const tunnel = startTunnel(nodes[index], ports[index]);
-      tunnels.push(tunnel);
-      await waitForDockerPing(ports[index]);
-      process.stdout.write(
-        `tunnel ${nodes[index].name} -> ${LOOPBACK_HOST}:${ports[index]} ready\n`,
-      );
-    }
+    await openTunnels(nodes, ports, tunnels);
     await buildRemoteConfig(absoluteBase, nodes, ports, configPath, nodesPerHost,
       machineIds);
     const args = buildHarnessRunnerArgs({
@@ -328,15 +451,63 @@ export async function runHarness({
       verbose,
       extraArgs,
     });
-    const childEnvironment = {
-      ...environment,
-      [DISTRIBUTED_EXECUTION_ENV.TARGET]: DISTRIBUTED_EXECUTION_TARGET.LAB,
-      [DISTRIBUTED_EXECUTION_ENV.HOSTS]: nodes
-        .map((node) => node.name)
-        .join(HOST_LIST_SEPARATOR),
-    };
-    await run(process.execPath, args, {env: childEnvironment})
-      .catch(nameRefusedRun);
+    await runFormation(args, nodes, environment);
+  } finally {
+    await Promise.all(tunnels.map(stopTunnel));
+    await releaseHolds(holds);
+  }
+}
+
+async function openTunnels(nodes, ports, tunnels) {
+  for (let index = 0; index < nodes.length; index += 1) {
+    tunnels.push(startTunnel(nodes[index], ports[index]));
+    await waitForDockerPing(ports[index]);
+    process.stdout.write(
+      `tunnel ${nodes[index].name} -> ${LOOPBACK_HOST}:${ports[index]} ready\n`,
+    );
+  }
+}
+
+function runFormation(args, nodes, environment) {
+  const childEnvironment = {
+    ...environment,
+    [DISTRIBUTED_EXECUTION_ENV.TARGET]: DISTRIBUTED_EXECUTION_TARGET.LAB,
+    [DISTRIBUTED_EXECUTION_ENV.HOSTS]: nodes
+      .map((node) => node.name)
+      .join(HOST_LIST_SEPARATOR),
+  };
+  return run(process.execPath, args, {env: childEnvironment})
+    .catch(nameRefusedRun);
+}
+
+// A certification run: every check before any hold, the config generated
+// with one node per observed machine, the runner asked for the verdict.
+async function runCertificationHarness(options) {
+  const {nodes, scenario, baseConfig, verbose, extraArgs, dryRun, hold,
+    environment, certify, write} = options;
+  const prepared = await prepareCertificationRun(options);
+  const timestamp = new Date().toISOString().replace(/[:.]/gu, NAME_SEPARATOR);
+  const configPath = resolve(CONFIG_DIR.ROOT, CONFIG_DIR.LEAF,
+    `${sanitizeName(scenario)}-certify-${timestamp}.json`);
+  const ports = [];
+  for (let index = 0; index < nodes.length; index += 1) {
+    ports.push(await reserveLocalPort());
+  }
+  const config = await buildRemoteConfig(resolve(baseConfig), nodes, ports, configPath,
+    CERTIFICATION_NODES_PER_HOST, prepared.machineIds);
+  const topology = refuseUncertifiableConfig(prepared.requirement, config);
+  const args = buildHarnessRunnerArgs({configPath, scenario, verbose,
+    extraArgs: [...extraArgs, CLI.ARG_CERTIFY, certify]});
+  if (dryRun) {
+    write(`Would write config: ${configPath}\n`);
+    printCertificationDryRun(write, nodes, prepared, topology, args);
+    return;
+  }
+  const holds = await holdHarnessNodes(nodes, sanitizeName(scenario), hold);
+  const tunnels = [];
+  try {
+    await openTunnels(nodes, ports, tunnels);
+    await runFormation(args, nodes, environment);
   } finally {
     await Promise.all(tunnels.map(stopTunnel));
     await releaseHolds(holds);

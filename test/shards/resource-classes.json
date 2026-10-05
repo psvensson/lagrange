@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2229,
+    "ordinary": 2231,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2246,
-  "digest": "fnv1a32-03bfa7b0",
+  "censusSize": 2248,
+  "digest": "fnv1a32-f24c9a8e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -900,6 +900,7 @@
     "test/distributed/harness/__tests__/run.test.js": "ordinary",
     "test/distributed/harness/__tests__/scale-certification-receipt-freshness.test.js": "ordinary",
     "test/distributed/harness/__tests__/scale-evidence-contract.test.js": "ordinary",
+    "test/distributed/harness/__tests__/scenario-certification.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-config.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-discovery.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-ground-truth.test.js": "ordinary",
@@ -2017,6 +2018,7 @@
     "test/scripts/run-live-repetitions.test.js": "ordinary",
     "test/scripts/run-test-ci.test.js": "ordinary",
     "test/scripts/run-test-files.test.js": "ordinary",
+    "test/scripts/scenario-certification-consumers.test.js": "ordinary",
     "test/scripts/scenario-refused-outcome-consumers.test.js": "ordinary",
     "test/scripts/select-change-tests.test.js": "ordinary",
     "test/scripts/selection-golden-corpus.test.js": "ordinary",

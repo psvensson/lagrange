@@ -478,6 +478,55 @@ The adapter always disables fast-local mode for a physical-host run. The source
 image is therefore the normal built harness image, rather than a bind mount from
 the controller's local source tree.
 
+### Certification formations: one node per distinct machine
+
+A run is certification evidence only when it asks for it and every
+condition is observed in that run (owner rulings 5 and 6, 2026-10-05; owner:
+`test/distributed/harness/scenario-certification.js`). The five-node formation
+acceptance is `public-path-multinode-baseline` on the five-node base config,
+one node on each of the five remote lab machines:
+
+```bash
+node scripts/lab.js harness run public-path-multinode-baseline \
+  --base test/distributed/config/local.json \
+  --nodes tv-dator,carinas-windows,adam-laptop,adams-gamla,lenovo-laptop \
+  --certify "$(git rev-parse HEAD)" --dry-run
+```
+
+All five remote hosts are usable for it and none is excluded: tv-dator
+(192.168.86.32), carinas-windows (192.168.86.26, WSL2 Ubuntu in mirrored
+networking), adam-laptop (192.168.86.34), adams-gamla (192.168.86.41) and
+lenovo-laptop (192.168.86.27), each its own kernel with its own boot id. In
+host-network mode node `i` of the formation listens on REST `8080 + 10*i`,
+admin `8081 + 10*i` and transport `8082 + 10*i` (the harness's per-node port
+block of 10), so a five-node formation uses 8080-8122 on its machines;
+carinas-windows has 8080-8179 open, verified from the controller and from
+tv-dator on 2026-10-05. main-linux is the controller's own machine (the same
+boot id as the controller's Docker), so it is never a separate machine from
+the controller.
+
+`--certify SHA` (a full 40-hex commit) makes the run a certification run.
+Before any node is held it refuses, naming the reason, when: the checkout is
+dirty or its `HEAD` is not `SHA`; `--nodes-per-host` is anything but 1; the
+scenario declares no `SCENARIO_CERTIFICATION_REQUIREMENT`; a selected node's
+boot id cannot be read over ssh; two selected nodes share one boot id; or the
+generated config cannot place the scenario's nodes one per machine (four
+machines for five nodes). `--dry-run` performs exactly these checks (it reads
+each machine's boot id over ssh, holds nothing and starts nothing) and prints
+the node-to-machine table, the certification topology and the runner command.
+A `--certify` passed after `--` is refused: certification is never a
+passthrough.
+
+The run passes `--certify SHA` to the distributed runner. Each scenario's
+report entry then carries a `certification` block: `certified: true|false`,
+one record per condition with the evidence observed, the named failures, the
+certified `sha` and what is still not certified (see
+`test/distributed/README.local.md`). The scenario outcome is unchanged; a run
+that requested certification and is not certified exits `4` (`NOT_CERTIFIED`),
+never `0`. The same placement without `--certify` is an ordinary run: it may
+run five nodes on four machines, and two child leaders on the shared machine
+remain a real failure of the host gate, never classified away.
+
 A remote physical harness run needs at least two Linux Docker hosts. A
 single-host distributed run should continue to use the existing local Docker
 configuration, because the distributed harness only switches to host-network
