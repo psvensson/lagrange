@@ -23,12 +23,18 @@ node scripts/solve.js land  --id <id>       # guards, tests, commits; never push
 Two more exist: `evidence add <path> --quest <id>` uploads a file too large for
 git and records it only after re-download and re-hash, and `board` lists open
 epics and quests. There are no others; anything else you have seen written down
-is a retired v1 operation.
+is a retired v1 operation. The landing guard itself answers, read-only, whether
+every production-surface (`src/`, `vendor/`) change a range brings is a solver landing, which is what the main
+push gate asks: `node scripts/solve/guards.js admit --base <sha> --head <sha>`.
 
 `note` takes exactly one of `--finding`, `--attempt`, `--verification`,
 `--blocked`, `--exhausted` or `--superseded`. A verification also takes
-`--verifier subagent:<id>` and `--verdict approve|reject`. Changes under `src/`
-cannot land without an approving verification newer than the last attempt.
+`--verifier subagent:<id>` and `--verdict approve|reject`. Production-surface
+changes cannot land without an approving verification newer than the last attempt.
+An approval records the digest of the production-surface change it reviewed
+(`reviewedSource`), and `land` and `admit` refuse a src/ or vendor/ change that
+differs from it (tests, docs and scripts are not bound), so stage the change
+before asking for the verdict and re-verify after any production edit.
 
 ## After A Rejection
 
@@ -71,7 +77,9 @@ Completion" and must-not #16 stated it. It applies to ad-hoc work as much as to
 a quest, so it needs a home that ad-hoc work reaches.
 
 When a unit of work is complete and coherent - a quest terminal, a bug fix, a
-docs or tooling change, anything you would report as done - commit it. Do not
+docs or tooling change, anything you would report as done - commit it. A
+production-surface change (`src/`, `vendor/`) is committed only by `land`, however small: the main push
+gate refuses a direct one, naming the commit and its paths. Do not
 leave finished work sitting uncommitted waiting to be asked. Committing
 completed work is durably authorised; a never-before-authorised push or publish
 is not, and stays an authority boundary under R16.
@@ -228,6 +236,52 @@ a driver `npm run hooks:install` configures: a merge keeps ours instead of
 conflicting, and the merged tree owes `npm run -s test:metadata:refresh` and
 `node scripts/generate-global-owner-debt-inventory.js` (`--refresh` when its
 inputs are absent) before it is pushed.
+
+A merge that brings unlanded production-surface commits to `main`, or changes
+that surface itself, takes the receipt route. No parent is privileged (a push
+fast-forwards `main` to any descendant, so the first parent is arbitrary): a
+production path is clean only where the merge equals the textbook three-way
+result over every merge base of every pair of its parents, and anything else
+is the merge's own change - a landing dropped by `-s ours` or take-theirs
+(either parent first, octopus included), a path both sides changed
+differently, a rename merged with an edit. Taking "ours" over a side's landing
+leaves `main`'s bytes unchanged but is refused all the same: the landed code
+would silently never reach `main`; revert the landing by a quest instead, or
+take the receipt route. The receipt route, in order:
+
+1. Build the merge `M` locally with a `Quest: <governing quest>` trailer; the
+   quest's log at `M` records a current approving verification (not bound to a
+   digest: the receipt and the owner's finding bind `M` itself).
+2. Prove `M` itself: `npm run check:release` on it, then record what it
+   prints, `node scripts/proof-authority.js record release-full-v1 <M>`. That
+   is the only honest producer for a sha not yet on `main`; the publisher
+   records after a push.
+3. The identity witness: the owner's authenticated GitHub approval of the pull
+   request, `gh pr view <n> --json reviewDecision,reviews` showing
+   `APPROVED` by the owner for the head `H` that `M` merges. If the GitHub
+   approval is not present when admission reaches that point, leave the merge
+   pending rather than inventing an alternative authority.
+4. Before writing it, check what the route would cover: `node
+   scripts/solve/guards.js admit --base <remote main sha> --head <M>` refuses
+   `M` pending the finding and names every unlanded commit `M` brings; each
+   one must be in the pull request (`git merge-base --is-ancestor <c> <H>`).
+   The route covers every unlanded commit brought from any parent, local
+   direct commits on the `main` side included; the GitHub approval covers `H`.
+   Then the authorisation record, on top of `M` (a log inside `M` cannot name
+   `M`'s own sha): `node scripts/solve.js note --id <governing quest> --finding
+   "owner authorizes merge of PR #<n>: merge sha <M>, head <H>, receipt <id>"
+   --kind decision`, stating the `reviewDecision` you saw, committed as the
+   next commit after `M`; push `main` to that commit.
+
+The admission checks the receipt (exact sha `M`), the governing quest at `M`,
+and a decision finding naming `M`'s full sha in that quest's log at the pushed
+head. The hook is offline: it cannot verify the GitHub approval, so step 3 is
+the merge runner's pre-condition, recorded in the finding's text. An emergency
+revert of a red `main` is no exception: it is a quest whose probe is the red
+witness, landed with the revert as its change. The code on the remote `main`
+judges a main push; if that code itself fails, every main push is refused, and
+the one way past is the documented emergency `git push --no-verify` (it skips
+every stage) with the owner's authorisation, pushing the repair.
 
 `solve land` proves the quest delta, not the branch: its `npm test` runs with
 the change-proof base pinned to `HEAD` (the index it is about to commit

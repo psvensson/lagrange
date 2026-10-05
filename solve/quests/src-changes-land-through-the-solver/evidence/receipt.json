@@ -1,0 +1,362 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "src-changes-land-through-the-solver",
+  "status": "pass",
+  "testFileDigests": {
+    "test/solve/commands.test.js": "035ec744403e06a4ae5c93af0c5c54b71e7a47bc8f913b79acd7b9e0c1a468b1",
+    "test/scripts/pre-push-hook-control-flow.test.js": "745f3674e7733d1871fb4d3c32c0a6b02484bda52760df9c4b5e3126cbc7c0cf"
+  },
+  "generatedAt": "2026-10-05T07:01:38.125Z",
+  "receipts": [
+    {
+      "id": "direct-src-commit-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a direct commit that changes src/, naming the commit and its path$\" test/solve/commands.test.js",
+      "detail": "a direct commit changing src/ is refused by the real solve CLI, named with its subject and src/ path",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "forged-landing-signals-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses typed landing trailers and hand-written terminal entries$\" test/solve/commands.test.js",
+      "detail": "typed Quest/Epic/Sealed-At trailers, an unbound typed terminal entry, a real binding over other bytes, and a replay of the landed change with no new terminal entry are each refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "landing-log-without-approval-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a correctly bound terminal entry whose log records no current approval$\" test/solve/commands.test.js",
+      "detail": "a correctly bound landing commit whose log lacks the approving verification is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "real-landing-admitted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits a real solver landing of a src/ change$\" test/solve/commands.test.js",
+      "detail": "a commit made by the real land of a sealed, verified quest changing src/ is admitted as a solver landing",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "non-src-direct-commit-admitted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits direct commits that touch only docs, tests and scripts$\" test/solve/commands.test.js",
+      "detail": "a direct commit of docs, tests and scripts is admitted",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "long-lived-merge-admission",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits a long-lived branch merge only under its exact-SHA receipt and governing quest$\" test/solve/commands.test.js",
+      "detail": "a merge bringing direct src/ commits is refused without a receipt, with a receipt for the branch tip only, and with a receipt but no governing quest; with an exact-SHA receipt for the merge and a Quest: trailer naming a sealed verified quest it and its brought commits are admitted; receipt and governing quest without the owner's decision finding naming the merge sha on top of it stay refused (pending), as do a finding naming another sha or of another kind",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "merge-of-landings-and-hand-resolved-merge",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits a clean merge of solver landings and refuses a merge that resolves src/ itself$\" test/solve/commands.test.js",
+      "detail": "a clean merge of landings needs no receipt; a merge whose src/ differs from every parent is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "src-path-shapes-judged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit judges a rename into or out of src/, a deletion and a symlink as src/ changes$\" test/solve/commands.test.js",
+      "detail": "renames into and out of src/, a deletion and a file replaced by a symlink are refused; a symlink outside src/ is not a src/ change",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "ancestry-cut-off",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit judges only what the push brings: commits on the remote main are not judged$\" test/solve/commands.test.js",
+      "detail": "a direct src/ commit at or before the base is not judged; the same commit inside the range is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "main-push-runs-the-admission-first",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a main push is judged by the solver-landing admission before any other content stage$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "the real hook runs admit over exactly the remote and local main shas first among content stages, also beside another ref, and a refusal stops the push there",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "non-main-push-not-admitted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a push that does not update main never runs the solver-landing admission$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "a branch push, preserved or proved on request, never runs the admission",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "land-refuses-unrequired-quest-file",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^land refuses a quest holding a file its sealed claim does not require, before any proof$\" test/solve/commands.test.js",
+      "detail": "land refuses naming the unrequired evidence file before the proof, index untouched, quest open; the twin lands and closes clean",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "land-refuses-rewritten-quest-log",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^land refuses to commit a rewritten quest log$\" test/solve/commands.test.js",
+      "detail": "land refuses a committed quest log rewritten in the working tree",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "closed-or-unsealed-quest-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a solved entry appended to an already-closed quest and a never-sealed log$\" test/solve/commands.test.js",
+      "detail": "a correctly bound solved entry appended to a quest already closed at the parent, and a landing whose log was never sealed, are refused (B1, unsealed survivor)",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "stale-side-merge-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a merge that reverts or drops src/ by taking a stale side$\" test/solve/commands.test.js",
+      "detail": "a merge keeping an old main version of a src/ file, a merge dropping a landed file from a stale side, and an octopus taking a side change are the merge's own src/ change (B2)",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "clean-merge-of-two-landings-admitted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits a clean merge of two landings on different files with nothing extra$\" test/solve/commands.test.js",
+      "detail": "a merge of two landings, one on each side, needs no receipt",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "range-not-ancestor-or-unknown-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a range whose base is not an ancestor or is unknown, without a stack trace$\" test/solve/commands.test.js",
+      "detail": "a rewound main and an unknown base are refused with a typed message and no stack trace",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "verdict-line-names-range",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit says its verdict on one line naming exactly the judged range$\" test/solve/commands.test.js",
+      "detail": "the admitted and refused verdict lines name exactly base..head",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "quoted-src-paths-land-and-admit",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^land and admit read src/ paths git would quote \\\\(non-ASCII, quote characters\\\\)$\" test/solve/commands.test.js",
+      "detail": "land stages and commits non-ASCII and quote-character src/ paths (added, modified, deleted) under the default core.quotepath, and admit admits the landing",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "remote-main-code-judges-with-verdict-line",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the admission is judged by remote main's code and needs its verdict line$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "a weakened or pre-gate admission in the push never runs (remote main's code judges), exit 0 without the exact verdict line refuses, and the bootstrap push is judged by the pushed code once and announced (B3)",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "reopened-quest-log-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a re-landing of a quest whose log an earlier commit in the push reopened$\" test/solve/commands.test.js",
+      "detail": "a log rewritten earlier in the push (terminal line removed, or a newer attempt dropped to revive a stale approval) is refused: the log at the remote base must be an open byte prefix of the log at the parent (R3)",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "criss-cross-merge-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a criss-cross merge that takes a stale side over a later main landing$\" test/solve/commands.test.js",
+      "detail": "with two merge bases and git picking the docs-only one by date, a merge taking the stale side over a later main landing is refused (R4)",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "take-theirs-merge-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a merge that takes the side of a path both sides landed$\" test/solve/commands.test.js",
+      "detail": "a merge taking the side version of a path both sides landed is refused (R5)",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "independent-three-way-property",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit agrees with the independent three-way oracle over every merge base on random histories$\" test/solve/commands.test.js",
+      "detail": "the verifier's independent oracle (a merge is clean on a path only where it equals the textbook three-way result over every merge base) and a net-effect oracle agree with admit on fixed-seed random histories with src/ and vendor/ files, take-ours/theirs/base resolutions and fast-forwards of main onto the side",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "missing-remote-sha-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a main push whose remote main sha is not in this repository is refused, never bootstrapped$\" test/scripts/pre-push-hook-control-flow.test.js",
+      "detail": "a remote main sha missing locally refuses the push before any admission code runs",
+      "testFile": "test/scripts/pre-push-hook-control-flow.test.js"
+    },
+    {
+      "id": "vendor-is-production-surface",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a vendor/ change lands only with a current approval and enters main only as a landing$\" test/solve/commands.test.js",
+      "detail": "a direct vendor/ commit is refused, land needs a current approval for a vendor-only change, its landing is admitted, and a merge dropping it is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "take-ours-stale-first-parent-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a take-ours merge from a stale side fast-forwarded onto main \\\\(src/ and vendor/\\\\)$\" test/solve/commands.test.js",
+      "detail": "a `-s ours` merge made on the stale side (side first) and fast-forwarded onto main, discarding a src/ or a vendor/ landing, is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "octopus-take-ours-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses an octopus take-ours merge that lists main last$\" test/solve/commands.test.js",
+      "detail": "an octopus `-s ours` that lists main last and discards its landing is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "resurrected-deletion-side-first-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a merge into the side that resurrects a file a main landing deleted$\" test/solve/commands.test.js",
+      "detail": "a merge of main into the side keeping the side's copy of a file a main landing deleted is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "take-ours-over-side-landing-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a take-ours merge on main that drops a side landing$\" test/solve/commands.test.js",
+      "detail": "owner-visible: a merge on main taking ours over a side landing takes the receipt route",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "merge-verdict-parent-order-invariant",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit gives a merge one verdict whichever parent is first$\" test/solve/commands.test.js",
+      "detail": "the same tree merged with either parent first: clean admitted, take-main and take-side refused, identical changes admitted",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "rename-plus-edit-merge-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a merge of a rename landing with an edit landing \\\\(receipt route\\\\)$\" test/solve/commands.test.js",
+      "detail": "git's rename merge of a rename landing and an edit landing writes content no landing wrote: receipt route",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "every-merge-base-judged",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit judges a merge over every merge base, not only the one git picks$\" test/solve/commands.test.js",
+      "detail": "two merge bases where only the base git does not pick shows the first parent's change: refused (kills dropping --all)",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "surface-directory-entry-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses a merge whose own change creates the surface directory entry itself$\" test/solve/commands.test.js",
+      "detail": "a merge whose own change adds a root `vendor` entry is refused (kills dropping the surface-directory check)",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "octopus-every-pair-bases",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit judges an octopus over the merge bases of every pair of its parents$\" test/solve/commands.test.js",
+      "detail": "an octopus that drops a revert landing visible only over the base two non-first parents share is refused in every parent order",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "unrelated-history-empty-tree-admitted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits a clean merge of an unrelated landed history over the empty tree$\" test/solve/commands.test.js",
+      "detail": "a pair with no merge base is judged against the empty tree, so a clean merge of landed unrelated roots is admitted",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "brought-commits-parent-order-invariant",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit covers a long-lived branch's commits whichever parent the merge lists first$\" test/solve/commands.test.js",
+      "detail": "a receipt-admitted merge whose first parent is the branch covers the branch's commits",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "shared-history-not-brought",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit does not cover a direct commit that every merge parent already holds$\" test/solve/commands.test.js",
+      "detail": "a direct src/ commit that every parent of an authorised receipt merge already holds is not brought by it and stays refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "union-quest-log-landing-admitted",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit admits a landing over an order-preserving union of the quest log$\" test/solve/commands.test.js",
+      "detail": "a landing whose quest log is an order-preserving union of main's and the side's entries is admitted; the same landing over a union dropping main's entry is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "approval-binds-added-file",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a production file added after the approval is refused by land and by admit$\" test/solve/commands.test.js",
+      "detail": "a src/ file added after the approval: land refuses naming it; a hand-made landing commit carrying it is refused by admit",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "approval-binding-computed-not-typed",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^the reviewed change is computed by note, never taken from a typed field$\" test/solve/commands.test.js",
+      "detail": "note computes reviewedSource itself; a typed reviewedSource option is ignored and a later src/ addition is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "approval-binds-edited-file",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a production file edited after the approval is refused$\" test/solve/commands.test.js",
+      "detail": "a src/ file edited after the approval is refused by land, naming it",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "approval-binds-removed-file",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a production file removed from the change after the approval is refused$\" test/solve/commands.test.js",
+      "detail": "a src/ file removed from the change after the approval is refused by land, naming it",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "approval-binding-production-surface-only",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^tests, docs and scripts tidied after the approval still land and are admitted$\" test/solve/commands.test.js",
+      "detail": "tests, docs and scripts edited after the approval still land, and admit admits the landing",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "approval-binding-new-attempt-relands",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a new attempt and a new approval over the changed production diff land$\" test/solve/commands.test.js",
+      "detail": "after a refused stale approval, a new attempt and approval over the changed src/ diff land and are admitted",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "rejection-carries-no-binding",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a rejection records no reviewed change and still stands as before$\" test/solve/commands.test.js",
+      "detail": "a reject records no reviewedSource and refuses with the standing-rejection message only",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "old-writer-approval-insufficient",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an approval written without a reviewed change does not admit a production change$\" test/solve/commands.test.js",
+      "detail": "an approval without reviewedSource (old writer) is refused by land and admit: re-record the verification",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "empty-review-binds-empty-change",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^an approval of an empty production change binds the empty change$\" test/solve/commands.test.js",
+      "detail": "an approval with nothing on the production surface records the empty-change digest; a later src/ change is refused",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "amended-landing-refused",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^admit refuses an amended landing whose terminal binding differs from the review$\" test/solve/commands.test.js",
+      "detail": "a landing amended with a src/ file and its terminal binding rewritten to match is refused by admit",
+      "testFile": "test/solve/commands.test.js"
+    },
+    {
+      "id": "non-production-quest-unaffected",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^a quest that touches no production path is unaffected by the binding$\" test/solve/commands.test.js",
+      "detail": "a docs-only quest edited after its approval lands and is admitted as before",
+      "testFile": "test/solve/commands.test.js"
+    }
+  ]
+}

@@ -13,9 +13,33 @@ the CLI offers, and nothing here restates it.
 
 ## Choosing the unit
 
-Work likely to need more than one measured attempt, or that changes an owner
-boundary, is a quest (R15). A single-sitting change with an obvious proof is
-committed directly, and its commit message names the witness.
+Every change to the production surface - `src/` and `vendor/`, production
+semantics rather than one directory - is a quest and reaches the shared branch
+only as its landing (R15), however small: a direct source commit naming one witness once
+carried a regression its own change cone would have caught. Work likely to
+need more than one measured attempt, or that changes an owner boundary, is a
+quest too. Documentation, tests, scripts and generated metadata may be
+committed directly, and the commit message names the witness.
+
+The main push gate holds this. Every commit a push brings to `main` over the
+remote `main` that changes a production-surface path (a rename, deletion or
+type change included) must be a landing: its own tree appends to a quest log
+the terminal entry `land` writes, binding exactly that commit's
+production-surface change, in a log open at its parent (a quest lands once),
+unrewritten since the remote `main`, recording the seal and a current
+approving verification. Message trailers prove nothing. A long-lived branch
+enters as a merge, admitted with every commit it brings when an
+exact-commit whole-corpus or release receipt names the merge commit itself,
+the merge names its governing quest (`Quest:` trailer) whose log at the merge
+records a current approving verification, and that log at the pushed head
+records the owner's decision naming the merge's full sha (the runbook's merge
+procedure). A merge's own production-surface change needs the same; no parent
+is privileged: a path is clean only where the merge equals the textbook
+three-way result over every merge base, so a dropped landing (`ours` or
+`theirs`, either parent first), a two-sided change or a rename merged with an
+edit is the merge's own. Commits already on
+`main` are never judged, and the code on the remote `main` judges the push. The
+landing guard's own `admit` command runs the same judgement on any range.
 
 ## What a quest is
 
@@ -39,9 +63,12 @@ Nothing recorded is ever edited (R21); a correction is a new entry.
 
 ## Verification
 
-A change under `src/` lands only behind an independent verification newer
+A production-surface change lands only behind an independent verification newer
 than the last attempt, recorded with the verifier's identity and verdict. A
-standing rejection blocks landing until an attempt answers it.
+standing rejection blocks landing until an attempt answers it. An approval
+binds the production-surface change it reviewed (`note` records its digest),
+so `land` and the push gate refuse any later src/ or vendor/ edit until a new
+attempt and verification, while tests, docs and scripts may still be tidied.
 
 ## Landing and publishing
 
