@@ -105,3 +105,11 @@ t.test('range routing decodes persisted INTEGER boundaries with the same authori
   }), false);
   t.end();
 });
+
+t.test('INTEGER authority accepts historical SQLite zero-fraction TEXT storage only', (t) => {
+  t.equal(decodePartitionBoundaryValue('500.0', 'INTEGER'), 500n);
+  t.equal(decodePartitionBoundaryValue('-500.000', 'INTEGER'), -500n);
+  t.throws(() => decodePartitionBoundaryValue('500.5', 'INTEGER'),
+    /Invalid INTEGER/u);
+  t.end();
+});
