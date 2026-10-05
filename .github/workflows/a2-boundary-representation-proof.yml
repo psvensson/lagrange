@@ -1,0 +1,27 @@
+name: a2-boundary-representation-proof
+on:
+  push:
+    branches:
+      - quest/0-3-boundary-representation
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: A2 sealed metric
+        run: node scripts/checks/partition-boundary-representation.js
+      - name: A2 focused witnesses
+        run: npm run test:file -- test/partition/partition-boundary-representation.test.js
+      - name: A1 comparator preservation
+        run: npm run test:file -- test/partition/routing-key-comparator.test.js
