@@ -1,3 +1,4 @@
+import {RESUME_TRIGGER} from './group-retirement-resume.js';
 import {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
@@ -7,6 +8,10 @@ import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
 } from '../workflow/workflow-constants.js';
+import {
+  phaseChange,
+  refusedStepAs,
+} from './managed-workflow-record-changes.js';
 import {
   claimWorkflowOwnershipCore,
   renewWorkflowOwnershipCore,
@@ -32,6 +37,7 @@ const LOCAL_STR_PARTITION_MERGE_WORKFLOW = 'partition:merge:workflow';
 const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
 const LOCAL_STR_CONTROL_PLANE_BACKPRESSURE = 'control_plane_backpressure';
 const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_FUNCTION = 'function';
 
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const MANAGED_MERGE_MUTATION_OPTIONS = Object.freeze({
@@ -258,20 +264,23 @@ class ManagedMergeWorkflowExecutionGateMethods {
     }
 
     return this.runSerializedOwnerStep(workflow.ownerKey, () =>
-      this.runMergeOwnerLaneStepWithSameOwnerResync({
+      this.workflowStepRunner.runStep({
         workflowId,
         ownerKey: workflow.ownerKey + MERGE_OWNER_STEP_LANE_SUFFIX,
         stepName: nextPhase,
-        execute: async ({workflow: currentWorkflow}) =>
-          this.buildMergePhaseAdvanceStepResult({
+        execute: async ({workflow: currentWorkflow}) => {
+          // A queued change: the projection read below is then current.
+          const ownership = await this.renewMergeWorkflowOwnership(workflowId);
+          return this.buildMergePhaseAdvanceStepResult({
             workflowId,
             nextPhase,
             phaseMetadata,
             expectedPredecessorStates,
             currentWorkflow,
-            ownership: await this.renewMergeWorkflowOwnership(workflowId),
-          }),
-      }),
+            ownership,
+          });
+        },
+      }).catch(refusedStepAs(false)),
     );
   }
 
@@ -300,13 +309,9 @@ class ManagedMergeWorkflowExecutionGateMethods {
       // (mirrors the split owner).
       fenceToken: input.ownership?.fenceToken,
       ownerId: input.ownership?.ownerId,
-      updates: {
-        status: input.nextPhase,
-        metadata: {
-          ...(input.currentWorkflow.metadata || {}),
-          ...input.phaseMetadata,
-        },
-      },
+      // Re-checked on the record at the change's turn.
+      change: phaseChange(input.nextPhase, input.expectedPredecessorStates,
+        input.phaseMetadata),
       result: true,
     };
   }
@@ -355,38 +360,39 @@ class ManagedMergeWorkflowExecutionGateMethods {
    * @private
    */
   /**
-   * Claim durable ownership at merge start (new fence epoch, mirrors
-   * the split owner) and return the refusal outcome when another owner
-   * holds the live lease. Exactly one node holds the lease; a refused
-   * claim is a typed outcome — this node must not drive the workflow.
+   * The typed outcome of a merge whose start-time claim was refused (claim
+   * before register: nothing was written, nothing is registered): a live
+   * foreign lease, or a registration compare-and-swap another owner's write
+   * beat. This node must not drive the workflow; a retiring record is handed
+   * to the durable resume (it waits for that lease's expiry).
    * @param {string} workflowId
-   * @param {string[]} sourcePartitionIds - Merge sources (log context).
-   * @return {Promise<Object|null>} Refusal result, or null when claimed.
+   * @param {string[]} sourcePartitionIds - Log context.
+   * @param {Object} registration - registerWorkflowWithClaim's refusal.
+   * @param {Object|null} tableInfo - The record as read.
+   * @return {Object} Refusal result.
    * @private
    */
-  async claimMergeWorkflowAtStart(workflowId, sourcePartitionIds) {
-    const ownershipClaim = await this.claimMergeWorkflowOwnership(
+  refuseMergeOwnershipAtStart(workflowId, sourcePartitionIds, registration,
+    tableInfo) {
+    this.logger.info(MANAGED_MERGE_LOG_MSG.OWNERSHIP_CLAIM_REFUSED, {
       workflowId,
-    );
-    if (ownershipClaim.accepted !== true) {
-      this.logger.info(MANAGED_MERGE_LOG_MSG.OWNERSHIP_CLAIM_REFUSED, {
-        workflowId,
-        sourcePartitionIds,
-        result: ownershipClaim.result,
-      });
-      return {
-        success: false,
-        sourcePartitionIds,
-        workflowId,
-        ownership: ownershipClaim.result,
-      };
-    }
-    this.logger.info(MANAGED_MERGE_LOG_MSG.OWNERSHIP_CLAIMED, {
-      workflowId,
-      fenceToken: ownershipClaim.workflow.fenceToken,
-      ownerId: this.workflowOwnerId,
+      sourcePartitionIds,
+      result: registration.refusal,
+      recordOwnerId: registration.recordOwnerId ?? null,
+      recordLeaseExpiresAt: registration.recordLeaseExpiresAt ?? null,
     });
-    return null;
+    const tableId = String(tableInfo?.table_id ?? '');
+    const current = (this.listTableInfos?.() || []).find((row) =>
+      String(row?.table_id ?? '') === tableId) || tableInfo;
+    if (current && typeof this.resumeGroupRetirement === LOCAL_STR_FUNCTION) {
+      this.resumeGroupRetirement(current, RESUME_TRIGGER.START_REFUSED).catch(() => {});
+    }
+    return {
+      success: false,
+      sourcePartitionIds,
+      workflowId,
+      ownership: registration.refusal, reason: registration.reason ?? null,
+    };
   }
 
   async renewMergeWorkflowOwnership(workflowId) {
@@ -417,20 +423,16 @@ class ManagedMergeWorkflowExecutionGateMethods {
     if (this.isMergeWorkflowStateUnavailable(workflow)) {
       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
     }
-    this.ensureCanonicalMergeParticipants(
-      workflow.workflowId,
-      workflow.metadata,
-    );
     const ackResult = await this.workflowCoordinator.acknowledgeParticipant(
       workflowId,
       ack,
     );
 
-    // A rejected acknowledgement (stale fence, out-of-graph transition,
-    // duplicate, unknown participant) is a typed outcome, never silently
-    // applied (mirrors the split owner): short-circuit every owner
-    // reaction.
+    // A rejected acknowledgement is a typed outcome, never silently
+    // applied (mirrors the split owner): no owner reaction follows.
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
+      await this.resumeMergeDissolutionOnRedelivery(workflowId, ackResult,
+        ack);
       return this.buildRejectedMergeAckOutcome(workflowId, ackResult);
     }
 
@@ -607,16 +609,17 @@ class ManagedMergeWorkflowExecutionGateMethods {
    */
   async applyMergeCutoverStep(workflowId, ownerKey) {
     return this.runSerializedOwnerStep(ownerKey, () =>
-      this.runMergeOwnerLaneStepWithSameOwnerResync({
+      this.workflowStepRunner.runStep({
         workflowId,
         ownerKey: ownerKey + MERGE_OWNER_STEP_LANE_SUFFIX,
         stepName: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
         execute: async ({workflow: currentWorkflow}) => {
-          if (!PRE_CUTOVER_MERGE_STATES.has(currentWorkflow.status) ||
-              !this.areAllMergeSourcesAtStatus(
-                currentWorkflow,
-                MERGE_ACK_CATCHUP_SATISFIED_STATUSES,
-              )) {
+          // Renew first (a change queued behind every earlier one, a failure
+          // ack among them): the projection checked below is current.
+          const ownership = await this.renewMergeWorkflowOwnership(
+            workflowId,
+          );
+          if (!this.isMergeCutoverAdmissible(currentWorkflow)) {
             this.logger.warn(MANAGED_MERGE_LOG_MSG.PHASE_ADVANCE_REFUSED, {
               workflowId,
               nextPhase: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
@@ -637,31 +640,37 @@ class ManagedMergeWorkflowExecutionGateMethods {
               targetVersion,
             );
           }
-          // Renew the lease inside the same lane slot so the epoch-flip
-          // transition carries a live fence (mirrors the split owner).
-          const ownership = await this.renewMergeWorkflowOwnership(
-            workflowId,
-          );
           return {
             nextStep: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
             reason: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
             fenceToken: ownership.fenceToken,
             ownerId: ownership.ownerId,
-            updates: {
-              status: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
-              metadata: {
-                ...(currentWorkflow.metadata || {}),
+            // Re-checked on the record at its turn (a failure ack refuses).
+            change: phaseChange(
+              PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
+              PRE_CUTOVER_MERGE_STATES, {
                 [PARTITION_TRANSITION_METADATA_FIELD.CUTOVER_APPLIED_AT]:
                   this.now(),
                 [PARTITION_TRANSITION_METADATA_FIELD.SIBLING_PARTITION_IDS]:
                   siblingPartitionIds,
-              },
-            },
+              }, (record) => this.isMergeCutoverAdmissible(record)),
             result: true,
           };
         },
-      }),
+      }).catch(refusedStepAs(false)),
     );
+  }
+
+  /**
+   * Pre-cutover with every source caught up (the projection or a record).
+   * @param {Object} workflow
+   * @return {boolean}
+   * @private
+   */
+  isMergeCutoverAdmissible(workflow) {
+    return PRE_CUTOVER_MERGE_STATES.has(workflow.status) &&
+      this.areAllMergeSourcesAtStatus(workflow,
+        MERGE_ACK_CATCHUP_SATISFIED_STATUSES);
   }
 
   /**
@@ -756,17 +765,15 @@ class ManagedMergeWorkflowExecutionGateMethods {
         input.retryMetadata,
         deniedState,
       );
-      const deniedMetadata = {
-        ...input.workflowMetadata,
+      const deniedDelta = {
         [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
           input.compactAdmission,
         [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
           deniedRetryMetadata,
       };
-      await this.workflowCoordinator.updateWorkflow(input.workflowId, {
-        status: deniedState,
-        metadata: deniedMetadata,
-      });
+      await this.workflowCoordinator.recordExecutionOutcome(input.workflowId,
+        {status: deniedState, delta: deniedDelta,
+          incident: {reason: input.admissionResult.decisionType}});
       return {
         blocked: true,
         result: this.buildAdmissionDeniedExecutionResult({

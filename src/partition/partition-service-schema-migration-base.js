@@ -9,6 +9,27 @@ const {
   SYSTEM_TABLE_NAME,
 } = PARTITION_SERVICE_SHARED;
 
+// The columns the tables table gained after it first shipped: [column, its
+// ADD COLUMN clause, the log line of the upgrade].
+const TABLES_TABLE_ADDED_COLUMNS = Object.freeze([
+  [PARTITION_SERVICE_COLUMN.ACTIVE_PARTITION_VERSION,
+    PARTITION_SERVICE_COLUMN_SQL.ADD_ACTIVE_PARTITION_VERSION,
+    PARTITION_SERVICE_LOG_MSG.ADDED_ACTIVE_PARTITION_VERSION],
+  [PARTITION_SERVICE_COLUMN.PENDING_PARTITION_VERSION,
+    PARTITION_SERVICE_COLUMN_SQL.ADD_PENDING_PARTITION_VERSION,
+    PARTITION_SERVICE_LOG_MSG.ADDED_PENDING_PARTITION_VERSION],
+  [PARTITION_SERVICE_COLUMN.PARTITION_TRANSITION_STATE,
+    PARTITION_SERVICE_COLUMN_SQL.ADD_PARTITION_TRANSITION_STATE,
+    PARTITION_SERVICE_LOG_MSG.ADDED_PARTITION_TRANSITION_STATE],
+  [PARTITION_SERVICE_COLUMN.PARTITION_TRANSITION_METADATA,
+    PARTITION_SERVICE_COLUMN_SQL.ADD_PARTITION_TRANSITION_METADATA,
+    PARTITION_SERVICE_LOG_MSG.ADDED_PARTITION_TRANSITION_METADATA],
+  // The workflow record generation (managed-workflow-record-store.js).
+  [PARTITION_SERVICE_COLUMN.PARTITION_TRANSITION_GENERATION,
+    PARTITION_SERVICE_COLUMN_SQL.ADD_PARTITION_TRANSITION_GENERATION,
+    PARTITION_SERVICE_LOG_MSG.ADDED_PARTITION_TRANSITION_GENERATION],
+]);
+
 class PartitionServiceSchemaMigrationBase extends PartitionServiceRaftInitBase {
   /**
    * Ensure services includes the durable cleanup ownership token.
@@ -68,61 +89,16 @@ class PartitionServiceSchemaMigrationBase extends PartitionServiceRaftInitBase {
     if (this.tableName !== SYSTEM_TABLE_NAME.TABLES) {
       return;
     }
-    const columns = this.db
+    const present = new Set(this.db
       .prepare(`PRAGMA table_info(${this.tableName})`)
-      .all();
-    const hasActivePartitionVersion = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.ACTIVE_PARTITION_VERSION,
-    );
-    const hasPendingPartitionVersion = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.PENDING_PARTITION_VERSION,
-    );
-    const hasPartitionTransitionState = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.PARTITION_TRANSITION_STATE,
-    );
-    const hasPartitionTransitionMetadata = columns.some(
-      (col) =>
-        col.name === PARTITION_SERVICE_COLUMN.PARTITION_TRANSITION_METADATA,
-    );
-    if (!hasActivePartitionVersion) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_ACTIVE_PARTITION_VERSION,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG.ADDED_ACTIVE_PARTITION_VERSION,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasPendingPartitionVersion) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_PENDING_PARTITION_VERSION,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG.ADDED_PENDING_PARTITION_VERSION,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasPartitionTransitionState) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_PARTITION_TRANSITION_STATE,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG.ADDED_PARTITION_TRANSITION_STATE,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasPartitionTransitionMetadata) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_PARTITION_TRANSITION_METADATA,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG.ADDED_PARTITION_TRANSITION_METADATA,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
+      .all().map((col) => col.name));
+    for (const [column, addSql, logMessage] of TABLES_TABLE_ADDED_COLUMNS) {
+      if (present.has(column)) {
+        continue;
+      }
+      this.db.exec(`ALTER TABLE ${this.tableName} ${addSql}`);
+      this.logger.info(logMessage,
+        {tableName: this.tableName, partitionId: this.partitionId});
     }
   }
   /**

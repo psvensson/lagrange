@@ -42,7 +42,7 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
         this.removedReplicaCleanupAdmissionBarrier.then(
           (startupAuthorities) =>
             this.sweepRemovedReplicaCleanupDebt(startupAuthorities),
-        ).catch((error) => {
+        ).finally(() => this.watchGroupRetiredTombstones?.()).catch((error) => {
           this.logger.warn(
             REPLICA_HANDLER_LOG_MSG.REMOVED_CLEANUP_SWEEP_FAILED,
             {nodeId: this.nodeId, error: error.message},

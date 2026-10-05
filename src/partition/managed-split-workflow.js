@@ -1,3 +1,9 @@
+import {createGroupRetirementRedrive} from
+  './group-retirement-redrive.js';
+import {
+  WORKFLOW_FAMILY,
+  attachGroupRetirementResume,
+} from './group-retirement-resume.js';
 import {
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
@@ -6,11 +12,13 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
-import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
+import {RecordProjectedWorkflowCoordinator} from
+  './managed-workflow-record-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
 import {TimeoutPolicy} from '../workflow/timeout-policy.js';
 import {WorkflowStepRunner} from '../workflow/workflow-step-runner.js';
 import {
+  MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
@@ -44,6 +52,8 @@ import {
   buildSplitWorkflowOwnerId,
   ManagedSplitWorkflowOwnershipMethods,
 } from './managed-split-workflow-ownership-methods.js';
+import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
+import {registerWorkflowWithClaim} from './managed-workflow-ownership-core.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_MANAGED_SPLIT = 'managed_split';
@@ -100,20 +110,16 @@ class ManagedSplitWorkflow {
       options.workflowLeaseMs > 0 ?
       Math.floor(options.workflowLeaseMs) :
       DEFAULT_WORKFLOW_LEASE_MS;
-    this.workflowCoordinator = options.workflowCoordinator ||
-      new DurableWorkflowCoordinator({
-        persistWorkflow: async (workflow) =>
-          this.persistWorkflowTransition(workflow),
-        persistWorkflowClaim: async (workflow, context) =>
-          this.persistSplitWorkflowClaim(workflow, context),
-        persistWorkflowTransition: async (workflow, context) =>
-          this.persistSplitWorkflowTransitionFence(workflow, context),
-        persistParticipant: async (participant) =>
-          this.persistWorkflowParticipantState(participant),
-        isParticipantTransitionAllowed: (participantKey, from, to) =>
-          this.isSplitParticipantTransitionAllowed(participantKey, from, to),
-        now: this.now,
-      });
+    this.groupRetirementRedrive =
+      createGroupRetirementRedrive(this, options);
+    // The in-memory workflows are projections of their durable records;
+    // every mutation is a change of the record (owner decision 2026-10-05).
+    this.workflowCoordinator = new RecordProjectedWorkflowCoordinator({
+      owner: this,
+      isParticipantTransitionAllowed: (participantKey, from, to) =>
+        this.isSplitParticipantTransitionAllowed(participantKey, from, to),
+      now: this.now,
+    });
     this.executionTimeoutPolicy = options.executionTimeoutPolicy ||
       new TimeoutPolicy({
         operationName: LOCAL_STR_MANAGED_SPLIT,
@@ -134,6 +140,17 @@ class ManagedSplitWorkflow {
         timeoutPolicy: this.executionTimeoutPolicy,
         now: this.now,
       });
+    // The owner resumes, from the durable record, any whole-group
+    // retirement step nobody drives (owner start, record changes).
+    this.resumeGroupRetirement = attachGroupRetirementResume(this, {
+      family: WORKFLOW_FAMILY.SPLIT,
+      claim: (workflowId) => this.claimSplitWorkflowOwnership(workflowId),
+      finalize: (workflowId) =>
+        this.finalizeSplitDissolutionIfReady(workflowId),
+      teardown: (workflowId, workflow) =>
+        this.teardownAbortedSplitChildren(workflowId, workflow),
+      scheduler: options.groupRetirementScheduler,
+    });
   }
 
   /**
@@ -329,7 +346,10 @@ class ManagedSplitWorkflow {
         persistedSplitPlan,
       ),
     });
-    const workflow = await this.workflowCoordinator.registerWorkflow({
+    // Claim before register: the registration IS the ownership claim, one
+    // compare-and-swap on the record as read (a live foreign lease writes
+    // nothing; a refused swap registers nothing).
+    const registration = await registerWorkflowWithClaim(this, {
       workflowId,
       ownerKey: partitionId,
       tableId,
@@ -354,18 +374,15 @@ class ManagedSplitWorkflow {
       }),
       createdAt: now,
       updatedAt: now,
-    });
-
-    // Durable ownership claim (new fence epoch): exactly one node holds
-    // the live lease for this workflow. A refused claim is a typed
-    // outcome — this node must not drive the workflow.
-    const ownershipRefusal = await this.claimSplitWorkflowAtStart(
-      workflowId,
-      partitionId,
-    );
-    if (ownershipRefusal) {
-      return ownershipRefusal;
+    }, tableInfo);
+    if (!registration.workflow) {
+      return this.refuseSplitOwnershipAtStart(workflowId, partitionId,
+        registration, tableInfo);
     }
+    const workflow = registration.workflow;
+    this.logger.info(MANAGED_SPLIT_LOG_MSG.OWNERSHIP_CLAIMED, {workflowId,
+      partitionId, fenceToken: workflow.fenceToken,
+      ownerId: this.workflowOwnerId});
 
     try {
       const admissionResult = await this.evaluateSplitAdmission({
@@ -467,22 +484,21 @@ class ManagedSplitWorkflow {
       if (childProvisioningDeferral) {
         return childProvisioningDeferral;
       }
-      const transitionMetadata = {
-        ...workflow.metadata,
+      // A change of the record (its plan delta merged onto the record's own
+      // metadata at the change's turn); the canonical child participants
+      // ride the same write (the encoder materializes them).
+      const planDelta = {
         [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
           compactAdmission,
         [PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT]:
           transitionTopologySnapshot,
         ...this.buildSplitPlanTransitionMetadata(splitPlan),
       };
-      this.ensureCanonicalSplitParticipants(
-        workflowId,
-        transitionMetadata,
-      );
-      await this.workflowCoordinator.updateWorkflow(workflowId, {
-        status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
-        metadata: transitionMetadata,
-      });
+      const prepared = await this.workflowCoordinator.updateWorkflow(
+        workflowId, (current) => ({...current,
+          status: PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
+          metadata: {...current.metadata, ...planDelta}}));
+      const transitionMetadata = prepared.metadata;
 
       const leftPartitionMetadata = {
         partition_id: splitPlan.leftPartition.partitionId,
@@ -530,6 +546,8 @@ class ManagedSplitWorkflow {
         ),
       ]);
 
+      await markTargetProvisioningDispatched(this, workflowId,
+        splitPlan.leftPartition.partitionId);
       await this.provisionInitialTablePartition({
         tableId,
         tableName,
@@ -551,6 +569,8 @@ class ManagedSplitWorkflow {
         routingReadinessDimension:
           SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
+      await markTargetProvisioningDispatched(this, workflowId,
+        splitPlan.rightPartition.partitionId);
       await this.provisionInitialTablePartition({
         tableId,
         tableName,
@@ -573,16 +593,15 @@ class ManagedSplitWorkflow {
           SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
 
-      await this.workflowCoordinator.updateWorkflow(workflowId, {
-        status: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
-        metadata: transitionMetadata,
-      });
+      const backfilling = await this.workflowCoordinator.updateWorkflow(
+        workflowId, (current) => ({...current,
+          status: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING}));
 
       await this.startSplitReplicationOnSourcePartition(
         partitionId,
         tableId,
         tableName,
-        transitionMetadata,
+        backfilling.metadata,
       );
 
       this.logger.info(QUERY_LOG_MSG.TABLE_SPLIT_PREPARED, {

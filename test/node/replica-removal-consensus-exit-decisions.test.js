@@ -17,6 +17,8 @@ import {
   RAFT_EVENT,
   RAFT_OPERATION,
 } from '../../src/raft/raft-operation-port-constants.js';
+import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
+  '../../src/partition/partition-replica-membership-constants.js';
 import {
   REPLICA_CONSENSUS_EXIT_REASON,
   awaitReplicaConsensusExit,
@@ -142,9 +144,14 @@ test('the backstop bounds a removal nobody proposes; release ends it at ' +
   // The backstop timer does not hold the process open; this test does.
   const keepAlive = setTimeout(() => {}, LONG_MS);
   t.teardown(() => clearTimeout(keepAlive));
+  // The backstop is an alarm (owner decision 2026-10-04): its answer also
+  // says why no exit came - the last witness read still named the replica
+  // a voter.
   t.same(await awaitReplicaConsensusExit(named().service,
     {replicaId: SELF, backstopMs: 20}),
-  {reason: REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP}, 'backstop');
+  {reason: REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP,
+    lastObservation: {state: PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER,
+      gateOpen: true}}, 'backstop');
   const release = new AbortController();
   const released = awaitReplicaConsensusExit(named().service,
     {replicaId: SELF, backstopMs: LONG_MS, signal: release.signal});

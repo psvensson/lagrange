@@ -12,10 +12,13 @@ import {
 } from '../raft/raft-committed-membership-constants.js';
 import {
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
+  RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
+  RAFT_OPERATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
+import {isGroupRetiringInView} from './group-retirement-evidence.js';
 import {recoveryRetryWindowMsOf} from '../raft/raft-rs-runtime-tuning.js';
 import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
   './partition-replica-membership-constants.js';
@@ -23,6 +26,8 @@ import {computeReplicaElectionTimeouts} from
   '../raft/replica-election-timeouts.js';
 
 const {PARTITION_SERVICE_VALUE} = PARTITION_SERVICE_SHARED;
+const GROUP_RETIRING_LOG_MSG = 'Partition membership change refused: the ' +
+  'group is being retired as a unit by its durable workflow record';
 
 // The partition as a caller of the group-neutral admission owner (design R3
 // section 1.6, decision D4): its identity, its logger and its own record
@@ -44,6 +49,16 @@ function reservePartitionRaftPeerIdentity(
     joiningReplicaIdentity);
 }
 
+// The port-shaped refusal of any membership change of a group its durable
+// record retires as a unit (group-retirement-members.js froze its members),
+// or null. The one fence every partition conf change passes.
+function groupRetiringRefusal(service) {
+  return isGroupRetiringInView(service.systemTableCache, service.partitionId) ?
+    Object.freeze({outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      reason: RAFT_MEMBERSHIP_CHANGE_REFUSAL.GROUP_RETIRING,
+      retryable: false, recoveryRequired: false}) : null;
+}
+
 /**
  * The partition's one path to admitting a peer into its raft configuration,
  * through the group-neutral admission owner: only the leader proposes, a
@@ -54,6 +69,15 @@ function reservePartitionRaftPeerIdentity(
  * @return {Object} The frozen admission record.
  */
 function admitPartitionRaftPeer(service, peer) {
+  const retiring = groupRetiringRefusal(service);
+  if (retiring) {
+    const refused = Object.freeze({replicaIdentity: peer?.replicaIdentity,
+      ...admissionOfPortAnswer(retiring)});
+    service.logger?.warn?.(GROUP_RETIRING_LOG_MSG, {
+      partitionId: service.partitionId,
+      change: RAFT_MEMBERSHIP_OPERATION.ADD_PEER, ...refused});
+    return refused;
+  }
   return admitGroupPeer(service.raft, admissionGroupOf(service), peer);
 }
 
@@ -88,6 +112,12 @@ function trackRetirement(service, change, answered) {
  * @return {*} What the port answered.
  */
 function proposePeerRetirement(service, change) {
+  const retiring = groupRetiringRefusal(service);
+  if (retiring) {
+    retirementsDeferredOf(service).delete(
+      change.replicaIdentity ?? change.peerAddress);
+    return retiring;
+  }
   const answered = service.raft.proposeConfChange(change);
   if (answered && typeof answered.then === 'function') {
     answered.then((settled) => trackRetirement(service, change, settled),
@@ -233,6 +263,10 @@ function replicaIdentitiesOf(answer, peerIds) {
  *   leaderReplicaId?}.
  */
 async function retirePartitionRaftPeer(service, replicaIdentity) {
+  const retiring = groupRetiringRefusal(service);
+  if (retiring) {
+    return Object.freeze(admissionOfPortAnswer(retiring));
+  }
   const reservation = reservePartitionRaftPeerIdentity(
     service, replicaIdentity);
   if (reservation.outcome !== RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED) {

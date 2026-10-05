@@ -45,9 +45,13 @@ const COMMITTED_MEMBERSHIP_ANSWER_KIND = Object.freeze({
 // leader never reserved; a witness read (the REPLACE owner asking its target
 // replica for its own applied configuration) is answered by whichever
 // replica is asked.
+// A retirement read (a workflow owner freezing a retiring group's member
+// set) is a bootstrap read that also refuses while a configuration change is
+// pending: what it answers must be the configuration no change will alter.
 const COMMITTED_MEMBERSHIP_READ_PURPOSE = Object.freeze({
   BOOTSTRAP: 'bootstrap',
   WITNESS: 'witness',
+  RETIREMENT: 'retirement',
 });
 
 // Every typed refusal of the boundary, one enumeration:
@@ -87,6 +91,7 @@ const COMMITTED_MEMBERSHIP_REFUSAL = Object.freeze({
   GENESIS_REFUSED_GROUP_EXISTS: 'membership-genesis-refused-group-exists',
   DURABLE_RECORD_MISSING: 'durable-record-missing',
   RESEED_REQUIRED: 'reseed-required',
+  CONF_CHANGE_PENDING: 'membership-conf-change-pending',
 });
 
 // Why a dispatched stamp is STAMP_INVALID (the refusal's detail).

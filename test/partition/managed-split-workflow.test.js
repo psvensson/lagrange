@@ -917,14 +917,16 @@ test('ManagedSplitWorkflow preserves workflow identity across deferred ' +
     updateCalls,
     admissionCalls,
   } = buildWorkflow({
-    getTableInfo: () => ({
+    // The durable record IS what the owner read (the registration's
+    // compare-and-swap names it).
+    durableTableRows: [{
       table_id: 'tbl-users',
       table_name: 'users',
       partition_key: 'id',
       active_partition_version: 1,
       partition_transition_state: PARTITION_TRANSITION_STATE.DEFERRED,
       partition_transition_metadata: JSON.stringify(existingTransition.metadata),
-    }),
+    }],
     parsePartitionTransition: () => existingTransition,
     buildManagedSplitPlan: async () => {
       t.fail('split planning should not run while admission remains deferred');

@@ -362,6 +362,8 @@ class PartitionServiceMergeReplicationMethods {
     if (Number.isInteger(metadata.workflowFenceToken)) {
       ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] = metadata.workflowFenceToken;
     }
+    // The attempt it was started under (an ack of another attempt is stale).
+    ack[PARTICIPANT_ACK_FIELD.ATTEMPT] = metadata.workflowAttempt ?? 0;
     if (checkpoint) {
       ack[PARTICIPANT_ACK_FIELD.CHECKPOINT] = checkpoint;
     }

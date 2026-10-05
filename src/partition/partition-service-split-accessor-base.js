@@ -116,11 +116,8 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       }),
     );
     if (result?.success === false) {
-      throw new Error(
-        result.error ||
-          result.message ||
-          PARTITION_SERVICE_LITERAL.SIZE_PERSISTENCE_FAILED,
-      );
+      throw new Error(result.error || result.message ||
+        PARTITION_SERVICE_LITERAL.SIZE_PERSISTENCE_FAILED);
     }
   }
   /**
@@ -294,6 +291,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     if (Number.isInteger(metadata.workflowFenceToken)) {
       ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] = metadata.workflowFenceToken;
     }
+    ack[PARTICIPANT_ACK_FIELD.ATTEMPT] = metadata.workflowAttempt ?? 0;
     if (checkpoint) {
       ack[PARTICIPANT_ACK_FIELD.CHECKPOINT] = checkpoint;
     }

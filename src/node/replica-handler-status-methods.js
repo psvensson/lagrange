@@ -122,6 +122,9 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           partitionId,
           nodeId: existing?.node_id || this.nodeId,
           errorMessage: additionalData.errorMessage,
+          // What triggered the new status (the row's trigger_reason): a
+          // group retired as a unit marks its REMOVING row so.
+          reason: additionalData.triggerReason,
           serviceId: existing?.service_id || replicaId,
           serviceType:
             existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,

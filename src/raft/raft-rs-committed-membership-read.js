@@ -66,6 +66,19 @@ function identitiesOf(group, ids) {
   return identities;
 }
 
+// What a bootstrap or retirement read refuses of a configuration still in
+// transition: a joint configuration; for a retirement read also a proposed
+// change not yet applied (a member it adds would never be retired).
+function configurationInTransitionRefusal(status, votersOutgoing, purpose) {
+  if (votersOutgoing.length > 0) {
+    return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.JOINT);
+  }
+  return purpose === COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT &&
+    status.confChangePending !== false ?
+    committedMembershipRefusal(
+      COMMITTED_MEMBERSHIP_REFUSAL.CONF_CHANGE_PENDING) : null;
+}
+
 /**
  * The answer a shaped status (one recorded observation) gives the read.
  * @param {Object} group - The runtime group.
@@ -87,8 +100,10 @@ function answerCommittedMembership(group, status, purpose) {
   const voters = sortedIds(confState.voters);
   const votersOutgoing = sortedIds(confState.votersOutgoing);
   const learners = sortedIds(confState.learners);
-  if (bootstrap && votersOutgoing.length > 0) {
-    return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.JOINT);
+  const transitionRefusal = bootstrap ?
+    configurationInTransitionRefusal(status, votersOutgoing, purpose) : null;
+  if (transitionRefusal) {
+    return transitionRefusal;
   }
   let identities;
   try {

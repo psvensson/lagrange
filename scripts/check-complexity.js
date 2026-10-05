@@ -91,7 +91,18 @@ const TARGET_THRESHOLD = 12;
 // 2026-10-05 (quest/pgwire-dml-row-counts): tightened 1761 -> 1760 on the
 // checker's hint (the PG-wire mapper's three `changes ?? rowCount ?? 0`
 // fallbacks became one call to the result-count owner).
-const BASELINE_COUNT = 1760;
+// 2026-10-05 (quest/group-retirement-as-a-unit): tightened 1770 -> 1769 on
+// the checker's hint (the group-retired tombstone record's text fields go
+// through one helper).
+// 2026-10-05: tightened 1769 -> 1768 on the checker's hint (the record
+// store's change functions and the split decoder extracted helpers).
+// 2026-10-05: tightened 1768 -> 1767 on the checker's hint (round 7: the
+// record store's turn and the SQLite witness world extracted helpers).
+// 2026-10-05: merge of quest/group-retirement-as-a-unit keeps the lower
+// value, then tightened 1760 -> 1757 on the checker's hint for the merged
+// tree (the merge persistence's same-owner re-sync left with the record
+// store redesign).
+const BASELINE_COUNT = 1757;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

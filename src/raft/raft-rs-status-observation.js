@@ -117,6 +117,10 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     peerId: group.peerId,
     term: Number(status.term),
     commitIndex: Number(status.commit),
+    // The core holds a proposed configuration change it has not applied
+    // (the conf-change admission's own pending check).
+    confChangePending:
+      BigInt(status.pendingConfIndex ?? 0) > BigInt(status.applied ?? 0),
     // The runtime's applied index of this same observation (the one its
     // confState came from).
     appliedIndex: observation.appliedIndex,

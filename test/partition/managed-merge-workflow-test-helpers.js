@@ -6,6 +6,7 @@ import {
   createAdmissionResult,
   createTransactionCoordinator,
 } from './managed-split-workflow-test-helpers.js';
+import {tablesColumnOf} from './tables-row-defaults.js';
 
 const FIXTURE_TABLE_ID = 'tbl-users';
 const FIXTURE_TABLE_NAME = 'users';
@@ -96,6 +97,12 @@ function parseDurablePartitionTransition(tableInfo) {
  * @param {*} fallback
  * @return {*}
  */
+// The replica ids a test's services rows declare for one group.
+function committedMembersOfRows(rows) {
+  return (rows || []).map((row) => String(row?.replica_id ?? row?.replicaId ??
+    '')).filter((id) => id.length > 0);
+}
+
 function resolveOption(options, name, fallback) {
   return Object.hasOwn(options, name) ? options[name] : fallback;
 }
@@ -120,7 +127,7 @@ function createRecordingCdcIntegrationService(recorders) {
         // conditional update would match zero rows.
         const matchesWhere = Object.entries(whereClause || {})
           .every(([column, expected]) => {
-            const actual = durableTableRow?.[column];
+            const actual = tablesColumnOf(durableTableRow, column);
             if (expected === null || expected === undefined) {
               return actual === null || actual === undefined;
             }
@@ -303,11 +310,20 @@ function buildMergeWorkflow(options = {}) {
       'listPartitionServiceRows',
       (partitionId) => serviceRowsByPartitionId[partitionId] || [],
     ),
+    // The group leader's committed configuration (production: the
+    // committed-membership read): here, the replicas the test's own rows
+    // declare for the group. No rows: membership unavailable.
+    readCommittedGroupMembers: opt(
+      'readCommittedGroupMembers',
+      async (partitionId) => committedMembersOfRows(
+        (options.listPartitionServiceRows ||
+          ((id) => serviceRowsByPartitionId[id] || []))(partitionId)),
+    ),
     deliverReplicaRemoval: opt(
       'deliverReplicaRemoval',
       async (request) => {
         replicaRemovalCalls.push(request);
-        return {status: 'initiated'};
+        return {status: 'completed'};
       },
     ),
     mergeStorageThresholdBytes: opt('mergeStorageThresholdBytes', undefined),
@@ -316,6 +332,9 @@ function buildMergeWorkflow(options = {}) {
     transactionCoordinator: opt(
       'transactionCoordinator', createTransactionCoordinator(now),
     ),
+    groupRetirementScheduler: opt('groupRetirementScheduler', undefined),
+    groupRetirementLeaseScheduler: opt('groupRetirementLeaseScheduler',
+      undefined),
   });
 
   return {

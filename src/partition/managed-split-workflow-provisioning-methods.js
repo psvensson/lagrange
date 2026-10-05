@@ -20,6 +20,7 @@ import {
 import {
   applyManagedSplitWorkflowPersistenceMethods,
 } from './managed-split-workflow-persistence-methods.js';
+import {targetProvisioningMarks} from './target-provisioning-mark.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
@@ -83,6 +84,9 @@ class ManagedSplitWorkflowProvisioningMethods {
         partitionId: String(rightPartitionId),
         keyRange: rightRange,
       },
+      // Reused child ids keep the prior record's own provisioning marks.
+      targetProvisioning: targetProvisioningMarks(targetPartitionIds,
+        {minted: false, priorMetadata: existingTransition.metadata}),
     };
   }
 
@@ -137,12 +141,19 @@ class ManagedSplitWorkflowProvisioningMethods {
     if (!splitPlan) {
       return {};
     }
+    const targetPartitionIds = [
+      splitPlan.leftPartition.partitionId,
+      splitPlan.rightPartition.partitionId,
+    ];
     return {
       [PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY]: splitPlan.medianKey,
-      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]: [
-        splitPlan.leftPartition.partitionId,
-        splitPlan.rightPartition.partitionId,
-      ],
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]:
+        targetPartitionIds,
+      // A planner's plan minted its child ids now: no create was ever sent
+      // under them. A persisted plan carries its own marks.
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PROVISIONING]:
+        splitPlan.targetProvisioning ??
+          targetProvisioningMarks(targetPartitionIds, {minted: true}),
     };
   }
 
@@ -203,8 +214,7 @@ class ManagedSplitWorkflowProvisioningMethods {
     );
     const errorMessage = options.error?.message ||
       QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED;
-    const deferredMetadata = {
-      ...(workflow?.metadata || {}),
+    const deferredDelta = {
       [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
         options.admission,
       [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
@@ -218,12 +228,10 @@ class ManagedSplitWorkflowProvisioningMethods {
       },
     };
 
-    if (workflow) {
-      await this.workflowCoordinator.updateWorkflow(options.workflowId, {
-        status: deferredState,
-        metadata: deferredMetadata,
-      });
-    }
+    const recorded = workflow ?
+      await this.workflowCoordinator.recordExecutionOutcome(
+        options.workflowId, {status: deferredState, delta: deferredDelta,
+          incident: {reason: errorMessage}}) : null;
 
     return {
       success: false,
@@ -232,7 +240,7 @@ class ManagedSplitWorkflowProvisioningMethods {
       tableName: options.tableName,
       workflowId: options.workflowId,
       targetVersion: options.targetVersion,
-      state: deferredState,
+      state: recorded?.state ?? deferredState,
       admission: options.admission,
       retry,
       error: errorMessage,

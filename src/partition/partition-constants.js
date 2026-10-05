@@ -280,6 +280,9 @@ const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
   SPLIT_KEY: 'splitKey',
   TARGET_PARTITION_IDS: 'targetPartitionIds',
   TARGET_PARTITION_VERSION: 'targetPartitionVersion',
+  // Per target partition id, whether a replica create may have been sent
+  // for it (target-provisioning-mark.js): carried with the target ids.
+  TARGET_PROVISIONING: 'targetProvisioning',
   CUTOVER_APPLIED_AT: 'cutoverAppliedAt',
   PARTICIPANTS: 'participants',
   SOURCE_CHECKPOINT: 'sourceCheckpoint',
@@ -290,7 +293,26 @@ const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
   WORKFLOW_FENCE_TOKEN: 'workflowFenceToken',
   WORKFLOW_OWNER_ID: 'workflowOwnerId',
   WORKFLOW_LEASE_EXPIRES_AT: 'workflowLeaseExpiresAt',
+  // The workflow ATTEMPT (round 7): the record generation its registration
+  // wrote, minted once and never changed. (workflowId, workflowAttempt) is
+  // one attempt; a re-registration of the same workflow id is another.
+  WORKFLOW_ATTEMPT: 'workflowAttempt',
+  // Failures that arrived after the cutover, recorded without moving the
+  // phase (the workflow continues forward to its terminal).
+  POST_CUTOVER_INCIDENTS: 'postCutoverIncidents',
 });
+
+/**
+ * The attempt one transition metadata object records: a positive integer,
+ * or 0 for a record registered before attempts existed (the legacy
+ * attempt).
+ * @param {Object|null} metadata
+ * @return {number}
+ */
+function workflowAttemptOf(metadata) {
+  const attempt = metadata?.[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ATTEMPT];
+  return Number.isSafeInteger(attempt) && attempt > 0 ? attempt : 0;
+}
 
 const PARTITION_SPLIT_MIRROR_ORIGIN = Object.freeze({
   SNAPSHOT: 'snapshot',
@@ -703,4 +725,5 @@ export {
   buildPartitionTransitionProjection,
   isDeferredPartitionTransitionOutcome,
   isRetryablePartitionTransitionState,
+  workflowAttemptOf,
 };

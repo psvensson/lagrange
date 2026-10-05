@@ -1,4 +1,8 @@
 import {
+  phaseChange,
+  refusedStepAs,
+} from './managed-workflow-record-changes.js';
+import {
   QUERY_ERROR_MSG,
 } from '../query/query-constants.js';
 import {
@@ -243,16 +247,20 @@ class ManagedSplitWorkflowExecutionGateMethods {
         workflowId,
         ownerKey: workflow.ownerKey + SPLIT_OWNER_STEP_LANE_SUFFIX,
         stepName: nextPhase,
-        execute: async ({workflow: currentWorkflow}) =>
-          this.buildSplitPhaseAdvanceStepResult({
+        execute: async ({workflow: currentWorkflow}) => {
+          // The renewal is a change queued behind every earlier change of
+          // the record: the projection read below is then current.
+          const ownership = await this.renewSplitWorkflowOwnership(workflowId);
+          return this.buildSplitPhaseAdvanceStepResult({
             workflowId,
             nextPhase,
             phaseMetadata,
             expectedPredecessorStates,
             currentWorkflow,
-            ownership: await this.renewSplitWorkflowOwnership(workflowId),
-          }),
-      }),
+            ownership,
+          });
+        },
+      }).catch(refusedStepAs(false)),
     );
   }
 
@@ -282,13 +290,9 @@ class ManagedSplitWorkflowExecutionGateMethods {
       // check instead of landing.
       fenceToken: input.ownership?.fenceToken,
       ownerId: input.ownership?.ownerId,
-      updates: {
-        status: input.nextPhase,
-        metadata: {
-          ...(input.currentWorkflow.metadata || {}),
-          ...input.phaseMetadata,
-        },
-      },
+      // Re-checked on the record at the change's turn.
+      change: phaseChange(input.nextPhase, input.expectedPredecessorStates,
+        input.phaseMetadata),
       result: true,
     };
   }
@@ -321,10 +325,6 @@ class ManagedSplitWorkflowExecutionGateMethods {
         QUERY_ERROR_MSG.TABLE_SPLIT_WORKFLOW_NOT_FOUND,
       );
     }
-    this.ensureCanonicalSplitParticipants(
-      workflow.workflowId,
-      workflow.metadata,
-    );
     const ackResult = await this.workflowCoordinator.acknowledgeParticipant(
       workflowId,
       ack,
@@ -335,6 +335,8 @@ class ManagedSplitWorkflowExecutionGateMethods {
     // applied: short-circuit every owner reaction so a stale or
     // malformed ack can never drive a cutover, abort, or dissolution.
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
+      await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult,
+        ack);
       return this.buildRejectedSplitAckOutcome(workflowId, ackResult);
     }
 
@@ -474,10 +476,14 @@ class ManagedSplitWorkflowExecutionGateMethods {
         ownerKey: ownerKey + SPLIT_OWNER_STEP_LANE_SUFFIX,
         stepName: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
         execute: async ({workflow: currentWorkflow}) => {
-          if (!PRE_CUTOVER_SPLIT_STATES.has(currentWorkflow.status) ||
-              !SPLIT_ACK_CATCHUP_SATISFIED_STATUSES.has(
-                this.resolveSplitSourceParticipantStatus(currentWorkflow),
-              )) {
+          // Renew first: the renewal is a change queued behind every earlier
+          // change of the record (a source failure acknowledgement among
+          // them), so the projection checked below is current; claim loss
+          // throws before anything is promoted.
+          const ownership = await this.renewSplitWorkflowOwnership(
+            workflowId,
+          );
+          if (!this.isSplitCutoverAdmissible(currentWorkflow)) {
             this.logger.warn(MANAGED_SPLIT_LOG_MSG.PHASE_ADVANCE_REFUSED, {
               workflowId,
               nextPhase: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
@@ -507,32 +513,38 @@ class ManagedSplitWorkflowExecutionGateMethods {
               targetVersion,
             );
           }
-          // Renew the lease inside the same lane slot so the epoch-flip
-          // transition carries a live fence; claim loss throws before
-          // the epoch write.
-          const ownership = await this.renewSplitWorkflowOwnership(
-            workflowId,
-          );
           return {
             nextStep: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
             reason: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
             fenceToken: ownership.fenceToken,
             ownerId: ownership.ownerId,
-            updates: {
-              status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
-              metadata: {
-                ...(currentWorkflow.metadata || {}),
+            // The cutover's own precondition, on the record at its turn.
+            change: phaseChange(
+              PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+              PRE_CUTOVER_SPLIT_STATES, {
                 [PARTITION_TRANSITION_METADATA_FIELD.CUTOVER_APPLIED_AT]:
                   this.now(),
                 [PARTITION_TRANSITION_METADATA_FIELD.SIBLING_PARTITION_IDS]:
                   siblingPartitionIds,
-              },
-            },
+              }, (record) => this.isSplitCutoverAdmissible(record)),
             result: true,
           };
         },
-      }),
+      }).catch(refusedStepAs(false)),
     );
+  }
+
+  /**
+   * Whether a workflow (the projection, or the record a change is applied
+   * to) admits the cutover: pre-cutover and the source caught up.
+   * @param {Object} workflow
+   * @return {boolean}
+   * @private
+   */
+  isSplitCutoverAdmissible(workflow) {
+    return PRE_CUTOVER_SPLIT_STATES.has(workflow.status) &&
+      SPLIT_ACK_CATCHUP_SATISFIED_STATUSES.has(
+        this.resolveSplitSourceParticipantStatus(workflow));
   }
 
   /**
@@ -634,17 +646,15 @@ class ManagedSplitWorkflowExecutionGateMethods {
         input.retryMetadata,
         deniedState,
       );
-      const deniedMetadata = {
-        ...input.workflowMetadata,
+      const deniedDelta = {
         [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
           input.compactAdmission,
         [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
           deniedRetryMetadata,
       };
-      await this.workflowCoordinator.updateWorkflow(input.workflowId, {
-        status: deniedState,
-        metadata: deniedMetadata,
-      });
+      await this.workflowCoordinator.recordExecutionOutcome(input.workflowId,
+        {status: deniedState, delta: deniedDelta,
+          incident: {reason: input.admissionResult.decisionType}});
       return this.buildBlockedExecutionGateOutcome(
         this.buildAdmissionDeniedExecutionResult({
           partitionId: input.partitionId,

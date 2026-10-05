@@ -12,6 +12,7 @@ import {
   takeDeferredRetirements,
 } from './partition-service-raft-membership-administration.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {GROUP_RETIREMENT_REASON} from './group-retirement-evidence.js';
 
 // The admission outcomes that leave a peer outside the configuration.
 const UNADMITTED_PEER_OUTCOMES = Object.freeze(new Set([
@@ -159,7 +160,14 @@ const EXPLICIT_PEER_RETIREMENT_STATUSES = Object.freeze(new Set([
   ReplicaStatus.REMOVED,
 ]));
 
+// A replica of a group retired as a unit (a verified group-retirement
+// REMOVE marks its REMOVING row so; owner decision 2026-10-04, amending F2)
+// leaves with its whole group: nobody proposes a conf change for it, so no
+// member is removed down to a last voter.
 function isExplicitPeerRetirement(operation, serviceRow) {
+  if (serviceRow?.trigger_reason === GROUP_RETIREMENT_REASON) {
+    return false;
+  }
   return (
     operation === PARTITION_SERVICE_LITERAL.DELETE ||
     EXPLICIT_PEER_RETIREMENT_STATUSES.has(serviceRow?.status)

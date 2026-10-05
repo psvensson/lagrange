@@ -32,6 +32,9 @@ const TOPOLOGY_BOUND_METHOD_SPECS = Object.freeze([
   {property: 'listTablePartitionRows', fallback: () => []},
   {property: 'listPartitionServiceRows', fallback: () => []},
   {property: 'deliverReplicaRemoval', fallback: async () => null},
+  // No reader: membership unavailable, never "no members".
+  {property: 'readCommittedGroupMembers', fallback: async () => []},
+  {property: 'observeSystemRows', fallback: () => null},
 ]);
 
 /**

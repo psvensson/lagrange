@@ -20,16 +20,25 @@
  *   NO_CONSENSUS_PORT  the service has no port (no events) to participate
  *                      through;
  *   BACKSTOP           the bounded wait elapsed (a removal nobody proposed,
- *                      or an applied removal this replica never learned);
- *   RELEASED           the caller released the wait (node shutdown).
+ *                      or an applied removal this replica never learned):
+ *                      an ALARM, never a normal exit (owner decision
+ *                      2026-10-04); the answer carries the last witness read
+ *                      (lastObservation) and the caller logs it at ERROR;
+ *   RELEASED           the caller released the wait (node shutdown);
+ *   GROUP_RETIRED      never produced by this wait: the exit of a replica
+ *                      whose whole group retired as a unit at a verified
+ *                      durable workflow transition (amendment of ruling F2,
+ *                      owner decision 2026-10-04; the caller never waits).
  * Prohibited: no services row is read as membership, and no removal kind is
- * told apart from another.
+ * told apart from another (a group retired as a unit never enters the wait).
  */
 import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
   '../partition/partition-replica-membership-constants.js';
 import {readPartitionReplicaMembership} from
   '../partition/partition-service-raft-membership-administration.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {GROUP_RETIREMENT_REASON} from
+  '../partition/group-retirement-evidence.js';
 
 const REPLICA_CONSENSUS_EXIT_REASON = Object.freeze({
   REMOVAL_APPLIED: 'own-removal-applied',
@@ -37,6 +46,7 @@ const REPLICA_CONSENSUS_EXIT_REASON = Object.freeze({
   NO_CONSENSUS_PORT: 'no-consensus-port',
   BACKSTOP: 'removal-commit-backstop-elapsed',
   RELEASED: 'consensus-exit-wait-released',
+  GROUP_RETIRED: GROUP_RETIREMENT_REASON,
 });
 // The events after which the replica's own configuration may no longer name
 // it: an applied configuration change, and its gate opening (the read below
@@ -86,6 +96,8 @@ function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
     let settled = false;
     const unsubscribers = [];
     let timer = null;
+    // The last witness read: on BACKSTOP it says why no exit event came.
+    let lastObservation = null;
     const onAbort = () => finish(REPLICA_CONSENSUS_EXIT_REASON.RELEASED);
     function finish(reason) {
       if (settled) {
@@ -97,7 +109,8 @@ function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
       }
       clearTimeout(timer);
       signal?.removeEventListener?.(ABORT_EVENT, onAbort);
-      resolve(Object.freeze({reason}));
+      resolve(Object.freeze(reason === REPLICA_CONSENSUS_EXIT_REASON.BACKSTOP ?
+        {reason, lastObservation} : {reason}));
     }
     // A read outside the port's own drain (never re-entered from inside the
     // event that woke it); a read that throws means the port cannot answer.
@@ -107,6 +120,8 @@ function awaitReplicaConsensusExit(service, {replicaId, backstopMs, signal}) {
       }
       readPartitionReplicaMembership(service, replicaId).then(
         (observation) => {
+          lastObservation = Object.freeze({state: observation?.state ?? null,
+            gateOpen: observation?.gateOpen ?? null});
           const reason = consensusExitOf(observation);
           if (reason !== null) {
             finish(reason);

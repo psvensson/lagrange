@@ -28,6 +28,8 @@ const LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION = 'startSplitReplicationO
 const LOCAL_STR_LISTTABLEPARTITIONROWS = 'listTablePartitionRows';
 const LOCAL_STR_LISTPARTITIONSERVICEROWS = 'listPartitionServiceRows';
 const LOCAL_STR_DELIVERREPLICAREMOVAL = 'deliverReplicaRemoval';
+const LOCAL_STR_READCOMMITTEDGROUPMEMBERS = 'readCommittedGroupMembers';
+const LOCAL_STR_OBSERVESYSTEMROWS = 'observeSystemRows';
 const LOCAL_STR_RESOLVESPLITCHILDLEADERROUTINGEVIDENCE =
   'resolveSplitChildLeaderRoutingEvidence';
 const LOCAL_STR_RESOLVEROUTINGWAITPOLLINTERVALMS =
@@ -93,6 +95,9 @@ const TOPOLOGY_METHOD_BINDINGS = Object.freeze([
   {property: LOCAL_STR_LISTTABLEPARTITIONROWS, fallback: returnsEmptyList},
   {property: LOCAL_STR_LISTPARTITIONSERVICEROWS, fallback: returnsEmptyList},
   {property: LOCAL_STR_DELIVERREPLICAREMOVAL, fallback: () => async () => null},
+  // No reader: membership unavailable, never "no members".
+  {property: LOCAL_STR_READCOMMITTEDGROUPMEMBERS, fallback: () => async () => []},
+  {property: LOCAL_STR_OBSERVESYSTEMROWS, fallback: () => () => null},
   // Cutover readiness evidence (child canonical leader + serve-routable
   // node ids) is observed from the query plane; the owner decides.
   {

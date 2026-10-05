@@ -33,6 +33,14 @@ const TABLES_SCHEMA = {
     {name: 'pending_partition_version', type: COLUMN_TYPE.INTEGER},
     {name: 'partition_transition_state', type: COLUMN_TYPE.TEXT},
     {name: 'partition_transition_metadata', type: COLUMN_TYPE.TEXT},
+    // The workflow record generation: strictly increased by every write of
+    // the transition record, never repeated (managed-workflow-record-store).
+    {
+      name: 'partition_transition_generation',
+      type: COLUMN_TYPE.INTEGER,
+      notNull: true,
+      defaultValue: 0,
+    },
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],

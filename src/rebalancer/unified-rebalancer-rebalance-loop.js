@@ -6,6 +6,8 @@ import {
 import {
   isBoundMembershipPublicationEpoch,
 } from './replica-operation-membership-epoch-binding.js';
+import {isGroupRetiringInView} from
+  '../partition/group-retirement-evidence.js';
 
 const {
   EntityType,
@@ -17,6 +19,13 @@ const {
   TriggerType,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
+
+// Whether this rebalancer's partition is a group its durable workflow record
+// retires as a unit (group-retirement-evidence.js), as its view holds it.
+function isEntityGroupRetiring(rebalancer) {
+  return isGroupRetiringInView(rebalancer.systemTableCache,
+    rebalancer.entityId);
+}
 
 function resolveLedgerSurplusDrainTargetState(
   targetState,
@@ -220,6 +229,13 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     const membershipChangeRefusal = this.messageGroupMembershipChangeRefusal();
     if (membershipChangeRefusal !== null) {
       return membershipChangeRefusal;
+    }
+
+    // A group retired as a unit has a frozen member set: plan nothing for it
+    // (a skipped cycle backs the cadence off; nothing loops).
+    if (isEntityGroupRetiring(this)) {
+      return this.buildRebalanceResult(true, {skipped: true, moves: [],
+        reason: REBALANCER_SKIP_REASON.GROUP_RETIRING});
     }
 
     const effectivePolicy = policy || (await this.getPolicy());

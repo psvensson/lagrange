@@ -22,7 +22,9 @@ const REPLICA_HANDLER_DEFAULT = Object.freeze({
   STATUS_WRITE_RETRY_TIMEOUT_MS: TIME_MS.SECOND * NUM.THIRTY,
   // The bound on a retiring replica's wait for its own removal to apply
   // (owner ruling F2): inside the replica state machine's one-minute REMOVING
-  // timeout, so the removal still completes as REMOVED.
+  // timeout, so the removal still completes as REMOVED. An alarm, never a
+  // normal exit (owner decision 2026-10-04): its firing is a spent wait
+  // (wait_bound_spent ERROR).
   // ends-on: the applied configuration no longer names the retiring replica, or its group is unavailable
   REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS: TIME_MS.SECOND * NUM.THIRTY,
 });
@@ -78,6 +80,22 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
     'Replica removal deferred: its REMOVING row could not be made durable',
   REMOVE_CONSENSUS_EXIT:
     'Retiring replica left consensus; retiring its port',
+  REMOVE_CONSENSUS_EXIT_BACKSTOP_ALARM:
+    'Consensus exit backstop elapsed: no committed exit event arrived for ' +
+    'a retiring replica',
+  OPENED_INTO_RETIRED_GROUP:
+    'Replica opened into a group its durable workflow record retired; ' +
+    'retiring it as a unit',
+  OPEN_RETIREMENT_RECORD_UNAVAILABLE:
+    'Replica opened without reading its group\'s retirement record; it ' +
+    'stays un-retired until the record is readable or its workflow owner ' +
+    're-drives it',
+  REMOVE_GROUP_RETIREMENT_REFUSED:
+    'Replica removal refused: its group-retirement evidence does not match ' +
+    'the durable workflow record',
+  REMOVE_GROUP_RETIRED_CLEANUP_DEFERRED:
+    'Group-retirement REMOVE of a replica this node already removed: ' +
+    'answered completed; its cleanup reconcile stays deferred',
   REMOVE_FAILED: 'Replica removal failed',
   REMOVE_STATUS_WRITE_DEFERRED:
     'Replica removal status write deferred after retryable control-plane failure',
@@ -128,6 +146,8 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   CACHE_MISSING_FILTER: 'System table cache missing filter',
   PARTITION_METADATA_MISSING: (partitionId) =>
     `Partition metadata not found for ${partitionId}`,
+  removeGroupRetirementRefused: (replicaId, refusal) =>
+    `Replica ${replicaId} group retirement refused: ${refusal}`,
   REMOVE_PARTITION_MISMATCH: (replicaId, localPartitionId, requestPartitionId) =>
     `Replica ${replicaId} belongs to partition ${localPartitionId}, ` +
     `not requested partition ${requestPartitionId}`,

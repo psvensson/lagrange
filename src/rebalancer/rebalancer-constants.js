@@ -463,6 +463,9 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   // id whose history the group holds elsewhere (the 2026-10 defect).
   MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED:
     'message_group_membership_change_unsupported',
+  // The partition's group is being retired as a unit by its durable
+  // workflow record: its member set is frozen, no membership change.
+  GROUP_RETIRING: 'group_retiring',
 });
 
 /**

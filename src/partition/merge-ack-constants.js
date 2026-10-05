@@ -101,7 +101,14 @@ const MERGE_ACK_CHECKPOINT_FIELD = Object.freeze({
   REPLAY_WATERMARK_INDEX: 'replayWatermarkIndex',
   BACKFILL_ROWS_COPIED: 'backfillRowsCopied',
   SOURCE_MIRROR_REMOVED: 'sourceMirrorRemoved',
+  // A retiring group's members (group-retirement-members.js): the frozen
+  // committed configuration, their addresses, and the members that
+  // answered positively; and, for a target whose durable provisioning mark
+  // says no create was ever sent, the empty set frozen as never-provisioned.
+  REQUIRED_REPLICA_IDS: 'requiredReplicaIds',
+  MEMBER_NODE_IDS: 'memberNodeIds',
   DISSOLVED_REPLICA_IDS: 'dissolvedReplicaIds',
+  NEVER_PROVISIONED: 'neverProvisioned',
 });
 
 /**

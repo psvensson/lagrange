@@ -289,6 +289,7 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
   PENDING_PARTITION_VERSION: 'pending_partition_version',
   PARTITION_TRANSITION_STATE: 'partition_transition_state',
   PARTITION_TRANSITION_METADATA: 'partition_transition_metadata',
+  PARTITION_TRANSITION_GENERATION: 'partition_transition_generation',
   PARTITION_VERSION: 'partition_version',
   TARGET_CLAIM_KEY: 'target_claim_key',
   MEMBERSHIP_PUBLICATION_EPOCH: 'membership_publication_epoch',
@@ -328,6 +329,10 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'ADD COLUMN partition_transition_state TEXT',
   ADD_PARTITION_TRANSITION_METADATA:
     'ADD COLUMN partition_transition_metadata TEXT',
+  // The workflow record generation (managed-workflow-record-store.js):
+  // existing rows read 0, the first record write moves them to 1.
+  ADD_PARTITION_TRANSITION_GENERATION:
+    'ADD COLUMN partition_transition_generation INTEGER NOT NULL DEFAULT 0',
   ADD_PARTITION_VERSION:
     'ADD COLUMN partition_version INTEGER NOT NULL DEFAULT 1',
   ADD_TARGET_CLAIM_KEY:
@@ -450,6 +455,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Added partition_transition_state column to tables table',
   ADDED_PARTITION_TRANSITION_METADATA:
     'Added partition_transition_metadata column to tables table',
+  ADDED_PARTITION_TRANSITION_GENERATION:
+    'Added partition_transition_generation column to tables table',
   ADDED_PARTITIONS_TABLE_NAME: 'Added table_name column to partitions table',
   ADDED_PARTITION_VERSION: 'Added partition_version column to partitions table',
   ADDED_REPLICA_OPERATIONS_TARGET_CLAIM_KEY:

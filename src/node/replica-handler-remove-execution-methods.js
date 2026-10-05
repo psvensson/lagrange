@@ -18,14 +18,20 @@ import {
   REPLICA_CONSENSUS_EXIT_REASON,
   awaitReplicaConsensusExit,
 } from './replica-removal-consensus-exit.js';
+import {
+  REPLICA_LEADER_CLEAR_DEFERRED,
+  REPLICA_REMOVAL_COMPLETION_DEFERRED,
+  buildFailedRemovalOutcome,
+  removalRowDeleteDeferred,
+  retryableRemovalDebtError,
+} from './replica-removal-debt-errors.js';
+import {GROUP_RETIREMENT_REASON} from
+  '../partition/group-retirement-evidence.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_REMOVE_EXECUTION_REASON = Object.freeze({
   DURABLE_REMOVE_CLEANUP_COMPLETE: 'durable_remove_cleanup_complete',
 });
-const REPLICA_REMOVAL_COMPLETION_DEFERRED =
-  'REPLICA_REMOVAL_COMPLETION_DEFERRED';
-const REPLICA_LEADER_CLEAR_DEFERRED = 'REPLICA_LEADER_CLEAR_DEFERRED';
 const REMOVAL_CONSENSUS_EXIT_WAIT = Object.freeze({
   wait: 'REPLICA_HANDLER_DEFAULT.REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS',
   awaited: 'retiring replica\'s applied configuration no longer names it ' +
@@ -34,8 +40,11 @@ const REMOVAL_CONSENSUS_EXIT_WAIT = Object.freeze({
 
 /**
  * Log one consensus-exit outcome: the backstop elapsing is a spent wait
- * (one wait_bound_spent ERROR with what the handler last observed of the
- * retiring replica); every other exit is the ordinary info line.
+ * and an alarm, never a normal exit (owner decision 2026-10-04): one
+ * wait_bound_spent ERROR with the wait's last witness read and what the
+ * handler last observed of the retiring replica. The removal proceeds as
+ * before so a missed event never wedges the node. Every other exit is the
+ * ordinary info line.
  * @param {Object} handler - The ReplicaHandler.
  * @param {Object} exit - Frozen {reason} from awaitReplicaConsensusExit.
  * @param {Object} context - {operationId, replicaId, partitionId,
@@ -60,25 +69,13 @@ function logReplicaRemovalConsensusExit(handler, exit, context) {
     elapsedMs: Date.now() - startedAtMs,
     lastObserved: () => ({
       exitReason: exit.reason,
+      // The wait's last witness read: why no exit event came.
+      lastObservation: exit.lastObservation ?? null,
       trackedRaftRole: handler.getTrackedReplicaRole?.(replicaId) ?? null,
       lifecycleState: handler.getTrackedReplicaLifecycleState(replicaId),
     }),
     scope: {nodeId: handler.nodeId, operationId, partitionId, replicaId},
   });
-}
-
-function retryableRemovalDebtError(code, message, metadata = {}) {
-  const error = new Error(message);
-  error.code = code;
-  error.errorCode = code;
-  error.deferRetry = true;
-  if (Number.isFinite(metadata.retryAfterMs)) {
-    error.retryAfterMs = metadata.retryAfterMs;
-  }
-  if (typeof metadata.mutationOutcome === REPLICA_HANDLER_TYPEOF.STRING) {
-    error.mutationOutcome = metadata.mutationOutcome;
-  }
-  return error;
 }
 
 async function bindAuthoritativeRemovingGenerationOrThrow(
@@ -139,14 +136,6 @@ async function settleCanonicalLeaderClearOrThrow(
     handler,
     replicaId,
     partitionId,
-  );
-}
-
-function removalRowDeleteDeferred(replicaId, metadata = {}) {
-  return retryableRemovalDebtError(
-    REPLICA_REMOVAL_COMPLETION_DEFERRED,
-    `Replica REMOVING row deletion deferred for ${replicaId}`,
-    metadata,
   );
 }
 
@@ -215,9 +204,44 @@ async function runRemovalEffectsOrThrow(
   return true;
 }
 
+/**
+ * When the retiring replica leaves consensus. A replica of a group retired
+ * as a unit (a verified group-retirement REMOVE, owner decision 2026-10-04)
+ * leaves at once: its whole group ends at the durable workflow transition,
+ * nobody proposes a conf change for it, and nothing commits in it again.
+ * Every other removal keeps participating until its own removal applies
+ * (ruling F2).
+ * @param {Object} handler
+ * @param {Object} request
+ * @param {Object|null} service
+ * @return {Promise<Object>} Frozen {reason}.
+ */
+function leaveConsensus(handler, request, service) {
+  const {operationId, partitionId, replicaId} = request;
+  if (request.groupRetirement?.retire === true) {
+    const exit = Object.freeze({
+      reason: REPLICA_CONSENSUS_EXIT_REASON.GROUP_RETIRED});
+    handler.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_CONSENSUS_EXIT, {
+      operationId, replicaId, partitionId, nodeId: handler.nodeId,
+      reason: exit.reason, groupRetirementKind: request.groupRetirement.kind,
+    });
+    return Promise.resolve(exit);
+  }
+  return handler.awaitReplicaRemovalConsensusExit(service, {
+    operationId,
+    replicaId,
+    partitionId,
+  });
+}
+
 async function performReplicaRemoval(handler, request, service, lifecycle,
   execution) {
-  const {operationId, partitionId, replicaId, reason} = request;
+  const {operationId, partitionId, replicaId} = request;
+  // A group retired as a unit records its retirement as such - on the
+  // REMOVING row (the row-driven reconcile proposes no conf change for it)
+  // and on the durable lifecycle row.
+  const reason = request.groupRetirement?.retire === true ?
+    GROUP_RETIREMENT_REASON : request.reason;
   handler.throwIfShuttingDown();
   await handler.waitForReplicaServingDrain(service);
   const retiringRow = await handler.publishReplicaRetiringRow({
@@ -226,6 +250,8 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
     partitionId,
     service,
     removalLifecycleSnapshot: lifecycle,
+    triggerReason: request.groupRetirement?.retire === true ?
+      GROUP_RETIREMENT_REASON : null,
   });
   if (retiringRow.deferred) {
     handler.deferReplicaRemovalWithoutDurableRow({operationId, replicaId,
@@ -233,11 +259,7 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
     return false;
   }
   execution.retiringRowDurable = true;
-  await handler.awaitReplicaRemovalConsensusExit(service, {
-    operationId,
-    replicaId,
-    partitionId,
-  });
+  await leaveConsensus(handler, request, service);
   handler.throwIfShuttingDown();
   const authority = await settleCanonicalLeaderClearOrThrow(
     handler,
@@ -253,12 +275,22 @@ async function performReplicaRemoval(handler, request, service, lifecycle,
         throw removalRowDeleteDeferred(replicaId);
       }
       // Retire exactly the runtime this removal owns (the captured service's
-      // port), never whatever runtime now serves the reused logical name.
+      // port), never whatever runtime now serves the reused logical name;
+      // a group retirement records its verified evidence with the row.
       await raftRsLifecycleAdministration.retireReplica(
         replicaId,
         reason || REPLICA_REMOVE_EXECUTION_REASON.DURABLE_REMOVE_CLEANUP_COMPLETE,
-        {groupId: partitionId, runtime: service?.raft ?? null},
+        {groupId: partitionId, runtime: service?.raft ?? null,
+          evidence: request.groupRetirement?.retire === true ?
+            request.groupRetirementEvidence : null},
       );
+      // A group retired as a unit: its member-owned tombstone is durable
+      // before the replica database (and the lifecycle row in it) is
+      // deleted; a failed write keeps the database.
+      if (request.groupRetirement?.retire === true) {
+        handler.recordGroupRetiredTombstone({partitionId, replicaId,
+          evidence: request.groupRetirementEvidence});
+      }
       const cleanupAuthority = await takeoverRemovingRowForCleanupOrThrow(
         handler,
         replicaId,
@@ -332,22 +364,6 @@ function reportReplicaRemovalSuccess(handler, request, cleanupError) {
   });
 }
 
-function buildFailedRemovalOutcome(replicaId, error) {
-  const outcome = {replicaId, errorMessage: error.message};
-  if (error?.deferRetry === true) outcome.deferRetry = true;
-  const errorCode = typeof error?.errorCode === REPLICA_HANDLER_TYPEOF.STRING ?
-    error.errorCode :
-    typeof error?.code === REPLICA_HANDLER_TYPEOF.STRING ? error.code : null;
-  if (errorCode) outcome.errorCode = errorCode;
-  if (Number.isFinite(error?.retryAfterMs)) {
-    outcome.retryAfterMs = error.retryAfterMs;
-  }
-  if (typeof error?.mutationOutcome === REPLICA_HANDLER_TYPEOF.STRING) {
-    outcome.mutationOutcome = error.mutationOutcome;
-  }
-  return outcome;
-}
-
 async function handleReplicaRemovalFailure(handler, request, service,
   execution, error) {
   const {operationId, partitionId, replicaId} = request;
@@ -393,8 +409,44 @@ async function handleReplicaRemovalFailure(handler, request, service,
   });
 }
 
+// The replica's durable lifecycle row, from the partition database file its
+// port opened.
+function readReplicaLifecycleFile(handler, partitionId, replicaId) {
+  return raftRsLifecycleAdministration.readReplicaLifecycle(
+    handler.getPartitionDbPath(partitionId, replicaId), partitionId,
+    replicaId);
+}
+
 function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
   class ReplicaHandlerRemoveExecutionMethods {
+    /**
+     * One replica's durable raft-rs lifecycle row, read from the partition
+     * database its port opened (it survives a restart that dropped the
+     * replica from this node's tracking).
+     * @param {string} partitionId - The group.
+     * @param {string} replicaId - The replica identity.
+     * @return {Object} Frozen {state, reason}.
+     * @private
+     */
+    readReplicaDurableLifecycle(partitionId, replicaId) {
+      return readReplicaLifecycleFile(this, partitionId, replicaId);
+    }
+
+    /**
+     * The lifecycle administration's verdicts on one durable lifecycle read:
+     * the read itself plus retired, groupRetired (retired with its whole
+     * group), absent (no row) and holdsRow. Never a verdict from absence.
+     * @param {Object} lifecycle - readReplicaDurableLifecycle's answer.
+     * @return {Object} Frozen read with its verdicts.
+     * @private
+     */
+    lifecycleVerdictsOf(lifecycle) {
+      const admin = raftRsLifecycleAdministration;
+      return Object.freeze({...lifecycle, retired: admin.isRetired(lifecycle),
+        groupRetired: admin.isRetiredFor(lifecycle, GROUP_RETIREMENT_REASON),
+        absent: admin.isAbsent(lifecycle), holdsRow: admin.holdsRow(lifecycle)});
+    }
+
     /**
      * Raise the partition-owned transaction admission fence synchronously,
      * before REMOVE_REPLICA returns an accepted status. This gives acceptance
@@ -482,7 +534,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      * @private
      */
     async publishReplicaRetiringRow({operationId, replicaId, partitionId,
-      service: _service, removalLifecycleSnapshot}) {
+      service: _service, removalLifecycleSnapshot, triggerReason = null}) {
       if (removalLifecycleSnapshot.skipRemovingStatusWrite === true) {
         return {
           skipRemovingStatusWrite: true,
@@ -493,7 +545,7 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         await this.persistReplicaStatusWithRetry(
           replicaId,
           ReplicaStatus.REMOVING,
-          {partitionId},
+          triggerReason === null ? {partitionId} : {partitionId, triggerReason},
         );
         return {skipRemovingStatusWrite: false,
           deferred: false};
@@ -677,6 +729,8 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
      */
     async removeReplicaAsync(request) {
       const {operationId, replicaId} = request;
+      // request.groupRetirement: the verified group-retirement decision
+      // (verifyRemoveGroupRetirement), or absent for an ordinary REMOVE.
       const service = this.getTrackedService(replicaId);
       const removalLifecycleSnapshot =
         this.buildReplicaRemovalLifecycleSnapshot(replicaId);

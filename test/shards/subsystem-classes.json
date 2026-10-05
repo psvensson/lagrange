@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 289,
+    "bootstrap-membership": 297,
     "cdc-metadata": 62,
     "cli-tooling": 96,
     "control-plane": 212,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 148,
+    "storage-partition": 162,
     "storage-raft": 107,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2256,
-  "digest": "fnv1a32-935b56b2",
+  "censusSize": 2278,
+  "digest": "fnv1a32-2ebb7b8f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ae057e48",
+  "observationDigest": "fnv1a32-0df468ce",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1018,6 +1018,7 @@
     "test/integration/leader-routable-system-writes.integration.test.js": "query-sql",
     "test/integration/load-channel-resilience.integration.test.js": "transport-messaging",
     "test/integration/managed-split-admission-reliability.integration.test.js": "storage-partition",
+    "test/integration/managed-split-writes-after-cutover.integration.test.js": "storage-partition",
     "test/integration/membership-consistency.integration.test.js": "bootstrap-membership",
     "test/integration/message-group-multi-join-formation.integration.test.js": "transport-messaging",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "services-runtime",
@@ -1122,6 +1123,14 @@
     "test/node/failure-detector.test.js": "bootstrap-membership",
     "test/node/failure-repair-intent-contract.test.js": "bootstrap-membership",
     "test/node/fault-recovery-behavior.property.test.js": "bootstrap-membership",
+    "test/node/group-retired-tombstone-incarnation.test.js": "bootstrap-membership",
+    "test/node/group-retired-tombstone.test.js": "bootstrap-membership",
+    "test/node/group-retirement-as-a-unit.test.js": "bootstrap-membership",
+    "test/node/group-retirement-fail-closed.test.js": "bootstrap-membership",
+    "test/node/group-retirement-fences.test.js": "bootstrap-membership",
+    "test/node/group-retirement-liveness.test.js": "bootstrap-membership",
+    "test/node/group-retirement-redrive.test.js": "bootstrap-membership",
+    "test/node/group-retirement-reseed-held.test.js": "bootstrap-membership",
     "test/node/idempotent-operations.property.test.js": "bootstrap-membership",
     "test/node/lifecycle-readiness.test.js": "bootstrap-membership",
     "test/node/local-only-reconcile-activation-boundary.test.js": "bootstrap-membership",
@@ -1206,6 +1215,9 @@
     "test/partition/durable-replay-cursor.test.js": "storage-partition",
     "test/partition/durable-voter-visibility-role-write.test.js": "storage-partition",
     "test/partition/extracted-module-api-equivalence.property.test.js": "storage-partition",
+    "test/partition/group-retirement-epoch-decode.test.js": "storage-partition",
+    "test/partition/group-retirement-provisioning-mark.test.js": "storage-partition",
+    "test/partition/group-retirement-resume-claim.test.js": "storage-partition",
     "test/partition/key-range-manager.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-budget-walk.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
@@ -1283,6 +1295,7 @@
     "test/partition/raft-rs-transport-demux.test.js": "storage-partition",
     "test/partition/range-integrity-validation.property.test.js": "storage-partition",
     "test/partition/replica-operations-schema-migration.test.js": "storage-partition",
+    "test/partition/retiring-source-resume-refusal.test.js": "storage-partition",
     "test/partition/routing-key-comparator.test.js": "storage-partition",
     "test/partition/split-abort-fence-parity.test.js": "storage-partition",
     "test/partition/split-ack-constants.test.js": "storage-partition",
@@ -1303,6 +1316,15 @@
     "test/partition/table-partition-structure.property.test.js": "storage-partition",
     "test/partition/timeout-cleanup.property.test.js": "storage-partition",
     "test/partition/workflow-fencing-wiring.test.js": "storage-partition",
+    "test/partition/workflow-record-change-preconditions.test.js": "storage-partition",
+    "test/partition/workflow-record-incarnation.test.js": "storage-partition",
+    "test/partition/workflow-record-interleaving.property.test.js": "storage-partition",
+    "test/partition/workflow-record-lagging-view.test.js": "storage-partition",
+    "test/partition/workflow-record-projection-drop.test.js": "storage-partition",
+    "test/partition/workflow-record-reconcile.test.js": "storage-partition",
+    "test/partition/workflow-record-same-owner-race.test.js": "storage-partition",
+    "test/partition/workflow-record-stale-owner.test.js": "storage-partition",
+    "test/partition/workflow-record-two-owners.test.js": "storage-partition",
     "test/partition/write-path-epoch-fencing.test.js": "storage-partition",
     "test/policy/policy-driven-adjustment.property.test.js": "control-plane",
     "test/policy/table-policy-application.property.test.js": "control-plane",
@@ -7091,6 +7113,18 @@
         "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
+    "test/integration/managed-split-writes-after-cutover.integration.test.js": {
+      "files": [
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/embedded-lagrange.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "wit"
+      ]
+    },
     "test/integration/membership-consistency.integration.test.js": {
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js",
@@ -7581,6 +7615,220 @@
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
+    "test/node/group-retired-tombstone-incarnation.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-constants.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/split-ack-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/runtime/oci-host-agent-durable-files.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/group-retired-tombstone.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-constants.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/split-ack-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/group-retirement-as-a-unit.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/node/replica-removal-consensus-exit.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/split-ack-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/group-retirement-fail-closed.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/split-ack-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/group-retirement-fences.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/partition/group-retirement-members.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/split-ack-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/index.js",
+        "src/rebalancer/rebalancer-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/group-retirement-liveness.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/split-ack-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/group-retirement-redrive.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/split-ack-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/node/group-retirement-reseed-held.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/node/replica-handler-constants.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/partition-constants.js",
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/partition/split-ack-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
     "test/node/idempotent-operations.property.test.js": {
       "files": [
         "test/test-helpers/lifecycle-state-store.js",
@@ -7741,6 +7989,11 @@
     "test/node/replica-lifecycle-message-delivery.property.test.js": {
       "files": [
         "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/replica-removal-consensus-exit-decisions.test.js": {
+      "files": [
+        "src/partition/partition-replica-membership-constants.js"
       ]
     },
     "test/node/replica-removal-consensus-exit-reported-once.test.js": {
@@ -7938,9 +8191,51 @@
         "src/rebalancer/operation-ledger-quorum-concentration.js"
       ]
     },
+    "test/partition/group-retirement-epoch-decode.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/group-retirement-provisioning-mark.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/group-retirement-resume-claim.test.js": {
+      "files": [
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/partition-constants.js"
+      ]
+    },
     "test/partition/learner-promotion-count-check-inputs.test.js": {
       "files": [
         "test/partition/fixtures/critical-spread-transition-authority/recorded-guard-shapes.json"
+      ]
+    },
+    "test/partition/managed-merge-epoch-persistence-effects.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/managed-split-epoch-persistence-effects.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/managed-split-resume-under-write-load.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/managed-split-workflow-terminal-lifecycle.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/managed-split-workflow-transition-persistence.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/partition-admission-redrive-wakes.test.js": {
@@ -8271,9 +8566,25 @@
         "src/partition/partition-service.js"
       ]
     },
+    "test/partition/retiring-source-resume-refusal.test.js": {
+      "files": [
+        "src/raft/raft-operation-port.js",
+        "test/partition/partition-rs-raft-restart-fixture.js"
+      ]
+    },
+    "test/partition/split-abort-fence-parity.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
     "test/partition/split-cutover-owner-delegation.test.js": {
       "files": [
         "src/partition/partition-service.js"
+      ]
+    },
+    "test/partition/split-dissolution-durable-proof.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
       ]
     },
     "test/partition/split-execution-state-reconstruction.test.js": {
@@ -8306,6 +8617,59 @@
     "test/partition/sql-statement-parser-coverage-matrix.test.js": {
       "files": [
         "src/storage/sqlite-store-constants.js"
+      ]
+    },
+    "test/partition/workflow-fencing-wiring.test.js": {
+      "files": [
+        "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/workflow-record-change-preconditions.test.js": {
+      "files": [
+        "src/partition/partition-constants.js",
+        "src/partition/target-provisioning-mark.js"
+      ]
+    },
+    "test/partition/workflow-record-incarnation.test.js": {
+      "files": [
+        "src/partition/partition-constants.js",
+        "src/workflow/workflow-constants.js"
+      ]
+    },
+    "test/partition/workflow-record-interleaving.property.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/partition-constants.js",
+        "src/partition/target-provisioning-mark.js",
+        "src/workflow/workflow-constants.js"
+      ]
+    },
+    "test/partition/workflow-record-lagging-view.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js"
+      ]
+    },
+    "test/partition/workflow-record-projection-drop.test.js": {
+      "files": [
+        "src/workflow/workflow-constants.js"
+      ]
+    },
+    "test/partition/workflow-record-reconcile.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/managed-workflow-record-store.js"
+      ]
+    },
+    "test/partition/workflow-record-same-owner-race.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/workflow/workflow-constants.js"
+      ]
+    },
+    "test/partition/workflow-record-stale-owner.test.js": {
+      "files": [
+        "src/partition/managed-workflow-ownership-core.js",
+        "src/partition/partition-constants.js"
       ]
     },
     "test/query/application-database.test.js": {
