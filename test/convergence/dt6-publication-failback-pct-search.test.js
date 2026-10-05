@@ -279,10 +279,20 @@ t.test('a PCT-searched fail-back seed replays to the same semantic outcome ' +
   '(outcome determinism; exact schedule replay not claimed)', async (t) => {
   const a = await runFailbackUnderPct(5);
   const b = await runFailbackUnderPct(5);
-  const outcome = (m) => ({leaderA: m.leaderA, leaderB: m.leaderB, versions: m.versions,
+  // Under native check_quorum the fail-back winner after a lease is drawn by raft-rs's own
+  // randomized election timeout, not by the seed (owner ruling 2026-10-05: narrow the tests,
+  // no crate fork): leaderB's identity is compared per run as a shape, not across runs.
+  const outcome = (m) => ({leaderA: m.leaderA, versions: m.versions,
     converged: m.converged, divergent: m.divergentCommittedIndexes, reason: m.reason});
   t.same(outcome(b), outcome(a),
-    'same seed -> same terminal leaders, versions and convergence/agreement verdicts');
+    'same seed -> same first leader, versions and convergence/agreement verdicts');
+  // A follower leads by the end of phase B in most runs; a phase-B window that ends before the
+  // lease and a split vote resolve leaves leaderB null (measured 1/10), and the heal still
+  // converges (asserted above), so only a named leaderB is shape-checked.
+  for (const m of [a, b]) {
+    t.ok(m.leaderB === null || m.leaderB !== m.leaderA,
+      `a fail-back leader is one of leaderA's followers (${m.leaderB})`);
+  }
   t.same(a.divergentCommittedIndexes, [], 'the replayed seed has zero committed-log divergence');
   t.equal(a.converged, true, 'the replayed seed converged to committed v2 cluster-wide');
   t.ok(a.reorders > 0 && b.reorders > 0,

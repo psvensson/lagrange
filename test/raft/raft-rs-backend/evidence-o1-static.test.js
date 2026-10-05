@@ -118,6 +118,11 @@ test('enumerations: every refusal of the boundary is decided at one named ' +
   });
   assertClassifies('PARTICIPATION_GATE', PARTICIPATION_GATE, {
     refusal: ['GATE_CLOSED'], event: ['GATE_OPENED'],
+    // The open-to-SYNCING window (verifier N3): the refusal of every command
+    // but a status read, its release, and the dropped delivery (a lost
+    // message to its sender, answered CORE_OK).
+    identityRecord: ['IDENTITY_UNRECORDED', 'IDENTITY_RECORDED',
+      'INBOUND_DROPPED_IDENTITY_UNRECORDED'],
   });
 });
 
