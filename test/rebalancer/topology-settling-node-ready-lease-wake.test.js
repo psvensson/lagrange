@@ -534,6 +534,7 @@ function installCriticalTopologyReadinessFixture(
   {
     deferred = true,
     generationSaturated = false,
+    generationSaturationKnown = true,
     livenessReady = true,
     livenessConnected = true,
     clusterMemberHealthy = true,
@@ -550,7 +551,8 @@ function installCriticalTopologyReadinessFixture(
         return buildDeferredRecoveryReadiness(nodeId, {
           substantiveReason: substantiveDeferredDenial,
           transportTopologyValid,
-          generationSaturated,
+          generationSaturated:
+            generationSaturationKnown ? generationSaturated : undefined,
         });
       }
       const current = buildReadinessSnapshot(cache, nodeId);
@@ -630,6 +632,15 @@ test(
       rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
       READY_LEASE_BLOCKER_REASON,
       'generation-saturated PENDING remains fail-closed',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      generationSaturationKnown: false,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'PENDING without an explicit unsaturated generation remains fail-closed',
     );
 
     installCriticalTopologyReadinessFixture(rebalancer, cache, {
