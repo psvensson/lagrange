@@ -694,6 +694,18 @@
         "test/integration/call-cell-public-outcome-adversarial.integration.test.js",
         "test/integration/public-binding-cell-invocation-seam.integration.test.js"
       ]
+    },
+    "public-binding-two-partition-policy-shape": {
+      "description": "The public Binding fanout proof persists its exact table policy through TablePolicyService, and the production split/merge manager consumes that policy with live child metrics before the harness relies on two frozen partition identities.",
+      "owners": [
+        "src/policy/table-policy-service.js",
+        "src/partition/partition-split-merge-manager-core-methods.js",
+        "src/entrypoint-runtime-admin-composition.js"
+      ],
+      "tests": [
+        "test/partition/partition-split-policy-precedence.test.js",
+        "test/integration/public-binding-cell-invocation-seam.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1248,6 +1260,29 @@
         "test/rebalancer/replace-real-group-completion.test.js",
         "test/rebalancer/replace-real-group-scheduling.test.js",
         "test/rebalancer/replace-witness-boundary.test.js"
+      ]
+    },
+    "public-binding-table-policy-merge-decision": {
+      "description": "The table-policy mutation owner and live split/merge decision owner must agree that the public Binding harness's nonvacuous split children are merge-ineligible before exact one-child versus two-child routing is proved.",
+      "endpoints": [
+        {
+          "id": "table-policy-owner",
+          "owners": [
+            "src/policy/table-policy-service.js"
+          ]
+        },
+        {
+          "id": "live-merge-decision",
+          "owners": [
+            "src/partition/partition-split-merge-manager-core-methods.js",
+            "src/entrypoint-runtime-admin-composition.js"
+          ]
+        }
+      ],
+      "contract": "public-binding-two-partition-policy-shape",
+      "witnessTests": [
+        "test/partition/partition-split-policy-precedence.test.js",
+        "test/integration/public-binding-cell-invocation-seam.integration.test.js"
       ]
     }
   }
