@@ -286,10 +286,10 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         this, operation, {timeoutBudget});
     }
 
-    // The operation can terminalize after the pre-insert absence/live check.
+    // The operation can become terminal after the pre-insert live check.
     // Publish CREATED only after a fresh authoritative operation observation.
     // If terminal/absent/mismatched authority won, release this exact row now;
-    // terminalization that starts after this observation will see the row in
+    // a terminal transition after this observation will see the row in
     // its ordinary release path.
     const insertedAuthority = await adoptAuthoritativeReservationForOperation(
       this, operation, {timeoutBudget});
