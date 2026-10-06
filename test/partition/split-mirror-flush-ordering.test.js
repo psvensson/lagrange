@@ -34,6 +34,10 @@ function buildSplitReplicationHandle(metadata, overrides = {}) {
     flushPromise: null,
     startedAt: 1,
     lastError: null,
+    authorized: true,
+    quiescing: false,
+    quiesced: false,
+    activities: new Set(),
     ...overrides,
   };
 }

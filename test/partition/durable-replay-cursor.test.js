@@ -38,6 +38,10 @@ import {
   PartitionService,
 } from '../../src/partition/partition-service.js';
 import {
+  startMergeReplicationHandleForService,
+  startSplitReplicationHandleForService,
+} from '../../src/partition/partition-service-source-replication-start-methods.js';
+import {
   MERGE_ACK_CHECKPOINT_FIELD,
 } from '../../src/partition/merge-ack-constants.js';
 import {
@@ -75,6 +79,14 @@ function buildSplitRawMetadata(overrides = {}) {
 
 function buildLogger() {
   return {info() {}, warn() {}, error() {}, debug() {}};
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((settle) => {
+    resolve = settle;
+  });
+  return {promise, resolve};
 }
 
 const SOURCE_TABLE = 'users';
@@ -324,6 +336,107 @@ test('loadDurableDeltasBehindWatermark stamps each delta with its ' +
   }
 });
 
+test('accepted recovery refreshes writes committed while START waits and ' +
+  'never re-runs a completed snapshot', async () => {
+  for (const scenario of [
+    {family: 'split', phase: PARTITION_TRANSITION_STATE.SPLIT_CATCHUP},
+    {family: 'split', phase: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
+    {family: 'merge', phase: PARTITION_TRANSITION_STATE.MERGE_CATCHUP},
+    {family: 'merge', phase: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE},
+  ]) {
+    const source = await restartedSource([insertCommand('barrier')]);
+    try {
+      await source.restarted.raft.campaign();
+      source.restarted.role = RAFT_ROLE.LEADER;
+      const watermark = source.committed[0].index;
+      const authorizationEntered = deferred();
+      const authorizationGate = deferred();
+      const replayed = [];
+      let snapshots = 0;
+      const isSplit = scenario.family === 'split';
+      const handle = {
+        metadata: isSplit ? {
+          workflowId: `${scenario.family}-${scenario.phase}`,
+          workflowAttempt: 1,
+          workflowFenceToken: 1,
+          sourcePartitionId: FIXTURE_PARTITION_ID,
+          targetPartitionIds: [...FIXTURE_TARGET_IDS],
+          targetPartitionVersion: 2,
+          primaryKeyColumn: 'id',
+          splitKey: 'm',
+        } : {
+          workflowId: `${scenario.family}-${scenario.phase}`,
+          workflowAttempt: 1,
+          workflowFenceToken: 1,
+          sourcePartitionIds: [FIXTURE_PARTITION_ID, 'users-p2'],
+          targetPartitionId: 'users-merged',
+          targetPartitionVersion: 2,
+          primaryKeyColumn: 'id',
+        },
+        phase: scenario.phase,
+        pendingEntries: [],
+        flushPromise: null,
+        snapshotBarrierIndex: watermark,
+        replayWatermarkIndex: watermark,
+      };
+      Object.assign(source.restarted, {
+        splitReplication: isSplit ? handle : null,
+        mergeReplication: isSplit ? null : handle,
+        openSplitSnapshotDatabase() {
+          snapshots += 1;
+          return {close() {}};
+        },
+        replaySplitEntry: async (entry) => replayed.push(entry),
+        replayMergeEntry: async (entry) => replayed.push(entry),
+        waitForMergeCutoverActivation: async () => {},
+        emitSplitSourceAck: async (_metadata, status) => {
+          if (status === 'snapshot_started') {
+            authorizationEntered.resolve();
+            await authorizationGate.promise;
+          }
+          return {result: status === 'catchup_ready' ? 'duplicate' : 'accepted',
+            splitCutoverApplied: status === 'catchup_ready',
+            splitSourceRetired: status === 'cleanup_completed'};
+        },
+        emitMergeSourceAck: async (_metadata, status) => {
+          if (status === 'snapshot_started') {
+            authorizationEntered.resolve();
+            await authorizationGate.promise;
+          }
+          return {result: status === 'catchup_ready' ? 'duplicate' : 'accepted',
+            mergeCutoverApplied: status === 'catchup_ready'};
+        },
+      });
+
+      const start = isSplit ?
+        startSplitReplicationHandleForService(source.restarted, handle) :
+        startMergeReplicationHandleForService(source.restarted, handle);
+      await authorizationEntered.promise;
+      const duringAuthorization = insertCommand(
+        `${scenario.family}-${scenario.phase}`);
+      await source.restarted.raft.propose(duringAuthorization);
+      assert.equal(handle.pendingEntries.length, 0,
+        `${scenario.family} ${scenario.phase}: unauthorized after-write ` +
+        'cannot enter the volatile queue');
+      authorizationGate.resolve();
+      const response = await start;
+      assert.equal(response.acknowledged, true,
+        `${scenario.family} ${scenario.phase}: durable START is accepted`);
+      await (isSplit ? source.restarted.splitReplicationRun :
+        source.restarted.mergeReplicationRun);
+      assert.equal(snapshots, 0,
+        `${scenario.family} ${scenario.phase}: recovery does not regress ` +
+        'to snapshot backfill');
+      assert.deepEqual(replayed.map((entry) => entry.entryId),
+        [duringAuthorization.entryId],
+        `${scenario.family} ${scenario.phase}: the authorization window is ` +
+        'recovered from the committed source log');
+    } finally {
+      await source.dispose();
+    }
+  }
+});
+
 // ── Receipt 3: bounded delta queue ──────────────────────────────────
 
 test('the split mirror delta queue is bounded: at capacity the write ' +
@@ -340,6 +453,10 @@ test('the split mirror delta queue is bounded: at capacity the write ' +
       ),
       flushPromise: null,
       lastError: null,
+      authorized: true,
+      quiescing: false,
+      quiesced: false,
+      activities: new Set(),
     },
     cloneSplitEntry: proto.cloneSplitEntry,
     enqueueSplitDeltaBounded: proto.enqueueSplitDeltaBounded,
@@ -415,6 +532,9 @@ test('leader activation on a restarted source resumes the split ' +
       runSplitReplicationWorkflow() {
         workerCalls.push(this.splitReplication?.phase || null);
         return Promise.resolve();
+      },
+      emitSplitSourceAck() {
+        return Promise.resolve({result: 'accepted'});
       },
     });
 

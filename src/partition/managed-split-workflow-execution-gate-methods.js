@@ -30,11 +30,56 @@ import {
   assertSplitRegistrationOverlapGuardClear,
   assertSplitTransitionAdmissionClear,
 } from './partition-transition-overlap-guard.js';
+import {
+  acknowledgeSourceStartAtRecordTurn,
+  splitStartAuthorization,
+} from
+  './managed-source-replication-start-authorization.js';
 
 const LOCAL_STR_PARTITION_SPLIT_WORKFLOW = 'partition:split:workflow';
 const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
+
 const LOCAL_STR_CONTROL_PLANE_BACKPRESSURE = 'control_plane_backpressure';
 const LOCAL_STR_OBJECT = 'object';
+
+async function resolveDuplicateSplitCutoverOutcome(owner, workflowId,
+  ackResult, ackStatus) {
+  if (ackResult?.result !== PARTICIPANT_ACK_RESULT.DUPLICATE ||
+      ackStatus !== SPLIT_ACK_STATUS.CATCHUP_READY) return {handled: false};
+  const cutoverOutcome = await owner.resolveSplitCutoverOutcome(workflowId);
+  return {handled: true, outcome: {...ackResult,
+    splitCutoverApplied: cutoverOutcome.applied,
+    splitSourceRetired: false,
+    ...(cutoverOutcome.readiness ?
+      {cutoverReadiness: cutoverOutcome.readiness} : {})}};
+}
+
+async function buildAcceptedSplitAckOutcome(owner, workflow, workflowId,
+  ackResult, ackStatus) {
+  let splitCutoverApplied =
+    workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
+  let splitSourceRetired = false;
+  let cutoverReadiness = null;
+  if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
+    owner.abortSplitOnSourceFailure(workflowId, ackStatus).catch((error) => {
+      owner.logger.error(MANAGED_SPLIT_LOG_MSG.ABORT_DISPATCH_FAILED, {
+        workflowId, ackStatus, error: error?.message || error,
+      });
+    });
+    splitCutoverApplied = false;
+  }
+  if (ackStatus === SPLIT_ACK_STATUS.CATCHUP_READY) {
+    const outcome = await owner.resolveSplitCutoverOutcome(workflowId);
+    splitCutoverApplied = outcome.applied;
+    cutoverReadiness = outcome.readiness;
+  }
+  if (ackStatus === SPLIT_ACK_STATUS.CLEANUP_COMPLETED) {
+    splitSourceRetired = await owner.finalizeSplitDissolutionIfReady(
+      workflowId);
+  }
+  return {...ackResult, splitCutoverApplied, splitSourceRetired,
+    ...(cutoverReadiness ? {cutoverReadiness} : {})};
+}
 
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const MANAGED_SPLIT_MUTATION_OPTIONS = Object.freeze({
@@ -313,7 +358,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
    * @return {Promise<Object>} acknowledgeParticipant result extended
    *   with {splitCutoverApplied: boolean}.
    */
-  async acknowledgeSourceParticipant(workflowId, ack) {
+  async acknowledgeSourceParticipant(workflowId, ack, startContext = null) {
     if (!workflowId) {
       throw new Error(
         QUERY_ERROR_MSG.TABLE_SPLIT_WORKFLOW_NOT_FOUND,
@@ -325,55 +370,28 @@ class ManagedSplitWorkflowExecutionGateMethods {
         QUERY_ERROR_MSG.TABLE_SPLIT_WORKFLOW_NOT_FOUND,
       );
     }
-    const ackResult = await this.workflowCoordinator.acknowledgeParticipant(
-      workflowId,
-      ack,
-    );
+    const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
+    const ackResult = await acknowledgeSourceStartAtRecordTurn(
+      this.workflowCoordinator, workflowId, ack, startContext, ackStatus,
+      SPLIT_ACK_STATUS.SNAPSHOT_STARTED, splitStartAuthorization);
 
     // A rejected acknowledgement (stale fence, out-of-graph transition,
     // duplicate, unknown participant) is a typed outcome, never silently
     // applied: short-circuit every owner reaction so a stale or
     // malformed ack can never drive a cutover, abort, or dissolution.
+    const duplicateOutcome = await resolveDuplicateSplitCutoverOutcome(
+      this, workflowId, ackResult, ackStatus);
+    if (duplicateOutcome.handled) return duplicateOutcome.outcome;
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
       await this.resumeSplitDissolutionOnRedelivery(workflowId, ackResult,
         ack);
       return this.buildRejectedSplitAckOutcome(workflowId, ackResult);
     }
 
-    const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
-    let splitCutoverApplied =
-      workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
-    let cutoverReadiness = null;
-    if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
-      // Deliberately NOT awaited: the abort is FIFO-serialized on the
-      // owner lane and may queue behind an in-flight cutover step; the
-      // failing source's acknowledgement must not block on that lane.
-      // FIFO enqueue order still guarantees the abort lands before any
-      // cutover step enqueued after it.
-      this.abortSplitOnSourceFailure(workflowId, ackStatus)
-        .catch((error) => {
-          this.logger.error(MANAGED_SPLIT_LOG_MSG.ABORT_DISPATCH_FAILED, {
-            workflowId,
-            ackStatus,
-            error: error?.message || error,
-          });
-        });
-      splitCutoverApplied = false;
-    }
-    if (ackStatus === SPLIT_ACK_STATUS.CATCHUP_READY) {
-      const cutoverOutcome = await this.resolveSplitCutoverOutcome(workflowId);
-      splitCutoverApplied = cutoverOutcome.applied;
-      cutoverReadiness = cutoverOutcome.readiness;
-    }
-    if (ackStatus === SPLIT_ACK_STATUS.CLEANUP_COMPLETED) {
-      await this.finalizeSplitDissolutionIfReady(workflowId);
-    }
-
-    return {
-      ...ackResult,
-      splitCutoverApplied,
-      ...(cutoverReadiness ? {cutoverReadiness} : {}),
-    };
+    // Failure dispatch is deliberately unawaited inside the reaction owner:
+    // its FIFO lane orders it before any later cutover step.
+    return buildAcceptedSplitAckOutcome(
+      this, workflow, workflowId, ackResult, ackStatus);
   }
 
   /**

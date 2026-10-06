@@ -68,6 +68,10 @@ function assertManagedMergeEpochMutationEffect(mutationResult, workflow) {
  * the routable epoch).
  */
 class ManagedMergeWorkflowPersistenceMethods {
+  isRetryablePostAdmissionExecutionError(error) {
+    return isRetryableManagedSplitExecutionFailure(error);
+  }
+
   /**
    * Persist an execution failure after a merge has already been admitted.
    * @param {string} workflowId
