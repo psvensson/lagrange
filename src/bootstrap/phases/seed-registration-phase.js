@@ -93,7 +93,6 @@ class SeedRegistrationPhase {
    */
   constructor(options = {}) {
     this.delegates = options.delegates || {};
-    this.requiredPartitionLeadershipSatisfied = false;
     this.messageGroupRegistrationEvidenceByReplicaId = new Map();
     this.runtimeOwner = new SeedRegistrationRuntimeOwner({
       delegates: this.delegates,
@@ -145,20 +144,16 @@ class SeedRegistrationPhase {
   }
 
   /**
-   * Spend the registration phase's existing leadership gate once. The seed
-   * partition scheduler moves this gate earlier so the required cohort can
-   * form before unrelated FULL-persistence work, and phaseRegistration reuses
-   * the satisfied result instead of adding a second wait budget.
+   * Consume the partition leadership owner's existing one-time gate for the
+   * registration dependency cut. The partition scheduler moves this same gate
+   * earlier so the required cohort can form before unrelated FULL-persistence
+   * work; SeedPartitionsPhase owns reuse of the satisfied result.
    * @return {Promise<void>}
    */
   async waitForRequiredPartitionLeadership() {
-    if (this.requiredPartitionLeadershipSatisfied) {
-      return;
-    }
     await this.delegates.waitForPartitionLeadership({
       partitionIds: REGISTRATION_REQUIRED_LEADER_PARTITION_IDS,
     });
-    this.requiredPartitionLeadershipSatisfied = true;
   }
 
   /**

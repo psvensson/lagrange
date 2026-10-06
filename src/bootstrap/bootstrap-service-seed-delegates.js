@@ -298,9 +298,6 @@ function buildPhaseExecutionDelegates(service) {
     getRegistrationRequiredLeaderPartitionIds: () =>
       self.seedRegistrationPhase
         .getRequiredLeaderPartitionIds(),
-    waitForRegistrationRequiredPartitionLeadership: () =>
-      self.seedRegistrationPhase
-        .waitForRequiredPartitionLeadership(),
     isShuttingDown: () => self.isShuttingDown === true,
     stopUnifiedLifecycleOwners: () => {
       detachServiceInstallationReconcilerOwner(self);

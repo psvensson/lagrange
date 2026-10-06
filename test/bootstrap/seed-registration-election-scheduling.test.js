@@ -14,6 +14,13 @@ const REQUIRED_PARTITION_IDS = Object.freeze([
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.TABLES],
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.MESSAGE_GROUPS],
 ]);
+const REQUIRED_REPLICA_COUNT = 3;
+
+function requiredReplicaStartEvents() {
+  return REQUIRED_PARTITION_IDS.flatMap((_partitionId, partitionIndex) =>
+    Array.from({length: REQUIRED_REPLICA_COUNT}, (_unused, replicaIndex) =>
+      `start:required-${partitionIndex + 1}-r${replicaIndex + 1}`));
+}
 
 function createDeferred() {
   let resolve;
@@ -39,26 +46,46 @@ function createReplica(replicaId, partitionId, events) {
   };
 }
 
-function createSchedulingFixture() {
+function createSchedulingFixture(options = {}) {
   const events = [];
   const leadership = createDeferred();
+  const messageGroupLeadership = options.messageGroupLeadership || null;
   let shuttingDown = false;
   const replicas = [
     createReplica('ordinary-a-r1', 'ordinary-a', events),
-    ...REQUIRED_PARTITION_IDS.map((partitionId, index) =>
-      createReplica(`required-${index + 1}-r1`, partitionId, events)),
+    ...REQUIRED_PARTITION_IDS.flatMap((partitionId, partitionIndex) =>
+      Array.from({length: REQUIRED_REPLICA_COUNT}, (_unused, replicaIndex) =>
+        createReplica(
+          `required-${partitionIndex + 1}-r${replicaIndex + 1}`,
+          partitionId,
+          events,
+        ))),
     createReplica('ordinary-b-r1', 'ordinary-b', events),
   ];
+  const messageGroupReplicas = messageGroupLeadership ? [{
+    startElection() {
+      events.push('start:message-group-r1');
+    },
+  }] : [];
   const phase = new SeedPartitionsPhase({
     delegates: {
       getLogger: () => ({info() {}, debug() {}}),
       getNodeId: () => 'seed-a',
-      getMessageGroupReplicas: () => [],
+      getMessageGroupReplicas: () => messageGroupReplicas,
+      async waitForMessageGroupLeadership() {
+        events.push('wait:message-group');
+        return messageGroupLeadership?.promise;
+      },
       getPartitionReplicas: () => replicas,
       getPartitionsCreated: () => replicas.length,
       getRegistrationRequiredLeaderPartitionIds: () =>
         [...REQUIRED_PARTITION_IDS],
-      async waitForRegistrationRequiredPartitionLeadership() {
+      async waitForPartitionLeadership(options) {
+        const requested = [...options.partitionIds].sort();
+        const required = [...REQUIRED_PARTITION_IDS].sort();
+        if (requested.join(',') !== required.join(',')) {
+          throw new Error('scheduler changed the registration dependency cut');
+        }
         events.push('wait:registration-required');
         return leadership.promise;
       },
@@ -68,6 +95,7 @@ function createSchedulingFixture() {
   return {
     events,
     leadership,
+    messageGroupLeadership,
     phase,
     setShuttingDown(value) {
       shuttingDown = value;
@@ -82,20 +110,14 @@ test('seed elections start the registration dependency cohort before the remaind
 
     await Promise.resolve();
     t.same(fixture.events, [
-      'start:required-1-r1',
-      'start:required-2-r1',
-      'start:required-3-r1',
-      'start:required-4-r1',
+      ...requiredReplicaStartEvents(),
       'wait:registration-required',
     ], 'unrelated election work stays held while the direct-write cut elects');
 
     fixture.leadership.resolve();
     await scheduling;
     t.same(fixture.events, [
-      'start:required-1-r1',
-      'start:required-2-r1',
-      'start:required-3-r1',
-      'start:required-4-r1',
+      ...requiredReplicaStartEvents(),
       'wait:registration-required',
       'start:ordinary-a-r1',
       'start:ordinary-b-r1',
@@ -133,21 +155,59 @@ test('shutdown during the dependency wait does not restart stopped work',
       'shutdown cleanup remains the only owner of the unstarted cohort');
   });
 
+test('shutdown during message-group leadership starts no partition election',
+  async (t) => {
+    const messageGroupLeadership = createDeferred();
+    const fixture = createSchedulingFixture({messageGroupLeadership});
+    const scheduling = fixture.phase.startDeferredBootstrapReplicaElections();
+
+    await Promise.resolve();
+    t.same(fixture.events, [
+      'start:message-group-r1',
+      'wait:message-group',
+    ], 'partition elections remain behind message-group leadership');
+    fixture.setShuttingDown(true);
+    messageGroupLeadership.resolve();
+    await scheduling;
+    t.equal(fixture.events.some((event) => event.startsWith('start:required-') ||
+      event.startsWith('start:ordinary-')), false,
+    'cleanup remains the only owner after shutdown crosses the held wait');
+    t.equal(fixture.events.includes('wait:registration-required'), false,
+      'shutdown spends no partition leadership budget');
+  });
+
 test('registration owns the exact dependency cut and spends its gate once',
   async (t) => {
-    const waits = [];
-    const phase = new SeedRegistrationPhase({
+    let waitTurns = 0;
+    const partitionServices = new Map(REQUIRED_PARTITION_IDS.map(
+      (partitionId) => [partitionId, {partitionId, isLeader: false}],
+    ));
+    const partitionsPhase = new SeedPartitionsPhase({
       delegates: {
-        async waitForPartitionLeadership(options) {
-          waits.push([...options.partitionIds]);
+        getLogger: () => ({debug() {}}),
+        getConfig: () => ({leadershipWaitTimeoutMs: 100,
+          leadershipWaitInitialDelayMs: 1}),
+        getNodeId: () => 'seed-a',
+        getPartitionServices: () => partitionServices,
+        async sleep() {
+          waitTurns += 1;
+          for (const service of partitionServices.values()) {
+            service.isLeader = true;
+          }
         },
       },
     });
+    const phase = new SeedRegistrationPhase({delegates: {
+      waitForPartitionLeadership: (options) =>
+        partitionsPhase.waitForPartitionLeadership(options),
+    }});
 
     t.same(phase.getRequiredLeaderPartitionIds(), REQUIRED_PARTITION_IDS,
       'the registration owner publishes its four direct-write dependencies');
     await phase.waitForRequiredPartitionLeadership();
     await phase.waitForRequiredPartitionLeadership();
-    t.same(waits, [REQUIRED_PARTITION_IDS],
-      'partitions and registration transfer one existing wait budget');
+    t.equal(waitTurns, 1,
+      'both consumers reuse the partition owner\'s one existing wait budget');
+    t.notOk(Object.hasOwn(phase, 'requiredPartitionLeadershipSatisfied'),
+      'registration keeps no duplicate satisfaction authority');
   });

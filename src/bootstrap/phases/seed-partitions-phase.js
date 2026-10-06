@@ -397,6 +397,13 @@ class SeedPartitionsPhase {
         [...INITIAL_MESSAGE_GROUP_REPLICA_IDS],
       );
 
+      // Shutdown may begin while message-group leadership is pending. Cleanup
+      // then owns every unstarted replica; do not begin either partition
+      // cohort after that lifecycle boundary.
+      if (d.isShuttingDown()) {
+        return;
+      }
+
       logger.debug(
         BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_LEADERSHIP_READY, {
           groupId: INITIAL_MESSAGE_GROUP_ID,
@@ -428,7 +435,9 @@ class SeedPartitionsPhase {
     }
 
     try {
-      await d.waitForRegistrationRequiredPartitionLeadership();
+      await d.waitForPartitionLeadership({
+        partitionIds: [...registrationRequiredPartitionIds],
+      });
     } finally {
       // A failed dependency gate must not strand otherwise independent
       // partition groups. During shutdown, cleanup owns every unstarted
