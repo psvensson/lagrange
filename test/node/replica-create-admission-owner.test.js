@@ -175,14 +175,61 @@ describe('ReplicaCreateAdmissionOwner', () => {
     const firstEvidence = await first.claim(f.request);
     const secondEvidence = await second.claim(f.request);
     assert.equal(first, second);
-    assert.equal(first.claimPhysicalWorker(firstEvidence), true);
-    assert.equal(second.claimPhysicalWorker(secondEvidence), false);
+    assert.equal(await first.claimPhysicalWorker(firstEvidence), true);
+    assert.equal(await second.claimPhysicalWorker(secondEvidence), false);
     const materialized = await first.markMaterialized(firstEvidence);
     assert.equal(materialized.admissionState, CREATE_ADMISSION_STATE.MATERIALIZED);
     first.releasePhysicalWorker(firstEvidence.operationId);
     ReplicaCreateAdmissionOwner.release(first);
     ReplicaCreateAdmissionOwner.release(second);
   });
+
+  it('fences a claimed old boot before physical grant and durable progress',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({
+        gateway: f.gateway, nodeId: 'node-1', ownerIncarnation: 101,
+        now: () => 20,
+      });
+      const evidence = await owner.claim(f.request);
+      let releaseHeldWork;
+      const heldWork = new Promise((resolve) => {
+        releaseHeldWork = resolve;
+      }).then(() => owner.claimPhysicalWorker(evidence));
+      f.setBootIncarnation(102);
+      releaseHeldWork();
+      await assert.rejects(
+        heldWork,
+        {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED},
+      );
+      await assert.rejects(
+        owner.markMaterialized(evidence),
+        {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED},
+      );
+      assert.equal(owner.activePhysicalWorkerOperationIds.size, 0);
+      assert.equal(f.row.create_admission_state, CREATE_ADMISSION_STATE.ADMITTED);
+    });
+
+  it('revalidates boot after physical grant and fences the old worker',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({
+        gateway: f.gateway, nodeId: 'node-1', ownerIncarnation: 101,
+        now: () => 20,
+      });
+      const evidence = await owner.claim(f.request);
+      assert.equal(await owner.claimPhysicalWorker(evidence), true);
+      f.setBootIncarnation(102);
+      await assert.rejects(
+        owner.revalidatePhysicalWorker(evidence),
+        {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED},
+      );
+      await assert.rejects(
+        owner.markMaterialized(evidence),
+        {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED},
+      );
+      assert.equal(f.row.create_admission_state, CREATE_ADMISSION_STATE.ADMITTED);
+    });
 
   it('recovers the operation-row half of attempt rotation from the old request', async () => {
     const f = fixture();
@@ -277,7 +324,10 @@ describe('ReplicaCreateAdmissionOwner', () => {
     });
     const takeover = await newBoot.takeoverRetained({...f.row});
     assert.equal(takeover.ownerIncarnation, 102);
-    assert.equal(await oldBoot.markMaterialized(oldEvidence), null);
+    await assert.rejects(
+      oldBoot.markMaterialized(oldEvidence),
+      {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED},
+    );
     assert.equal(
       (await newBoot.markMaterialized(takeover)).admissionState,
       CREATE_ADMISSION_STATE.MATERIALIZED,

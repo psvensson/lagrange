@@ -240,6 +240,7 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     this.lastSuboptimalSignal = null;
     this.failedCreateTargetCleanupPreconditionByReplicaId = new Map();
     this.terminalFailedCreateTargetReplicaIds = new Set();
+    this.terminalFailedCreateTargetClaimByReplicaId = new Map();
 
     // Scheduler state
     this.scheduledCheck = null;

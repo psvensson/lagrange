@@ -28,7 +28,7 @@
   "censusSize": 2215,
   "digest": "fnv1a32-9b3ca535",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e29d4ec5",
+  "observationDigest": "fnv1a32-2aae249f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -9818,6 +9818,7 @@
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
         "src/rebalancer/rebalance-coordinator.js"
       ]
     },

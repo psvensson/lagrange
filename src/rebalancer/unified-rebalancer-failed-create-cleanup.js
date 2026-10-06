@@ -2,8 +2,10 @@ import {SYSTEM_TABLE_NAME} from
   '../bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 import {
+  OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
+  getOperationMetadataObject,
 } from './replica-status.js';
 import {normalizeReplicaOperationRecord} from
   './replica-operation-liveness.js';
@@ -39,15 +41,31 @@ const UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS = Object.freeze({
   async refreshFailedCreateTargetCleanupDecisions() {
     const decisions = new Map();
     const terminalTargets = new Set();
+    const terminalClaims = new Map();
     if (typeof this.rebalanceCoordinator
       ?.decideFailedCreateTargetCleanup !== LOCAL_TYPEOF_FUNCTION) {
       this.failedCreateTargetCleanupPreconditionByReplicaId = decisions;
       this.terminalFailedCreateTargetReplicaIds = terminalTargets;
+      this.terminalFailedCreateTargetClaimByReplicaId = terminalClaims;
       return decisions;
     }
     for (const operation of this.getTerminalFailedCreateOperations()) {
       const targetReplicaId = this.getReplicaIdFromOperationRow(operation);
-      if (targetReplicaId.length > 0) terminalTargets.add(targetReplicaId);
+      if (targetReplicaId.length > 0) {
+        terminalTargets.add(targetReplicaId);
+        const claimedPrecondition = getOperationMetadataObject(
+          normalizeReplicaOperationRecord(operation, {nowMs: this.nowFn()})
+            .stepsHistory,
+          OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+        );
+        if (claimedPrecondition) {
+          const claims = terminalClaims.get(targetReplicaId) || [];
+          terminalClaims.set(
+            targetReplicaId,
+            Object.freeze([...claims, claimedPrecondition]),
+          );
+        }
+      }
       const decision = await this.rebalanceCoordinator
         .decideFailedCreateTargetCleanup(
           normalizeReplicaOperationRecord(operation, {nowMs: this.nowFn()}),
@@ -60,6 +78,7 @@ const UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS = Object.freeze({
     }
     this.failedCreateTargetCleanupPreconditionByReplicaId = decisions;
     this.terminalFailedCreateTargetReplicaIds = terminalTargets;
+    this.terminalFailedCreateTargetClaimByReplicaId = terminalClaims;
     return decisions;
   },
 
@@ -77,6 +96,11 @@ const UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS = Object.freeze({
     return this.failedCreateTargetCleanupPreconditionByReplicaId?.get(
       replicaId,
     ) || null;
+  },
+
+  getTerminalFailedCreateTargetClaims(replicaId) {
+    return this.terminalFailedCreateTargetClaimByReplicaId?.get(replicaId) ||
+      Object.freeze([]);
   },
 });
 

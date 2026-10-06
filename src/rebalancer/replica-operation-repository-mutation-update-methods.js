@@ -4,6 +4,8 @@ import {
 import {
   resolveOperationOwnerLeaseExpiryForPersist,
 } from './replica-operation-owner-lease.js';
+import {operationCarriesReplicaCreateAdmission} from
+  './replica-operation-create-admission-fields.js';
 
 // A terminal write that is also a step CAS (a REPLACE FAILED admitted
 // against its durable step, quest replace-source-removal-owner): both guards,
@@ -12,27 +14,22 @@ const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL = `UPDATE replica_operations 
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
     WHERE operation_id = ? AND workflow_step = ? AND completed_at IS NULL`;
+const UPDATE_OPERATION_TERMINAL_WITHOUT_CREATE_ADMISSION_SQL =
+  `UPDATE replica_operations SET
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+    error_message = ?, steps_history = ?, replica_id = ?
+    WHERE operation_id = ? AND completed_at IS NULL
+      AND create_admission_state IS NULL`;
+const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_WITHOUT_CREATE_ADMISSION_SQL =
+  `UPDATE replica_operations SET
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+    error_message = ?, steps_history = ?, replica_id = ?
+    WHERE operation_id = ? AND workflow_step = ? AND completed_at IS NULL
+      AND create_admission_state IS NULL`;
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const PERSIST_PHASE_DIVERGENCE_REINSERT = 'divergence_reinsert';
 const OWNER_LEASE_TOUCH_LOG_CONTEXT = 'owner_lease_touch';
-const REPLICA_CREATE_ADMISSION_OPERATION_FIELDS = Object.freeze([
-  'createAdmissionState',
-  'createAdmissionToken',
-  'createAdmissionReplicaCreatedAt',
-  'createAdmissionAttemptToken',
-  'createAdmissionPreviousAttemptToken',
-  'createAdmissionAttemptSeq',
-  'createAdmissionWorkflowUpdatedAt',
-  'createAdmissionOwnerIncarnation',
-]);
-
-function operationCarriesReplicaCreateAdmission(operation) {
-  return REPLICA_CREATE_ADMISSION_OPERATION_FIELDS.some((field) =>
-    operation?.[field] !== null && operation?.[field] !== undefined,
-  );
-}
-
 function buildOperationUpdatePersistResult(options, persisted, disposition, operation) {
   if (options?.returnDisposition !== true) {
     return persisted;
@@ -155,7 +152,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           whereClause: this.buildReplicaOperationUpdateWhereClause(
             operation,
             expectedWorkflowStep,
-            {terminalTransition},
+            {
+              terminalTransition,
+              requireCreateAdmissionAbsent:
+                options.requireCreateAdmissionAbsent === true,
+            },
           ),
           data: this.buildReplicaOperationUpdateData(operation),
           owner: REPLICA_OPERATION_OWNER_NAME,
@@ -179,6 +180,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           sql: this.resolveOperationUpdateSql(
             expectedWorkflowStep,
             terminalTransition,
+            options.requireCreateAdmissionAbsent === true,
           ),
           params: this.buildReplicaOperationUpdateParams(
             operation,
@@ -232,11 +234,18 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     // An expected-step CAS write pins the step in the WHERE clause; a
     // terminal write guards on completed_at IS NULL; a terminal write that
     // is also a step CAS carries both; the plain update carries neither.
-    resolveOperationUpdateSql(expectedWorkflowStep, terminalTransition) {
+    resolveOperationUpdateSql(expectedWorkflowStep, terminalTransition,
+      requireCreateAdmissionAbsent = false) {
       if (expectedWorkflowStep) {
+        if (terminalTransition && requireCreateAdmissionAbsent) {
+          return UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_WITHOUT_CREATE_ADMISSION_SQL;
+        }
         return terminalTransition ?
           UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL :
           SQL.UPDATE_OPERATION_EXPECTING_STEP;
+      }
+      if (terminalTransition && requireCreateAdmissionAbsent) {
+        return UPDATE_OPERATION_TERMINAL_WITHOUT_CREATE_ADMISSION_SQL;
       }
       return terminalTransition ?
         SQL.UPDATE_OPERATION_TERMINAL :

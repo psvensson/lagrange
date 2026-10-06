@@ -24,6 +24,8 @@ import {
 } from './replica-create-admission-token.js';
 import {bindReplaceCreateTargetReplicaId} from
   './operation-workflow-replace-target-binding.js';
+import {resolveAmbiguousCreateDeliveryFailure} from
+  './operation-workflow-ambiguous-create-delivery.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   DISPATCH_RETRY_DELAY_MS,
@@ -220,6 +222,7 @@ function resolveDispatchDeliveryErrorLike(response) {
     cause: nestedError,
   };
 }
+
 function buildReplicaOperationDispatchTimeoutError(operation) {
   const error = new Error(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT);
   error.code = ROUTER_MESSAGE_TIMEOUT_ERROR_CODE;
@@ -697,6 +700,16 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         error,
         REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
       );
+      const ambiguousCreateResult =
+        await resolveAmbiguousCreateDeliveryFailure(
+          this,
+          operation,
+          error,
+          replaceRemoveDispatchPhase,
+        );
+      if (ambiguousCreateResult) {
+        return ambiguousCreateResult;
+      }
       if (this.deferDispatchRetry(operation, error)) {
         return this.buildSkippedOperationResult(
           REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
@@ -721,6 +734,16 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         errorLike,
         REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
       );
+      const ambiguousCreateResult =
+        await resolveAmbiguousCreateDeliveryFailure(
+          this,
+          operation,
+          errorLike,
+          replaceRemoveDispatchPhase,
+        );
+      if (ambiguousCreateResult) {
+        return ambiguousCreateResult;
+      }
       if (this.deferDispatchRetry(operation, errorLike)) {
         return this.buildSkippedOperationResult(
           REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
@@ -841,6 +864,16 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     const errorLike = resolveDispatchDeliveryErrorLike(response);
     const errorMsg = this.normalizeErrorMessage(errorLike, 'Unknown error');
+    const ambiguousCreateResult =
+      await resolveAmbiguousCreateDeliveryFailure(
+        this,
+        operation,
+        errorLike,
+        replaceRemovePhase,
+      );
+    if (ambiguousCreateResult) {
+      return ambiguousCreateResult;
+    }
     if (this.deferDispatchRetry(operation, errorLike)) {
       return this.buildSkippedOperationResult(
         REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,

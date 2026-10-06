@@ -7,6 +7,7 @@ import {
   ReplicaStatus,
 } from '../rebalancer/replica-status.js';
 import {
+  CREATE_ADMISSION_ERROR_CODE,
   CREATE_ADMISSION_STATE,
 } from './replica-create-admission-owner.js';
 import {assignReplicaHandlerCreateAdmissionMethods} from
@@ -137,25 +138,49 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       this.registerOperationTask(
         new Promise((resolve) => {
           setImmediate(() => {
-            if (this.shuttingDown) {
-              this.getReplicaCreateAdmissionOwner()
-                .releasePhysicalWorker(operationId);
-              this.inProgressOperations.delete(operationId);
-              this.localServices.delete(replicaId);
-              this.localReplicas.delete(replicaId);
-              resolve();
-              return;
-            }
-            resolve(
-              this.createReplicaAsync(request).catch((error) => {
-                this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
-                  operationId,
-                  replicaId,
-                  error: error.message,
-                  stack: error.stack,
-                });
-              }),
-            );
+            let createStarted = false;
+            const start = async () => {
+              if (this.shuttingDown) {
+                this.getReplicaCreateAdmissionOwner()
+                  .releasePhysicalWorker(operationId);
+                this.inProgressOperations.delete(operationId);
+                this.localServices.delete(replicaId);
+                this.localReplicas.delete(replicaId);
+                return;
+              }
+              const evidence = request?.createAdmissionEvidence;
+              if (evidence && !await this.getReplicaCreateAdmissionOwner()
+                .revalidatePhysicalWorker(evidence)) {
+                throw Object.assign(
+                  new Error(
+                    `Current boot lost before queued CREATE ${operationId}`,
+                  ),
+                  {
+                    code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+                    errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+                    deferRetry: true,
+                    bootAuthorityUnavailable: true,
+                  },
+                );
+              }
+              createStarted = true;
+              await this.createReplicaAsync(request);
+            };
+            resolve(start().catch((error) => {
+              if (!createStarted) {
+                this.getReplicaCreateAdmissionOwner()
+                  .releasePhysicalWorker(operationId);
+                this.inProgressOperations.delete(operationId);
+                this.localServices.delete(replicaId);
+                this.localReplicas.delete(replicaId);
+              }
+              this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
+                operationId,
+                replicaId,
+                error: error.message,
+                stack: error.stack,
+              });
+            }));
           });
         }),
       );
@@ -280,6 +305,19 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             Math.max(0, replicaIds.length - 1) :
             0,
         });
+        if (createAdmissionEvidence &&
+            !await this.getReplicaCreateAdmissionOwner()
+              .revalidatePhysicalWorker(createAdmissionEvidence)) {
+          throw Object.assign(
+            new Error(`Current boot lost before physical CREATE ${operationId}`),
+            {
+              code: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+              errorCode: CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+              deferRetry: true,
+              bootAuthorityUnavailable: true,
+            },
+          );
+        }
         partitionService = await this.createPartitionService({
           partitionId, tableId, tableName, schema, keyRange,
           replicaId,
@@ -458,6 +496,22 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               deferRetry: true,
             },
           );
+          throw error;
+        }
+        if (error?.bootAuthorityUnavailable === true) {
+          await this.fenceFailedReplicaCreateRuntime(
+            replicaId,
+            partitionId,
+            partitionService,
+          );
+          this.clearReplicaCreationProgress(progress);
+          if (operationId) {
+            this.inProgressOperations.delete(operationId);
+            this.getReplicaCreateAdmissionOwner()
+              .releasePhysicalWorker(operationId);
+          }
+          this.localServices.delete(replicaId);
+          this.localReplicas.delete(replicaId);
           throw error;
         }
         await this.fenceFailedReplicaCreateRuntime(

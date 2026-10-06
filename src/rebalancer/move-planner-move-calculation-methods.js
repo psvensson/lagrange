@@ -55,6 +55,21 @@ const FAILED_CREATE_SOURCE_STATES = Object.freeze(new Set([
 ]));
 // The named "this plan states no cycle facts" context.
 const EMPTY_PLANNING_CONTEXT = Object.freeze({});
+const FAILED_CREATE_CLAIM_IDENTITY_FIELDS = Object.freeze([
+  'created_at',
+  'state_entered_at',
+  'create_attempt_token',
+]);
+
+function historicalFailedCreateClaimProtects(replica, claims) {
+  if (replica?.previous_state === ReplicaStatus.ACTIVE) return false;
+  if (!Array.isArray(claims) || claims.length === 0) return true;
+  const comparableFields = FAILED_CREATE_CLAIM_IDENTITY_FIELDS.filter(
+    (field) => replica?.[field] !== null && replica?.[field] !== undefined,
+  );
+  return comparableFields.length === 0 || claims.some((claim) =>
+    comparableFields.every((field) => replica[field] === claim[field]));
+}
 
 // The partition policy row, resolved at most once per plan and only when a
 // cure asks for it. `planningContext` reaches this module as a pass-through
@@ -302,9 +317,13 @@ class MovePlannerMoveCalculationMethods {
         terminalFailedReplaceTargetReplicaIds.has(replicaId)
       ) {
         const ownerProtectedFailedCreate =
-          terminalFailedCreateTargetReplicaIds.has(replicaId) ||
           isFailedCreateCleanupToken(replica.cleanup_token) ||
-          FAILED_CREATE_SOURCE_STATES.has(replica.previous_state);
+          FAILED_CREATE_SOURCE_STATES.has(replica.previous_state) ||
+          terminalFailedCreateTargetReplicaIds.has(replicaId) &&
+            historicalFailedCreateClaimProtects(
+              replica,
+              this.getTerminalFailedCreateTargetClaims(replicaId),
+            );
         if (ownerProtectedFailedCreate &&
             !terminalFailedReplaceTargetReplicaIds.has(replicaId)) {
           continue;
@@ -1021,6 +1040,19 @@ class MovePlannerMoveCalculationMethods {
       .getFailedCreateTargetCleanupPrecondition(replicaId);
     return precondition && typeof precondition === MOVE_PLANNER_LITERAL.OBJECT ?
       precondition : null;
+  }
+
+  getTerminalFailedCreateTargetClaims(replicaId) {
+    if (
+      typeof this.moveStateProvider.getTerminalFailedCreateTargetClaims !==
+        MOVE_PLANNER_LITERAL.FUNCTION
+    ) {
+      return [];
+    }
+    const claims = this.moveStateProvider.getTerminalFailedCreateTargetClaims(
+      replicaId,
+    );
+    return Array.isArray(claims) ? claims : [];
   }
 }
 

@@ -69,7 +69,7 @@ function operationRow(overrides = {}) {
   };
 }
 
-function createCache(targetRow = null) {
+function createCache(targetRows = []) {
   const cache = new SystemTableCache();
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
     table_id: 'table-1',
@@ -101,7 +101,8 @@ function createCache(targetRow = null) {
     state_entered_at: 1,
     updated_at: 1,
   });
-  if (targetRow) {
+  const rows = Array.isArray(targetRows) ? targetRows : [targetRows];
+  for (const targetRow of rows.filter(Boolean)) {
     cache.applySystemTableChange(
       SYSTEM_TABLE_NAME.SERVICES,
       'INSERT',
@@ -133,6 +134,7 @@ function targetLifecycle(row, overrides = {}) {
 
 function gatewayFixture(cache, row, options = {}) {
   const lifecycle = createLifecycleControlPlaneGatewayForCache(cache);
+  const operationRows = [row, ...(options.additionalRows || [])];
   let bootIncarnation = options.bootIncarnation ?? 102;
   let snapshotFailures = options.snapshotFailures ?? 0;
   const gateway = {
@@ -145,8 +147,10 @@ function gatewayFixture(cache, row, options = {}) {
       }
       if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
         if (sql.includes('WHERE operation_id = ?')) {
-          return {success: true, rows:
-            row.operation_id === params[0] ? [row] : []};
+          const operation = operationRows.find(
+            (candidate) => candidate.operation_id === params[0],
+          );
+          return {success: true, rows: operation ? [operation] : []};
         }
         if (params.length === 1) {
           await options.snapshotBarrier;
@@ -154,22 +158,27 @@ function gatewayFixture(cache, row, options = {}) {
             snapshotFailures -= 1;
             throw new Error('operation ledger unavailable');
           }
-          return {success: true, rows:
-            row.target_node_id === params[0] &&
-              row.create_admission_state !== null ? [row] : []};
+          return {success: true, rows: operationRows.filter((candidate) =>
+            candidate.target_node_id === params[0] &&
+              candidate.create_admission_state !== null)};
         }
-        return {success: true, rows:
-          row.replica_id === params[0] && row.target_node_id === params[1] ?
-            [row] : []};
+        return {success: true, rows: operationRows.filter((candidate) =>
+          candidate.replica_id === params[0] &&
+            candidate.target_node_id === params[1])};
+      }
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          params[0] === options.deferredLifecycleReplicaId) {
+        return {success: false, error: 'lifecycle authority deferred'};
       }
       return lifecycle.readAuthoritativeRows(tableName, sql, params);
     },
     async updateSystemTableRow(tableName, where, data) {
-      if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
-          !matches(row, where)) {
+      const operation = operationRows.find((candidate) =>
+        matches(candidate, where));
+      if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS || !operation) {
         return {success: true, outcome: 'no_op'};
       }
-      Object.assign(row, data);
+      Object.assign(operation, data);
       return {success: true, outcome: 'applied'};
     },
     submitMutation: lifecycle.submitMutation,
@@ -206,8 +215,9 @@ function routedCreateRequest(row) {
   };
 }
 
-async function createHandlerFixture({row, targetRow, gatewayOptions} = {}) {
-  const cache = createCache(targetRow);
+async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
+  gatewayOptions} = {}) {
+  const cache = createCache([targetRow, ...additionalTargetRows]);
   const authority = gatewayFixture(cache, row, gatewayOptions);
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'create-recovery-'));
   tempDirs.push(dataDir);
@@ -377,10 +387,7 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
       const row = operationRow();
       const fixture = await createHandlerFixture({row, targetRow: null});
       fixture.handler.initialize();
-      await assert.rejects(
-        fixture.handler.awaitReplicaCreateAdmissionRecoveryBarrier(),
-        /refused resurrection/,
-      );
+      await fixture.handler.awaitReplicaCreateAdmissionRecoveryBarrier();
       assert.equal(row.create_admission_state, CREATE_ADMISSION_STATE.CLOSED);
       assert.equal(fixture.physicalStarts(), 0);
       await fixture.handler.shutdown();
@@ -404,6 +411,49 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
       assert.equal(fixture.handler.replicaCreateAdmissionRecoveryRearmOwner
         .current(), null);
       assert.equal(fixture.physicalStarts(), 0);
+    });
+
+  it('isolates a deferred retained row so a later row recovers once',
+    async () => {
+      const deferredRow = operationRow();
+      const laterToken =
+        'replica-create-admission:v1:op-2:replica-2:node-1:12';
+      const laterRow = operationRow({
+        operation_id: 'op-2',
+        replica_id: 'replica-2',
+        updated_at: 12,
+        create_admission_token: laterToken,
+        create_admission_replica_created_at: 21,
+        create_admission_attempt_token: `${laterToken}:attempt:1`,
+        create_admission_workflow_updated_at: 12,
+      });
+      const fixture = await createHandlerFixture({
+        row: deferredRow,
+        targetRow: targetLifecycle(deferredRow),
+        additionalTargetRows: [targetLifecycle(laterRow)],
+        gatewayOptions: {
+          bootIncarnation: 102,
+          additionalRows: [laterRow],
+          deferredLifecycleReplicaId: deferredRow.replica_id,
+        },
+      });
+      const completed = waitForCreateCompletion(fixture.handler);
+      fixture.handler.initialize();
+      await fixture.handler.replicaCreateAdmissionRecoveryTask;
+      await waitForPhysicalStart(fixture);
+      assert.equal(fixture.physicalStarts(), 1,
+        'the later valid retained row starts despite the earlier deferral');
+      const timer = fixture.handler.replicaCreateAdmissionRecoveryRearmOwner
+        .current();
+      assert.ok(timer, 'one bounded retry remains for the deferred census');
+      assert.equal(timer.hasRef(), false);
+      fixture.releaseFactory();
+      await completed;
+      fixture.handler.startReplicaCreateAdmissionRecovery();
+      await fixture.handler.replicaCreateAdmissionRecoveryTask;
+      assert.equal(fixture.physicalStarts(), 1,
+        'retrying the deferred row does not duplicate the recovered worker');
+      await fixture.handler.shutdown();
     });
 
   it('admits a routed CREATE while an unrelated startup scan is pending',

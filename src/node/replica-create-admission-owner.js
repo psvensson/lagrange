@@ -19,6 +19,9 @@ import {
   adoptReplicaCreateAdmissionGeneration,
   reserveReplicaCreateAdmissionGeneration,
 } from './replica-create-admission-evidence.js';
+import {claimReplicaCreatePhysicalWorker, releaseReplicaCreatePhysicalWorker,
+  revalidateReplicaCreatePhysicalWorker, runReplicaCreateExclusive} from
+  './replica-create-process-owner.js';
 
 const CREATE_ADMISSION_STATE = Object.freeze({
   ADMITTED: 'ADMITTED',
@@ -346,29 +349,19 @@ class ReplicaCreateAdmissionOwner {
   }
 
   runExclusive(operationId, work) {
-    const key = String(operationId || '').trim();
-    const previous = this.laneTailByOperationId.get(key) || Promise.resolve();
-    const current = previous.catch(() => undefined).then(work);
-    const tail = current.catch(() => undefined).finally(() => {
-      if (this.laneTailByOperationId.get(key) === tail) {
-        this.laneTailByOperationId.delete(key);
-      }
-    });
-    this.laneTailByOperationId.set(key, tail);
-    return current;
+    return runReplicaCreateExclusive(this, operationId, work);
   }
 
-  claimPhysicalWorker(evidence) {
-    if (!evidence || evidence.ownerIncarnation !== this.ownerIncarnation ||
-        this.activePhysicalWorkerOperationIds.has(evidence.operationId)) {
-      return false;
-    }
-    this.activePhysicalWorkerOperationIds.add(evidence.operationId);
-    return true;
+  async claimPhysicalWorker(evidence) {
+    return claimReplicaCreatePhysicalWorker(this, evidence);
+  }
+
+  async revalidatePhysicalWorker(evidence) {
+    return revalidateReplicaCreatePhysicalWorker(this, evidence);
   }
 
   releasePhysicalWorker(operationId) {
-    return this.activePhysicalWorkerOperationIds.delete(operationId);
+    return releaseReplicaCreatePhysicalWorker(this, operationId);
   }
 
   async readOperation(operationId) {
@@ -481,11 +474,13 @@ class ReplicaCreateAdmissionOwner {
       observation.rows[0] : null;
     if (row?.node_id !== this.nodeId ||
         nullableSafeInteger(row.boot_incarnation) !== this.ownerIncarnation) {
-      throw admissionError(
+      const error = admissionError(
         CREATE_ADMISSION_ERROR_CODE.DEFERRED,
         this.nodeId,
         `Current boot authority unavailable for ${this.nodeId}`,
       );
+      error.bootAuthorityUnavailable = true;
+      throw error;
     }
     return row;
   }
@@ -646,6 +641,7 @@ class ReplicaCreateAdmissionOwner {
     if (!isValidAdvanceRequest(
       evidence, this.ownerIncarnation, expected, nextState,
     )) return null;
+    await this.requireCurrentBootIncarnation();
     for (const expectedState of expected) {
       let result = null;
       try {
@@ -674,6 +670,7 @@ class ReplicaCreateAdmissionOwner {
       if (classifyControlPlaneMutationResult(result).applied === true) break;
     }
     const row = await this.readOperation(evidence.operationId);
+    await this.requireCurrentBootIncarnation();
     if (!rowMatchesAdvanceResult(
       row, evidence, nextState, this.ownerIncarnation, data,
     )) return null;

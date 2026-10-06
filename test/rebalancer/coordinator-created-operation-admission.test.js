@@ -276,3 +276,108 @@ test('CREATE redispatch adopts the durable admission tuple instead of mutable ' 
     await coordinator.shutdown();
   }
 });
+
+test('lost CREATE response adopts durable admission and cannot terminalize ' +
+  'across the admission CAS', async (t) => {
+  const coordinator = createAdmissionCoordinator();
+  const owner = coordinator.workflowOwner;
+  const operation = {
+    operationId: 'add-lost-response-admission-race',
+    type: OperationType.ADD,
+    partitionId: 'user-lost-response-p1',
+    replicaId: 'user-lost-response-p1-r2',
+    sourceNodeId: 'node-source',
+    targetNodeId: 'node-local',
+    status: 'sending',
+    workflowStep: WORKFLOW_STEP.SENDING,
+    createdAt: Date.now(),
+    updatedAt: 101,
+    completedAt: null,
+    entityType: 'partition',
+    entityId: 'user-lost-response-p1',
+    stepsHistory: [],
+  };
+  const admitted = {
+    ...operation,
+    createAdmissionState: 'ADMITTED',
+    createAdmissionToken: 'lost-response-admission',
+    createAdmissionReplicaCreatedAt: 303,
+    createAdmissionAttemptToken: 'lost-response-admission:attempt:1',
+    createAdmissionAttemptSeq: 1,
+    createAdmissionWorkflowUpdatedAt: 101,
+    createAdmissionOwnerIncarnation: 7,
+  };
+  const retained = [];
+  let failCalls = 0;
+  owner.repository.isOperationLocallyOwned = () => true;
+  owner.repository.isReplaceRemoveDispatchPhase = () => false;
+  owner.repository.getReplaceSourceReplicaId = () => null;
+  owner.isCreateRearmDispatchPhase = () => false;
+  owner.isPriorityRecoverySupersededTargetFailureApplicable = () => false;
+  owner.evaluateRemoveSafety = async () => null;
+  owner.clearDeferredSafetyBlockState = () => {};
+  owner.deliverReplicaOperationRequest = async () => ({
+    acknowledged: true,
+    error: 'Pending response timeout',
+  });
+  owner.retainDeliveredCreateProgress = (candidate, response) => {
+    if (response?.status !== ReplicaOperationResponseStatus.IN_PROGRESS) {
+      return false;
+    }
+    retained.push({candidate: {...candidate}, response: {...response}});
+    return true;
+  };
+  owner.failOperation = async () => {
+    failCalls += 1;
+    return {committed: true};
+  };
+
+  try {
+    owner.repository.getOperationByIdVisibilityObservation = async () => ({
+      operation: admitted,
+      deferredOutcome: null,
+    });
+    const admittedResult = await owner.executeOperationInternal(
+      {...operation},
+      {},
+    );
+    t.equal(admittedResult.skipped, true,
+      'an answer loss after durable admission remains owned and retryable');
+    t.equal(failCalls, 0,
+      'observed admission prevents ordinary transport failure settlement');
+    t.equal(retained.length, 1,
+      'the existing delivered-progress owner retains the admitted work');
+    t.equal(retained[0].candidate.createAdmissionAttemptToken,
+      admitted.createAdmissionAttemptToken,
+      'retention binds the exact durable attempt token');
+
+    retained.length = 0;
+    owner.repository.getOperationByIdVisibilityObservation = async () => ({
+      operation,
+      deferredOutcome: null,
+    });
+    owner.failOperation = async (_candidate, _message, options) => {
+      failCalls += 1;
+      t.equal(options.requireCreateAdmissionAbsent, true,
+        'terminal settlement CAS requires admission to remain absent');
+      t.equal(options.deferWhenCreateAdmissionWins, true,
+        'a concurrent admission winner is returned to the retry owner');
+      return {
+        committed: false,
+        disposition: 'refused',
+        createAdmissionWon: true,
+        operation: admitted,
+      };
+    };
+    const racedResult = await owner.executeOperationInternal(
+      {...operation},
+      {},
+    );
+    t.equal(racedResult.skipped, true,
+      'admission winning the terminal CAS race is retained');
+    t.equal(retained.length, 1,
+      'the race winner converges on the same retained-progress owner');
+  } finally {
+    await coordinator.shutdown();
+  }
+});

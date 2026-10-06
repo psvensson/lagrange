@@ -30,6 +30,8 @@ import {
 import {
   releaseOperationLedgerSelfMoveHoldAfterTerminal,
 } from './operation-workflow-dispatch-ledger-self-move-gate.js';
+import {operationCarriesReplicaCreateAdmission} from
+  './replica-operation-create-admission-fields.js';
 
 const {
   ControlPlaneReadinessService,
@@ -50,6 +52,7 @@ const {
 
 const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
+const NO_CONCURRENT_CREATE_ADMISSION_WINNER = false;
 
 // completeOperation/failOperation report their typed transition outcome
 // ({committed, disposition}) so level-triggered callers (the recovery
@@ -77,6 +80,32 @@ function applyFailureStepMetadata(failedStepEntry, options) {
   ) {
     Object.assign(failedStepEntry, options.stepMetadata);
   }
+}
+
+async function observeConcurrentCreateAdmissionWinner(
+  owner,
+  operation,
+  transitionOutcome,
+  options,
+) {
+  if (
+    options.deferWhenCreateAdmissionWins !== true ||
+    transitionOutcome?.disposition !==
+      REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED
+  ) {
+    return NO_CONCURRENT_CREATE_ADMISSION_WINNER;
+  }
+  const authoritativeOperation =
+    await owner.repository
+      .queryReplicaOperationPersistenceAuthorityOperation(operation);
+  if (
+    !authoritativeOperation ||
+    owner.repository.isOperationTerminal(authoritativeOperation) ||
+    !operationCarriesReplicaCreateAdmission(authoritativeOperation)
+  ) {
+    return NO_CONCURRENT_CREATE_ADMISSION_WINNER;
+  }
+  return authoritativeOperation;
 }
 
 class OperationWorkflowTransitionPersistence
@@ -631,12 +660,18 @@ class OperationWorkflowTransitionPersistence
       operation.errorMessage = normalizedError;
     };
 
+    const terminalPersistOptions = {
+      ...failureAdmission.persistOptions,
+      ...(options.requireCreateAdmissionAbsent === true ?
+        {requireCreateAdmissionAbsent: true} :
+        {}),
+    };
     const persistFn = async () => {
       return this.repository.persistOperationUpdate(
         projectedOperation,
         {
           ...this.buildOperationTransitionPersistOptions(),
-          ...failureAdmission.persistOptions,
+          ...terminalPersistOptions,
           terminalTransition: true,
           returnDisposition: true,
         },
@@ -653,13 +688,27 @@ class OperationWorkflowTransitionPersistence
           await this.confirmCommittedTransitionPersistence(
             projectedOperation,
             {terminalTransitionRepair: true,
-              repairPersistOptions: failureAdmission.persistOptions},
+              repairPersistOptions: terminalPersistOptions},
           );
         },
       },
     );
 
     if (!transitionOutcome?.committed) {
+      const createAdmissionWinner =
+        await observeConcurrentCreateAdmissionWinner(
+          this,
+          operation,
+          transitionOutcome,
+          options,
+        );
+      if (createAdmissionWinner) {
+        return Object.freeze({
+          ...transitionOutcome,
+          createAdmissionWon: true,
+          operation: createAdmissionWinner,
+        });
+      }
       // Same fail-closed release gate as completeOperation: never release
       // on the unresolved-divergence arm (audit findings 3+11).
       await this.resolveNotCommittedTerminalTransition(
@@ -667,7 +716,7 @@ class OperationWorkflowTransitionPersistence
         projectedOperation,
         transitionOutcome,
         WORKFLOW_STEP.FAILED,
-        failureAdmission.persistOptions,
+        terminalPersistOptions,
       );
       return transitionOutcome;
     }

@@ -259,6 +259,8 @@ function plannedMoves(rebalancer, targetStatus,
         rebalancer.getTerminalFailedReplaceTargetReplicaIds(),
       getTerminalFailedCreateTargetReplicaIds: () =>
         rebalancer.getTerminalFailedCreateTargetReplicaIds(),
+      getTerminalFailedCreateTargetClaims: (replicaId) =>
+        rebalancer.getTerminalFailedCreateTargetClaims?.(replicaId) || [],
       getFailedCreateTargetCleanupPrecondition: (replicaId) =>
         rebalancer.getFailedCreateTargetCleanupPrecondition(replicaId),
       hasPendingMove: () => false,
@@ -589,13 +591,23 @@ test('M2 owner boundary: cleanup follows authoritative lifecycle, not a ' +
     });
   }
 
-  for (const [label, options] of [
-    ['absent', {authoritativeAbsent: true}],
-    ['unavailable', {authorityUnavailable: true}],
-    ['newer FAILED generation', {authoritativeStateEnteredAt:
-      FAILED_STATE_ENTERED_AT + 1}],
+  for (const [label, options, targetFields, expectsGenericRepair] of [
+    ['absent', {authoritativeAbsent: true}, {}, false],
+    ['unavailable', {authorityUnavailable: true}, {}, false],
+    ['newer formerly-live FAILED generation', {authoritativeStateEnteredAt:
+      FAILED_STATE_ENTERED_AT + 1}, {
+      previous_state: ReplicaStatus.ACTIVE,
+      created_at: CREATED_AT,
+      state_entered_at: FAILED_STATE_ENTERED_AT + 1,
+      create_attempt_token: CREATE_ATTEMPT_TOKEN,
+    }, true],
     ['newer create attempt', {authoritativeCreateAttemptToken:
-      `${CREATE_ATTEMPT_TOKEN}-2`}],
+      `${CREATE_ATTEMPT_TOKEN}-2`}, {
+      previous_state: ReplicaStatus.SYNCING,
+      created_at: CREATED_AT,
+      state_entered_at: FAILED_STATE_ENTERED_AT,
+      create_attempt_token: `${CREATE_ATTEMPT_TOKEN}-2`,
+    }, false],
   ]) {
     await t.test(`authoritative ${label} is not cleanup eligibility`,
       async (t) => {
@@ -608,9 +620,18 @@ test('M2 owner boundary: cleanup follows authoritative lifecycle, not a ' +
           t.same([
             ...harness.rebalancer.getTerminalFailedReplaceTargetReplicaIds(),
           ], []);
-          t.notOk(plannedMoves(harness.rebalancer, ReplicaStatus.FAILED)
-            .some((move) => move.reason === MOVE_REASON.REPLICA_FAILED),
-          'projected FAILED cannot become tokenless cleanup');
+          const hasGenericRepair = plannedMoves(
+            harness.rebalancer,
+            ReplicaStatus.FAILED,
+            {targetFields},
+          ).some((move) => move.reason === MOVE_REASON.REPLICA_FAILED);
+          t.equal(
+            hasGenericRepair,
+            expectsGenericRepair,
+            expectsGenericRepair ?
+              'later formerly-live generation returns to generic repair' :
+              'create-phase ambiguity cannot become tokenless cleanup',
+          );
         } finally {
           harness.rebalancer.shutdown();
           await harness.coordinator.shutdown();
@@ -623,6 +644,7 @@ test('M2 owner boundary: cleanup follows authoritative lifecycle, not a ' +
     const noOwnerDecision = {
       getTerminalFailedReplaceTargetReplicaIds: () => new Set(),
       getTerminalFailedCreateTargetReplicaIds: () => new Set(),
+      getTerminalFailedCreateTargetClaims: () => [],
       getFailedCreateTargetCleanupPrecondition: () => null,
     };
     const moves = plannedMoves(noOwnerDecision, ReplicaStatus.FAILED, {

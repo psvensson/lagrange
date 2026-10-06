@@ -31,6 +31,8 @@ import {REPLICA_CLEANUP_ERROR_CODE} from
 import {observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
+import {recoverRetainedCreateAdmissionRow} from
+  './replica-create-admission-retained-recovery.js';
 import {
   REPLICA_HANDLER_CREATE_DECISION,
   REPLICA_HANDLER_ERROR_MSG,
@@ -524,7 +526,7 @@ function isPendingCreateStatus(status) {
   ].includes(status);
 }
 
-function claimCreatePhysicalWorker(handler, createRequest) {
+async function claimCreatePhysicalWorker(handler, createRequest) {
   const evidence = createRequest.createAdmissionEvidence;
   return !evidence || handler.getReplicaCreateAdmissionOwner()
     .claimPhysicalWorker(evidence);
@@ -542,9 +544,9 @@ function inProgressCreateResponse(handler, operationId, replicaId,
   );
 }
 
-function restartPendingCreate(handler, existingReplica, createRequest,
+async function restartPendingCreate(handler, existingReplica, createRequest,
   tableName) {
-  if (!claimCreatePhysicalWorker(handler, createRequest)) {
+  if (!await claimCreatePhysicalWorker(handler, createRequest)) {
     return inProgressCreateResponse(
       handler, createRequest.operationId, createRequest.replicaId,
     );
@@ -570,7 +572,7 @@ function restartPendingCreate(handler, existingReplica, createRequest,
   );
 }
 
-function pendingCreateResponse(handler, existingReplica, createRequest,
+async function pendingCreateResponse(handler, existingReplica, createRequest,
   tableName) {
   const decision = handler.resolvePendingReplicaCreateDecision(
     existingReplica,
@@ -599,7 +601,7 @@ function pendingCreateResponse(handler, existingReplica, createRequest,
   );
 }
 
-function existingCreateResponse(handler, existingReplica, createRequest,
+async function existingCreateResponse(handler, existingReplica, createRequest,
   tableName) {
   if (!existingReplica) return null;
   if (handler.isReplicaCreateAlreadySatisfied(existingReplica)) {
@@ -645,20 +647,19 @@ async function persistCreateLifecycle(handler, createRequest,
   createRequest.pendingStatusPersisted = true;
 }
 
-function startPreparedCreate(handler, createRequest, tableName,
+async function startPreparedCreate(handler, createRequest, tableName,
   needsReplicaRuntimeRepair) {
+  if (!await claimCreatePhysicalWorker(handler, createRequest)) {
+    return inProgressCreateResponse(
+      handler, createRequest.operationId, createRequest.replicaId,
+    );
+  }
   handler.trackReplicaCreateOperation(
     createRequest.operationId,
     createRequest.partitionId,
     createRequest.replicaId,
     tableName,
   );
-  if (!claimCreatePhysicalWorker(handler, createRequest)) {
-    handler.inProgressOperations.delete(createRequest.operationId);
-    return inProgressCreateResponse(
-      handler, createRequest.operationId, createRequest.replicaId,
-    );
-  }
   createRequest.skipLifecycleStatusPersistence = needsReplicaRuntimeRepair;
   handler.startCreateReplicaAsync(createRequest);
   return handler.buildReplicaOperationResponse(
@@ -676,7 +677,7 @@ async function executePreparedCreate(handler, prepared, tableName) {
   const terminalResponse = await terminalFailedCreateResponse(handler, prepared);
   if (terminalResponse) return terminalResponse;
   const existingReplica = handler.getLocalReplica(createRequest.replicaId);
-  const existingResponse = existingCreateResponse(
+  const existingResponse = await existingCreateResponse(
     handler, existingReplica, createRequest, tableName,
   );
   if (existingResponse) return existingResponse;
@@ -696,7 +697,7 @@ async function executePreparedCreate(handler, prepared, tableName) {
     needsReplicaRuntimeRepair,
     existingReplica?.status === ReplicaStatus.FAILED,
   );
-  return startPreparedCreate(
+  return await startPreparedCreate(
     handler, createRequest, tableName, needsReplicaRuntimeRepair,
   );
 }
@@ -707,43 +708,38 @@ function assignReplicaHandlerCreateAdmissionMethods(ReplicaHandler) {
       this.throwIfShuttingDown();
       const owner = this.getReplicaCreateAdmissionOwner();
       const rows = await owner.snapshotTargetAdmissions();
+      const deferredOperationIds = [];
       for (const row of rows) {
         this.throwIfShuttingDown();
         if (row.create_admission_state === CREATE_ADMISSION_STATE.CLOSED) {
           continue;
         }
-        await owner.runExclusive(row.operation_id, async () => {
+        try {
+          await recoverRetainedCreateAdmissionRow(this, owner, row, {
+            buildRequest: buildRetainedCreateRequest,
+            reconcileLifecycle: reconcileCreateAdmissionLifecycle,
+          });
+        } catch (error) {
           this.throwIfShuttingDown();
-          const evidence = await owner.takeoverRetained(row);
-          if (!evidence) return;
-          const reconciled = await reconcileCreateAdmissionLifecycle(
-            this,
-            evidence,
-          );
-          const lifecycleStatus = reconciled.row?.status || null;
-          if (lifecycleStatus === ReplicaStatus.ACTIVE ||
-              lifecycleStatus === ReplicaStatus.FAILED) {
-            const settledState = lifecycleStatus === ReplicaStatus.ACTIVE ?
-              CREATE_ADMISSION_STATE.ACTIVE :
-              CREATE_ADMISSION_STATE.FAILED;
-            if (reconciled.evidence.admissionState !== settledState &&
-                !await owner.markProgress(
-                  reconciled.evidence,
-                  settledState,
-                )) {
-              const error = new Error(
-                `CREATE admission progress deferred ${row.operation_id}`,
-              );
-              error.code = CREATE_ADMISSION_ERROR_CODE.DEFERRED;
-              error.deferRetry = true;
-              throw error;
-            }
-            return;
+          if (error?.deferRetry === true ||
+              error?.code === CREATE_ADMISSION_ERROR_CODE.DEFERRED) {
+            deferredOperationIds.push(row.operation_id);
+            continue;
           }
-          await this.handleCreateReplica(
-            buildRetainedCreateRequest(row, reconciled.evidence),
+          this.logger.warn(
+            REPLICA_HANDLER_LOG_MSG.CREATE_ADMISSION_RECOVERY_FAILED,
+            {operationId: row.operation_id, error: error.message},
           );
-        });
+        }
+      }
+      if (deferredOperationIds.length > 0) {
+        const error = createAdmissionLifecycleError(
+          `CREATE admission recovery deferred for ${deferredOperationIds.join(',')}`,
+          CREATE_ADMISSION_ERROR_CODE.DEFERRED,
+          true,
+        );
+        error.operationIds = Object.freeze([...deferredOperationIds]);
+        throw error;
       }
     }
     async handleCreateReplica(request) {

@@ -93,6 +93,10 @@ const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'operation-workflow-transition-persistence.js': 1,
 });
 const FAIL_OPERATION_CALLER_FILES = Object.freeze([
+  // Lost CREATE responses settle only through the same failure owner, with
+  // an admission-absent CAS. The P1'/AN3 cells below keep REPLACE's durable
+  // source-removal boundary authoritative for this additional caller.
+  'operation-workflow-ambiguous-create-delivery.js',
   'operation-workflow-dispatch-epoch-gate.js',
   'operation-workflow-dispatch-response-reconcile.js',
   'operation-workflow-executor-outcome-reconcile-methods.js',

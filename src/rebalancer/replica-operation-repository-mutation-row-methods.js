@@ -6,6 +6,7 @@ import {
 } from './rebalancer-entity-identity.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const SQL_NULL_VALUE = null;
 
 function assignReplicaOperationRepositoryMutationRowMethods(
   ReplicaOperationRepository,
@@ -110,6 +111,9 @@ function assignReplicaOperationRepositoryMutationRowMethods(
       // last-writer-wins overwrite into a first-terminal-wins CAS.
       if (options?.terminalTransition === true) {
         whereClause.completed_at = null;
+      }
+      if (options?.requireCreateAdmissionAbsent === true) {
+        whereClause.create_admission_state = SQL_NULL_VALUE;
       }
       return whereClause;
     }
