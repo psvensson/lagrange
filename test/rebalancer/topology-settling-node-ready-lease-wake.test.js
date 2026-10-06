@@ -642,6 +642,15 @@ test(
     );
 
     installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      clusterMemberHealthy: false,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'an unhealthy cluster-membership projection cannot clear PENDING',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
       deferred: false,
     });
     t.equal(
