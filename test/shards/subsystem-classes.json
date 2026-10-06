@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 148,
-    "storage-raft": 111,
+    "storage-raft": 112,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2260,
-  "digest": "fnv1a32-ae50b7dc",
+  "censusSize": 2261,
+  "digest": "fnv1a32-ddf16e02",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-dd606b90",
+  "observationDigest": "fnv1a32-3ba122b1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1483,6 +1483,7 @@
     "test/raft/raft-rs-backend/conf-change-leader-only.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-change-pending-deferral.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/diagnostic-staged-seed-election-mutant.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-commit-performance.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-commit-power-loss.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js": "storage-raft",
@@ -8775,6 +8776,11 @@
       "files": [
         "src/raft/raft-rs-host-contract.js",
         "src/raft/raft-rs-membership-projection.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/diagnostic-staged-seed-election-mutant.test.js": {
+      "files": [
+        "src/bootstrap/phases/seed-partitions-phase.js"
       ]
     },
     "test/raft/raft-rs-backend/durable-commit-performance.test.js": {
