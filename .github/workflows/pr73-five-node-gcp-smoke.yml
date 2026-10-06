@@ -1,0 +1,109 @@
+name: pr73-five-node-gcp-smoke
+
+on:
+  push:
+    branches:
+      - qualification/pr73-five-node-gcp-smoke
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr73-five-node-gcp-smoke
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 6df3ec5e1c09ef14e6a743dc805399c1092712a8
+  LAGRANGE_TEST_MACHINE_FACTOR: '3'
+
+jobs:
+  wake-runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP (WIF, keyless)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          skip_install: false
+      - name: Start the runner VM (idempotent)
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe lagrange-ci-runner --zone europe-north1-a --format='value(status)')"
+          echo "runner VM status: ${STATUS}"
+          if [ "${STATUS}" != "RUNNING" ]; then
+            gcloud compute instances start lagrange-ci-runner --zone europe-north1-a
+          fi
+
+  smoke:
+    needs: wake-runner
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact PR73 candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Bind exact candidate identity
+        run: |
+          set -euo pipefail
+          ACTUAL="$(git rev-parse HEAD)"
+          echo "candidate=${CANDIDATE_SHA}"
+          echo "checked_out=${ACTUAL}"
+          test "${ACTUAL}" = "${CANDIDATE_SHA}"
+          mkdir -p test-output
+          printf 'candidate=%s\nchecked_out=%s\n' "${CANDIDATE_SHA}" "${ACTUAL}" > test-output/pr73-five-node-candidate.txt
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install Pulumi CLI
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          curl -fsSL --connect-timeout 20 --max-time 300 --retry 2 https://get.pulumi.com -o "$RUNNER_TEMP/install-pulumi.sh"
+          sh "$RUNNER_TEMP/install-pulumi.sh" --version 3.261.0
+          echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.pulumi/bin:$PATH"
+          test "$(pulumi version)" = "v3.261.0"
+
+      - name: Install dependencies
+        run: |
+          npm install --global npm@11.7.0
+          npm ci
+          npm install --no-save @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1
+
+      - name: Fetch MovieLens dataset (digest-pinned)
+        run: |
+          node examples/service-data-affinity/download-movielens.js
+          echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
+
+      - name: Five-node GCP formation smoke
+        run: npm run health:formation -- --gcp --trend "$RUNNER_TEMP/pr73-formation-trend.ndjson"
+
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr73-five-node-gcp-smoke-${{ github.run_id }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            test-output/pr73-five-node-candidate.txt
+            test-output/reports/movielens-lagrange-formation-only-live-*.report.json
+            data/examples/service-data-affinity-demo/node-*.log
