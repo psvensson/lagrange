@@ -26,9 +26,9 @@
     "wasm-toolchain": 57
   },
   "censusSize": 2261,
-  "digest": "fnv1a32-ddf16e02",
+  "digest": "fnv1a32-3ccf8ee6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3ba122b1",
+  "observationDigest": "fnv1a32-03956365",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1483,7 +1483,7 @@
     "test/raft/raft-rs-backend/conf-change-leader-only.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-change-pending-deferral.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "storage-raft",
-    "test/raft/raft-rs-backend/diagnostic-staged-seed-election-mutant.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/diagnostic-staged-seed-election-mutant.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-commit-performance.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-commit-power-loss.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js": "storage-raft",
@@ -8778,7 +8778,7 @@
         "src/raft/raft-rs-membership-projection.js"
       ]
     },
-    "test/raft/raft-rs-backend/diagnostic-staged-seed-election-mutant.test.js": {
+    "test/raft/raft-rs-backend/diagnostic-staged-seed-election-mutant.integration.test.js": {
       "files": [
         "src/bootstrap/phases/seed-partitions-phase.js"
       ]
