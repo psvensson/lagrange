@@ -23,11 +23,6 @@ import path from 'path';
 import os from 'os';
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  ReplicaHandler as ProductionReplicaHandler,
-} from '../../src/node/replica-handler.js';
-import {scenarioStampingReplicaHandler} from
-  './replica-handler-bootstrap-stamps.js';
-import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
@@ -58,10 +53,8 @@ import {
 } from '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
-
-// Lifecycle scenarios: every create carries the committed-membership stamp
-// its scenario's creator would have produced (owner decision O1).
-const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
+import {OwnerPathReplicaHandler as ReplicaHandler} from
+  './replica-handler-owner-path-admission-fixture.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_PARTITION_ID = 'partition-1';
@@ -1050,6 +1043,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
           handler.replicaStateMachine = new ReplicaStateMachine({
             nodeId: TEST_NODE_ID,
             cdcIntegrationService: cdcService,
+            controlPlaneSystemTableGateway:
+              handler.controlPlaneSystemTableGateway,
             systemTableCache: cache,
           });
           handler.localReplicas.clear();
@@ -1233,6 +1228,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       handler.replicaStateMachine = new ReplicaStateMachine({
         nodeId: TEST_NODE_ID,
         cdcIntegrationService: cdcService,
+        controlPlaneSystemTableGateway:
+          handler.controlPlaneSystemTableGateway,
         systemTableCache: cache,
       });
       handler.localReplicas.clear();

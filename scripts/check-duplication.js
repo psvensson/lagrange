@@ -209,8 +209,10 @@ const RATCHET_TARGETS = [
     // after the handler's CREATE acceptance cases became refusal cases (C3).
     // 2026-10-05: tightened 713/27050 -> 712/27025 on the checker's hint
     // after the identity-record witnesses shared their fixtures.
-    baselineCloneGroupCount: 712,
-    baselineDuplicatedLineCount: 27025,
+    baselineCloneGroupCount: 711,
+    // 2026-10-06: tightened 27025 -> 26990 on the checker's hint after
+    // consolidating the routed CREATE admission fixtures.
+    baselineDuplicatedLineCount: 26990,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

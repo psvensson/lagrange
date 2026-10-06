@@ -31,6 +31,13 @@ function matchesFailedCreateCleanupPrecondition(precondition, expected) {
   );
 }
 
+function hasValidFailedCreateCleanupPrecondition(precondition) {
+  if (!precondition) return false;
+  if (!isFailedCreateCleanupToken(precondition.cleanup_token)) return false;
+  return typeof precondition.create_attempt_token === 'string' &&
+    precondition.create_attempt_token.length > 0;
+}
+
 function matchesClaimedFailedCreateRemoval(row, precondition, cleanupToken) {
   const identityMatches = matchesFailedCreateCleanupPrecondition(row, {
     service_id: precondition?.service_id,
@@ -248,10 +255,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       const precondition = request?.[
         ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
       ];
-      if (!precondition ||
-          !isFailedCreateCleanupToken(precondition.cleanup_token) ||
-          typeof precondition.create_attempt_token !== 'string' ||
-          precondition.create_attempt_token.length === 0) return false;
+      if (!hasValidFailedCreateCleanupPrecondition(precondition)) return false;
       const cleanupToken = buildFailedCreateRemoveToken(
         request?.[ReplicaOperationField.OPERATION_ID],
       );

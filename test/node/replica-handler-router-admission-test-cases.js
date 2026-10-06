@@ -3,6 +3,67 @@ import {
   buildReplicaCreateAttemptToken,
 } from '../../src/rebalancer/replica-create-admission-token.js';
 
+function createMockRouter() {
+  const registeredHandlers = new Map();
+  return {
+    registeredHandlers,
+    router: {
+      register(address, handlerFn) {
+        registeredHandlers.set(address, handlerFn);
+      },
+      unregister(address) {
+        registeredHandlers.delete(address);
+      },
+    },
+  };
+}
+
+function seedRoutedCreateOperation(cache, seedReplicaOperation) {
+  seedReplicaOperation(cache, 'op-1', {
+    entity_type: 'partition',
+    entity_id: 'partition-1',
+    workflow_step: 'SENDING',
+    completed_at: null,
+    create_admission_state: null,
+    create_admission_token: null,
+    create_admission_replica_created_at: null,
+    create_admission_attempt_token: null,
+    create_admission_previous_attempt_token: null,
+    create_admission_attempt_seq: null,
+    create_admission_workflow_updated_at: null,
+    create_admission_owner_incarnation: null,
+  });
+}
+
+function buildRoutedCreateEnvelope(operation, {
+  OperationType,
+  ReplicaOperationMessageType,
+}) {
+  const createAdmissionToken = buildReplicaCreateAdmissionToken({
+    operationId: operation.operation_id,
+    replicaId: operation.replica_id,
+    targetNodeId: operation.target_node_id,
+    workflowUpdatedAt: operation.updated_at,
+  });
+  return {
+    correlationId: 'corr-1',
+    payload: {
+      type: ReplicaOperationMessageType.CREATE_REPLICA,
+      operationId: 'op-1',
+      operationType: OperationType.ADD,
+      entityType: 'partition',
+      entityId: 'partition-1',
+      partitionId: 'partition-1',
+      replicaId: 'replica-1',
+      createAdmissionToken,
+      createAdmissionWorkflowUpdatedAt: operation.updated_at,
+      createAdmissionAttemptToken:
+        buildReplicaCreateAttemptToken(createAdmissionToken, 1),
+      createAdmissionAttemptSeq: 1,
+    },
+  };
+}
+
 async function registerReplicaHandlerRouterAdmissionTests({
   t,
   createSeededCache,
@@ -19,20 +80,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
 }) {
   t.test('registerWithRouter registers handler at correct address', async (t) => {
     const cache = createSeededCache();
-    seedReplicaOperation(cache, 'op-1', {
-      entity_type: 'partition',
-      entity_id: 'partition-1',
-      workflow_step: 'SENDING',
-      completed_at: null,
-      create_admission_state: null,
-      create_admission_token: null,
-      create_admission_replica_created_at: null,
-      create_admission_attempt_token: null,
-      create_admission_previous_attempt_token: null,
-      create_admission_attempt_seq: null,
-      create_admission_workflow_updated_at: null,
-      create_admission_owner_incarnation: null,
-    });
+    seedRoutedCreateOperation(cache, seedReplicaOperation);
     const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
@@ -51,16 +99,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
       'replicaCreationFailed',
     );
 
-    // Create mock message router
-    const registeredHandlers = new Map();
-    const mockRouter = {
-      register(address, handlerFn) {
-        registeredHandlers.set(address, handlerFn);
-      },
-      unregister(address) {
-        registeredHandlers.delete(address);
-      },
-    };
+    const {router: mockRouter, registeredHandlers} = createMockRouter();
 
     handler.registerWithRouter(mockRouter);
 
@@ -76,29 +115,10 @@ async function registerReplicaHandlerRouterAdmissionTests({
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       'op-1',
     );
-    const createAdmissionToken = buildReplicaCreateAdmissionToken({
-      operationId: operation.operation_id,
-      replicaId: operation.replica_id,
-      targetNodeId: operation.target_node_id,
-      workflowUpdatedAt: operation.updated_at,
+    const envelope = buildRoutedCreateEnvelope(operation, {
+      OperationType,
+      ReplicaOperationMessageType,
     });
-    const envelope = {
-      correlationId: 'corr-1',
-      payload: {
-        type: ReplicaOperationMessageType.CREATE_REPLICA,
-        operationId: 'op-1',
-        operationType: OperationType.ADD,
-        entityType: 'partition',
-        entityId: 'partition-1',
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
-        createAdmissionToken,
-        createAdmissionWorkflowUpdatedAt: operation.updated_at,
-        createAdmissionAttemptToken:
-          buildReplicaCreateAttemptToken(createAdmissionToken, 1),
-        createAdmissionAttemptSeq: 1,
-      },
-    };
 
     const response = await registeredHandler(envelope);
     t.equal(response.acknowledged, true, 'response acknowledged');
@@ -125,16 +145,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
 
     handler.initialize();
 
-    // Create mock message router
-    const registeredHandlers = new Map();
-    const mockRouter = {
-      register(address, handlerFn) {
-        registeredHandlers.set(address, handlerFn);
-      },
-      unregister(address) {
-        registeredHandlers.delete(address);
-      },
-    };
+    const {router: mockRouter, registeredHandlers} = createMockRouter();
 
     handler.registerWithRouter(mockRouter);
     t.ok(
@@ -153,20 +164,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
 
   t.test('registerWithRouter with RPC client notifies on response', async (t) => {
     const cache = createSeededCache();
-    seedReplicaOperation(cache, 'op-1', {
-      entity_type: 'partition',
-      entity_id: 'partition-1',
-      workflow_step: 'SENDING',
-      completed_at: null,
-      create_admission_state: null,
-      create_admission_token: null,
-      create_admission_replica_created_at: null,
-      create_admission_attempt_token: null,
-      create_admission_previous_attempt_token: null,
-      create_admission_attempt_seq: null,
-      create_admission_workflow_updated_at: null,
-      create_admission_owner_incarnation: null,
-    });
+    seedRoutedCreateOperation(cache, seedReplicaOperation);
     const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
@@ -193,16 +191,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
       },
     };
 
-    // Create mock message router
-    const registeredHandlers = new Map();
-    const mockRouter = {
-      register(address, handlerFn) {
-        registeredHandlers.set(address, handlerFn);
-      },
-      unregister(address) {
-        registeredHandlers.delete(address);
-      },
-    };
+    const {router: mockRouter, registeredHandlers} = createMockRouter();
 
     handler.registerWithRouter(mockRouter, {rpcClient: mockRpcClient});
 
@@ -212,29 +201,10 @@ async function registerReplicaHandlerRouterAdmissionTests({
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       'op-1',
     );
-    const createAdmissionToken = buildReplicaCreateAdmissionToken({
-      operationId: operation.operation_id,
-      replicaId: operation.replica_id,
-      targetNodeId: operation.target_node_id,
-      workflowUpdatedAt: operation.updated_at,
+    const envelope = buildRoutedCreateEnvelope(operation, {
+      OperationType,
+      ReplicaOperationMessageType,
     });
-    const envelope = {
-      correlationId: 'corr-1',
-      payload: {
-        type: ReplicaOperationMessageType.CREATE_REPLICA,
-        operationId: 'op-1',
-        operationType: OperationType.ADD,
-        entityType: 'partition',
-        entityId: 'partition-1',
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
-        createAdmissionToken,
-        createAdmissionWorkflowUpdatedAt: operation.updated_at,
-        createAdmissionAttemptToken:
-          buildReplicaCreateAttemptToken(createAdmissionToken, 1),
-        createAdmissionAttemptSeq: 1,
-      },
-    };
 
     await registeredHandler(envelope);
     await created;

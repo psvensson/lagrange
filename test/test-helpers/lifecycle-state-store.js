@@ -153,6 +153,8 @@ function createCanonicalLifecycleServiceRow(sourceRow, index = 0) {
       {group_id: firstDefined(sourceRow.group_id, null)} : {}),
     replica_id: firstDefined(sourceRow.replica_id, defaultReplicaId),
     address: firstDefined(sourceRow.address, defaultAddress),
+    cleanup_token: firstDefined(sourceRow.cleanup_token, null),
+    create_attempt_token: firstDefined(sourceRow.create_attempt_token, null),
     created_at: firstDefined(sourceRow.created_at, version),
     state_entered_at: version,
     updated_at: firstDefined(sourceRow.updated_at, version),

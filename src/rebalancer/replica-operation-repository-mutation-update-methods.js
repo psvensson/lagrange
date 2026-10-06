@@ -53,6 +53,12 @@ function adoptWinningTerminalOperationOutcome(operation, winningTerminal) {
   operation.errorMessage = winningTerminal.errorMessage;
 }
 
+function hasWinningTerminalOperation(repository, terminalTransition,
+  authoritativeOperation) {
+  if (!terminalTransition || !authoritativeOperation) return false;
+  return repository.isAuthoritativeOperationTerminal(authoritativeOperation);
+}
+
 function assignReplicaOperationRepositoryMutationUpdateMethods(
   ReplicaOperationRepository,
   options = {},
@@ -371,11 +377,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           authoritativeOperation,
         );
       }
-      if (
-        terminalTransition &&
-        authoritativeOperation &&
-        this.isAuthoritativeOperationTerminal(authoritativeOperation)
-      ) {
+      if (hasWinningTerminalOperation(
+        this,
+        terminalTransition,
+        authoritativeOperation,
+      )) {
         // Lost the terminal CAS: the authority row is a DIFFERENT terminal
         // state that already won. Adopt the winner into the writer's
         // projection and report the typed adoption so callers stand the

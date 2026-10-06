@@ -201,6 +201,27 @@ async function captureFailedCreateTargetCleanupClaim(owner, operation) {
   return eligible ? observation.lifecyclePrecondition : null;
 }
 
+function isTerminalFailedOperation(operation) {
+  return operation?.workflowStep === WORKFLOW_STEP.FAILED &&
+    operation?.status === ReplicaStatus.FAILED &&
+    Number.isFinite(operation?.completedAt);
+}
+
+function hasCreateOperationIdentity(operation) {
+  const hasOperationId = typeof operation?.operationId === 'string' &&
+    operation.operationId.length > 0;
+  const hasReplicaId = typeof operation?.replicaId === 'string' &&
+    operation.replicaId.length > 0;
+  return hasOperationId && hasReplicaId;
+}
+
+function isTerminalFailedCreateOperation(operation) {
+  const partitionCreate = isPartitionAdd(operation) ||
+    isPartitionReplace(operation);
+  return partitionCreate && isTerminalFailedOperation(operation) &&
+    hasCreateOperationIdentity(operation);
+}
+
 /**
  * Decide whether one terminal failed ADD/REPLACE target is the same exact
  * authoritative FAILED lifecycle generation admitted by the operation owner.
@@ -211,15 +232,7 @@ async function captureFailedCreateTargetCleanupClaim(owner, operation) {
  * @return {Promise<Object>}
  */
 async function decideFailedCreateTargetCleanup(owner, operation) {
-  const terminalFailed = operation?.workflowStep === WORKFLOW_STEP.FAILED &&
-    operation?.status === ReplicaStatus.FAILED &&
-    Number.isFinite(operation?.completedAt);
-  if ((!isPartitionAdd(operation) && !isPartitionReplace(operation)) ||
-      !terminalFailed ||
-      typeof operation?.operationId !== 'string' ||
-      operation.operationId.length === 0 ||
-      typeof operation?.replicaId !== 'string' ||
-      operation.replicaId.length === 0) {
+  if (!isTerminalFailedCreateOperation(operation)) {
     return Object.freeze({
       decision: CREATE_TARGET_CLEANUP_DECISION.INELIGIBLE,
       observationState: null,

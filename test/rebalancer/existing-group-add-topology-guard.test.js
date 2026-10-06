@@ -65,8 +65,15 @@ import {
 } from '../node/replica-handler-bootstrap-stamps.js';
 import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
-import {createLifecycleCdcServiceForCache} from
+import {
+  createLifecycleCdcServiceForCache,
+  createLifecycleControlPlaneGatewayForCache,
+} from
   '../test-helpers/lifecycle-state-store.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from '../../src/rebalancer/replica-create-admission-token.js';
 import {
   createMockCache,
   createMockCdcService,
@@ -165,16 +172,100 @@ function createCapturingPartitionServiceFactory(captured) {
 }
 
 function createJoinHandler({cache, captured}) {
+  const lifecycleGateway = createLifecycleControlPlaneGatewayForCache(cache);
+  const operationRows = new Map();
+  const matches = (row, where) => Object.entries(where).every(
+    ([field, value]) => row?.[field] === value,
+  );
+  const controlPlaneSystemTableGateway = {
+    async readAuthoritativeRows(tableName, sql, params = []) {
+      if (tableName === SYSTEM_TABLE_NAME.NODES) {
+        return {success: true, rows: [{
+          node_id: JOIN_NODE_ID,
+          boot_incarnation: 1,
+        }]};
+      }
+      if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        return lifecycleGateway.readAuthoritativeRows(tableName, sql, params);
+      }
+      if (sql.includes('WHERE operation_id = ?')) {
+        const row = operationRows.get(params[0]);
+        return {success: true, rows: row ? [{...row}] : []};
+      }
+      return {success: true, rows: [...operationRows.values()].filter(
+        (row) => row.target_node_id === params[0] &&
+          row.create_admission_state !== null,
+      ).map((row) => ({...row}))};
+    },
+    async updateSystemTableRow(tableName, where, data) {
+      if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        return lifecycleGateway.submitMutation({
+          operation: 'update', tableName, whereClause: where, data,
+        });
+      }
+      const row = operationRows.get(where.operation_id);
+      if (!row || !matches(row, where)) {
+        return {success: true, outcome: 'observed_state_changed',
+          partitionResult: {affectedRows: 0}};
+      }
+      Object.assign(row, data);
+      return {success: true, outcome: 'applied',
+        partitionResult: {affectedRows: 1}};
+    },
+    submitMutation: lifecycleGateway.submitMutation,
+  };
   const handler = new ReplicaHandler({
     nodeId: JOIN_NODE_ID,
     cdcIntegrationService: createLifecycleCdcServiceForCache(cache),
     systemTableCache: cache,
+    controlPlaneSystemTableGateway,
     dataDir: getTempDir(),
     createPartitionService: createCapturingPartitionServiceFactory(captured),
   });
   handler.initialize();
+  handler.testOperationRows = operationRows;
   handler.syncTimeoutMs = HANDLER_SYNC_TIMEOUT_MS;
   return handler;
+}
+
+function admittedCreateRequest(handler, request) {
+  const updatedAt = Date.now();
+  const admissionToken = buildReplicaCreateAdmissionToken({
+    operationId: request.operationId,
+    replicaId: request.replicaId,
+    targetNodeId: JOIN_NODE_ID,
+    workflowUpdatedAt: updatedAt,
+  });
+  handler.testOperationRows.set(request.operationId, {
+    operation_id: request.operationId,
+    type: request.operationType,
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: request.partitionId,
+    partition_id: request.partitionId,
+    replica_id: request.replicaId,
+    target_node_id: JOIN_NODE_ID,
+    workflow_step: 'SENDING',
+    updated_at: updatedAt,
+    completed_at: null,
+    create_admission_state: null,
+    create_admission_token: null,
+    create_admission_replica_created_at: null,
+    create_admission_attempt_token: null,
+    create_admission_previous_attempt_token: null,
+    create_admission_attempt_seq: null,
+    create_admission_workflow_updated_at: null,
+    create_admission_owner_incarnation: null,
+  });
+  return {
+    ...request,
+    entityType: SERVICE_TYPE.PARTITION,
+    entityId: request.partitionId,
+    createAdmissionToken: admissionToken,
+    createAdmissionWorkflowUpdatedAt: updatedAt,
+    createAdmissionAttemptToken:
+      buildReplicaCreateAttemptToken(admissionToken, 1),
+    createAdmissionAttemptSeq: 1,
+  };
 }
 
 function waitForReplicaEvent(handler, successEvent, failureEvent) {
@@ -216,12 +307,12 @@ async (t) => {
     ).then(() => {
       throw new Error('self-only ADD must not create a replica');
     });
-    await handler.handleCreateReplica({
+    await handler.handleCreateReplica(admittedCreateRequest(handler, {
       operationId: 'op-add-self-only',
       operationType: OperationType.ADD,
       partitionId: ADD_PARTITION_ID,
       replicaId: ADD_REPLICA_ID,
-    });
+    }));
     await Promise.race([
       unexpectedCreate,
       new Promise((resolve) => {
@@ -282,12 +373,13 @@ async (t) => {
       'replicaCreated',
       'replicaCreationFailed',
     );
-    await handler.handleCreateReplica(withBootstrapStamp({
-      operationId: 'op-add-fresh',
-      operationType: OperationType.ADD,
-      partitionId: ADD_PARTITION_ID,
-      replicaId: ADD_REPLICA_ID,
-    }, genesisStampFor([ADD_REPLICA_ID])));
+    await handler.handleCreateReplica(admittedCreateRequest(handler,
+      withBootstrapStamp({
+        operationId: 'op-add-fresh',
+        operationType: OperationType.ADD,
+        partitionId: ADD_PARTITION_ID,
+        replicaId: ADD_REPLICA_ID,
+      }, genesisStampFor([ADD_REPLICA_ID]))));
     await outcome;
 
     t.ok(

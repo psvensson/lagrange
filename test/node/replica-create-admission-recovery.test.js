@@ -149,6 +149,7 @@ function gatewayFixture(cache, row, options = {}) {
             row.operation_id === params[0] ? [row] : []};
         }
         if (params.length === 1) {
+          await options.snapshotBarrier;
           if (snapshotFailures > 0) {
             snapshotFailures -= 1;
             throw new Error('operation ledger unavailable');
@@ -178,6 +179,30 @@ function gatewayFixture(cache, row, options = {}) {
     setBootIncarnation(value) {
       bootIncarnation = value;
     },
+  };
+}
+
+function routedCreateRequest(row) {
+  const admissionToken = buildReplicaCreateAdmissionToken({
+    operationId: row.operation_id,
+    replicaId: row.replica_id,
+    targetNodeId: row.target_node_id,
+    workflowUpdatedAt: row.updated_at,
+  });
+  return {
+    [ReplicaOperationField.OPERATION_ID]: row.operation_id,
+    [ReplicaOperationField.OPERATION_TYPE]: OperationType.ADD,
+    [ReplicaOperationField.ENTITY_TYPE]: row.entity_type,
+    [ReplicaOperationField.ENTITY_ID]: row.entity_id,
+    [ReplicaOperationField.PARTITION_ID]: row.partition_id,
+    [ReplicaOperationField.REPLICA_ID]: row.replica_id,
+    [ReplicaOperationField.CREATE_ADMISSION_TOKEN]: admissionToken,
+    [ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT]: row.updated_at,
+    [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN]:
+      buildReplicaCreateAttemptToken(admissionToken, 1),
+    [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ]: 1,
+    [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]:
+      committedStampFor(['leader-replica']),
   };
 }
 
@@ -253,28 +278,9 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
     const fixture = await createHandlerFixture({row, targetRow: null});
     fixture.handler.initialize();
     await fixture.handler.awaitReplicaCreateAdmissionRecoveryBarrier();
-    const admissionToken = buildReplicaCreateAdmissionToken({
-      operationId: row.operation_id,
-      replicaId: row.replica_id,
-      targetNodeId: row.target_node_id,
-      workflowUpdatedAt: row.updated_at,
-    });
-    const response = await fixture.handler.handleCreateReplica({
-      [ReplicaOperationField.OPERATION_ID]: row.operation_id,
-      [ReplicaOperationField.OPERATION_TYPE]: OperationType.ADD,
-      [ReplicaOperationField.ENTITY_TYPE]: row.entity_type,
-      [ReplicaOperationField.ENTITY_ID]: row.entity_id,
-      [ReplicaOperationField.PARTITION_ID]: row.partition_id,
-      [ReplicaOperationField.REPLICA_ID]: row.replica_id,
-      [ReplicaOperationField.CREATE_ADMISSION_TOKEN]: admissionToken,
-      [ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT]:
-        row.updated_at,
-      [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN]:
-        buildReplicaCreateAttemptToken(admissionToken, 1),
-      [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ]: 1,
-      [ReplicaOperationField.BOOTSTRAP_MEMBERSHIP]:
-        committedStampFor(['leader-replica']),
-    });
+    const response = await fixture.handler.handleCreateReplica(
+      routedCreateRequest(row),
+    );
     assert.equal(response.status, 'error');
     assert.match(response.error, /Terminal/u);
     assert.equal(fixture.physicalStarts(), 0);
@@ -398,6 +404,39 @@ describe('ReplicaHandler retained CREATE admission recovery', () => {
       assert.equal(fixture.handler.replicaCreateAdmissionRecoveryRearmOwner
         .current(), null);
       assert.equal(fixture.physicalStarts(), 0);
+    });
+
+  it('admits a routed CREATE while an unrelated startup scan is pending',
+    async () => {
+      const row = operationRow({
+        create_admission_state: null,
+        create_admission_token: null,
+        create_admission_replica_created_at: null,
+        create_admission_attempt_token: null,
+        create_admission_previous_attempt_token: null,
+        create_admission_attempt_seq: null,
+        create_admission_workflow_updated_at: null,
+        create_admission_owner_incarnation: null,
+      });
+      let releaseSnapshot;
+      const snapshotBarrier = new Promise((resolve) => {
+        releaseSnapshot = resolve;
+      });
+      const fixture = await createHandlerFixture({
+        row,
+        targetRow: null,
+        gatewayOptions: {bootIncarnation: 102, snapshotBarrier},
+      });
+      const completed = waitForCreateCompletion(fixture.handler);
+      fixture.handler.initialize();
+      const response = await fixture.handler.handleCreateReplica(
+        routedCreateRequest(row),
+      );
+      assert.equal(response.status, 'initiated');
+      releaseSnapshot();
+      fixture.releaseFactory();
+      await completed;
+      await fixture.handler.shutdown();
     });
 
   it('does not make direct bootstrap recovery depend on the operation ledger',

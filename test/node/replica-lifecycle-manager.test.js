@@ -584,6 +584,8 @@ test('ReplicaLifecycleManager', async (t) => {
           group_id: null,
           created_at: 12345,
           status: 'syncing',
+          cleanup_token: null,
+          create_attempt_token: null,
           state_entered_at: 12345,
         },
         'canonical recovery guard should target exact source generation',

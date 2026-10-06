@@ -81,7 +81,9 @@ const TARGET_THRESHOLD = 12;
 // origin/main d60c30921 merge (consensus-cutover closeout tree).
 // 2026-10-04: tightened 1770 -> 1765 on the checker's hint after the
 // message-group MOVE_REPLICA selection and execution were deleted.
-const BASELINE_COUNT = 1765;
+// 2026-10-06: tightened 1765 -> 1764 on the checker's hint after CREATE
+// admission owner extraction.
+const BASELINE_COUNT = 1764;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -60,7 +60,6 @@ const LOCAL_STR_CRITICAL = 'critical';
 const LOCAL_STR_BACKGROUND = 'background';
 
 const ReplicaState = REPLICA_STATE_MACHINE_STATE;
-
 const BACKGROUND_PERSISTENCE_STATES = new Set([
   ReplicaState.PENDING,
   ReplicaState.CREATING,
@@ -746,6 +745,7 @@ function buildCreateCdcData(
     group_id: groupId,
     replica_id: replicaState.replicaIdentity,
     address,
+    cleanup_token: replicaState.cleanupToken ?? null,
     created_at: createdAt,
     create_attempt_token: replicaState.createAttemptToken ?? null,
   };

@@ -56,6 +56,14 @@ const CRITICAL_OPTIONS = Object.freeze({
   deliveryPriority: 'critical',
   workClass: 'critical',
 });
+const CREATE_ADMISSION_REQUEST_FIELD = Object.freeze({
+  OPERATION_ID: 'operationId',
+  ENTITY_ID: 'entityId',
+  PARTITION_ID: 'partitionId',
+  REPLICA_ID: 'replicaId',
+  ADMISSION_TOKEN: 'admissionToken',
+  ATTEMPT_TOKEN: 'attemptToken',
+});
 const processOwnerRegistry = new Map();
 
 function admissionError(code, operationId, message) {
@@ -77,17 +85,39 @@ function nullableSafeInteger(value) {
   return Number.isSafeInteger(normalized) ? normalized : null;
 }
 
+function normalizedStringField(source, field) {
+  return String(source?.[field] ?? '').trim();
+}
+
 function normalizeRequest(request, nodeId) {
   return {
-    operationId: String(request?.operationId || '').trim(),
-    operationType: request?.operationType || null,
-    entityType: request?.entityType || null,
-    entityId: String(request?.entityId || '').trim(),
-    partitionId: String(request?.partitionId || '').trim(),
-    replicaId: String(request?.replicaId || '').trim(),
+    operationId: normalizedStringField(
+      request,
+      CREATE_ADMISSION_REQUEST_FIELD.OPERATION_ID,
+    ),
+    operationType: request?.operationType ?? null,
+    entityType: request?.entityType ?? null,
+    entityId: normalizedStringField(
+      request,
+      CREATE_ADMISSION_REQUEST_FIELD.ENTITY_ID,
+    ),
+    partitionId: normalizedStringField(
+      request,
+      CREATE_ADMISSION_REQUEST_FIELD.PARTITION_ID,
+    ),
+    replicaId: normalizedStringField(
+      request,
+      CREATE_ADMISSION_REQUEST_FIELD.REPLICA_ID,
+    ),
     targetNodeId: nodeId,
-    admissionToken: String(request?.admissionToken || '').trim(),
-    attemptToken: String(request?.attemptToken || '').trim(),
+    admissionToken: normalizedStringField(
+      request,
+      CREATE_ADMISSION_REQUEST_FIELD.ADMISSION_TOKEN,
+    ),
+    attemptToken: normalizedStringField(
+      request,
+      CREATE_ADMISSION_REQUEST_FIELD.ATTEMPT_TOKEN,
+    ),
     attemptSeq: nullableSafeInteger(request?.attemptSeq),
     workflowUpdatedAt: nullableSafeInteger(request?.workflowUpdatedAt),
   };
@@ -183,16 +213,97 @@ function isClosedAdmission(row) {
 }
 
 function rowMatchesAdmissionIdentity(row, evidence) {
-  return row?.operation_id === evidence?.operationId &&
-    row?.type === evidence?.operationType &&
-    row?.entity_type === evidence?.entityType &&
-    row?.entity_id === evidence?.entityId &&
-    row?.partition_id === evidence?.partitionId &&
-    row?.replica_id === evidence?.replicaId &&
-    row?.target_node_id === evidence?.targetNodeId &&
-    row?.create_admission_token === evidence?.admissionToken &&
+  const expected = {
+    operation_id: evidence?.operationId,
+    type: evidence?.operationType,
+    entity_type: evidence?.entityType,
+    entity_id: evidence?.entityId,
+    partition_id: evidence?.partitionId,
+    replica_id: evidence?.replicaId,
+    target_node_id: evidence?.targetNodeId,
+    create_admission_token: evidence?.admissionToken,
+  };
+  return Object.entries(expected).every(([field, value]) =>
+    row?.[field] === value) &&
     nullableSafeInteger(row?.create_admission_replica_created_at) ===
       evidence?.replicaCreatedAt;
+}
+
+function isRetainedAdmissionRowEligible(row, request, nodeId) {
+  return rowMatchesAdmission(row, request) &&
+    row.target_node_id === nodeId && !isClosedAdmission(row);
+}
+
+function isRetainedOwnerEligible(previousOwner, currentOwner) {
+  if (previousOwner === null || currentOwner === null) return false;
+  return currentOwner >= previousOwner;
+}
+
+function currentRowMatchesRetainedAdmission(current, retainedEvidence, owner) {
+  const request = requestFromAdmissionRow(current);
+  return rowMatchesAdmission(current, request) &&
+    rowMatchesAdmissionIdentity(current, retainedEvidence) &&
+    current.create_admission_owner_incarnation === owner;
+}
+
+function isValidAdvanceRequest(evidence, ownerIncarnation,
+  expectedStates, nextState) {
+  const states = Object.values(CREATE_ADMISSION_STATE);
+  return evidence?.ownerIncarnation === ownerIncarnation &&
+    expectedStates.length > 0 &&
+    expectedStates.every((state) => states.includes(state)) &&
+    states.includes(nextState);
+}
+
+function rowMatchesAdvanceResult(row, evidence, nextState, ownerIncarnation,
+  data) {
+  const request = requestFromAdmissionRow(row);
+  return rowMatchesAdmission(row, request) &&
+    rowMatchesAdmissionIdentity(row, evidence) &&
+    row.create_admission_state === nextState &&
+    row.create_admission_owner_incarnation === ownerIncarnation &&
+    Object.entries(data).every(([field, value]) => row?.[field] === value);
+}
+
+function lifecycleReplicaId(lifecycle) {
+  return lifecycle?.replicaId ?? lifecycle?.replicaIdentity ??
+    lifecycle?.serviceId ?? null;
+}
+
+function isOpenAdmissionForIncarnation(row, createdAt) {
+  return nullableSafeInteger(row.create_admission_replica_created_at) ===
+    createdAt && row.create_admission_state !== CREATE_ADMISSION_STATE.CLOSED;
+}
+
+function attemptTokenMatches(row, attemptToken) {
+  return (row.create_admission_attempt_token ?? null) === attemptToken;
+}
+
+async function closeAdmissionRow(owner, row, createdAt, attemptToken) {
+  const result = await owner.gateway.updateSystemTableRow(
+    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    {
+      operation_id: row.operation_id,
+      create_admission_state: row.create_admission_state,
+      create_admission_token: row.create_admission_token,
+      create_admission_replica_created_at: createdAt,
+      create_admission_attempt_token: attemptToken,
+      create_admission_attempt_seq: row.create_admission_attempt_seq,
+    },
+    {
+      create_admission_state: CREATE_ADMISSION_STATE.CLOSED,
+      create_admission_owner_incarnation: owner.ownerIncarnation,
+    },
+    {allowCoalescing: false, deliveryPriority: 'critical', workClass: 'critical'},
+  );
+  if (classifyControlPlaneMutationResult(result).applied) return true;
+  const current = await owner.readOperation(row.operation_id);
+  const retainedEvidence = admissionEvidenceFromRow(
+    row,
+    requestFromAdmissionRow(row),
+  );
+  return current?.create_admission_state === CREATE_ADMISSION_STATE.CLOSED &&
+    rowMatchesAdmissionIdentity(current, retainedEvidence);
 }
 
 class ReplicaCreateAdmissionOwner {
@@ -386,25 +497,23 @@ class ReplicaCreateAdmissionOwner {
 
   async takeoverRetained(row) {
     const request = requestFromAdmissionRow(row);
-    if (!rowMatchesAdmission(row, request) ||
-        row.target_node_id !== this.nodeId || isClosedAdmission(row)) {
+    if (!isRetainedAdmissionRowEligible(row, request, this.nodeId)) {
       return null;
     }
     const previousOwner = nullableSafeInteger(
       row.create_admission_owner_incarnation,
     );
-    if (previousOwner === null || this.ownerIncarnation === null ||
-        this.ownerIncarnation < previousOwner) return null;
+    if (!isRetainedOwnerEligible(previousOwner, this.ownerIncarnation)) {
+      return null;
+    }
+    const retainedEvidence = admissionEvidenceFromRow(row, request);
     await this.requireCurrentBootIncarnation();
     if (this.ownerIncarnation === previousOwner) {
       const current = await this.readOperation(row.operation_id);
-      const currentRequest = requestFromAdmissionRow(current);
-      if (!rowMatchesAdmission(current, currentRequest) ||
-          !rowMatchesAdmissionIdentity(current,
-            admissionEvidenceFromRow(row, request)) ||
-          current.create_admission_owner_incarnation !==
-            this.ownerIncarnation) return null;
-      return admissionEvidenceFromRow(current, currentRequest);
+      if (!currentRowMatchesRetainedAdmission(
+        current, retainedEvidence, this.ownerIncarnation,
+      )) return null;
+      return admissionEvidenceFromRow(current, requestFromAdmissionRow(current));
     }
     let result = null;
     try {
@@ -429,11 +538,9 @@ class ReplicaCreateAdmissionOwner {
     }
     const current = await this.readOperation(row.operation_id);
     await this.requireCurrentBootIncarnation();
-    const currentRequest = requestFromAdmissionRow(current);
-    if (!rowMatchesAdmission(current, currentRequest) ||
-        !rowMatchesAdmissionIdentity(current,
-          admissionEvidenceFromRow(row, request)) ||
-        current.create_admission_owner_incarnation !== this.ownerIncarnation) {
+    if (!currentRowMatchesRetainedAdmission(
+      current, retainedEvidence, this.ownerIncarnation,
+    )) {
       const effect = classifyControlPlaneMutationResult(result);
       if (effect.retryable) {
         throw admissionError(
@@ -444,7 +551,7 @@ class ReplicaCreateAdmissionOwner {
       }
       return null;
     }
-    return admissionEvidenceFromRow(current, currentRequest);
+    return admissionEvidenceFromRow(current, requestFromAdmissionRow(current));
   }
 
   async claim(requestInput) {
@@ -533,11 +640,9 @@ class ReplicaCreateAdmissionOwner {
   async advance(evidence, expectedStates, nextState, data = {}, extraWhere = {}) {
     const expected = Array.isArray(expectedStates) ? expectedStates :
       [expectedStates];
-    if (!evidence || evidence.ownerIncarnation !== this.ownerIncarnation ||
-        expected.length === 0 ||
-        !expected.every((state) =>
-          Object.values(CREATE_ADMISSION_STATE).includes(state)) ||
-        !Object.values(CREATE_ADMISSION_STATE).includes(nextState)) return null;
+    if (!isValidAdvanceRequest(
+      evidence, this.ownerIncarnation, expected, nextState,
+    )) return null;
     for (const expectedState of expected) {
       let result = null;
       try {
@@ -566,15 +671,10 @@ class ReplicaCreateAdmissionOwner {
       if (classifyControlPlaneMutationResult(result).applied === true) break;
     }
     const row = await this.readOperation(evidence.operationId);
-    const request = requestFromAdmissionRow(row);
-    if (!rowMatchesAdmission(row, request) ||
-        !rowMatchesAdmissionIdentity(row, evidence) ||
-        row.create_admission_state !== nextState ||
-        row.create_admission_owner_incarnation !== this.ownerIncarnation ||
-        !Object.entries(data).every(
-          ([field, value]) => row?.[field] === value,
-        )) return null;
-    return admissionEvidenceFromRow(row, request);
+    if (!rowMatchesAdvanceResult(
+      row, evidence, nextState, this.ownerIncarnation, data,
+    )) return null;
+    return admissionEvidenceFromRow(row, requestFromAdmissionRow(row));
   }
 
   async markMaterialized(evidence) {
@@ -665,51 +765,23 @@ class ReplicaCreateAdmissionOwner {
   }
 
   async closeForLifecycle(lifecycle) {
-    const replicaId = lifecycle?.replicaId || lifecycle?.replicaIdentity ||
-      lifecycle?.serviceId;
+    const replicaId = lifecycleReplicaId(lifecycle);
     const createdAt = nullableSafeInteger(lifecycle?.createdAt);
     const attemptToken = lifecycle?.createAttemptToken ?? null;
     if (!replicaId || createdAt === null) return false;
     if (attemptToken === null) return true;
     const rows = await this.readReplicaAdmissions(replicaId);
     const sameIncarnation = rows.filter((row) =>
-      nullableSafeInteger(row.create_admission_replica_created_at) ===
-        createdAt &&
-      row.create_admission_state !== CREATE_ADMISSION_STATE.CLOSED);
+      isOpenAdmissionForIncarnation(row, createdAt));
     if (sameIncarnation.some((row) =>
-      (row.create_admission_attempt_token ?? null) !== attemptToken)) {
+      !attemptTokenMatches(row, attemptToken))) {
       return false;
     }
     const matching = sameIncarnation.filter((row) =>
-      (row.create_admission_attempt_token ?? null) === attemptToken);
+      attemptTokenMatches(row, attemptToken));
     for (const row of matching) {
-      const result = await this.gateway.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        {
-          operation_id: row.operation_id,
-          create_admission_state: row.create_admission_state,
-          create_admission_token: row.create_admission_token,
-          create_admission_replica_created_at: createdAt,
-          create_admission_attempt_token: attemptToken,
-          create_admission_attempt_seq: row.create_admission_attempt_seq,
-        },
-        {
-          create_admission_state: CREATE_ADMISSION_STATE.CLOSED,
-          create_admission_owner_incarnation: this.ownerIncarnation,
-        },
-        {
-          allowCoalescing: false,
-          deliveryPriority: 'critical',
-          workClass: 'critical',
-        },
-      );
-      if (!classifyControlPlaneMutationResult(result).applied) {
-        const current = await this.readOperation(row.operation_id);
-        if (current?.create_admission_state !== CREATE_ADMISSION_STATE.CLOSED ||
-            !rowMatchesAdmissionIdentity(current,
-              admissionEvidenceFromRow(row, requestFromAdmissionRow(row)))) {
-          return false;
-        }
+      if (!await closeAdmissionRow(this, row, createdAt, attemptToken)) {
+        return false;
       }
     }
     return true;

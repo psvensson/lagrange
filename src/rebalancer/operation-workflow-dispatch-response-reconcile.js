@@ -22,6 +22,8 @@ import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,
 } from './replica-create-admission-token.js';
+import {bindReplaceCreateTargetReplicaId} from
+  './operation-workflow-replace-target-binding.js';
 const {
   DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL,
@@ -272,6 +274,19 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       this.isCreateRearmDispatchPhase(operation);
     const replaceSourceReplicaId =
       this.repository.getReplaceSourceReplicaId(operation);
+    const dispatchOperationId = operation.operationId;
+    operation = await bindReplaceCreateTargetReplicaId(
+      this,
+      operation,
+      replaceRemoveDispatchPhase,
+      replaceSourceReplicaId,
+    );
+    if (!operation) {
+      return this.buildSkippedOperationResult(
+        OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+        dispatchOperationId,
+      );
+    }
     const supersededPriorityRecoveryError =
       this.isPriorityRecoverySupersededTargetFailureApplicable(
         operation,
@@ -428,19 +443,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           OPERATION_WORKFLOW_OWNER_LITERAL.REPLACE_SOURCE_REMOVAL;
       } else {
         messageType = ReplicaOperationMessageType.CREATE_REPLICA;
-        if (
-          !operation.replicaId ||
-          operation.replicaId === replaceSourceReplicaId
-        ) {
-          operation.replicaId = await this.allocateCanonicalReplicaId({
-            partitionId: operation.partitionId,
-            entityType,
-            entityId,
-            excludeReplicaIds: replaceSourceReplicaId ?
-              [replaceSourceReplicaId] :
-              [],
-          });
-        }
         requestReplicaId = operation.replicaId;
       }
     }

@@ -94,14 +94,56 @@ function isExactCreateRow(handler, row, {
   const admissionMatches = !createAdmissionEvidence ||
     row?.created_at === createAdmissionEvidence.replicaCreatedAt &&
     row?.create_attempt_token === createAdmissionEvidence.attemptToken;
-  return admissionMatches && row?.service_id === replicaId &&
-    row.replica_id === replicaId &&
-    row.partition_id === partitionId &&
-    row.node_id === handler.nodeId &&
-    row.service_type === REPLICA_HANDLER_SERVICE.TYPE &&
-    row.status === status &&
-    Number.isFinite(row.created_at) &&
-    Boolean(durableRowVersion(row));
+  const expected = {
+    service_id: replicaId,
+    replica_id: replicaId,
+    partition_id: partitionId,
+    node_id: handler.nodeId,
+    service_type: REPLICA_HANDLER_SERVICE.TYPE,
+    status,
+  };
+  const identityMatches = Object.entries(expected).every(([field, value]) =>
+    row?.[field] === value);
+  return admissionMatches && identityMatches &&
+    Number.isFinite(row?.created_at) && Boolean(durableRowVersion(row));
+}
+
+async function resumePersistedCreateStatus(handler, options) {
+  if (await handler.restartFailedReplicaCreateStatus(options)) return true;
+  if (await handler.resumeCreatingReplicaCreateStatus(options)) return true;
+  return handler.resumeSyncingReplicaCreateStatus(options);
+}
+
+function shouldRethrowCreateStatusError(error) {
+  return error?.code === REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS ||
+    isRetryableControlPlaneError(error) !== true;
+}
+
+async function rotateFailedCreateEvidence(handler, evidence) {
+  if (!evidence) return null;
+  let rotating = evidence;
+  if (evidence.admissionState === CREATE_ADMISSION_STATE.FAILED) {
+    rotating = await handler.getReplicaCreateAdmissionOwner()
+      .beginFailedAttemptRotation(evidence);
+  }
+  return rotating?.admissionState === CREATE_ADMISSION_STATE.ROTATING ?
+    rotating : null;
+}
+
+function buildRotatingReplayContext(handler, replicaId, partitionId,
+  service, rotatingEvidence) {
+  const context = buildFailedCreateReplayContext(
+    handler,
+    replicaId,
+    partitionId,
+    service,
+  );
+  if (!rotatingEvidence) return context;
+  return {
+    ...context,
+    createAttemptToken: rotatingEvidence.attemptToken,
+    createAdmissionEvidence: rotatingEvidence,
+  };
 }
 
 // The exact authoritative row of this create on this node in `status`,
@@ -247,9 +289,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         createAdmissionEvidence = null,
         createAttemptToken = null,
       } = options;
-      if (await this.restartFailedReplicaCreateStatus(options) ||
-          await this.resumeCreatingReplicaCreateStatus(options) ||
-          await this.resumeSyncingReplicaCreateStatus(options)) {
+      if (await resumePersistedCreateStatus(this, options)) {
         return true;
       }
       try {
@@ -271,13 +311,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         });
         return true;
       } catch (error) {
-        if (error?.code ===
-          REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS) {
-          throw error;
-        }
-        if (isRetryableControlPlaneError(error) !== true) {
-          throw error;
-        }
+        if (shouldRethrowCreateStatusError(error)) throw error;
         this.deferRetryableReplicaCreateStatusWrite({
           operationId,
           partitionId,
@@ -337,10 +371,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       if (!replay) {
         return false;
       }
-      if (replay.service.cleanup_token !== null &&
-          replay.service.cleanup_token !== undefined) {
-        return false;
-      }
+      if (replay.service.cleanup_token != null) return false;
       const staleRuntime = this.getTrackedService(replicaId);
       await this.fenceFailedReplicaCreateRuntime(
         replicaId,
@@ -352,31 +383,17 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
           `Cannot redrive failed replica ${replicaId} while its runtime is tracked`,
         );
       }
-      let rotatingEvidence = createAdmissionEvidence;
-      if (createAdmissionEvidence) {
-        if (createAdmissionEvidence.admissionState ===
-            CREATE_ADMISSION_STATE.FAILED) {
-          rotatingEvidence = await this.getReplicaCreateAdmissionOwner()
-            .beginFailedAttemptRotation(createAdmissionEvidence);
-        }
-        if (rotatingEvidence?.admissionState !==
-            CREATE_ADMISSION_STATE.ROTATING) return false;
-      }
+      const rotatingEvidence = await rotateFailedCreateEvidence(
+        this,
+        createAdmissionEvidence,
+      );
+      if (createAdmissionEvidence && !rotatingEvidence) return false;
       const restarted = await Promise.resolve(
         this.replicaStateMachine.restartFailedCreate(
           replicaId,
-          {
-            ...buildFailedCreateReplayContext(
-              this,
-              replicaId,
-              partitionId,
-              replay.service,
-            ),
-            ...(rotatingEvidence ? {
-              createAttemptToken: rotatingEvidence.attemptToken,
-              createAdmissionEvidence: rotatingEvidence,
-            } : {}),
-          },
+          buildRotatingReplayContext(
+            this, replicaId, partitionId, replay.service, rotatingEvidence,
+          ),
           {
             persist: true,
             expectedSourceEvidence: replay.service,

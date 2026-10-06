@@ -32,7 +32,6 @@ import {
   REPLICA_STATE_MACHINE_REASON,
   REPLICA_STATE_MACHINE_STATE,
 } from './replica-state-machine-constants.js';
-
 const ReplicaState = REPLICA_STATE_MACHINE_STATE;
 const REMOVAL_AUTHORITY_KIND = Object.freeze({
   ABSENT: 'absent',
@@ -736,12 +735,6 @@ function registerReplicaSnapshot(stateMachine, replicaId, context = {}) {
   return runSerializedReplicaMutation(stateMachine, replicaId, register);
 }
 
-/**
- * Register a replica directly for recovery purposes.
- * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
- * @param {string} replicaId - Replica identifier.
- * @param {Object} context - Replica context.
- */
 function registerReplicaForRecovery(stateMachine, replicaId, context) {
   const now = stateMachine.now();
   const state = context.state;
@@ -753,27 +746,30 @@ function registerReplicaForRecovery(stateMachine, replicaId, context) {
   const replicaState = {
     replicaId,
     partitionId: context.partitionId,
-    nodeId: context.nodeId || stateMachine.nodeId,
+    nodeId: context.nodeId ?? stateMachine.nodeId,
     state,
     stateEnteredAt,
-    timeoutStartedAt:
-      stateMachine.timeouts[state] === undefined ? null : stateEnteredAt,
+    timeoutStartedAt: recoveryTimeoutStartedAt(
+      stateMachine,
+      state,
+      stateEnteredAt,
+    ),
     previousState: null,
-    triggerReason: context.triggerReason ||
+    triggerReason: context.triggerReason ??
       REPLICA_STATE_MACHINE_REASON.RECOVERY_REGISTRATION,
     errorMessage: null,
     metadata: {},
-    serviceId: context.serviceId || null,
-    serviceType: context.serviceType || SERVICE_TYPE.PARTITION,
-    serviceAddress: context.serviceAddress || null,
-    replicaIdentity: context.replicaIdentity || null,
+    serviceId: context.serviceId ?? null,
+    serviceType: context.serviceType ?? SERVICE_TYPE.PARTITION,
+    serviceAddress: context.serviceAddress ?? null,
+    replicaIdentity: context.replicaIdentity ?? null,
     groupId: context.groupId ?? null,
     cleanupToken: normalizeRecoveryCleanupToken(context),
     createAttemptToken: context.createAttemptToken ?? null,
     createdAt: context.createdAt,
     lifecycleIdentityAuthoritative:
       context.authoritativeSnapshot === true,
-    durableVersionColumn: context.durableVersionColumn ||
+    durableVersionColumn: context.durableVersionColumn ??
       'state_entered_at',
     durableVersion: Number.isFinite(context.durableVersion) ?
       context.durableVersion : stateEnteredAt,
@@ -787,6 +783,10 @@ function registerReplicaForRecovery(stateMachine, replicaId, context) {
     state,
     nodeId: stateMachine.nodeId,
   });
+}
+
+function recoveryTimeoutStartedAt(stateMachine, state, stateEnteredAt) {
+  return stateMachine.timeouts[state] === undefined ? null : stateEnteredAt;
 }
 
 export {

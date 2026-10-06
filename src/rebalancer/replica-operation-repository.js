@@ -680,6 +680,7 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   NUM,
   OperationType,
   ReplicaStatus,
+  ReplicaOperationField,
   REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS,
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS,

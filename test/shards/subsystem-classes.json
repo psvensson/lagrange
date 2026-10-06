@@ -28,7 +28,7 @@
   "censusSize": 2214,
   "digest": "fnv1a32-cc7c1d35",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2aa50a53",
+  "observationDigest": "fnv1a32-d22a2362",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7237,6 +7237,8 @@
         "src/config/configuration-manager.js",
         "src/rebalancer/replica-operation-constants.js",
         "test/node/replica-handler-bootstrap-stamps.js",
+        "test/node/replica-handler-owner-path-admission-fixture.js",
+        "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -8210,6 +8212,7 @@
         "src/control-plane/replica-dispatch-readiness-capture.js",
         "src/message-group/message-group-consensus-port.js",
         "src/node/replica-handler-committed-membership-methods.js",
+        "src/node/replica-handler-create-admission-methods.js",
         "src/node/replica-handler-create-methods.js",
         "src/node/replica-handler-membership-methods.js",
         "src/node/replica-handler-runtime-metadata-methods.js",
@@ -9737,6 +9740,7 @@
         "src/rebalancer/rebalance-coordinator.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-membership-epoch-binding.js",
+        "src/rebalancer/replica-operation-repository-constants.js",
         "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
         "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
         "src/rebalancer/replica-operation-repository-row-methods.js",

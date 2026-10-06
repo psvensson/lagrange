@@ -6,23 +6,46 @@ import {isReplicaCreateAdmissionEvidence} from
   './replica-create-admission-evidence.js';
 import {mintServiceRowCreatedAt} from './service-row-incarnation.js';
 
+const CREATE_ADMISSION_RESERVATION_UNAVAILABLE = Object.freeze({
+  available: false,
+});
+
+function reservedCreateAdmissionCreatedAt(replicaId, existingState, context) {
+  if (existingState) return CREATE_ADMISSION_RESERVATION_UNAVAILABLE;
+  const evidence = context?.createAdmissionEvidence;
+  if (!isReplicaCreateAdmissionEvidence(evidence)) {
+    return CREATE_ADMISSION_RESERVATION_UNAVAILABLE;
+  }
+  if (evidence.replicaId !== replicaId) {
+    return CREATE_ADMISSION_RESERVATION_UNAVAILABLE;
+  }
+  return evidence.attemptToken === context.createAttemptToken ?
+    {available: true, createdAt: evidence.replicaCreatedAt} :
+    CREATE_ADMISSION_RESERVATION_UNAVAILABLE;
+}
+
+function resolveCreateLifecycleCreatedAt(existingState, reservation, now) {
+  if (Number.isFinite(existingState?.createdAt)) return existingState.createdAt;
+  return reservation.available === true ? reservation.createdAt :
+    mintServiceRowCreatedAt(now);
+}
+
 function buildCreateAdmissionLifecycleIdentity(
   replicaId,
   existingState,
   now,
   context,
 ) {
-  const reservedCreatedAt =
-    !existingState &&
-    isReplicaCreateAdmissionEvidence(context?.createAdmissionEvidence) &&
-    context.createAdmissionEvidence.replicaId === replicaId &&
-    context.createAdmissionEvidence.attemptToken ===
-      context.createAttemptToken ?
-      context.createAdmissionEvidence.replicaCreatedAt : null;
-  const createdAt = Number.isFinite(existingState?.createdAt) ?
-    existingState.createdAt :
-    Number.isSafeInteger(reservedCreatedAt) ? reservedCreatedAt :
-      mintServiceRowCreatedAt(now);
+  const reservation = reservedCreateAdmissionCreatedAt(
+    replicaId,
+    existingState,
+    context,
+  );
+  const createdAt = resolveCreateLifecycleCreatedAt(
+    existingState,
+    reservation,
+    now,
+  );
   return {
     replicaIdentity: existingState?.replicaIdentity || replicaId,
     groupId: existingState?.groupId ?? null,
