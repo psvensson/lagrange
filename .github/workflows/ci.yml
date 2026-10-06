@@ -198,19 +198,18 @@ jobs:
       - name: Repository-selected proof
         shell: bash
         run: |
-          set +e
-          npm run check 2>&1 | tee "$RUNNER_TEMP/ordinary-proof.log"
-          ordinary_status=${PIPESTATUS[0]}
-          set -e
-          if [ "$ordinary_status" -eq 0 ]; then
+          proof_log="$RUNNER_TEMP/ordinary-proof.log"
+          if npm run check >"$proof_log" 2>&1; then
+            cat "$proof_log"
             exit 0
           fi
-          if grep -q 'reason: RELEASE_PROOF_REQUIRED' "$RUNNER_TEMP/ordinary-proof.log"; then
+          cat "$proof_log"
+          if grep -q 'reason: RELEASE_PROOF_REQUIRED' "$proof_log"; then
             echo "ordinary proof requires the release contract; delegating to check:release"
             npm run check:release
             exit $?
           fi
-          exit "$ordinary_status"
+          exit 1
 
       # The proof writes test-output/proof-scope.json itself, saying which sha
       # it proved and whether it ran the whole corpus; the canary reads it
