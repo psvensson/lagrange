@@ -8,7 +8,8 @@ doneWhen:
   probe: oracle
   args:
     file: solve/oracle/raft-rs-full-cutover.json
-quests: []
+quests:
+  - public-binding-two-partition-harness
 authorizes:
   - architecture
   - docs

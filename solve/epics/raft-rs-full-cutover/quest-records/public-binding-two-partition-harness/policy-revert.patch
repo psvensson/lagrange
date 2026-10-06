@@ -1,0 +1,13 @@
+--- a/test/integration/helpers/public-binding-seam-harness.js
++++ b/test/integration/helpers/public-binding-seam-harness.js
+@@ -351,10 +351,6 @@
+     throw new Error(HARNESS_ERROR.TABLE_ID_REQUIRED);
+   }
+ 
+-  await tablePolicyService.updateTablePolicy(
+-    tableId,
+-    MERGE_DISABLED_TABLE_POLICY,
+-  );
+   const visiblePolicy = await tablePolicyService.getTablePolicy(tableId);
+ 
+   const partitions = await splitTableOnce(runtime.engine, tableName, wait);

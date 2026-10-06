@@ -1,0 +1,55 @@
+{
+  "schema": "solve-quest/2",
+  "id": "public-binding-two-partition-harness",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The public Binding invocation acceptance harness preserves its declared two-partition routing prerequisite for the whole exercise: before its managed split it persists the repository's canonical merge-disabled per-table policy through TablePolicyService, the production split/merge manager observes a nonvacuous live child pair as merge-ineligible, the exact two child identities remain current, a literal-key Binding plans and witnesses exactly its one frozen owning child, and an unbounded Binding plans and witnesses exactly both frozen children. The correction changes no production behavior, timeout, sleep, evaluation cadence, threshold owner, or acceptance term, and it never accepts a merged one-partition topology.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/public-binding-two-partition-harness/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-table-policy-visible-before-split",
+        "live-child-pair-nonvacuous-and-merge-ineligible",
+        "exact-two-child-identity-retained",
+        "literal-one-child-unbounded-two-child",
+        "policy-revert-control-red"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "test-only-scope",
+      "statement": "Scope is limited to the public Binding integration test, its existing harness helper, coupled-pair/test classification metadata required by the repository, one deterministic receipt producer, and Quest evidence/history. No production source or product configuration changes are allowed."
+    },
+    {
+      "id": "canonical-policy-owner",
+      "statement": "Harness shaping persists mergeStorageThreshold=1 and mergeTrafficThreshold=1 through the runtime's existing TablePolicyService for the exact created table, reads the effective policy back through that owner, and proves the production PartitionSplitMergeManager consumes it. It may not mutate manager fields, system-table caches, or raw rows directly."
+    },
+    {
+      "id": "nonvacuous-exact-topology",
+      "statement": "The live child metrics must prove combined storage greater than one byte before merge ineligibility is accepted. Every later routing proof remains bound to the same two frozen child identities; a current one-partition topology is a failure, never a refreshed expectation."
+    },
+    {
+      "id": "no-timing-or-acceptance-workaround",
+      "statement": "Do not add or raise a timeout, sleep, retry, evaluation interval, production threshold, hysteresis, or merge disable switch. Do not weaken the literal one-child or unbounded two-child acceptance claims."
+    },
+    {
+      "id": "separate-reservation-owner",
+      "statement": "The preexisting storage-reservation ambiguous-insert defect remains a separately owned finding. This Quest neither repairs nor suppresses it and classifies any occurrence separately from topology drift."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Obtain a fresh independent verifier on the exact frozen candidate before landing and record the approving Solver verification as subagent:<id>."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "A controlled negative that removes only the canonical table-policy shaping must fail at the production manager's immediate nonvacuous merge-eligibility assertion before later routing assertions. Preserve its exact source fingerprint and output outside the terminal Quest directory."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "125bb12e761ef48e7f7b5387540e524a8c6c1c80"
+}
