@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1972,
+    "unit": 1973,
     "integration": 79,
     "bootstrap": 198,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2256,
-  "digest": "fnv1a32-23bc941c",
+  "censusSize": 2257,
+  "digest": "fnv1a32-3337e105",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1464,6 +1464,7 @@
     "test/raft/raft-rs-backend/conf-change-leader-only.test.js": "unit",
     "test/raft/raft-rs-backend/conf-change-pending-deferral.test.js": "unit",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "unit",
+    "test/raft/raft-rs-backend/durable-commit-performance.test.js": "unit",
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "unit",
     "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "unit",
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "unit",

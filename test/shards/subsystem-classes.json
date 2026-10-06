@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 148,
-    "storage-raft": 107,
+    "storage-raft": 108,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2256,
-  "digest": "fnv1a32-935b56b2",
+  "censusSize": 2257,
+  "digest": "fnv1a32-20a755da",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ae057e48",
+  "observationDigest": "fnv1a32-e8c95710",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1483,6 +1483,7 @@
     "test/raft/raft-rs-backend/conf-change-leader-only.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-change-pending-deferral.test.js": "storage-raft",
     "test/raft/raft-rs-backend/conf-state-authority.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/durable-commit-performance.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "storage-raft",
@@ -8771,6 +8772,22 @@
       "files": [
         "src/raft/raft-rs-host-contract.js",
         "src/raft/raft-rs-membership-projection.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/durable-commit-performance.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/message-group/message-group-service.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/durable-commit-performance-worker.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ],
+      "env": [
+        "TMPDIR"
       ]
     },
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": {
