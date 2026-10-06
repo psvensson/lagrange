@@ -493,10 +493,25 @@ function createFormedThreeNodeCache() {
 }
 
 
-function buildDeferredRecoveryReadiness(nodeId) {
+function buildDeferredRecoveryReadiness(
+  nodeId,
+  {
+    substantiveReason = false,
+    transportTopologyValid = true,
+    generationSaturated = false,
+  } = {},
+) {
+  const reasons = ['planning_snapshot_refresh_pending'];
+  if (substantiveReason) {
+    reasons.unshift('priority_control_plane_recovery_pending');
+  }
   return Object.freeze({
     nodeId,
     readinessPlanningTokenStatus: 'stale',
+    readinessPlanningToken: Object.freeze({
+      transportTopologyValid,
+      generationSaturated,
+    }),
     dimensions: Object.freeze({
       [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
@@ -509,14 +524,22 @@ function buildDeferredRecoveryReadiness(nodeId) {
         .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
     }),
-    reasons: Object.freeze(['planning_snapshot_refresh_pending']),
+    reasons: Object.freeze(reasons),
   });
 }
 
 function installCriticalTopologyReadinessFixture(
   rebalancer,
   cache,
-  {deferred = true, livenessReady = true} = {},
+  {
+    deferred = true,
+    generationSaturated = false,
+    livenessReady = true,
+    livenessConnected = true,
+    clusterMemberHealthy = true,
+    substantiveDeferredDenial = false,
+    transportTopologyValid = true,
+  } = {},
 ) {
   rebalancer.controlPlaneReadinessService = {
     getNodeReadinessSync(nodeId) {
@@ -524,7 +547,11 @@ function installCriticalTopologyReadinessFixture(
         return buildReadinessSnapshot(cache, nodeId);
       }
       if (deferred) {
-        return buildDeferredRecoveryReadiness(nodeId);
+        return buildDeferredRecoveryReadiness(nodeId, {
+          substantiveReason: substantiveDeferredDenial,
+          transportTopologyValid,
+          generationSaturated,
+        });
       }
       const current = buildReadinessSnapshot(cache, nodeId);
       return {
@@ -539,15 +566,22 @@ function installCriticalTopologyReadinessFixture(
       };
     },
     projectNodeLiveness(nodeId) {
+      const isJoiner = nodeId === JOINER_NODE_ID;
       return Object.freeze({
-        readyNow: nodeId !== JOINER_NODE_ID || livenessReady,
+        readyNow: !isJoiner || livenessReady,
+        connectionSemantics: Object.freeze({
+          connected: !isJoiner || livenessConnected,
+        }),
+        clusterMembershipSemantics: Object.freeze({
+          healthy: !isJoiner || clusterMemberHealthy,
+        }),
       });
     },
   };
 }
 
 test(
-  'R7 readiness currency: a deferred recovery snapshot is not a lease failure when canonical liveness is ready',
+  'R7 readiness currency: only evidence-absent PENDING with current liveness may clear the priority topology gate',
   (t) => {
     initializeTestEnvironment();
     const {cache} = createFormedThreeNodeCache();
@@ -555,10 +589,7 @@ test(
     rebalancer.messageRouter.getConnectedNodes =
       () => [SEED_NODE_ID, JOINER_NODE_ID];
 
-    installCriticalTopologyReadinessFixture(rebalancer, cache, {
-      deferred: true,
-      livenessReady: true,
-    });
+    installCriticalTopologyReadinessFixture(rebalancer, cache);
     t.equal(
       rebalancer.getCriticalSystemTopologySettlingBlocker(),
       null,
@@ -566,7 +597,6 @@ test(
     );
 
     installCriticalTopologyReadinessFixture(rebalancer, cache, {
-      deferred: true,
       livenessReady: false,
     });
     t.equal(
@@ -576,8 +606,43 @@ test(
     );
 
     installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      substantiveDeferredDenial: true,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'a deferred snapshot that inherits a substantive denial remains blocking',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      transportTopologyValid: false,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'transport-topology-invalid PENDING remains fail-closed',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      generationSaturated: true,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'generation-saturated PENDING remains fail-closed',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      livenessConnected: false,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'a disconnected liveness projection cannot clear PENDING',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
       deferred: false,
-      livenessReady: true,
     });
     t.equal(
       rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
@@ -591,7 +656,6 @@ test(
     installCriticalTopologyReadinessFixture(
       ordinarySystemRebalancer,
       cache,
-      {deferred: true, livenessReady: true},
     );
     t.equal(
       ordinarySystemRebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
