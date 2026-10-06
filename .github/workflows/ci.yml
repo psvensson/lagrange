@@ -205,7 +205,13 @@ jobs:
           if [ "$ordinary_status" -eq 0 ]; then
             exit 0
           fi
-          if grep -q '^  reason: RELEASE_PROOF_REQUIRED
+          if grep -q 'reason: RELEASE_PROOF_REQUIRED' "$RUNNER_TEMP/ordinary-proof.log"; then
+            echo "ordinary proof requires the release contract; delegating to check:release"
+            npm run check:release
+            exit $?
+          fi
+          exit "$ordinary_status"
+
       # The proof writes test-output/proof-scope.json itself, saying which sha
       # it proved and whether it ran the whole corpus; the canary reads it
       # rather than inferring the scope from this job's log.
