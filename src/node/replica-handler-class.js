@@ -81,6 +81,41 @@ import {
   partitionMetadataMissingError,
 } from './replica-handler-transition-policy.js';
 
+const LOCAL_RAFT_ROLE = Object.freeze({
+  FOLLOWER: 'follower',
+  LEADER: 'leader',
+});
+
+function shouldRetainCanonicalPartitionLeader(handler, replicaState) {
+  const retiringReplicaId =
+    replicaState?.replicaId || replicaState?.serviceId || null;
+  if (!retiringReplicaId || !replicaState?.partitionId) return false;
+
+  let retiringRole = null;
+  try {
+    retiringRole = handler.getTrackedReplicaRole(retiringReplicaId);
+  } catch (_error) {
+    return false;
+  }
+  if (retiringRole !== LOCAL_RAFT_ROLE.FOLLOWER) return false;
+
+  for (const [replicaId, service] of handler.localServices.entries()) {
+    if (replicaId === retiringReplicaId ||
+        service?.partitionId !== replicaState.partitionId) {
+      continue;
+    }
+    try {
+      if (handler.getTrackedReplicaRole(replicaId) ===
+          LOCAL_RAFT_ROLE.LEADER) {
+        return true;
+      }
+    } catch (_error) {
+      // A broken/retired runtime is not positive leader evidence.
+    }
+  }
+  return false;
+}
+
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
  * Returns immediately with status, then performs async work.
@@ -140,6 +175,11 @@ class ReplicaHandler extends EventEmitter {
     // voter-readiness); the registry also relays each tracked service's
     // consensus observations to the REPLACE owner (design S5.2).
     this.localServices = new TrackedServiceRegistry();
+    this.replicaStateMachine
+      .bindCanonicalPartitionLeaderRetentionObserver?.(
+        (replicaState) =>
+          shouldRetainCanonicalPartitionLeader(this, replicaState),
+      );
     this.consensusEvents = Object.freeze({
       subscribe: (listener) =>
         this.localServices.subscribeConsensusObservations?.(listener) ||
