@@ -11,7 +11,7 @@ permissions:
 jobs:
   prove:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - name: Checkout candidate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -59,6 +59,31 @@ jobs:
           node test/rebalancer/runtime-service-expired-lease-candidate-admission.test.js
           node test/control-plane/readiness-deferred-denial-evidence-absent.test.js
           node test/control-plane/node-liveness-semantic-projection-owner.test.js
+
+      - name: Readiness planning impact-contract witness cone
+        run: |
+          set -euo pipefail
+          for test_file in \
+            test/control-plane/single-readiness-owner.receipt.test.js \
+            test/control-plane/node-liveness-semantic-projection-owner.test.js \
+            test/control-plane/publication-readiness-churn-liveness.test.js \
+            test/control-plane/readiness-planning-cache-classification-barrier.test.js \
+            test/control-plane/readiness-planning-deferral-bounded.test.js \
+            test/control-plane/readiness-planning-generation-granularity.test.js \
+            test/control-plane/readiness-planning-semantic-generation.test.js \
+            test/control-plane/readiness-planning-snapshot-identity-owner.test.js \
+            test/control-plane/control-plane-read-authority-token.test.js \
+            test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js \
+            test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js \
+            test/rebalancer/startup-authority-available-node-contract.test.js \
+            test/rebalancer/storage-capacity-accounting-service.test.js \
+            test/rebalancer/storage-capacity-semantic-projection-owner.test.js \
+            test/workflow/owner-key-reconcile-queue.test.js
+          do
+            echo "::group::$test_file"
+            node "$test_file"
+            echo "::endgroup::"
+          done
 
       - name: Architecture model contracts
         run: npm run model:contracts
