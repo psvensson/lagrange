@@ -45,5 +45,17 @@
       "statement": "No Raft runtime, consensus, membership, formation or lifecycle behavior changes."
     }
   ],
-  "sealedAt": "046c16cd4cb6237f016d91351770c825411fa159"
+  "sealedAt": "046c16cd4cb6237f016d91351770c825411fa159",
+  "verifiedAt": "78618340ed0f870a5616987b949219abd8baf785",
+  "status": "done",
+  "verdict": "ACCEPT",
+  "verification": {
+    "workflowRunId": 37426346310,
+    "metric": 0,
+    "target": 0,
+    "focusedAssertions": 27,
+    "a1Preservation": "pass",
+    "tableCreationRegression": "pass",
+    "scopedGuardrails": "pass"
+  }
 }
