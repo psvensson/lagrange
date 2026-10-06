@@ -61,6 +61,19 @@ const ReplicaOperationField = Object.freeze({
   ENTITY_ID: FIELD.ENTITY_ID,
   REASON: FIELD.REASON,
   SOURCE_REPLICA_ID: 'sourceReplicaId',
+  // Exact authoritative FAILED lifecycle generation which authorized a
+  // failed-create target cleanup. It is a precondition carried to the
+  // lifecycle owner; the value never authorizes a mutation by itself.
+  FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION:
+    'failedCreateTargetLifecyclePrecondition',
+  // Durable late-CREATE admission binding carried by the workflow owner to
+  // the partition handler. The handler CASes the same replica_operations row
+  // before any lifecycle or physical CREATE effect.
+  CREATE_ADMISSION_TOKEN: 'createAdmissionToken',
+  CREATE_ADMISSION_WORKFLOW_UPDATED_AT:
+    'createAdmissionWorkflowUpdatedAt',
+  CREATE_ADMISSION_ATTEMPT_TOKEN: 'createAdmissionAttemptToken',
+  CREATE_ADMISSION_ATTEMPT_SEQ: 'createAdmissionAttemptSeq',
   // A REPLACE handoff attempt's sequence, echoed by the handler so a late
   // answer of an earlier attempt is dropped.
   ATTEMPT_SEQ: 'attemptSeq',

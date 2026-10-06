@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 283,
+    "bootstrap-membership": 286,
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 205,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2211,
-  "digest": "fnv1a32-de29ee90",
+  "censusSize": 2214,
+  "digest": "fnv1a32-cc7c1d35",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-adda398b",
+  "observationDigest": "fnv1a32-2aa50a53",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1110,8 +1110,11 @@
     "test/node/partition-registration-invariant.property.test.js": "bootstrap-membership",
     "test/node/registered-partition-removal.property.test.js": "bootstrap-membership",
     "test/node/replica-cleanup-token-authority.test.js": "bootstrap-membership",
+    "test/node/replica-create-admission-owner.test.js": "bootstrap-membership",
+    "test/node/replica-create-admission-recovery.test.js": "bootstrap-membership",
     "test/node/replica-creation-idempotency.property.test.js": "bootstrap-membership",
     "test/node/replica-executor-activation-handler-boundary.test.js": "bootstrap-membership",
+    "test/node/replica-failed-create-cleanup-generation.test.js": "bootstrap-membership",
     "test/node/replica-handler-cache-state.test.js": "bootstrap-membership",
     "test/node/replica-handler-idempotency.property.test.js": "bootstrap-membership",
     "test/node/replica-handler-leadership-transfer.test.js": "bootstrap-membership",
@@ -7169,6 +7172,14 @@
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
+    "test/node/replica-create-admission-recovery.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/node/replica-creation-idempotency.property.test.js": {
       "files": [
         "test/test-helpers/lifecycle-state-store.js"
@@ -7179,6 +7190,11 @@
         "src/node/replica-state-machine-constants.js",
         "src/node/replica-state-machine-serialization.js",
         "test/test-helpers/lifecycle-state-store.js"
+      ]
+    },
+    "test/node/replica-failed-create-cleanup-generation.test.js": {
+      "files": [
+        "src/rebalancer/failed-create-cleanup-token.js"
       ]
     },
     "test/node/replica-handler-cache-state.test.js": {
@@ -7253,6 +7269,7 @@
         "test/node/replica-handler-bootstrap-stamps.js",
         "test/node/replica-handler-identity-entry-test-cases.js",
         "test/node/replica-handler-identity-record-test-cases.js",
+        "test/node/replica-handler-router-admission-test-cases.js",
         "test/test-helpers/lifecycle-state-store.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -9947,9 +9964,11 @@
     "test/rebalancer/terminal-failed-add-target-cleanup.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-replace-owner.js",
         "src/rebalancer/rebalancer-constants.js",
-        "src/rebalancer/replica-status.js",
-        "src/rebalancer/unified-rebalancer-replica-state.js"
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js"
       ]
     },
     "test/rebalancer/timeout-triggers-failure.property.test.js": {
@@ -10998,6 +11017,7 @@
         "src/rebalancer/operation-workflow-observed-progress-retention.js",
         "src/rebalancer/operation-workflow-owner-retry-registry.js",
         "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
+        "src/rebalancer/operation-workflow-terminal-transition-repair.js",
         "src/rebalancer/operation-workflow-transition-persistence.js"
       ],
       "directories": [

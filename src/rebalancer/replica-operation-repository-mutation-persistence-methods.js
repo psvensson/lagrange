@@ -178,6 +178,14 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
                   operation.entityType,
                   operation.entityId,
                   operation.membershipPublicationEpoch ?? null,
+                  operation.createAdmissionState ?? null,
+                  operation.createAdmissionToken ?? null,
+                  operation.createAdmissionReplicaCreatedAt ?? null,
+                  operation.createAdmissionAttemptToken ?? null,
+                  operation.createAdmissionPreviousAttemptToken ?? null,
+                  operation.createAdmissionAttemptSeq ?? null,
+                  operation.createAdmissionWorkflowUpdatedAt ?? null,
+                  operation.createAdmissionOwnerIncarnation ?? null,
                 ],
               },
             );
@@ -485,6 +493,21 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         Number(observedOperation.completedAt) < expectedOperation.completedAt
       ) {
         return false;
+      }
+      if (expectedOperation.createAdmissionState !== null &&
+          expectedOperation.createAdmissionState !== undefined) {
+        const admissionFields = [
+          'createAdmissionState',
+          'createAdmissionToken',
+          'createAdmissionReplicaCreatedAt',
+          'createAdmissionAttemptToken',
+          'createAdmissionPreviousAttemptToken',
+          'createAdmissionAttemptSeq',
+          'createAdmissionWorkflowUpdatedAt',
+          'createAdmissionOwnerIncarnation',
+        ];
+        if (admissionFields.some((field) =>
+          observedOperation[field] !== expectedOperation[field])) return false;
       }
       return true;
     }

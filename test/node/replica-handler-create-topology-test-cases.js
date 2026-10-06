@@ -12,6 +12,34 @@ import {
 } from './replica-handler-bootstrap-stamps.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from '../../src/rebalancer/replica-create-admission-token.js';
+import {SYSTEM_TABLE_NAME as SYSTEM_TABLE_NAMES} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+
+function withOperationAdmission(cache, request) {
+  const row = cache.get(
+    SYSTEM_TABLE_NAMES.REPLICA_OPERATIONS,
+    request.operationId,
+  );
+  const token = buildReplicaCreateAdmissionToken({
+    operationId: row.operation_id,
+    replicaId: request.replicaId,
+    targetNodeId: row.target_node_id,
+    workflowUpdatedAt: row.updated_at,
+  });
+  return {
+    ...request,
+    entityType: row.entity_type || 'partition',
+    entityId: row.entity_id || request.partitionId,
+    createAdmissionToken: token,
+    createAdmissionWorkflowUpdatedAt: row.updated_at,
+    createAdmissionAttemptToken: buildReplicaCreateAttemptToken(token, 1),
+    createAdmissionAttemptSeq: 1,
+  };
+}
 
 export async function registerReplicaHandlerCreateTopologyTests({
   t,
@@ -452,15 +480,22 @@ export async function registerReplicaHandlerCreateTopologyTests({
       });
 
       handler.initialize();
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
 
-      await handler.handleCreateReplica(withBootstrapStamp({
-        operationId: 'op-1',
-        operationType: 'REPLACE',
-        partitionId,
-        replicaId: 'replica_operations-p1-r4',
-      }, committedStampFor(['replica_operations-p1-r2',
-        'replica_operations-p1-r3', 'replica_operations-p1-r5'])));
+      await handler.handleCreateReplica(withBootstrapStamp(
+        withOperationAdmission(cache, {
+          operationId: 'op-1',
+          operationType: 'REPLACE',
+          partitionId,
+          replicaId: 'replica_operations-p1-r4',
+        }), committedStampFor(['replica_operations-p1-r2',
+          'replica_operations-p1-r3', 'replica_operations-p1-r5'])));
       await factoryCalled;
+      await created;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
       t.equal(
@@ -486,8 +521,15 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'a COMMITTED stamp is a join: disconnected leader metadata no longer ' +
           're-forms the group from rows (O1)',
       );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'op-1')
+          ?.create_admission_state,
+        'ACTIVE',
+        'the operation-ledger replica repair reaches an exact durable ' +
+          'admission outcome through surviving ledger authority',
+      );
 
-      handler.shutdown();
+      await handler.shutdown();
     },
   );
 
@@ -691,14 +733,15 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreated',
         'replicaCreationFailed',
       );
-      await handler.handleCreateReplica(withBootstrapStamp({
-        operationId: 'op-1',
-        operationType: 'REPLACE',
-        partitionId,
-        replicaId: 'replica-4',
-        replicaIds: bootstrapReplicaIds,
-        peerAddresses: bootstrapPeerAddresses,
-      }, committedStampFor(['replica-1', 'replica-2', 'replica-3'])));
+      await handler.handleCreateReplica(withBootstrapStamp(
+        withOperationAdmission(cache, {
+          operationId: 'op-1',
+          operationType: 'REPLACE',
+          partitionId,
+          replicaId: 'replica-4',
+          replicaIds: bootstrapReplicaIds,
+          peerAddresses: bootstrapPeerAddresses,
+        }), committedStampFor(['replica-1', 'replica-2', 'replica-3'])));
       await created;
 
       t.ok(capturedOptions, 'partition factory invoked');
@@ -864,12 +907,12 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreationFailed',
         'replicaCreated',
       );
-      await handler.handleCreateReplica({
+      await handler.handleCreateReplica(withOperationAdmission(cache, {
         operationId: 'op-1',
         operationType: 'REPLACE',
         partitionId,
         replicaId: 'replica-4',
-      });
+      }));
       const failure = await outcome;
 
       t.equal(

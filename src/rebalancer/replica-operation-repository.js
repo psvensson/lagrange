@@ -71,8 +71,7 @@ import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OPERATION_METADATA_KEY,
   REPLICA_OPERATION_SEMANTIC_PHASE,
-  OperationType,
-  ReplicaStatus,
+  OperationType, ReplicaStatus,
   buildReplicaOperationSemanticWitnesses,
   getOperationMetadataObject,
   getOperationMetadataString,
@@ -83,6 +82,8 @@ import {
   resolveReplicaOperationSemanticPhase,
 } from './replica-status.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
+import {REPLICA_OPERATION_INSERT_SQL} from
+  './replica-operation-repository-constants.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -183,12 +184,7 @@ const SQL = Object.freeze({
   SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
     WHERE type = ?`,
   SELECT_ALL_OPERATIONS: 'SELECT * FROM replica_operations ORDER BY created_at DESC',
-  INSERT_OPERATION: `INSERT INTO replica_operations (
-    operation_id, type, partition_id, replica_id, target_claim_key, source_node_id,
-    target_node_id, status, workflow_step, created_at, updated_at,
-    completed_at, error_message, steps_history,
-    entity_type, entity_id, membership_publication_epoch
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  INSERT_OPERATION: REPLICA_OPERATION_INSERT_SQL,
   UPDATE_OPERATION: `UPDATE replica_operations SET
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
@@ -212,11 +208,13 @@ const SQL = Object.freeze({
   UPDATE_OPERATION_OWNER_LEASE: `UPDATE replica_operations SET
     lease_expires_at = ?
     WHERE operation_id = ? AND completed_at IS NULL`,
-  SELECT_REPLICA_STATUS: `SELECT service_id, replica_id, partition_id, node_id,
-      service_type, status, raft_role, address
+  SELECT_REPLICA_STATUS: `SELECT service_id, replica_id, group_id, partition_id,
+      node_id, service_type, status, raft_role, address, cleanup_token,
+      create_attempt_token, created_at, state_entered_at
     FROM services WHERE service_id = ?`,
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT service_id, replica_id,
-      partition_id, node_id, service_type, status, raft_role, address
+      group_id, partition_id, node_id, service_type, status, raft_role, address,
+      cleanup_token, create_attempt_token, created_at, state_entered_at
     FROM services 
     WHERE partition_id = ? AND node_id = ?`,
 });
@@ -681,6 +679,7 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE,
   NUM,
   OperationType,
+  ReplicaStatus,
   REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS,
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS,

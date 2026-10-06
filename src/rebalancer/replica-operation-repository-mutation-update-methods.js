@@ -16,6 +16,22 @@ const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL = `UPDATE replica_operations 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const PERSIST_PHASE_DIVERGENCE_REINSERT = 'divergence_reinsert';
 const OWNER_LEASE_TOUCH_LOG_CONTEXT = 'owner_lease_touch';
+const REPLICA_CREATE_ADMISSION_OPERATION_FIELDS = Object.freeze([
+  'createAdmissionState',
+  'createAdmissionToken',
+  'createAdmissionReplicaCreatedAt',
+  'createAdmissionAttemptToken',
+  'createAdmissionPreviousAttemptToken',
+  'createAdmissionAttemptSeq',
+  'createAdmissionWorkflowUpdatedAt',
+  'createAdmissionOwnerIncarnation',
+]);
+
+function operationCarriesReplicaCreateAdmission(operation) {
+  return REPLICA_CREATE_ADMISSION_OPERATION_FIELDS.some((field) =>
+    operation?.[field] !== null && operation?.[field] !== undefined,
+  );
+}
 
 function buildOperationUpdatePersistResult(options, persisted, disposition, operation) {
   if (options?.returnDisposition !== true) {
@@ -390,6 +406,20 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             expectedWorkflowStep,
           },
         );
+        // A vanished row also destroys the durable linearization record for
+        // an admitted physical CREATE. Re-inserting an in-memory admission
+        // tuple could resurrect CLOSED work or a generation removed after
+        // the snapshot was taken. Only admission-free operation rows retain
+        // the older divergence-repair authority; admitted work must defer to
+        // startup/operation recovery without recreating its authority.
+        if (operationCarriesReplicaCreateAdmission(operation)) {
+          return buildOperationUpdatePersistResult(
+            resultOptions,
+            false,
+            REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+            null,
+          );
+        }
         try {
           const reinserted = await this.persistNewOperationUnlocked(operation);
           if (reinserted) {

@@ -1,28 +1,21 @@
 import {WORKFLOW_STEP} from '../constants/index.js';
-import {
-  SERVICE_TYPE,
-  isPartitionCleanupServiceRow,
-} from '../constants/service.js';
-import {SYSTEM_TABLE_NAME} from
-  '../bootstrap/system-table-schemas-constants.js';
-import {
-  classifySystemPartition,
-} from '../bootstrap/system-partition-classification.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {
-  ReplicaOperationField,
   ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {
+  ReplicaStatus,
+} from '../rebalancer/replica-status.js';
+import {
+  CREATE_ADMISSION_STATE,
+} from './replica-create-admission-owner.js';
+import {assignReplicaHandlerCreateAdmissionMethods} from
+  './replica-handler-create-admission-methods.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-tombstone-owner.js';
-import {observeAuthoritativeReplicaLifecycle} from
-  './replica-state-machine-lifecycle-observation.js';
-import {durableRowVersion} from './replica-state-machine-recovery.js';
 import * as priorExistence from './replica-prior-existence.js';
 import {
-  REPLICA_HANDLER_ERROR_MSG,
+  REPLICA_HANDLER_CREATE_DECISION,
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_PROGRESS,
@@ -30,7 +23,6 @@ import {
 } from './replica-handler-constants.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
 const REPLICA_HANDLER_LITERAL = Object.freeze({
   VALUE: '',
 });
@@ -59,289 +51,30 @@ const REPLICA_CREATE_IN_PROGRESS_OUTCOME_BY_STATUS = Object.freeze(
     ],
   ]),
 );
-const REPLICA_CREATE_PENDING_DECISION = Object.freeze({
-  REPORT_IN_PROGRESS: 'report_in_progress',
-  RESTART_CREATE: 'restart_create',
-});
 // Rows a create re-drives when nothing runs for them in this process: PENDING
 // never opened; SYNCING is the ack-loss wedge, resumed at its own row (F3 c).
 const RESTARTABLE_CREATE_STATUSES = new Set([
   ReplicaStatus.PENDING, ReplicaStatus.SYNCING]);
 
-function rowMatchesActiveStorageAdmission(row, handler, replicaId,
-  partitionId, version) {
-  if (!version) return false;
-  const expected = {
-    service_id: replicaId,
-    service_type: SERVICE_TYPE.PARTITION,
-    partition_id: partitionId,
-    node_id: handler.nodeId,
-    status: ReplicaStatus.ACTIVE,
-    [version.column]: version.value,
-  };
-  return Object.entries(expected).every(([field, value]) =>
-    row?.[field] === value);
-}
-
-async function requireActiveReplicaStorageAdmission(
-  handler,
-  replicaId,
-  partitionId,
-) {
-  const cached = handler.systemTableCache?.get?.(
-    SYSTEM_TABLE_NAME.SERVICES,
-    replicaId,
-  );
-  const version = durableRowVersion(cached);
-  const observation = await observeAuthoritativeReplicaLifecycle(
-    handler.replicaStateMachine,
-    replicaId,
-  );
-  const row = observation.row;
-  if (observation.available !== true ||
-      !rowMatchesActiveStorageAdmission(
-        row, handler, replicaId, partitionId, version)) {
-    const error = new Error(
-      `Replica storage admission deferred for ${replicaId}`,
-    );
-    error.code = isPartitionCleanupServiceRow(row) ?
-      REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS :
-      CREATE_OWNER_DEFERRED_CODE;
-    error.deferRetry = true;
-    throw error;
-  }
-  return row;
-}
-
 function assignReplicaHandlerCreateMethods(ReplicaHandler) {
+  assignReplicaHandlerCreateAdmissionMethods(ReplicaHandler);
   class ReplicaHandlerCreateMethods {
-    /**
-     * Handle CREATE_REPLICA request.
-     * Returns immediately with 'initiated', then does async work.
-     * Implements idempotency per Requirements 10.2.
-     * @param {Object} request - CREATE_REPLICA request.
-     * @return {Promise<Object>} Response.
-     */
-    async handleCreateReplica(request) {
-      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
-      const operationId = request?.[ReplicaOperationField.OPERATION_ID];
-      const explicitOperationType =
-        typeof request?.[ReplicaOperationField.OPERATION_TYPE] ===
-        REPLICA_HANDLER_TYPEOF.STRING ?
-          request[ReplicaOperationField.OPERATION_TYPE] :
-          null;
-      const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
-      const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
-      const bootstrapReplicaIds = Array.isArray(
-        request?.[ReplicaOperationField.REPLICA_IDS],
-      ) ?
-        request[ReplicaOperationField.REPLICA_IDS] :
-        [];
-      const bootstrapPeerAddresses = Array.isArray(
-        request?.[ReplicaOperationField.PEER_ADDRESSES],
-      ) ?
-        request[ReplicaOperationField.PEER_ADDRESSES] :
-        [];
-      const bootstrapTableMetadata =
-        request?.[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] &&
-        typeof request[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] ===
-          REPLICA_HANDLER_TYPEOF.OBJECT ?
-          request[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] :
-          null;
-      const bootstrapPartitionMetadata =
-        request?.[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] &&
-        typeof request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] ===
-          REPLICA_HANDLER_TYPEOF.OBJECT ?
-          request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] :
-          null;
-      const tableName = request?.tableName || null;
-      // The committed-membership stamp, carried unchanged to the target's
-      // port (owner decision O1); validated in resolveReplicaContext.
-      const bootstrapMembership =
-        request?.[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] ?? null;
-      const createRequest = {
-        operationId,
-        explicitOperationType,
-        partitionId,
-        replicaId,
-        bootstrapReplicaIds,
-        bootstrapPeerAddresses,
-        bootstrapTableMetadata,
-        bootstrapPartitionMetadata,
-        bootstrapMembership,
-        deferCdcPropagationHandshake: classifySystemPartition({
-          partitionId,
-          partitionRow: bootstrapPartitionMetadata,
-        }).priorityControlPlane,
-      };
-      this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_REQUEST, {
-        operationId,
-        explicitOperationType,
-        partitionId,
-        replicaId,
-        nodeId: this.nodeId,
-      });
-      if (!operationId || !partitionId || !replicaId) {
-        this.logger.warn(REPLICA_HANDLER_LOG_MSG.CREATE_MISSING_FIELDS, {
-          operationId,
-          partitionId,
-          replicaId,
-          nodeId: this.nodeId,
-        });
-        return this.buildReplicaOperationResponse(
-          ReplicaOperationResponseStatus.ERROR,
-          {
-            error: REPLICA_HANDLER_ERROR_MSG.CREATE_REQUIRED_FIELDS,
-            nodeId: this.nodeId,
-          },
-        );
-      }
-      // Check idempotency - existing replica
-      const existingReplica = this.getLocalReplica(replicaId);
-      const needsReplicaRuntimeRepair =
-        existingReplica?.status === ReplicaStatus.ACTIVE &&
-        !this.isReplicaCreateAlreadySatisfied(existingReplica);
-      const needsFailedCreateReplay =
-        existingReplica?.status === ReplicaStatus.FAILED;
-      if (existingReplica) {
-        if (this.isReplicaCreateAlreadySatisfied(existingReplica)) {
-          this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE, {
-            replicaId: existingReplica.replicaId,
-            nodeId: this.nodeId,
-          });
-          this.emitExecutorOutcome(
-            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
-            operationId,
-            WORKFLOW_STEP.ACTIVE,
-            {
-              replicaId: existingReplica.replicaId,
-              partitionId: existingReplica.partitionId || partitionId,
-            },
-          );
-          return this.buildReplicaOperationResponse(
-            ReplicaOperationResponseStatus.ALREADY_EXISTS,
-            {
-              replicaId: existingReplica.replicaId,
-              [ReplicaOperationField.REPLICA_STATUS]: ReplicaStatus.ACTIVE,
-              nodeId: this.nodeId,
-            },
-          );
-        }
-        if (
-          existingReplica.status === ReplicaStatus.PENDING ||
-          existingReplica.status === ReplicaStatus.CREATING ||
-          existingReplica.status === ReplicaStatus.SYNCING
-        ) {
-          const pendingDecision = this.resolvePendingReplicaCreateDecision(
-            existingReplica, replicaId);
-          if (
-            pendingDecision === REPLICA_CREATE_PENDING_DECISION.RESTART_CREATE
-          ) {
-            this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_RESTARTING_PENDING, {
-              replicaId: existingReplica.replicaId,
-              status: existingReplica.status,
-              nodeId: this.nodeId,
-            });
-            this.trackReplicaCreateOperation(
-              operationId, partitionId, replicaId, tableName);
-            this.startCreateReplicaAsync(createRequest);
-            return this.buildReplicaOperationResponse(
-              ReplicaOperationResponseStatus.INITIATED,
-              {
-                operationId,
-                replicaId,
-                nodeId: this.nodeId,
-              },
-            );
-          }
-          this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_IN_PROGRESS, {
-            replicaId: existingReplica.replicaId,
-            status: existingReplica.status,
-            nodeId: this.nodeId,
-          });
-          this.emitReplicaCreateInProgressOutcome(
-            existingReplica,
-            operationId,
-          );
-          return this.buildReplicaOperationResponse(
-            ReplicaOperationResponseStatus.IN_PROGRESS,
-            {
-              replicaId: existingReplica.replicaId,
-              [ReplicaOperationField.REPLICA_STATUS]: existingReplica.status,
-              nodeId: this.nodeId,
-            },
-          );
-        }
-      }
-      // Check idempotency - in-progress operation
-      if (this.inProgressOperations.has(operationId)) {
-        this.logger.info(REPLICA_HANDLER_LOG_MSG.OPERATION_IN_PROGRESS, {
-          operationId,
-          nodeId: this.nodeId,
-        });
-        return this.buildReplicaOperationResponse(
-          ReplicaOperationResponseStatus.IN_PROGRESS,
-          {
-            operationId,
-            nodeId: this.nodeId,
-          },
-        );
-      }
-      // Track in-progress operation
-      if (needsReplicaRuntimeRepair) {
-        await this.requireActiveReplicaStorageAdmission(
-          replicaId,
-          partitionId,
-        );
-      } else if (!needsFailedCreateReplay) {
-        await this.persistReplicaStatusWithRetry(
-          replicaId,
-          ReplicaStatus.PENDING,
-          {partitionId},
-        );
-        createRequest.pendingStatusPersisted = true;
-      }
-      this.trackReplicaCreateOperation(
-        operationId,
-        partitionId,
-        replicaId,
-        tableName,
-      );
-      createRequest.skipLifecycleStatusPersistence = needsReplicaRuntimeRepair;
-      this.startCreateReplicaAsync(createRequest);
-      return this.buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.INITIATED,
-        {
-          operationId,
-          replicaId,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-    /**
-     * Prove that an existing replica path still belongs to the exact cached
-     * live generation before reopening it.
-     * @param {string} replicaId
-     * @param {string} partitionId
-     * @return {Promise<Object>}
-     */
-    async requireActiveReplicaStorageAdmission(replicaId, partitionId) {
-      return requireActiveReplicaStorageAdmission(
-        this,
-        replicaId,
-        partitionId,
-      );
-    }
     /**
      * @param {Object|null} existingReplica
      * @param {string} replicaId
      * @return {string}
      * @private
      */
-    resolvePendingReplicaCreateDecision(existingReplica, replicaId) {
+    resolvePendingReplicaCreateDecision(
+      existingReplica,
+      replicaId,
+      createAdmissionEvidence = null,
+    ) {
       const snapshot = {
         hasPendingStatus:
-          RESTARTABLE_CREATE_STATUSES.has(existingReplica?.status),
+          RESTARTABLE_CREATE_STATUSES.has(existingReplica?.status) ||
+          existingReplica?.status === ReplicaStatus.CREATING &&
+            Boolean(createAdmissionEvidence),
         hasInProgressCreate: this.hasInProgressReplicaCreation(replicaId),
         hasTrackedService: Boolean(this.getTrackedService(replicaId)),
       };
@@ -350,9 +83,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         !snapshot.hasInProgressCreate &&
         !snapshot.hasTrackedService
       ) {
-        return REPLICA_CREATE_PENDING_DECISION.RESTART_CREATE;
+        return REPLICA_HANDLER_CREATE_DECISION.RESTART_CREATE;
       }
-      return REPLICA_CREATE_PENDING_DECISION.REPORT_IN_PROGRESS;
+      return REPLICA_HANDLER_CREATE_DECISION.REPORT_IN_PROGRESS;
     }
     /**
      * @param {string} replicaId
@@ -405,6 +138,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         new Promise((resolve) => {
           setImmediate(() => {
             if (this.shuttingDown) {
+              this.getReplicaCreateAdmissionOwner()
+                .releasePhysicalWorker(operationId);
               this.inProgressOperations.delete(operationId);
               this.localServices.delete(replicaId);
               this.localReplicas.delete(replicaId);
@@ -463,7 +198,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         deferCdcPropagationHandshake = false,
         skipLifecycleStatusPersistence = false,
         pendingStatusPersisted = false,
+        createAdmissionEvidence: requestAdmissionEvidence = null,
+        createAttemptToken: requestAttemptToken = null,
       } = request;
+      let createAdmissionEvidence = requestAdmissionEvidence;
+      let createAttemptToken = requestAttemptToken;
       const progress = this.startReplicaCreationProgress({
         partitionId,
         replicaId,
@@ -475,17 +214,23 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         const {existed, record: identityRecord} = await priorExistence
           .observeReplicaIdentity(this, replicaId, skipLifecycleStatusPersistence);
         if (!skipLifecycleStatusPersistence) {
+          const initialStatusOptions = {
+            operationId,
+            partitionId,
+            replicaId,
+            pendingStatusPersisted,
+            createAdmissionEvidence,
+            createAttemptToken,
+          };
           const initialStatusPersisted =
-            await this.persistReplicaCreateInitialStatus({
-              operationId,
-              partitionId,
-              replicaId,
-              pendingStatusPersisted,
-            });
+            await this.persistReplicaCreateInitialStatus(initialStatusOptions);
           if (initialStatusPersisted !== true) {
             this.clearReplicaCreationProgress(progress);
             return;
           }
+          createAdmissionEvidence =
+            initialStatusOptions.createAdmissionEvidence;
+          createAttemptToken = initialStatusOptions.createAttemptToken;
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -628,8 +373,19 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           await this.persistReplicaStatusWithRetry(
             replicaId,
             ReplicaStatus.ACTIVE,
-            {partitionId, activationService: partitionService},
+            {
+              partitionId,
+              activationService: partitionService,
+              createAdmissionEvidence,
+              createAttemptToken,
+            },
           );
+          if (createAdmissionEvidence) {
+            await this.getReplicaCreateAdmissionOwner().markProgress(
+              createAdmissionEvidence,
+              CREATE_ADMISSION_STATE.ACTIVE,
+            );
+          }
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -643,6 +399,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         // Clean up in-progress tracking
         if (operationId) {
           this.inProgressOperations.delete(operationId);
+          this.getReplicaCreateAdmissionOwner()
+            .releasePhysicalWorker(operationId);
         }
         this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_COMPLETED, {
           operationId,
@@ -671,6 +429,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           }
           if (operationId) {
             this.inProgressOperations.delete(operationId);
+            this.getReplicaCreateAdmissionOwner()
+              .releasePhysicalWorker(operationId);
           }
           this.localServices.delete(replicaId);
           this.localReplicas.delete(replicaId);
@@ -679,7 +439,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         if (error?.code ===
             REPLICA_CLEANUP_ERROR_CODE.CLEANUP_IN_PROGRESS) {
           this.clearReplicaCreationProgress(progress);
-          if (operationId) this.inProgressOperations.delete(operationId);
+          if (operationId) {
+            this.inProgressOperations.delete(operationId);
+            this.getReplicaCreateAdmissionOwner()
+              .releasePhysicalWorker(operationId);
+          }
           this.localServices.delete(replicaId);
           this.localReplicas.delete(replicaId);
           this.emitExecutorOutcome(
@@ -732,18 +496,23 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         if (error?.deferRetry === true) {
           failedOutcomeOptions.deferRetry = true;
         }
-        // Emit failed outcome - coordinator will transition workflow.
-        this.emitExecutorOutcome(
-          EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
-          operationId,
-          WORKFLOW_STEP.FAILED,
-          failedOutcomeOptions,
-        );
         try {
-          await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
+          // Confirm exact FAILED authority before publishing terminal outcome.
+          await this.persistOrConfirmReplicaCreateFailed({
+            operationId,
+            replicaId,
             partitionId,
             errorMessage: error.message,
+            claimCleanup: error?.deferRetry !== true,
+            createAdmissionEvidence,
+            createAttemptToken,
           });
+          if (createAdmissionEvidence) {
+            await this.getReplicaCreateAdmissionOwner().markProgress(
+              createAdmissionEvidence,
+              CREATE_ADMISSION_STATE.FAILED,
+            );
+          }
           this.setLocalReplica(replicaId, {
             replicaId,
             partitionId,
@@ -758,10 +527,18 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               ReplicaStatus.FAILED,
             );
           }
+          this.emitExecutorOutcome(
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+            operationId,
+            WORKFLOW_STEP.FAILED,
+            failedOutcomeOptions,
+          );
         } finally {
           // Clean up in-progress tracking even when FAILED status persistence is deferred.
           if (operationId) {
             this.inProgressOperations.delete(operationId);
+            this.getReplicaCreateAdmissionOwner()
+              .releasePhysicalWorker(operationId);
           }
         }
         this.emit(REPLICA_HANDLER_EVENT.CREATION_FAILED, {

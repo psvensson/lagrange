@@ -112,6 +112,8 @@ function openedRow(replicaId, status) {
     replica_id: replicaId,
     status,
     address: `${NODE_ID}/partition/${replicaId}`,
+    cleanup_token: null,
+    create_attempt_token: null,
     created_at: 1,
     state_entered_at: 1,
     updated_at: 1,
@@ -421,8 +423,10 @@ export async function registerReplicaHandlerIdentityRecordTests({
             const row = durable.services.get(replicaId);
             if (row?.status === ReplicaStatus.SYNCING) {
               durable.services.set(replicaId, {...row, [field]: value});
+              if (released === null) {
+                released = recordStateAt(opened[0]);
+              }
             }
-            released = recordStateAt(opened[0]);
           });
         },
       });

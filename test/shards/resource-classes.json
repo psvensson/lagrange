@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2194,
+    "ordinary": 2197,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2211,
-  "digest": "fnv1a32-83ef3ed9",
+  "censusSize": 2214,
+  "digest": "fnv1a32-c9ad9935",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1090,8 +1090,11 @@
     "test/node/partition-registration-invariant.property.test.js": "ordinary",
     "test/node/registered-partition-removal.property.test.js": "ordinary",
     "test/node/replica-cleanup-token-authority.test.js": "ordinary",
+    "test/node/replica-create-admission-owner.test.js": "ordinary",
+    "test/node/replica-create-admission-recovery.test.js": "ordinary",
     "test/node/replica-creation-idempotency.property.test.js": "ordinary",
     "test/node/replica-executor-activation-handler-boundary.test.js": "ordinary",
+    "test/node/replica-failed-create-cleanup-generation.test.js": "ordinary",
     "test/node/replica-handler-cache-state.test.js": "ordinary",
     "test/node/replica-handler-idempotency.property.test.js": "ordinary",
     "test/node/replica-handler-leadership-transfer.test.js": "ordinary",

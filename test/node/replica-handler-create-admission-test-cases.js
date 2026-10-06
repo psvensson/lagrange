@@ -4,6 +4,13 @@ import {
 } from '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {ReplicaOperationField} from
+  '../../src/rebalancer/replica-operation-constants.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from '../../src/rebalancer/replica-create-admission-token.js';
 
 const TEST_INITIAL_STATUS_RETRY_OPERATION_ID =
   'op-initial-create-status-retry';
@@ -34,6 +41,165 @@ export async function registerReplicaHandlerCreateAdmissionTests({
   getTempDir,
   ReplicaOperationResponseStatus,
 }) {
+  t.test(
+    'two same-boot handlers share one admission lane and physical worker',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-shared-handler', {
+        entity_type: 'partition',
+        entity_id: 'partition-1',
+        workflow_step: 'SENDING',
+        completed_at: null,
+        create_admission_state: null,
+        create_admission_token: null,
+        create_admission_replica_created_at: null,
+        create_admission_attempt_token: null,
+        create_admission_previous_attempt_token: null,
+        create_admission_attempt_seq: null,
+        create_admission_workflow_updated_at: null,
+        create_admission_owner_incarnation: null,
+      });
+      const operationRow = structuredClone(cache.get(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        'op-shared-handler',
+      ));
+      const lifecycleGateway = createLifecycleControlPlaneGatewayForCache(
+        cache,
+      );
+      const matches = (row, where) => Object.entries(where).every(
+        ([field, value]) => row?.[field] === value,
+      );
+      const gateway = {
+        async readAuthoritativeRows(tableName, sql, params) {
+          if (tableName === SYSTEM_TABLE_NAME.NODES) {
+            return {success: true, rows: [{
+              node_id: 'test-node',
+              boot_incarnation: 101,
+            }]};
+          }
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+            if (sql.includes('WHERE operation_id = ?')) {
+              return {success: true, rows:
+                operationRow.operation_id === params[0] ? [operationRow] : []};
+            }
+            if (params.length === 1) {
+              return {success: true, rows:
+                operationRow.target_node_id === params[0] &&
+                operationRow.create_admission_state ? [operationRow] : []};
+            }
+            return {success: true, rows:
+              operationRow.replica_id === params[0] &&
+                operationRow.target_node_id === params[1] ?
+                [operationRow] : []};
+          }
+          return lifecycleGateway.readAuthoritativeRows(
+            tableName,
+            sql,
+            params,
+          );
+        },
+        async updateSystemTableRow(tableName, where, data) {
+          if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+              !matches(operationRow, where)) {
+            return {success: true, outcome: 'no_op'};
+          }
+          Object.assign(operationRow, data);
+          return {success: true, outcome: 'applied'};
+        },
+        submitMutation: lifecycleGateway.submitMutation,
+      };
+      const mockCDC = createMockCDCService(cache);
+      let physicalStarts = 0;
+      let releasePhysicalStart;
+      const physicalStartGate = new Promise((resolve) => {
+        releasePhysicalStart = resolve;
+      });
+      const createPartitionService = async (options) => {
+        physicalStarts += 1;
+        await physicalStartGate;
+        return bindRegisteredReplicaHandler({
+          partitionId: options.partitionId,
+          replicaId: options.replicaId,
+          initialized: true,
+          role: 'follower',
+          async shutdown() {},
+          async syncFromLeader() {},
+        }, options);
+      };
+      const makeHandler = () => new ReplicaHandler({
+        nodeId: 'test-node',
+        ownerIncarnation: 101,
+        cdcIntegrationService: mockCDC,
+        controlPlaneSystemTableGateway: gateway,
+        systemTableCache: cache,
+        createPartitionService,
+        dataDir: getTempDir(),
+      });
+      const first = makeHandler();
+      const second = makeHandler();
+      const completed = new Promise((resolve, reject) => {
+        for (const handler of [first, second]) {
+          handler.once('replicaCreated', resolve);
+          handler.once('replicaCreationFailed', (event) => {
+            reject(new Error(event?.error || 'replica creation failed'));
+          });
+        }
+      });
+      first.initialize();
+      second.initialize();
+      await Promise.all([
+        first.awaitReplicaCreateAdmissionRecoveryBarrier(),
+        second.awaitReplicaCreateAdmissionRecoveryBarrier(),
+      ]);
+      const workflowUpdatedAt = operationRow.updated_at;
+      const admissionToken = buildReplicaCreateAdmissionToken({
+        operationId: operationRow.operation_id,
+        replicaId: operationRow.replica_id,
+        targetNodeId: operationRow.target_node_id,
+        workflowUpdatedAt,
+      });
+      const request = {
+        [ReplicaOperationField.OPERATION_ID]: operationRow.operation_id,
+        [ReplicaOperationField.OPERATION_TYPE]: OperationType.ADD,
+        [ReplicaOperationField.ENTITY_TYPE]: operationRow.entity_type,
+        [ReplicaOperationField.ENTITY_ID]: operationRow.entity_id,
+        [ReplicaOperationField.PARTITION_ID]: operationRow.partition_id,
+        [ReplicaOperationField.REPLICA_ID]: operationRow.replica_id,
+        [ReplicaOperationField.CREATE_ADMISSION_TOKEN]: admissionToken,
+        [ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT]:
+          workflowUpdatedAt,
+        [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN]:
+          buildReplicaCreateAttemptToken(admissionToken, 1),
+        [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ]: 1,
+      };
+      const responses = await Promise.all([
+        first.handleCreateReplica(request),
+        second.handleCreateReplica(request),
+      ]);
+      for (let turn = 0; physicalStarts === 0 && turn < 20; turn += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      t.equal(physicalStarts, 1, 'one physical partition factory starts');
+      t.same(
+        responses.map((response) => response.status).sort(),
+        [
+          ReplicaOperationResponseStatus.INITIATED,
+          ReplicaOperationResponseStatus.IN_PROGRESS,
+        ].sort(),
+        'duplicate handler joins the admitted in-progress work',
+      );
+      operationRow.completed_at = workflowUpdatedAt + 1;
+      releasePhysicalStart();
+      await completed;
+      t.equal(
+        operationRow.create_admission_state,
+        'ACTIVE',
+        'admission-first work reaches ACTIVE after ordinary terminal settlement',
+      );
+      await Promise.all([first.shutdown(), second.shutdown()]);
+    },
+  );
+
   t.test(
     'handleCreateReplica - wins durable admission before ACK or runtime open',
     async (t) => {

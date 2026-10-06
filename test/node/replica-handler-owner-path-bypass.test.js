@@ -1105,11 +1105,21 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
     async (t) => {
       const emitter = new ExecutorOutcomeEmitter({logger: console});
       const emittedOutcomes = [];
+      const lifecycleAtFailure = [];
       emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
         emittedOutcomes.push(outcome);
       });
 
       const cache = createSeededCache();
+      emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
+        if (outcome.outcomeType ===
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED) {
+          lifecycleAtFailure.push(cache.get(
+            SYSTEM_TABLE_NAME.SERVICES,
+            TEST_REPLICA_ID,
+          )?.status || null);
+        }
+      });
       const cdcService = createMockCDCService(cache);
 
       // Factory that throws to simulate creation failure.
@@ -1156,6 +1166,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         failOutcomes[0].errorMessage,
         'failure outcome must carry errorMessage',
       );
+      t.same(lifecycleAtFailure, [ReplicaStatus.FAILED],
+        'the terminal outcome is emitted only after durable FAILED is visible');
 
       // Verify no CDC operation touched replica_operations.
       const replicaOpsWrites = cdcService.operations.filter(
