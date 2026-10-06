@@ -12,6 +12,8 @@ const RECOVERY_PATH =
   'src/rebalancer/operation-workflow-recovery-status-reconcile.js';
 const TRANSITION_PATH =
   'src/rebalancer/operation-workflow-transition-persistence.js';
+const CLEANUP_RELEASE_PATH =
+  'src/rebalancer/operation-workflow-terminal-transition-repair.js';
 
 const CENSUS_TIMEOUT_MS = 90000;
 
@@ -164,6 +166,23 @@ test('census rejects a second CREATE delivery sink', async (t) => {
     'a second transport sink must increase the metric',
   );
 });
+
+test('census rejects cleanup release without an exact create attempt',
+  async (t) => {
+    const sourceByPath = await loadSourceByPath();
+    const mutated = mutateSource(
+      sourceByPath,
+      CLEANUP_RELEASE_PATH,
+      (source) => source.replace(
+        'typeof precondition?.create_attempt_token === \'string\'',
+        'typeof precondition?.cleanup_token === \'string\'',
+      ),
+    );
+    t.ok(
+      violationKinds(mutated).has('cleanup_release_delivery_shape'),
+      'a release without exact attempt identity must increase the metric',
+    );
+  });
 
 test('census rejects a parallel delivered-create registry', async (t) => {
   const sourceByPath = await loadSourceByPath();

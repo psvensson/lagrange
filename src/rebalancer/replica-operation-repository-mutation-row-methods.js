@@ -48,6 +48,20 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         entity_id: entityId,
         membership_publication_epoch:
           operation.membershipPublicationEpoch,
+        create_admission_state: operation.createAdmissionState ?? null,
+        create_admission_token: operation.createAdmissionToken ?? null,
+        create_admission_replica_created_at:
+          operation.createAdmissionReplicaCreatedAt ?? null,
+        create_admission_attempt_token:
+          operation.createAdmissionAttemptToken ?? null,
+        create_admission_previous_attempt_token:
+          operation.createAdmissionPreviousAttemptToken ?? null,
+        create_admission_attempt_seq:
+          operation.createAdmissionAttemptSeq ?? null,
+        create_admission_workflow_updated_at:
+          operation.createAdmissionWorkflowUpdatedAt ?? null,
+        create_admission_owner_incarnation:
+          operation.createAdmissionOwnerIncarnation ?? null,
       };
     }
 

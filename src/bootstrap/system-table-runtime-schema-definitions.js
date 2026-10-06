@@ -61,6 +61,17 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'entity_type', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'entity_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'membership_publication_epoch', type: COLUMN_TYPE.INTEGER},
+    // ReplicaHandler-owned late-CREATE admission record. General operation
+    // writers never assign these columns; they are advanced only by exact
+    // handler CASes on this row.
+    {name: 'create_admission_state', type: COLUMN_TYPE.TEXT},
+    {name: 'create_admission_token', type: COLUMN_TYPE.TEXT},
+    {name: 'create_admission_replica_created_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'create_admission_attempt_token', type: COLUMN_TYPE.TEXT},
+    {name: 'create_admission_previous_attempt_token', type: COLUMN_TYPE.TEXT},
+    {name: 'create_admission_attempt_seq', type: COLUMN_TYPE.INTEGER},
+    {name: 'create_admission_workflow_updated_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'create_admission_owner_incarnation', type: COLUMN_TYPE.INTEGER},
     {name: 'replica_id', type: COLUMN_TYPE.TEXT},
     {name: 'target_claim_key', type: COLUMN_TYPE.TEXT},
     {name: 'source_node_id', type: COLUMN_TYPE.TEXT, notNull: true},

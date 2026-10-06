@@ -22,6 +22,7 @@ import {
   readAuthoritativeReplicaLifecycle,
   resolveReplicaCreateGroupId,
   rowMatchesReplicaLifecycle,
+  rowMatchesReplicaLifecyclePredicate,
 } from './replica-state-machine-lifecycle-observation.js';
 import {
   advanceReplicaRevision,
@@ -36,6 +37,8 @@ import {clearLeaderOrRecordDebt} from
 import {createReplicaRowInCdc} from
   './replica-state-machine-create-persistence.js';
 import {mintServiceRowCreatedAt} from './service-row-incarnation.js';
+import {isReplicaCreateAdmissionEvidence} from
+  './replica-create-admission-evidence.js';
 import {
   isCreateSyncingEdge,
   resolveCreateSyncingEdge,
@@ -137,10 +140,23 @@ function resolveTransitionTimestamp(stateMachine, existingState, context) {
   };
 }
 
-function buildTransitionLifecycleIdentity(replicaId, existingState, now) {
+function buildTransitionLifecycleIdentity(
+  replicaId,
+  existingState,
+  now,
+  context,
+) {
+  const reservedCreatedAt =
+    !existingState &&
+    isReplicaCreateAdmissionEvidence(context?.createAdmissionEvidence) &&
+    context.createAdmissionEvidence.replicaId === replicaId &&
+    context.createAdmissionEvidence.attemptToken ===
+      context.createAttemptToken ?
+      context.createAdmissionEvidence.replicaCreatedAt : null;
   const createdAt = Number.isFinite(existingState?.createdAt) ?
     existingState.createdAt :
-    mintServiceRowCreatedAt(now);
+    Number.isSafeInteger(reservedCreatedAt) ? reservedCreatedAt :
+      mintServiceRowCreatedAt(now);
   return {
     replicaIdentity: existingState?.replicaIdentity || replicaId,
     groupId: existingState?.groupId ?? null,
@@ -206,13 +222,24 @@ function buildTransitionState(
         context.serviceAddress,
         existingState?.serviceAddress,
       ),
-      ...buildTransitionLifecycleIdentity(replicaId, existingState, now),
+      ...buildTransitionLifecycleIdentity(
+        replicaId,
+        existingState,
+        now,
+        context,
+      ),
+      cleanupToken: transitionValue(
+        context.cleanupToken, existingState?.cleanupToken, null),
+      createAttemptToken: transitionValue(
+        context.createAttemptToken,
+        existingState?.createAttemptToken,
+        null,
+      ),
       durableVersionColumn: STATE_ENTERED_AT_COLUMN,
       durableVersion: now,
     },
   };
 }
-
 function commitTransition(
   stateMachine,
   replicaId,
@@ -503,7 +530,17 @@ function applyTransition(stateMachine, replicaId, newState, context = {}, option
   const admission = captureReplicaAdmission(stateMachine, replicaId);
   const currentState = admission.sourceState;
   const validate = options.validate !== false;
-
+  if (!currentState && context.createAdmissionEvidence &&
+      (!isReplicaCreateAdmissionEvidence(context.createAdmissionEvidence) ||
+        context.createAdmissionEvidence.replicaId !== replicaId ||
+        context.createAdmissionEvidence.attemptToken !==
+          context.createAttemptToken)) return false;
+  if (options.expectedSourceEvidence) {
+    const tracked = buildReplicaLifecycleMutationPredicateFromState(
+      stateMachine.replicas.get(replicaId));
+    if (!rowMatchesReplicaLifecyclePredicate(options.expectedSourceEvidence,
+      tracked)) return false;
+  }
   if (stateMachine.uncertainRemovingIntentByReplicaId.has(replicaId) &&
       newState !== ReplicaState.REMOVING) {
     return refuseTransition(
@@ -681,8 +718,9 @@ function buildUpdateCdcData(replicaState, previousState) {
     previous_state: previousState,
     trigger_reason: replicaState.triggerReason,
     updated_at: durableUpdatedAt,
+    cleanup_token: replicaState.cleanupToken ?? null,
+    create_attempt_token: replicaState.createAttemptToken ?? null,
   };
-
   if (replicaState.errorMessage) {
     cdcData.error_message = replicaState.errorMessage;
   }
@@ -741,6 +779,7 @@ function buildCreateCdcData(
     replica_id: replicaState.replicaIdentity,
     address,
     created_at: createdAt,
+    create_attempt_token: replicaState.createAttemptToken ?? null,
   };
 }
 

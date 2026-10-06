@@ -31,6 +31,10 @@ import {
 import {
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from '../../src/rebalancer/replica-create-admission-token.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   registerReplicaHandlerCreateAdmissionTests,
@@ -542,7 +546,20 @@ test('ReplicaHandler', async (t) => {
 
   t.test('handleMessage routes to correct handler', async (t) => {
     const cache = createSeededCache();
-    seedReplicaOperation(cache, 'op-1');
+    seedReplicaOperation(cache, 'op-1', {
+      entity_type: 'partition',
+      entity_id: 'partition-1',
+      workflow_step: 'SENDING',
+      completed_at: null,
+      create_admission_state: null,
+      create_admission_token: null,
+      create_admission_replica_created_at: null,
+      create_admission_attempt_token: null,
+      create_admission_previous_attempt_token: null,
+      create_admission_attempt_seq: null,
+      create_admission_workflow_updated_at: null,
+      create_admission_owner_incarnation: null,
+    });
     const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
@@ -562,13 +579,28 @@ test('ReplicaHandler', async (t) => {
     );
 
     // Test CREATE_REPLICA routing
+    const operation = cache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'op-1');
+    const createAdmissionToken = buildReplicaCreateAdmissionToken({
+      operationId: operation.operation_id,
+      replicaId: operation.replica_id,
+      targetNodeId: operation.target_node_id,
+      workflowUpdatedAt: operation.updated_at,
+    });
     const createEnvelope = {
       correlationId: 'corr-1',
       payload: {
         type: ReplicaOperationMessageType.CREATE_REPLICA,
         operationId: 'op-1',
+        operationType: OperationType.ADD,
+        entityType: 'partition',
+        entityId: 'partition-1',
         partitionId: 'partition-1',
         replicaId: 'replica-1',
+        createAdmissionToken,
+        createAdmissionWorkflowUpdatedAt: operation.updated_at,
+        createAdmissionAttemptToken:
+          buildReplicaCreateAttemptToken(createAdmissionToken, 1),
+        createAdmissionAttemptSeq: 1,
       },
     };
 
@@ -969,6 +1001,23 @@ test('ReplicaHandler', async (t) => {
         partitionId: TEST_PENDING_RESTART_PARTITION_ID,
         replicaId: TEST_PENDING_RESTART_REPLICA_ID,
       });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: TEST_PENDING_RESTART_REPLICA_ID,
+        service_type: 'partition',
+        partition_id: TEST_PENDING_RESTART_PARTITION_ID,
+        node_id: 'test-node',
+        replica_id: TEST_PENDING_RESTART_REPLICA_ID,
+        group_id: null,
+        raft_role: null,
+        status: ReplicaStatus.PENDING,
+        address:
+          `test-node/partition/${TEST_PENDING_RESTART_REPLICA_ID}`,
+        cleanup_token: null,
+        create_attempt_token: null,
+        created_at: 1,
+        state_entered_at: 1,
+        updated_at: 1,
+      });
       const mockCDC = createMockCDCService(cache);
       const createCalls = [];
 
@@ -989,6 +1038,23 @@ test('ReplicaHandler', async (t) => {
         partitionId: TEST_PENDING_RESTART_PARTITION_ID,
         status: ReplicaStatus.PENDING,
       });
+      handler.replicaStateMachine.registerReplicaSnapshot(
+        TEST_PENDING_RESTART_REPLICA_ID,
+        {
+          partitionId: TEST_PENDING_RESTART_PARTITION_ID,
+          nodeId: 'test-node',
+          state: ReplicaStatus.PENDING,
+          serviceId: TEST_PENDING_RESTART_REPLICA_ID,
+          serviceType: 'partition',
+          replicaIdentity: TEST_PENDING_RESTART_REPLICA_ID,
+          cleanupToken: null,
+          createAttemptToken: null,
+          createdAt: 1,
+          durableVersionColumn: 'updated_at',
+          durableVersion: 1,
+          authoritativeSnapshot: true,
+        },
+      );
 
       const created = waitForReplicaEvent(
         handler,

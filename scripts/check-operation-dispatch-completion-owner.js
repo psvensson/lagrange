@@ -17,6 +17,8 @@ const REPO_ROOT = path.resolve(
 const SOURCE_ROOT = path.join(REPO_ROOT, 'src');
 const CANONICAL_DISPATCH_PATH =
   'src/rebalancer/operation-workflow-dispatch-response-reconcile.js';
+const CLEANUP_RELEASE_PATH =
+  'src/rebalancer/operation-workflow-terminal-transition-repair.js';
 const OWNER_REGISTRY_PATH =
   'src/rebalancer/operation-workflow-owner-retry-registry.js';
 const OBSERVED_RETENTION_PATH =
@@ -26,6 +28,7 @@ const RECOVERY_STATUS_RECONCILE_PATH =
 const TRANSITION_PERSISTENCE_PATH =
   'src/rebalancer/operation-workflow-transition-persistence.js';
 const CANONICAL_DISPATCH_FUNCTION = 'executeOperationInternal';
+const CLEANUP_RELEASE_FUNCTION = 'deliverFailedCreateCleanupRelease';
 const DELIVERY_CALL = 'deliverReplicaOperationRequest';
 const RETENTION_CALL = 'retainDeliveredCreateProgress';
 const RESPONSE_RECONCILE_CALL = '_handleDispatchResponse';
@@ -277,6 +280,10 @@ function collectOperationDispatchCompletionViolations(sourceByPath) {
     site.filePath === CANONICAL_DISPATCH_PATH &&
     site.functionName === CANONICAL_DISPATCH_FUNCTION,
   );
+  const cleanupReleaseDelivery = deliveryCalls.find((site) =>
+    site.filePath === CLEANUP_RELEASE_PATH &&
+    site.functionName === CLEANUP_RELEASE_FUNCTION,
+  );
   const canonicalRetention = retentionCalls.find((site) =>
     site.filePath === CANONICAL_DISPATCH_PATH &&
     site.functionName === CANONICAL_DISPATCH_FUNCTION,
@@ -286,10 +293,31 @@ function collectOperationDispatchCompletionViolations(sourceByPath) {
     site.functionName === CANONICAL_DISPATCH_FUNCTION,
   );
 
-  if (deliveryCalls.length !== 1 || !canonicalDelivery) {
+  if (deliveryCalls.length !== 2 || !canonicalDelivery ||
+      !cleanupReleaseDelivery) {
     violations.push({
       kind: 'create_delivery_sink_census',
-      detail: `expected one canonical delivery call, found ${deliveryCalls.length}`,
+      detail: 'expected one canonical operation delivery and one typed ' +
+        `cleanup release, found ${deliveryCalls.length}`,
+    });
+  }
+  const cleanupReleaseSource = sourceByPath.get(CLEANUP_RELEASE_PATH) || '';
+  if (
+    !cleanupReleaseDelivery ||
+    !cleanupReleaseSource.includes(
+      'ReplicaOperationMessageType.REMOVE_REPLICA',
+    ) ||
+    !cleanupReleaseSource.includes(
+      'FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION',
+    ) ||
+    !cleanupReleaseSource.includes(
+      'typeof precondition?.create_attempt_token === \'string\'',
+    )
+  ) {
+    violations.push({
+      kind: 'cleanup_release_delivery_shape',
+      detail: 'cleanup release must be REMOVE-only and carry an exact ' +
+        'cleanup plus create-attempt precondition',
     });
   }
   if (retentionCalls.length !== 1 || !canonicalRetention) {

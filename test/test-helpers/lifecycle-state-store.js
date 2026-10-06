@@ -114,6 +114,7 @@ function createLifecycleServiceRow(options = {}) {
       `${nodeId}/partition/${replicaId}`,
     ),
     cleanup_token: firstDefined(options.cleanupToken, null),
+    create_attempt_token: firstDefined(options.createAttemptToken, null),
     trigger_reason: firstDefined(options.triggerReason, null),
     error_message: firstDefined(options.errorMessage, null),
     created_at: createdAt,

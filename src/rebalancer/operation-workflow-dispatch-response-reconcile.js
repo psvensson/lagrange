@@ -18,6 +18,10 @@ import {
 import {
   isBoundMembershipPublicationEpoch,
 } from './replica-operation-membership-epoch-binding.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from './replica-create-admission-token.js';
 const {
   DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL,
@@ -465,6 +469,30 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       [ReplicaOperationField.ENTITY_TYPE]: entityType,
       [ReplicaOperationField.ENTITY_ID]: entityId,
     };
+    if (messageType === ReplicaOperationMessageType.CREATE_REPLICA &&
+        (operation.type === OperationType.ADD ||
+          operation.type === OperationType.REPLACE)) {
+      const workflowUpdatedAt =
+        operation.createAdmissionWorkflowUpdatedAt ?? operation.updatedAt;
+      const admissionToken = operation.createAdmissionToken ||
+        buildReplicaCreateAdmissionToken({
+          operationId: operation.operationId,
+          replicaId: requestReplicaId,
+          targetNodeId: dispatchNodeId,
+          workflowUpdatedAt,
+        });
+      const attemptSeq = operation.createAdmissionAttemptSeq || 1;
+      const attemptToken = operation.createAdmissionAttemptToken ||
+        buildReplicaCreateAttemptToken(admissionToken, attemptSeq);
+      request[ReplicaOperationField.CREATE_ADMISSION_TOKEN] = admissionToken;
+      request[
+        ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT
+      ] = workflowUpdatedAt;
+      request[ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN] =
+        attemptToken;
+      request[ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ] =
+        attemptSeq;
+    }
     // Carry the planning epoch into the executor request (audit finding 7)
     // so ADD/REPLACE execution can reject staleness against it.
     if (
@@ -477,6 +505,18 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     if (requestReason) {
       request[ReplicaOperationField.REASON] = requestReason;
+    }
+    if (
+      messageType === ReplicaOperationMessageType.REMOVE_REPLICA &&
+      operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ]
+    ) {
+      request[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ];
     }
     if (
       Array.isArray(operation[ReplicaOperationField.REPLICA_IDS]) &&

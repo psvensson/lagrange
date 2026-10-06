@@ -130,6 +130,9 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           partitionId,
           nodeId: existing?.node_id || this.nodeId,
           errorMessage: additionalData.errorMessage,
+          cleanupToken: additionalData.cleanupToken,
+          createAttemptToken: additionalData.createAttemptToken,
+          createAdmissionEvidence: additionalData.createAdmissionEvidence,
           serviceId: existing?.service_id || replicaId,
           serviceType:
             existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
@@ -179,6 +182,10 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
                 partitionId,
                 nodeId: existing?.node_id || this.nodeId,
                 errorMessage: additionalData.errorMessage,
+                cleanupToken: additionalData.cleanupToken,
+                createAttemptToken: additionalData.createAttemptToken,
+                createAdmissionEvidence:
+                  additionalData.createAdmissionEvidence,
                 serviceId: existing?.service_id || replicaId,
                 serviceType:
                   existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,

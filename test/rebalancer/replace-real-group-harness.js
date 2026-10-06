@@ -159,6 +159,8 @@ function serviceRow(partitionId, replicaId, nodeId, raftRole,
     status,
     raft_role: raftRole,
     address: `${nodeId}/partition/${replicaId}`,
+    cleanup_token: null,
+    create_attempt_token: null,
   };
 }
 

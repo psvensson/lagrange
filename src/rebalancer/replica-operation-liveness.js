@@ -381,6 +381,11 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       LOCAL_STR_TARGET_NODE_ID,
       LOCAL_STR_TARGETNODEID,
     ) || inferredTargetNodeId || ''),
+    createAdmissionAttemptToken: firstStringField(
+      row,
+      'create_admission_attempt_token',
+      'createAdmissionAttemptToken',
+    ),
     createdAt,
     updatedAt,
     completedAt,

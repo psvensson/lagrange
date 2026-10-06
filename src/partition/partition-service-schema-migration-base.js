@@ -24,6 +24,9 @@ class PartitionServiceSchemaMigrationBase extends PartitionServiceRaftInitBase {
     const hasCleanupToken = columns.some(
       (col) => col.name === PARTITION_SERVICE_COLUMN.CLEANUP_TOKEN,
     );
+    const hasCreateAttemptToken = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.CREATE_ATTEMPT_TOKEN,
+    );
     if (!hasCleanupToken) {
       this.db.exec(
         `ALTER TABLE ${this.tableName} ` +
@@ -33,6 +36,16 @@ class PartitionServiceSchemaMigrationBase extends PartitionServiceRaftInitBase {
         tableName: this.tableName,
         partitionId: this.partitionId,
       });
+    }
+    if (!hasCreateAttemptToken) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+          PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ATTEMPT_TOKEN,
+      );
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG.ADDED_SERVICES_CREATE_ATTEMPT_TOKEN,
+        {tableName: this.tableName, partitionId: this.partitionId},
+      );
     }
   }
   /**

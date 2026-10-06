@@ -4,6 +4,8 @@ import {
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
+import {isFailedCreateRemoveToken} from
+  '../rebalancer/failed-create-cleanup-token.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {raftRsLifecycleAdministration} from
   '../raft/raft-rs-lifecycle-administration.js';
@@ -113,7 +115,12 @@ async function takeoverRemovingRowForCleanupOrThrow(
   guard,
   reason,
 ) {
-  if (!await guard.requireRemoving() || !guard.isCurrent() ||
+  if (!await guard.requireRemoving() || !guard.isCurrent()) {
+    throw removalRowDeleteDeferred(replicaId);
+  }
+  const admissionClosed = await handler.getReplicaCreateAdmissionOwner()
+    .closeForLifecycle(authority.replicaState);
+  if (admissionClosed !== true || !guard.isCurrent() ||
       guard.beginExactDelete() !== true) {
     throw removalRowDeleteDeferred(replicaId);
   }
@@ -143,6 +150,17 @@ async function completeCleanupTombstoneOrThrow(
     service,
     cleanupAuthority,
   );
+  if (isFailedCreateRemoveToken(cleanupAuthority.ownerToken)) {
+    const completionReceipt = await owner.markComplete(
+      cleanupAuthority,
+      {artifactsAbsent: true},
+    );
+    if (!completionReceipt ||
+        !await guard.confirmCleanupComplete(completionReceipt)) {
+      throw removalRowDeleteDeferred(replicaId);
+    }
+    return true;
+  }
   if (!await owner.requireCurrent(cleanupAuthority) ||
       !await owner.release(cleanupAuthority, {artifactsAbsent: true}) ||
       !await guard.confirmDeleted()) {

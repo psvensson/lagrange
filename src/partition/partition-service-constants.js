@@ -270,6 +270,7 @@ const PARTITION_SERVICE_DB = Object.freeze({
 
 const PARTITION_SERVICE_COLUMN = Object.freeze({
   CLEANUP_TOKEN: 'cleanup_token',
+  CREATE_ATTEMPT_TOKEN: 'create_attempt_token',
   BOOT_INCARNATION: 'boot_incarnation',
   CONNECTION_STATE: 'connection_state',
   LEGACY_WS_CONNECTION_STATE: 'ws_connection_state',
@@ -289,10 +290,23 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
   PARTITION_VERSION: 'partition_version',
   TARGET_CLAIM_KEY: 'target_claim_key',
   MEMBERSHIP_PUBLICATION_EPOCH: 'membership_publication_epoch',
+  CREATE_ADMISSION_STATE: 'create_admission_state',
+  CREATE_ADMISSION_TOKEN: 'create_admission_token',
+  CREATE_ADMISSION_REPLICA_CREATED_AT:
+    'create_admission_replica_created_at',
+  CREATE_ADMISSION_ATTEMPT_TOKEN: 'create_admission_attempt_token',
+  CREATE_ADMISSION_PREVIOUS_ATTEMPT_TOKEN:
+    'create_admission_previous_attempt_token',
+  CREATE_ADMISSION_ATTEMPT_SEQ: 'create_admission_attempt_seq',
+  CREATE_ADMISSION_WORKFLOW_UPDATED_AT:
+    'create_admission_workflow_updated_at',
+  CREATE_ADMISSION_OWNER_INCARNATION:
+    'create_admission_owner_incarnation',
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
   ADD_CLEANUP_TOKEN: 'ADD COLUMN cleanup_token TEXT',
+  ADD_CREATE_ATTEMPT_TOKEN: 'ADD COLUMN create_attempt_token TEXT',
   ADD_BOOT_INCARNATION:
     'ADD COLUMN boot_incarnation INTEGER NOT NULL DEFAULT 0',
   ADD_CONNECTION_STATE:
@@ -331,6 +345,22 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'ADD COLUMN target_claim_key TEXT',
   ADD_MEMBERSHIP_PUBLICATION_EPOCH:
     'ADD COLUMN membership_publication_epoch INTEGER',
+  ADD_CREATE_ADMISSION_STATE:
+    'ADD COLUMN create_admission_state TEXT',
+  ADD_CREATE_ADMISSION_TOKEN:
+    'ADD COLUMN create_admission_token TEXT',
+  ADD_CREATE_ADMISSION_REPLICA_CREATED_AT:
+    'ADD COLUMN create_admission_replica_created_at INTEGER',
+  ADD_CREATE_ADMISSION_ATTEMPT_TOKEN:
+    'ADD COLUMN create_admission_attempt_token TEXT',
+  ADD_CREATE_ADMISSION_PREVIOUS_ATTEMPT_TOKEN:
+    'ADD COLUMN create_admission_previous_attempt_token TEXT',
+  ADD_CREATE_ADMISSION_ATTEMPT_SEQ:
+    'ADD COLUMN create_admission_attempt_seq INTEGER',
+  ADD_CREATE_ADMISSION_WORKFLOW_UPDATED_AT:
+    'ADD COLUMN create_admission_workflow_updated_at INTEGER',
+  ADD_CREATE_ADMISSION_OWNER_INCARNATION:
+    'ADD COLUMN create_admission_owner_incarnation INTEGER',
   BACKFILL_CONNECTION_STATE_FROM_LEGACY_WS:
     'SET connection_state = ws_connection_state ' +
     'WHERE ws_connection_state IS NOT NULL',
@@ -430,6 +460,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   APPLIED_RUNTIME_RAFT_TIMING: 'Applied runtime raft timing configuration',
   CREATED_TABLE: 'Created table',
   ADDED_SERVICES_CLEANUP_TOKEN: 'Added cleanup_token column to services table',
+  ADDED_SERVICES_CREATE_ATTEMPT_TOKEN:
+    'Added create_attempt_token column to services table',
   ADDED_CONNECTION_STATE: 'Added connection_state column to nodes table',
   MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS:
     'Migrated connection_state values from legacy ws_connection_state column',
@@ -463,6 +495,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Added target_claim_key column to replica_operations table',
   ADDED_REPLICA_OPERATIONS_MEMBERSHIP_PUBLICATION_EPOCH:
     'Added membership_publication_epoch column to replica_operations table',
+  ADDED_REPLICA_OPERATIONS_CREATE_ADMISSION_COLUMN:
+    'Added CREATE admission column to replica_operations table',
   UNKNOWN_MESSAGE_TYPE: 'Unknown application message type',
   HANDLING_SYSTEM_TABLE_WRITE: 'Handling system table write from remote node',
   HANDLING_REMOTE_QUERY: 'Handling remote query',

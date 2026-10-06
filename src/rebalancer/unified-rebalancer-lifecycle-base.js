@@ -238,6 +238,8 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     this.rebalanceCount = UNIFIED_REBALANCER_LITERAL.ZERO;
     this.lastDegradedTargetSignal = null;
     this.lastSuboptimalSignal = null;
+    this.failedCreateTargetCleanupPreconditionByReplicaId = new Map();
+    this.terminalFailedCreateTargetReplicaIds = new Set();
 
     // Scheduler state
     this.scheduledCheck = null;

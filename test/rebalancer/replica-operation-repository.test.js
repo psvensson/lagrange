@@ -907,6 +907,46 @@ test('CL-017(b): zero-row update with missing authoritative row re-inserts the o
   );
 });
 
+test('missing authoritative row never resurrects a stale create admission tuple',
+  async (t) => {
+    const executedSql = [];
+    const repo = createTestRepository({
+      authoritativeVisibilityTimeoutMs: 0,
+      controlPlaneSystemTableGateway: {
+        executeQuery: async (sql) => {
+          executedSql.push(sql);
+          return {success: true, changes: 0};
+        },
+        readRows: async () => ({success: true, rows: []}),
+      },
+    });
+    const operation = repo.rowToOperation(makeRow({
+      status: 'failed',
+      workflow_step: WORKFLOW_STEP.FAILED,
+      completed_at: 300,
+      updated_at: 300,
+      create_admission_state: 'CLOSED',
+      create_admission_token: 'admission-token',
+      create_admission_replica_created_at: 100,
+      create_admission_attempt_token: 'attempt-token',
+      create_admission_previous_attempt_token: null,
+      create_admission_attempt_seq: 1,
+      create_admission_workflow_updated_at: 200,
+      create_admission_owner_incarnation: 101,
+    }));
+
+    const persisted = await repo.persistOperationUpdate(operation, {
+      expectedWorkflowStep: WORKFLOW_STEP.SENDING,
+    });
+
+    t.equal(persisted, false,
+      'row loss defers rather than recreating stale admission authority');
+    t.notOk(
+      executedSql.some((sql) => sql.trim().toUpperCase().startsWith('INSERT')),
+      'stale CLOSED admission tuple is never reinserted',
+    );
+  });
+
 test('CL-017(b): zero-row update with VISIBLE authoritative row does not re-insert', async (t) => {
   const executedSql = [];
   const repo = createTestRepository({

@@ -565,6 +565,8 @@ export async function registerReplicaHandlerTailTests({
         group_id: null,
         status: ReplicaStatus.ACTIVE,
         address: 'test-node/partition/replica-1',
+        cleanup_token: null,
+        create_attempt_token: null,
         created_at: 100,
         state_entered_at: 100,
         updated_at: 100,
@@ -581,6 +583,21 @@ export async function registerReplicaHandlerTailTests({
       });
 
       handler.initialize();
+      handler.replicaStateMachine.registerReplicaSnapshot('replica-1', {
+        partitionId: 'partition-1',
+        nodeId: 'test-node',
+        state: ReplicaStatus.ACTIVE,
+        serviceId: 'replica-1',
+        serviceType: 'partition',
+        serviceAddress: 'test-node/partition/replica-1',
+        replicaIdentity: 'replica-1',
+        cleanupToken: null,
+        createAttemptToken: null,
+        createdAt: 100,
+        durableVersionColumn: 'state_entered_at',
+        durableVersion: 100,
+        authoritativeSnapshot: true,
+      });
 
       const removed = waitForReplicaEvent(
         handler,
@@ -637,6 +654,8 @@ export async function registerReplicaHandlerTailTests({
         group_id: null,
         status: ReplicaStatus.ACTIVE,
         address: 'test-node/partition/replica-1',
+        cleanup_token: null,
+        create_attempt_token: null,
         created_at: 100,
         state_entered_at: 100,
         updated_at: 100,
@@ -661,6 +680,21 @@ export async function registerReplicaHandlerTailTests({
       });
 
       handler.initialize();
+      replicaStateMachine.registerReplicaSnapshot('replica-1', {
+        partitionId: 'partition-1',
+        nodeId: 'test-node',
+        state: ReplicaStatus.ACTIVE,
+        serviceId: 'replica-1',
+        serviceType: 'partition',
+        serviceAddress: 'test-node/partition/replica-1',
+        replicaIdentity: 'replica-1',
+        cleanupToken: null,
+        createAttemptToken: null,
+        createdAt: 100,
+        durableVersionColumn: 'state_entered_at',
+        durableVersion: 100,
+        authoritativeSnapshot: true,
+      });
 
       const removed = waitForReplicaEvent(
         handler,
@@ -701,6 +735,7 @@ export async function registerReplicaHandlerTailTests({
   t.test('handleRemoveReplica preserves local runtime when durable delete fails',
     async (t) => {
       const cache = createSeededCache();
+      const replicaCreatedAt = Date.now();
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: TEST_REMOVE_DELETE_FAILURE_REPLICA_ID,
         service_type: 'partition',
@@ -710,12 +745,14 @@ export async function registerReplicaHandlerTailTests({
         group_id: null,
         raft_role: 'follower',
         status: ReplicaStatus.ACTIVE,
+        cleanup_token: null,
+        create_attempt_token: null,
         address:
           `${TEST_ACTIVE_REPAIR_NODE_ID}/partition/` +
           `${TEST_REMOVE_DELETE_FAILURE_REPLICA_ID}`,
-        created_at: Date.now(),
-        state_entered_at: Date.now(),
-        updated_at: Date.now(),
+        created_at: replicaCreatedAt,
+        state_entered_at: replicaCreatedAt,
+        updated_at: replicaCreatedAt,
       });
 
       const mockCDC = createMockCDCService(cache);
@@ -733,6 +770,26 @@ export async function registerReplicaHandlerTailTests({
       });
 
       handler.initialize();
+      handler.replicaStateMachine.registerReplicaSnapshot(
+        TEST_REMOVE_DELETE_FAILURE_REPLICA_ID,
+        {
+          partitionId: TEST_REMOVE_DELETE_FAILURE_PARTITION_ID,
+          nodeId: TEST_ACTIVE_REPAIR_NODE_ID,
+          state: ReplicaStatus.ACTIVE,
+          serviceId: TEST_REMOVE_DELETE_FAILURE_REPLICA_ID,
+          serviceType: 'partition',
+          serviceAddress:
+            `${TEST_ACTIVE_REPAIR_NODE_ID}/partition/` +
+            `${TEST_REMOVE_DELETE_FAILURE_REPLICA_ID}`,
+          replicaIdentity: TEST_REMOVE_DELETE_FAILURE_REPLICA_ID,
+          cleanupToken: null,
+          createAttemptToken: null,
+          createdAt: replicaCreatedAt,
+          durableVersionColumn: 'state_entered_at',
+          durableVersion: replicaCreatedAt,
+          authoritativeSnapshot: true,
+        },
+      );
 
       let shutdownCalls = 0;
       const trackedService = {
@@ -853,12 +910,22 @@ export async function registerReplicaHandlerTailTests({
       const TEST_STALLED_REMOVE_ADDRESS =
         TEST_STALLED_REMOVE_NODE_ID + '/partition/' +
         TEST_STALLED_REMOVE_REPLICA_ID;
-      const cache = createSeededCache();
+      const cache = createSeededCache({
+        partitionId: TEST_STALLED_REMOVE_PARTITION_ID,
+        leaderNodeId: 'other-node',
+        leaderReplicaId: TEST_STALLED_REMOVE_REPLICA_ID,
+      });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'UPDATE', {
+        partition_id: TEST_STALLED_REMOVE_PARTITION_ID,
+        leader_node_id: null,
+        updated_at: Date.now(),
+      });
       seedReplicaOperation(cache, TEST_STALLED_REMOVE_OPERATION_ID, {
         type: OperationType.REMOVE,
         partitionId: TEST_STALLED_REMOVE_PARTITION_ID,
         replicaId: TEST_STALLED_REMOVE_REPLICA_ID,
       });
+      const replicaCreatedAt = Date.now();
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: TEST_STALLED_REMOVE_REPLICA_ID,
         service_type: 'partition',
@@ -868,10 +935,12 @@ export async function registerReplicaHandlerTailTests({
         group_id: null,
         raft_role: RAFT_ROLE.FOLLOWER,
         status: ReplicaStatus.REMOVING,
+        cleanup_token: null,
+        create_attempt_token: null,
         address: TEST_STALLED_REMOVE_ADDRESS,
-        created_at: Date.now(),
-        state_entered_at: Date.now(),
-        updated_at: Date.now(),
+        created_at: replicaCreatedAt,
+        state_entered_at: replicaCreatedAt,
+        updated_at: replicaCreatedAt,
       });
       const mockCDC = createMockCDCService(cache);
 
@@ -884,6 +953,24 @@ export async function registerReplicaHandlerTailTests({
       });
 
       handler.initialize();
+      handler.replicaStateMachine.registerReplicaSnapshot(
+        TEST_STALLED_REMOVE_REPLICA_ID,
+        {
+          partitionId: TEST_STALLED_REMOVE_PARTITION_ID,
+          nodeId: TEST_STALLED_REMOVE_NODE_ID,
+          state: ReplicaStatus.REMOVING,
+          serviceId: TEST_STALLED_REMOVE_REPLICA_ID,
+          serviceType: 'partition',
+          serviceAddress: TEST_STALLED_REMOVE_ADDRESS,
+          replicaIdentity: TEST_STALLED_REMOVE_REPLICA_ID,
+          cleanupToken: null,
+          createAttemptToken: null,
+          createdAt: replicaCreatedAt,
+          durableVersionColumn: 'state_entered_at',
+          durableVersion: replicaCreatedAt,
+          authoritativeSnapshot: true,
+        },
+      );
       handler.localReplicas.set(TEST_STALLED_REMOVE_REPLICA_ID, {
         replicaId: TEST_STALLED_REMOVE_REPLICA_ID,
         partitionId: TEST_STALLED_REMOVE_PARTITION_ID,
@@ -1109,6 +1196,7 @@ export async function registerReplicaHandlerTailTests({
   t.test('handleRemoveReplica keeps durable removal unambiguous when local cleanup is deferred',
     async (t) => {
       const cache = createSeededCache();
+      const replicaCreatedAt = Date.now();
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: TEST_REMOVED_CLEANUP_REPLICA_ID,
         service_type: 'partition',
@@ -1118,12 +1206,14 @@ export async function registerReplicaHandlerTailTests({
         group_id: null,
         raft_role: 'follower',
         status: ReplicaStatus.ACTIVE,
+        cleanup_token: null,
+        create_attempt_token: null,
         address:
           `${TEST_ACTIVE_REPAIR_NODE_ID}/partition/` +
           `${TEST_REMOVED_CLEANUP_REPLICA_ID}`,
-        created_at: Date.now(),
-        state_entered_at: Date.now(),
-        updated_at: Date.now(),
+        created_at: replicaCreatedAt,
+        state_entered_at: replicaCreatedAt,
+        updated_at: replicaCreatedAt,
       });
       const mockCDC = createMockCDCService(cache);
       const handler = new ReplicaHandler({
@@ -1135,6 +1225,26 @@ export async function registerReplicaHandlerTailTests({
       });
 
       handler.initialize();
+      handler.replicaStateMachine.registerReplicaSnapshot(
+        TEST_REMOVED_CLEANUP_REPLICA_ID,
+        {
+          partitionId: TEST_REMOVED_CLEANUP_PARTITION_ID,
+          nodeId: TEST_ACTIVE_REPAIR_NODE_ID,
+          state: ReplicaStatus.ACTIVE,
+          serviceId: TEST_REMOVED_CLEANUP_REPLICA_ID,
+          serviceType: 'partition',
+          serviceAddress:
+            `${TEST_ACTIVE_REPAIR_NODE_ID}/partition/` +
+            `${TEST_REMOVED_CLEANUP_REPLICA_ID}`,
+          replicaIdentity: TEST_REMOVED_CLEANUP_REPLICA_ID,
+          cleanupToken: null,
+          createAttemptToken: null,
+          createdAt: replicaCreatedAt,
+          durableVersionColumn: 'state_entered_at',
+          durableVersion: replicaCreatedAt,
+          authoritativeSnapshot: true,
+        },
+      );
       let shutdownCalls = 0;
       const trackedService = {
         async shutdown() {

@@ -11,7 +11,9 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
+import {OperationType} from '../rebalancer/replica-status.js';
 import {
+  REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
 } from './replica-handler-constants.js';
@@ -48,6 +50,39 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
             {nodeId: this.nodeId, error: error.message},
           );
         });
+      this.startReplicaCreateAdmissionRecovery();
+    }
+
+    startReplicaCreateAdmissionRecovery() {
+      if (this.shuttingDown) return null;
+      if (this.replicaCreateAdmissionRecoveryRetryTimer) {
+        clearTimeout(this.replicaCreateAdmissionRecoveryRetryTimer);
+        this.replicaCreateAdmissionRecoveryRetryTimer = null;
+      }
+      const barrier = this.recoverRetainedReplicaCreateAdmissions();
+      this.replicaCreateAdmissionRecoveryBarrier = barrier;
+      this.replicaCreateAdmissionRecoveryTask = barrier.catch((error) => {
+        if (this.shuttingDown) return;
+        this.logger.warn(
+          REPLICA_HANDLER_LOG_MSG.CREATE_ADMISSION_RECOVERY_FAILED,
+          {nodeId: this.nodeId, error: error.message},
+        );
+        const timer = setTimeout(() => {
+          if (this.replicaCreateAdmissionRecoveryRetryTimer === timer) {
+            this.replicaCreateAdmissionRecoveryRetryTimer = null;
+          }
+          this.startReplicaCreateAdmissionRecovery();
+        }, REPLICA_HANDLER_DEFAULT.CREATE_ADMISSION_RECOVERY_RETRY_MS);
+        timer.unref?.();
+        this.replicaCreateAdmissionRecoveryRetryTimer = timer;
+      });
+      return barrier;
+    }
+
+    async awaitReplicaCreateAdmissionRecoveryBarrier() {
+      if (this.replicaCreateAdmissionRecoveryBarrier) {
+        await this.replicaCreateAdmissionRecoveryBarrier;
+      }
     }
     /**
      * Handle incoming message (called by message router).
@@ -65,7 +100,20 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
       });
       let response;
       if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
-        response = await this.handleCreateReplica(payload);
+        const operationType = payload?.[ReplicaOperationField.OPERATION_TYPE];
+        if (operationType !== OperationType.ADD &&
+            operationType !== OperationType.REPLACE) {
+          response = this.buildReplicaOperationResponse(
+            ReplicaOperationResponseStatus.ERROR,
+            {
+              error: 'CREATE_REPLICA requires ADD or REPLACE operationType',
+              errorCode: 'REPLICA_CREATE_ADMISSION_INVALID',
+              nodeId: this.nodeId,
+            },
+          );
+        } else {
+          response = await this.handleCreateReplica(payload);
+        }
       } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
         response = await this.handleRemoveReplica(payload);
       } else if (type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {

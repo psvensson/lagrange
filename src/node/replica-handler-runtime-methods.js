@@ -600,6 +600,13 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           nodeId: this.nodeId,
         });
         this.shuttingDown = true;
+        if (this.replicaCreateAdmissionRecoveryRetryTimer) {
+          clearTimeout(this.replicaCreateAdmissionRecoveryRetryTimer);
+          this.replicaCreateAdmissionRecoveryRetryTimer = null;
+        }
+        await Promise.allSettled([
+          this.replicaCreateAdmissionRecoveryTask,
+        ].filter(Boolean));
         // A removal waiting for its replica to leave consensus stops waiting.
         this.removalConsensusExitRelease?.abort();
         for (const progress of this.creationProgressByReplica.values()) {
@@ -632,6 +639,10 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         this.inProgressOperations.clear();
         this.localServices.clear();
         this.localReplicas.clear();
+        options.ReplicaCreateAdmissionOwner?.release?.(
+          this.replicaCreateAdmissionOwner,
+        );
+        this.replicaCreateAdmissionOwner = null;
         this.initialized = false;
         this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});
       })();

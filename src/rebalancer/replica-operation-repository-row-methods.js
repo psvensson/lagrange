@@ -45,6 +45,21 @@ function assignReplicaOperationRepositoryRowMethods(
     resolveReplicaOperationSemanticPhase,
   } = options;
 
+  function attachFailedCreateTargetCleanupPrecondition(
+    operation,
+    stepsHistory,
+  ) {
+    const precondition = getOperationMetadataObject(
+      stepsHistory,
+      OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+    );
+    if (precondition) {
+      operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = precondition;
+    }
+  }
+
   class ReplicaOperationRepositoryRowMethods {
   /**
    * Translate a raw SQL/cache row into a normalized operation object.
@@ -86,6 +101,34 @@ function assignReplicaOperationRepositoryRowMethods(
         completedAt: row.completed_at,
         errorMessage: row.error_message,
         stepsHistory,
+        createAdmissionState: row.create_admission_state || null,
+        createAdmissionToken: row.create_admission_token || null,
+        createAdmissionReplicaCreatedAt:
+          row.create_admission_replica_created_at !== null &&
+          row.create_admission_replica_created_at !== undefined &&
+          Number.isSafeInteger(Number(row.create_admission_replica_created_at)) ?
+            Number(row.create_admission_replica_created_at) : null,
+        createAdmissionAttemptToken:
+          row.create_admission_attempt_token || null,
+        createAdmissionPreviousAttemptToken:
+          row.create_admission_previous_attempt_token || null,
+        createAdmissionAttemptSeq:
+          row.create_admission_attempt_seq !== null &&
+          row.create_admission_attempt_seq !== undefined &&
+          Number.isSafeInteger(Number(row.create_admission_attempt_seq)) ?
+            Number(row.create_admission_attempt_seq) : null,
+        createAdmissionWorkflowUpdatedAt:
+          row.create_admission_workflow_updated_at !== null &&
+          row.create_admission_workflow_updated_at !== undefined &&
+          Number.isSafeInteger(Number(
+            row.create_admission_workflow_updated_at,
+          )) ? Number(row.create_admission_workflow_updated_at) : null,
+        createAdmissionOwnerIncarnation:
+          row.create_admission_owner_incarnation !== null &&
+          row.create_admission_owner_incarnation !== undefined &&
+          Number.isSafeInteger(Number(
+            row.create_admission_owner_incarnation,
+          )) ? Number(row.create_admission_owner_incarnation) : null,
       };
       // Durable planning-epoch binding: SQL NULL / absent column stays
       // unbound (field omitted), a non-negative integer binds (zero stays
@@ -158,6 +201,7 @@ function assignReplicaOperationRepositoryRowMethods(
       if (bootstrapMembership) {
         operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] = bootstrapMembership;
       }
+      attachFailedCreateTargetCleanupPrecondition(operation, stepsHistory);
       return operation;
     }
     /**
