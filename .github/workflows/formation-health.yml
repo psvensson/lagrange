@@ -14,6 +14,9 @@ on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch: {}
+  push:
+    branches:
+      - "experiment/zero-liferaft-gcp-4cpu-20261006"
 
 permissions:
   contents: read
@@ -117,7 +120,7 @@ jobs:
       # consolidation budget read the same file. Only a measuring verdict
       # appends a record; a red measurement is committed like a green one.
       - name: Commit the trend record to main
-        if: always()
+        if: ${{ always() && github.ref == 'refs/heads/main' }}
         # The push asks for the data-only path: the pre-push hook has the
         # trend's owner prove it only appends records, or refuses it.
         env:
