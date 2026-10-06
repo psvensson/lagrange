@@ -269,13 +269,6 @@ jobs:
             test-output/reports/
           retention-days: 14
           if-no-files-found: ignore
- "$RUNNER_TEMP/ordinary-proof.log"; then
-            echo "ordinary proof correctly requires the release contract; delegating to check:release"
-            npm run check:release
-            exit $?
-          fi
-          exit "$ordinary_status"
-
       # The proof writes test-output/proof-scope.json itself, saying which sha
       # it proved and whether it ran the whole corpus; the canary reads it
       # rather than inferring the scope from this job's log.
