@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: pr73-late-leader-row-gcp-discriminator
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   FIX_SHA: 08af886176aeed11b713a29f8c320b66a49ca76f
