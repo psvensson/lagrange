@@ -295,6 +295,10 @@ function buildPhaseExecutionDelegates(service) {
     waitForPartitionLeadership: (options) =>
       self.seedPartitionsPhase
         .waitForPartitionLeadership(options),
+    getRegistrationRequiredLeaderPartitionIds: () =>
+      self.seedRegistrationPhase
+        .getRequiredLeaderPartitionIds(),
+    isShuttingDown: () => self.isShuttingDown === true,
     stopUnifiedLifecycleOwners: () => {
       detachServiceInstallationReconcilerOwner(self);
       return self.seedInfrastructurePhase.stopUnifiedLifecycleOwners();

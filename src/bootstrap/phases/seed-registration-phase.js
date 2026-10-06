@@ -109,9 +109,7 @@ class SeedRegistrationPhase {
     const logger = d.getLogger();
     const timestamp = resolveHostedNodeClock(this.delegates)();
 
-    await d.waitForPartitionLeadership({
-      partitionIds: REGISTRATION_REQUIRED_LEADER_PARTITION_IDS,
-    });
+    await this.waitForRequiredPartitionLeadership();
     const systemTableWriter = this.ensureSystemTableWriter();
 
     logger.debug(BOOTSTRAP_LOG_MSG.BOOTSTRAP_MODE_ENABLED, {
@@ -132,6 +130,29 @@ class SeedRegistrationPhase {
     logger.debug(BOOTSTRAP_LOG_MSG.SERVICE_REGISTRATION_COMPLETE, {
       nodeId: d.getNodeId(),
       servicesCreated: d.getServicesCreated(),
+    });
+  }
+
+  /**
+   * Return the exact partition leaders required by direct registration writes.
+   * SeedRegistrationPhase owns this dependency cut; election scheduling may
+   * read it but must not restate it.
+   * @return {string[]}
+   */
+  getRequiredLeaderPartitionIds() {
+    return [...REGISTRATION_REQUIRED_LEADER_PARTITION_IDS];
+  }
+
+  /**
+   * Consume the partition leadership owner's existing one-time gate for the
+   * registration dependency cut. The partition scheduler moves this same gate
+   * earlier so the required cohort can form before unrelated FULL-persistence
+   * work; SeedPartitionsPhase owns reuse of the satisfied result.
+   * @return {Promise<void>}
+   */
+  async waitForRequiredPartitionLeadership() {
+    await this.delegates.waitForPartitionLeadership({
+      partitionIds: REGISTRATION_REQUIRED_LEADER_PARTITION_IDS,
     });
   }
 

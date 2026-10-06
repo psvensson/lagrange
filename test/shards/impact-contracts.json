@@ -75,6 +75,17 @@
         "test/bootstrap/"
       ]
     },
+    "seed-registration-election-scheduling": {
+      "description": "Seed registration's direct-write leader dependency cut and the partition election scheduler share one transferred leadership gate.",
+      "owners": [
+        "src/bootstrap/phases/seed-registration-phase.js",
+        "src/bootstrap/phases/seed-partitions-phase.js",
+        "src/bootstrap/bootstrap-service-seed-delegates.js"
+      ],
+      "tests": [
+        "test/bootstrap/seed-registration-election-scheduling.test.js"
+      ]
+    },
     "runtime-service-placement": {
       "description": "Runtime-service placement and data-affinity contract.",
       "owners": [
@@ -697,6 +708,28 @@
     }
   },
   "coupledPairs": {
+    "seed-registration-election-scheduling": {
+      "description": "Registration owns the exact direct-write dependency cut and one wait budget; partition scheduling prioritizes that cut and releases all other elections without restating it.",
+      "endpoints": [
+        {
+          "id": "registration-dependency-authority",
+          "owners": [
+            "src/bootstrap/phases/seed-registration-phase.js"
+          ]
+        },
+        {
+          "id": "partition-election-scheduler",
+          "owners": [
+            "src/bootstrap/phases/seed-partitions-phase.js",
+            "src/bootstrap/bootstrap-service-seed-delegates.js"
+          ]
+        }
+      ],
+      "contract": "seed-registration-election-scheduling",
+      "witnessTests": [
+        "test/bootstrap/seed-registration-election-scheduling.test.js"
+      ]
+    },
     "priority-spread-planner-retention-admission-hold": {
       "description": "The planner must retain the same over-target spread cure that coordinator admission permits.",
       "endpoints": [
