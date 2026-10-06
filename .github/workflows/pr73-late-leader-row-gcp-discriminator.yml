@@ -1,0 +1,111 @@
+name: pr73-late-leader-row-gcp-discriminator
+
+on:
+  push:
+    branches:
+      - "investigate/pr73-late-leader-row-seed-20261006"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr73-late-leader-row-gcp-discriminator
+  cancel-in-progress: false
+
+env:
+  FIX_SHA: ca745236ce585caf675ae2e2b8d78b314c01e7b0
+  BASE_SHA: 6df3ec5e1c09ef14e6a743dc805399c1092712a8
+  LAGRANGE_TEST_MACHINE_FACTOR: '3'
+
+jobs:
+  wake-runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP (WIF, keyless)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          skip_install: false
+      - name: Start the runner VM (idempotent)
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe lagrange-ci-runner --zone europe-north1-a --format='value(status)')"
+          echo "runner VM status: ${STATUS}"
+          if [ "${STATUS}" != "RUNNING" ]; then
+            gcloud compute instances start lagrange-ci-runner --zone europe-north1-a
+          fi
+
+  discriminate:
+    needs: wake-runner
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact repair candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.FIX_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Bind candidate identity
+        run: |
+          set -euo pipefail
+          ACTUAL="$(git rev-parse HEAD)"
+          echo "base=${BASE_SHA}"
+          echo "fix=${FIX_SHA}"
+          echo "checked_out=${ACTUAL}"
+          test "${ACTUAL}" = "${FIX_SHA}"
+          mkdir -p test-output
+          printf 'base=%s\nfix=%s\nchecked_out=%s\n' "${BASE_SHA}" "${FIX_SHA}" "${ACTUAL}" > test-output/pr73-late-leader-row-candidate.txt
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install Pulumi CLI
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          curl -fsSL --connect-timeout 20 --max-time 300 --retry 2 https://get.pulumi.com -o "$RUNNER_TEMP/install-pulumi.sh"
+          sh "$RUNNER_TEMP/install-pulumi.sh" --version 3.261.0
+          echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.pulumi/bin:$PATH"
+          test "$(pulumi version)" = "v3.261.0"
+
+      - name: Install dependencies
+        run: |
+          npm install --global npm@11.7.0
+          npm ci
+          npm install --no-save @pulumi/pulumi@3.261.0 @pulumi/gcp@9.36.1
+
+      - name: Fetch MovieLens dataset (digest-pinned)
+        run: |
+          node examples/service-data-affinity/download-movielens.js
+          echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
+
+      - name: Five-node GCP discriminator
+        run: npm run health:formation -- --gcp --trend "$RUNNER_TEMP/pr73-late-row-trend.ndjson"
+
+      - name: Upload discriminator evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr73-late-leader-row-gcp-${{ github.run_id }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            test-output/pr73-late-leader-row-candidate.txt
+            test-output/reports/movielens-lagrange-formation-only-live-*.report.json
+            data/examples/service-data-affinity-demo/node-*.log
