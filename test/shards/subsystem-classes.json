@@ -12,7 +12,7 @@
     "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 21,
-    "placement-rebalance": 259,
+    "placement-rebalance": 260,
     "query-sql": 166,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2278,
-  "digest": "fnv1a32-2ebb7b8f",
+  "censusSize": 2279,
+  "digest": "fnv1a32-6492b572",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-feb8072e",
+  "observationDigest": "fnv1a32-9225dec6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1809,6 +1809,7 @@
     "test/rebalancer/storage-capacity-ownership.test.js": "placement-rebalance",
     "test/rebalancer/storage-capacity-semantic-projection-owner.test.js": "placement-rebalance",
     "test/rebalancer/storage-pressure-behavior.test.js": "placement-rebalance",
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": "placement-rebalance",
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": "placement-rebalance",
@@ -10757,6 +10758,12 @@
       ],
       "directories": [
         "src/rebalancer"
+      ]
+    },
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/rebalance-coordinator.js"
       ]
     },
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": {

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2261,
+    "ordinary": 2262,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2278,
-  "digest": "fnv1a32-c4745043",
+  "censusSize": 2279,
+  "digest": "fnv1a32-949b391f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1789,6 +1789,7 @@
     "test/rebalancer/storage-capacity-ownership.test.js": "ordinary",
     "test/rebalancer/storage-capacity-semantic-projection-owner.test.js": "ordinary",
     "test/rebalancer/storage-pressure-behavior.test.js": "ordinary",
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": "ordinary",
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": "ordinary",
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": "ordinary",
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": "ordinary",
