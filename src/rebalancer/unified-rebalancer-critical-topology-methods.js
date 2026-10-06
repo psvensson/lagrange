@@ -81,7 +81,7 @@ function isDeferredPriorityRecoveryLivenessReady(
     !isDeferredReadinessPlanningSnapshot(readiness) ||
     !isEvidenceAbsentReadinessDenialSnapshot(readiness) ||
     token?.transportTopologyValid !== true ||
-    token?.generationSaturated === true ||
+    token?.generationSaturated !== false ||
     typeof rebalancer.controlPlaneReadinessService?.projectNodeLiveness !==
       'function'
   ) {
