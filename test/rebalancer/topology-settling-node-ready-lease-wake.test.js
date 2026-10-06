@@ -492,6 +492,198 @@ function createFormedThreeNodeCache() {
   return {cache, tables};
 }
 
+
+function buildDeferredRecoveryReadiness(
+  nodeId,
+  {
+    substantiveReason = false,
+    transportTopologyValid = true,
+    generationSaturated = false,
+  } = {},
+) {
+  const reasons = ['planning_snapshot_refresh_pending'];
+  if (substantiveReason) {
+    reasons.unshift('priority_control_plane_recovery_pending');
+  }
+  return Object.freeze({
+    nodeId,
+    readinessPlanningTokenStatus: 'stale',
+    readinessPlanningToken: Object.freeze({
+      transportTopologyValid,
+      generationSaturated,
+    }),
+    dimensions: Object.freeze({
+      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+    }),
+    reasons: Object.freeze(reasons),
+  });
+}
+
+function installCriticalTopologyReadinessFixture(
+  rebalancer,
+  cache,
+  {
+    deferred = true,
+    generationSaturated = false,
+    livenessReady = true,
+    livenessConnected = true,
+    clusterMemberHealthy = true,
+    substantiveDeferredDenial = false,
+    transportTopologyValid = true,
+  } = {},
+) {
+  rebalancer.controlPlaneReadinessService = {
+    getNodeReadinessSync(nodeId) {
+      if (nodeId !== JOINER_NODE_ID) {
+        return buildReadinessSnapshot(cache, nodeId);
+      }
+      if (deferred) {
+        return buildDeferredRecoveryReadiness(nodeId, {
+          substantiveReason: substantiveDeferredDenial,
+          transportTopologyValid,
+          generationSaturated,
+        });
+      }
+      const current = buildReadinessSnapshot(cache, nodeId);
+      return {
+        ...current,
+        readinessPlanningTokenStatus: 'current',
+        dimensions: {
+          ...current.dimensions,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+        },
+        reasons: ['priority_control_plane_recovery_pending'],
+      };
+    },
+    projectNodeLiveness(nodeId) {
+      const isJoiner = nodeId === JOINER_NODE_ID;
+      return Object.freeze({
+        readyNow: !isJoiner || livenessReady,
+        connectionSemantics: Object.freeze({
+          connected: !isJoiner || livenessConnected,
+        }),
+        clusterMembershipSemantics: Object.freeze({
+          healthy: !isJoiner || clusterMemberHealthy,
+        }),
+      });
+    },
+  };
+}
+
+test(
+  'R7 readiness currency: only evidence-absent PENDING with current liveness may clear the priority topology gate',
+  (t) => {
+    initializeTestEnvironment();
+    const {cache} = createFormedThreeNodeCache();
+    const rebalancer = createRebalancer(cache, PARTITION_K1);
+    rebalancer.messageRouter.getConnectedNodes =
+      () => [SEED_NODE_ID, JOINER_NODE_ID];
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache);
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker(),
+      null,
+      'PENDING readiness plus ready canonical liveness does not masquerade as node_ready_lease_incomplete',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      livenessReady: false,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'PENDING readiness still blocks when canonical liveness is actually not ready',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      substantiveDeferredDenial: true,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'a deferred snapshot that inherits a substantive denial remains blocking',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      transportTopologyValid: false,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'transport-topology-invalid PENDING remains fail-closed',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      generationSaturated: true,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'generation-saturated PENDING remains fail-closed',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      generationSaturated: null,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'PENDING without an explicit unsaturated generation remains fail-closed',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      livenessConnected: false,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'a disconnected liveness projection cannot clear PENDING',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      clusterMemberHealthy: false,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'an unhealthy cluster-membership projection cannot clear PENDING',
+    );
+
+    installCriticalTopologyReadinessFixture(rebalancer, cache, {
+      deferred: false,
+    });
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'a substantive current recovery-readiness denial remains blocking despite live liveness',
+    );
+
+    const ordinarySystemRebalancer = createRebalancer(cache, NODES_PARTITION);
+    ordinarySystemRebalancer.messageRouter.getConnectedNodes =
+      () => [SEED_NODE_ID, JOINER_NODE_ID];
+    installCriticalTopologyReadinessFixture(
+      ordinarySystemRebalancer,
+      cache,
+    );
+    t.equal(
+      ordinarySystemRebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
+      READY_LEASE_BLOCKER_REASON,
+      'non-priority system topology keeps the fail-closed deferred-readiness behavior',
+    );
+    t.end();
+  },
+);
+
 test(
   'critical topology settling ignores postgres-wire endpoints for a non-priority system partition',
   async (t) => {
