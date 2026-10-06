@@ -266,52 +266,40 @@ class PartitionSplitMergeManagerTransitionMethods {
   }
 
   /**
-   * Flush deferred managed-split retry scheduling state and trigger
-   * one reactive evaluation request.
-   * @return {void}
-   * @private
-   */
-  flushDeferredRetryEvaluation() {
-    const request = this.deferredRetryEvaluation;
-    this.deferredRetryEvaluation = null;
-    this.deferredRetryEvaluationDueAtMs = null;
-    this.deferredRetryEvaluationTimer = null;
-    this.requestEvaluation(request || {
-      reasonCode: SPLIT_MERGE_REASON.MANAGED_SPLIT_RETRY_DUE,
-    });
-  }
-
-  /**
-   * Arm the manager's one deferred evaluation: the contexts of every
-   * deferral coalesce into one request, due at the earliest due time
-   * (policy clock).
-   * @param {number} dueAtMs - When the evaluation is due.
-   * @param {Object} context - {reasonCode, partitionId|partitionIds}.
+   * Retain one logical obligation when supplied, project the earliest due
+   * batch onto diagnostics, and own the one timer for that deadline.
+   * @param {number} [dueAtMs] - When the evaluation is due.
+   * @param {Object} [context] - {reasonCode, partitionId|partitionIds}.
    * @return {void}
    * @private
    */
   armDeferredEvaluation(dueAtMs, context) {
-    const nowMs = this.now();
-    const normalizedDueAtMs = Math.max(nowMs, dueAtMs);
-    this.deferredRetryEvaluation = this.mergeRequestedEvaluationContext(
-      this.deferredRetryEvaluation,
-      context,
-    );
-    if (this.deferredRetryEvaluationTimer &&
-        Number.isFinite(this.deferredRetryEvaluationDueAtMs) &&
-        this.deferredRetryEvaluationDueAtMs <= normalizedDueAtMs) {
+    if (context) {
+      this.retainDeferredEvaluationObligation(dueAtMs, context);
+    }
+
+    const earliest = this.resolveEarliestDeferredEvaluation();
+
+    const timerAlreadyOwnsDeadline =
+      this.deferredRetryEvaluationTimer &&
+      this.deferredRetryEvaluationDueAtMs === earliest.dueAtMs;
+    this.deferredRetryEvaluation = earliest.context;
+    this.deferredRetryEvaluationDueAtMs = earliest.dueAtMs;
+    if (timerAlreadyOwnsDeadline) {
       return;
     }
     if (this.deferredRetryEvaluationTimer) {
       clearTimeout(this.deferredRetryEvaluationTimer);
       this.deferredRetryEvaluationTimer = null;
     }
-
-    this.deferredRetryEvaluationDueAtMs = normalizedDueAtMs;
-    const retryDelayMs = Math.max(0, normalizedDueAtMs - nowMs);
+    if (this.isShutdown || earliest.dueAtMs === null) {
+      return;
+    }
+    const delayMs = Math.max(0, earliest.dueAtMs - this.now());
     this.deferredRetryEvaluationTimer = setTimeout(() => {
+      this.deferredRetryEvaluationTimer = null;
       this.flushDeferredRetryEvaluation();
-    }, retryDelayMs);
+    }, delayMs);
     this.deferredRetryEvaluationTimer.unref?.();
   }
 

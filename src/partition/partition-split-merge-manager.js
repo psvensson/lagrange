@@ -25,6 +25,9 @@ import {
   createPartitionSplitMergeManagerTransitionMethods,
 } from './partition-split-merge-manager-transition-methods.js';
 import {
+  createPartitionSplitMergeManagerDeferredSchedulerMethods,
+} from './partition-split-merge-manager-deferred-scheduler-methods.js';
+import {
   createPartitionSplitMergeManagerEvaluationMethods,
 } from './partition-split-merge-manager-evaluation-methods.js';
 import {
@@ -191,6 +194,10 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.deferredRetryEvaluation = null;
     this.deferredRetryEvaluationDueAtMs = null;
     this.deferredRetryEvaluationTimer = null;
+    // One retained entry per logical deferred context. The projection fields
+    // above expose only the earliest due batch for diagnostics and the
+    // deterministic simulation; this map owns every later obligation.
+    this.deferredEvaluationObligations = new Map();
     this.isShutdown = false;
     this.lastEvaluationRequestedAtMs = null;
     this.lastEvaluationStartedAtMs = null;
@@ -213,6 +220,7 @@ class PartitionSplitMergeManager extends EventEmitter {
 Object.assign(
   PartitionSplitMergeManager.prototype,
   createPartitionSplitMergeManagerCoreMethods(),
+  createPartitionSplitMergeManagerDeferredSchedulerMethods(),
   createPartitionSplitMergeManagerTransitionMethods(),
   createPartitionSplitMergeManagerProposalMethods(),
   createPartitionSplitMergeManagerEvaluationMethods({

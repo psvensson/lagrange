@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1964,
+    "unit": 1965,
     "integration": 78,
     "bootstrap": 198,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2247,
-  "digest": "fnv1a32-fedacb36",
+  "censusSize": 2248,
+  "digest": "fnv1a32-44cdb289",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1206,6 +1206,7 @@
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "unit",
     "test/partition/partition-commit-deadline-wait-bound-spent.test.js": "unit",
     "test/partition/partition-consensus-hold-log.test.js": "unit",
+    "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js": "unit",
     "test/partition/partition-descriptor-epoch-contract.test.js": "unit",
     "test/partition/partition-leader-row-publication-integrity.test.js": "unit",
     "test/partition/partition-legacy-consensus-state.test.js": "unit",

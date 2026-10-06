@@ -669,7 +669,8 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         evaluationIntervalMs: this.evaluationIntervalMs,
         reactiveEvaluationDebounceMs: this.reactiveEvaluationDebounceMs,
         inFlight: this.state === operationState.EVALUATING,
-        deferredRetryEvaluationPending: this.deferredRetryEvaluation !== null,
+        deferredRetryEvaluationPending:
+          this.deferredEvaluationObligations.size > 0,
         deferredRetryEvaluationDueAtMs: this.deferredRetryEvaluationDueAtMs,
         requestedEvaluationPending: this.requestedEvaluation !== null,
         requestedAtMs: this.lastEvaluationRequestedAtMs,
@@ -704,6 +705,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       }
       this.deferredRetryEvaluation = null;
       this.deferredRetryEvaluationDueAtMs = null;
+      this.deferredEvaluationObligations.clear();
       this.requestedEvaluation = null;
       this.clearRequestedEvaluationDiagnostics();
       this.removeAllListeners();
