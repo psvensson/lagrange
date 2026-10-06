@@ -2,6 +2,8 @@ import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {selectCurrentEndpointRows} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
+import {isDeferredReadinessPlanningSnapshot} from
+  '../control-plane/readiness-planning-version-contract.js';
 
 const {
   COLUMN,
@@ -63,6 +65,33 @@ function isWithinStartupAuthority(context, nodeId) {
   return !context.constrainToStartupAuthority ||
     context.startupAuthorityNodeIds.has(nodeId);
 }
+function isDeferredPriorityRecoveryLivenessReady(
+  rebalancer,
+  readiness,
+  nodeId,
+  context,
+) {
+  if (
+    !rebalancer.isControlPlanePriorityPartition() ||
+    context.readinessDecisionDimension !==
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE ||
+    !isDeferredReadinessPlanningSnapshot(readiness) ||
+    typeof rebalancer.controlPlaneReadinessService?.projectNodeLiveness !==
+      'function'
+  ) {
+    return false;
+  }
+  // Readiness PENDING is not a negative node-liveness verdict. During
+  // formation the versioned planning owner can rotate faster than one build
+  // is admitted, producing an all-false deferred snapshot even while the
+  // liveness owner has current READY evidence. This gate only decides whether
+  // the priority planner may run; mutation admission, voter/promotion safety,
+  // quorum, and remove safety remain downstream owners. Consume the existing
+  // liveness owner rather than re-deriving lease arithmetic here.
+  return rebalancer.controlPlaneReadinessService
+    .projectNodeLiveness(nodeId)?.readyNow === true;
+}
+
 function isCriticalNodeReady(rebalancer, nodeRow, nodeId, context) {
   const readiness =
     typeof rebalancer.controlPlaneReadinessService?.getNodeReadinessSync ===
@@ -75,11 +104,21 @@ function isCriticalNodeReady(rebalancer, nodeRow, nodeId, context) {
     readiness,
     context.readinessDecisionDimension,
   );
+  const deferredPriorityRecoveryLivenessReady =
+    !membershipReady &&
+    isDeferredPriorityRecoveryLivenessReady(
+      rebalancer,
+      readiness,
+      nodeId,
+      context,
+    );
   const startupLeaseClear =
     context.bypassPriorityStartupReadiness &&
     nodeId === rebalancer.nodeId &&
     isNodeReadyLeaseExplicitlyCleared(nodeRow, {requireActiveStatus: true});
-  return startupLeaseClear || membershipReady;
+  return startupLeaseClear ||
+    membershipReady ||
+    deferredPriorityRecoveryLivenessReady;
 }
 function classifyCriticalNode(rebalancer, nodeRow, context) {
   const {status, nodeId} = normalizeNodeRow(nodeRow);
