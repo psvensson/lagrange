@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FIX_SHA: ca745236ce585caf675ae2e2b8d78b314c01e7b0
-  BASE_SHA: 6df3ec5e1c09ef14e6a743dc805399c1092712a8
+  FIX_SHA: 08af886176aeed11b713a29f8c320b66a49ca76f
+  BASE_SHA: ca745236ce585caf675ae2e2b8d78b314c01e7b0
   LAGRANGE_TEST_MACHINE_FACTOR: '3'
 
 jobs:
