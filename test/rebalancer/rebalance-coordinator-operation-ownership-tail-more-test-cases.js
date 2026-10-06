@@ -24,6 +24,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   createStorageOwners,
   createTransactionCoordinator,
   createCoordinator,
+  seedStorageIncreasingOperation,
   disablePersistenceConfirmation,
 }) {
   test('RebalanceCoordinator executeOperation uses injected workflow coordinator single-flight',
@@ -564,6 +565,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         errorMessage: null,
         stepsHistory: [],
       };
+      seedStorageIncreasingOperation(coordinator, operation);
 
       const result = await coordinator.dispatchOperation(operation);
 
@@ -841,6 +843,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         errorMessage: null,
         stepsHistory: [],
       };
+      seedStorageIncreasingOperation(coordinator, operation);
 
       const result = await coordinator.dispatchOperation(operation);
 

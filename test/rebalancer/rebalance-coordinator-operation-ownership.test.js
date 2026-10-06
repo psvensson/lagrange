@@ -92,12 +92,122 @@ function createTransactionCoordinator() {
   };
 }
 
-function createCoordinator(overrides = {}) {
-  const sqlQueryEngine = overrides.sqlQueryEngine || {
-    async executeQuery() {
-      return {success: true, rows: [], affectedRows: 0};
+function withAuthoritativeOperationRows(sqlQueryEngine) {
+  const trackedOperations = new Map();
+  const trackedReservations = new Map();
+  const fixtureEngine = {
+    ...sqlQueryEngine,
+    seedStorageIncreasingOperation(operation, reasonCode) {
+      const now = Date.now();
+      trackedOperations.set(operation.operationId, {
+        operation_id: operation.operationId,
+        type: operation.type,
+        partition_id: operation.partitionId,
+        replica_id: operation.replicaId,
+        target_claim_key: operation.targetClaimKey ?? null,
+        source_node_id: operation.sourceNodeId ?? null,
+        target_node_id: operation.targetNodeId,
+        status: operation.status,
+        workflow_step: operation.workflowStep,
+        created_at: operation.createdAt,
+        updated_at: operation.updatedAt,
+        completed_at: operation.completedAt,
+        error_message: operation.errorMessage,
+        steps_history: JSON.stringify(operation.stepsHistory || []),
+        entity_type: operation.entityType,
+        entity_id: operation.entityId,
+        membership_publication_epoch:
+          operation.membershipPublicationEpoch ?? null,
+      });
+      trackedReservations.set(operation.operationId, {
+        reservation_id: `res-${operation.operationId}`,
+        operation_id: operation.operationId,
+        entity_type: operation.entityType,
+        entity_id: operation.entityId,
+        partition_id: operation.partitionId,
+        target_node_id: operation.targetNodeId,
+        estimated_bytes: 1,
+        amplification_factor: 1,
+        status: 'active',
+        reason_code: reasonCode,
+        created_at: now,
+        updated_at: now,
+        expires_at: now + 300000,
+        released_at: null,
+      });
+    },
+    async executeQuery(sql, params = [], options = {}) {
+      if (sql.includes('FROM replica_operations') &&
+          sql.includes('operation_id = ?')) {
+        const row = trackedOperations.get(params[0]);
+        if (row) {
+          return {success: true, rows: [row]};
+        }
+      }
+      const result = await sqlQueryEngine.executeQuery(sql, params, options);
+      if (result?.success !== false &&
+          sql.includes('INSERT INTO replica_operations')) {
+        const [
+          operationId, type, partitionId, replicaId, targetClaimKey,
+          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
+          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
+          entityId, membershipPublicationEpoch,
+        ] = params;
+        trackedOperations.set(operationId, {
+          operation_id: operationId,
+          type,
+          partition_id: partitionId,
+          replica_id: replicaId,
+          target_claim_key: targetClaimKey,
+          source_node_id: sourceNodeId,
+          target_node_id: targetNodeId,
+          status,
+          workflow_step: workflowStep,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          completed_at: completedAt,
+          error_message: errorMessage,
+          steps_history: stepsHistory,
+          entity_type: entityType,
+          entity_id: entityId,
+          membership_publication_epoch: membershipPublicationEpoch,
+        });
+      }
+      return result;
     },
   };
+  const executeOperationQuery = fixtureEngine.executeQuery.bind(fixtureEngine);
+  return {
+    ...fixtureEngine,
+    async executeQuery(sql, params = [], options = {}) {
+      if (sql.includes('FROM storage_reservations') &&
+          sql.includes('operation_id = ?')) {
+        const row = trackedReservations.get(params[0]);
+        return {
+          success: true,
+          rows: row && row.status === params[1] ? [row] : [],
+        };
+      }
+      return executeOperationQuery(sql, params, options);
+    },
+  };
+}
+
+function seedStorageIncreasingOperation(coordinator, operation) {
+  coordinator.sqlQueryEngine.seedStorageIncreasingOperation(
+    operation,
+    coordinator.getReservationReasonCode(operation.type),
+  );
+}
+
+function createCoordinator(overrides = {}) {
+  const sqlQueryEngine = withAuthoritativeOperationRows(
+    overrides.sqlQueryEngine || {
+      async executeQuery() {
+        return {success: true, rows: [], affectedRows: 0};
+      },
+    },
+  );
   const hasExplicitGateway =
     overrides.controlPlaneSystemTableGateway &&
     typeof overrides.controlPlaneSystemTableGateway === 'object';
@@ -552,7 +662,7 @@ test('RebalanceCoordinator createOperation uses injected workflow coordinator si
         },
       },
       sqlQueryEngine: {
-        async executeQuery(_sql) {
+        async executeQuery() {
           return {success: true, rows: [], changes: 1};
         },
       },
@@ -895,7 +1005,7 @@ test('RebalanceCoordinator createOperation rejects stale membership plans using 
 
 test('RebalanceCoordinator createOperation persists membership publication epoch metadata',
   async (t) => {
-    const coordinator = new RebalanceCoordinator({
+    const coordinator = createCoordinator({
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
@@ -1014,5 +1124,6 @@ registerRebalanceCoordinatorOperationOwnershipTailTests({
   createStorageOwners,
   createTransactionCoordinator,
   createCoordinator,
+  seedStorageIncreasingOperation,
   disablePersistenceConfirmation,
 });

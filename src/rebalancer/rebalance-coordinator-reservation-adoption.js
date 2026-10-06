@@ -53,6 +53,30 @@ function classifyOperationAdoptionError(owner, operation, observation) {
   return null;
 }
 
+async function observeAuthoritativeOperationForReservation(
+  owner,
+  operation,
+  options = {},
+) {
+  const operationObservation =
+    await owner.queryAuthoritativeOperationVisibilityObservation(
+      operation.operationId,
+      {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+        allowOwnerPersistedTransitionDeferredVisibility: false,
+        requireAbsenceConfirmation: true,
+        timeoutBudget: options.timeoutBudget,
+      },
+    );
+  return classifyOperationAdoptionError(
+    owner,
+    operation,
+    operationObservation,
+  );
+}
+
 function buildReservationRowAdoption(owner, operation, rows, options) {
   const reservationId = `res-${operation.operationId}`;
   if (rows.length === 0 && options.allowConfirmedAbsentReservation === true) {
@@ -119,20 +143,11 @@ async function adoptAuthoritativeReservationForOperation(
   const rows = Array.isArray(activeResult.rows) ? activeResult.rows : [];
   // Observe the operation after the awaited reservation read so a stale live
   // observation cannot authorize adoption after the operation has completed.
-  const operationObservation =
-    await owner.queryAuthoritativeOperationVisibilityObservation(
-      operation.operationId,
-      {
-        authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
-        allowOwnerPersistedTransitionDeferredVisibility: false,
-        requireAbsenceConfirmation: true,
-        timeoutBudget: options.timeoutBudget,
-      },
-    );
-  const operationError = classifyOperationAdoptionError(
-    owner, operation, operationObservation);
+  const operationError = await observeAuthoritativeOperationForReservation(
+    owner,
+    operation,
+    options,
+  );
   if (operationError) {
     return buildFailedReservationAdoption(
       owner,
@@ -143,4 +158,8 @@ async function adoptAuthoritativeReservationForOperation(
   return buildReservationRowAdoption(owner, operation, rows, options);
 }
 
-export {adoptAuthoritativeReservationForOperation};
+export {
+  adoptAuthoritativeReservationForOperation,
+  buildFailedReservationAdoption,
+  observeAuthoritativeOperationForReservation,
+};

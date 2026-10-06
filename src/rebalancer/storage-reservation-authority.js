@@ -1,3 +1,10 @@
+import {
+  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
+  assertMembershipPublicationEpochBinding,
+} from './replica-operation-membership-epoch-binding.js';
+
+const MEMBERSHIP_PUBLICATION_EPOCH_FIELD = 'membershipPublicationEpoch';
+
 const STORAGE_RESERVATION_AUTHORITY_ERROR = Object.freeze({
   OPERATION_AUTHORITY_UNAVAILABLE:
     'Authoritative replica operation is unavailable for reservation adoption',
@@ -25,21 +32,47 @@ const OPERATION_IDENTITY_FIELDS = Object.freeze([
   'targetNodeId',
   'entityType',
   'entityId',
-  'membershipPublicationEpoch',
+  MEMBERSHIP_PUBLICATION_EPOCH_FIELD,
 ]);
 
 function normalizeNullableIdentity(value) {
   return value === undefined ? null : value;
 }
 
+function membershipPublicationEpochMatches(expected, actual) {
+  const expectedBinding = assertMembershipPublicationEpochBinding(
+    expected.membershipPublicationEpoch,
+    {
+      source: 'storage-reservation-expected-operation',
+      operationId: expected.operationId,
+    },
+  );
+  const actualBinding = assertMembershipPublicationEpochBinding(
+    actual.membershipPublicationEpoch,
+    {
+      source: 'storage-reservation-authoritative-operation',
+      operationId: actual.operationId,
+    },
+  );
+  if (expectedBinding.state !== actualBinding.state) {
+    return false;
+  }
+  return expectedBinding.state ===
+      MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.UNBOUND ||
+    expectedBinding.epoch === actualBinding.epoch;
+}
+
 function storageReservationOperationIdentityMatches(expected, actual) {
   if (!expected || !actual) {
     return false;
   }
-  return OPERATION_IDENTITY_FIELDS.every((field) =>
-    normalizeNullableIdentity(expected[field]) ===
-      normalizeNullableIdentity(actual[field]),
-  );
+  return OPERATION_IDENTITY_FIELDS.every((field) => {
+    if (field === MEMBERSHIP_PUBLICATION_EPOCH_FIELD) {
+      return membershipPublicationEpochMatches(expected, actual);
+    }
+    return normalizeNullableIdentity(expected[field]) ===
+      normalizeNullableIdentity(actual[field]);
+  });
 }
 
 function isFinitePositiveNumber(value) {

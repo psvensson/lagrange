@@ -8,8 +8,11 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
-import {adoptAuthoritativeReservationForOperation} from
-  './rebalance-coordinator-reservation-adoption.js';
+import {
+  adoptAuthoritativeReservationForOperation,
+  buildFailedReservationAdoption,
+  observeAuthoritativeOperationForReservation,
+} from './rebalance-coordinator-reservation-adoption.js';
 import {STORAGE_RESERVATION_AUTHORITY_ERROR} from
   './storage-reservation-authority.js';
 
@@ -291,14 +294,15 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     // If terminal/absent/mismatched authority won, release this exact row now;
     // a terminal transition after this observation will see the row in
     // its ordinary release path.
-    const insertedAuthority = await adoptAuthoritativeReservationForOperation(
-      this, operation, {timeoutBudget});
-    if (
-      insertedAuthority.outcome !==
-        OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE
-    ) {
+    const insertedOperationError =
+      await observeAuthoritativeOperationForReservation(
+        this,
+        operation,
+        {timeoutBudget},
+      );
+    if (insertedOperationError) {
       if (PROVEN_INVALID_CREATED_RESERVATION_ERRORS.has(
-        insertedAuthority.error,
+        insertedOperationError,
       )) {
         const cleanup = await this.transitionActiveReservationById(
           reservationId,
@@ -317,7 +321,11 @@ class RebalanceCoordinatorReservationLifecycleMethods {
           );
         }
       }
-      return insertedAuthority;
+      return buildFailedReservationAdoption(
+        this,
+        operation,
+        insertedOperationError,
+      );
     }
 
     this.stats.reservationsCreated++;
