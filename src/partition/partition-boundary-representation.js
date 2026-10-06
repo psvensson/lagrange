@@ -4,6 +4,8 @@ const PARTITION_BOUNDARY_KEY_TYPE = Object.freeze({
   BLOB: 'BLOB',
 });
 const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_BIGINT = 'bigint';
+const LOCAL_STR_NUMBER = 'number';
 const ERROR_MISSING_AUTHORITY =
   'Partition boundary type authority is missing; revalidation required';
 const ERROR_INVALID_INTEGER = 'Invalid INTEGER partition boundary representation';
@@ -16,8 +18,8 @@ function normalizePartitionBoundaryKeyType(value) {
 }
 
 function decodeIntegerBoundary(value) {
-  if (typeof value === 'bigint') return value;
-  if (typeof value === 'number' && Number.isSafeInteger(value)) {
+  if (typeof value === LOCAL_STR_BIGINT) return value;
+  if (typeof value === LOCAL_STR_NUMBER && Number.isSafeInteger(value)) {
     return BigInt(value);
   }
   if (typeof value === LOCAL_STR_STRING &&
