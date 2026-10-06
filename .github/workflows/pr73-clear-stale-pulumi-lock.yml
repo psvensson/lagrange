@@ -1,0 +1,65 @@
+name: pr73-clear-stale-pulumi-lock
+
+on:
+  push:
+    branches:
+      - "ops/pr73-clear-stale-pulumi-lock-20261006"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr73-gcp-runner-maintenance
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 10
+    steps:
+      - name: Guarded stale Pulumi cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          PID=19264
+          LOCK_DIR="/tmp/.pulumi-local-backend/.pulumi/locks/organization/ddb-distributed-test/ddb-distributed-test"
+
+          echo "Before cleanup:"
+          if [ -d "$LOCK_DIR" ]; then
+            find "$LOCK_DIR" -maxdepth 1 -type f -name '*.json' -print
+          else
+            echo "lock directory absent"
+          fi
+
+          if kill -0 "$PID" 2>/dev/null; then
+            CMD="$(tr '\0' ' ' < "/proc/$PID/cmdline" || true)"
+            PPID_VALUE="$(awk '/^PPid:/{print $2}' "/proc/$PID/status" || true)"
+            echo "pid=$PID ppid=$PPID_VALUE cmd=$CMD"
+            if [[ "$CMD" != *pulumi* || "$CMD" != *ddb-distributed-test* ]]; then
+              echo "::error::PID $PID is alive but is not the stale ddb-distributed-test Pulumi process; refusing cleanup"
+              exit 1
+            fi
+            echo "Terminating stale cancelled-job Pulumi process $PID"
+            kill -TERM "$PID"
+            for _ in $(seq 1 20); do
+              if ! kill -0 "$PID" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            if kill -0 "$PID" 2>/dev/null; then
+              echo "Pulumi process did not exit after TERM; sending KILL"
+              kill -KILL "$PID"
+            fi
+          else
+            echo "recorded lock PID $PID is not alive"
+          fi
+
+          if [ -d "$LOCK_DIR" ]; then
+            find "$LOCK_DIR" -maxdepth 1 -type f -name '*.json' -print -delete
+          fi
+
+          echo "After cleanup:"
+          if [ -d "$LOCK_DIR" ]; then
+            find "$LOCK_DIR" -maxdepth 1 -type f -name '*.json' -print
+          fi
