@@ -140,13 +140,19 @@ function createLostOutcomeSqlEngine(options = {}) {
   const operationReadOptions = [];
   let reservationInsertAttempts = 0;
 
-  function insertReservation(sql, params, queryOptions) {
+  async function insertReservation(sql, params, queryOptions) {
     reservationInsertAttempts++;
     reservationMutationOptions.push(queryOptions);
     const row = buildReservationRow(params);
     const existing = reservations.get(row.reservation_id);
     if (!existing) {
       reservations.set(row.reservation_id, row);
+      if (typeof options.onReservationInsert === 'function') {
+        await options.onReservationInsert({operations, reservations, row});
+      }
+      if (options.reservationInsertSucceeds === true) {
+        return {success: true, changes: 1};
+      }
       return {
         success: false,
         error: LOST_OUTCOME_ERROR,
@@ -203,6 +209,21 @@ function createLostOutcomeSqlEngine(options = {}) {
       }
       if (sql.includes('INSERT') && sql.includes('storage_reservations')) {
         return insertReservation(sql, params, queryOptions);
+      }
+      if (sql.includes('UPDATE storage_reservations')) {
+        const [status, updatedAt, releasedAt, reservationId, expectedStatus] =
+          params;
+        const row = reservations.get(reservationId);
+        if (!row || row.status !== expectedStatus) {
+          return {success: true, changes: 0};
+        }
+        reservations.set(reservationId, {
+          ...row,
+          status,
+          updated_at: updatedAt,
+          released_at: releasedAt,
+        });
+        return {success: true, changes: 1};
       }
       if (
         sql.includes(
@@ -595,6 +616,52 @@ test('terminalization during reservation read cannot authorize adoption',
         'the final operation observation owns the refusal');
       t.equal(sqlEngine.reservationInsertAttempts, 0,
         'terminalization does not drive another reservation mutation');
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('terminalization after a fresh insert cannot strand an ACTIVE hold',
+  async (t) => {
+    initializeConfig();
+    const operation = buildOperation();
+    const sqlEngine = createLostOutcomeSqlEngine({
+      reservationInsertSucceeds: true,
+      onReservationInsert({operations}) {
+        const row = operations.get(operation.operationId);
+        operations.set(operation.operationId, {
+          ...row,
+          status: 'failed',
+          workflow_step: WORKFLOW_STEP.FAILED,
+          completed_at: Date.now(),
+        });
+      },
+    });
+    const coordinator = createCoordinator(sqlEngine);
+    seedOperation(sqlEngine, operation);
+    let creationEvents = 0;
+    coordinator.on(REBALANCE_COORDINATOR_EVENT.RESERVATION_CREATED, () => {
+      creationEvents++;
+    });
+
+    try {
+      const result = await coordinator.ensureReservationForOperation(operation);
+      const reservation = sqlEngine.reservations.get(
+        `res-${operation.operationId}`,
+      );
+      t.equal(result.outcome, OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+        'the terminal operation wins the post-insert authority check');
+      t.equal(result.error,
+        STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL,
+        'the exact terminal authority owns the refusal');
+      t.equal(reservation.status, RESERVATION_STATUS.RELEASED,
+        'the just-inserted hold is released instead of stranded ACTIVE');
+      t.equal(sqlEngine.reservations.size, 1,
+        'cleanup transitions the exact row without allocating another hold');
+      t.equal(coordinator.stats.reservationsCreated, 0,
+        'the losing insertion is not counted as a created hold');
+      t.equal(creationEvents, 0,
+        'the losing insertion emits no observational creation event');
     } finally {
       await coordinator.shutdown();
     }

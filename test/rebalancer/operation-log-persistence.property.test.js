@@ -30,6 +30,7 @@ const PERSISTENCE_PROPERTY_DEFAULT_REPLICA_SUFFIX = 'r1';
 
 function createTestCoordinatorWithPersistence() {
   const persistedOperations = new Map();
+  const persistedReservations = new Map();
 
   const sqlQueryEngine = {
     executeQuery: async (sql, params) => {
@@ -85,7 +86,28 @@ function createTestCoordinatorWithPersistence() {
       }
 
       if (sql.includes('INTO storage_reservations')) {
-        return {success: true, affectedRows: 1};
+        const [
+          reservationId, operationId, entityType, entityId, partitionId,
+          targetNodeId, estimatedBytes, amplificationFactor, status,
+          reasonCode, createdAt, updatedAt, expiresAt,
+        ] = params;
+        persistedReservations.set(reservationId, {
+          reservation_id: reservationId,
+          operation_id: operationId,
+          entity_type: entityType,
+          entity_id: entityId,
+          partition_id: partitionId,
+          target_node_id: targetNodeId,
+          estimated_bytes: estimatedBytes,
+          amplification_factor: amplificationFactor,
+          status,
+          reason_code: reasonCode,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          expires_at: expiresAt,
+          released_at: null,
+        });
+        return {success: true, affectedRows: 1, changes: 1};
       }
 
       if (sql.includes('UPDATE storage_reservations')) {
@@ -93,7 +115,11 @@ function createTestCoordinatorWithPersistence() {
       }
 
       if (sql.includes('FROM storage_reservations')) {
-        return {success: true, rows: [], affectedRows: 0};
+        const [operationId, status] = params;
+        const rows = Array.from(persistedReservations.values()).filter(
+          (row) => row.operation_id === operationId && row.status === status,
+        );
+        return {success: true, rows, affectedRows: rows.length};
       }
 
       if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {

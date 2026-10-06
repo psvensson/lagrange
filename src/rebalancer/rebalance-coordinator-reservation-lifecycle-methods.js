@@ -10,6 +10,8 @@ import {
 } from './rebalancer-entity-identity.js';
 import {adoptAuthoritativeReservationForOperation} from
   './rebalance-coordinator-reservation-adoption.js';
+import {STORAGE_RESERVATION_AUTHORITY_ERROR} from
+  './storage-reservation-authority.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RESERVATION_ORPHAN_RECONCILE_STATE = Object.freeze({
@@ -23,6 +25,12 @@ const RESERVATION_ORPHAN_RECONCILE_ACTION = Object.freeze({
   KEEP_ACTIVE: 'keep_active',
   RELEASE_ACTIVE: 'release_active',
 });
+
+const PROVEN_INVALID_CREATED_RESERVATION_ERRORS = Object.freeze(new Set([
+  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_ABSENT,
+  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL,
+  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+]));
 
 const RESERVATION_ORPHAN_RECONCILE_STATE_TABLE = Object.freeze([
   Object.freeze({
@@ -161,6 +169,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       {
         ownerId: options.ownerId || reservationId,
         sessionId: options.sessionId,
+        timeoutBudget: options.timeoutBudget,
       },
     );
     if (!result.success) {
@@ -275,6 +284,40 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     if (changeCount === null || changeCount <= 0) {
       return adoptAuthoritativeReservationForOperation(
         this, operation, {timeoutBudget});
+    }
+
+    // The operation can terminalize after the pre-insert absence/live check.
+    // Publish CREATED only after a fresh authoritative operation observation.
+    // If terminal/absent/mismatched authority won, release this exact row now;
+    // terminalization that starts after this observation will see the row in
+    // its ordinary release path.
+    const insertedAuthority = await adoptAuthoritativeReservationForOperation(
+      this, operation, {timeoutBudget});
+    if (
+      insertedAuthority.outcome !==
+        OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE
+    ) {
+      if (PROVEN_INVALID_CREATED_RESERVATION_ERRORS.has(
+        insertedAuthority.error,
+      )) {
+        const cleanup = await this.transitionActiveReservationById(
+          reservationId,
+          RESERVATION_STATUS.RELEASED,
+          Date.now(),
+          {ownerId: operation.operationId, timeoutBudget},
+        );
+        if (!cleanup.success) {
+          this.logger.warn(
+            REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
+            {
+              operationId: operation.operationId,
+              reservationId,
+              error: cleanup.error,
+            },
+          );
+        }
+      }
+      return insertedAuthority;
     }
 
     this.stats.reservationsCreated++;

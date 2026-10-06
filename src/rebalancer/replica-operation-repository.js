@@ -698,6 +698,7 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   buildReplicaOperationVisibilityReadOptions,
   classifySystemPartition,
   getControlPlaneRetryAfterMs,
+  getRemainingBudgetMs,
   isCoordinatorOwnedOperationType,
   isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,

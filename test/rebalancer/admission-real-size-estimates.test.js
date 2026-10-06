@@ -139,10 +139,21 @@ function createTrackingSqlEngine() {
         return {success: true, changes: 1};
       }
       if (sql.includes('SELECT * FROM storage_reservations')) {
-        return {success: true, rows: []};
+        const [operationId, status] = params;
+        return {
+          success: true,
+          rows: Array.from(reservations.values()).filter((row) =>
+            row.operation_id === operationId && row.status === status,
+          ),
+        };
+      }
+      if (sql.includes('replica_operations') &&
+          sql.includes('operation_id = ?')) {
+        const row = operations.get(params[0]);
+        return {success: true, rows: row ? [row] : []};
       }
       if (sql.includes('replica_operations')) {
-        return {success: true, rows: []};
+        return {success: true, rows: Array.from(operations.values())};
       }
       return {success: true, rows: []};
     },
