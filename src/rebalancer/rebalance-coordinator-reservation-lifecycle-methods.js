@@ -8,6 +8,8 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {adoptAuthoritativeReservationForOperation} from
+  './rebalance-coordinator-reservation-adoption.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RESERVATION_ORPHAN_RECONCILE_STATE = Object.freeze({
@@ -211,6 +213,9 @@ class RebalanceCoordinatorReservationLifecycleMethods {
           LOCAL_STR_FUNCTION,
       REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED,
     );
+    const timeoutBudget = this.createOperationMutationTimeoutBudget(
+      options.timeoutBudget,
+    );
 
     const {entityType, entityId} =
       assertCanonicalRebalancerEntityIdentity(operation);
@@ -246,6 +251,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       {
         ownerId: operation.operationId,
         sessionId: options.sessionId,
+        timeoutBudget,
       },
     );
 
@@ -263,6 +269,12 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         reservationId,
         error: result.error || null,
       });
+    }
+
+    const changeCount = this.extractMutationChangeCount(result);
+    if (changeCount === null || changeCount <= 0) {
+      return adoptAuthoritativeReservationForOperation(
+        this, operation, {timeoutBudget});
     }
 
     this.stats.reservationsCreated++;
@@ -304,41 +316,28 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    *   presence).
    * @private
    */
-  async ensureReservationForOperation(operation) {
+  async ensureReservationForOperation(operation, options = {}) {
     if (!this.isStorageIncreasingOperation(operation?.type)) {
       return Object.freeze({
         outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.NOT_REQUIRED,
       });
     }
-    const activeResult = await readAuthoritativeControlPlaneRows(
-      this.controlPlaneSystemTableGateway,
-      SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
-      SQL.SELECT_ACTIVE_RESERVATIONS_BY_OPERATION,
-      [operation.operationId, RESERVATION_STATUS.ACTIVE],
-      STORAGE_RESERVATION_READ_QUERY_OPTIONS,
+    const timeoutBudget = this.createOperationMutationTimeoutBudget(
+      options.timeoutBudget,
     );
-    if (activeResult.success && activeResult.rows?.length > 0) {
-      return Object.freeze({
-        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE,
-        reservationId: `res-${operation.operationId}`,
-      });
+    const adoption = await adoptAuthoritativeReservationForOperation(
+      this,
+      operation,
+      {allowConfirmedAbsentReservation: true, timeoutBudget},
+    );
+    if (
+      adoption.outcome ===
+        OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE ||
+      adoption.reservationAbsent !== true
+    ) {
+      return adoption;
     }
-    if (!activeResult.success) {
-      this.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_CREATE_FAILED,
-        {
-          operationId: operation.operationId,
-          reservationId: `res-${operation.operationId}`,
-          error: activeResult.error,
-        },
-      );
-      return Object.freeze({
-        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
-        reservationId: `res-${operation.operationId}`,
-        error: activeResult.error || null,
-      });
-    }
-    return this.createReservationForOperation(operation);
+    return this.createReservationForOperation(operation, {timeoutBudget});
   }
 
   /**

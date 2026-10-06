@@ -355,6 +355,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           ...readQueryOptions,
           leaderMode: options?.leaderMode,
           retryOnRetryableFailure: true,
+          timeoutBudget: options?.timeoutBudget,
         },
       );
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;

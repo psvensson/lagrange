@@ -26,16 +26,9 @@ import {
 } from '../../src/rebalancer/storage-capacity-accounting-service.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
-const STORAGE_RESERVATION_AUTHORITY_ERROR = Object.freeze({
-  OPERATION_AUTHORITY_UNAVAILABLE:
-    'Authoritative replica operation is unavailable for reservation adoption',
-  OPERATION_ABSENT:
-    'Authoritative replica operation is absent for reservation adoption',
-  OPERATION_TERMINAL:
-    'Authoritative replica operation is terminal for reservation adoption',
-  OPERATION_MISMATCH:
-    'Authoritative replica operation identity mismatches reservation request',
-});
+import {
+  STORAGE_RESERVATION_AUTHORITY_ERROR,
+} from '../../src/rebalancer/storage-reservation-authority.js';
 import {
   createMockCache,
   createMockCdcService,

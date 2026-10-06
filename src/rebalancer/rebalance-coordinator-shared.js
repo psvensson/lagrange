@@ -159,7 +159,7 @@ const SQL = Object.freeze({
   SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
     WHERE partition_id = ? AND node_id = ?`,
-  INSERT_RESERVATION: `INSERT INTO storage_reservations (
+  INSERT_RESERVATION: `INSERT OR IGNORE INTO storage_reservations (
     reservation_id, operation_id, entity_type, entity_id,
     partition_id, target_node_id, estimated_bytes,
     amplification_factor, status, reason_code,

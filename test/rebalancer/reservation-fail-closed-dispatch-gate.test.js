@@ -203,7 +203,7 @@ function createTrackingSqlEngine(options = {}) {
       if (sql.includes('INSERT INTO replica_operations')) {
         return insertOperationRow(operations, params);
       }
-      if (sql.includes('INSERT INTO storage_reservations')) {
+      if (sql.includes('INTO storage_reservations')) {
         return insertReservationRow(reservations, params, options);
       }
       if (sql.includes('UPDATE storage_reservations')) {
@@ -329,6 +329,27 @@ function buildStorageIncreasingOperation(overrides = {}) {
   };
 }
 
+function seedAuthoritativeOperation(sqlEngine, operation) {
+  sqlEngine.operations.set(operation.operationId, {
+    operation_id: operation.operationId,
+    type: operation.type,
+    partition_id: operation.partitionId,
+    replica_id: operation.replicaId || null,
+    target_claim_key: operation.targetClaimKey || null,
+    source_node_id: operation.sourceNodeId || null,
+    target_node_id: operation.targetNodeId,
+    status: operation.status,
+    workflow_step: operation.workflowStep,
+    created_at: operation.createdAt,
+    updated_at: operation.updatedAt,
+    completed_at: operation.completedAt,
+    error_message: operation.errorMessage || null,
+    steps_history: JSON.stringify(operation.stepsHistory || []),
+    entity_type: operation.entityType,
+    entity_id: operation.entityId,
+  });
+}
+
 // --- reservation-failure-blocks-dispatch ---
 
 test('reservation-failure-blocks-dispatch: reservation insert failure ' +
@@ -396,6 +417,7 @@ async (t) => {
   });
 
   const operation = buildStorageIncreasingOperation();
+  seedAuthoritativeOperation(sqlEngine, operation);
   const owner = coordinator.workflowOwner;
   owner.repository.isOperationLocallyOwned = () => true;
   owner.executeOperationInternal = async (dispatchedOperation) => ({
@@ -437,6 +459,7 @@ async (t) => {
   });
 
   const operation = buildStorageIncreasingOperation();
+  seedAuthoritativeOperation(sqlEngine, operation);
   const owner = coordinator.workflowOwner;
   owner.repository.isOperationLocallyOwned = () => true;
   const dispatchCalls = [];

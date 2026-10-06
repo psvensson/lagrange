@@ -131,6 +131,10 @@ class RebalanceCoordinatorOwnerFacade {
     );
   }
 
+  createOperationMutationTimeoutBudget(timeoutBudget = null) {
+    return this.repository.createOperationMutationTimeoutBudget(timeoutBudget);
+  }
+
   /**
    * Check whether operation persist error is transient and retryable.
    * @param {string} errorMessage - SQL error message.

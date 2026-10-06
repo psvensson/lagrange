@@ -694,6 +694,25 @@
         "test/integration/call-cell-public-outcome-adversarial.integration.test.js",
         "test/integration/public-binding-cell-invocation-seam.integration.test.js"
       ]
+    },
+    "storage-reservation-authoritative-adoption": {
+      "description": "The reservation lifecycle uses the deterministic operation-derived identity, write-if-absent insertion, and exact authoritative live operation plus ACTIVE reservation witnesses to converge a lost INSERT answer on one durable capacity hold without duplicating creation observations.",
+      "owners": [
+        "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+        "src/rebalancer/rebalance-coordinator-shared.js",
+        "src/rebalancer/rebalance-coordinator-owner-facade.js",
+        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "src/rebalancer/replica-operation-repository-read-methods.js",
+        "src/rebalancer/replica-operation-repository-row-methods.js",
+        "src/rebalancer/storage-reservation-authority.js"
+      ],
+      "tests": [
+        "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+        "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+        "test/rebalancer/reservation-expiry-operation-aware.test.js",
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1210,6 +1229,33 @@
         "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js",
         "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
         "test/raft/raft-rs-backend/committed-membership-target-validation.test.js"
+      ]
+    },
+    "storage-reservation-operation-and-retry-authority": {
+      "description": "The reservation owner may adopt an operation-derived hold only when the replica_operations owner proves the exact immutable generation is still non-terminal, and insertion plus authoritative reconciliation consume the operation mutation owner's single existing retry deadline.",
+      "endpoints": [
+        {
+          "id": "reservation-lifecycle",
+          "owners": [
+            "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+            "src/rebalancer/storage-reservation-authority.js"
+          ]
+        },
+        {
+          "id": "operation-ledger-authority",
+          "owners": [
+            "src/rebalancer/rebalance-coordinator-owner-facade.js",
+            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+            "src/rebalancer/replica-operation-repository-read-methods.js",
+            "src/rebalancer/replica-operation-repository-row-methods.js"
+          ]
+        }
+      ],
+      "contract": "storage-reservation-authoritative-adoption",
+      "witnessTests": [
+        "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
       ]
     },
     "replace-owner-membership-observation": {
