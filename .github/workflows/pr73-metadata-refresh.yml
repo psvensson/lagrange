@@ -1,0 +1,33 @@
+name: pr73-metadata-refresh
+on:
+  push:
+    branches:
+      - finalize/zero-liferaft-2026-10-02
+permissions:
+  contents: write
+jobs:
+  refresh:
+    if: github.event.head_commit.message == 'ci: remove duplicated qualification tail'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run -s test:metadata:refresh
+      - name: Commit generated metadata if changed
+        run: |
+          if git diff --quiet -- test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json; then
+            echo "metadata already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json
+          git commit -m "test: refresh generated metadata for PR73"
+          git push origin HEAD:finalize/zero-liferaft-2026-10-02
