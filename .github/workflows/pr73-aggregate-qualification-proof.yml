@@ -1,0 +1,104 @@
+name: pr73-aggregate-qualification-proof
+
+on:
+  push:
+    branches:
+      - "integrate/pr73-qualification-fixes-20261006"
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout aggregate candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Primary qualification witnesses
+        run: |
+          set -euo pipefail
+          node test/node/replica-colocated-follower-leader-clear.test.js
+          node test/control-plane/cl-036-local-leader-row-seed.test.js
+          node test/rebalancer/topology-settling-node-ready-lease-wake.test.js
+
+      - name: Leader lifecycle adjacent cone
+        run: |
+          set -euo pipefail
+          node test/node/replica-lifecycle-durable-generation.test.js
+          node test/partition/partition-leader-row-publication-integrity.test.js
+          node test/partition/partition-service-role-metadata-publication.test.js
+          node test/convergence/dt-local-leader-seed-safety-merge.test.js
+
+      - name: Readiness topology adjacent cone
+        run: |
+          set -euo pipefail
+          node test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js
+          node test/rebalancer/startup-authority-topology-settling-contract.test.js
+          node test/rebalancer/runtime-service-expired-lease-candidate-admission.test.js
+          node test/control-plane/readiness-deferred-denial-evidence-absent.test.js
+          node test/control-plane/node-liveness-semantic-projection-owner.test.js
+
+      - name: Readiness planning impact-contract witness cone
+        run: |
+          set -euo pipefail
+          for test_file in \
+            test/control-plane/single-readiness-owner.receipt.test.js \
+            test/control-plane/node-liveness-semantic-projection-owner.test.js \
+            test/control-plane/publication-readiness-churn-liveness.test.js \
+            test/control-plane/readiness-planning-cache-classification-barrier.test.js \
+            test/control-plane/readiness-planning-deferral-bounded.test.js \
+            test/control-plane/readiness-planning-generation-granularity.test.js \
+            test/control-plane/readiness-planning-semantic-generation.test.js \
+            test/control-plane/readiness-planning-snapshot-identity-owner.test.js \
+            test/control-plane/control-plane-read-authority-token.test.js \
+            test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js \
+            test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js \
+            test/rebalancer/startup-authority-available-node-contract.test.js \
+            test/rebalancer/storage-capacity-accounting-service.test.js \
+            test/rebalancer/storage-capacity-semantic-projection-owner.test.js \
+            test/workflow/owner-key-reconcile-queue.test.js
+          do
+            echo "::group::$test_file"
+            node "$test_file"
+            echo "::endgroup::"
+          done
+
+      - name: Architecture model contracts
+        run: npm run model:contracts
+
+      - name: Repository structural ratchets
+        run: |
+          set -euo pipefail
+          npm run test:deps
+          npm run audit:file-size
+          npm run test:complexity
+          npm run test:complexity:cognitive
+          npm run test:duplication
+          npm run audit:impact-contracts
+          npm run audit:guidelines
+
+      - name: Scoped ESLint
+        run: |
+          npx eslint \
+            src/node/replica-handler-class.js \
+            src/node/replica-state-machine-leader-clear.js \
+            src/node/replica-state-machine.js \
+            src/partition/partition-service-metadata-delivery-methods.js \
+            src/rebalancer/unified-rebalancer-critical-topology-methods.js \
+            test/node/replica-colocated-follower-leader-clear.test.js \
+            test/control-plane/cl-036-local-leader-row-seed.test.js \
+            test/rebalancer/topology-settling-node-ready-lease-wake.test.js
