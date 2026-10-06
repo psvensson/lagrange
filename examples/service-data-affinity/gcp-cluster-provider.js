@@ -59,8 +59,8 @@ const GCP_DEMO_DEPLOYMENT_PROFILE = Object.freeze({
     preemptible: false,
   }),
   container: Object.freeze({
-    memory: '2g',
-    cpus: '2.0',
+    memory: '4g',
+    cpus: '4.0',
   }),
 });
 const GCP_DEMO_ZONE_ENV = 'LAGRANGE_AFFINITY_DEMO_GCP_ZONE';
