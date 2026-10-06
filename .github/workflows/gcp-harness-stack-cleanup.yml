@@ -1,0 +1,67 @@
+name: gcp-harness-stack-cleanup
+
+on:
+  push:
+    branches:
+      - "infra/gcp-harness-stack-cleanup-20261006"
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 20
+    steps:
+      - name: Assert no harness workflow overlap
+        run: |
+          echo "Cleanup branch is operator-isolated; no other Actions runs were active when dispatched."
+
+      - name: Remove leaked harness VMs
+        run: |
+          set -euo pipefail
+          mapfile -t VMS < <(gcloud compute instances list \
+            --project something-2e584 \
+            --filter="zone:(europe-central2-a) AND name~'^ddb-test-vm-'" \
+            --format="value(name)")
+          printf "found %s harness VMs\n" "${#VMS[@]}"
+          if [ "${#VMS[@]}" -gt 0 ]; then
+            gcloud compute instances delete "${VMS[@]}" \
+              --project something-2e584 \
+              --zone europe-central2-a \
+              --quiet
+          fi
+
+      - name: Remove harness firewall rules and network
+        run: |
+          set -euo pipefail
+          for RULE in ddb-allow-internal ddb-allow-docker ddb-allow-iap-ssh; do
+            if gcloud compute firewall-rules describe "$RULE" --project something-2e584 >/dev/null 2>&1; then
+              gcloud compute firewall-rules delete "$RULE" --project something-2e584 --quiet
+            fi
+          done
+          if gcloud compute networks describe ddb-test-vpc --project something-2e584 >/dev/null 2>&1; then
+            gcloud compute networks delete ddb-test-vpc --project something-2e584 --quiet
+          fi
+
+      - name: Reset dedicated local Pulumi backend
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/.pulumi-local-backend
+          rm -rf /tmp/lagrange-gcp-docker-tls-* /tmp/lagrange-image-* || true
+          test ! -e /tmp/.pulumi-local-backend
+
+      - name: Verify harness resources are absent
+        run: |
+          set -euo pipefail
+          test -z "$(gcloud compute instances list --project something-2e584 --filter="zone:(europe-central2-a) AND name~'^ddb-test-vm-'" --format="value(name)")"
+          for RULE in ddb-allow-internal ddb-allow-docker ddb-allow-iap-ssh; do
+            if gcloud compute firewall-rules describe "$RULE" --project something-2e584 >/dev/null 2>&1; then
+              echo "::error::firewall rule still exists: $RULE"
+              exit 1
+            fi
+          done
+          if gcloud compute networks describe ddb-test-vpc --project something-2e584 >/dev/null 2>&1; then
+            echo "::error::harness network still exists"
+            exit 1
+          fi
