@@ -129,6 +129,10 @@ async function clearCanonicalPartitionLeaderIfNeeded(
   replicaState,
 ) {
   if (!hasCanonicalLeaderClearIdentity(replicaState)) return true;
+  if (stateMachine.shouldRetainCanonicalPartitionLeader?.(replicaState) ===
+      true) {
+    return true;
+  }
   return stateMachine.getControlPlaneSystemTableGateway().submitMutation({
     operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
     tableName: TABLES.PARTITIONS,
