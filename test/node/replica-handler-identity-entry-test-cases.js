@@ -27,12 +27,24 @@ import {RAFT_OPERATION_PORT_REQUEST as REQUEST} from
 import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../../src/raft/raft-committed-membership-constants.js';
-import {ReplicaOperationResponseStatus} from
+import {SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  ReplicaOperationField,
+  ReplicaOperationResponseStatus,
+} from
   '../../src/rebalancer/replica-operation-constants.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from '../../src/rebalancer/replica-create-admission-token.js';
 import {EXECUTOR_OUTCOME_TYPE} from
   '../../src/rebalancer/executor-outcome-constants.js';
+import {CREATE_ADMISSION_STATE} from
+  '../../src/node/replica-create-admission-owner.js';
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
+import {committedStampFor} from './replica-handler-bootstrap-stamps.js';
 import {
   NODE_ID,
   PARTITION_ID,
@@ -67,6 +79,20 @@ function wipeRecord(directory, replicaId) {
   }
 }
 
+function rowMatches(row, where) {
+  return Object.entries(where).every(
+    ([field, value]) => row?.[field] === value,
+  );
+}
+
+function mutationResult(applied) {
+  return {
+    success: true,
+    outcome: applied ? 'applied' : 'observed_state_changed',
+    partitionResult: {affectedRows: applied ? 1 : 0},
+  };
+}
+
 export async function registerReplicaHandlerIdentityEntryTests({
   t,
   ReplicaHandler,
@@ -79,13 +105,58 @@ export async function registerReplicaHandlerIdentityEntryTests({
   // One process of the node: a handler over the durable store (shared across
   // a restart) and the data directory.
   function startNode({directory, cache, store = null, beforeMutation = null,
-    overridesFor = undefined}) {
+    overridesFor = undefined, operationRows = new Map(),
+    ownerIncarnation = 1, initialize = true}) {
     const opened = [];
     const outcomes = [];
-    const gateway = createLifecycleControlPlaneGatewayForCache(cache, {
+    const lifecycleGateway = createLifecycleControlPlaneGatewayForCache(cache, {
       store,
       beforeMutation: (mutation) => beforeMutation?.(mutation),
     });
+    const gateway = {
+      store: lifecycleGateway.store,
+      submitMutation: lifecycleGateway.submitMutation,
+      async readAuthoritativeRows(tableName, sql, params = []) {
+        if (tableName === SYSTEM_TABLE_NAME.NODES) {
+          return {success: true, rows: [{
+            node_id: NODE_ID,
+            boot_incarnation: ownerIncarnation,
+          }]};
+        }
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+          if (sql.includes('WHERE operation_id = ?')) {
+            return {success: true, rows: [operationRows.get(params[0])]
+              .filter(Boolean).map((row) => ({...row}))};
+          }
+          const rows = [...operationRows.values()].filter((row) =>
+            row.create_admission_state !== null &&
+            (params.length === 2 ?
+              row.replica_id === params[0] &&
+                row.target_node_id === params[1] :
+              row.target_node_id === params[0]));
+          return {success: true, rows: rows.map((row) => ({...row}))};
+        }
+        return lifecycleGateway.readAuthoritativeRows(
+          tableName,
+          sql,
+          params,
+        );
+      },
+      async updateSystemTableRow(tableName, where, data) {
+        if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+          return lifecycleGateway.submitMutation({
+            operation: 'update',
+            tableName,
+            whereClause: where,
+            data,
+          });
+        }
+        const row = operationRows.get(where.operation_id);
+        const applied = Boolean(row && rowMatches(row, where));
+        if (applied) Object.assign(row, data);
+        return mutationResult(applied);
+      },
+    };
     const createPartitionService =
       realPortFactory(directory, opened, overridesFor);
     const handler = new ReplicaHandler({
@@ -95,17 +166,46 @@ export async function registerReplicaHandlerIdentityEntryTests({
       cdcIntegrationService: createMockCDCService(cache),
       replicaStateMachine: new ReplicaStateMachine({nodeId: NODE_ID,
         controlPlaneSystemTableGateway: gateway}),
+      controlPlaneSystemTableGateway: gateway,
+      ownerIncarnation,
       createPartitionService,
     });
-    handler.initialize();
     handler.executorOutcomeEmitter = {
       emitOutcome: (type, operationId, step, options) =>
         outcomes.push({type, operationId, step, options}),
     };
+    if (initialize) handler.initialize();
     const drive = async (replicaId, operationId) => {
-      const response = await handler.handleCreateReplica({operationId,
-        operationType: OperationType.ADD, partitionId: PARTITION_ID,
-        replicaId});
+      if (!handler.initialized) handler.initialize();
+      await handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+      let row = operationRows.get(operationId);
+      if (!row) {
+        row = createOperationRow(replicaId, operationId);
+        operationRows.set(operationId, row);
+      }
+      const admissionToken = row.create_admission_token ||
+        buildReplicaCreateAdmissionToken({
+          operationId,
+          replicaId,
+          targetNodeId: NODE_ID,
+          workflowUpdatedAt: row.updated_at,
+        });
+      const attemptSeq = row.create_admission_attempt_seq || 1;
+      const response = await handler.handleCreateReplica({
+        [ReplicaOperationField.OPERATION_ID]: operationId,
+        [ReplicaOperationField.OPERATION_TYPE]: OperationType.ADD,
+        [ReplicaOperationField.ENTITY_TYPE]: 'partition',
+        [ReplicaOperationField.ENTITY_ID]: PARTITION_ID,
+        [ReplicaOperationField.PARTITION_ID]: PARTITION_ID,
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+        [ReplicaOperationField.CREATE_ADMISSION_TOKEN]: admissionToken,
+        [ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT]:
+          row.updated_at,
+        [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN]:
+          row.create_admission_attempt_token ||
+            buildReplicaCreateAttemptToken(admissionToken, attemptSeq),
+        [ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ]: attemptSeq,
+      });
       await Promise.allSettled([...handler.operationTasks]);
       return response;
     };
@@ -119,7 +219,76 @@ export async function registerReplicaHandlerIdentityEntryTests({
       }
     };
     return {handler, opened, outcomes, store: gateway.store, drive, stop,
-      createPartitionService};
+      createPartitionService, operationRows};
+  }
+
+  function retainedAdmission(replicaId, operationId, lifecycleRow,
+    admissionState, updatedAt) {
+    if (!lifecycleRow) {
+      return {
+        create_admission_state: null,
+        create_admission_token: null,
+        create_admission_replica_created_at: null,
+        create_admission_attempt_token: null,
+        create_admission_previous_attempt_token: null,
+        create_admission_attempt_seq: null,
+        create_admission_workflow_updated_at: null,
+        create_admission_owner_incarnation: null,
+      };
+    }
+    const admissionToken = buildReplicaCreateAdmissionToken({
+      operationId,
+      replicaId,
+      targetNodeId: NODE_ID,
+      workflowUpdatedAt: updatedAt,
+    });
+    const attemptToken = buildReplicaCreateAttemptToken(admissionToken, 1);
+    if (lifecycleRow.create_attempt_token == null) {
+      lifecycleRow.create_attempt_token = attemptToken;
+    }
+    return {
+      create_admission_state: admissionState,
+      create_admission_token: admissionToken,
+      create_admission_replica_created_at: lifecycleRow.created_at,
+      create_admission_attempt_token: attemptToken,
+      create_admission_previous_attempt_token: null,
+      create_admission_attempt_seq: 1,
+      create_admission_workflow_updated_at: updatedAt,
+      create_admission_owner_incarnation: 1,
+    };
+  }
+
+  function createOperationRow(replicaId, operationId, lifecycleRow = null,
+    admissionState = null) {
+    const updatedAt = 10;
+    const bootstrapMembership = lifecycleRow ?
+      committedStampFor([replicaId]) : genesisStamp([replicaId]);
+    return {
+      operation_id: operationId,
+      type: OperationType.ADD,
+      entity_type: 'partition',
+      entity_id: PARTITION_ID,
+      partition_id: PARTITION_ID,
+      replica_id: replicaId,
+      source_node_id: 'seed-node',
+      target_node_id: NODE_ID,
+      status: ReplicaStatus.CREATING,
+      workflow_step: 'SENDING',
+      steps_history: JSON.stringify([{
+        bootstrapMembership,
+      }]),
+      created_at: 9,
+      updated_at: updatedAt,
+      completed_at: null,
+      error_message: null,
+      ...retainedAdmission(
+        replicaId,
+        operationId,
+        lifecycleRow,
+        admissionState,
+        updatedAt,
+      ),
+    };
   }
 
   function seededCache(row = null) {
@@ -224,10 +393,12 @@ export async function registerReplicaHandlerIdentityEntryTests({
       wipeRecord(directory, replicaId);
       // The process restarts on the wiped disk; the control plane re-drives.
       const second = startNode({directory, cache, store: life.node.store,
+        operationRows: life.node.operationRows,
+        ownerIncarnation: 2,
         overridesFor: group.overridesFor});
       nodes.push(second);
-      await second.drive(replicaId, 'k3-redrive-1');
-      await second.drive(replicaId, 'k3-redrive-2');
+      await second.drive(replicaId, 'k3-first');
+      await second.drive(replicaId, 'k3-first');
       const reopened = second.opened.filter((entry) => entry.port !== null);
       for (const entry of reopened) {
         t.notOk(await forgetsItsVote(entry, directory, replicaId,
@@ -255,11 +426,21 @@ export async function registerReplicaHandlerIdentityEntryTests({
     're-driven under its replica id and completes', async (t) => {
     const replicaId = 'k3-never-opened';
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'identity-k3n-'));
-    const node = startNode({directory, cache: seededCache({
+    const lifecycleRow = {
       ...openedRow(replicaId, ReplicaStatus.FAILED),
-      previous_state: ReplicaStatus.CREATING})});
+      previous_state: ReplicaStatus.CREATING,
+    };
+    const operationId = 'k3-never-opened-op';
+    const operationRows = new Map([[operationId, createOperationRow(
+      replicaId,
+      operationId,
+      lifecycleRow,
+      CREATE_ADMISSION_STATE.FAILED,
+    )]]);
+    const node = startNode({directory, cache: seededCache(lifecycleRow),
+      operationRows, ownerIncarnation: 2});
     try {
-      const response = await node.drive(replicaId, 'k3-never-opened-op');
+      const response = await node.drive(replicaId, operationId);
       t.equal(response.status, ReplicaOperationResponseStatus.INITIATED);
       t.equal(node.opened.length, 1, 'one open');
       t.equal(node.opened[0].options.identityExisted, false);
@@ -287,12 +468,20 @@ export async function registerReplicaHandlerIdentityEntryTests({
         }
         const before = record === null ? null :
           readRecord(directory, replicaId);
+        const lifecycleRow = openedRow(replicaId, ReplicaStatus.SYNCING);
+        const operationId = `${replicaId}-op`;
+        const operationRows = new Map([[operationId, createOperationRow(
+          replicaId,
+          operationId,
+          lifecycleRow,
+          CREATE_ADMISSION_STATE.MATERIALIZED,
+        )]]);
         const node = startNode({directory,
-          cache: seededCache(openedRow(replicaId, ReplicaStatus.SYNCING))});
+          cache: seededCache(lifecycleRow), operationRows,
+          ownerIncarnation: 2});
         try {
-          const response = await node.drive(replicaId, `${replicaId}-op`);
-          t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
-            'routed into the create/resume branch, not in_progress');
+          await node.handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+          await Promise.allSettled([...node.handler.operationTasks]);
           t.ok(node.opened.length >= 1, 'the create opened');
           t.equal(node.opened[0].options.identityExisted, true, 'fact read');
           t.equal(node.opened[0].options.identityRecorded, undefined);
@@ -324,11 +513,21 @@ export async function registerReplicaHandlerIdentityEntryTests({
   async function trackedRuntimeNode(replicaId) {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'identity-trk-'));
     leaveEarlierAttempt(replicaId, {voted: false})(directory);
+    const lifecycleRow = openedRow(replicaId, ReplicaStatus.SYNCING);
+    const operationId = `${replicaId}-op`;
+    const operationRows = new Map([[operationId, createOperationRow(
+      replicaId,
+      operationId,
+      lifecycleRow,
+      CREATE_ADMISSION_STATE.MATERIALIZED,
+    )]]);
     const node = startNode({directory,
-      cache: seededCache(openedRow(replicaId, ReplicaStatus.SYNCING))});
+      cache: seededCache(lifecycleRow), operationRows,
+      ownerIncarnation: 2, initialize: false});
     const live = await node.createPartitionService({partitionId: PARTITION_ID,
       replicaId, identityExisted: true});
     node.handler.localServices.set(replicaId, live);
+    node.handler.initialize();
     return {node, directory};
   }
 

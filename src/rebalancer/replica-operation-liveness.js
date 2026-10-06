@@ -36,6 +36,10 @@ const LOCAL_STR_SOURCE_REPLICA_ID = 'source_replica_id';
 const LOCAL_STR_SOURCEREPLICAID = 'sourceReplicaId';
 const LOCAL_STR_TARGET_NODE_ID = 'target_node_id';
 const LOCAL_STR_TARGETNODEID = 'targetNodeId';
+const LOCAL_STR_CREATE_ADMISSION_ATTEMPT_TOKEN =
+  'create_admission_attempt_token';
+const LOCAL_STR_CREATEADMISSIONATTEMPTTOKEN =
+  'createAdmissionAttemptToken';
 const LOCAL_STR_STEP = 'step';
 const LOCAL_STR_TIMESTAMP = 'timestamp';
 const LOCAL_STR_TIMESTAMPMS = 'timestampMs';
@@ -381,6 +385,11 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       LOCAL_STR_TARGET_NODE_ID,
       LOCAL_STR_TARGETNODEID,
     ) || inferredTargetNodeId || ''),
+    createAdmissionAttemptToken: firstStringField(
+      row,
+      LOCAL_STR_CREATE_ADMISSION_ATTEMPT_TOKEN,
+      LOCAL_STR_CREATEADMISSIONATTEMPTTOKEN,
+    ),
     createdAt,
     updatedAt,
     completedAt,

@@ -23,11 +23,6 @@ import path from 'path';
 import os from 'os';
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  ReplicaHandler as ProductionReplicaHandler,
-} from '../../src/node/replica-handler.js';
-import {scenarioStampingReplicaHandler} from
-  './replica-handler-bootstrap-stamps.js';
-import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
@@ -58,10 +53,8 @@ import {
 } from '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
-
-// Lifecycle scenarios: every create carries the committed-membership stamp
-// its scenario's creator would have produced (owner decision O1).
-const ReplicaHandler = scenarioStampingReplicaHandler(ProductionReplicaHandler);
+import {OwnerPathReplicaHandler as ReplicaHandler} from
+  './replica-handler-owner-path-admission-fixture.js';
 
 const TEST_NODE_ID = 'test-node';
 const TEST_PARTITION_ID = 'partition-1';
@@ -1050,6 +1043,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
           handler.replicaStateMachine = new ReplicaStateMachine({
             nodeId: TEST_NODE_ID,
             cdcIntegrationService: cdcService,
+            controlPlaneSystemTableGateway:
+              handler.controlPlaneSystemTableGateway,
             systemTableCache: cache,
           });
           handler.localReplicas.clear();
@@ -1105,11 +1100,21 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
     async (t) => {
       const emitter = new ExecutorOutcomeEmitter({logger: console});
       const emittedOutcomes = [];
+      const lifecycleAtFailure = [];
       emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
         emittedOutcomes.push(outcome);
       });
 
       const cache = createSeededCache();
+      emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
+        if (outcome.outcomeType ===
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED) {
+          lifecycleAtFailure.push(cache.get(
+            SYSTEM_TABLE_NAME.SERVICES,
+            TEST_REPLICA_ID,
+          )?.status || null);
+        }
+      });
       const cdcService = createMockCDCService(cache);
 
       // Factory that throws to simulate creation failure.
@@ -1156,6 +1161,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         failOutcomes[0].errorMessage,
         'failure outcome must carry errorMessage',
       );
+      t.same(lifecycleAtFailure, [ReplicaStatus.FAILED],
+        'the terminal outcome is emitted only after durable FAILED is visible');
 
       // Verify no CDC operation touched replica_operations.
       const replicaOpsWrites = cdcService.operations.filter(
@@ -1221,6 +1228,8 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
       handler.replicaStateMachine = new ReplicaStateMachine({
         nodeId: TEST_NODE_ID,
         cdcIntegrationService: cdcService,
+        controlPlaneSystemTableGateway:
+          handler.controlPlaneSystemTableGateway,
         systemTableCache: cache,
       });
       handler.localReplicas.clear();

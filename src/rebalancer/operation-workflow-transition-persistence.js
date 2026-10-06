@@ -9,6 +9,8 @@ import {
 } from './operation-workflow-replace-owner.js';
 import {
   admitCreateTerminalFailure,
+  decideFailedCreateTargetCleanup,
+  revalidateCreateTerminalFailure,
 } from './operation-workflow-replace-terminal-admission.js';
 import {
   OperationWorkflowTransitionOrchestration,
@@ -18,7 +20,9 @@ import {
 } from './operation-workflow-terminal-reservation-release.js';
 import {
   TERMINAL_TRANSITION_REPAIR_CAUSE,
+  armFailedCreateCleanupRelease,
   armTerminalTransitionRepair,
+  recoverFailedCreateCleanupReleaseDebt,
 } from './operation-workflow-terminal-transition-repair.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
@@ -77,6 +81,9 @@ function applyFailureStepMetadata(failedStepEntry, options) {
 
 class OperationWorkflowTransitionPersistence
   extends OperationWorkflowTransitionOrchestration {
+  recoverFailedCreateCleanupReleaseDebt() {
+    return recoverFailedCreateCleanupReleaseDebt(this);
+  }
   /**
    * Claim one priority control-plane operation for dispatch without relying on
    * a transition-scoped distributed transaction. The claim remains single-
@@ -357,6 +364,7 @@ class OperationWorkflowTransitionPersistence
       operation.completedAt !== null &&
       operation.completedAt !== undefined
     ) {
+      armFailedCreateCleanupRelease(this, operation);
       return ALREADY_TERMINAL_TRANSITION_OUTCOME;
     }
     // R-1a (quest replace-source-removal-owner): every success edge of a
@@ -470,6 +478,7 @@ class OperationWorkflowTransitionPersistence
     this.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
       operation,
     });
+    armFailedCreateCleanupRelease(this, operation);
 
     try {
       this.logger.info(METRICS_LOG_TAG.REBALANCE_OPERATION, {
@@ -503,10 +512,23 @@ class OperationWorkflowTransitionPersistence
     const admission = await admitCreateTerminalFailure(
       this, operation, options);
     if (admission.admitted) {
+      const terminalAdmission = admission.requiresRevalidation === true ?
+        () => revalidateCreateTerminalFailure(
+          this,
+          operation,
+          admission,
+          options,
+        ) : undefined;
       return admission.expectedWorkflowStep === null ?
-        UNBOUNDED_FAILURE_ADMISSION :
+        Object.freeze({
+          ...UNBOUNDED_FAILURE_ADMISSION,
+          persistOptions: {terminalAdmission},
+          stepMetadata: admission.stepMetadata,
+        }) :
         Object.freeze({refused: false, persistOptions: {
-          expectedWorkflowStep: admission.expectedWorkflowStep}});
+          expectedWorkflowStep: admission.expectedWorkflowStep,
+          terminalAdmission},
+        stepMetadata: admission.stepMetadata});
     }
     this.logger.warn(
       REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILURE_REFUSED_AFTER_INTENT,
@@ -520,7 +542,11 @@ class OperationWorkflowTransitionPersistence
       },
     );
     return Object.freeze({refused: true, persistOptions: {},
-      completeInstead: admission.completeInstead});
+      completeInstead: admission.completeInstead, stepMetadata: null});
+  }
+
+  async decideFailedCreateTargetCleanup(operation) {
+    return decideFailedCreateTargetCleanup(this, operation);
   }
 
   /**
@@ -570,7 +596,13 @@ class OperationWorkflowTransitionPersistence
       previousStep,
       now,
     );
-    applyFailureStepMetadata(failedStepEntry, options);
+    applyFailureStepMetadata(failedStepEntry, {
+      ...options,
+      stepMetadata: {
+        ...(options.stepMetadata || {}),
+        ...(failureAdmission.stepMetadata || {}),
+      },
+    });
     const projectedOperation = {
       ...operation,
       workflowStep: WORKFLOW_STEP.FAILED,

@@ -27,6 +27,8 @@ function registeredRow(overrides = {}) {
     raft_role: 'follower',
     status: 'stopped',
     address: 'node-a/partition/p1-r1',
+    cleanup_token: null,
+    create_attempt_token: null,
     created_at: 10,
     updated_at: 100,
     ...overrides,
@@ -190,6 +192,8 @@ test('ReplicaStateMachine registered activation refuses a newer REMOVING generat
       replica_id: 'p1-r1',
       group_id: null,
       status: 'stopped',
+      cleanup_token: null,
+      create_attempt_token: null,
       created_at: 10,
       updated_at: 100,
     }, 'activation CAS should carry the observed legacy generation');
@@ -363,6 +367,8 @@ test('ReplicaStateMachine registered activation recognizes only its exact lost-A
       replica_id: 'p1-r1',
       group_id: null,
       status: 'stopped',
+      cleanup_token: null,
+      create_attempt_token: null,
       created_at: 10,
       state_entered_at: 100,
     }, 'current rows should use state_entered_at as the exact source generation');

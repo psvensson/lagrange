@@ -31,6 +31,8 @@ import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {REPLICA_HANDLER_LOG_MSG} from
   '../../src/node/replica-handler-constants.js';
+import {EXECUTOR_OUTCOME_TYPE} from
+  '../../src/rebalancer/executor-outcome-constants.js';
 import {createLifecycleControlPlaneGatewayForCache} from
   '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from
@@ -112,6 +114,8 @@ function openedRow(replicaId, status) {
     replica_id: replicaId,
     status,
     address: `${NODE_ID}/partition/${replicaId}`,
+    cleanup_token: null,
+    create_attempt_token: null,
     created_at: 1,
     state_entered_at: 1,
     updated_at: 1,
@@ -184,13 +188,14 @@ export async function registerReplicaHandlerIdentityRecordTests({
       cache.applySystemTableChange('services', 'INSERT', seedRow);
     }
     const opened = [];
+    const outcomes = [];
+    const gateway = createLifecycleControlPlaneGatewayForCache(cache, {
+      beforeMutation: (mutation, _options, store) =>
+        beforeMutation?.(mutation, opened, store),
+    });
     const stateMachine = new ReplicaStateMachine({
       nodeId: NODE_ID,
-      controlPlaneSystemTableGateway:
-        createLifecycleControlPlaneGatewayForCache(cache, {
-          beforeMutation: (mutation, _options, store) =>
-            beforeMutation?.(mutation, opened, store),
-        }),
+      controlPlaneSystemTableGateway: gateway,
     });
     const handler = new ReplicaHandler({
       nodeId: NODE_ID,
@@ -200,6 +205,10 @@ export async function registerReplicaHandlerIdentityRecordTests({
       replicaStateMachine: stateMachine,
       createPartitionService: realPortFactory(directory, opened),
     });
+    handler.executorOutcomeEmitter = {
+      emitOutcome: (type, operationId, step, options) =>
+        outcomes.push({type, operationId, step, options}),
+    };
     handler.initialize();
     const warnings = [];
     const warn = handler.logger.warn.bind(handler.logger);
@@ -232,7 +241,7 @@ export async function registerReplicaHandlerIdentityRecordTests({
       }
       fs.rmSync(directory, {recursive: true, force: true});
     };
-    return {opened, warnings, failure, finish};
+    return {opened, warnings, outcomes, failure, finish, store: gateway.store};
   }
 
   const recordStateAt = (entry) => entry.port.readStatus().identityRecorded;
@@ -421,8 +430,10 @@ export async function registerReplicaHandlerIdentityRecordTests({
             const row = durable.services.get(replicaId);
             if (row?.status === ReplicaStatus.SYNCING) {
               durable.services.set(replicaId, {...row, [field]: value});
+              if (released === null) {
+                released = recordStateAt(opened[0]);
+              }
             }
-            released = recordStateAt(opened[0]);
           });
         },
       });
@@ -431,6 +442,15 @@ export async function registerReplicaHandlerIdentityRecordTests({
         t.equal(released, false, 'unreleased when the row was read');
         t.ok(run.warnings.some((line) => line.message ===
           REPLICA_HANDLER_LOG_MSG.IDENTITY_RECORD_WAIT_SPENT), 'spent wait');
+        const row = run.store.durableRow('services', replicaId);
+        t.equal(row?.cleanup_token, null,
+          'the mismatched generation receives no failed-create claim');
+        t.equal(row?.[field], value,
+          'the successor generation is not overwritten by failure repair');
+        t.equal(run.outcomes.filter((outcome) =>
+          outcome.type === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED).length,
+        1,
+        'ordinary failure settlement is emitted independently');
       } finally {
         await run.finish();
       }

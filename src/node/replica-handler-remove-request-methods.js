@@ -5,14 +5,120 @@ import {
 } from '../rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
+  buildFailedCreateRemoveToken,
+  isFailedCreateCleanupToken,
+} from
+  '../rebalancer/failed-create-cleanup-token.js';
+import {durableRowVersion} from
+  './replica-state-machine-lifecycle-observation.js';
+import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
 } from './replica-handler-constants.js';
+import {REPLICA_CLEANUP_AUTHORITY_KIND} from
+  './replica-cleanup-constants.js';
 import {
   REPLICA_HANDLER_LEADER_HANDOFF_STATE,
 } from './replica-handler-leader-handoff-methods.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
+function matchesFailedCreateCleanupPrecondition(precondition, expected) {
+  if (!precondition || typeof precondition !== 'object' ||
+      Array.isArray(precondition)) return false;
+  return Object.entries(expected).every(
+    ([field, value]) => precondition[field] === value,
+  );
+}
+
+function hasValidFailedCreateCleanupPrecondition(precondition) {
+  if (!precondition) return false;
+  if (!isFailedCreateCleanupToken(precondition.cleanup_token)) return false;
+  return typeof precondition.create_attempt_token === 'string' &&
+    precondition.create_attempt_token.length > 0;
+}
+
+function matchesClaimedFailedCreateRemoval(row, precondition, cleanupToken) {
+  const identityMatches = matchesFailedCreateCleanupPrecondition(row, {
+    service_id: precondition?.service_id,
+    replica_id: precondition?.replica_id,
+    group_id: precondition?.group_id ?? null,
+    partition_id: precondition?.partition_id,
+    node_id: precondition?.node_id,
+    service_type: precondition?.service_type,
+    created_at: precondition?.created_at,
+    status: ReplicaStatus.REMOVING,
+    previous_state: ReplicaStatus.FAILED,
+    cleanup_token: cleanupToken,
+    create_attempt_token: precondition?.create_attempt_token,
+  });
+  return identityMatches && isLaterLifecycleGeneration(row, precondition);
+}
+
+function isLaterLifecycleGeneration(row, precondition) {
+  const sourceVersion = precondition?.state_entered_at;
+  return Number.isFinite(sourceVersion) &&
+    Number.isFinite(row?.state_entered_at) &&
+    row.state_entered_at > sourceVersion;
+}
+
+function matchesCleanupCompletionReceipt(
+  authority,
+  replicaId,
+  partitionId,
+  nodeId,
+  cleanupToken,
+) {
+  return authority?.kind === REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE &&
+    authority.replicaId === replicaId &&
+    authority.partitionId === partitionId &&
+    authority.nodeId === nodeId &&
+    authority.ownerToken === cleanupToken;
+}
+
+function validFailedCreateCleanupRequest(
+  handler,
+  precondition,
+  replicaId,
+  partitionId,
+) {
+  return matchesFailedCreateCleanupPrecondition(precondition, {
+    service_id: replicaId,
+    partition_id: partitionId,
+    node_id: handler.nodeId,
+    status: ReplicaStatus.FAILED,
+  }) && isFailedCreateCleanupToken(precondition?.cleanup_token) &&
+    typeof precondition?.create_attempt_token === 'string' &&
+    precondition.create_attempt_token.length > 0 &&
+    typeof handler.replicaStateMachine
+      ?.transitionAuthoritativeReplicaGeneration === 'function';
+}
+
+async function applyFailedCreateCleanupTransition(
+  handler,
+  precondition,
+  request,
+  replicaId,
+  partitionId,
+  cleanupToken,
+) {
+  try {
+    return await handler.replicaStateMachine
+      .transitionAuthoritativeReplicaGeneration(
+        precondition,
+        ReplicaStatus.REMOVING,
+        {
+          partitionId,
+          nodeId: handler.nodeId,
+          serviceId: replicaId,
+          errorMessage: request?.[ReplicaOperationField.REASON] || null,
+          cleanupToken,
+        },
+      ) === true;
+  } catch (_error) {
+    return false;
+  }
+}
 
 function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
   class ReplicaHandlerRemoveRequestMethods {
@@ -85,6 +191,137 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       );
     }
     /**
+     * Consume a failed-create cleanup precondition at the lifecycle owner.
+     * The state machine performs the authoritative read and exact-generation
+     * FAILED -> REMOVING CAS in its per-replica mutation lane. A token is only
+     * a predicate; absence, authority failure, or a newer generation refuses
+     * the destructive request before the local serving fence is raised.
+     * @param {Object} request
+     * @param {string} replicaId
+     * @param {string} partitionId
+     * @return {Promise<boolean>}
+     * @private
+     */
+    async admitFailedCreateTargetCleanup(request, replicaId, partitionId) {
+      const precondition = request?.[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ];
+      if (precondition === undefined) {
+        return true;
+      }
+      if (!validFailedCreateCleanupRequest(
+        this, precondition, replicaId, partitionId)) {
+        return false;
+      }
+      const cleanupToken = buildFailedCreateRemoveToken(
+        request?.[ReplicaOperationField.OPERATION_ID],
+      );
+      if (!cleanupToken) return false;
+      if (await applyFailedCreateCleanupTransition(
+        this, precondition, request, replicaId, partitionId, cleanupToken)) {
+        return true;
+      }
+      const observation = await this.replicaStateMachine
+        .observeAuthoritativeReplicaLifecycle(replicaId);
+      if (observation?.available !== true ||
+          !matchesClaimedFailedCreateRemoval(
+            observation.row,
+            precondition,
+            cleanupToken,
+          )) return false;
+      const version = durableRowVersion(observation.row);
+      return this.replicaStateMachine.registerReplicaSnapshot(replicaId, {
+        partitionId,
+        nodeId: this.nodeId,
+        state: ReplicaStatus.REMOVING,
+        serviceId: replicaId,
+        serviceType: observation.row.service_type,
+        serviceAddress: observation.row.address,
+        replicaIdentity: observation.row.replica_id,
+        groupId: observation.row.group_id,
+        cleanupToken: observation.row.cleanup_token,
+        createAttemptToken: observation.row.create_attempt_token,
+        createdAt: observation.row.created_at,
+        durableVersionColumn: version?.column,
+        durableVersion: version?.value,
+        authoritativeSnapshot: true,
+      }) === true;
+    }
+    async hasCompletedFailedCreateCleanupReceipt(
+      request,
+      replicaId,
+      partitionId,
+    ) {
+      const precondition = request?.[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ];
+      if (!hasValidFailedCreateCleanupPrecondition(precondition)) return false;
+      const cleanupToken = buildFailedCreateRemoveToken(
+        request?.[ReplicaOperationField.OPERATION_ID],
+      );
+      if (!cleanupToken) return false;
+      const owner = this.getReplicaCleanupTombstoneOwner();
+      const observation = await owner.observeReplica(replicaId);
+      if (observation.available !== true) return false;
+      if (observation.row === null) {
+        return owner.isTerminalCleanupReplicaAbsent(
+          replicaId,
+          request?.[ReplicaOperationField.OPERATION_ID],
+        );
+      }
+      const authority = await owner.observeAuthority(replicaId);
+      const matchingReceipt = matchesCleanupCompletionReceipt(
+        authority,
+        replicaId,
+        partitionId,
+        this.nodeId,
+        cleanupToken,
+      );
+      if (!matchingReceipt) return false;
+      if (!await owner.isReceiptOperationTerminal(authority)) return true;
+      return owner.release(authority, {artifactsAbsent: true});
+    }
+    async answerCompletedFailedCreateCleanupReceipt(
+      request,
+      operationId,
+      replicaId,
+      partitionId,
+    ) {
+      const precondition = request?.[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ];
+      if (precondition === undefined ||
+          !await this.hasCompletedFailedCreateCleanupReceipt(
+            request,
+            replicaId,
+            partitionId,
+          )) return null;
+      return this.buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.COMPLETED,
+        {operationId, replicaId, nodeId: this.nodeId},
+      );
+    }
+    answerMissingRemoveReplica(replica, precondition, replicaId) {
+      if (replica) return null;
+      this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_NOT_FOUND, {
+        replicaId,
+        nodeId: this.nodeId,
+      });
+      return this.buildReplicaOperationResponse(
+        precondition === undefined ?
+          ReplicaOperationResponseStatus.NOT_FOUND :
+          ReplicaOperationResponseStatus.ERROR,
+        {
+          ...(precondition === undefined ? {} : {
+            error:
+              REPLICA_HANDLER_ERROR_MSG.REMOVE_CLEANUP_PRECONDITION_REFUSED,
+          }),
+          replicaId,
+          nodeId: this.nodeId,
+        },
+      );
+    }
+    /**
      * Handle REMOVE_REPLICA request.
      * Returns immediately with 'initiated', then does async work.
      * Implements idempotency per Requirements 10.2.
@@ -119,21 +356,18 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           },
         );
       }
+      const failedCreateCleanupPrecondition = request?.[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ];
+      const receiptResponse =
+        await this.answerCompletedFailedCreateCleanupReceipt(
+          request, operationId, replicaId, partitionId);
+      if (receiptResponse) return receiptResponse;
       // Check if replica exists
       const replica = this.getLocalReplica(replicaId);
-      if (!replica) {
-        this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_NOT_FOUND, {
-          replicaId,
-          nodeId: this.nodeId,
-        });
-        return this.buildReplicaOperationResponse(
-          ReplicaOperationResponseStatus.NOT_FOUND,
-          {
-            replicaId,
-            nodeId: this.nodeId,
-          },
-        );
-      }
+      const missingReplicaResponse = this.answerMissingRemoveReplica(
+        replica, failedCreateCleanupPrecondition, replicaId);
+      if (missingReplicaResponse) return missingReplicaResponse;
       // Cross-check partition identity before any status write or shutdown:
       // a mismatched request must never shut down the wrong replica, corrupt
       // local metadata, or silently no-op the partition-scoped row delete.
@@ -163,8 +397,17 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           },
         );
       }
+      const trackedOperation = this.inProgressOperations.get(operationId);
+      const sameRemovalAlreadyInProgress =
+        trackedOperation?.type === ReplicaOperationMessageType.REMOVE_REPLICA &&
+        trackedOperation?.replicaId === replicaId &&
+        trackedOperation?.partitionId === partitionId;
+      const mayUseLocalRemovalShortcut =
+        failedCreateCleanupPrecondition === undefined ||
+        sameRemovalAlreadyInProgress;
       // Check idempotency - already removing
-      if (replica.status === ReplicaStatus.REMOVING) {
+      if (replica.status === ReplicaStatus.REMOVING &&
+          mayUseLocalRemovalShortcut) {
         this.fenceReplicaServingAdmissionForRemoval(replicaId, replica);
         if (!this.hasInProgressReplicaRemoval(replicaId)) {
           this.trackReplicaRemovalOperation(operationId, partitionId, replicaId);
@@ -189,7 +432,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       if (
         replica.status === ReplicaStatus.REMOVED &&
         (typeof replica.partitionId !== 'string' ||
-          replica.partitionId === partitionId)
+          replica.partitionId === partitionId) &&
+        mayUseLocalRemovalShortcut
       ) {
         try {
           await this.reconcileRemovedReplicaCleanup(replicaId, partitionId);
@@ -217,6 +461,26 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         return this.buildReplicaOperationResponse(
           ReplicaOperationResponseStatus.COMPLETED,
           {
+            replicaId,
+            nodeId: this.nodeId,
+          },
+        );
+      }
+      const cleanupAdmitted = await this.admitFailedCreateTargetCleanup(
+        request,
+        replicaId,
+        partitionId,
+      );
+      if (!cleanupAdmitted) {
+        this.logger.warn(
+          REPLICA_HANDLER_LOG_MSG.REMOVE_CLEANUP_PRECONDITION_REFUSED,
+          {operationId, replicaId, partitionId, nodeId: this.nodeId},
+        );
+        return this.buildReplicaOperationResponse(
+          ReplicaOperationResponseStatus.ERROR,
+          {
+            error:
+              REPLICA_HANDLER_ERROR_MSG.REMOVE_CLEANUP_PRECONDITION_REFUSED,
             replicaId,
             nodeId: this.nodeId,
           },

@@ -27,6 +27,8 @@ function serviceRow(replicaId, status, version) {
     node_id: NODE_ID,
     address: `${NODE_ID}/partition/${replicaId}`,
     status,
+    cleanup_token: null,
+    create_attempt_token: null,
     created_at: 10,
     state_entered_at: version,
     updated_at: version,
@@ -156,6 +158,8 @@ test('authoritative lifecycle CAS cannot mutate a same-key replacement with ' +
     group_id: null,
     created_at: 10,
     status: ReplicaState.ACTIVE,
+    cleanup_token: null,
+    create_attempt_token: null,
     state_entered_at: 100,
   }, 'generic lifecycle CAS carries the complete admitted row identity');
   t.same(rows[SERVICES].get(source.service_id), replacement,

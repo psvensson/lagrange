@@ -14,6 +14,40 @@ function buildNewOperationPersistResult(options, disposition, operation) {
   return Object.freeze({persisted: true, disposition, operation});
 }
 
+function nullableOperationValue(value) {
+  return value ?? null;
+}
+
+function buildReplicaOperationInsertParams(operation) {
+  return [
+    operation.operationId,
+    operation.type,
+    operation.partitionId,
+    operation.replicaId,
+    nullableOperationValue(operation.targetClaimKey),
+    operation.sourceNodeId,
+    operation.targetNodeId,
+    operation.status,
+    operation.workflowStep,
+    operation.createdAt,
+    operation.updatedAt,
+    operation.completedAt,
+    operation.errorMessage,
+    JSON.stringify(operation.stepsHistory),
+    operation.entityType,
+    operation.entityId,
+    nullableOperationValue(operation.membershipPublicationEpoch),
+    nullableOperationValue(operation.createAdmissionState),
+    nullableOperationValue(operation.createAdmissionToken),
+    nullableOperationValue(operation.createAdmissionReplicaCreatedAt),
+    nullableOperationValue(operation.createAdmissionAttemptToken),
+    nullableOperationValue(operation.createAdmissionPreviousAttemptToken),
+    nullableOperationValue(operation.createAdmissionAttemptSeq),
+    nullableOperationValue(operation.createAdmissionWorkflowUpdatedAt),
+    nullableOperationValue(operation.createAdmissionOwnerIncarnation),
+  ];
+}
+
 function assignReplicaOperationRepositoryMutationPersistenceMethods(
   ReplicaOperationRepository,
   options = {},
@@ -160,25 +194,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
               },
               {
                 sql: SQL.INSERT_OPERATION,
-                params: [
-                  operation.operationId,
-                  operation.type,
-                  operation.partitionId,
-                  operation.replicaId,
-                  operation.targetClaimKey || null,
-                  operation.sourceNodeId,
-                  operation.targetNodeId,
-                  operation.status,
-                  operation.workflowStep,
-                  operation.createdAt,
-                  operation.updatedAt,
-                  operation.completedAt,
-                  operation.errorMessage,
-                  JSON.stringify(operation.stepsHistory),
-                  operation.entityType,
-                  operation.entityId,
-                  operation.membershipPublicationEpoch ?? null,
-                ],
+                params: buildReplicaOperationInsertParams(operation),
               },
             );
       if (!result.success) {
@@ -485,6 +501,21 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         Number(observedOperation.completedAt) < expectedOperation.completedAt
       ) {
         return false;
+      }
+      if (expectedOperation.createAdmissionState !== null &&
+          expectedOperation.createAdmissionState !== undefined) {
+        const admissionFields = [
+          'createAdmissionState',
+          'createAdmissionToken',
+          'createAdmissionReplicaCreatedAt',
+          'createAdmissionAttemptToken',
+          'createAdmissionPreviousAttemptToken',
+          'createAdmissionAttemptSeq',
+          'createAdmissionWorkflowUpdatedAt',
+          'createAdmissionOwnerIncarnation',
+        ];
+        if (admissionFields.some((field) =>
+          observedOperation[field] !== expectedOperation[field])) return false;
       }
       return true;
     }

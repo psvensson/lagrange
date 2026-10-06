@@ -7,11 +7,11 @@
  * Inputs: the operation's durable step (authoritative read), the ADD
  * target's authoritative row, the owner's R-1a verdict, and the options a
  * terminal was admitted with.
- * Canonical output: whether a FAILED of a partition REPLACE or ADD is
- * admitted, the step CAS its write carries, and whether a refused ADD is
- * completed instead; whether the terminal-transition repair may re-assert a
- * retained REPLACE terminal.
- * Prohibited: no terminal is decided or written here.
+ * Canonical output: two separate decisions: whether ordinary FAILED
+ * settlement is admitted (including the step CAS it carries), and whether a
+ * terminal FAILED create owns a fresh exact-generation cleanup claim.
+ * Prohibited: no terminal is decided or written here, and settlement never
+ * derives deletion authority from target lifecycle evidence.
  */
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
@@ -23,18 +23,41 @@ import {
 } from './operation-workflow-replace-owner.js';
 
 import {isLiveCreateTargetStatus} from './replica-status.js';
+import {buildFailedCreateCleanupToken} from
+  './failed-create-cleanup-token.js';
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+  OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
+  ReplicaStatus,
   SERVICE_TYPE,
   WORKFLOW_STEP,
+  getOperationMetadataObject,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
-// The ADD target's liveness is read from the authority only: a cache row
-// that lags is no evidence either way, and absence of evidence admits the
-// failure exactly as before.
+const CREATE_TARGET_CLEANUP_DECISION = Object.freeze({
+  ELIGIBLE: 'eligible',
+  INELIGIBLE: 'ineligible',
+});
+const CREATE_TARGET_LIFECYCLE_PRECONDITION_FIELDS = Object.freeze([
+  'service_id',
+  'replica_id',
+  'group_id',
+  'partition_id',
+  'node_id',
+  'service_type',
+  'status',
+  'created_at',
+  'state_entered_at',
+  'cleanup_token',
+  'create_attempt_token',
+]);
+
+// The ADD target's lifecycle is read from the authority only: a cache row
+// that lags is no evidence either way. A positive live row completes instead;
+// absent, unavailable and non-live evidence preserve ordinary settlement.
 const ADD_TARGET_LIVENESS_READ = Object.freeze({
   ...EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   allowCacheFallback: false,
@@ -45,7 +68,23 @@ const NO_INTENT_FAILURE_ADMISSION = Object.freeze({
   admitted: true,
   expectedWorkflowStep: null,
   completeInstead: false,
+  stepMetadata: null,
+  requiresRevalidation: false,
 });
+
+function isClaimedFailedCreateObservation(
+  observation,
+  cleanupToken,
+  createAttemptToken,
+) {
+  return observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED &&
+    observation.lifecycleStatus === ReplicaStatus.FAILED &&
+    observation.lifecyclePrecondition?.status === ReplicaStatus.FAILED &&
+    observation.lifecyclePrecondition?.cleanup_token === cleanupToken &&
+    typeof createAttemptToken === 'string' && createAttemptToken.length > 0 &&
+    observation.lifecyclePrecondition?.create_attempt_token ===
+      createAttemptToken;
+}
 
 function isPartitionAdd(operation) {
   return operation?.type === OperationType.ADD &&
@@ -73,6 +112,17 @@ async function readReplaceDurableStep(owner, operation) {
   return authoritative?.workflowStep || operation.workflowStep;
 }
 
+async function observeCreateTarget(owner, operation) {
+  return typeof owner.repository?.getActualReplicaObservation ===
+    OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
+    owner.repository.getActualReplicaObservation(
+      operation.replicaId,
+      operation.partitionId,
+      operation.targetNodeId,
+      ADD_TARGET_LIVENESS_READ,
+    ) : null;
+}
+
 /**
  * D2's admission of a terminal FAILED for a partition REPLACE, decided on
  * the DURABLE step: before the durable intent every existing failure
@@ -90,8 +140,11 @@ async function admitReplaceTerminalFailure(owner, operation, options = {}) {
     {...operation, workflowStep: durableStep}) ||
     options?.replacePostIntentFailure ===
       REPLACE_POST_INTENT_FAILURE.TARGET_DEAD_SOURCE_RETAINED;
-  return Object.freeze({admitted, expectedWorkflowStep: durableStep,
-    completeInstead: false});
+  return Object.freeze({admitted,
+    expectedWorkflowStep: durableStep,
+    completeInstead: false,
+    stepMetadata: null,
+    requiresRevalidation: true});
 }
 
 /**
@@ -106,15 +159,107 @@ async function admitReplaceTerminalFailure(owner, operation, options = {}) {
  *   completeInstead}.
  */
 async function admitAddTerminalFailure(owner, operation) {
-  const observation = typeof owner.repository?.getActualReplicaObservation ===
-    OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ?
-    await owner.repository.getActualReplicaObservation(operation.replicaId,
-      operation.partitionId, operation.targetNodeId,
-      ADD_TARGET_LIVENESS_READ) : null;
+  const [observation, durableStep] = await Promise.all([
+    observeCreateTarget(owner, operation),
+    readReplaceDurableStep(owner, operation),
+  ]);
   const live = observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL
     .OBSERVED && isLiveCreateTargetStatus(observation.lifecycleStatus);
-  return Object.freeze({admitted: !live, expectedWorkflowStep: null,
-    completeInstead: live});
+  return Object.freeze({
+    admitted: !live,
+    expectedWorkflowStep: durableStep,
+    completeInstead: live,
+    stepMetadata: null,
+    requiresRevalidation: true,
+  });
+}
+
+function lifecyclePreconditionsEqual(left, right) {
+  return Boolean(left && right) &&
+    CREATE_TARGET_LIFECYCLE_PRECONDITION_FIELDS.every(
+      (field) => left[field] === right[field],
+    );
+}
+
+async function captureFailedCreateTargetCleanupClaim(owner, operation) {
+  if ((!isPartitionAdd(operation) && !isPartitionReplace(operation)) ||
+      typeof operation?.operationId !== 'string' ||
+      operation.operationId.length === 0 ||
+      typeof operation?.replicaId !== 'string' ||
+      operation.replicaId.length === 0) return null;
+  const observation = await observeCreateTarget(owner, operation);
+  const expectedCleanupToken = buildFailedCreateCleanupToken(
+    operation.operationId,
+  );
+  const eligible = isClaimedFailedCreateObservation(
+    observation,
+    expectedCleanupToken,
+    operation.createAdmissionAttemptToken,
+  ) && CREATE_TARGET_LIFECYCLE_PRECONDITION_FIELDS.every(
+    (field) => Object.hasOwn(observation.lifecyclePrecondition, field),
+  );
+  return eligible ? observation.lifecyclePrecondition : null;
+}
+
+function isTerminalFailedOperation(operation) {
+  return operation?.workflowStep === WORKFLOW_STEP.FAILED &&
+    operation?.status === ReplicaStatus.FAILED &&
+    Number.isFinite(operation?.completedAt);
+}
+
+function hasCreateOperationIdentity(operation) {
+  const hasOperationId = typeof operation?.operationId === 'string' &&
+    operation.operationId.length > 0;
+  const hasReplicaId = typeof operation?.replicaId === 'string' &&
+    operation.replicaId.length > 0;
+  return hasOperationId && hasReplicaId;
+}
+
+function isTerminalFailedCreateOperation(operation) {
+  const partitionCreate = isPartitionAdd(operation) ||
+    isPartitionReplace(operation);
+  return partitionCreate && isTerminalFailedOperation(operation) &&
+    hasCreateOperationIdentity(operation);
+}
+
+/**
+ * Decide whether one terminal failed ADD/REPLACE target is the same exact
+ * authoritative FAILED lifecycle generation admitted by the operation owner.
+ * The recorded value is only a precondition: the repository remains lifecycle
+ * authority and an absent/unavailable/mismatched observation is ineligible.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @return {Promise<Object>}
+ */
+async function decideFailedCreateTargetCleanup(owner, operation) {
+  if (!isTerminalFailedCreateOperation(operation)) {
+    return Object.freeze({
+      decision: CREATE_TARGET_CLEANUP_DECISION.INELIGIBLE,
+      observationState: null,
+      lifecyclePrecondition: null,
+    });
+  }
+  const lifecyclePrecondition = await captureFailedCreateTargetCleanupClaim(
+    owner,
+    operation,
+  );
+  const claimedPrecondition = getOperationMetadataObject(
+    operation.stepsHistory,
+    OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+  );
+  const eligible = lifecyclePreconditionsEqual(
+    lifecyclePrecondition,
+    claimedPrecondition,
+  );
+  return Object.freeze({
+    decision: eligible ?
+      CREATE_TARGET_CLEANUP_DECISION.ELIGIBLE :
+      CREATE_TARGET_CLEANUP_DECISION.INELIGIBLE,
+    observationState: lifecyclePrecondition ?
+      OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED : null,
+    lifecyclePrecondition: eligible ? lifecyclePrecondition : null,
+    cleanupEligible: eligible,
+  });
 }
 
 /**
@@ -125,14 +270,44 @@ async function admitAddTerminalFailure(owner, operation) {
  * @return {Promise<Object>} Frozen {admitted, expectedWorkflowStep,
  *   completeInstead}.
  */
-function admitCreateTerminalFailure(owner, operation, options = {}) {
-  if (isPartitionReplace(operation)) {
-    return admitReplaceTerminalFailure(owner, operation, options);
-  }
-  if (isPartitionAdd(operation)) {
-    return admitAddTerminalFailure(owner, operation);
-  }
-  return Promise.resolve(NO_INTENT_FAILURE_ADMISSION);
+async function admitCreateTerminalFailure(owner, operation, options = {}) {
+  const admission = isPartitionReplace(operation) ?
+    await admitReplaceTerminalFailure(owner, operation, options) :
+    isPartitionAdd(operation) ?
+      await admitAddTerminalFailure(owner, operation) :
+      NO_INTENT_FAILURE_ADMISSION;
+  if (admission.admitted !== true) return admission;
+  const lifecyclePrecondition =
+    await captureFailedCreateTargetCleanupClaim(owner, operation);
+  return Object.freeze({
+    ...admission,
+    stepMetadata: lifecyclePrecondition ? {
+      [OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+        lifecyclePrecondition,
+    } : null,
+  });
+}
+
+async function revalidateCreateTerminalFailure(
+  owner,
+  operation,
+  initialAdmission,
+  options = {},
+) {
+  const current = await admitCreateTerminalFailure(owner, operation, options);
+  const initialCleanupClaim = initialAdmission.stepMetadata?.[
+    OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+  ] || null;
+  const currentCleanupClaim = current.stepMetadata?.[
+    OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+  ] || null;
+  return current?.admitted === true &&
+    current.expectedWorkflowStep === initialAdmission.expectedWorkflowStep &&
+    current.completeInstead === initialAdmission.completeInstead &&
+    (!initialCleanupClaim || lifecyclePreconditionsEqual(
+      initialCleanupClaim,
+      currentCleanupClaim,
+    ));
 }
 
 /**
@@ -180,4 +355,6 @@ async function admitReplaceTerminalRepair(owner, projectedOperation,
 export {
   admitCreateTerminalFailure,
   admitReplaceTerminalRepair,
+  decideFailedCreateTargetCleanup,
+  revalidateCreateTerminalFailure,
 };

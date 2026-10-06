@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "failed-create-cleanup-settlement-separation",
+  "status": "fail",
+  "generatedAt": "2026-10-06T14:05:00+02:00",
+  "receipts": [
+    {
+      "id": "ordinary-settlement-independent-of-cleanup",
+      "passed": false,
+      "command": "pending",
+      "detail": "Red seal: ordinary terminal settlement is still coupled to positive failed-create cleanup evidence."
+    },
+    {
+      "id": "failed-create-cleanup-exact-generation",
+      "passed": false,
+      "command": "pending",
+      "detail": "Red seal: exact-generation cleanup evidence exists but is not yet separated from settlement."
+    },
+    {
+      "id": "d2-source-retention-and-generic-repair",
+      "passed": false,
+      "command": "pending",
+      "detail": "Red seal: D2 target-dead/source-retained settlement is refused without a failed-create token."
+    },
+    {
+      "id": "late-create-durable-admission-linearization",
+      "passed": false,
+      "command": "pending",
+      "detail": "Red seal: terminal-first and admission-first CREATE orderings have not been proved at one durable admission boundary."
+    },
+    {
+      "id": "stale-retry-and-restart-reconstruction",
+      "passed": false,
+      "command": "pending",
+      "detail": "Red seal: successor reconstruction exclusions and stale-generation proof are not complete."
+    },
+    {
+      "id": "cleanup-release-delivery-and-retry-lifetime",
+      "passed": false,
+      "command": "pending",
+      "detail": "Red seal: the REMOVE-only delivery edge and native recovery-scan timer lifetime are not registered and proved."
+    },
+    {
+      "id": "owner-censuses-and-widened-regression",
+      "passed": false,
+      "command": "pending",
+      "detail": "Red seal: owner censuses and the widened candidate-caused regression set are not green."
+    }
+  ]
+}

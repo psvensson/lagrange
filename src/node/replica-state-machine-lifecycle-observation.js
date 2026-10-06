@@ -18,6 +18,7 @@ const READ_REPLICA_LIFECYCLE_SQL = `SELECT
   trigger_reason,
   error_message,
   cleanup_token,
+  create_attempt_token,
   created_at,
   state_entered_at,
   updated_at
@@ -80,6 +81,8 @@ function buildLifecycleIdentityPredicate(fields, version) {
     group_id: fields.groupId ?? null,
     created_at: fields.createdAt,
     status: fields.status,
+    cleanup_token: fields.cleanupToken ?? null,
+    create_attempt_token: fields.createAttemptToken ?? null,
     [version.column]: version.value,
   });
 }
@@ -94,6 +97,8 @@ function buildReplicaLifecycleMutationPredicateFromRow(row) {
     groupId: row?.group_id,
     createdAt: row?.created_at,
     status: row?.status,
+    cleanupToken: row?.cleanup_token,
+    createAttemptToken: row?.create_attempt_token,
   }, durableRowVersion(row));
 }
 
@@ -114,6 +119,8 @@ function buildReplicaLifecyclePredicateFromState(replicaState) {
     groupId: replicaState.groupId,
     createdAt: replicaState.createdAt,
     status: replicaState.state,
+    cleanupToken: replicaState.cleanupToken,
+    createAttemptToken: replicaState.createAttemptToken,
   }, version);
 }
 
@@ -231,6 +238,8 @@ async function installAuthoritativeReplicaLifecycleSnapshot(
       serviceAddress: service.address,
       replicaIdentity: service.replica_id,
       groupId: service.group_id,
+      cleanupToken: service.cleanup_token,
+      createAttemptToken: service.create_attempt_token,
       createdAt: service.created_at,
       durableVersionColumn: observedVersion.column,
       durableVersion: observedVersion.value,

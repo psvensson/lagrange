@@ -18,7 +18,14 @@ import {
 import {
   isBoundMembershipPublicationEpoch,
 } from './replica-operation-membership-epoch-binding.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from './replica-create-admission-token.js';
+import {bindReplaceCreateTargetReplicaId} from
+  './operation-workflow-replace-target-binding.js';
 const {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL,
   OPERATION_OWNER_ACTION,
@@ -47,6 +54,23 @@ const {
 // Bounded memory for the first-attempt dispatch log discrimination; clearing
 // on overflow only means one extra info line per live operation step.
 const SEND_OPERATION_LOG_KEY_CAP = 2048;
+const CREATE_DISPATCH_IDENTITY_FIELDS = Object.freeze([
+  'operationId',
+  'type',
+  'entityType',
+  'entityId',
+  'partitionId',
+  'replicaId',
+  'targetNodeId',
+]);
+const CREATE_DISPATCH_AUTHORITY_ACTION = Object.freeze({
+  DISPATCH: 'DISPATCH',
+  REFUSE: 'REFUSE',
+});
+const REFUSED_CREATE_DISPATCH_AUTHORITY = Object.freeze({
+  action: CREATE_DISPATCH_AUTHORITY_ACTION.REFUSE,
+  operation: null,
+});
 
 /**
  * The first dispatch attempt per (operation, step) logs at info so run
@@ -79,6 +103,94 @@ function logSendOperationAttempt(owner, operation, payload) {
     ...payload,
     firstAttemptForStep,
   });
+}
+
+function isCreateDispatchPhase(operation, replaceRemoveDispatchPhase) {
+  return replaceRemoveDispatchPhase !== true &&
+    (operation?.type === OperationType.ADD ||
+      operation?.type === OperationType.REPLACE);
+}
+
+function sameCreateDispatchIdentity(left, right) {
+  return CREATE_DISPATCH_IDENTITY_FIELDS.every(
+    (field) => left?.[field] === right?.[field],
+  );
+}
+
+function buildCreateDispatchRefreshDeferred(operation, observation) {
+  const error = new Error(
+    `Durable CREATE admission dispatch refresh deferred for ${operation.operationId}`,
+  );
+  error.deferRetry = true;
+  error.retryAfterMs = observation?.deferredOutcome?.retryAfterMs;
+  return error;
+}
+
+function hasDurableCreateDispatchTuple(operation) {
+  return [
+    typeof operation?.createAdmissionState === 'string',
+    typeof operation?.createAdmissionToken === 'string',
+    Number.isSafeInteger(operation?.createAdmissionReplicaCreatedAt),
+    typeof operation?.createAdmissionAttemptToken === 'string',
+    Number.isSafeInteger(operation?.createAdmissionAttemptSeq),
+    Number.isSafeInteger(operation?.createAdmissionWorkflowUpdatedAt),
+    Number.isSafeInteger(operation?.createAdmissionOwnerIncarnation),
+  ].every(Boolean);
+}
+
+function allowCreateDispatchAuthority(operation) {
+  return {
+    action: CREATE_DISPATCH_AUTHORITY_ACTION.DISPATCH,
+    operation,
+  };
+}
+
+/**
+ * Re-read the operation owner's row before every CREATE delivery. The first
+ * SENDING delivery normally observes no admission and proceeds with its
+ * deterministic proposed token. Once the handler has admitted the operation,
+ * every retry adopts that exact durable tuple instead of rebuilding a token
+ * from mutable workflow updated_at. This also makes a terminal-first row stop
+ * before a late delivery reaches the handler.
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {boolean} replaceRemoveDispatchPhase
+ * @return {Promise<Object|null>}
+ */
+async function refreshCreateDispatchAuthority(
+  owner,
+  operation,
+  replaceRemoveDispatchPhase,
+) {
+  if (!isCreateDispatchPhase(operation, replaceRemoveDispatchPhase)) {
+    return allowCreateDispatchAuthority(operation);
+  }
+  if (hasDurableCreateDispatchTuple(operation) ||
+      operation.workflowStep === WORKFLOW_STEP.PENDING ||
+      operation.workflowStep === WORKFLOW_STEP.SENDING) {
+    return allowCreateDispatchAuthority(operation);
+  }
+  const observation =
+    await owner.repository.getOperationByIdVisibilityObservation(
+      operation.operationId,
+      {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        allowOwnerPersistedTransitionDeferredVisibility: false,
+      },
+    );
+  const current = observation?.operation || null;
+  if (!current) {
+    throw buildCreateDispatchRefreshDeferred(operation, observation);
+  }
+  if (!sameCreateDispatchIdentity(operation, current)) {
+    return REFUSED_CREATE_DISPATCH_AUTHORITY;
+  }
+  if (owner.repository.isOperationTerminal(current) &&
+      !hasDurableCreateDispatchTuple(current)) {
+    return REFUSED_CREATE_DISPATCH_AUTHORITY;
+  }
+  return allowCreateDispatchAuthority(current);
 }
 const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
   new Set([
@@ -268,6 +380,32 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       this.isCreateRearmDispatchPhase(operation);
     const replaceSourceReplicaId =
       this.repository.getReplaceSourceReplicaId(operation);
+    const dispatchOperationId = operation.operationId;
+    operation = await bindReplaceCreateTargetReplicaId(
+      this,
+      operation,
+      replaceRemoveDispatchPhase,
+      replaceSourceReplicaId,
+    );
+    if (!operation) {
+      return this.buildSkippedOperationResult(
+        OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+        dispatchOperationId,
+      );
+    }
+    const createDispatchAuthority = await refreshCreateDispatchAuthority(
+      this,
+      operation,
+      replaceRemoveDispatchPhase,
+    );
+    if (createDispatchAuthority.action ===
+        CREATE_DISPATCH_AUTHORITY_ACTION.REFUSE) {
+      return this.buildSkippedOperationResult(
+        OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+        dispatchOperationId,
+      );
+    }
+    operation = createDispatchAuthority.operation;
     const supersededPriorityRecoveryError =
       this.isPriorityRecoverySupersededTargetFailureApplicable(
         operation,
@@ -424,19 +562,6 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           OPERATION_WORKFLOW_OWNER_LITERAL.REPLACE_SOURCE_REMOVAL;
       } else {
         messageType = ReplicaOperationMessageType.CREATE_REPLICA;
-        if (
-          !operation.replicaId ||
-          operation.replicaId === replaceSourceReplicaId
-        ) {
-          operation.replicaId = await this.allocateCanonicalReplicaId({
-            partitionId: operation.partitionId,
-            entityType,
-            entityId,
-            excludeReplicaIds: replaceSourceReplicaId ?
-              [replaceSourceReplicaId] :
-              [],
-          });
-        }
         requestReplicaId = operation.replicaId;
       }
     }
@@ -465,6 +590,30 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       [ReplicaOperationField.ENTITY_TYPE]: entityType,
       [ReplicaOperationField.ENTITY_ID]: entityId,
     };
+    if (messageType === ReplicaOperationMessageType.CREATE_REPLICA &&
+        (operation.type === OperationType.ADD ||
+          operation.type === OperationType.REPLACE)) {
+      const workflowUpdatedAt =
+        operation.createAdmissionWorkflowUpdatedAt ?? operation.updatedAt;
+      const admissionToken = operation.createAdmissionToken ||
+        buildReplicaCreateAdmissionToken({
+          operationId: operation.operationId,
+          replicaId: requestReplicaId,
+          targetNodeId: dispatchNodeId,
+          workflowUpdatedAt,
+        });
+      const attemptSeq = operation.createAdmissionAttemptSeq || 1;
+      const attemptToken = operation.createAdmissionAttemptToken ||
+        buildReplicaCreateAttemptToken(admissionToken, attemptSeq);
+      request[ReplicaOperationField.CREATE_ADMISSION_TOKEN] = admissionToken;
+      request[
+        ReplicaOperationField.CREATE_ADMISSION_WORKFLOW_UPDATED_AT
+      ] = workflowUpdatedAt;
+      request[ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_TOKEN] =
+        attemptToken;
+      request[ReplicaOperationField.CREATE_ADMISSION_ATTEMPT_SEQ] =
+        attemptSeq;
+    }
     // Carry the planning epoch into the executor request (audit finding 7)
     // so ADD/REPLACE execution can reject staleness against it.
     if (
@@ -477,6 +626,18 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     }
     if (requestReason) {
       request[ReplicaOperationField.REASON] = requestReason;
+    }
+    if (
+      messageType === ReplicaOperationMessageType.REMOVE_REPLICA &&
+      operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ]
+    ) {
+      request[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ];
     }
     if (
       Array.isArray(operation[ReplicaOperationField.REPLICA_IDS]) &&
