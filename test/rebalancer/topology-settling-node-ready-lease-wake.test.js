@@ -534,7 +534,6 @@ function installCriticalTopologyReadinessFixture(
   {
     deferred = true,
     generationSaturated = false,
-    generationSaturationKnown = true,
     livenessReady = true,
     livenessConnected = true,
     clusterMemberHealthy = true,
@@ -551,8 +550,7 @@ function installCriticalTopologyReadinessFixture(
         return buildDeferredRecoveryReadiness(nodeId, {
           substantiveReason: substantiveDeferredDenial,
           transportTopologyValid,
-          generationSaturated:
-            generationSaturationKnown ? generationSaturated : undefined,
+          generationSaturated,
         });
       }
       const current = buildReadinessSnapshot(cache, nodeId);
@@ -635,7 +633,7 @@ test(
     );
 
     installCriticalTopologyReadinessFixture(rebalancer, cache, {
-      generationSaturationKnown: false,
+      generationSaturated: null,
     });
     t.equal(
       rebalancer.getCriticalSystemTopologySettlingBlocker()?.reason,
