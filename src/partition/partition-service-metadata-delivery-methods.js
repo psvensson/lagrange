@@ -260,11 +260,32 @@ class PartitionServiceMetadataDeliveryMethods {
    * @return {boolean} Whether local evidence was re-projected.
    */
   handleCanonicalLeaderRowCacheChange(record) {
-    const observation = this.localCanonicalLeaderObservation;
-    if (
-      !observation ||
-      record?.[COLUMN.PARTITION_ID] !== this.partitionId
-    ) {
+    if (record?.[COLUMN.PARTITION_ID] !== this.partitionId) {
+      return false;
+    }
+    let observation = this.localCanonicalLeaderObservation;
+    // An election can complete before the durable PARTITIONS row has reached
+    // this node's cache. CL-036 deliberately refuses to synthesize that row,
+    // but without a level-trigger on the later real-row arrival the local
+    // leadership projection is lost forever and the durable publication can
+    // deadlock behind the recovery/readiness route that needs leader identity.
+    // Make the two orderings equivalent: once the real row exists, a replica
+    // that STILL owns live Raft leadership may project the same version-
+    // preserving tenure-bound observation the election edge would have made.
+    if (!observation && this.isLeader === true) {
+      const seeded = this.seedLocalCanonicalLeaderNodeId(
+        this.nodeId,
+        typeof this.resolveCurrentTermSafe === PARTITION_SERVICE_LITERAL.FUNCTION ?
+          this.resolveCurrentTermSafe() :
+          null,
+      );
+      observation = this.localCanonicalLeaderObservation;
+      if (seeded) {
+        this.reassertDurableLeaderNodeId();
+        return true;
+      }
+    }
+    if (!observation) {
       return false;
     }
     if (this.isLeader !== true) {
