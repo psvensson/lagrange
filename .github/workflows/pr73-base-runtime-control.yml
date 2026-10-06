@@ -1,0 +1,25 @@
+name: pr73-base-runtime-control
+on:
+  push:
+    branches:
+      - proof/0-3-pr73-base-runtime-control
+permissions:
+  contents: read
+jobs:
+  control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: d60c309216ccc86712a26766b83c97b0583ab919
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: WASM driver control
+        run: npm run test:file -- test/runtime/wasm-driver-contract-conformance.test.js
+      - name: Service lifecycle PG-wire control
+        run: npm run test:file -- test/integration/service-install-lifecycle-cli-pgwire.integration.test.js
