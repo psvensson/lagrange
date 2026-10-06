@@ -138,6 +138,62 @@ t.test('CL-036 local seed: it never synthesizes an incomplete partition row', (t
   t.end();
 });
 
+t.test(
+  'CL-036 late row: an election won before the PARTITIONS row replays local ownership when the real row arrives',
+  (t) => {
+    const cache = new SystemTableCache();
+    const {context, queued} = makeLocalLeaderContext(cache, {isLeader: false});
+    context.replicaId = `${PARTITION_ID}-r4`;
+    context.resolveCurrentTermSafe = () => 7;
+
+    applyReplicaLeadership(context, 'leader');
+    t.equal(
+      cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID),
+      undefined,
+      'the election still does not synthesize an incomplete partition row',
+    );
+    t.same(
+      queued,
+      [REPLACEMENT_NODE_ID],
+      'durable convergence was requested even though local identity was absent',
+    );
+
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.PARTITIONS,
+      'INSERT',
+      {
+        partition_id: PARTITION_ID,
+        table_id: 'replica_operations',
+        leader_node_id: null,
+        created_at: 1000,
+        updated_at: 1000,
+      },
+      {causeId: 'durable-row-arrived-after-election'},
+    );
+    const arrived = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID);
+
+    t.equal(
+      context.handleCanonicalLeaderRowCacheChange(arrived),
+      true,
+      'RED-ON-CURRENT: the later real row closes the missed election edge',
+    );
+    const projected = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID);
+    t.equal(projected.leader_node_id, REPLACEMENT_NODE_ID);
+    t.equal(projected.updated_at, 1000, 'the late projection preserves durable version');
+    t.equal(
+      projected.leader_claim_raft_term,
+      7,
+      'the late projection is bound to the still-live Raft tenure',
+    );
+    t.same(
+      queued,
+      [REPLACEMENT_NODE_ID, REPLACEMENT_NODE_ID],
+      'row arrival level-triggers the existing durable owner once more',
+    );
+    t.end();
+  },
+);
+
 t.test('CL-036 level trigger: only the current leader can reassert durability', (t) => {
   const cache = makePartitionRowCache();
   const {context, queued} = makeLocalLeaderContext(cache);
