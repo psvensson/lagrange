@@ -200,6 +200,11 @@ class ReplicaStateMachine extends EventEmitter {
     this.uncertainRemovingIntentByReplicaId = new Map();
     this.canonicalLeaderClearDebtByReplicaId = new Map();
     this.canonicalLeaderClearSettlementByReplicaId = new Map();
+    // The ReplicaHandler may bind a live partition-runtime observation seam.
+    // It is deliberately absent for remote/recovery-only lifecycle owners:
+    // without positive local runtime evidence, leader clearing stays
+    // conservative.
+    this.canonicalPartitionLeaderRetentionObserver = null;
     this.replicaMutationAdmissionClosed = false;
     this.clearInFlight = null;
 
@@ -432,6 +437,17 @@ class ReplicaStateMachine extends EventEmitter {
 
   async _updateReplicaStateInCdc(replicaState, previousState) {
     return updateReplicaStateInCdc(this, replicaState, previousState);
+  }
+
+  bindCanonicalPartitionLeaderRetentionObserver(observer) {
+    this.canonicalPartitionLeaderRetentionObserver =
+      typeof observer === 'function' ? observer : null;
+  }
+
+  shouldRetainCanonicalPartitionLeader(replicaState) {
+    return typeof this.canonicalPartitionLeaderRetentionObserver ===
+        'function' &&
+      this.canonicalPartitionLeaderRetentionObserver(replicaState) === true;
   }
 
   async _clearCanonicalPartitionLeaderIfNeeded(replicaState) {
