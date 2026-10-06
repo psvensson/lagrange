@@ -27,6 +27,8 @@ jobs:
         run: npm run test:file -- test/partition/routing-key-comparator.test.js
       - name: Table creation type-authority regression
         run: npm run test:file -- test/query/table-creation-service.test.js
+      - name: Literal guard diagnostic
+        run: node scripts/check-guideline-literals.js --json src/partition/partition-boundary-representation.js
       - name: Scoped guardrails
         run: |
           npm run -s test:metrics:scoped -- src/query/partition-resolver.js src/partition/split-key-comparator.js src/partition/partition-boundary-representation.js src/partition/partition-split-merge-manager-core-methods.js src/partition/managed-split-workflow.js src/partition/managed-split-workflow-persistence-methods.js src/query/table-creation-service-create-table.js src/query/table-creation-service-partition-provisioning.js
