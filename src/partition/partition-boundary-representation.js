@@ -9,6 +9,7 @@ const PARTITION_BOUNDARY_KEY_TYPE = Object.freeze({
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_BIGINT = 'bigint';
 const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_BASE64 = 'base64';
 const ERROR_MISSING_AUTHORITY =
   'Partition boundary type authority is missing; revalidation required';
 const ERROR_INVALID_INTEGER = 'Invalid INTEGER partition boundary representation';
@@ -34,7 +35,7 @@ function decodeIntegerBoundary(value) {
 
 function decodeBlobBoundary(value) {
   if (Buffer.isBuffer(value)) return value;
-  if (typeof value === LOCAL_STR_STRING) return Buffer.from(value, 'base64');
+  if (typeof value === LOCAL_STR_STRING) return Buffer.from(value, LOCAL_STR_BASE64);
   throw new Error(ERROR_INVALID_BLOB);
 }
 
