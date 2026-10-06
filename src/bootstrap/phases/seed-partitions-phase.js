@@ -411,8 +411,33 @@ class SeedPartitionsPhase {
       nodeId: d.getNodeId(),
     });
 
+    const registrationRequiredPartitionIds = new Set(
+      d.getRegistrationRequiredLeaderPartitionIds(),
+    );
+    const registrationRequiredReplicas = [];
+    const remainingReplicas = [];
     for (const partition of partitionReplicas) {
+      const cohort = registrationRequiredPartitionIds.has(
+        partition.partitionId,
+      ) ? registrationRequiredReplicas : remainingReplicas;
+      cohort.push(partition);
+    }
+
+    for (const partition of registrationRequiredReplicas) {
       partition.startElection();
+    }
+
+    try {
+      await d.waitForRegistrationRequiredPartitionLeadership();
+    } finally {
+      // A failed dependency gate must not strand otherwise independent
+      // partition groups. During shutdown, cleanup owns every unstarted
+      // replica and this scheduler must not restart them.
+      if (!d.isShuttingDown()) {
+        for (const partition of remainingReplicas) {
+          partition.startElection();
+        }
+      }
     }
   }
 

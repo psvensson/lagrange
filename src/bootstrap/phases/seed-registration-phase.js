@@ -93,6 +93,7 @@ class SeedRegistrationPhase {
    */
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.requiredPartitionLeadershipSatisfied = false;
     this.messageGroupRegistrationEvidenceByReplicaId = new Map();
     this.runtimeOwner = new SeedRegistrationRuntimeOwner({
       delegates: this.delegates,
@@ -109,9 +110,7 @@ class SeedRegistrationPhase {
     const logger = d.getLogger();
     const timestamp = resolveHostedNodeClock(this.delegates)();
 
-    await d.waitForPartitionLeadership({
-      partitionIds: REGISTRATION_REQUIRED_LEADER_PARTITION_IDS,
-    });
+    await this.waitForRequiredPartitionLeadership();
     const systemTableWriter = this.ensureSystemTableWriter();
 
     logger.debug(BOOTSTRAP_LOG_MSG.BOOTSTRAP_MODE_ENABLED, {
@@ -133,6 +132,33 @@ class SeedRegistrationPhase {
       nodeId: d.getNodeId(),
       servicesCreated: d.getServicesCreated(),
     });
+  }
+
+  /**
+   * Return the exact partition leaders required by direct registration writes.
+   * SeedRegistrationPhase owns this dependency cut; election scheduling may
+   * read it but must not restate it.
+   * @return {string[]}
+   */
+  getRequiredLeaderPartitionIds() {
+    return [...REGISTRATION_REQUIRED_LEADER_PARTITION_IDS];
+  }
+
+  /**
+   * Spend the registration phase's existing leadership gate once. The seed
+   * partition scheduler moves this gate earlier so the required cohort can
+   * form before unrelated FULL-persistence work, and phaseRegistration reuses
+   * the satisfied result instead of adding a second wait budget.
+   * @return {Promise<void>}
+   */
+  async waitForRequiredPartitionLeadership() {
+    if (this.requiredPartitionLeadershipSatisfied) {
+      return;
+    }
+    await this.delegates.waitForPartitionLeadership({
+      partitionIds: REGISTRATION_REQUIRED_LEADER_PARTITION_IDS,
+    });
+    this.requiredPartitionLeadershipSatisfied = true;
   }
 
   /**

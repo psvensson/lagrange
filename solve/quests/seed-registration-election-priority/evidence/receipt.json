@@ -1,0 +1,60 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-registration-election-priority",
+  "status": "fail",
+  "testFileDigests": {
+    "test/bootstrap/seed-registration-election-scheduling.test.js": "ec342af7a31bee42a6e655c2295e7df05e04b41c2036c9dd28c8525e62faf1ee"
+  },
+  "generatedAt": "2026-10-06T12:24:00.000Z",
+  "receipts": [
+    {
+      "id": "dependency-cohort-first-and-once",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-registration-election-scheduling.test.js",
+      "detail": "The deterministic witness starts the 12 replicas belonging to registration's four-partition cut before observing the gate, holds all other elections until it settles, and starts each replica once.",
+      "testFile": "test/bootstrap/seed-registration-election-scheduling.test.js"
+    },
+    {
+      "id": "active-failure-releases-remaining-cohort",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-registration-election-scheduling.test.js",
+      "detail": "The deterministic rejected-gate witness releases every remaining election exactly once while bootstrap is active and preserves the original failure as the outcome.",
+      "testFile": "test/bootstrap/seed-registration-election-scheduling.test.js"
+    },
+    {
+      "id": "shutdown-preserves-cleanup-authority",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-registration-election-scheduling.test.js",
+      "detail": "When shutdown begins during the held gate, no remaining election starts; the original interruption propagates and cleanup stays authoritative.",
+      "testFile": "test/bootstrap/seed-registration-election-scheduling.test.js"
+    },
+    {
+      "id": "registration-owns-cut-and-single-gate",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-registration-election-scheduling.test.js",
+      "detail": "SeedRegistrationPhase publishes a defensive copy of its exact dependency cut and two sequential consumers spend the underlying existing leadership wait only once.",
+      "testFile": "test/bootstrap/seed-registration-election-scheduling.test.js"
+    },
+    {
+      "id": "owner-interaction-registered",
+      "passed": true,
+      "command": "npm run audit:impact-contracts",
+      "detail": "impact-contracts registers the registration authority and partition scheduler as a coupled pair with the deterministic scheduling witness; audit passes with 49 contracts and 20 pairs.",
+      "testFile": "test/shards/impact-contracts.json"
+    },
+    {
+      "id": "full-sync-physical-target-reached",
+      "passed": false,
+      "command": "locked physical lab run of critical-partition-learner-safety.integration.test.js",
+      "detail": "Pending the exact candidate's full target proof. The diagnostic mutant passed 10/10 in 91800ms but is not the production candidate.",
+      "testFile": "test/integration/critical-partition-learner-safety.integration.test.js"
+    },
+    {
+      "id": "durability-timeouts-and-census-preserved",
+      "passed": true,
+      "command": "focused source audit and current-tip change gate",
+      "detail": "The exact diff changes no raft durability or timing constant. A current-source census reports 45 system-table partitions and 135 replicas, correcting the earlier 47/141 note.",
+      "testFile": "src/bootstrap/phases/seed-partitions-phase.js"
+    }
+  ]
+}

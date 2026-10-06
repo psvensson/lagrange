@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-registration-election-priority",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "On FULL raft-rs persistence, the seed currently starts elections for all 45 system-table partitions before the four partitions whose leaders SeedRegistrationPhase requires for direct writes have formed. The resulting synchronous persistence load can consume the registration leadership gate before its target path is reached. SeedRegistrationPhase remains the sole owner of that exact four-partition dependency cut and its existing wait budget; SeedPartitionsPhase starts that cohort first, transfers the satisfied gate to registration, and then releases every remaining election exactly once. An active dependency failure still releases the remaining cohort before propagating, while shutdown leaves unstarted replicas to the existing cleanup owner. FULL durability and all timing constants stay unchanged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-registration-election-priority/evidence/receipt.json",
+      "requiredReceipts": [
+        "dependency-cohort-first-and-once",
+        "active-failure-releases-remaining-cohort",
+        "shutdown-preserves-cleanup-authority",
+        "registration-owns-cut-and-single-gate",
+        "owner-interaction-registered",
+        "full-sync-physical-target-reached",
+        "durability-timeouts-and-census-preserved"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "registration-owns-dependency-cut",
+      "statement": "SeedRegistrationPhase remains the sole authority for the exact partitions, services, tables, and message_groups direct-write dependency set; no broader globally-critical classification is introduced."
+    },
+    {
+      "id": "one-existing-wait-budget",
+      "statement": "The partitions phase transfers SeedRegistrationPhase's existing leadership gate; registration reuses its satisfied result and no second timeout allowance is added."
+    },
+    {
+      "id": "eventual-start-and-shutdown-ownership",
+      "statement": "After the dependency wait settles, every remaining replica election is released exactly once while bootstrap is active, including on dependency failure; shutdown never starts or restarts that cohort and existing cleanup remains authoritative."
+    },
+    {
+      "id": "no-durability-or-timing-change",
+      "statement": "RaftStorageDurability.FULL, fsync placement, leadership timeout values, retry delays, and election tick constants are unchanged."
+    },
+    {
+      "id": "exact-physical-target-proof",
+      "statement": "The exact candidate must reach and pass the full critical-partition learner-safety target on one locked physical lab host; deterministic scheduling tests alone cannot satisfy this receipt."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "A verifier independent of the implementation reviews the exact final fingerprint after the last source attempt and records an approve verdict before landing."
+    }
+  ],
+  "sealedAt": "89365eb925f9aad16b063d9cb8a550ebef7a90d4"
+}

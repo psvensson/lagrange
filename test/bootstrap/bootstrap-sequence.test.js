@@ -107,6 +107,8 @@ function getRandomPort() {
 }
 
 function disablePostPartitionBootstrapWork(bootstrap) {
+  bootstrap.seedRegistrationPhase.waitForRequiredPartitionLeadership =
+    NOOP_ASYNC;
   bootstrap.seedRegistrationPhase.phaseRegistration = NOOP_ASYNC;
   bootstrap.seedCacheHydrationPhase.phaseCacheHydration = NOOP_ASYNC;
   bootstrap.initializeReplicaStateMachine = () => {
