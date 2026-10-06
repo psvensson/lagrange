@@ -10,6 +10,8 @@ import {
 import {
   PARTITION_SERVICE_MESSAGE_TYPE,
 } from './partition-service-constants.js';
+import {deliverProcessedSourceReplicationStart} from
+  './managed-source-replication-start-delivery.js';
 
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_FUNCTION = 'function';
@@ -141,17 +143,14 @@ class ManagedMergeTopologyAdapter {
       throw new Error(MERGE_REPLICATION_START_FAILED);
     }
 
-    const response = await this.messageRouter.deliver(serviceInfo.address, {
-      type: PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION,
-      partitionId,
-      tableId,
-      tableName,
-      transitionMetadata,
-    });
-
-    if (!response?.acknowledged || response?.success === false) {
-      throw new Error(response?.error || MERGE_REPLICATION_START_FAILED);
-    }
+    await deliverProcessedSourceReplicationStart(
+      this.messageRouter, serviceInfo.address, {
+        type: PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION,
+        partitionId,
+        tableId,
+        tableName,
+        transitionMetadata,
+      }, MERGE_REPLICATION_START_FAILED);
   }
 
   /**

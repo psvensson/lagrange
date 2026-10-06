@@ -24,6 +24,8 @@ import {
   findDurableMirrorTransitionForService,
   loadDurableDeltasBehindWatermark,
 } from './partition-mirror-replay-cursor.js';
+import {startMergeReplicationHandleForService} from
+  './partition-service-source-replication-start-methods.js';
 
 class PartitionServiceMergeReplicationResumptionMethods {
   /**
@@ -98,13 +100,9 @@ class PartitionServiceMergeReplicationResumptionMethods {
         workflowId: transition.metadata.workflowId,
       },
     );
-    this.mergeReplicationRun = this.runMergeReplicationWorkflow().catch(
-      (error) => this.handleMergeReplicationRunFailure(
-        transition.metadata,
-        error,
-      ),
-    );
-    return true;
+    const response = await startMergeReplicationHandleForService(
+      this, this.mergeReplication);
+    return response.acknowledged === true;
   }
 }
 

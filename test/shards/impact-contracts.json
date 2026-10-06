@@ -706,6 +706,21 @@
         "test/partition/partition-split-policy-precedence.test.js",
         "test/integration/public-binding-cell-invocation-seam.integration.test.js"
       ]
+    },
+    "partition-replication-start-authorization": {
+      "description": "Durable split or merge workflow records authorize exact source START identities; sender delivery classification and PartitionService execution handles preserve that authorization through physical execution.",
+      "owners": [
+        "src/partition/managed-source-replication-start-authorization.js",
+        "src/partition/managed-workflow-record-changes.js",
+        "src/partition/managed-workflow-record-coordinator.js",
+        "src/partition/managed-source-replication-start-delivery.js",
+        "src/partition/partition-service-source-replication-start-methods.js",
+        "src/query/sql-query-engine-partition-routing-readiness.js",
+        "src/partition/managed-merge-topology-adapter.js"
+      ],
+      "tests": [
+        "test/partition/partition-replication-restart-attempt-handoff.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1283,6 +1298,32 @@
       "witnessTests": [
         "test/partition/partition-split-policy-precedence.test.js",
         "test/integration/public-binding-cell-invocation-seam.integration.test.js"
+      ]
+    },
+    "partition-replication-record-physical-start": {
+      "description": "The durable workflow record must accept the exact attempt, fence, and payload before one PartitionService worker begins; transport acknowledgement without handler processing cannot bridge the two owners.",
+      "endpoints": [
+        {
+          "id": "durable-record-start-authorization",
+          "owners": [
+            "src/partition/managed-source-replication-start-authorization.js",
+            "src/partition/managed-workflow-record-changes.js",
+            "src/partition/managed-workflow-record-coordinator.js"
+          ]
+        },
+        {
+          "id": "physical-source-start-execution",
+          "owners": [
+            "src/partition/managed-source-replication-start-delivery.js",
+            "src/partition/partition-service-source-replication-start-methods.js",
+            "src/query/sql-query-engine-partition-routing-readiness.js",
+            "src/partition/managed-merge-topology-adapter.js"
+          ]
+        }
+      ],
+      "contract": "partition-replication-start-authorization",
+      "witnessTests": [
+        "test/partition/partition-replication-restart-attempt-handoff.test.js"
       ]
     }
   }

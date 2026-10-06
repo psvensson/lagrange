@@ -1,21 +1,12 @@
 import {RESUME_TRIGGER} from './group-retirement-resume.js';
-import {
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PressureGovernor,
-} from '../control-plane/pressure-governor.js';
-import {
-  PARTICIPANT_ACK_FIELD,
-  PARTICIPANT_ACK_RESULT,
-} from '../workflow/workflow-constants.js';
-import {
-  phaseChange,
-  refusedStepAs,
-} from './managed-workflow-record-changes.js';
-import {
-  claimWorkflowOwnershipCore,
-  renewWorkflowOwnershipCore,
-} from './managed-workflow-ownership-core.js';
+import {PRESSURE_GOVERNOR_ACTION, PRESSURE_WORK_CLASS, PressureGovernor} from
+  '../control-plane/pressure-governor.js';
+import {PARTICIPANT_ACK_FIELD, PARTICIPANT_ACK_RESULT} from
+  '../workflow/workflow-constants.js';
+import {phaseChange, refusedStepAs} from
+  './managed-workflow-record-changes.js';
+import {claimWorkflowOwnershipCore, renewWorkflowOwnershipCore} from
+  './managed-workflow-ownership-core.js';
 import {
   MANAGED_MERGE_ERROR_MSG,
   MANAGED_MERGE_LOG_MSG,
@@ -32,12 +23,43 @@ import {
   MERGE_PARTICIPANT_PREFIX,
   isMergeSourceAckTransitionAllowed,
 } from './merge-ack-constants.js';
+import {acknowledgeSourceStartAtRecordTurn, mergeStartAuthorization} from
+  './managed-source-replication-start-authorization.js';
 
 const LOCAL_STR_PARTITION_MERGE_WORKFLOW = 'partition:merge:workflow';
 const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
 const LOCAL_STR_CONTROL_PLANE_BACKPRESSURE = 'control_plane_backpressure';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
+
+async function resolveDuplicateMergeCutoverOutcome(owner, workflowId,
+  ackResult, ackStatus) {
+  if (ackResult?.result !== PARTICIPANT_ACK_RESULT.DUPLICATE ||
+      ackStatus !== MERGE_ACK_STATUS.CATCHUP_READY) return {handled: false};
+  return {handled: true, outcome: {...ackResult,
+    mergeCutoverApplied: await owner.applyMergeCutoverIfReady(workflowId)}};
+}
+
+async function buildAcceptedMergeAckOutcome(owner, workflow, workflowId,
+  ackResult, ackStatus) {
+  let mergeCutoverApplied =
+    workflow.status === PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
+  if (MERGE_ACK_FAILURE_STATUSES.has(ackStatus)) {
+    owner.abortMergeOnSourceFailure(workflowId, ackStatus).catch((error) => {
+      owner.logger.error(MANAGED_MERGE_LOG_MSG.ABORT_DISPATCH_FAILED, {
+        workflowId, ackStatus, error: error?.message || error,
+      });
+    });
+    mergeCutoverApplied = false;
+  }
+  if (ackStatus === MERGE_ACK_STATUS.CATCHUP_READY) {
+    mergeCutoverApplied = await owner.applyMergeCutoverIfReady(workflowId);
+  }
+  if (ackStatus === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED) {
+    await owner.finalizeMergeDissolutionIfReady(workflowId);
+  }
+  return {...ackResult, mergeCutoverApplied};
+}
 
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const MANAGED_MERGE_MUTATION_OPTIONS = Object.freeze({
@@ -415,7 +437,8 @@ class ManagedMergeWorkflowExecutionGateMethods {
    * @return {Promise<Object>} acknowledgeParticipant result extended with
    *   {mergeCutoverApplied: boolean}.
    */
-  async acknowledgeMergeSourceParticipant(workflowId, ack) {
+  async acknowledgeMergeSourceParticipant(workflowId, ack,
+    startContext = null) {
     if (!workflowId) {
       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
     }
@@ -423,49 +446,26 @@ class ManagedMergeWorkflowExecutionGateMethods {
     if (this.isMergeWorkflowStateUnavailable(workflow)) {
       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
     }
-    const ackResult = await this.workflowCoordinator.acknowledgeParticipant(
-      workflowId,
-      ack,
-    );
+    const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
+    const ackResult = await acknowledgeSourceStartAtRecordTurn(
+      this.workflowCoordinator, workflowId, ack, startContext, ackStatus,
+      MERGE_ACK_STATUS.SNAPSHOT_STARTED, mergeStartAuthorization);
 
     // A rejected acknowledgement is a typed outcome, never silently
     // applied (mirrors the split owner): no owner reaction follows.
+    const duplicateOutcome = await resolveDuplicateMergeCutoverOutcome(
+      this, workflowId, ackResult, ackStatus);
+    if (duplicateOutcome.handled) return duplicateOutcome.outcome;
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
       await this.resumeMergeDissolutionOnRedelivery(workflowId, ackResult,
         ack);
       return this.buildRejectedMergeAckOutcome(workflowId, ackResult);
     }
 
-    const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
-    let mergeCutoverApplied =
-      workflow.status === PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
-    if (MERGE_ACK_FAILURE_STATUSES.has(ackStatus)) {
-      // Deliberately NOT awaited: the abort is FIFO-serialized on the
-      // owner lane and may queue behind an in-flight cutover step; the
-      // failing source's acknowledgement must not block on that lane.
-      // FIFO enqueue order still guarantees the abort lands before any
-      // cutover step enqueued after it.
-      this.abortMergeOnSourceFailure(workflowId, ackStatus)
-        .catch((error) => {
-          this.logger.error(MANAGED_MERGE_LOG_MSG.ABORT_DISPATCH_FAILED, {
-            workflowId,
-            ackStatus,
-            error: error?.message || error,
-          });
-        });
-      mergeCutoverApplied = false;
-    }
-    if (ackStatus === MERGE_ACK_STATUS.CATCHUP_READY) {
-      mergeCutoverApplied = await this.applyMergeCutoverIfReady(workflowId);
-    }
-    if (ackStatus === MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED) {
-      await this.finalizeMergeDissolutionIfReady(workflowId);
-    }
-
-    return {
-      ...ackResult,
-      mergeCutoverApplied,
-    };
+    // Failure dispatch is deliberately unawaited inside the reaction owner:
+    // its FIFO lane orders it before any later cutover step.
+    return buildAcceptedMergeAckOutcome(
+      this, workflow, workflowId, ackResult, ackStatus);
   }
 
   /**
