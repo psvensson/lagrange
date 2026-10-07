@@ -1,8 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SYSTEM_TABLE_NAME} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {createTestCoordinator} from './test-helpers.js';
 
@@ -34,10 +32,12 @@ test(
       autoProgressCreatedOperations: true,
       enableTimeouts: false,
     });
-    const gateway = coordinator.controlPlaneSystemTableGateway;
-    const originalExecuteQuery = gateway.executeQuery.bind(gateway);
-    const originalReadAuthoritativeRows =
-      gateway.readAuthoritativeRows.bind(gateway);
+    const originalExecuteOperationMutationWithRetry =
+      coordinator.executeOperationMutationWithRetry.bind(coordinator);
+    const originalQueryAuthoritativeOperationVisibilityObservation =
+      coordinator.queryAuthoritativeOperationVisibilityObservation.bind(
+        coordinator,
+      );
 
     const planningIdentity = Object.freeze({
       globalPlanningGeneration: 1,
@@ -76,38 +76,35 @@ test(
     let operationAuthorityAvailable = false;
     const armedOperationIds = [];
 
-    gateway.executeQuery = async (sql, params = [], options = {}) => {
-      const statement = String(sql);
-      if (statement.includes('INSERT INTO storage_reservations')) {
-        reservationInsertCount += 1;
-        reservationInserted = true;
-      }
-      return originalExecuteQuery(sql, params, options);
-    };
-
-    gateway.readAuthoritativeRows = async (
-      tableName,
+    coordinator.executeOperationMutationWithRetry = async (
       sql,
       params = [],
       options = {},
     ) => {
-      if (
-        reservationInserted &&
-        tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-        operationAuthorityAvailable !== true
-      ) {
-        postReservationOperationOwnerReadCount += 1;
-        return {
-          success: false,
-          rows: [],
-          error: OWNER_UNAVAILABLE_ERROR,
-          source: 'owner_rpc_lane',
-        };
+      if (String(sql).includes('INSERT INTO storage_reservations')) {
+        reservationInsertCount += 1;
+        reservationInserted = true;
       }
-      return originalReadAuthoritativeRows(
-        tableName,
-        sql,
-        params,
+      return originalExecuteOperationMutationWithRetry(sql, params, options);
+    };
+
+    coordinator.queryAuthoritativeOperationVisibilityObservation = async (
+      operationId,
+      options = {},
+    ) => {
+      if (reservationInserted && operationAuthorityAvailable !== true) {
+        postReservationOperationOwnerReadCount += 1;
+        return Object.freeze({
+          operation: null,
+          deferredOutcome: Object.freeze({
+            reason: OWNER_UNAVAILABLE_ERROR,
+            contractState: 'deferred',
+            nextAction: 'retry',
+          }),
+        });
+      }
+      return originalQueryAuthoritativeOperationVisibilityObservation(
+        operationId,
         options,
       );
     };
