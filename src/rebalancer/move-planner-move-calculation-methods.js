@@ -3,6 +3,9 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {isExplicitNonLeaderRaftRole} from
   '../raft/replica-voter-readiness.js';
 import {OperationType, ReplicaStatus} from './replica-status.js';
+import {ReplicaOperationField} from './replica-operation-constants.js';
+import {isFailedCreateCleanupToken} from
+  './failed-create-cleanup-token.js';
 import {normalizeReplicaOperationRecord} from './replica-operation-liveness.js';
 import {
   REPLICA_INVENTORY_EFFECTIVE_VIEW,
@@ -45,8 +48,28 @@ const MOVE_PLANNER_LITERAL = Object.freeze({
   UNKNOWN: 'unknown',
 });
 const MoveType = REBALANCER_MOVE_TYPE;
+const FAILED_CREATE_SOURCE_STATES = Object.freeze(new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.SYNCING,
+]));
 // The named "this plan states no cycle facts" context.
 const EMPTY_PLANNING_CONTEXT = Object.freeze({});
+const FAILED_CREATE_CLAIM_IDENTITY_FIELDS = Object.freeze([
+  'created_at',
+  'state_entered_at',
+  'create_attempt_token',
+]);
+
+function historicalFailedCreateClaimProtects(replica, claims) {
+  if (replica?.previous_state === ReplicaStatus.ACTIVE) return false;
+  if (!Array.isArray(claims) || claims.length === 0) return true;
+  const comparableFields = FAILED_CREATE_CLAIM_IDENTITY_FIELDS.filter(
+    (field) => replica?.[field] !== null && replica?.[field] !== undefined,
+  );
+  return comparableFields.length === 0 || claims.some((claim) =>
+    comparableFields.every((field) => replica[field] === claim[field]));
+}
 
 // The partition policy row, resolved at most once per plan and only when a
 // cure asks for it. `planningContext` reaches this module as a pass-through
@@ -218,6 +241,8 @@ class MovePlannerMoveCalculationMethods {
     const replicasInRemoving = transitionSnapshot.replicasInRemoving;
     const terminalFailedReplaceTargetReplicaIds =
       this.getTerminalFailedReplaceTargetReplicaIds();
+    const terminalFailedCreateTargetReplicaIds =
+      this.getTerminalFailedCreateTargetReplicaIds();
     const scheduledRemoveReplicaIds = new Set();
     const pendingCount = transitionSnapshot.pendingCount;
     if (pendingCount > 0) {
@@ -291,6 +316,18 @@ class MovePlannerMoveCalculationMethods {
         status === ReplicaStatus.FAILED ||
         terminalFailedReplaceTargetReplicaIds.has(replicaId)
       ) {
+        const ownerProtectedFailedCreate =
+          isFailedCreateCleanupToken(replica.cleanup_token) ||
+          FAILED_CREATE_SOURCE_STATES.has(replica.previous_state) ||
+          terminalFailedCreateTargetReplicaIds.has(replicaId) &&
+            historicalFailedCreateClaimProtects(
+              replica,
+              this.getTerminalFailedCreateTargetClaims(replicaId),
+            );
+        if (ownerProtectedFailedCreate &&
+            !terminalFailedReplaceTargetReplicaIds.has(replicaId)) {
+          continue;
+        }
         if (scheduledRemoveReplicaIds.has(replicaId)) {
           continue;
         }
@@ -298,12 +335,25 @@ class MovePlannerMoveCalculationMethods {
         const failedReplicaCure = resolvePlacementCure(
           PLACEMENT_CURE_CONDITION.FAILED_REPLICA,
         );
-        moves.push({
+        const move = {
           type: failedReplicaCure.moveType,
           replicaId,
           nodeId: replica.node_id,
           reason: failedReplicaCure.moveReason,
-        });
+        };
+        if (terminalFailedReplaceTargetReplicaIds.has(replicaId)) {
+          const cleanupPrecondition =
+            this.getFailedCreateTargetCleanupPrecondition(replicaId);
+          if (!cleanupPrecondition) {
+            scheduledRemoveReplicaIds.delete(replicaId);
+            continue;
+          }
+          move[
+            ReplicaOperationField
+              .FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+          ] = cleanupPrecondition;
+        }
+        moves.push(move);
       }
     }
 
@@ -961,6 +1011,48 @@ class MovePlannerMoveCalculationMethods {
         )
         .filter((replicaId) => replicaId.length > 0),
     );
+  }
+
+  getTerminalFailedCreateTargetReplicaIds() {
+    if (
+      typeof this.moveStateProvider.getTerminalFailedCreateTargetReplicaIds !==
+      MOVE_PLANNER_LITERAL.FUNCTION
+    ) {
+      return new Set();
+    }
+    const replicaIds =
+      this.moveStateProvider.getTerminalFailedCreateTargetReplicaIds();
+    const values = replicaIds instanceof Set ? [...replicaIds] :
+      Array.isArray(replicaIds) ? replicaIds : [];
+    return new Set(values.map((value) => String(value || '').trim())
+      .filter((value) => value.length > 0));
+  }
+
+  getFailedCreateTargetCleanupPrecondition(replicaId) {
+    if (
+      typeof this.moveStateProvider
+        .getFailedCreateTargetCleanupPrecondition !==
+        MOVE_PLANNER_LITERAL.FUNCTION
+    ) {
+      return null;
+    }
+    const precondition = this.moveStateProvider
+      .getFailedCreateTargetCleanupPrecondition(replicaId);
+    return precondition && typeof precondition === MOVE_PLANNER_LITERAL.OBJECT ?
+      precondition : null;
+  }
+
+  getTerminalFailedCreateTargetClaims(replicaId) {
+    if (
+      typeof this.moveStateProvider.getTerminalFailedCreateTargetClaims !==
+        MOVE_PLANNER_LITERAL.FUNCTION
+    ) {
+      return [];
+    }
+    const claims = this.moveStateProvider.getTerminalFailedCreateTargetClaims(
+      replicaId,
+    );
+    return Array.isArray(claims) ? claims : [];
   }
 }
 

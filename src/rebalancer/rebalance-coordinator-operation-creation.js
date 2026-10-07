@@ -685,6 +685,23 @@ class RebalanceCoordinatorOperationCreation {
     });
     operation.entityType = entityType;
     operation.entityId = entityId;
+    const failedCreateTargetCleanupPrecondition = move?.[
+      ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+    ];
+    if (
+      normalizedMoveType === OperationType.REMOVE &&
+      failedCreateTargetCleanupPrecondition &&
+      typeof failedCreateTargetCleanupPrecondition === 'object' &&
+      !Array.isArray(failedCreateTargetCleanupPrecondition) &&
+      operation.stepsHistory.length > 0
+    ) {
+      operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = failedCreateTargetCleanupPrecondition;
+      operation.stepsHistory[0][
+        OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = failedCreateTargetCleanupPrecondition;
+    }
     if (
       entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
       (

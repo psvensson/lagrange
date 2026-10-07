@@ -300,6 +300,13 @@ class MessageGroupService extends EventEmitter {
     // When true, the Raft election timer won't start until startElection() is called
     // This prevents election storms when multiple replicas are created on the same node
     this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
+    // The opening host's authoritative row proves this replica identity
+    // existed before (the open-time rule).
+    this.identityExisted = options.identityExisted === true;
+    // A replica whose identity fact (its services row) is written only after
+    // it opened: the port steps nothing until the durable row write releases
+    // this (the identity-record window, verifier N3 / F1).
+    this.identityRecorded = options.identityRecorded ?? null;
     this.deferElectionUntilJoinConvergence =
       options.deferElectionUntilJoinConvergence === true;
     this.deferElection =

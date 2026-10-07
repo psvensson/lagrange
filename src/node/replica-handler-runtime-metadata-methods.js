@@ -44,6 +44,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     PARTITION_METADATA_MISSING_PREFIX,
     PartitionServiceRowOwner,
     ReplicaCleanupTombstoneOwner,
+    ReplicaCreateAdmissionOwner,
     REPLICA_HANDLER_ERROR_MSG,
     REPLICA_HANDLER_LITERAL,
     REPLICA_HANDLER_LOG_MSG,
@@ -537,8 +538,21 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       }
       this.replicaCleanupTombstoneOwner = new ReplicaCleanupTombstoneOwner({
         gateway: this.getControlPlaneSystemTableGateway(),
+        logger: this.logger,
       });
       return this.replicaCleanupTombstoneOwner;
+    }
+    getReplicaCreateAdmissionOwner() {
+      if (this.replicaCreateAdmissionOwner) {
+        return this.replicaCreateAdmissionOwner;
+      }
+      this.replicaCreateAdmissionOwner = ReplicaCreateAdmissionOwner.acquire({
+        gateway: this.getControlPlaneSystemTableGateway(),
+        nodeId: this.nodeId,
+        ownerIncarnation: this.ownerIncarnation,
+        now: () => this.replicaStateMachine?.now?.() ?? Date.now(),
+      });
+      return this.replicaCreateAdmissionOwner;
     }
     /**
      * @return {Object|null}

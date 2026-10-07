@@ -223,7 +223,36 @@ export {
   isTerminalReplicaOperationSemanticPhase,
 } from './replica-operation-progress.js';
 
+// The one peer-admission rule over a services row's status, read by
+// partition and message-group admission alike (F1/F2): a row whose replica
+// has not durably recorded that its port opened (PENDING, CREATING - a create
+// target steps nothing until its SYNCING fact is durable, verifier N3) or
+// that is retiring (FAILED, REMOVING, REMOVED) names no peer. A row without a
+// status is a live one.
+const PEER_ROW_EXCLUDED_STATUSES = Object.freeze(new Set([
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.FAILED,
+  ReplicaStatus.REMOVING,
+  ReplicaStatus.REMOVED,
+]));
+
+function isPeerRowStatusAdmissible(status) {
+  return !PEER_ROW_EXCLUDED_STATUSES.has(status || ReplicaStatus.ACTIVE);
+}
+
+// The post-intent boundary of a create (an ADD or REPLACE target), M2: its
+// authoritative services row is ACTIVE - the replica opened, caught up and
+// serves. Past it a create is never failed (the operation owner completes it
+// instead) and its target is never a failed-target cleanup candidate. A
+// target admitted but closed never wrote ACTIVE, so the cure still removes it.
+function isLiveCreateTargetStatus(status) {
+  return status === ReplicaStatus.ACTIVE;
+}
+
 export {
+  isLiveCreateTargetStatus,
+  isPeerRowStatusAdmissible,
   createOperation,
   getAllStatusValues,
   isValidStatus,

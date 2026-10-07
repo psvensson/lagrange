@@ -212,6 +212,8 @@ class PartitionServiceRowOwner {
       raft_role: resolvePartitionRaftRole(service),
       status,
       address,
+      cleanup_token: null,
+      create_attempt_token: null,
       created_at: createdAt,
       // Registration stamps the canonical lifecycle generation, so every
       // later lifecycle CAS is fenced by it rather than by updated_at.

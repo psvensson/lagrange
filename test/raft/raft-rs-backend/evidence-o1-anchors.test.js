@@ -490,29 +490,26 @@ function replaceOwnerOver(model, target, source) {
   };
 }
 
-// B12 over two transient shapes: H1 + self (C_j = {b}; the replayed view
-// passes through {t}: b ABSENT, nothing unresolved) and H5 + self (C_j =
-// {a}; the view passes through {b, t}: a absent while b, removed by j, was
-// never reserved on the target: UNRESOLVED). Both fail closed; only the
-// first reaches the gate branch of R-1a.
+// B12 over the two formerly transient shapes: H1 + self (C_j = {b}; a
+// whole-log replay passed through {t}: b ABSENT) and H5 + self (C_j = {a};
+// a replay passed through {b, t}: UNRESOLVED). Folded at C_j: no transient
+// view - at those cuts the below-gate witness now holds C_j and names the
+// committed voter; R-1a still never decides from it.
 const B12_SHAPES = Object.freeze([
-  {key: 'H1', sourceLetter: 'b',
-    belowGate: PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
-    verdict: REPLACE_COMPLETION_VERDICT.WITNESS_BELOW_GATE},
-  {key: 'H5', sourceLetter: 'a',
-    belowGate: PARTITION_REPLICA_MEMBERSHIP_STATE.UNRESOLVED,
-    verdict: REPLACE_COMPLETION_VERDICT.UNAVAILABLE},
+  {key: 'H1', sourceLetter: 'b'},
+  {key: 'H5', sourceLetter: 'a'},
 ]);
 
 for (const shape of B12_SHAPES) {
-  test(`anchor (B12, ${shape.key} + self): a witness below its gate answers ` +
-    `${shape.verdict} for the committed voter it asks about; R-1a decides ` +
-    'STILL_VOTER from the leader below and above the gate (F1)', async () => {
+  test(`anchor (B12, ${shape.key} + self): a witness below its gate, folded ` +
+    'at C_j, names the committed voter it asks about at the formerly ' +
+    'transient cut; R-1a decides STILL_VOTER from the leader below and ' +
+    'above the gate (F1)', async () => {
     await b12Shape(shape);
   });
 }
 
-async function b12Shape({key, sourceLetter, belowGate, verdict}) {
+async function b12Shape({key, sourceLetter}) {
   const target = identityOf(key, 't');
   const source = identityOf(key, sourceLetter);
   const founders = HISTORY[key].genesis.map((letter) =>
@@ -535,8 +532,8 @@ async function b12Shape({key, sourceLetter, belowGate, verdict}) {
       !foldAt(logFold(model.replica(leader).dbFile, PARTITION_ID,
         [...stamp.voters, targetPeerId]), index).voters.includes(
         sourcePeerId));
-    assert.ok(transient !== undefined, 'setup: a cut where the replayed ' +
-      'view omits the source');
+    assert.ok(transient !== undefined, 'setup: a cut where a whole-log ' +
+      'replay would omit the source');
     cap.value = transient;
     assert.ok(settle(model, () =>
       durableOf(model, target).applied.appliedIndex === transient, [leader]),
@@ -548,21 +545,21 @@ async function b12Shape({key, sourceLetter, belowGate, verdict}) {
       replicaId: target, targetNodeId: 'b12-node'};
     const targetView = await readPartitionReplicaMembership(
       serviceOf(model, target), source);
-    assert.equal(targetView.state, belowGate,
-      'the below-gate witness does not show the committed voter');
+    // Folded at C_j: no transient view.
+    assert.equal(targetView.state, PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER,
+      'the below-gate witness holds C_j and names the committed voter');
     assert.equal(targetView.gateOpen, false);
     const below = await decideReplaceCompletion(owner, operation);
     assert.notEqual(below.verdict, REPLACE_COMPLETION_VERDICT.SOURCE_RETIRED,
       'R-1a never retires a source from a below-gate witness');
     // F1 (owner ruling): the completion authority is the leader's own
     // answer, reached through the target's redirect; the below-gate target's
-    // transient view (WITNESS_BELOW_GATE / UNRESOLVED, asserted above as the
-    // target's own answer) is a route, never the verdict. The leader's gate
-    // is open by construction, so the verdict below the target's gate is
-    // exactly STILL_VOTER, from the leader.
+    // view is a route, never the verdict. The leader's gate is open by
+    // construction, so the verdict below the target's gate is exactly
+    // STILL_VOTER, from the leader.
     assert.equal(below.verdict, REPLACE_COMPLETION_VERDICT.STILL_VOTER,
       'F1: the leader\'s answer decides STILL_VOTER below the target\'s ' +
-        `gate (the target's own view: ${verdict})`);
+        'gate');
     assert.equal(below.observation.replicaId, below.observation.leaderReplicaId,
       'the below-gate verdict is the leader\'s own answer');
     assert.equal(below.observation.gateOpen, true,

@@ -82,10 +82,10 @@ class OperationWorkflowOwnerRetryRegistry extends
       options.disengageOperationLedgerSelfMoveHold;
     this.releaseOperationLedgerSelfMoveHoldOnLocalTerminal =
       options.releaseOperationLedgerSelfMoveHoldOnLocalTerminal;
-    this.setTimeoutFn =
-      typeof options.setTimeoutFn === 'function' ?
-        options.setTimeoutFn :
-        setTimeout;
+    this.setTimeoutFn = typeof options.setTimeoutFn === 'function' ?
+      options.setTimeoutFn :
+      setTimeout;
+    this.usesNativeRetryTimers = this.setTimeoutFn === setTimeout;
     this.clearTimeoutFn =
       typeof options.clearTimeoutFn === 'function' ?
         options.clearTimeoutFn :

@@ -3,6 +3,11 @@ import {STRING} from '../constants/strings.js';
 import {TABLES} from '../constants/tables.js';
 import {TIME_MS} from '../constants/time.js';
 import {RAFT_ELECTION_TIMING} from '../raft/constants.js';
+import {
+  PARTITION_SERVICE_CREATE_ADMISSION_COLUMN,
+  PARTITION_SERVICE_CREATE_ADMISSION_COLUMN_SQL,
+  PARTITION_SERVICE_CREATE_ADMISSION_LOG_MSG,
+} from './partition-service-create-admission-migration-constants.js';
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   MEMORY_DB_PATH: ':memory:',
@@ -272,6 +277,7 @@ const PARTITION_SERVICE_DB = Object.freeze({
 });
 
 const PARTITION_SERVICE_COLUMN = Object.freeze({
+  ...PARTITION_SERVICE_CREATE_ADMISSION_COLUMN,
   CLEANUP_TOKEN: 'cleanup_token',
   BOOT_INCARNATION: 'boot_incarnation',
   CONNECTION_STATE: 'connection_state',
@@ -296,6 +302,7 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
+  ...PARTITION_SERVICE_CREATE_ADMISSION_COLUMN_SQL,
   ADD_CLEANUP_TOKEN: 'ADD COLUMN cleanup_token TEXT',
   ADD_BOOT_INCARNATION:
     'ADD COLUMN boot_incarnation INTEGER NOT NULL DEFAULT 0',
@@ -377,6 +384,7 @@ const PARTITION_SERVICE_INIT_STAGE = Object.freeze({
 });
 
 const PARTITION_SERVICE_LOG_MSG = Object.freeze({
+  ...PARTITION_SERVICE_CREATE_ADMISSION_LOG_MSG,
   INITIALIZING: 'Initializing partition service',
   CREATED_PARTITION_DIR: 'Created partition directory',
   DEFERRING_ELECTION_START: 'Deferring election start',

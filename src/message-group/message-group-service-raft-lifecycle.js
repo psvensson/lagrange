@@ -18,7 +18,7 @@ import {
 } from '../raft/raft-rs-group-membership-admission.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {resolveReplicaRaftTiming} from '../raft/replica-raft-timing.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {isPeerRowStatusAdmissible} from '../rebalancer/replica-status.js';
 import {
   MESSAGE_GROUP_SERVICE_LOG_MSG,
   RAFT_ROLE as RaftRole,
@@ -31,12 +31,6 @@ import {
 } from './message-group-consensus-port.js';
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   './message-group-service-runtime-support.js';
-
-const RETIRED_REPLICA_STATUSES = Object.freeze(new Set([
-  ReplicaStatus.FAILED,
-  ReplicaStatus.REMOVING,
-  ReplicaStatus.REMOVED,
-]));
 
 function isThisGroupsServiceRow(service, row) {
   return (row?.[COLUMN.GROUP_ID] || row?.group_id) === service.groupId &&
@@ -79,10 +73,11 @@ function expectedPeersFromServicesCache(service, onlyReplicaIds) {
     TABLES.SERVICES, (row) => isThisGroupsServiceRow(service, row));
   for (const row of rows) {
     const replicaId = replicaIdOfServiceRow(row);
-    const status = row?.[COLUMN.STATUS] || row?.status ||
-      ReplicaStatus.ACTIVE;
+    // The partition's peer-admission rule (F1): neither a retiring row nor
+    // one that has not recorded its replica's identity fact names a peer.
+    const status = row?.[COLUMN.STATUS] || row?.status;
     if (!replicaId || replicaId === service.replicaId ||
-        RETIRED_REPLICA_STATUSES.has(status) ||
+        !isPeerRowStatusAdmissible(status) ||
         (onlyReplicaIds !== null && !onlyReplicaIds.has(replicaId))) {
       continue;
     }

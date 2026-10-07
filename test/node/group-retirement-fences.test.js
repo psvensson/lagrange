@@ -59,6 +59,7 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {REBALANCER_SKIP_REASON} from
   '../../src/rebalancer/rebalancer-constants.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {RebalanceCoordinator, UnifiedRebalancer} from
   '../../src/rebalancer/index.js';
 import {bindingWireNumbers} from
@@ -380,6 +381,78 @@ test('P5 an untracked member answers COMPLETED only from its own durable ' +
     .handleRemoveReplica(groupRemove(other, live));
   t.equal(unknown.status, ReplicaOperationResponseStatus.NOT_FOUND,
     'an active (never retired) row answers NOT_FOUND');
+});
+
+
+test('I1 a concurrent FAILED winner preserves the group-retirement reason ' +
+  'on the REMOVING retry', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'fence-i1', voters: 1});
+  const [replicaId] = world.members;
+  const {handler} = world.sources.get(replicaId);
+  const contexts = [];
+  const originalTransition = handler.replicaStateMachine.transition;
+  const originalGetState = handler.replicaStateMachine.getState;
+  handler.replicaStateMachine.transition = async (
+    _replicaId,
+    _newStatus,
+    context,
+  ) => {
+    contexts.push(context);
+    return contexts.length === 1 ? false : true;
+  };
+  handler.replicaStateMachine.getState = () => ({
+    state: ReplicaStatus.FAILED,
+  });
+  try {
+    await handler.updateReplicaStatus(replicaId, ReplicaStatus.REMOVING, {
+      partitionId: world.partitionId,
+      triggerReason: GROUP_RETIRED,
+    });
+  } finally {
+    handler.replicaStateMachine.transition = originalTransition;
+    handler.replicaStateMachine.getState = originalGetState;
+  }
+  t.equal(contexts.length, 2, 'the concurrent FAILED winner is retried');
+  t.equal(contexts[1]?.reason, GROUP_RETIRED,
+    'the retry preserves the durable group-retirement marker');
+});
+
+test('I2 retirement proof cannot complete an exact failed-create cleanup ' +
+  'request whose cleanup receipt is absent', async (t) => {
+  const world = openGroupWorld(t, {partitionId: 'fence-i2', voters: 1});
+  const [replicaId] = world.members;
+  const owner = await openSplitOwner(world);
+  await owner.finalizeSplitDissolutionIfReady(WORKFLOW_ID);
+  t.equal(await driveUntilRemoved(world, world.members), true,
+    'setup: member retired as a unit');
+  const handler = forget(world, replicaId);
+  const retirementOnly = await handler.handleRemoveReplica(
+    groupRemove(world, replicaId));
+  t.equal(retirementOnly.status, ReplicaOperationResponseStatus.COMPLETED,
+    'an absent cleanup field retains retirement-only completion');
+  const mixedPreconditions = [
+    ['null', null],
+    ['false', false],
+    ['zero', 0],
+    ['empty string', ''],
+    ['malformed scalar', 'invalid'],
+    ['malformed object', {}],
+    ['valid-looking object', {
+      cleanup_token: 'failed-create:unrelated-create',
+      create_attempt_token: 'create-attempt:unrelated-create:1',
+    }],
+  ];
+  for (const [label, precondition] of mixedPreconditions) {
+    const request = groupRemove(world, replicaId);
+    request[
+      ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+    ] = precondition;
+    const answer = await handler.handleRemoveReplica(request);
+    t.equal(answer.status, ReplicaOperationResponseStatus.ERROR,
+      `${label}: mixed authority cannot borrow retirement proof`);
+    t.notOk(answer.durablyRetired,
+      `${label}: retirement evidence cannot manufacture cleanup completion`);
+  }
 });
 
 test('P3 a leaderless group\'s membership-unavailable ends on the group ' +

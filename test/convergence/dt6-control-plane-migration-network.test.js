@@ -72,6 +72,10 @@ function hostOwnerDriver(net, consensus, nodeId) {
 
 // Run the full whole-system scenario for one seed; return a phase-by-phase snapshot of which
 // node is acting as the publication owner (its cumulative gatePasses).
+const PHASE_B_DEADLINE_MS = 4000;
+const PHASE_SETTLE_MS = 300;
+const HEAL_OBSERVE_MS = 400;
+
 async function runControlPlaneMigration(seed) {
   const net = createVirtualNetwork();
   const consensus = connectRaftRsNetwork(net, IDS, {
@@ -95,18 +99,25 @@ async function runControlPlaneMigration(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await consensus.runUntil(1000, {stepMs: 5});
+  // Under check_quorum each follower ignores pre-votes for its own election
+  // timeout after A's last heartbeat (its leader lease): the migration is
+  // awaited as an event, then the phase settles.
+  await consensus.runUntilTrue(() => followers.some((id) =>
+    consensus.isLeader(id) && owners.get(id).counters.gatePasses > 0),
+  {deadlineMs: PHASE_B_DEADLINE_MS, stepMs: 5});
+  await consensus.runUntil(net.now() + PHASE_SETTLE_MS, {stepMs: 5});
   const leaderB = followers.find((id) => consensus.isLeader(id)) || null;
   const afterPartition = snapshot();
+  const oldLeaderLeadsAfterPartition = consensus.isLeader(leaderA);
 
   // Phase C — heal; the old leader steps down and stops acting as owner. Two snapshots after
   // heal let us assert who is STILL accruing (the single stable owner) vs frozen.
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await consensus.runUntil(1300, {stepMs: 5});
+  await consensus.runUntil(net.now() + PHASE_SETTLE_MS, {stepMs: 5});
   const healMid = snapshot();
-  await consensus.runUntil(1700, {stepMs: 5});
+  await consensus.runUntil(net.now() + HEAL_OBSERVE_MS, {stepMs: 5});
   const healEnd = snapshot();
 
   assertMembershipPublicationOwnerDriverHostsHealthy(
@@ -116,7 +127,8 @@ async function runControlPlaneMigration(seed) {
     owners.get(id).coordinator.stopOwnerMembershipDriver();
   });
   consensus.dispose();
-  return {leaderA, leaderB, afterElection, afterPartition, healMid, healEnd};
+  return {leaderA, leaderB, afterElection, afterPartition, healMid, healEnd,
+    oldLeaderLeadsAfterPartition};
 }
 
 t.test('Phase A: the real owner gate settles on the elected raft leader (single owner)',
@@ -139,10 +151,15 @@ t.test('Phase B: a real migration hands the owner role to the new leader (with t
   t.not(m.leaderB, null, 'leadership migrated to a new raft leader');
   t.ok(m.afterPartition[m.leaderB] > 0,
     'the migrated leader now passes the gate and acts as the publication owner');
-  // The partitioned old leader still believes it leads (raft does not self-demote), so it keeps
-  // acting as owner on its isolated side — the genuine dual-owner hazard a partition creates.
+  // The partitioned old leader still believes it leads until check_quorum
+  // steps it down (one election timeout without a quorum), so it keeps acting
+  // as owner on its isolated side for that bounded window - the dual-owner
+  // hazard a partition creates.
   t.ok(m.afterPartition[m.leaderA] > m.afterElection[m.leaderA],
-    'the isolated old leader keeps acting as owner while partitioned (dual-owner window)');
+    'the isolated old leader acts as owner while partitioned until check_quorum ' +
+      'steps it down (bounded dual-owner window)');
+  t.equal(m.oldLeaderLeadsAfterPartition, false,
+    'check_quorum stepped the isolated old leader down');
 });
 
 t.test('Phase C: heal resolves to a single stable owner (old leader steps down, stops acting)',
@@ -173,21 +190,37 @@ function ownerHandoff(m) {
   };
 }
 
-// DETERMINISM IS NARROWED TO THE HANDOFF (owner decision O2, closed 2026-10-04: the raft-rs
-// binding is not seeded), the same shape as dt6-publication-failback-pct-search's Phase J
-// narrowing. raft-rs draws each randomized election timeout from the platform RNG, which no seed
-// can choose, so the virtual instant a node becomes candidate - and with it every owner-gate tick
-// count - varies run to run. A replayed seed must reach the same leaders and the same owner in
-// every phase; this test does NOT claim identical gate-pass counts.
-t.test('the whole-system handoff is seed-determined (same leaders and owners per phase; ' +
-  'gate-pass counts not claimed)', async (t) => {
+// DETERMINISM IS NARROWED TO THE FIRST ELECTION (owner decision O2, closed 2026-10-04: the
+// raft-rs binding is not seeded; owner 2026-10-05: "narrow the tests", no crate fork). raft-rs
+// draws each randomized election timeout from the platform RNG, which no seed can choose. Phase A
+// is still seed-determined (no leader is known, nobody holds a lease: the seed's rank-0 replica
+// wins). Phase B is not: under check_quorum the followers keep the dead leader's lease for their
+// own election timeout, so the failover winner is drawn by raft-rs's own randomness. A replayed
+// seed must reach the same first leader and the same owner after election; for each run the
+// failover must have the shape of a correct handoff (the new leader is one of the two followers,
+// both leaders act while partitioned, only the new leader owns after heal). Gate-pass counts and
+// the identity of the failover winner are not claimed.
+t.test('the whole-system handoff is seed-determined up to the failover winner (same first ' +
+  'leader and owner; handoff shape per run; gate-pass counts not claimed)', async (t) => {
   const a = await runControlPlaneMigration(5);
   const b = await runControlPlaneMigration(5);
-  t.same(ownerHandoff(b), ownerHandoff(a),
-    'same seed -> same leaders and the same owner in election, partition and after heal');
-  t.same(ownerHandoff(a).partition,
-    IDS.filter((id) => id === a.leaderA || id === a.leaderB),
-    'the replayed seed shows the dual-owner window: both leaders act while partitioned');
+  const firstElection = (m) => {
+    const handoff = ownerHandoff(m);
+    return {leaderA: handoff.leaderA, election: handoff.election};
+  };
+  t.same(firstElection(b), firstElection(a),
+    'same seed -> same first leader and the same owner after election');
+  for (const [name, m] of [['run a', a], ['run b', b]]) {
+    const handoff = ownerHandoff(m);
+    const followers = IDS.filter((id) => id !== m.leaderA);
+    t.ok(followers.includes(m.leaderB),
+      `${name}: the failover leader is one of the first leader's followers`);
+    t.same(handoff.partition,
+      IDS.filter((id) => id === m.leaderA || id === m.leaderB),
+      `${name}: the dual-owner window: both leaders act while partitioned`);
+    t.same(handoff.healed, [m.leaderB],
+      `${name}: only the failover leader owns after heal`);
+  }
 
   // Across seeds the owner gate always follows real raft leadership: exactly the elected leader
   // owns after election, and exactly the migrated leader is the sole stable owner after heal.

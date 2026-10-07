@@ -14,9 +14,11 @@
 // Histories (challenger B, section C): a genesis founder set and a script of
 // single voter changes committed through the canonical port; D = the founders
 // removed by j (the D1 silent-skew set), P = joiners added by j. A target
-// bootstrapped from C_j replays the whole log over C_j + self; below j its
-// view is `true(i) minus D plus (P not yet added)` - never the committed
-// configuration when D is non-empty.
+// bootstrapped from C_j opens as a learner of C_j and folds only the log
+// above j over it (the configuration entries at or below j are already in
+// C_j): below j its view is C_j itself - the silent-skew view
+// `true(i) minus D plus (P not yet added)` of a whole-log replay no longer
+// exists.
 
 import assert from 'node:assert/strict';
 
@@ -24,6 +26,7 @@ import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {coreTrappingAppend} from './core-trap-envelope.js';
 import {
   bindingWireNumbers,
+  bootstrapFold,
   durableAppliedState,
   durableHardState,
   durableLog,
@@ -344,18 +347,21 @@ function admissionIndexOf(cluster, holder, peerId, afterIndex) {
 }
 
 /**
- * The view a replica bootstrapped from B holds after replaying a log to
- * `index` (the crate's replay law: remove of an absent id is a no-op, add of
- * a present id is idempotent), folded from a member's durable log.
+ * The view a joiner opened from `stamp` holds at applied `index`: C_j with
+ * itself a learner, folded with the member's durable log above j only (the
+ * crate's law for each folded entry: remove of an absent id is a no-op, add
+ * of a present id is idempotent).
  * @param {Object} cluster - The cluster.
  * @param {string} holder - The member whose log is folded.
- * @param {Array<string>} bootstrapVoters - B.
+ * @param {Object} stamp - The joiner's COMMITTED stamp (C_j, j).
+ * @param {string} selfPeerId - The joiner's raft peer id.
  * @param {number} index - The applied index.
  * @return {Object} {voters, learners}.
  */
-function replayedView(cluster, holder, bootstrapVoters, index) {
-  return foldAt(logFold(cluster.replica(holder).dbFile, cluster.partitionId,
-    bootstrapVoters), index);
+function replayedView(cluster, holder, stamp, selfPeerId, index) {
+  return foldAt(bootstrapFold(cluster.replica(holder).dbFile,
+    cluster.partitionId, {voters: stamp.voters, learners: stamp.learners,
+      bootstrapIndex: stamp.appliedIndex, selfPeerId}), index);
 }
 
 /**

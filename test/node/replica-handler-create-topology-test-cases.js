@@ -12,6 +12,34 @@ import {
 } from './replica-handler-bootstrap-stamps.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from '../../src/rebalancer/replica-create-admission-token.js';
+import {SYSTEM_TABLE_NAME as SYSTEM_TABLE_NAMES} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+
+function withOperationAdmission(cache, request) {
+  const row = cache.get(
+    SYSTEM_TABLE_NAMES.REPLICA_OPERATIONS,
+    request.operationId,
+  );
+  const token = buildReplicaCreateAdmissionToken({
+    operationId: row.operation_id,
+    replicaId: request.replicaId,
+    targetNodeId: row.target_node_id,
+    workflowUpdatedAt: row.updated_at,
+  });
+  return {
+    ...request,
+    entityType: row.entity_type || 'partition',
+    entityId: row.entity_id || request.partitionId,
+    createAdmissionToken: token,
+    createAdmissionWorkflowUpdatedAt: row.updated_at,
+    createAdmissionAttemptToken: buildReplicaCreateAttemptToken(token, 1),
+    createAdmissionAttemptSeq: 1,
+  };
+}
 
 export async function registerReplicaHandlerCreateTopologyTests({
   t,
@@ -20,6 +48,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
   SYSTEM_TABLE_NAME,
   SERVICE_STATUS,
   RAFT_ROLE,
+  ReplicaOperationResponseStatus,
   createMockCDCService,
   createMockPartitionServiceFactory,
   createSeededCache,
@@ -385,8 +414,21 @@ export async function registerReplicaHandlerCreateTopologyTests({
         leaderReplicaId: 'replica_operations-p1-r2',
       });
       seedReplicaOperation(cache, 'op-1', {
+        type: 'REPLACE',
+        entity_type: 'partition',
+        entity_id: partitionId,
         partitionId,
         replicaId: 'replica_operations-p1-r4',
+        workflow_step: 'SENDING',
+        completed_at: null,
+        create_admission_state: null,
+        create_admission_token: null,
+        create_admission_replica_created_at: null,
+        create_admission_attempt_token: null,
+        create_admission_previous_attempt_token: null,
+        create_admission_attempt_seq: null,
+        create_admission_workflow_updated_at: null,
+        create_admission_owner_incarnation: null,
       });
 
       const now = Date.now();
@@ -398,6 +440,14 @@ export async function registerReplicaHandlerCreateTopologyTests({
           ready_lease_expires_at: now + 60_000,
         });
       }
+      const ownerIncarnation = 701;
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+        node_id: 'test-node',
+        status: SERVICE_STATUS.ACTIVE,
+        last_heartbeat: now,
+        ready_lease_expires_at: now + 60_000,
+        boot_incarnation: ownerIncarnation,
+      });
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: 'replica_operations-p1-r3',
         service_type: 'partition',
@@ -430,6 +480,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
 
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
+        ownerIncarnation,
         cdcIntegrationService: mockCDC,
         systemTableCache: cache,
         messageRouter: {
@@ -445,6 +496,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
             partitionId: options.partitionId,
             replicaId: options.replicaId,
             initialized: true,
+            role: RAFT_ROLE.FOLLOWER,
             async shutdown() {},
             async syncFromLeader() {},
           }, options);
@@ -452,14 +504,27 @@ export async function registerReplicaHandlerCreateTopologyTests({
       });
 
       handler.initialize();
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
 
-      await handler.handleCreateReplica(withBootstrapStamp({
-        operationId: 'op-1',
-        operationType: 'REPLACE',
-        partitionId,
-        replicaId: 'replica_operations-p1-r4',
-      }, committedStampFor(['replica_operations-p1-r2',
-        'replica_operations-p1-r3', 'replica_operations-p1-r5'])));
+      const response = await handler.handleCreateReplica(withBootstrapStamp(
+        withOperationAdmission(cache, {
+          operationId: 'op-1',
+          operationType: 'REPLACE',
+          partitionId,
+          replicaId: 'replica_operations-p1-r4',
+        }), committedStampFor(['replica_operations-p1-r2',
+          'replica_operations-p1-r3', 'replica_operations-p1-r5'])));
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        `priority CREATE should be admitted: ${response.errorCode || ''} ` +
+          `${response.error || ''}`,
+      );
+      await created;
       await factoryCalled;
 
       t.ok(capturedOptions, 'partition factory should receive create options');
@@ -486,8 +551,15 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'a COMMITTED stamp is a join: disconnected leader metadata no longer ' +
           're-forms the group from rows (O1)',
       );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'op-1')
+          ?.create_admission_state,
+        'ACTIVE',
+        'the operation-ledger replica repair reaches an exact durable ' +
+          'admission outcome through surviving ledger authority',
+      );
 
-      handler.shutdown();
+      await handler.shutdown();
     },
   );
 
@@ -644,7 +716,15 @@ export async function registerReplicaHandlerCreateTopologyTests({
       const partitionId = 'partition-1';
       const tableId = 'table-1';
       const cache = createMetadataOnlyCache({partitionId, tableId});
-      seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-4'});
+      seedReplicaOperation(cache, 'op-1', {
+        type: 'REPLACE',
+        entity_type: 'partition',
+        entity_id: partitionId,
+        partitionId,
+        replicaId: 'replica-4',
+        workflow_step: 'SENDING',
+        completed_at: null,
+      });
       const createdAt = Date.now() - 60000;
       // Established partition: leader set, updated after creation — the
       // fresh-bootstrap window is CLOSED (the live CL-013 witness state).
@@ -666,10 +746,19 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'node-seed/partition/replica-3',
         'node-learner/partition/replica-4',
       ];
+      const ownerIncarnation = 801;
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+        node_id: 'node-learner',
+        status: SERVICE_STATUS.ACTIVE,
+        last_heartbeat: Date.now(),
+        ready_lease_expires_at: Date.now() + 60_000,
+        boot_incarnation: ownerIncarnation,
+      });
       let capturedOptions = null;
 
       const handler = new ReplicaHandler({
         nodeId: 'node-learner',
+        ownerIncarnation,
         cdcIntegrationService: createMockCDCService(cache),
         systemTableCache: cache,
         dataDir: getTempDir(),
@@ -691,14 +780,15 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreated',
         'replicaCreationFailed',
       );
-      await handler.handleCreateReplica(withBootstrapStamp({
-        operationId: 'op-1',
-        operationType: 'REPLACE',
-        partitionId,
-        replicaId: 'replica-4',
-        replicaIds: bootstrapReplicaIds,
-        peerAddresses: bootstrapPeerAddresses,
-      }, committedStampFor(['replica-1', 'replica-2', 'replica-3'])));
+      await handler.handleCreateReplica(withBootstrapStamp(
+        withOperationAdmission(cache, {
+          operationId: 'op-1',
+          operationType: 'REPLACE',
+          partitionId,
+          replicaId: 'replica-4',
+          replicaIds: bootstrapReplicaIds,
+          peerAddresses: bootstrapPeerAddresses,
+        }), committedStampFor(['replica-1', 'replica-2', 'replica-3'])));
       await created;
 
       t.ok(capturedOptions, 'partition factory invoked');
@@ -722,7 +812,7 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'never a self-only topology',
       );
 
-      handler.shutdown();
+      await handler.shutdown();
     },
   );
 
@@ -827,7 +917,15 @@ export async function registerReplicaHandlerCreateTopologyTests({
       const partitionId = 'partition-1';
       const tableId = 'table-1';
       const cache = createMetadataOnlyCache({partitionId, tableId});
-      seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-4'});
+      seedReplicaOperation(cache, 'op-1', {
+        type: 'REPLACE',
+        entity_type: 'partition',
+        entity_id: partitionId,
+        partitionId,
+        replicaId: 'replica-4',
+        workflow_step: 'SENDING',
+        completed_at: null,
+      });
       const createdAt = Date.now() - 60000;
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
         partition_id: partitionId,
@@ -838,10 +936,19 @@ export async function registerReplicaHandlerCreateTopologyTests({
         created_at: createdAt,
         updated_at: createdAt + 5000,
       });
+      const ownerIncarnation = 802;
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+        node_id: 'node-learner',
+        status: SERVICE_STATUS.ACTIVE,
+        last_heartbeat: Date.now(),
+        ready_lease_expires_at: Date.now() + 60_000,
+        boot_incarnation: ownerIncarnation,
+      });
       let capturedOptions = null;
 
       const handler = new ReplicaHandler({
         nodeId: 'node-learner',
+        ownerIncarnation,
         cdcIntegrationService: createMockCDCService(cache),
         systemTableCache: cache,
         dataDir: getTempDir(),
@@ -864,12 +971,12 @@ export async function registerReplicaHandlerCreateTopologyTests({
         'replicaCreationFailed',
         'replicaCreated',
       );
-      await handler.handleCreateReplica({
+      await handler.handleCreateReplica(withOperationAdmission(cache, {
         operationId: 'op-1',
         operationType: 'REPLACE',
         partitionId,
         replicaId: 'replica-4',
-      });
+      }));
       const failure = await outcome;
 
       t.equal(

@@ -45,20 +45,15 @@
 //     MsgTransferLeader is never refused here: a transfer named at a
 //     follower is forwarded to the leader as exactly that peer message.
 //
-//   - a vote or pre-vote request at a term above this replica's from a raft
-//     id outside its configuration, while this replica leads or follows a
-//     leader: the disruptive-server rule of Raft (Ongaro, section 4.2.3:
-//     a server that believes a current leader exists disregards a
-//     RequestVote) applied only to senders this replica's configuration does
-//     not name. raft-rs runs without check_quorum and pre_vote, so it has no
-//     such lease and steps any higher-term request down to its term. The
-//     refusal ends when this replica's own election timer clears its leader
-//     (it then campaigns, follows no one, and the request is stepped), so a
-//     legitimately added voter this replica has not yet applied is never
-//     locked out (the membership-transition race, witnessed by
-//     local-log-guard-sender-admissibility A5). Appends and heartbeats from
-//     outside the configuration are stepped: a new leader the receiver has
-//     not yet applied sends exactly those (binding direction section 6).
+//   Vote and pre-vote requests are never refused here, from anyone: the
+//   disruptive-server requirement (Raft section 4.2.3) is raft-rs's own,
+//   with pre_vote and check_quorum on (raft-rs-group-constants.js) - a
+//   replica that heard a leader within its election timeout ignores a
+//   higher-term vote or pre-vote request (raft.rs step, in_lease), a
+//   pre-vote never moves a term, and a leader that loses its quorum steps
+//   down. Appends and heartbeats from outside the configuration are
+//   stepped: a new leader the receiver has not yet applied sends exactly
+//   those (binding direction section 6).
 //
 // A held group never reaches this guard: the runtime owner answers every
 // delivery and operation of a held group with its hold, votes included, and
@@ -78,8 +73,6 @@ import {RAFT_RS_LOCAL_LOG_REFUSAL} from
 const ZERO = 0n;
 const CONFIGURATION_PARTS = Object.freeze([
   'voters', 'votersOutgoing', 'learners', 'learnersNext']);
-const VOTE_REQUESTS = new Set([
-  RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE, RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE]);
 
 function positionOf(value) {
   return value === undefined ? ZERO : BigInt(value);
@@ -106,16 +99,6 @@ function commitBeyondLocalLog(message, local) {
     namesSender(local.confState, String(message.from)) ?
     refusal(RAFT_RS_LOCAL_LOG_REFUSAL.PEER_COMMIT_BEYOND_LOCAL_LOG, true) :
     refusal(RAFT_RS_LOCAL_LOG_REFUSAL.UNADMITTED_COMMIT_BEYOND_LOCAL_LOG);
-}
-
-// The sender admissibility decided before any position check, so a sender
-// that may not move this replica can never hold it either.
-function senderRefusal(message, local) {
-  return VOTE_REQUESTS.has(message.msgType) && local.leaderKnown &&
-    positionOf(message.term) > local.term &&
-    !namesSender(local.confState, String(message.from)) ?
-    refusal(RAFT_RS_LOCAL_LOG_REFUSAL.VOTE_REQUEST_OUTSIDE_CONFIGURATION) :
-    null;
 }
 
 const POSITION_CHECKS = Object.freeze({
@@ -158,10 +141,6 @@ function inboundStepRefusal(message, local) {
   const type = message.msgType;
   if (!local.gateOpen && type === RAFT_RS_MESSAGE_TYPE.TIMEOUT_NOW) {
     return refusal(PARTICIPATION_GATE.GATE_CLOSED);
-  }
-  const sender = senderRefusal(message, local);
-  if (sender !== null) {
-    return sender;
   }
   const check = POSITION_CHECKS[type];
   return check === undefined ? null : check(message, local);

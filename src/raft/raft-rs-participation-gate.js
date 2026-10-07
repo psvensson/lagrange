@@ -11,6 +11,16 @@
 // open when the replica's applied index reaches max(bootstrapIndex,
 // admissionIndex); it holds on the applied index alone, whatever the commit
 // index says, and never delegates to the core's own campaign guard.
+//
+// One more state closes it whatever the indices say: `identityRecorded`
+// false - the opening's prior-existence fact (the CREATE_REPLICA target's
+// SYNCING services row) is not yet durable (verifier N3, the open-to-SYNCING
+// window). Until it is, the replica steps no delivered envelope (no vote or
+// pre-vote grant, no append, nothing that writes its hard state or log; a
+// delivery is dropped as a lost message, never refused to its sender) and
+// enters the core for nothing but a status read, so a crash before that
+// write leaves a core that never voted. Only the acknowledgement of the
+// durable write releases it (an event, never a timer).
 
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
@@ -56,6 +66,19 @@ function createdParticipationGate(bootstrap, peerId) {
 }
 
 /**
+ * The gate an opening establishes, with the group's identity record state
+ * (which no durable record carries: it is the opening host's, and survives
+ * a runtime reconstruction on the group).
+ * @param {Object} gate - {bootstrapIndex, admissionIndex}.
+ * @param {boolean} identityRecorded - Whether the prior-existence fact is
+ *   durable.
+ * @return {Object} {bootstrapIndex, admissionIndex, identityRecorded}.
+ */
+function withIdentityRecord(gate, identityRecorded) {
+  return {...gate, identityRecorded: identityRecorded === true};
+}
+
+/**
  * The gate a durable record restores. A record without a bootstrap index or
  * without an admission index restores closed: nothing in it proves the
  * replica's role.
@@ -92,7 +115,7 @@ function participationGateIndex(gate) {
  * @return {boolean} Whether the replica may participate.
  */
 function participationGateOpen(gate, appliedIndex) {
-  if (gate === null) {
+  if (gate === null || gate.identityRecorded === false) {
     return false;
   }
   const gateIndex = participationGateIndex(gate);
@@ -137,7 +160,41 @@ function participationObservation(gate, appliedIndex) {
     bootstrapIndex: Number(gate.bootstrapIndex),
     admissionIndex: gate.admissionIndex === null ? null :
       Number(gate.admissionIndex),
+    identityRecorded: gate.identityRecorded !== false,
   };
+}
+
+/**
+ * The prior-existence fact became durable (the acknowledgement of its
+ * write): the group's gate may open now, and GATE_OPENED is emitted when it
+ * does. Idempotent.
+ * @param {Object} group - The runtime group.
+ * @return {Object} Frozen CORE_OK outcome.
+ */
+function recordIdentity(group) {
+  group.identityRecorded = true;
+  if (group.gate !== null) {
+    group.gate = withIdentityRecord(group.gate, true);
+    settleParticipationGate(group);
+  }
+  return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+    reason: PARTICIPATION_GATE.IDENTITY_RECORDED});
+}
+
+/**
+ * The typed refusal of every command but a status read while the opening's
+ * prior-existence fact is not durable: retryable, the group stays usable,
+ * and nothing entered the core.
+ * @return {Object} Frozen CORE_REFUSED outcome.
+ */
+function identityUnrecorded() {
+  return deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    reason: PARTICIPATION_GATE.IDENTITY_UNRECORDED,
+    phase: PARTICIPATION_GATE_PHASE,
+    retryable: true,
+    recoveryRequired: false,
+  });
 }
 
 /**
@@ -238,33 +295,68 @@ function durableRecordIncompatible() {
 }
 
 /**
- * Whether opening a group with no durable record must be refused: a rejoin
- * (the record is the only source), a COMMITTED stamp whose configuration
- * already names this replica a voter (its earlier incarnation voted; its
- * record is gone), or a GENESIS stamp on a replica that joins a group which
- * already exists (its identity's history is held elsewhere: opened as a
- * founder of an empty log it would vote and lead without it).
- * @param {Object} bootstrap - The port's bootstrap.
- * @return {boolean}
+ * The typed refusal of an opening whose replica identity provably existed
+ * before while its durable record is gone (the owner's open-time rule,
+ * 2026-10-05): the existing reseed-required semantics - non-retryable,
+ * recovery required, and held durably by the replica's lifecycle owner, as
+ * the heartbeat hold holds it - so the identity never opens as a fresh or
+ * genesis replica, never campaigns and never votes.
+ * @return {Object} Frozen CORE_REFUSED outcome.
  */
-function requiresDurableRecord(bootstrap) {
-  return bootstrap.source === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD ||
+function reseedRequiredAtOpen() {
+  return deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    reason: RUNTIME_REASON.RESEED_REQUIRED,
+    phase: RUNTIME_PHASE.DURABLE_RECORD_READ,
+    retryable: false,
+    recoveryRequired: true,
+    detail: {cause: RUNTIME_REASON.DURABLE_RECORD_MISSING},
+  });
+}
+
+/**
+ * The opening admission of a group with no durable record - the one place
+ * an opening without history is decided, for every bootstrap source:
+ *   - the opening host's authoritative row proves this replica identity
+ *     existed before (bootstrap.identityExisted): its history is gone, and
+ *     opened empty it would campaign and vote on an empty log under an
+ *     identity its group still counts. Refused reseed-required and held
+ *     (GENESIS founders and COMMITTED joiners included);
+ *   - a rejoin (the record is the only source), a COMMITTED stamp whose
+ *     configuration already names this replica a voter (its earlier
+ *     incarnation voted; its record is gone), or a GENESIS stamp on a
+ *     replica that joins a group which already exists: refused
+ *     DURABLE_RECORD_MISSING (owner decision O4).
+ * A first opening carries no prior-existence fact (its row is being created
+ * now) and opens.
+ * @param {Object} bootstrap - The port's bootstrap.
+ * @return {Object|null} The typed refusal, or null to open.
+ */
+function openingWithoutRecordRefusal(bootstrap) {
+  if (bootstrap.identityExisted === true) {
+    return reseedRequiredAtOpen();
+  }
+  const missing = bootstrap.source ===
+    BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD ||
     (bootstrap.source === BOOTSTRAP_MEMBERSHIP_SOURCE.COMMITTED &&
       bootstrap.selfCommittedVoter === true) ||
     (bootstrap.source === BOOTSTRAP_MEMBERSHIP_SOURCE.GENESIS &&
       bootstrap.joiningExistingGroup === true);
+  return missing ? durableRecordMissing() : null;
 }
 
 export {
   admitsReplica,
   createdParticipationGate,
   durableRecordIncompatible,
-  durableRecordMissing,
+  identityUnrecorded,
+  openingWithoutRecordRefusal,
   participationGateClosed,
   participationGateColumns,
   participationObservation,
   recordAppliedEntry,
-  requiresDurableRecord,
+  recordIdentity,
   restoredParticipationGate,
   settleParticipationGate,
+  withIdentityRecord,
 };

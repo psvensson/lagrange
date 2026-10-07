@@ -243,6 +243,10 @@ const SERVICES_SCHEMA = {
     {name: 'trigger_reason', type: COLUMN_TYPE.TEXT}, // What triggered current state
     {name: 'error_message', type: COLUMN_TYPE.TEXT}, // Error if in failed state
     {name: 'cleanup_token', type: COLUMN_TYPE.TEXT},
+    // Operation-ledger CREATE attempt identity. Unlike created_at (the
+    // replica incarnation), this rotates when a tokenless FAILED attempt is
+    // retried under the same replica incarnation.
+    {name: 'create_attempt_token', type: COLUMN_TYPE.TEXT},
     {name: 'address', type: COLUMN_TYPE.TEXT},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},

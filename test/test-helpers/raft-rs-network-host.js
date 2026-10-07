@@ -176,6 +176,23 @@ class RaftRsNetworkHost {
   }
 
   /**
+   * Run the network in slices until `untilTrue` holds or the virtual
+   * deadline passes. A failover under check_quorum waits out each
+   * follower's own leader lease (its election timeout), so a scenario waits
+   * for the event rather than for a fixed instant.
+   * @param {Function} untilTrue - What the scenario waits for.
+   * @param {Object} options - {deadlineMs, stepMs, sliceMs}.
+   * @return {Promise<boolean>} Whether it held by the deadline.
+   */
+  async runUntilTrue(untilTrue, {deadlineMs, stepMs, sliceMs = 50}) {
+    while (!untilTrue() && this.net.now() < deadlineMs) {
+      await this.runUntil(Math.min(deadlineMs, this.net.now() + sliceMs),
+        {stepMs});
+    }
+    return untilTrue();
+  }
+
+  /**
    * @param {string} id - The replica.
    * @return {Object} Its port's own status.
    */

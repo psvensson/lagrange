@@ -1,3 +1,6 @@
+import {operationCarriesReplicaCreateAdmission} from
+  './replica-operation-create-admission-fields.js';
+
 // Operation-row repair for the fail-closed reservation gate (audit findings
 // 3+11). A storage-increasing operation whose reservation had to be
 // REPAIRED at dispatch time (outcome CREATED — the row predates the
@@ -27,7 +30,8 @@ const GATE_REPAIR_ROW_FAILED_LOG =
  * @private
  */
 async function repairOperationRowForGateRepairedReservation(owner, operation) {
-  if (typeof owner.repository?.persistNewOperation !== 'function') {
+  if (typeof owner.repository?.persistNewOperation !== 'function' ||
+      operationCarriesReplicaCreateAdmission(operation)) {
     return false;
   }
   try {

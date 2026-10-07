@@ -133,6 +133,9 @@ function hostQuorumPublisher(net, host, nodeId, required) {
   return {coordinator, state};
 }
 
+const PHASE_B_DEADLINE_MS = 5000;
+const HEAL_WINDOW_MS = 800;
+
 async function runQuorumFailback(seed) {
   const required = {version: 1};
   const net = createVirtualNetwork();
@@ -161,7 +164,12 @@ async function runQuorumFailback(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await host.runUntil(1400);
+  // Under check_quorum each follower ignores pre-votes for its own election
+  // timeout after A's last heartbeat (its leader lease): the fail-back is
+  // awaited as an event (a new leader that committed v2).
+  await host.runUntilTrue(() => followers.some((id) => host.isLeader(id) &&
+    pubs.get(id).state.committedVersion === 2),
+  {deadlineMs: PHASE_B_DEADLINE_MS});
   const leaderB = followers.find((id) => host.isLeader(id)) || null;
   const afterFailback = {
     versions: committedVersions(),
@@ -174,7 +182,7 @@ async function runQuorumFailback(seed) {
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await host.runUntil(2200);
+  await host.runUntil(net.now() + HEAL_WINDOW_MS);
   // Committed-log agreement: group every committed entry by index; any index with >1 distinct
   // {term, command} across nodes is a Raft safety violation (this is what CL-040 used to expose).
   const committedByIndex = new Map();
@@ -251,13 +259,22 @@ t.test('the real-quorum publication fail-back is deterministic and holds across 
   async (t) => {
     const a = await runQuorumFailback(5);
     const b = await runQuorumFailback(5);
+    // Same seed: the first election, v1 and the healed state are seed-determined; the failover
+    // winner is drawn by raft-rs's own randomness under check_quorum (owner 2026-10-05: narrow
+    // the tests, no crate fork), and vB is keyed by it, so per run only its shape is asserted.
     t.same(
-      {leaderA: a.leaderA, leaderB: a.leaderB,
-        vA: a.afterPublishV1.versions, vB: a.afterFailback.versions, vC: a.afterHeal.versions},
-      {leaderA: b.leaderA, leaderB: b.leaderB,
-        vA: b.afterPublishV1.versions, vB: b.afterFailback.versions, vC: b.afterHeal.versions},
-      'same seed -> identical election, real-quorum fail-back, and convergence',
+      {leaderA: a.leaderA, vA: a.afterPublishV1.versions, vC: a.afterHeal.versions},
+      {leaderA: b.leaderA, vA: b.afterPublishV1.versions, vC: b.afterHeal.versions},
+      'same seed -> identical election, v1 publication and convergence',
     );
+    for (const [name, m] of [['run a', a], ['run b', b]]) {
+      t.ok(IDS.filter((id) => id !== m.leaderA).includes(m.leaderB),
+        `${name}: the failover leader is one of the first leader's followers`);
+      t.equal(m.afterFailback.versions[m.leaderB], 2,
+        `${name}: the failover leader committed v2`);
+      t.equal(m.afterFailback.versions[m.leaderA], 1,
+        `${name}: the partitioned old leader stayed at v1`);
+    }
 
     const survivors = new Set();
     for (let seed = 0; seed < 10; seed += 1) {

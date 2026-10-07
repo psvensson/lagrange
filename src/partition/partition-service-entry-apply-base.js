@@ -84,6 +84,27 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       (col) => col.name ===
         PARTITION_SERVICE_COLUMN.MEMBERSHIP_PUBLICATION_EPOCH,
     );
+    const admissionColumns = [
+      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_STATE,
+        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_STATE],
+      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_TOKEN,
+        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_TOKEN],
+      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_REPLICA_CREATED_AT,
+        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_REPLICA_CREATED_AT],
+      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_ATTEMPT_TOKEN,
+        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_ATTEMPT_TOKEN],
+      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_PREVIOUS_ATTEMPT_TOKEN,
+        PARTITION_SERVICE_COLUMN_SQL
+          .ADD_CREATE_ADMISSION_PREVIOUS_ATTEMPT_TOKEN],
+      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_ATTEMPT_SEQ,
+        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_ATTEMPT_SEQ],
+      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_WORKFLOW_UPDATED_AT,
+        PARTITION_SERVICE_COLUMN_SQL
+          .ADD_CREATE_ADMISSION_WORKFLOW_UPDATED_AT],
+      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_OWNER_INCARNATION,
+        PARTITION_SERVICE_COLUMN_SQL
+          .ADD_CREATE_ADMISSION_OWNER_INCARNATION],
+    ];
     if (!hasTargetClaimKey) {
       this.db.exec(
         `ALTER TABLE ${this.tableName} ` +
@@ -104,6 +125,15 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         PARTITION_SERVICE_LOG_MSG
           .ADDED_REPLICA_OPERATIONS_MEMBERSHIP_PUBLICATION_EPOCH,
         {tableName: this.tableName, partitionId: this.partitionId},
+      );
+    }
+    for (const [columnName, addColumnSql] of admissionColumns) {
+      if (columns.some((column) => column.name === columnName)) continue;
+      this.db.exec(`ALTER TABLE ${this.tableName} ${addColumnSql}`);
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG
+          .ADDED_REPLICA_OPERATIONS_CREATE_ADMISSION_COLUMN,
+        {tableName: this.tableName, partitionId: this.partitionId, columnName},
       );
     }
   }

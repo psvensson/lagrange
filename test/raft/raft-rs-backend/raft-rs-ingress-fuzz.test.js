@@ -15,7 +15,13 @@
 //       held by a host failure. A member-identity heartbeat beyond the log
 //       may hold its recipient for a reseed (the stated residual: the
 //       transport does not authenticate a sender), so a held group's cluster
-//       is rebuilt and the fuzz goes on.
+//       is rebuilt and the fuzz goes on. The pre-vote request and response
+//       shapes are among the generated types, and some of each reach the
+//       core (an admitted, stepped envelope), so the native pre-vote path is
+//       fuzzed, not only refused at admission.
+//
+// INGRESS_FUZZ_SEEDS (comma-separated integers) runs F2 under other seeds
+// by hand; the default is the one fixed seed.
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -36,7 +42,10 @@ import {RAFT_RS_MESSAGE_TYPE as T} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 
 const FORMED_ENTRIES = 4;
-const FUZZ_SEED = 0x5eed1;
+const FUZZ_SEEDS = (process.env.INGRESS_FUZZ_SEEDS || String(0x5eed1))
+  .split(',').map(Number);
+const PRE_VOTE_TYPES = Object.freeze([T.REQUEST_PRE_VOTE,
+  T.REQUEST_PRE_VOTE_RESPONSE]);
 const FUZZ_CASES = 2400;
 const U64_MAX = '18446744073709551615';
 const STEP = 'step';
@@ -217,21 +226,24 @@ function hostileGenerator(random) {
   };
 }
 
-test('F2: a seeded fuzz of hostile envelopes through the single ingress ' +
-  'traps no core, replaces no runtime and holds no group by a host failure',
-async () => {
-  const random = seededRandom(FUZZ_SEED);
+// One seed's fuzz: the cases run, the faults reported (traps and runtime
+// replacements apart), the groups held by a host failure, and how many
+// pre-vote envelopes were generated and stepped into the core.
+async function fuzzOneSeed(seed) {
+  const random = seededRandom(seed);
   const hostile = hostileGenerator(random);
-  const tally = {cases: 0, faults: [], hostFailures: [], reseedHolds: 0};
+  const tally = {cases: 0, hostFailures: [], reseedHolds: 0,
+    preVoteGenerated: 0, preVoteStepped: 0};
   let built = null;
   const rebuild = () => {
     built?.cluster.dispose();
-    built = shapedCluster(`f2-${tally.cases}`);
+    built = shapedCluster(`f2-${seed}-${tally.cases}`);
     built.cluster.tickers = [built.leader];
   };
   rebuild();
+  let lines;
   try {
-    const lines = await capturingErrors(async () => {
+    lines = await capturingErrors(async () => {
       while (tally.cases < FUZZ_CASES) {
         const {cluster, ids} = built;
         const recipient = `${cluster.partitionId}-${pick3(random)}`;
@@ -249,21 +261,52 @@ async () => {
         const message = hostile({commit: status.commitIndex,
           term: status.term, voters: status.confState.voters},
         Object.values(ids));
+        const preVote = PRE_VOTE_TYPES.includes(message.msgType);
+        const before = cluster.coreEntries.length;
         await cluster.node(recipient).step(envelopeTo(cluster.partitionId,
           status.peerId, message));
         await cluster.node(recipient).tick();
+        if (preVote) {
+          tally.preVoteGenerated += 1;
+          tally.preVoteStepped += cluster.coreEntries.slice(before).some(
+            (entry) => entry.operation === STEP) ? 1 : 0;
+        }
         cluster.settle(() => false, {rounds: 2});
         tally.cases += 1;
       }
     });
-    tally.faults = faultsIn(lines).map(({context}) => context);
   } finally {
     built.cluster.dispose();
   }
-  assert.deepEqual(tally.faults, [], `seed ${FUZZ_SEED}: core traps`);
-  assert.deepEqual(tally.hostFailures, [],
-    `seed ${FUZZ_SEED}: groups held by a host failure`);
-  assert.equal(tally.cases, FUZZ_CASES);
+  const faults = faultsIn(lines).map(({context}) => context);
+  return {seed, ...tally,
+    traps: faults.filter(({report}) =>
+      report === RUNTIME_FAULT_REPORT.CORE_TRAPPED),
+    replacements: faults.filter(({report}) =>
+      report === RUNTIME_FAULT_REPORT.RUNTIME_REPLACED)};
+}
+
+test('F2: a seeded fuzz of hostile envelopes, pre-vote shapes included, ' +
+  'through the single ingress traps no core, replaces no runtime and holds ' +
+  'no group by a host failure', async (context) => {
+  for (const seed of FUZZ_SEEDS) {
+    const tally = await fuzzOneSeed(seed);
+    context.diagnostic(JSON.stringify({seed, cases: tally.cases,
+      traps: tally.traps.length, replacements: tally.replacements.length,
+      hostFailures: tally.hostFailures.length,
+      reseedHolds: tally.reseedHolds,
+      preVoteGenerated: tally.preVoteGenerated,
+      preVoteStepped: tally.preVoteStepped}));
+    assert.deepEqual(tally.traps, [], `seed ${seed}: core traps`);
+    assert.deepEqual(tally.replacements, [],
+      `seed ${seed}: runtime replacements`);
+    assert.deepEqual(tally.hostFailures, [],
+      `seed ${seed}: groups held by a host failure`);
+    assert.equal(tally.cases, FUZZ_CASES);
+    assert.ok(tally.preVoteStepped > 0,
+      `seed ${seed}: no pre-vote envelope reached the core ` +
+      `(${tally.preVoteGenerated} generated)`);
+  }
 });
 
 function pick3(random) {

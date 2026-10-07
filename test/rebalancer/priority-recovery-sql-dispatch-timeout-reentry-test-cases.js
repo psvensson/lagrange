@@ -347,7 +347,6 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           timestamp: staleCreatingUpdatedAt - TEST_STEP_HISTORY_LAG_MS,
         },
       ]);
-
       const coordinator = createCoordinator({
         nodeId: TEST_TARGET_NODE_ID,
         transactionCoordinator: buildTransactionCoordinator(),
@@ -475,9 +474,22 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           timestamp: nowMs - TEST_STEP_HISTORY_LAG_MS,
         },
       ]);
+      const sqlQueryEngine = {
+        async executeQuery(sql) {
+          if (String(sql).includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+            return {
+              success: true,
+              rows: [{...operationRow}],
+              affectedRows: 1,
+            };
+          }
+          return {success: true, rows: [], affectedRows: 0};
+        },
+      };
 
       const coordinator = createCoordinator({
         nodeId: TEST_TARGET_NODE_ID,
+        sqlQueryEngine,
         transactionCoordinator: buildTransactionCoordinator(),
         systemTableCache: {
           get() {
@@ -544,6 +556,24 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
           deferredTimers[0]?.delayMs,
           TEST_RETRY_AFTER_MS,
           'dispatch retry should preserve the router reconnect retry-after',
+        );
+        const staleSending = {...operation};
+        operationRow.status = 'failed';
+        operationRow.workflow_step = WORKFLOW_STEP.FAILED;
+        operationRow.completed_at = nowMs + 1;
+        const terminalFirst =
+          await coordinator.workflowOwner.executeOperationInternal(
+            staleSending,
+          );
+        t.equal(
+          terminalFirst?.skipped,
+          true,
+          'authoritative terminal settlement refuses a stale SENDING retry',
+        );
+        t.equal(
+          deliveries.length,
+          1,
+          'terminal-first authority reaches no second physical CREATE',
         );
       } finally {
         await coordinator.shutdown();

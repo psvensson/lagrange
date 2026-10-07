@@ -119,23 +119,27 @@ async () => {
       'the leader transferred through MsgTimeoutNow');
     proposeAndCommit(cluster, 'cf-a', 'after-timeout-now');
 
-    // The leader is lost; the others elect; it comes back as a follower.
+    // The leader is lost; the others elect (both tick: under check_quorum a
+    // follower that is never ticked keeps its leader lease); it comes back
+    // as a follower.
     cluster.isolate('cf-a');
-    cluster.tickers = ['cf-b'];
-    assert.ok(cluster.settle(() =>
-      cluster.node('cf-b').readStatus().role === LEADER_ROLE,
-    {rounds: ROUNDS}), 'a new leader was elected');
+    cluster.tickers = ['cf-b', 'cf-c'];
+    const survivorLeader = () => ['cf-b', 'cf-c'].find((replicaId) =>
+      cluster.node(replicaId).readStatus().role === LEADER_ROLE);
+    assert.ok(cluster.settle(() => survivorLeader() !== undefined,
+      {rounds: ROUNDS}), 'a new leader was elected');
+    const newLeader = survivorLeader();
     cluster.heal('cf-a');
-    assert.ok(settleOnLeader(cluster, 'cf-b', ['cf-b']),
+    assert.ok(settleOnLeader(cluster, newLeader, [newLeader]),
       'the old leader follows the new one');
-    proposeAndCommit(cluster, 'cf-b', 'after-leader-change');
+    proposeAndCommit(cluster, newLeader, 'after-leader-change');
 
     assert.deepEqual(guardRefusals(cluster), [],
       'a correct replica\'s envelope was refused');
     for (const replicaId of REPLICAS) {
       assert.equal(lifecycleRow(cluster, replicaId).state, 'active');
     }
-    const committed = commitOf(cluster, 'cf-b');
+    const committed = commitOf(cluster, newLeader);
     const logs = REPLICAS.map((replicaId) =>
       durableLog(cluster.dbFileOf(replicaId), cluster.partitionId)
         .filter((entry) => entry.index <= committed)

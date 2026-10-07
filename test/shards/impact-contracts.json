@@ -160,6 +160,24 @@
         "test/partition/partition-service-cleanup-token-schema.test.js"
       ]
     },
+    "failed-create-target-authoritative-cleanup": {
+      "description": "OperationWorkflowOwner alone admits failed create terminalization and cleanup from an exact authoritative lifecycle generation, persists that decision through ReplicaOperationRepository, and re-drives lifecycle-owner release without accepting cache projection as authority.",
+      "owners": [
+        "src/rebalancer/operation-workflow-replace-terminal-admission.js",
+        "src/rebalancer/operation-workflow-terminal-transition-repair.js",
+        "src/rebalancer/operation-workflow-transition-persistence.js",
+        "src/rebalancer/replica-operation-repository.js",
+        "src/rebalancer/replica-operation-repository-entity-read-methods.js",
+        "src/rebalancer/unified-rebalancer-failed-create-cleanup.js",
+        "src/node/replica-state-machine-failed-create-claim.js",
+        "src/node/replica-handler-remove-request-methods.js",
+        "src/node/replica-cleanup-tombstone-owner.js"
+      ],
+      "tests": [
+        "test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js"
+      ]
+    },
     "critical-create-admission-topology-ordering": {
       "description": "Critical create admission runs before the downstream topology guard on createOperation.",
       "owners": [
@@ -827,6 +845,35 @@
         "test/node/replica-lifecycle-durable-generation.test.js",
         "test/node/replica-handler.test.js",
         "test/partition/partition-service-cleanup-token-schema.test.js"
+      ]
+    },
+    "failed-create-target-authoritative-cleanup": {
+      "description": "OperationWorkflowOwner terminal admission and repair must carry the exact lifecycle generation through repository persistence and ReplicaHandler cleanup, while projections remain non-authoritative.",
+      "endpoints": [
+        {
+          "id": "operation-workflow-terminal-owner",
+          "owners": [
+            "src/rebalancer/operation-workflow-replace-terminal-admission.js",
+            "src/rebalancer/operation-workflow-terminal-transition-repair.js",
+            "src/rebalancer/operation-workflow-transition-persistence.js",
+            "src/rebalancer/replica-operation-repository.js",
+            "src/rebalancer/replica-operation-repository-entity-read-methods.js",
+            "src/rebalancer/unified-rebalancer-failed-create-cleanup.js"
+          ]
+        },
+        {
+          "id": "authoritative-lifecycle-cleanup-owner",
+          "owners": [
+            "src/node/replica-state-machine-failed-create-claim.js",
+            "src/node/replica-handler-remove-request-methods.js",
+            "src/node/replica-cleanup-tombstone-owner.js"
+          ]
+        }
+      ],
+      "contract": "failed-create-target-authoritative-cleanup",
+      "witnessTests": [
+        "test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js"
       ]
     },
     "critical-create-hold-topology-guard-order": {

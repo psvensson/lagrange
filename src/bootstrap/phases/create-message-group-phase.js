@@ -11,6 +11,12 @@ import {
 } from '../replication-target-authority.js';
 import {NodeService} from '../../node/node-service.js';
 import {
+  IDENTITY_WAIT,
+  IDENTITY_WAIT_AWAITED,
+  pendingReplicaIdentityRecord,
+  reportIdentityWaitSpent,
+} from '../../node/replica-prior-existence.js';
+import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../message-group-assignment.js';
 import {
@@ -173,6 +179,62 @@ class CreateMessageGroupPhase {
     this.pendingCreateSelfHostedMessageGroupRow = null;
     this.createSelfHostedMetadataFlushPromise = null;
     this.registrationEvidenceByReplicaId = new Map();
+    // The identity record of each first-join replica (F1): its services row
+    // is written only after it opened, so its port steps nothing until that
+    // row is durably registered (registerMessageGroupService releases it).
+    this.identityRecordByReplicaId = new Map();
+  }
+
+  /**
+   * The prior-existence fact of a self-hosted replica and, when it is not yet
+   * durable, its pending identity record (the partition create's mechanism).
+   * A replica named by this node's existing services rows (a rejoin's
+   * startupReplicaIds) opened before.
+   * @param {string} replicaId - The replica.
+   * @param {Array<string>} startupReplicaIds - This node's existing replicas.
+   * @return {Object} {identityExisted, identityRecorded}.
+   */
+  observeJoinReplicaIdentity(replicaId, startupReplicaIds) {
+    const existed = startupReplicaIds.includes(replicaId);
+    const record = pendingReplicaIdentityRecord({existed});
+    if (record === null) {
+      this.identityRecordByReplicaId.delete(replicaId);
+      return {identityExisted: true, identityRecorded: null};
+    }
+    this.identityRecordByReplicaId.set(replicaId,
+      {...record, startedAt: Date.now()});
+    return {identityExisted: false, identityRecorded: record.recorded};
+  }
+
+  /**
+   * Release a first-join replica's identity record on its durable
+   * registration, or abandon it (the spent wait logged once) when the
+   * registration ended without one.
+   * @param {string} replicaId - The replica.
+   * @param {Error|null} error - Why the registration ended without a row.
+   * @param {number|null} boundMs - The registration's bound, if any.
+   * @return {void}
+   */
+  settleJoinReplicaIdentityRecord(replicaId, error = null, boundMs = null) {
+    const record = this.identityRecordByReplicaId.get(replicaId);
+    if (!record) {
+      return;
+    }
+    this.identityRecordByReplicaId.delete(replicaId);
+    if (error === null) {
+      record.release();
+      return;
+    }
+    reportIdentityWaitSpent(this.delegates.getLogger(),
+      JOINING_LOG_MSG.MESSAGE_GROUP_IDENTITY_RECORD_WAIT_SPENT, {
+        wait: IDENTITY_WAIT.MESSAGE_GROUP_IDENTITY_RECORD,
+        awaited: IDENTITY_WAIT_AWAITED.MESSAGE_GROUP_IDENTITY_RECORD,
+        boundMs,
+        elapsedMs: Date.now() - record.startedAt,
+        lastObserved: error.message ?? null,
+        scope: {replicaId, nodeId: this.nodeId},
+      });
+    record.abandon(error);
   }
 
   /**
@@ -258,6 +320,7 @@ class CreateMessageGroupPhase {
           replicaIds: allReplicaIds,
           replicaIndex: replicaIndex >= 0 ? replicaIndex : index,
           peerAddresses,
+          ...this.observeJoinReplicaIdentity(replicaId, startupReplicaIds),
           deferElection: true,
           deferElectionUntilJoinConvergence:
             (replicaIndex >= 0 ? replicaIndex : index) > 0,
@@ -384,7 +447,10 @@ class CreateMessageGroupPhase {
             error: shortcutResult.error,
           },
         );
-        throw buildShortcutMessageGroupRegistrationError(shortcutResult);
+        const error = buildShortcutMessageGroupRegistrationError(
+          shortcutResult);
+        this.settleJoinReplicaIdentityRecord(replicaId, error);
+        throw error;
       }
 
       if (typeof this.delegates.seedJoinTimeCacheRow === LOCAL_STR_FUNCTION) {
@@ -407,6 +473,7 @@ class CreateMessageGroupPhase {
       );
       this.registrationEvidenceByReplicaId.set(replicaId,
         Object.freeze({...serviceData}));
+      this.settleJoinReplicaIdentityRecord(replicaId);
       return serviceData;
     }
 
@@ -482,6 +549,7 @@ class CreateMessageGroupPhase {
         );
         this.registrationEvidenceByReplicaId.set(replicaId,
           Object.freeze({...serviceData}));
+        this.settleJoinReplicaIdentityRecord(replicaId);
         return serviceData;
       } catch (error) {
         lastError = error;
@@ -547,6 +615,7 @@ class CreateMessageGroupPhase {
         retryTimeoutMs,
       ),
     );
+    this.settleJoinReplicaIdentityRecord(replicaId, error, retryTimeoutMs);
     logger.error(
       JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_FAILED,
       {

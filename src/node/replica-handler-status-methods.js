@@ -20,6 +20,13 @@ import {settlePartitionServiceActiveAdmission} from
   '../bootstrap/shared/partition-service-activation.js';
 import {isReplicaServiceHandlerBound} from
   './replica-transport-handler-identity.js';
+import {isCreateSyncingDeferral} from
+  './replica-state-machine-create-syncing-edge.js';
+import {
+  IDENTITY_WAIT,
+  IDENTITY_WAIT_AWAITED,
+  reportIdentityWaitSpent,
+} from './replica-prior-existence.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_STATUS_WRITE_WAIT = Object.freeze({
@@ -43,6 +50,7 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
       newStatus,
       additionalData = {},
     ) {
+      const startedAt = Date.now();
       return runRetryableControlPlaneWrite(
         () => this.updateReplicaStatus(replicaId, newStatus, additionalData),
         {
@@ -80,7 +88,21 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
             newStatus,
           },
         },
-      );
+      ).catch((error) => {
+        if (isCreateSyncingDeferral(error)) {
+          reportIdentityWaitSpent(this.logger,
+            REPLICA_HANDLER_LOG_MSG.CREATE_SYNCING_DEFERRAL_SPENT, {
+              wait: IDENTITY_WAIT.CREATE_SYNCING_DEFERRAL,
+              awaited: IDENTITY_WAIT_AWAITED.CREATE_SYNCING_DEFERRAL,
+              boundMs: REPLICA_HANDLER_DEFAULT.STATUS_WRITE_RETRY_TIMEOUT_MS,
+              elapsedMs: Date.now() - startedAt,
+              lastObserved: error.cause?.message ?? error.message,
+              scope: {replicaId, partitionId: additionalData.partitionId ??
+                null, nodeId: this.nodeId},
+            });
+        }
+        throw error;
+      });
     }
     /**
      * Update replica status through the replica lifecycle state machine.
@@ -125,6 +147,9 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
           // What triggered the new status (the row's trigger_reason): a
           // group retired as a unit marks its REMOVING row so.
           reason: additionalData.triggerReason,
+          cleanupToken: additionalData.cleanupToken,
+          createAttemptToken: additionalData.createAttemptToken,
+          createAdmissionEvidence: additionalData.createAdmissionEvidence,
           serviceId: existing?.service_id || replicaId,
           serviceType:
             existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
@@ -173,7 +198,12 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
               this.replicaStateMachine.transition(replicaId, newStatus, {
                 partitionId,
                 nodeId: existing?.node_id || this.nodeId,
+                reason: additionalData.triggerReason,
                 errorMessage: additionalData.errorMessage,
+                cleanupToken: additionalData.cleanupToken,
+                createAttemptToken: additionalData.createAttemptToken,
+                createAdmissionEvidence:
+                  additionalData.createAdmissionEvidence,
                 serviceId: existing?.service_id || replicaId,
                 serviceType:
                   existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,

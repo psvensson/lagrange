@@ -59,6 +59,13 @@ const EXPECTED = Object.freeze([...IDS]);
 const PUBLICATION_COMMAND_MARKER = '__membershipPublication';
 
 const PARTITION_ID = 'dt6-publication-pct';
+// Phase A ends at 600 ms; the slowest seeded follower window is [600, 1200) ms (rank 2 of the
+// seeded windows), so a follower's lease plus a split vote resolve within two such windows.
+const PHASE_A_END_MS = 600;
+const WORST_ELECTION_WINDOW_MS = 1200;
+const PHASE_B_MARGIN_MS = 400;
+const PHASE_B_DEADLINE_MS = PHASE_A_END_MS + 2 * WORST_ELECTION_WINDOW_MS + PHASE_B_MARGIN_MS;
+const HEAL_WINDOW_MS = 1400;
 
 function leaderOf(host) {
   return IDS.find((id) => host.isLeader(id)) || null;
@@ -172,7 +179,7 @@ async function runFailbackUnderPct(seed) {
   host.start();
 
   // Phase A — elect + commit membership v1 cluster-wide.
-  await host.runUntil(600);
+  await host.runUntil(PHASE_A_END_MS);
   const leaderA = leaderOf(host);
   if (!leaderA) {
     assertMembershipPublicationOwnerDriverHostsHealthy(
@@ -190,14 +197,20 @@ async function runFailbackUnderPct(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await host.runUntil(1600);
+  // Under check_quorum each follower ignores pre-votes for its own election timeout after A's last
+  // heartbeat (its leader lease): the fail-back is awaited as an OBSERVED event - a follower leads
+  // while A is cut off - within phase A's end + two worst-case election windows + margin. It is
+  // not a fixed instant, so a run where no follower ever leads during the partition has no
+  // leaderB (and fails below) instead of being rescued by the healed old cluster.
+  await host.runUntilTrue(() => followers.some((id) => host.isLeader(id)),
+    {deadlineMs: PHASE_B_DEADLINE_MS});
   const leaderB = followers.find((id) => host.isLeader(id)) || null;
 
   // Phase C — heal and settle generously, then read the FINAL converged state.
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await host.runUntil(3000);
+  await host.runUntil(net.now() + HEAL_WINDOW_MS);
 
   const versions = Object.fromEntries(IDS.map((id) => [id, pubs.get(id).state.committedVersion]));
   const converged = IDS.every((id) => versions[id] === 2);
@@ -229,7 +242,7 @@ async function runFailbackUnderPct(seed) {
 t.test('PCT search over the control-plane fail-back: convergence holds across searched interleavings',
   async (t) => {
     const SEEDS = 24;
-    const census = {converged: 0, diverged: 0, noLeader: 0};
+    const census = {converged: 0, diverged: 0, noLeader: 0, noLeaderB: 0};
     const leadersA = new Set();
     const leadersB = new Set();
     const counterexamples = [];
@@ -245,6 +258,12 @@ t.test('PCT search over the control-plane fail-back: convergence holds across se
       leadersA.add(m.leaderA);
       if (m.leaderB) {
         leadersB.add(m.leaderB);
+      } else {
+        // A failover during the partition is part of the scenario, not optional: no follower led
+        // while A was cut off is a liveness counterexample even if the heal converges.
+        census.noLeaderB += 1;
+        counterexamples.push({seed, reason: 'no-leaderB'});
+        continue;
       }
       if (m.divergentCommittedIndexes.length > 0) {
         census.diverged += 1;
@@ -264,6 +283,8 @@ t.test('PCT search over the control-plane fail-back: convergence holds across se
     t.equal(counterexamples.length, 0,
       'no searched delivery-order schedule violated convergence/agreement ' +
       `(counterexamples: ${JSON.stringify(counterexamples)})`);
+    t.equal(census.noLeaderB, 0,
+      'a follower of leaderA led during the partition in every searched schedule');
     t.equal(census.converged, SEEDS,
       'every searched delivery-order schedule converged to committed v2 cluster-wide');
     // Search-load-bearing assertion: the PctScheduler genuinely permuted co-due delivery order
@@ -279,10 +300,19 @@ t.test('a PCT-searched fail-back seed replays to the same semantic outcome ' +
   '(outcome determinism; exact schedule replay not claimed)', async (t) => {
   const a = await runFailbackUnderPct(5);
   const b = await runFailbackUnderPct(5);
-  const outcome = (m) => ({leaderA: m.leaderA, leaderB: m.leaderB, versions: m.versions,
+  // Under native check_quorum the fail-back winner after a lease is drawn by raft-rs's own
+  // randomized election timeout, not by the seed (owner ruling 2026-10-05: narrow the tests,
+  // no crate fork): leaderB's identity is compared per run as a shape, not across runs.
+  const outcome = (m) => ({leaderA: m.leaderA, versions: m.versions,
     converged: m.converged, divergent: m.divergentCommittedIndexes, reason: m.reason});
   t.same(outcome(b), outcome(a),
-    'same seed -> same terminal leaders, versions and convergence/agreement verdicts');
+    'same seed -> same first leader, versions and convergence/agreement verdicts');
+  // Phase B waits for the fail-back as an observed event, so every run names a leaderB, and it is
+  // one of leaderA's followers (the old leader, cut off, cannot lead the majority side).
+  for (const m of [a, b]) {
+    t.ok(m.leaderB !== null && m.leaderB !== m.leaderA && IDS.includes(m.leaderB),
+      `a follower of leaderA led during the partition (${m.leaderB})`);
+  }
   t.same(a.divergentCommittedIndexes, [], 'the replayed seed has zero committed-log divergence');
   t.equal(a.converged, true, 'the replayed seed converged to committed v2 cluster-wide');
   t.ok(a.reorders > 0 && b.reorders > 0,

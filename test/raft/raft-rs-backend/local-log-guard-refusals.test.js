@@ -284,6 +284,9 @@ async function floodLines(cluster, replicaId, messageAt) {
       await cluster.node(replicaId).step(envelopeTo(cluster.partitionId,
         cluster.node(replicaId).readStatus().peerId, messageAt(index)));
       await cluster.node(replicaId).tick();
+      // The group's own traffic keeps flowing: with check_quorum a leader
+      // that hears no quorum for an election timeout steps down.
+      cluster.deliverAll();
     }
   });
   return lines.filter(({context}) =>

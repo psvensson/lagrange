@@ -12,7 +12,8 @@
 //   the charged run is a function of the scenario, like the uncharged one,
 //     in exactly what production offers: the same process produces the same
 //     strict report and provenance snapshot, the host transcript's
-//     boundaries in the same causal order, the same network transcript
+//     boundaries in the same causal order per replica (see
+//     hostTranscriptCausalShape), the same network transcript
 //     modulo consensus timing, the same charged owners, and a formation
 //     inside the calibrated bound, twice over. The rs-raft core randomizes
 //     its own election timeouts (owner decision O2; see
@@ -70,6 +71,46 @@ after(() => {
   LoggingService.resetInstance();
 });
 
+// The host transcript as far as the charged schedule repeats it. Its
+// node-wide boundaries (phases, hydration, authority, teardown - every line
+// that names no replica) keep their exact order, every replica's own
+// boundaries keep their exact order, and the transcript holds the same
+// boundaries; how two replicas' boundaries interleave is not compared, and
+// the self link's DATA frames are compared as present, not counted: they
+// carry consensus and CDC traffic, and whether one more is in flight when
+// teardown starts is consensus timing (measured: one extra data frame
+// enqueued after teardown_started and delivered after teardown_completed,
+// 1 of 10 local runs) - the network transcript is compared modulo the same
+// timing (networkTranscriptStructure). Under
+// native check_quorum the instant each seed group elects is drawn by the
+// rs-raft core's own randomness (owner decision O2, closed 2026-10-04
+// without seeding; owner 2026-10-05: "narrow the tests", no crate fork), and
+// charged occupancy turns that instant into the order in which concurrent
+// replica creations complete.
+const SEQUENCE_FIELD = /^seq=\d+ /u;
+const REPLICA_FIELD = / replicaId=(\S+)/u;
+const DATA_FRAME = / frameKind=data$/u;
+
+function hostTranscriptCausalShape(serialized) {
+  const all = transcriptCausalOrder(serialized).split('\n')
+    .filter((line) => line.length > ZERO)
+    .map((line) => line.replace(SEQUENCE_FIELD, ''));
+  const lines = all.filter((line) => !DATA_FRAME.test(line));
+  const dataFramesCarried = lines.length < all.length;
+  const nodeWide = [];
+  const perReplica = {};
+  for (const line of lines) {
+    const replica = REPLICA_FIELD.exec(line)?.[1];
+    if (replica === undefined) {
+      nodeWide.push(line);
+    } else {
+      (perReplica[replica] ??= []).push(line);
+    }
+  }
+  return {nodeWide, perReplica, boundaries: [...lines].sort(),
+    dataFramesCarried};
+}
+
 // Which owners the charge ledger priced: its structure, without the amounts
 // consensus timing moves.
 function chargedOwners(run) {
@@ -116,9 +157,10 @@ test('the charged run is a function of the scenario', async () => {
     assert.equal(again[artifact], first[artifact],
       `${artifact} is exact across two charged runs`);
   }
-  assert.equal(transcriptCausalOrder(again.hostTranscript),
-    transcriptCausalOrder(first.hostTranscript),
-    'hostTranscript has the same boundaries in the same causal order');
+  assert.deepEqual(hostTranscriptCausalShape(again.hostTranscript),
+    hostTranscriptCausalShape(first.hostTranscript),
+    'hostTranscript has the same boundaries, node-wide and per replica in ' +
+      'the same causal order');
   assert.equal(networkTranscriptStructure(again.networkTranscript),
     networkTranscriptStructure(first.networkTranscript),
     'networkTranscript is structurally equal modulo consensus timing');
