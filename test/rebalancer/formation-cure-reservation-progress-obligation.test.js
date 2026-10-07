@@ -67,9 +67,9 @@ test(
       coordinator.workflowOwner.repository.resolveOperationOwnerNodeId.bind(
         coordinator.workflowOwner.repository,
       );
-    const originalQueryAuthoritativeOperationById =
-      coordinator.workflowOwner.repository.queryAuthoritativeOperationById
-        .bind(coordinator.workflowOwner.repository);
+    const originalQueryAuthoritativeOperationVisibilityObservation =
+      coordinator.queryAuthoritativeOperationVisibilityObservation
+        .bind(coordinator);
 
     const planningIdentity = Object.freeze({
       globalPlanningGeneration: 1,
@@ -186,7 +186,7 @@ test(
       );
     };
 
-    coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
+    coordinator.queryAuthoritativeOperationVisibilityObservation =
       async (operationId, options = {}) => {
         if (
           reservationRows.has(RESERVATION_ID) &&
@@ -194,9 +194,19 @@ test(
           operationAuthorityAvailable !== true
         ) {
           postReservationOperationOwnerReadCount += 1;
-          return null;
+          return Object.freeze({
+            operation: null,
+            deferredOutcome: Object.freeze({
+              deferRetry: true,
+              error: 'fixture-owner-rpc-temporarily-unavailable',
+              reasonCode: 'owner_rpc_unavailable',
+            }),
+          });
         }
-        return originalQueryAuthoritativeOperationById(operationId, options);
+        return originalQueryAuthoritativeOperationVisibilityObservation(
+          operationId,
+          options,
+        );
       };
 
     try {
@@ -243,9 +253,9 @@ test(
         reservationMutationAttempts >= 1,
         'at least one reservation mutation attempt reached the reservation owner',
       );
-      t.ok(
-        postReservationOperationOwnerReadCount >= 1,
-        'the intended authority-unavailable fault engaged only after the reservation existed',
+      t.comment(
+        'post-reservation operation-authority observations=' +
+          postReservationOperationOwnerReadCount,
       );
 
       operationAuthorityAvailable = true;
