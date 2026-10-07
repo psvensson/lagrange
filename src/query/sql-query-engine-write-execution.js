@@ -26,6 +26,17 @@ const WRITE_TRANSACTION_OWNERSHIP = Object.freeze({
 });
 const STATEMENT_AUTOCOMMIT_SESSION_PREFIX = 'statement-autocommit';
 
+// The idempotency key a caller delivers every attempt of one logical write
+// under: the write plan derives each participant's entryId from it, so a
+// caller's retry after an unknown outcome is the same entry (answered from
+// its outcome row) - never a fresh one that applies the write twice. A
+// caller that supplies none gets one minted for this statement alone.
+function writeIdentityOf(queryOptions) {
+  return typeof queryOptions?.idempotencyKey === 'string' &&
+    queryOptions.idempotencyKey.length > 0 ?
+    {idempotencyKey: queryOptions.idempotencyKey} : {};
+}
+
 class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMethods {
   /**
    * Write-path epoch fencing: resolve the epoch a write is planned
@@ -205,7 +216,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     const writePlan = this.distributedWriteCoordinator.createWritePlan(
       ast,
       params,
-      {sessionId},
+      {sessionId, ...writeIdentityOf(queryOptions)},
     );
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
 
@@ -371,6 +382,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       {
         sessionId,
         partitionIds,
+        ...writeIdentityOf(queryOptions),
       },
     );
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
@@ -537,6 +549,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       {
         sessionId,
         partitionIds,
+        ...writeIdentityOf(queryOptions),
       },
     );
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);

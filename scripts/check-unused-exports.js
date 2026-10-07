@@ -44,12 +44,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // deleted.
 // (origin/main 2026-10-03 tightened 1434 -> 1433: renderRunSummary gained
 // its first importer; superseded by the lower value here.)
-// 2026-10-04: tightened 1424 -> 1423 per checker hint after the
-// one-spread-authority deletion.
-// 2026-10-04: tightened 1423 -> 1422 per checker hint: the observation's
-// blocked-partition resolver became the first importer of the shared
-// isPriorityRecoveryClosureWitnessPending rule.
-const BASELINE_UNUSED_EXPORT_COUNT = 1422;
+// 2026-10-04: the integrated branch had already tightened 1424 -> 1422.
+// 2026-10-05: replay tightened 1422 -> 1418: the one participant failure
+// builder retired the executor's duplicate helpers on the combined tree.
+const BASELINE_UNUSED_EXPORT_COUNT = 1418;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

@@ -158,10 +158,11 @@ class MembershipPublicationRuntimeOwner {
       row,
       bootIncarnation,
       observe: () => readAuthoritativeNodeRow(gateway, row[COLUMN.NODE_ID]),
-      insert: (stampedRow) => gateway.insertSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES, stampedRow, options),
-      advance: (whereClause, stampedRow) => gateway.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES, whereClause, stampedRow, options),
+      insert: (stampedRow, identity) => gateway.insertSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES, stampedRow, {...options, ...identity}),
+      advance: (whereClause, stampedRow, identity) =>
+        gateway.updateSystemTableRow(SYSTEM_TABLE_NAME.NODES, whereClause,
+          stampedRow, {...options, ...identity}),
     });
   }
 
@@ -205,10 +206,10 @@ class MembershipPublicationRuntimeOwner {
       bootIncarnation,
       observe: () => readAuthoritativeEndpointRow(gateway, tableName,
         row[COLUMN.ENDPOINT_ID]),
-      insert: (stampedRow) => owner.insertEndpoint(stampedRow,
-        mutationOptions),
-      update: (whereClause, data) => owner.updateWhere(whereClause, data,
-        mutationOptions),
+      insert: (stampedRow, identity) => owner.insertEndpoint(stampedRow,
+        {...mutationOptions, ...identity}),
+      update: (whereClause, data, identity) => owner.updateWhere(whereClause,
+        data, {...mutationOptions, ...identity}),
     });
   }
 

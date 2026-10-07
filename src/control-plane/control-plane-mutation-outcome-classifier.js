@@ -7,6 +7,8 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
 } from './control-plane-system-table-visibility-constants.js';
 import {PRESSURE_GOVERNOR_ACTION} from './pressure-governor.js';
+import {isAppliedWithUnknownCount} from
+  '../partition/partition-write-kernel.js';
 
 const objectCreate = Object.create;
 const objectFreeze = Object.freeze;
@@ -20,6 +22,14 @@ const utilIsProxy = nodeUtilTypes.isProxy;
 const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
 const EMPTY_NORMALIZED_TEXT = '';
 const AFFECTED_ROWS_PROPERTY = 'affectedRows';
+const SETTLED_REPLAY_PROPERTY = 'settledReplay';
+// The count of a write applied as a settled replay whose count is not known:
+// absent (never zero rows), so the write classifies as applied.
+const UNKNOWN_AFFECTED_ROWS = objectFreeze({
+  present: false,
+  valid: true,
+  value: 0,
+});
 
 function freezeEffect(
   outcome,
@@ -185,7 +195,27 @@ function isKnownPressureAction(value) {
     value === PRESSURE_GOVERNOR_ACTION.REJECT;
 }
 
+// Whether the result, or the partition result it carries, names a settled
+// replay whose count is not known (the partition write kernel decides).
+function isSettledReplayWithUnknownCount(result, partitionResultProperty) {
+  const own = readOwnDataProperty(result, SETTLED_REPLAY_PROPERTY);
+  if (own.valid && isAppliedWithUnknownCount({settledReplay: own.value})) {
+    return true;
+  }
+  if (!partitionResultProperty.valid ||
+    !isPlainDataRecord(partitionResultProperty.value)) {
+    return false;
+  }
+  const nested = readOwnDataProperty(partitionResultProperty.value,
+    SETTLED_REPLAY_PROPERTY);
+  return nested.valid &&
+    isAppliedWithUnknownCount({settledReplay: nested.value});
+}
+
 function normalizeAffectedRows(result, partitionResultProperty) {
+  if (isSettledReplayWithUnknownCount(result, partitionResultProperty)) {
+    return UNKNOWN_AFFECTED_ROWS;
+  }
   let partitionAffectedRows = {
     present: false,
     valid: true,

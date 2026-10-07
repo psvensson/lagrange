@@ -384,9 +384,11 @@ class ServiceRegistrationHandoffOwner {
       row: registeredServiceRow,
     };
     return runRetryableControlPlaneWrite(
-      () => this.delegates.executeBootstrapControlPlaneMutation(mutation, {
-        skipCacheWait: true,
-      }),
+      (attemptIdentity) => this.delegates.executeBootstrapControlPlaneMutation(
+        mutation, {
+          skipCacheWait: true,
+          ...attemptIdentity,
+        }),
       {
         timeoutMs: this.getRegisterServiceWriteRetryTimeoutMs(),
         now: () => this.getNow(),

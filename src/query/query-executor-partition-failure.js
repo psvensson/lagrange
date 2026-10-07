@@ -1,4 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
 
 const {
   QUERY_EXECUTOR_LITERAL,
@@ -71,6 +72,9 @@ function buildQueryPartitionCandidateFailureDetails({
   participantAddress,
 }) {
   return {
+    // The failed answer's typed fields (its code, its entryId) travel with
+    // it to the delivery's failure result.
+    ...pickTypedWriteAnswer(failure),
     errorCode: failure?.errorCode || failure?.code,
     retryAfterMs: resolveRetryableLeaderFailureRetryAfterMs({
       executor,

@@ -43,6 +43,8 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
+import {PARTITION_SETTLED_REPLAY} from
+  '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
   '../../src/partition/proposal-queue-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -294,10 +296,15 @@ function logLength(dbPath, groupId) {
   }
 }
 
-test('F-aj: the query executor answers an unknown outcome to its client ' +
-  'once and never sends the statement again without its entryId; a ' +
-  'router holding the code re-proposes it only under its entryId, ' +
-  'idempotently', {timeout: TEST_TIMEOUT_MS}, async () => {
+// Superseded expectation (owner ruling, R6-B): the executor used to answer
+// the unknown outcome to its client after ONE delivery - and the caller's
+// re-drive then minted a fresh entry. The executor is now the one owner that
+// re-delivers an unknown outcome, and only under the write's one entryId, so
+// its client ends with the original result, the write applied exactly once.
+test('F-aj: the query executor re-delivers an unknown outcome under the ' +
+  'write\'s one entryId until it is settled - its client gets the original ' +
+  'result, applied once; a router holding the code re-proposes it only ' +
+  'under its entryId, idempotently', {timeout: TEST_TIMEOUT_MS}, async () => {
   await withPartitionedLeader(async ({services, members, partitionId,
     dbFileOf, addressOf, waitFor, blocked}) => {
     const [r1, r2] = services;
@@ -330,7 +337,7 @@ test('F-aj: the query executor answers an unknown outcome to its client ' +
           role: index === 0 ? 'leader' : 'follower'}))}),
       messageRouter: {
         async deliver(address, message) {
-          sent.push(address);
+          sent.push({address, entryId: message.entryId});
           return services[members.findIndex((member) =>
             addressOf(member) === address)].handleRemoteQuery(message);
         },
@@ -365,13 +372,21 @@ test('F-aj: the query executor answers an unknown outcome to its client ' +
       true, `setup: the replicas converged on A (${values('row-0')})`);
     await sleep(SETTLE_MS);
     assert.deepEqual(values('row-0'), ['v+', 'v+', 'v+'],
-      'A applied once on every replica: the executor did not send it again');
-    assert.deepEqual(sent, [addressOf(members[0])],
-      'the executor sent the statement once');
-    assert.equal(answered.success, false, 'its client is not told it ' +
-      'succeeded');
-    assert.ok(String(answered.error).includes(ERRORS.WRITE_OUTCOME_UNKNOWN),
-      `its client is told the outcome is unknown (${answered.error})`);
+      'A applied once on every replica: its re-deliveries were the same entry');
+    assert.equal(sent[0].address, addressOf(members[0]),
+      'setup: A was first sent to r1');
+    assert.ok(sent.length >= 2, 'the executor re-delivered the unknown ' +
+      `outcome (${JSON.stringify(sent)})`);
+    assert.equal(new Set(sent.map((delivery) => delivery.entryId)).size, 1,
+      `every delivery carried A's one entryId (${JSON.stringify(sent)})`);
+    assert.equal(typeof sent[0].entryId, 'string',
+      'an entryId minted once by the executor for a caller that gave none');
+    assert.equal(answered.success, true, 'its client is told the write ' +
+      `applied (${JSON.stringify(answered.error ?? null)})`);
+    assert.equal(answered.changes, 1, 'with its original result: the one row ' +
+      'A updated');
+    assert.ok(!String(answered.error ?? '').includes(
+      ERRORS.WRITE_OUTCOME_UNKNOWN), 'never the unknown outcome');
 
     const {PARTITION_WRITE_LEADERSHIP_REFUSAL: REFUSAL,
       isReroutableWriteFailureCode} = partitionWriteKernel;
@@ -386,8 +401,10 @@ test('F-aj: the query executor answers an unknown outcome to its client ' +
     const rerouted = await append(leader, 'row-1', held.entryId);
     assert.equal(rerouted.success, true, 'the re-proposal under B\'s entryId ' +
       `is answered (${JSON.stringify(rerouted)})`);
-    assert.equal(rerouted.idempotentReplay, true,
+    assert.equal(rerouted.settledReplay,
+      PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
       'from B\'s durable outcome row');
+    assert.equal(rerouted.changes, 1, 'with the row B updated');
     assert.equal(await waitFor(() => values('row-1').every((value) =>
       value === 'v+')), true, 'B applied once on every replica ' +
       `(${values('row-1')})`);
