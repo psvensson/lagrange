@@ -1,0 +1,117 @@
+name: pr73-qualification-fix-revert-matrix
+
+on:
+  push:
+    branches:
+      - "proof/pr73-formation-cure-progress-20261007"
+
+permissions:
+  contents: read
+
+env:
+  BASE_SHA: 6df3ec5e1c09ef14e6a743dc805399c1092712a8
+  AGGREGATE_SHA: 3bd0128bc361ce459ca74392c43c6dd913bc2130
+
+jobs:
+  discriminate:
+    strategy:
+      fail-fast: false
+      matrix:
+        mutant: [control, follower-retention-reverted, late-row-reverted, r7-reverted]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout aggregate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.AGGREGATE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Apply one exact PR73 mutant
+        env:
+          MUTANT: ${{ matrix.mutant }}
+        run: |
+          set -euo pipefail
+          case "$MUTANT" in
+            control)
+              ;;
+            follower-retention-reverted)
+              git checkout "$BASE_SHA" -- \
+                src/node/replica-handler-class.js \
+                src/node/replica-state-machine-leader-clear.js \
+                src/node/replica-state-machine.js
+              ;;
+            late-row-reverted)
+              git checkout "$BASE_SHA" -- \
+                src/partition/partition-service-metadata-delivery-methods.js
+              ;;
+            r7-reverted)
+              git checkout "$BASE_SHA" -- \
+                src/rebalancer/unified-rebalancer-critical-topology-methods.js
+              ;;
+            *)
+              echo "unknown mutant: $MUTANT" >&2
+              exit 2
+              ;;
+          esac
+          git diff --stat
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run repair witnesses with expected polarity
+        env:
+          MUTANT: ${{ matrix.mutant }}
+        run: |
+          set -euo pipefail
+          run_case() {
+            name="$1"
+            file="$2"
+            expected="$3"
+            set +e
+            node "$file" >"$RUNNER_TEMP/$name.tap" 2>&1
+            status=$?
+            set -e
+            cat "$RUNNER_TEMP/$name.tap"
+            if [ "$expected" = green ] && [ "$status" -ne 0 ]; then
+              echo "::error::$name expected GREEN under $MUTANT"
+              exit 1
+            fi
+            if [ "$expected" = red ] && [ "$status" -eq 0 ]; then
+              echo "::error::$name expected RED under $MUTANT"
+              exit 1
+            fi
+          }
+
+          follower=green
+          late=green
+          r7=green
+          [ "$MUTANT" = follower-retention-reverted ] && follower=red
+          [ "$MUTANT" = late-row-reverted ] && late=red
+          [ "$MUTANT" = r7-reverted ] && r7=red
+
+          run_case follower \
+            test/node/replica-colocated-follower-leader-clear.test.js \
+            "$follower"
+          run_case late \
+            test/control-plane/cl-036-local-leader-row-seed.test.js \
+            "$late"
+          run_case r7 \
+            test/rebalancer/topology-settling-node-ready-lease-wake.test.js \
+            "$r7"
+
+      - name: Historical owner cone remains green on control
+        if: matrix.mutant == 'control'
+        run: |
+          node test/rebalancer/formation-barrier-recovery-mutation-admission.test.js
+          node test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js
+          node test/rebalancer/operation-ledger-hold-policy.test.js
+          node test/convergence/dt6-operation-ledger-self-move-holder-release.test.js
+          node test/convergence/dt6-operation-ledger-terminal-hold.test.js
