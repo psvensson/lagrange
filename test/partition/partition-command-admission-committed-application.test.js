@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import Database from 'better-sqlite3';
 
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
@@ -44,13 +45,15 @@ async function waitForLeader(partition) {
   throw new Error('scratch partition did not elect its single-voter leader');
 }
 
-function durableAppliedIndex(partition) {
-  return Number(new RaftRsDurableStore(partition.db)
-    .readDurableRecord(partition.partitionId).appliedIndex);
+function durableAppliedIndex(observerDb, partitionId) {
+  return Number(RaftRsDurableStore.readAppliedIndexIn(
+    observerDb,
+    partitionId,
+  ));
 }
 
-function readRow(partition, id) {
-  return partition.db.prepare(
+function readRow(observerDb, id) {
+  return observerDb.prepare(
     'SELECT id, value FROM p2_rows WHERE id = ?',
   ).get(id) || null;
 }
@@ -63,14 +66,14 @@ function classifyPrivateApplicationRefusal(error) {
   };
 }
 
-function invokePublicCommittedApplication(partition, copiedRecord) {
+async function invokePublicCommittedApplication(partition, copiedRecord) {
   if (typeof partition.applyCommittedEntry !== 'function') {
     return {kind: 'public_method_absent'};
   }
   try {
     return {
       kind: 'public_method_returned',
-      outcome: partition.applyCommittedEntry(copiedRecord),
+      outcome: await partition.applyCommittedEntry(copiedRecord),
     };
   } catch (error) {
     return classifyPrivateApplicationRefusal(error);
@@ -81,6 +84,8 @@ test('ordinary admission commits while copied public committed application ' +
   'has zero durable effect', {timeout: TEST_TIMEOUT_MS}, async () => {
   initializeEnvironment();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'partition-p2-'));
+  const dbPath = path.join(directory, 'p2-partition-r1.db');
+  let observerDb = null;
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'p2-partition',
     tableId: 'p2_rows',
@@ -88,7 +93,7 @@ test('ordinary admission commits while copied public committed application ' +
     replicaId: 'p2-partition-r1',
     replicaIds: ['p2-partition-r1'],
     nodeId: 'p2-node',
-    dbPath: path.join(directory, 'p2-partition-r1.db'),
+    dbPath,
     schema: {
       columns: [
         {name: 'id', type: 'TEXT', primaryKey: true},
@@ -99,6 +104,7 @@ test('ordinary admission commits while copied public committed application ' +
   try {
     await partition.initialize();
     await waitForLeader(partition);
+    observerDb = new Database(dbPath, {readonly: true, fileMustExist: true});
 
     const ordinary = await partition.insertData('p2_rows', {
       id: 'ordinary-before',
@@ -106,12 +112,15 @@ test('ordinary admission commits while copied public committed application ' +
     });
     assert.equal(ordinary.success, true,
       'ordinary write commits through command admission');
-    assert.deepEqual(readRow(partition, 'ordinary-before'), {
+    assert.deepEqual(readRow(observerDb, 'ordinary-before'), {
       id: 'ordinary-before',
       value: 'committed-through-admission',
     }, 'ordinary admitted write survives a local SQLite read');
 
-    const appliedBeforeDirect = durableAppliedIndex(partition);
+    const appliedBeforeDirect = durableAppliedIndex(
+      observerDb,
+      partition.partitionId,
+    );
     const copiedRecord = {
       command: {
         type: PARTITION_SERVICE_OPERATION.INSERT,
@@ -126,12 +135,15 @@ test('ordinary admission commits while copied public committed application ' +
       term: ordinary.durableCommitWitness.term,
       effects: {afterCommit: [], afterRollback: []},
     };
-    const directOutcome = invokePublicCommittedApplication(
+    const directOutcome = await invokePublicCommittedApplication(
       partition,
       copiedRecord,
     );
-    const rowAfterDirect = readRow(partition, 'direct-copy');
-    const appliedAfterDirect = durableAppliedIndex(partition);
+    const rowAfterDirect = readRow(observerDb, 'direct-copy');
+    const appliedAfterDirect = durableAppliedIndex(
+      observerDb,
+      partition.partitionId,
+    );
 
     const ordinaryAfter = await partition.insertData('p2_rows', {
       id: 'ordinary-after',
@@ -149,7 +161,7 @@ test('ordinary admission commits while copied public committed application ' +
       appliedBeforeDirect,
       appliedAfterDirect,
       ordinaryAfterSuccess: ordinaryAfter.success,
-      ordinaryAfterRow: readRow(partition, 'ordinary-after'),
+      ordinaryAfterRow: readRow(observerDb, 'ordinary-after'),
     }, {
       directOutcome: directOutcome.kind === 'public_method_absent' ?
         {kind: 'public_method_absent'} : {
@@ -168,6 +180,7 @@ test('ordinary admission commits while copied public committed application ' +
     }, 'copied committed bytes cannot enter application outside the private ' +
       'transaction owner, while ordinary admission remains live');
   } finally {
+    observerDb?.close();
     await partition.shutdown();
     fs.rmSync(directory, {recursive: true, force: true});
     ConfigurationManager.resetInstance();
@@ -175,17 +188,28 @@ test('ordinary admission commits while copied public committed application ' +
   }
 });
 
-test('removed method and exact typed refusal are both valid target outcomes',
-  () => {
+test('removed method and sync/async exact typed refusal are valid outcomes',
+  async () => {
     assert.deepEqual(
-      invokePublicCommittedApplication({}, Object.freeze({})),
+      await invokePublicCommittedApplication({}, Object.freeze({})),
       {kind: 'public_method_absent'},
     );
     const refusal = new Error('committed application is private');
     refusal.code = PRIVATE_APPLICATION_REFUSAL_CODE;
     assert.deepEqual(
-      invokePublicCommittedApplication({
+      await invokePublicCommittedApplication({
         applyCommittedEntry() {
+          throw refusal;
+        },
+      }, Object.freeze({})),
+      {
+        kind: 'typed_private_application_refusal',
+        code: PRIVATE_APPLICATION_REFUSAL_CODE,
+      },
+    );
+    assert.deepEqual(
+      await invokePublicCommittedApplication({
+        async applyCommittedEntry() {
           throw refusal;
         },
       }, Object.freeze({})),
@@ -196,12 +220,17 @@ test('removed method and exact typed refusal are both valid target outcomes',
     );
   });
 
-test('unrelated errors cannot count as private committed-application refusal',
-  () => {
+test('unrelated sync/async errors cannot count as private application refusal',
+  async () => {
     const unrelated = new Error('SQLite unavailable');
     unrelated.code = 'SQLITE_IOERR';
-    assert.throws(() => invokePublicCommittedApplication({
+    await assert.rejects(invokePublicCommittedApplication({
       applyCommittedEntry() {
+        throw unrelated;
+      },
+    }, Object.freeze({})), (error) => error === unrelated);
+    await assert.rejects(invokePublicCommittedApplication({
+      async applyCommittedEntry() {
         throw unrelated;
       },
     }, Object.freeze({})), (error) => error === unrelated);
