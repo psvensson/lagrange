@@ -22,6 +22,8 @@ jobs:
             target: 611199334fdeddc861ae3318a9478437f60b4dad
           - label: restart
             target: c280049f783c77b23f5070f1a2c389383c18527f
+          - label: reservation-carrier
+            target: 24dcf2abb16c17bbcb55a4148a83e17d7b14a857
           - label: full-persistence
             target: 89365eb925f9aad16b063d9cb8a550ebef7a90d4
           - label: seed-scheduling
