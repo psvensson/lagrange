@@ -48,6 +48,21 @@ function buildMetadata() {
   };
 }
 
+function authorizedHandle(context, phase, pendingEntries = []) {
+  return {
+    metadata: context.normalizeMergeTransitionMetadata(buildMetadata()),
+    phase,
+    pendingEntries,
+    flushPromise: null,
+    startedAt: 1,
+    lastError: null,
+    authorized: true,
+    quiescing: false,
+    quiesced: false,
+    activities: new Set(),
+  };
+}
+
 /**
  * Build a minimal PartitionService `this` context with recording stubs.
  * Mirrors the prototype-method-borrow fixture style used by
@@ -218,8 +233,8 @@ test('merge source - full run emits the ack ladder in order and fans ' +
     ['a', 'b'],
   );
 
-  // Mirror removed after completion.
-  t.equal(context.mergeReplication, null);
+  t.equal(context.mergeReplication.quiesced, true,
+    'the completed handle remains as an inert idempotency witness');
 });
 
 test('merge source - idempotent restart acks; conflicting replication ' +
@@ -228,15 +243,6 @@ test('merge source - idempotent restart acks; conflicting replication ' +
   await context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
   });
-  // Re-install an in-flight handle to simulate mid-run re-delivery.
-  context.mergeReplication = {
-    metadata: context.normalizeMergeTransitionMetadata(buildMetadata()),
-    phase: PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
-    pendingEntries: [],
-    flushPromise: null,
-    startedAt: 1,
-    lastError: null,
-  };
   const duplicateResponse = await context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
   });
@@ -300,14 +306,8 @@ test('merge source - live writes queued mid-mirror are flushed to the ' +
 test('merge source - mirror-origin entries are skipped to prevent loops',
   async (t) => {
     const {context, mirroredWrites} = await buildSourceContext();
-    context.mergeReplication = {
-      metadata: context.normalizeMergeTransitionMetadata(buildMetadata()),
-      phase: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
-      pendingEntries: [],
-      flushPromise: null,
-      startedAt: 1,
-      lastError: null,
-    };
+    context.mergeReplication = authorizedHandle(
+      context, PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE);
     await context.handleMergeReplicationAfterWrite({
       sql: 'INSERT INTO users (id, v) VALUES (?, ?)',
       params: ['x', 9],
@@ -386,8 +386,8 @@ test('merge source - waits for the durable cutover when the owner has ' +
   );
 });
 
-test('merge source - never writes system tables directly; failed run ' +
-    'marks the local handle FAILED', async (t) => {
+test('merge source - never writes system tables directly; unavailable START ' +
+    'authorization installs no worker', async (t) => {
   const {context} = await buildSourceContext({
     cdcIntegrationService: {
       updateSystemTableRow() {
@@ -398,16 +398,13 @@ test('merge source - never writes system tables directly; failed run ' +
       throw new Error('owner unavailable');
     },
   });
-  await context.handleStartMergeReplication({
+  await t.rejects(context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
-  });
-  await context.mergeReplicationRun;
-
-  t.equal(
-    context.mergeReplication.phase,
-    PARTITION_TRANSITION_STATE.FAILED,
-  );
-  t.equal(context.mergeReplication.lastError, 'owner unavailable');
+  }), {message: 'owner unavailable'});
+  t.equal(context.mergeReplication, null,
+    'the provisional handle is removed when authorization is unavailable');
+  t.equal(context.mergeReplicationRun, null,
+    'no physical worker is installed before durable authorization');
 });
 
 test('merge source - queue is fully drained BEFORE the catch-up ack the ' +
@@ -419,11 +416,6 @@ test('merge source - queue is fully drained BEFORE the catch-up ack the ' +
   });
   const {context, mirroredWrites} = await buildSourceContext({
     ackResponder: async (workflowId, ack) => {
-      if (ack[PARTICIPANT_ACK_FIELD.STATUS] ===
-          MERGE_ACK_STATUS.SNAPSHOT_STARTED) {
-        // Hold the run until the live write below is queued.
-        await snapshotGate;
-      }
       if (ack[PARTICIPANT_ACK_FIELD.STATUS] ===
           MERGE_ACK_STATUS.CATCHUP_READY) {
         // The exact moment the owner may apply the durable cutover.
@@ -440,6 +432,11 @@ test('merge source - queue is fully drained BEFORE the catch-up ack the ' +
       return {result: 'accepted', mergeCutoverApplied: true};
     },
   });
+  const applySnapshotBatch = context.applyMergeSnapshotBatch;
+  context.applyMergeSnapshotBatch = async function(...args) {
+    await snapshotGate;
+    return applySnapshotBatch.call(this, ...args);
+  };
   await context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
   });
@@ -492,31 +489,25 @@ test('merge source - a mirror failure emits the matching failure ack ' +
     ['poison-key'],
   );
 
-  // A write landing AFTER the failure is retained too — fail closed,
-  // never silently dropped from mirroring (D2c).
+  // Once the failed worker and its live callbacks are quiescent, later
+  // writes cannot attach themselves to the terminal predecessor.
   await context.handleMergeReplicationAfterWrite({
     sql: 'INSERT INTO users (id, v) VALUES (?, ?)',
     params: ['later-key', 2],
   });
   t.same(
     context.mergeReplication.pendingEntries.map((entry) => entry.params[0]),
-    ['poison-key', 'later-key'],
+    ['poison-key'],
   );
 });
 
 test('merge source - cutover-active live writes preserve source order ' +
     'behind a non-empty queue (D5 guard)', async (t) => {
   const {context, mirroredWrites} = await buildSourceContext();
-  context.mergeReplication = {
-    metadata: context.normalizeMergeTransitionMetadata(buildMetadata()),
-    phase: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
-    pendingEntries: [
+  context.mergeReplication = authorizedHandle(
+    context, PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE, [
       {sql: 'INSERT INTO users (id, v) VALUES (?, ?)', params: ['older', 1]},
-    ],
-    flushPromise: null,
-    startedAt: 1,
-    lastError: null,
-  };
+    ]);
 
   // The newer write must NOT overtake the older queued entry.
   await context.handleMergeReplicationAfterWrite({

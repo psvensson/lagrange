@@ -493,6 +493,10 @@ test('PartitionService - queues source writes during split backfill and suppress
       flushPromise: null,
       startedAt: Date.now(),
       lastError: null,
+      authorized: true,
+      quiescing: false,
+      quiesced: false,
+      activities: new Set(),
     };
     partition.replaySplitEntry = async (entry) => {
       mirroredWrites.push(entry.sql);

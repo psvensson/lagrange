@@ -61,10 +61,11 @@ import {
   acceptsConnections,
   buildCallArtifact,
   enablePasswordPgwire,
+  MERGE_DISABLED_TABLE_POLICY,
   planShardPartitions,
   newReducedShardCounts,
   readReducedShardCounts,
-  splitTableOnce,
+  shapeStableTwoPartitionFanout,
   startSeamRuntime,
   stopPlacedPgwireReplicas,
   useSingleNodeReplicaShape,
@@ -215,6 +216,16 @@ function partitionsIntersecting(partitions, range) {
   }).map((partition) => partition.partition_id || partition.partitionId);
 }
 
+function sortedPartitionIds(partitions) {
+  return partitions.map((partition) =>
+    typeof partition === 'string' ? partition :
+      partition.partition_id || partition.partitionId).sort();
+}
+
+function currentPartitionIds(engine) {
+  return sortedPartitionIds(engine.getTablePartitions(TABLE) || []);
+}
+
 function importSpecifiers(source) {
   return [
     ...source.matchAll(IMPORT_SPECIFIER_PATTERN),
@@ -342,11 +353,28 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
     }
   });
   mark('rowsInserted');
-  const partitions = await readable(
-    () => splitTableOnce(runtime.engine, TABLE, wait()));
+  const fanoutShape = await readable(
+    () => shapeStableTwoPartitionFanout(runtime, TABLE, wait()));
+  const partitions = fanoutShape.partitions;
   mark('tableSplit');
-  const ownedPartitions = partitionsIntersecting(partitions, LOW_RANGE);
-  t.equal(ownedPartitions.length, 1,
+  const partitionIds = sortedPartitionIds(partitions);
+  t.same(fanoutShape.visiblePolicy, MERGE_DISABLED_TABLE_POLICY,
+    'harness: the canonical merge-disabled policy is visible before split');
+  t.same(fanoutShape.effectivePolicy, MERGE_DISABLED_TABLE_POLICY,
+    'harness: the production manager consumes the same table policy');
+  t.same(fanoutShape.managerSizeBytes, fanoutShape.liveSizeBytes,
+    'harness: the production manager consumes both live leader sizes');
+  const childPairIsNonvacuous = fanoutShape.combinedSizeBytes >
+    MERGE_DISABLED_TABLE_POLICY.mergeStorageThreshold;
+  t.ok(childPairIsNonvacuous,
+    'harness: the live child pair contains more than one byte');
+  t.notOk(fanoutShape.mergeEligible,
+    'harness: the production manager keeps the live children merge-ineligible');
+  t.same(currentPartitionIds(runtime.engine), partitionIds,
+    'harness: both exact split children are current after shaping');
+  const ownedPartitionIds = sortedPartitionIds(
+    partitionsIntersecting(partitions, LOW_RANGE));
+  t.equal(ownedPartitionIds.length, 1,
     'harness: the literal key range lies inside exactly one partition');
 
 
@@ -412,6 +440,8 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
     st.comment(`pg receives on cross-pinned Binding: ${
       JSON.stringify(crossPinned)}`);
   });
+  t.same(currentPartitionIds(runtime.engine), partitionIds,
+    'both exact split children remain current after Artifact installation');
 
   await t.test('Binding is the durable, create-only execution intent',
     async (st) => {
@@ -443,9 +473,13 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       st.comment(`pg receives on changed Binding: ${JSON.stringify(changed)}`);
     });
   mark('deployed');
+  t.same(currentPartitionIds(runtime.engine), partitionIds,
+    'both exact split children remain current after Binding deployment');
 
   await t.test('key-anchored call runs only the owning partition',
     async (st) => {
+      st.same(currentPartitionIds(runtime.engine), partitionIds,
+        'the literal call starts on the exact two-child topology');
       mark('callStart');
       const served = await callWhenReady(BINDING_NAME.OWNED_RANGE);
       mark('firstCallServed');
@@ -468,15 +502,20 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
         client, BINDING_NAME.OWNED_RANGE, {topN: TOP_N_ALL}), expected);
       const witnessed = await newReducedShardCounts(db, before, wait());
       st.comment(`witnessed shard slots of the new result: ${witnessed}`);
-      st.same(witnessed, [ownedPartitions.length],
+      st.same(witnessed, [ownedPartitionIds.length],
         'the published result snapshot witnesses exactly one shard');
-      st.same(planShardPartitions(runtime.engine, OWNED_RANGE_STATEMENT),
-        ownedPartitions,
-        'harness evidence: the canonical planner plans the owning shard only');
+      st.same(sortedPartitionIds(
+        planShardPartitions(runtime.engine, OWNED_RANGE_STATEMENT)),
+      ownedPartitionIds,
+      'harness evidence: the canonical planner plans the owning shard only');
+      st.same(currentPartitionIds(runtime.engine), partitionIds,
+        'the literal call retains both exact split children');
     });
 
   await t.test('the unbounded Binding fans out to every partition',
     async (st) => {
+      st.same(currentPartitionIds(runtime.engine), partitionIds,
+        'the unbounded call starts on the exact two-child topology');
       const served = await callWhenReady(BINDING_NAME.UNBOUNDED);
       st.equal(served.outcome, CONSUMER_RETRY_OUTCOME.SERVED,
         JSON.stringify(served.lastFailure));
@@ -486,11 +525,14 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
       st.same(await callBinding(
         client, BINDING_NAME.UNBOUNDED, {topN: TOP_N_ALL}), expected);
       st.same(await newReducedShardCounts(db, before, wait()),
-        [partitions.length],
+        [partitionIds.length],
         'the published result snapshot witnesses every shard');
-      st.equal(
-        planShardPartitions(runtime.engine, UNBOUNDED_STATEMENT).length,
-        partitions.length);
+      st.same(sortedPartitionIds(
+        planShardPartitions(runtime.engine, UNBOUNDED_STATEMENT)),
+      partitionIds,
+      'the canonical planner fans out to both exact split children');
+      st.same(currentPartitionIds(runtime.engine), partitionIds,
+        'the unbounded call retains both exact split children');
     });
   mark('callsServed');
 
@@ -557,6 +599,9 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
         st.notOk(scanned.includes(token), `no reference to ${token}`);
       }
     });
+
+  t.same(currentPartitionIds(runtime.engine), partitionIds,
+    'both exact split children remain current through the full exercise');
 
   t.comment(`seam wall-clock ms: ${JSON.stringify(clock.marks)}`);
 });

@@ -8,11 +8,11 @@ import {
 } from './partition-mirror-replay-cursor.js';
 import {
   assertSplitRoutingDescriptorEpochForService,
-  isSameSplitReplicationMetadata,
   normalizeSplitTransitionMetadataForService,
   reconstructSplitExecutionStateForService,
   resolveSplitDescriptorEpochEvidenceForService,
 } from './partition-service-split-replication-state.js';
+import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
 
 const {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -24,7 +24,6 @@ const {
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   PRESSURE_WORK_CLASS,
@@ -43,6 +42,69 @@ const {
   routePartitionSplitSnapshotBatch,
   runRetryableControlPlaneWrite,
 } = PARTITION_SERVICE_SHARED;
+
+async function authorizeSplitSnapshotStart(owner, metadata, options) {
+  if (options.startAuthorized === true) return;
+  const start = await owner.emitSplitSourceAck(
+    metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED);
+  const accepted = start?.result === PARTICIPANT_ACK_RESULT.ACCEPTED;
+  const duplicate = start?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+  if (!accepted && !duplicate) {
+    throw new Error(
+      PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+  }
+}
+
+async function runSplitBackfillPhase(owner, handle, metadata) {
+  if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING) return;
+  owner.seedSplitReplayCursorFromDurableLog(handle);
+  const snapshot = owner.openSplitSnapshotDatabase();
+  try {
+    await owner.backfillSplitSnapshot(snapshot, metadata);
+  } finally {
+    snapshot?.close?.();
+  }
+  handle.phase = PARTITION_TRANSITION_STATE.SPLIT_CATCHUP;
+}
+
+async function runSplitCatchupPhase(owner, handle, metadata) {
+  if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP) return;
+  await owner.flushSplitReplicationQueue();
+  const catchupAck = await owner.emitSplitSourceAck(
+    metadata,
+    SPLIT_ACK_STATUS.CATCHUP_READY,
+    buildReplayCursorCheckpoint(
+      SPLIT_ACK_CHECKPOINT_FIELD,
+      handle.snapshotBarrierIndex,
+      handle.replayWatermarkIndex,
+    ),
+  );
+  if (catchupAck?.splitCutoverApplied !== true) {
+    throw new Error(
+      PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
+    );
+  }
+  handle.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
+}
+
+async function runSplitCutoverPhase(owner, handle, metadata) {
+  if (handle.phase !==
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) return;
+  await owner.flushSplitReplicationQueue();
+  const cleanupAck = await owner.emitSplitSourceAck(
+    metadata,
+    SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+    {
+      [SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false,
+      ...buildReplayCursorCheckpoint(
+        SPLIT_ACK_CHECKPOINT_FIELD,
+        handle.snapshotBarrierIndex,
+        handle.replayWatermarkIndex,
+      ),
+    },
+  );
+  handle.terminal = cleanupAck?.splitSourceRetired === true;
+}
 
 class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
   getSize() {
@@ -151,16 +213,6 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     return assertSplitRoutingDescriptorEpochForService(this, metadata);
   }
   /**
-   * Determine whether two split-replication descriptors refer to the same split.
-   * @param {Object|null} left - Existing metadata.
-   * @param {Object|null} right - Incoming metadata.
-   * @return {boolean} True when both describe the same split.
-   * @private
-   */
-  isSameSplitReplication(left, right) {
-    return isSameSplitReplicationMetadata(left, right);
-  }
-  /**
    * Reconstruct the transient split execution handle from durable
    * workflow state after a process restart.
    *
@@ -186,7 +238,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @return {Promise<void>}
    * @private
    */
-  async runSplitReplicationWorkflow() {
+  async runSplitReplicationWorkflow(options = {}) {
     const splitReplication = this.splitReplication;
     const metadata = splitReplication?.metadata || null;
     if (!metadata) {
@@ -199,56 +251,17 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       targetPartitionIds: metadata.targetPartitionIds,
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
-    await this.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED);
-    this.seedSplitReplayCursorFromDurableLog(splitReplication);
-    const snapshot = this.openSplitSnapshotDatabase();
-    try {
-      await this.backfillSplitSnapshot(snapshot, metadata);
-      splitReplication.phase = PARTITION_TRANSITION_STATE.SPLIT_CATCHUP;
-      // Drain every queued live write BEFORE acknowledging catch-up
-      // readiness: the owner may apply the durable cutover on this ack,
-      // and it must never fire while this source holds a known
-      // undelivered delta (merge already enforces this ordering).
-      await this.flushSplitReplicationQueue();
-      // The workflow OWNER applies the durable cutover on this
-      // acknowledgement (sibling carry-forward + epoch flip inside its
-      // serialized lane); the source observes the outcome instead of
-      // advancing the phase itself (merge already works this way).
-      const catchupAck = await this.emitSplitSourceAck(
-        metadata,
-        SPLIT_ACK_STATUS.CATCHUP_READY,
-        buildReplayCursorCheckpoint(
-          SPLIT_ACK_CHECKPOINT_FIELD,
-          splitReplication.snapshotBarrierIndex,
-          splitReplication.replayWatermarkIndex,
-        ),
-      );
-      if (catchupAck?.splitCutoverApplied !== true) {
-        throw new Error(
-          PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
-        );
-      }
-      splitReplication.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
-      await this.flushSplitReplicationQueue();
-      await this.emitSplitSourceAck(
-        metadata,
-        SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
-        {
-          [SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false,
-          ...buildReplayCursorCheckpoint(
-            SPLIT_ACK_CHECKPOINT_FIELD,
-            splitReplication.snapshotBarrierIndex,
-            splitReplication.replayWatermarkIndex,
-          ),
-        },
-      );
+    await authorizeSplitSnapshotStart(this, metadata, options);
+    await runSplitBackfillPhase(this, splitReplication, metadata);
+    await runSplitCatchupPhase(this, splitReplication, metadata);
+    await runSplitCutoverPhase(this, splitReplication, metadata);
+    if (splitReplication.phase ===
+        PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_COMPLETED, {
         partitionId: this.partitionId,
         targetPartitionIds: metadata.targetPartitionIds,
         targetPartitionVersion: metadata.targetPartitionVersion,
       });
-    } finally {
-      snapshot?.close?.();
     }
   }
   /**
@@ -299,6 +312,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     const result = await splitWorkflow.acknowledgeSourceParticipant(
       workflowId,
       ack,
+      {metadata, tableId: this.tableId, tableName: this.tableName},
     );
     this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_ACK_EMITTED, {
       partitionId: this.partitionId,
@@ -457,39 +471,6 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
         targetPartitionIds: metadata.targetPartitionIds,
       },
     );
-  }
-  /**
-   * Handle source-partition writes while a split is in progress.
-   * Backfilling queues ordered deltas; cutover-active mirrors immediately.
-   * @param {Object} entry - Applied source write entry.
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleSplitReplicationAfterWrite(entry) {
-    const splitReplication = this.splitReplication;
-    if (
-      !splitReplication ||
-      !splitReplication.metadata ||
-      this.partitionId !== splitReplication.metadata.sourcePartitionId
-    ) {
-      return;
-    }
-    if (entry.splitMirrorOrigin === PARTITION_SPLIT_MIRROR_ORIGIN.TARGET) {
-      return;
-    }
-    if (
-      splitReplication.phase === PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING ||
-      splitReplication.phase === PARTITION_TRANSITION_STATE.SPLIT_CATCHUP
-    ) {
-      this.enqueueSplitDeltaBounded(splitReplication, entry);
-      return;
-    }
-    if (
-      splitReplication.phase !== PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE
-    ) {
-      return;
-    }
-    await this.mirrorCutoverActiveSplitWrite(entry, splitReplication);
   }
   /**
    * Clone a write entry before placing it in the split catch-up queue.

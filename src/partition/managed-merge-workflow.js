@@ -4,29 +4,23 @@ import {
   WORKFLOW_FAMILY,
   attachGroupRetirementResume,
 } from './group-retirement-resume.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../control-plane/control-plane-readiness-constants.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../control-plane/control-plane-readiness-constants.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
 import {RecordProjectedWorkflowCoordinator} from
   './managed-workflow-record-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
 import {TimeoutPolicy} from '../workflow/timeout-policy.js';
 import {WorkflowStepRunner} from '../workflow/workflow-step-runner.js';
-import {
-  PARTICIPANT_ACK_FIELD,
-} from '../workflow/workflow-constants.js';
-
+import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
 import {
   MANAGED_MERGE_ERROR_MSG,
   MANAGED_MERGE_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
-import {
-  MERGE_ACK_STATUS,
-  MERGE_PARTICIPANT_PREFIX,
-} from './merge-ack-constants.js';
+import {MERGE_ACK_STATUS, MERGE_PARTICIPANT_PREFIX} from
+  './merge-ack-constants.js';
 import {
   ManagedSplitWorkflowStateMethods,
 } from './managed-split-workflow-state-methods.js';
@@ -43,6 +37,10 @@ import {
 import {
   ManagedMergeWorkflowExecutionGateMethods,
 } from './managed-merge-workflow-execution-gate-methods.js';
+import {ManagedSourceReplicationStartConfirmationMethods} from
+  './managed-source-replication-start-confirmation-methods.js';
+import {sourceReplicationStartAnswerMayBeLost} from
+  './managed-source-replication-start-delivery.js';
 import {
   ManagedMergeWorkflowDissolutionMethods,
 } from './managed-merge-workflow-dissolution-methods.js';
@@ -59,13 +57,11 @@ import {
 } from './managed-merge-workflow-topology-bindings.js';
 import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
 import {registerWorkflowWithClaim} from './managed-workflow-ownership-core.js';
-
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_MANAGED_MERGE = 'managed_merge';
 const LOCAL_STR_MANAGED_MERGE_WORKFLOW = 'managed-merge-workflow';
 const LOCAL_STR_GETCDCINTEGRATIONSERVICE = 'getCDCIntegrationService';
-
 const ACTIVE_PARTITION_STATE = 'NORMAL';
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
@@ -706,12 +702,22 @@ class ManagedMergeWorkflow {
     const persistedTransitionMetadata =
       this.buildPersistedTransitionMetadata(backfilling);
     for (const sourcePartitionId of input.sourcePartitionIds) {
-      await this.startMergeReplicationOnSourcePartition(
-        sourcePartitionId,
-        input.tableId,
-        input.tableName,
-        persistedTransitionMetadata,
-      );
+      try {
+        await this.startMergeReplicationOnSourcePartition(
+          sourcePartitionId,
+          input.tableId,
+          input.tableName,
+          persistedTransitionMetadata,
+        );
+      } catch (error) {
+        const confirmed = sourceReplicationStartAnswerMayBeLost(error) &&
+          this.isRetryablePostAdmissionExecutionError(error) &&
+          await this.confirmMergeReplicationStart(sourcePartitionId,
+            persistedTransitionMetadata, input.tableId, input.tableName);
+        if (!confirmed) {
+          throw error;
+        }
+      }
     }
 
     this.logger.info(MANAGED_MERGE_LOG_MSG.MERGE_PREPARED, {
@@ -778,6 +784,10 @@ assignWorkflowMethods(
 assignWorkflowMethods(
   ManagedMergeWorkflow.prototype,
   ManagedMergeWorkflowExecutionGateMethods.prototype,
+);
+assignWorkflowMethods(
+  ManagedMergeWorkflow.prototype,
+  ManagedSourceReplicationStartConfirmationMethods.prototype,
 );
 assignWorkflowMethods(
   ManagedMergeWorkflow.prototype,

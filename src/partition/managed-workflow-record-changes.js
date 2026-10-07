@@ -261,8 +261,12 @@ function freshClaimChange(owner, isTerminal) {
       return refuseRecordChange(RECORD_CHANGE_REFUSAL.ACTIVE_OWNER);
     }
     const now = owner.now();
+    const fenceToken = (workflow.fenceToken ?? 0) + 1;
+    const participants = new Map([...workflow.participants]
+      .map(([key, participant]) => [key,
+        {...participant, fenceToken, updatedAt: now}]));
     return {...workflow, workflowOwnerId: owner.workflowOwnerId,
-      fenceToken: (workflow.fenceToken ?? 0) + 1,
+      fenceToken, participants,
       leaseExpiresAt: now + owner.workflowLeaseMs,
       attemptCount: (workflow.attemptCount ?? 0) + 1, updatedAt: now};
   };
@@ -395,6 +399,101 @@ function acknowledgementChange(owner, ack, isAllowed) {
     return renewLeaseRidingWrite(owner, {...workflow, participants,
       updatedAt: now});
   };
+}
+
+/**
+ * The source-mirror START authorization. Unlike an ordinary participant
+ * acknowledgement, START is also admission to physical work: the record at
+ * this change's turn must still name the exact attempt, fence, workflow phase,
+ * and immutable execution payload supplied by the source.
+ *
+ * A source recovering work that the record already advanced past
+ * SNAPSHOT_STARTED confirms the same authorization without moving the
+ * participant backwards. The confirmation still writes through the record
+ * CAS (updatedAt only), so a stale projection cannot authorize a successor.
+ *
+ * @param {Object} owner - Workflow record owner.
+ * @param {Object} ack - SNAPSHOT_STARTED acknowledgement.
+ * @param {Function|null} isAllowed - Participant graph predicate.
+ * @param {Object} authorization - Record-turn authorization contract.
+ * @param {ReadonlySet<string>} authorization.initialStates
+ * @param {ReadonlySet<string>} authorization.startedStatuses
+ * @param {Function} authorization.matches - (workflow) => boolean.
+ * @return {Function}
+ */
+function sourceStartIdentityIsExact(workflow, authorization, fence) {
+  return Number.isInteger(fence) && fence === workflow.fenceToken &&
+    typeof authorization?.matches === 'function' &&
+    authorization.matches(workflow) === true;
+}
+
+function validateSourceStartAuthorization(workflow, ack, authorization,
+  key, status, fence) {
+  if (!workflow) {
+    return {refusal: refuseRecordChange(RECORD_CHANGE_REFUSAL.RECORD_GONE,
+      {superseded: true, key, status, fence})};
+  }
+  const participant = workflow.participants.get(key);
+  const attemptRejection = attemptRejectionOf(workflow, ack);
+  if (attemptRejection) {
+    return {refusal: refuseRecordChange(attemptRejection,
+      {participant: participant ? {...participant} : null, key, status,
+        fence, recordAttempt: workflowAttemptOf(workflow.metadata),
+        attempt: ack[PARTICIPANT_ACK_FIELD.ATTEMPT] ?? null})};
+  }
+  if (!participant ||
+      !sourceStartIdentityIsExact(workflow, authorization, fence)) {
+    return {refusal: refuseRecordChange(
+      PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
+      {participant: participant ? {...participant} : null, key, status,
+        fence, currentStatus: participant?.status ?? null,
+        authorizationRefused: true})};
+  }
+  return {participant};
+}
+
+function refuseSourceStart(participant, key, status, fence) {
+  return refuseRecordChange(PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
+    {participant: {...participant}, key, status, fence,
+      currentStatus: participant.status ?? null,
+      authorizationRefused: true});
+}
+
+function confirmSourceStart(owner, workflow, participant, key) {
+  const now = owner.now();
+  const participants = new Map(workflow.participants);
+  participants.set(key, {...participant, updatedAt: now});
+  return {...workflow, participants, updatedAt: now};
+}
+
+function applySourceStartAuthorization(owner, ack, authorization, ordinary,
+  key, status, fence, workflow) {
+  const validation = validateSourceStartAuthorization(
+    workflow, ack, authorization, key, status, fence);
+  if (validation.refusal) return validation.refusal;
+  const {participant} = validation;
+  const alreadyStarted = authorization.startedStatuses.has(
+    String(participant.status || ''));
+  const executableState = authorization.executableStates?.has(
+    String(workflow.status || '')) === true;
+  if (alreadyStarted &&
+      (authorization.confirmationOnly === true || executableState)) {
+    return confirmSourceStart(owner, workflow, participant, key);
+  }
+  if (authorization.confirmationOnly === true ||
+      !authorization.initialStates.has(String(workflow.status || ''))) {
+    return refuseSourceStart(participant, key, status, fence);
+  }
+  return ordinary(workflow);
+}
+
+function sourceStartAuthorizationChange(owner, ack, isAllowed, authorization) {
+  const ordinary = acknowledgementChange(owner, ack, isAllowed);
+  const key = String(ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]);
+  const status = String(ack[PARTICIPANT_ACK_FIELD.STATUS]);
+  const fence = ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN];
+  return (workflow) => applySourceStartAuthorization(
+    owner, ack, authorization, ordinary, key, status, fence, workflow);
 }
 
 /**
@@ -555,6 +654,7 @@ export {
   phaseChange,
   refusedStepAs,
   acknowledgementChange,
+  sourceStartAuthorizationChange,
   clearChange,
   freshClaimChange,
   ownedChange,

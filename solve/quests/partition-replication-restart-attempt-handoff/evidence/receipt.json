@@ -1,0 +1,18 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "partition-replication-restart-attempt-handoff",
+  "status": "pass",
+  "testFileDigests": {
+    "test/partition/partition-replication-restart-attempt-handoff.test.js": "9b6fff8cdfb181b07f3263cd9c675fee50942676fea538dabe91ebaf2ab14854"
+  },
+  "generatedAt": "2026-10-06T14:52:52.100Z",
+  "receipts": [
+    {
+      "id": "restart-attempt-owner-contract",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/partition-replication-restart-attempt-handoff.test.js 1>&2",
+      "detail": "the real split and merge worker paths prove durable START authorization, answer-loss continuation, stale-request inertness, crash recovery, transport handler processing, exact-redelivery single-flight, quiescent takeover, and both successor-family directions",
+      "testFile": "test/partition/partition-replication-restart-attempt-handoff.test.js"
+    }
+  ]
+}
