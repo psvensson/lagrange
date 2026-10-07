@@ -31,6 +31,11 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
+// The durable partitions.created_at of a long-lived partition: far older
+// than the minimum merge age, so these pairs are past the age gate and the
+// assertions below exercise auto-execution itself.
+const LONG_LIVED_PARTITION_CREATED_AT_MS = 1;
+
 function buildPartitionRow(partitionId, startKey, endKey) {
   return {
     partition_id: partitionId,
@@ -38,6 +43,7 @@ function buildPartitionRow(partitionId, startKey, endKey) {
     partition_key_start: startKey,
     partition_key_end: endKey,
     size_bytes: 64,
+    created_at: LONG_LIVED_PARTITION_CREATED_AT_MS,
   };
 }
 

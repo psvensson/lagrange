@@ -4905,9 +4905,9 @@
     },
     {
       "filePath": "src/partition/partition-split-merge-manager-transition-methods.js",
-      "line": 322,
+      "line": 312,
       "column": 41,
-      "functionName": "scheduleDeferredManagedSplitRetry",
+      "functionName": "armDeferredEvaluation",
       "kind": "local_retry_loop",
       "reason": "local retry loops using setTimeout or setInterval are forbidden; use canonical retry registries or owners instead",
       "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"

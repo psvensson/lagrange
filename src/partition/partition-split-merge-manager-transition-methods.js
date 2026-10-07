@@ -266,19 +266,41 @@ class PartitionSplitMergeManagerTransitionMethods {
   }
 
   /**
-   * Flush deferred managed-split retry scheduling state and trigger
-   * one reactive evaluation request.
+   * Retain one logical obligation when supplied, project the earliest due
+   * batch onto diagnostics, and own the one timer for that deadline.
+   * @param {number} [dueAtMs] - When the evaluation is due.
+   * @param {Object} [context] - {reasonCode, partitionId|partitionIds}.
    * @return {void}
    * @private
    */
-  flushDeferredRetryEvaluation() {
-    const request = this.deferredRetryEvaluation;
-    this.deferredRetryEvaluation = null;
-    this.deferredRetryEvaluationDueAtMs = null;
-    this.deferredRetryEvaluationTimer = null;
-    this.requestEvaluation(request || {
-      reasonCode: SPLIT_MERGE_REASON.MANAGED_SPLIT_RETRY_DUE,
-    });
+  armDeferredEvaluation(dueAtMs, context) {
+    if (context) {
+      this.retainDeferredEvaluationObligation(dueAtMs, context);
+    }
+
+    const earliest = this.resolveEarliestDeferredEvaluation();
+
+    const timerAlreadyOwnsDeadline =
+      this.deferredRetryEvaluationTimer &&
+      this.deferredRetryEvaluationDueAtMs === earliest.dueAtMs;
+    this.deferredRetryEvaluation = earliest.context;
+    this.deferredRetryEvaluationDueAtMs = earliest.dueAtMs;
+    if (timerAlreadyOwnsDeadline) {
+      return;
+    }
+    if (this.deferredRetryEvaluationTimer) {
+      clearTimeout(this.deferredRetryEvaluationTimer);
+      this.deferredRetryEvaluationTimer = null;
+    }
+    if (this.isShutdown || earliest.dueAtMs === null) {
+      return;
+    }
+    const delayMs = Math.max(0, earliest.dueAtMs - this.now());
+    this.deferredRetryEvaluationTimer = setTimeout(() => {
+      this.deferredRetryEvaluationTimer = null;
+      this.flushDeferredRetryEvaluation();
+    }, delayMs);
+    this.deferredRetryEvaluationTimer.unref?.();
   }
 
   /**
@@ -298,31 +320,38 @@ class PartitionSplitMergeManagerTransitionMethods {
     if (!Number.isFinite(retryDueAtMs)) {
       return;
     }
-    const nowMs = Date.now();
-    const normalizedDueAtMs = Math.max(nowMs, retryDueAtMs);
-    this.deferredRetryEvaluation = this.mergeRequestedEvaluationContext(
-      this.deferredRetryEvaluation,
+    this.armDeferredEvaluation(retryDueAtMs, {
+      reasonCode: SPLIT_MERGE_REASON.MANAGED_SPLIT_RETRY_DUE,
+      partitionId,
+    });
+  }
+
+  /**
+   * A pair whose rates were read over a span longer than the merge span
+   * limit (sparse, periodic-only calls) is deferred, not merged: arm ONE
+   * follow-up evaluation one window plus one sampling cadence step later,
+   * when the QPM authority's previous sample (this evaluation's call)
+   * anchors a span of about one window. Bounded: one follow-up per pair
+   * between two periodic evaluations.
+   * @param {string} leftId - Left partition ID.
+   * @param {string} rightId - Right partition ID.
+   * @return {boolean} Whether a follow-up was armed.
+   * @private
+   */
+  scheduleMergeTrafficSpanFollowUp(leftId, rightId) {
+    const pairKey = `${leftId}\u0000${rightId}`;
+    if (this.isShutdown || this.mergeTrafficSpanFollowUps.has(pairKey)) {
+      return false;
+    }
+    this.mergeTrafficSpanFollowUps.add(pairKey);
+    this.armDeferredEvaluation(
+      this.now() + this.trafficWindowMs + this.trafficSampleCadenceMs,
       {
-        reasonCode: SPLIT_MERGE_REASON.MANAGED_SPLIT_RETRY_DUE,
-        partitionId,
+        reasonCode: SPLIT_MERGE_REASON.MERGE_TRAFFIC_SPAN_FOLLOW_UP,
+        partitionIds: [leftId, rightId],
       },
     );
-    if (this.deferredRetryEvaluationTimer &&
-        Number.isFinite(this.deferredRetryEvaluationDueAtMs) &&
-        this.deferredRetryEvaluationDueAtMs <= normalizedDueAtMs) {
-      return;
-    }
-    if (this.deferredRetryEvaluationTimer) {
-      clearTimeout(this.deferredRetryEvaluationTimer);
-      this.deferredRetryEvaluationTimer = null;
-    }
-
-    this.deferredRetryEvaluationDueAtMs = normalizedDueAtMs;
-    const retryDelayMs = Math.max(0, normalizedDueAtMs - nowMs);
-    this.deferredRetryEvaluationTimer = setTimeout(() => {
-      this.flushDeferredRetryEvaluation();
-    }, retryDelayMs);
-    this.deferredRetryEvaluationTimer.unref?.();
+    return true;
   }
 
   /**

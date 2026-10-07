@@ -16,6 +16,7 @@ import {
   DEBUG_TRACE_DEFAULTS,
   BENCHMARK_GATE_DEFAULTS,
   DETERMINISTIC_DEBUG_DEFAULTS,
+  PARTITION_CONFIG_ENV_FIELDS,
 } from './constants.js';
 import {
   resolvePostgresBaselineBenchmarkConfig,
@@ -39,31 +40,11 @@ function resolvePartitionStartupConfig(partial = {}) {
   }
 
   const normalized = {};
-  const splitThresholdBytes =
-    normalizePositiveInteger(partial.splitThresholdBytes);
-  const splitThresholdQpm =
-    normalizePositiveInteger(partial.splitThresholdQpm);
-  const mergeThresholdBytes =
-    normalizePositiveInteger(partial.mergeThresholdBytes);
-  const mergeThresholdQpm =
-    normalizePositiveInteger(partial.mergeThresholdQpm);
-  const evaluationIntervalMs =
-    normalizePositiveInteger(partial.evaluationIntervalMs);
-
-  if (splitThresholdBytes !== null) {
-    normalized.splitThresholdBytes = splitThresholdBytes;
-  }
-  if (splitThresholdQpm !== null) {
-    normalized.splitThresholdQpm = splitThresholdQpm;
-  }
-  if (mergeThresholdBytes !== null) {
-    normalized.mergeThresholdBytes = mergeThresholdBytes;
-  }
-  if (mergeThresholdQpm !== null) {
-    normalized.mergeThresholdQpm = mergeThresholdQpm;
-  }
-  if (evaluationIntervalMs !== null) {
-    normalized.evaluationIntervalMs = evaluationIntervalMs;
+  for (const [field] of PARTITION_CONFIG_ENV_FIELDS) {
+    const value = normalizePositiveInteger(partial[field]);
+    if (value !== null) {
+      normalized[field] = value;
+    }
   }
 
   return Object.keys(normalized).length > ZERO ? normalized : null;

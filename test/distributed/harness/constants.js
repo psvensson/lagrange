@@ -187,7 +187,25 @@ const PARTITION_ENV_KEYS = Object.freeze({
   MERGE_THRESHOLD_BYTES: 'PARTITION_MERGE_THRESHOLD_BYTES',
   MERGE_THRESHOLD_QPM: 'PARTITION_MERGE_THRESHOLD_QPM',
   EVALUATION_INTERVAL_MS: 'PARTITION_EVALUATION_INTERVAL_MS',
+  TRAFFIC_WINDOW_MS: 'PARTITION_TRAFFIC_WINDOW_MS',
+  MERGE_MINIMUM_AGE_MS: 'PARTITION_MERGE_MINIMUM_AGE_MS',
 });
+
+// The scenario config's `partition` block: each positive-integer field
+// becomes its node env key (the runtime's partition.* config).
+const PARTITION_CONFIG_ENV_FIELDS = Object.freeze([
+  Object.freeze(['splitThresholdBytes', PARTITION_ENV_KEYS.SPLIT_THRESHOLD_BYTES]),
+  Object.freeze(['splitThresholdQpm', PARTITION_ENV_KEYS.SPLIT_THRESHOLD_QPM]),
+  Object.freeze(['mergeThresholdBytes', PARTITION_ENV_KEYS.MERGE_THRESHOLD_BYTES]),
+  Object.freeze(['mergeThresholdQpm', PARTITION_ENV_KEYS.MERGE_THRESHOLD_QPM]),
+  Object.freeze([
+    'evaluationIntervalMs', PARTITION_ENV_KEYS.EVALUATION_INTERVAL_MS,
+  ]),
+  Object.freeze(['trafficWindowMs', PARTITION_ENV_KEYS.TRAFFIC_WINDOW_MS]),
+  Object.freeze([
+    'mergeMinimumAgeMs', PARTITION_ENV_KEYS.MERGE_MINIMUM_AGE_MS,
+  ]),
+]);
 
 // --- Network Constants ---
 const NETWORK_NAME_PREFIX = 'ddb-test-net';
@@ -864,6 +882,7 @@ export {
   DOCKER_DEFAULTS,
   ANALYZER_DEFAULTS,
   CONTAINER_ENV_KEYS,
+  PARTITION_CONFIG_ENV_FIELDS,
   PARTITION_ENV_KEYS,
   NETWORK,
   NODE_ROLES,

@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 163,
+    "storage-partition": 165,
     "storage-raft": 110,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2291,
-  "digest": "fnv1a32-c9656201",
+  "censusSize": 2293,
+  "digest": "fnv1a32-fa9ebc6a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-535840a7",
+  "observationDigest": "fnv1a32-5212c84a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1244,6 +1244,7 @@
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "storage-partition",
     "test/partition/partition-commit-deadline-wait-bound-spent.test.js": "storage-partition",
     "test/partition/partition-consensus-hold-log.test.js": "storage-partition",
+    "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js": "storage-partition",
     "test/partition/partition-descriptor-epoch-contract.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
     "test/partition/partition-legacy-consensus-state.test.js": "storage-partition",
@@ -1309,6 +1310,7 @@
     "test/partition/split-execution-state-reconstruction.test.js": "storage-partition",
     "test/partition/split-key-comparator.test.js": "storage-partition",
     "test/partition/split-merge-capacity-preflight.test.js": "storage-partition",
+    "test/partition/split-merge-hysteresis.test.js": "storage-partition",
     "test/partition/split-merge-overlap-guard.test.js": "storage-partition",
     "test/partition/split-mirror-flush-ordering.test.js": "storage-partition",
     "test/partition/split-mirror-write-identity.test.js": "storage-partition",
@@ -8301,6 +8303,11 @@
         "src/config/configuration-manager.js",
         "src/partition/partition-service-constants.js",
         "src/raft/raft-rs-runtime-tuning.js"
+      ]
+    },
+    "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js": {
+      "files": [
+        "src/partition/partition-split-merge-manager.js"
       ]
     },
     "test/partition/partition-leader-row-publication-integrity.test.js": {

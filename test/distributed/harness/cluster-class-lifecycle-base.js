@@ -2,6 +2,7 @@ import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
 import {waitForState} from './wait-for-state.js';
 import {observeConvergenceWait} from './scenario-certification.js';
+import {PARTITION_CONFIG_ENV_FIELDS} from './constants.js';
 import {SOURCE_FINGERPRINT_ENV_VAR} from '../../../src/diagnostics/source-fingerprint.js';
 import {
   createNodeLogStreamer,
@@ -109,7 +110,6 @@ const {
   NODE_OPTION_HEAP_PROF,
   NODE_OPTION_HEAP_SNAPSHOT_NEAR_LIMIT_PREFIX,
   NODE_ROLES,
-  PARTITION_ENV_KEYS,
   PLAYBACK_ENTITY_CLUSTER,
   PLAYBACK_EVENT_TYPE,
   PLAYBACK_SCOPE_CLUSTER,
@@ -595,45 +595,13 @@ class ClusterLifecycleBase {
       );
     }
 
-    if (
-      Number.isInteger(partitionConfig?.splitThresholdBytes) &&
-      partitionConfig.splitThresholdBytes > ZERO
-    ) {
-      env[PARTITION_ENV_KEYS.SPLIT_THRESHOLD_BYTES] = String(
-        partitionConfig.splitThresholdBytes,
-      );
-    }
-    if (
-      Number.isInteger(partitionConfig?.splitThresholdQpm) &&
-      partitionConfig.splitThresholdQpm > ZERO
-    ) {
-      env[PARTITION_ENV_KEYS.SPLIT_THRESHOLD_QPM] = String(
-        partitionConfig.splitThresholdQpm,
-      );
-    }
-    if (
-      Number.isInteger(partitionConfig?.mergeThresholdBytes) &&
-      partitionConfig.mergeThresholdBytes > ZERO
-    ) {
-      env[PARTITION_ENV_KEYS.MERGE_THRESHOLD_BYTES] = String(
-        partitionConfig.mergeThresholdBytes,
-      );
-    }
-    if (
-      Number.isInteger(partitionConfig?.mergeThresholdQpm) &&
-      partitionConfig.mergeThresholdQpm > ZERO
-    ) {
-      env[PARTITION_ENV_KEYS.MERGE_THRESHOLD_QPM] = String(
-        partitionConfig.mergeThresholdQpm,
-      );
-    }
-    if (
-      Number.isInteger(partitionConfig?.evaluationIntervalMs) &&
-      partitionConfig.evaluationIntervalMs > ZERO
-    ) {
-      env[PARTITION_ENV_KEYS.EVALUATION_INTERVAL_MS] = String(
-        partitionConfig.evaluationIntervalMs,
-      );
+    for (const [field, envKey] of PARTITION_CONFIG_ENV_FIELDS) {
+      if (
+        Number.isInteger(partitionConfig?.[field]) &&
+        partitionConfig[field] > ZERO
+      ) {
+        env[envKey] = String(partitionConfig[field]);
+      }
     }
     for (const key of FORWARDED_HOST_ENV_KEYS) {
       const value = process.env[key];

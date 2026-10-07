@@ -411,6 +411,8 @@ const SPLIT_MERGE_REASON = Object.freeze({
   BUSY: 'busy',
   CONTROL_PLANE_BACKPRESSURE: 'control_plane_backpressure',
   MANAGED_SPLIT_RETRY_DUE: 'managed_split_retry_due',
+  MERGE_TRAFFIC_SPAN_FOLLOW_UP: 'merge_traffic_span_follow_up',
+  OUTSTANDING_SPLIT_PROPOSAL: 'outstanding_split_proposal',
   INSUFFICIENT_CAPACITY: 'insufficient_capacity',
   CAPACITY_AVAILABLE: 'capacity_available',
 });
@@ -437,6 +439,8 @@ const SPLIT_MERGE_LOG_MSG = Object.freeze({
   CALCULATED_MEDIAN_KEY: 'Calculated median key',
   EVALUATED_SPLIT_CRITERIA: 'Evaluated split criteria',
   EVALUATED_MERGE_CRITERIA: 'Evaluated merge criteria',
+  MERGE_ELIGIBILITY_DECIDED: 'Evaluated adjacent-pair merge eligibility',
+  OUTSTANDING_SPLIT_REDRIVEN: 'Re-driving outstanding durable split proposal',
   STARTING_SPLIT: 'Starting partition split',
   SPLIT_PLAN_COMPLETED: 'Partition split plan completed',
   SPLIT_PLAN_FAILED: 'Partition split plan failed',
@@ -649,6 +653,38 @@ const SPLIT_MERGE_DEFAULT = Object.freeze({
   MERGE_STORAGE_THRESHOLD_BYTES: 2 * 1024 * 1024 * 1024,
   MERGE_TRAFFIC_THRESHOLD_QPM: 200,
   EVALUATION_INTERVAL_MS: 5 * 60 * 1000,
+  // The QPM measurement window: one minute, the unit the thresholds are
+  // stated in. A partition with less than one window of observations has
+  // no traffic signal (null, never 0).
+  TRAFFIC_WINDOW_MS: 60 * 1000,
+  // The QPM authority stores samples on its own cadence:
+  // window / TRAFFIC_SAMPLES_PER_WINDOW (5 s for the default window).
+  TRAFFIC_SAMPLES_PER_WINDOW: 12,
+  // A merge reads its rate over at most this many windows plus one
+  // sampling cadence step: a longer span (sparse, periodic-only calls) can
+  // average a burst that started near its end down to "idle".
+  MERGE_TRAFFIC_SPAN_WINDOWS: 2,
+  // Minimum durable age (partitions.created_at) before a partition may be
+  // merged; the effective value is never below two traffic windows.
+  MERGE_MINIMUM_PARTITION_AGE_MS: 10 * 60 * 1000,
+  MERGE_MINIMUM_AGE_TRAFFIC_WINDOWS: 2,
+  // Hysteresis: a merge threshold is clamped to this fraction of the split
+  // threshold of the same dimension, so a merged partition never qualifies
+  // to split again on the measurement that merged it.
+  MERGE_HYSTERESIS_FACTOR: 0.5,
+  // Outstanding durable split proposals are re-driven at most this many
+  // attempts (the workflow's own attempt count); then the spent bound is
+  // reported and the proposal stays visible as its durable record.
+  OUTSTANDING_SPLIT_MAX_ATTEMPTS: 10,
+});
+
+const SPLIT_MERGE_MERGE_DECISION = Object.freeze({
+  ELIGIBLE: 'eligible',
+  PARTITION_AGE_UNKNOWN: 'partition_age_unknown',
+  PARTITION_BELOW_MINIMUM_AGE: 'partition_below_minimum_age',
+  TRAFFIC_SIGNAL_UNAVAILABLE: 'traffic_signal_unavailable',
+  TRAFFIC_SPAN_TOO_LONG: 'traffic_span_too_long',
+  ABOVE_MERGE_THRESHOLD: 'above_merge_threshold',
 });
 
 const PENDING_REQUEST_DEFAULT = Object.freeze({
@@ -700,6 +736,7 @@ export {
   PENDING_REQUEST_LOG_MSG,
   PENDING_REQUEST_VALUE,
   SPLIT_MERGE_DEFAULT,
+  SPLIT_MERGE_MERGE_DECISION,
   SPLIT_MERGE_ERROR_MSG,
   SPLIT_MERGE_EVENT,
   SPLIT_MERGE_ID,
