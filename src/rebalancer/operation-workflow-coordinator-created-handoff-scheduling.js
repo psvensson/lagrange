@@ -209,6 +209,7 @@ function buildCoordinatorCreatedDispatchRow(operation) {
     type: operation?.type || null,
     partition_id: operation?.partitionId || null,
     replica_id: operation?.replicaId,
+    target_claim_key: operation?.targetClaimKey || null,
     source_node_id: operation?.sourceNodeId,
     target_node_id: operation?.targetNodeId,
     status: operation?.status,
@@ -220,6 +221,8 @@ function buildCoordinatorCreatedDispatchRow(operation) {
     steps_history: stepsHistory,
     entity_type: operation?.entityType,
     entity_id: operation?.entityId,
+    membership_publication_epoch:
+      operation?.membershipPublicationEpoch ?? null,
   };
 }
 
