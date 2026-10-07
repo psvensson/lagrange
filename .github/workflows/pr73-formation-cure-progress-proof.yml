@@ -1,0 +1,40 @@
+name: pr73-formation-cure-progress-proof
+
+on:
+  push:
+    branches:
+      - "proof/pr73-formation-cure-progress-20261007"
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - run: npm ci
+      - name: CL-044 mutation-admission seam
+        run: node test/rebalancer/formation-barrier-recovery-mutation-admission.test.js
+      - name: CL-044 lane discrimination
+        run: node test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js
+      - name: Ledger cure and surplus-drain reachability
+        run: node test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js
+      - name: Coordinator-created progress continuity
+        run: node test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+      - name: Reservation owner visibility and expiry
+        run: |
+          node test/rebalancer/reservation-reconcile-premature-orphan-release.test.js
+          node test/rebalancer/reservation-expiry-operation-aware.test.js
+      - name: Ledger terminal hold and completion continuity
+        run: |
+          node test/convergence/dt6-operation-ledger-terminal-hold.test.js
+          node test/convergence/dt-ledger-completion-continuity-discriminator.test.js
