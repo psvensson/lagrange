@@ -50,6 +50,8 @@ const GROUP_ID = 'p4c-message-group';
 const MEMBERSHIP_LANE_KEY = `message-group:${GROUP_ID}`;
 const PARTITION_ID = 'replica_operations-p1';
 const TEST_TIMEOUT_MS = 30_000;
+const OWNER_CAPABILITY_REFUSAL_CODE =
+  'SYSTEM_TABLE_OWNER_CAPABILITY_REQUIRED';
 
 function initializeEnvironment() {
   ConfigurationManager.resetInstance();
@@ -185,13 +187,28 @@ function membershipTuple(row) {
   };
 }
 
-async function submitMutationWithLostAnswer(gateway, mutation) {
-  await gateway.submitMutation(mutation);
-  return {
-    success: false,
-    deferRetry: true,
-    error: 'injected generic mutation answer loss after real apply',
-  };
+async function captureGenericMutation(submit, options = {}) {
+  try {
+    const response = await submit();
+    if (options.loseAnswerAfterApply === true) {
+      return {
+        kind: 'returned',
+        success: false,
+        deferRetry: true,
+        error: 'injected generic mutation answer loss after real apply',
+      };
+    }
+    return {
+      kind: 'returned',
+      success: response?.success === true,
+    };
+  } catch (error) {
+    if (error?.code !== OWNER_CAPABILITY_REFUSAL_CODE) throw error;
+    return {
+      kind: 'typed_owner_capability_refusal',
+      code: error.code,
+    };
+  }
 }
 
 test('P4c owner INSERT keeps the exact membership tuple and unique lane',
@@ -259,21 +276,26 @@ test('P4c generic whole-row INSERT is refused before the owner inserts',
     try {
       const operation = createMembershipOperation('p4c-generic-insert');
       const exactOwnerRow = repository.buildReplicaOperationRow(operation);
-      const generic = await gateway.submitMutation({
+      const generic = await captureGenericMutation(() => gateway.submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
         tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         row: exactOwnerRow,
-      });
+      }));
       const rowAfterGeneric = await readRow(world, operation.operationId);
       const owner = await repository.persistNewOperation(operation, {
         returnDisposition: true,
       });
 
       assert.deepEqual({
-        genericAdmitted: generic.success === true && rowAfterGeneric !== null,
+        generic,
+        durableRowAfterGeneric: rowAfterGeneric,
         ownerDisposition: owner.disposition,
       }, {
-        genericAdmitted: false,
+        generic: {
+          kind: 'typed_owner_capability_refusal',
+          code: OWNER_CAPABILITY_REFUSAL_CODE,
+        },
+        durableRowAfterGeneric: null,
         ownerDisposition: REPLICA_OPERATION_INSERT_DISPOSITION.INSERTED,
       }, 'generic refusal must leave the byte-identical owner INSERT available');
     } finally {
@@ -305,12 +327,15 @@ test('P4c generic whole-row UPDATE is refused before owner workflow update',
         null,
         {terminalTransition: true},
       );
-      const generic = await submitMutationWithLostAnswer(gateway, {
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        whereClause: predicate,
-        data: destination,
-      });
+      const generic = await captureGenericMutation(
+        () => gateway.submitMutation({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+          tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+          whereClause: predicate,
+          data: destination,
+        }),
+        {loseAnswerAfterApply: true},
+      );
       const rowAfterGeneric = await readRow(world, operation.operationId);
 
       const owner = await repository.persistOperationUpdate(operation, {
@@ -318,11 +343,14 @@ test('P4c generic whole-row UPDATE is refused before owner workflow update',
       });
 
       assert.deepEqual({
-        genericReplySuccess: generic.success,
+        generic,
         durableRowAfterGeneric: rowAfterGeneric,
         ownerDisposition: owner?.disposition,
       }, {
-        genericReplySuccess: false,
+        generic: {
+          kind: 'typed_owner_capability_refusal',
+          code: OWNER_CAPABILITY_REFUSAL_CODE,
+        },
         durableRowAfterGeneric: rowBeforeGeneric,
         ownerDisposition: REPLICA_OPERATION_UPDATE_DISPOSITION.APPLIED,
       }, 'lost generic reply cannot hide durable mutation, and refusal must ' +
@@ -344,19 +372,34 @@ test('P4c generic whole-row DELETE is refused and has no owner-positive prune',
     try {
       const operation = createMembershipOperation('p4c-generic-delete');
       await repository.persistNewOperation(operation, {returnDisposition: true});
-      const generic = await gateway.submitMutation({
+      const rowBeforeGeneric = await readRow(world, operation.operationId);
+      const generic = await captureGenericMutation(() => gateway.submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
         tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         whereClause: {operation_id: operation.operationId},
-      });
+      }));
       const rowAfterGeneric = await readRow(world, operation.operationId);
 
+      operation.status = ReplicaStatus.FAILED;
+      operation.workflowStep = WORKFLOW_STEP.FAILED;
+      operation.updatedAt = 20;
+      operation.completedAt = 20;
+      operation.errorMessage = 'owner remains usable after delete refusal';
+      const owner = await repository.persistOperationUpdate(operation, {
+        terminalTransition: true,
+      });
+
       assert.deepEqual({
-        genericAdmitted: generic.success === true && rowAfterGeneric === null,
-        ownerRowPresent: rowAfterGeneric !== null,
+        generic,
+        durableRowAfterGeneric: rowAfterGeneric,
+        ownerDisposition: owner?.disposition,
       }, {
-        genericAdmitted: false,
-        ownerRowPresent: true,
+        generic: {
+          kind: 'typed_owner_capability_refusal',
+          code: OWNER_CAPABILITY_REFUSAL_CODE,
+        },
+        durableRowAfterGeneric: rowBeforeGeneric,
+        ownerDisposition: REPLICA_OPERATION_UPDATE_DISPOSITION.APPLIED,
       }, 'the owner row must remain; no semantic prune API exists');
     } finally {
       await closeWorld(world);
@@ -365,3 +408,15 @@ test('P4c generic whole-row DELETE is refused and has no owner-positive prune',
       LoggingService.resetInstance();
     }
   });
+
+test('P4c refusal capture rejects unrelated thrown errors', async () => {
+  const unrelated = new Error('unrelated routing failure');
+  unrelated.code = 'ROUTING_UNAVAILABLE';
+  await assert.rejects(
+    captureGenericMutation(async () => {
+      throw unrelated;
+    }),
+    (error) => error === unrelated,
+    'network, timeout, routing, and fixture errors cannot count as refusal',
+  );
+});
