@@ -120,4 +120,7 @@ async function ensureDispatchReservationOrSkip(owner, operation) {
   );
 }
 
-export {ensureDispatchReservationOrSkip};
+export {
+  ensureDispatchReservationOrSkip,
+  isDispatchReservationGateEngaged,
+};

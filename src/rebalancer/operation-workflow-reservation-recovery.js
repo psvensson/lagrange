@@ -3,6 +3,8 @@ import {
   OPERATION_RESERVATION_RECOVERY_OUTCOME,
   buildReservationAuthorityUnavailableError,
 } from './operation-reservation-attempt-outcome.js';
+import {isDispatchReservationGateEngaged} from
+  './operation-workflow-dispatch-reservation-gate.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from
   './operation-workflow-owner-shared.js';
 
@@ -16,7 +18,7 @@ async function reconcileReservationBackedPendingOperation(
 ) {
   if (
     operation?.workflowStep !== WORKFLOW_STEP.PENDING ||
-    typeof owner.ensureReservationForOperation !== 'function'
+    !isDispatchReservationGateEngaged(owner)
   ) {
     return OPERATION_RESERVATION_RECOVERY_OUTCOME.NOT_APPLICABLE;
   }

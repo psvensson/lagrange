@@ -491,10 +491,21 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         enableTimeouts: false,
       });
-
+      let reservationRecoveryCalls = 0;
+      const ensureReservationForOperation =
+        coordinator.ensureReservationForOperation.bind(coordinator);
+      coordinator.ensureReservationForOperation = async (...args) => {
+        reservationRecoveryCalls += 1;
+        return ensureReservationForOperation(...args);
+      };
       coordinator.initialize();
       try {
+        t.notOk(coordinator.hasStorageReservationSupport(),
+          'the reduced owner has no storage-reservation subsystem');
         const result = await coordinator.handleRecovery();
+        t.equal(reservationRecoveryCalls, 0,
+          'reservation recovery stays disengaged when its canonical ' +
+          'support owner is absent');
         t.equal(
           result.totalIncomplete,
           1,
