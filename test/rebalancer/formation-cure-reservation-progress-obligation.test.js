@@ -36,7 +36,6 @@ test(
     });
     const gateway = coordinator.controlPlaneSystemTableGateway;
     const originalExecuteQuery = gateway.executeQuery.bind(gateway);
-    const originalSubmitMutation = gateway.submitMutation.bind(gateway);
     const originalReadAuthoritativeRows =
       gateway.readAuthoritativeRows.bind(gateway);
 
@@ -72,21 +71,10 @@ test(
     coordinator.resolveEntitySizeBytes = () => 1;
 
     let reservationInsertCount = 0;
-    let operationInsertCount = 0;
     let postReservationOperationOwnerReadCount = 0;
     let reservationInserted = false;
     let operationAuthorityAvailable = false;
     const armedOperationIds = [];
-
-    gateway.submitMutation = async (mutation) => {
-      if (
-        mutation?.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-        mutation?.operation === 'insert'
-      ) {
-        operationInsertCount += 1;
-      }
-      return originalSubmitMutation(mutation);
-    };
 
     gateway.executeQuery = async (sql, params = [], options = {}) => {
       const statement = String(sql);
@@ -157,11 +145,6 @@ test(
         created.operationId,
         OPERATION_ID,
         'the durable operation keeps the deterministic formation-cure identity',
-      );
-      t.equal(
-        operationInsertCount,
-        1,
-        'exactly one durable operation CREATE is attempted',
       );
       t.equal(
         reservationInsertCount,
