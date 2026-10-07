@@ -40,6 +40,7 @@ const SOURCE_TIME = 100;
 const DESTINATION_TIME = 200;
 const TEST_TIMEOUT_MS = 30_000;
 const SELECT_ROW_SQL = 'SELECT * FROM services WHERE service_id = ?';
+const OWNER_CAPABILITY_REQUIRED = 'SYSTEM_TABLE_OWNER_CAPABILITY_REQUIRED';
 
 function initializeEnvironment() {
   ConfigurationManager.resetInstance();
@@ -180,6 +181,33 @@ async function activateThroughOwner(world, registrationEvidence) {
   });
 }
 
+function isOwnerCapabilityRefusal(value) {
+  return value?.code === OWNER_CAPABILITY_REQUIRED ||
+    value?.errorCode === OWNER_CAPABILITY_REQUIRED ||
+    value?.outcome === OWNER_CAPABILITY_REQUIRED;
+}
+
+async function captureGenericActivation(attempt) {
+  try {
+    const result = await attempt();
+    const affectedRows = Number(
+      result?.partitionResult?.affectedRows ??
+        result?.partitionResult?.changes ?? result?.affectedRows ?? 0,
+    );
+    if (affectedRows > 0) return result;
+    if (result?.success === false && affectedRows === 0 &&
+        isOwnerCapabilityRefusal(result)) {
+      return result;
+    }
+    throw new Error(
+      'generic activation returned an unrecognized non-applied outcome',
+    );
+  } catch (error) {
+    if (isOwnerCapabilityRefusal(error)) return error;
+    throw error;
+  }
+}
+
 test('SERVICES activation requires the message-group row owner capability',
   {timeout: TEST_TIMEOUT_MS}, async () => {
     initializeEnvironment();
@@ -206,12 +234,13 @@ test('SERVICES activation requires the message-group row owner capability',
       assert.deepEqual(ownerResult, {...initialRow, ...destination});
       assert.deepEqual(ownerRow, {...initialRow, ...destination});
 
-      await genericWorld.gateway.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        activationPredicate(initialRow),
-        destination,
-        {allowCoalescing: false, skipCacheWait: true},
-      );
+      await captureGenericActivation(() =>
+        genericWorld.gateway.updateSystemTableRow(
+          SYSTEM_TABLE_NAME.SERVICES,
+          activationPredicate(initialRow),
+          destination,
+          {allowCoalescing: false, skipCacheWait: true},
+        ));
       const rowAfterGenericAttempt = await readRow(genericWorld);
 
       const secondOwnerResult = await activateThroughOwner(
@@ -236,3 +265,13 @@ test('SERVICES activation requires the message-group row owner capability',
       LoggingService.resetInstance();
     }
   });
+
+test('generic activation capture rethrows unrelated failures', async () => {
+  const unrelated = Object.assign(new Error('unrelated gateway failure'), {
+    code: 'UNRELATED_GATEWAY_FAILURE',
+  });
+  await assert.rejects(
+    captureGenericActivation(() => Promise.reject(unrelated)),
+    (error) => error === unrelated,
+  );
+});
