@@ -1,0 +1,131 @@
+name: pr73-reservation-green-independent-proof
+
+on:
+  push:
+    branches:
+      - "proof/pr73-reservation-green-independent-20261007"
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: 44592afe62220353c50a7177f5792dd730dd0dd8
+  BASE_SHA: c280049f783c77b23f5070f1a2c389383c18527f
+  TAP_TIMEOUT_FLOOR: '120'
+  LAGRANGE_TEST_MACHINE_FACTOR: '3'
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact repaired reservation commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Bind exact product identity
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          parent="$(git rev-parse HEAD^)"
+          echo "candidate=$CANDIDATE_SHA"
+          echo "checked_out=$actual"
+          echo "parent=$parent"
+          test "$actual" = "$CANDIDATE_SHA"
+          test "$parent" = "$BASE_SHA"
+          test -z "$(git status --porcelain)"
+          echo "LAGRANGE_CHECK_BASE=$BASE_SHA" >> "$GITHUB_ENV"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Exact reservation progress and successor witnesses
+        run: |
+          node test/rebalancer/formation-cure-reservation-progress-obligation.test.js
+          node test/rebalancer/formation-cure-reservation-progress-successor.test.js
+          node test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+          node test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+
+      - name: Historical missed-handoff and rearm closure
+        run: |
+          node test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js
+          node test/rebalancer/coordinator-reused-operation-rearm-guard.test.js
+          node test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+
+      - name: CL-044 formation cure owner cone
+        run: |
+          node test/rebalancer/formation-barrier-recovery-mutation-admission.test.js
+          node test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js
+          node test/rebalancer/operation-ledger-hold-policy.test.js
+
+      - name: Ledger terminal release and formation liveness
+        run: |
+          node test/convergence/dt6-operation-ledger-self-move-holder-release.test.js
+          node test/convergence/dt6-operation-ledger-terminal-hold.test.js
+          node test/convergence/dt-ledger-completion-continuity-discriminator.test.js
+          node test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js
+          node test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js
+          node test/convergence/dt6-priority-recovery-drain-parked-self-move.test.js
+
+      - name: Reservation-adjacent owner and repository regressions
+        run: |
+          node test/rebalancer/rebalance-coordinator-operation-ownership.test.js
+          node test/rebalancer/coordinator-reservation-lifecycle.test.js
+          node test/rebalancer/replica-operation-repository-owner-clock-waits.test.js
+
+      - name: Architecture and owner contracts
+        run: |
+          npm run audit:operation-progress-authority
+          npm run model:contracts
+
+      - name: Generated metadata and impact contracts
+        run: |
+          npm run audit:impact-contracts
+          npm run audit:shards
+
+      - name: Scoped structural ratchets
+        run: |
+          npm run test:metrics:scoped
+          npm run audit:file-size
+          npm run audit:guidelines
+
+      - name: Scoped lint
+        run: |
+          npx eslint \
+            src/rebalancer/operation-reservation-attempt-outcome.js \
+            src/rebalancer/operation-workflow-dispatch-reservation-gate.js \
+            src/rebalancer/operation-workflow-owner-handoff-state.js \
+            src/rebalancer/operation-workflow-recovery-drain.js \
+            src/rebalancer/operation-workflow-recovery-reconcile.js \
+            src/rebalancer/operation-workflow-reservation-recovery.js \
+            src/rebalancer/operation-workflow-transition-retry.js \
+            src/rebalancer/rebalance-coordinator-lifecycle.js \
+            src/rebalancer/rebalance-coordinator-operation-creation.js \
+            src/rebalancer/rebalance-coordinator-owner-facade.js \
+            src/rebalancer/rebalance-coordinator-reservation-adoption.js \
+            src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js \
+            src/rebalancer/rebalance-coordinator-shared.js \
+            src/rebalancer/replica-operation-repository-mutation-gateway-methods.js \
+            src/rebalancer/replica-operation-repository-read-methods.js \
+            src/rebalancer/replica-operation-repository.js \
+            src/rebalancer/storage-reservation-authority.js
+
+      - name: Upload proof evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr73-reservation-green-independent-${{ github.run_id }}
+          retention-days: 14
+          if-no-files-found: ignore
+          path: |
+            test-output/
+            .tap/test-results/
