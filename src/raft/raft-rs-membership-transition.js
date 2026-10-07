@@ -4,23 +4,17 @@ import {
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
 import {deepFreeze} from './raft-operation-port.js';
-import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
+import {
+  committedMembershipChangeType,
+  encodeCommittedMembershipContext,
+} from './raft-rs-committed-membership-context.js';
 
 const MEMBERSHIP_TRANSITION_REFUSAL_PHASE =
   'membership-transition-admission';
-const MEMBERSHIP_TRANSITION_CONTEXT_ENCODING = 'base64';
 const STAGE_ORDINAL = Object.freeze({
   [RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER]: 1,
   [RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE]: 2,
   [RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE]: 3,
-});
-const STAGE_CHANGE_TYPE = Object.freeze({
-  [RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER]:
-    RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
-  [RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE]:
-    RAFT_RS_CONF_CHANGE_TYPE.ADD_NODE,
-  [RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE]:
-    RAFT_RS_CONF_CHANGE_TYPE.REMOVE_NODE,
 });
 
 function refusal(reason) {
@@ -74,15 +68,15 @@ function transitionCommand(request, stamp, stageOrdinal, peerId) {
     expectedConfigurationKey: stamp.configurationKey,
     expectedMembershipGenerationIndex: stamp.membershipGenerationIndex,
     change: deepFreeze({transition: 0, changes: [deepFreeze({
-      changeType: STAGE_CHANGE_TYPE[request.stage], nodeId: peerId,
-    })], context: Buffer.from(JSON.stringify({
+      changeType: committedMembershipChangeType(request.stage), nodeId: peerId,
+    })], context: encodeCommittedMembershipContext({
       operationId: request.operationId,
       transitionIdentity: request.transitionIdentity,
       permitSequence: request.permitSequence,
       stage: request.stage,
       replicaIdentity: request.replicaIdentity,
       peerId,
-    })).toString(MEMBERSHIP_TRANSITION_CONTEXT_ENCODING)}),
+    })}),
   });
 }
 

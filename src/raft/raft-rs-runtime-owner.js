@@ -102,6 +102,8 @@ import {
 } from './raft-rs-participation-gate.js';
 import {answerCommittedMembership} from
   './raft-rs-committed-membership-read.js';
+import {committedMembershipContext} from
+  './raft-rs-committed-membership-context.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
 import {
@@ -115,6 +117,7 @@ import {proposeMembershipTransition} from
   './raft-rs-membership-transition-runtime.js';
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
+const ENTRY_APPLY_DURABLE_OK = Object.freeze({ok: true});
 
 // Resolved when the core is first needed, never at module load: the resolver
 // owns where source, the dist bundle and the SEA executable keep the binding.
@@ -868,6 +871,7 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!decoded.ok) {
       return decoded;
     }
+    const membershipContext = committedMembershipContext(decoded.value);
     const applied = invokeCoreAt(
       group, expectedGeneration, 'apply_conf_change', decoded.value);
     if (!applied.ok) {
@@ -878,7 +882,7 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!set.ok) {
       return set;
     }
-    return {...applied, decoded: decoded.value};
+    return {...applied, decoded: decoded.value, membershipContext};
   }
   return invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
@@ -897,12 +901,47 @@ function unresolvedCommittedEntry(group, failed) {
     failed;
 }
 
+
+function resolveEntryConfStateOrFailure(group, expectedGeneration, entry) {
+  try {
+    return resolveCommittedEntryConfState(group, expectedGeneration, entry);
+  } catch (error) {
+    return {ok: false, result: groupHostFailure(group,
+      RUNTIME_PHASE.APPLICATION, applicationFailureOf(error))};
+  }
+}
+
+
+function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
+  nextMembershipGeneration, admitted}) {
+  try {
+    applyCommittedEntryTransaction({
+      store: group.store,
+      groupId: group.groupId,
+      entry,
+      confState: resolvedConfState.value,
+      membershipGenerationIndex: String(nextMembershipGeneration),
+      applyCommittedEntry: group.applyCommittedEntry,
+      admitted,
+      committedMembershipContext: resolvedConfState.membershipContext || null,
+      applyCommittedMembershipContext:
+        group.applyCommittedMembershipContext,
+      runApplySlice: group.runApplySlice,
+    });
+    return ENTRY_APPLY_DURABLE_OK;
+  } catch (error) {
+    group.applyTransactionRolledBack?.();
+    return {ok: false, result: groupHostFailure(group,
+      RUNTIME_PHASE.APPLICATION, applicationFailureOf(error))};
+  }
+}
+
 function applyEntries(group, expectedGeneration, entries, index = 0) {
   if (index >= entries.length) {
     return outcome(CORE_OK, {reason: RUNTIME_REASON.ENTRIES_APPLIED});
   }
   const entry = entries[index];
-  const resolvedConfState = resolveCommittedEntryConfState(
+  const resolvedConfState = resolveEntryConfStateOrFailure(
     group, expectedGeneration, entry);
   if (!resolvedConfState.ok) {
     return unresolvedCommittedEntry(group, resolvedConfState.result);
@@ -917,21 +956,11 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
       !foldedIntoBootstrap(group, entry) &&
       BigInt(entry.index) > priorMembershipGeneration ?
     BigInt(entry.index) : priorMembershipGeneration;
-  try {
-    applyCommittedEntryTransaction({
-      store: group.store,
-      groupId: group.groupId,
-      entry,
-      confState: resolvedConfState.value,
-      membershipGenerationIndex: String(nextMembershipGeneration),
-      applyCommittedEntry: group.applyCommittedEntry,
-      admitted,
-      runApplySlice: group.runApplySlice,
-    });
-  } catch (error) {
-    group.applyTransactionRolledBack?.();
-    return groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
-      applicationFailureOf(error));
+  const applyFailure = applyEntryDurablyOrFailure({
+    group, entry, resolvedConfState, nextMembershipGeneration, admitted,
+  });
+  if (!applyFailure.ok) {
+    return applyFailure.result;
   }
   group.membershipGenerationIndex = nextMembershipGeneration;
   if (resolvedConfState.decoded !== undefined) {
@@ -1637,6 +1666,7 @@ function createRuntimeDispatcher(request) {
     resolvePeerAddress: request.resolvePeerAddress,
     resolvePeerIdentity: request.resolvePeerIdentity,
     applyCommittedEntry: request.applyCommittedEntry,
+    applyCommittedMembershipContext: request.applyCommittedMembershipContext,
     applyTransactionRolledBack: request.applyTransactionRolledBack,
     runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,

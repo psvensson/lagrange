@@ -11,8 +11,10 @@ import {
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RaftRsPeerIdentityRegistry} from
-  '../../../src/raft/raft-rs-peer-identity.js';
+import {
+  deriveRaftRsPeerId,
+  RaftRsPeerIdentityRegistry,
+} from '../../../src/raft/raft-rs-peer-identity.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {durableLog} from './committed-membership-oracles.js';
@@ -68,6 +70,16 @@ function assertMalformedStageSubprocess(stageExpression) {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e',
     script], {cwd: process.cwd(), encoding: 'utf8'});
   assert.equal(result.status, 0, result.stderr || result.stdout);
+}
+
+
+function electedWithoutTargetRegistration(t, suffix = 'peer-apply') {
+  const cluster = new PartitionNodeCluster({partitionId: `${GROUP}-${suffix}`,
+    replicaIds: FOUNDERS});
+  t.after(() => cluster.dispose());
+  cluster.tickers = [...FOUNDERS];
+  assert.ok(cluster.settle(() => cluster.leaderReplicaId() !== null));
+  return {cluster, leader: cluster.leaderReplicaId()};
 }
 
 function elected(t) {
@@ -340,4 +352,162 @@ test('a one-voter proposal buffers its settlement before the anchored answer ' +
   assert.ok(settlements.some(({appliedIndex}) =>
     appliedIndex >= answer.proposalIndex),
   'the settlement emitted synchronously is observable before the answer');
+});
+
+
+test('committed semantic ConfChange context reserves the target identity on ' +
+  'followers only after real apply and survives reopen and log pruning', (t) => {
+  const {cluster, leader} = electedWithoutTargetRegistration(t);
+  const follower = FOUNDERS.find((replicaId) => replicaId !== leader);
+  const leaderRegistry = new RaftRsPeerIdentityRegistry(
+    cluster.replica(leader).db);
+  const followerRegistry = new RaftRsPeerIdentityRegistry(
+    cluster.replica(follower).db);
+  const targetPeer = leaderRegistry.registerReplica(TARGET);
+  assert.equal(followerRegistry.raftPeerIdOf(TARGET), null,
+    'setup: follower is not pre-registered with the target identity');
+  const added = propose(cluster, leader, permit(cluster, leader,
+    RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER, 1));
+  assert.equal(added.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
+  assert.ok(cluster.settle(() => cluster.node(follower).readStatus()
+    .confState.learners.includes(targetPeer), {rounds: 400}),
+  'follower applies the committed ConfChange containing the target peer');
+  assert.equal(followerRegistry.raftPeerIdOf(TARGET), targetPeer);
+  cluster.restart(follower);
+  assert.equal(new RaftRsPeerIdentityRegistry(cluster.replica(follower).db)
+    .raftPeerIdOf(TARGET), targetPeer,
+  'the committed identity mapping survives close/reopen');
+  cluster.replica(follower).db.prepare(
+    'DELETE FROM _raft_rs_log WHERE group_id = ? AND log_index <= ?')
+    .run(cluster.partitionId, added.proposalIndex);
+  assert.equal(new RaftRsPeerIdentityRegistry(cluster.replica(follower).db)
+    .raftPeerIdOf(TARGET), targetPeer,
+  'operation-history pruning does not remove the permanent identity mapping');
+});
+
+test('malformed managed ConfChange context refuses before durable ' +
+  'identity mutation or native configuration mutation', (t) => {
+  const {cluster, leader} = electedWithoutTargetRegistration(t,
+    'managed-context-negative');
+  const targetPeer = deriveRaftRsPeerId(TARGET);
+  const proposed = cluster.node(leader).proposeConfChange({
+    transition: 0,
+    changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
+      nodeId: targetPeer}],
+    context: Buffer.from('not json').toString('base64'),
+  });
+  assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+  assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
+    .outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE, {rounds: 400}),
+  'committed malformed managed context holds the group safely');
+  const failed = cluster.node(leader).readStatus();
+  assert.equal(failed.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE);
+  assert.equal(failed.recoveryRequired, true);
+  assert.equal(new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
+    .raftPeerIdOf(TARGET), null,
+  'malformed managed context does not durably reserve the target');
+});
+
+test('decoded null managed ConfChange context refuses before durable or ' +
+  'native progress', (t) => {
+  const {cluster, leader} = electedWithoutTargetRegistration(t,
+    'managed-null-context');
+  const targetPeer = deriveRaftRsPeerId(TARGET);
+  const before = cluster.node(leader).readStatus();
+  const proposed = cluster.node(leader).proposeConfChange({
+    transition: 0,
+    changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
+      nodeId: targetPeer}],
+    context: Buffer.from('null').toString('base64'),
+  });
+  assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+  assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
+    .outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE, {rounds: 400}),
+  'committed null managed context holds the group safely');
+  assert.equal(new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
+    .raftPeerIdOf(TARGET), null,
+  'decoded null managed context does not durably reserve the target');
+  const durable = cluster.replica(leader).db.prepare(
+    'SELECT applied_index, membership_generation_index FROM ' +
+    '_raft_rs_applied_state WHERE group_id = ?').get(cluster.partitionId);
+  assert.equal(durable.membership_generation_index,
+    before.membershipGenerationIndex,
+    'decoded null context does not advance the durable generation');
+  assert.equal(cluster.node(leader).readStatus().recoveryRequired, true,
+    'decoded null context leaves the live runtime held before usable progress');
+});
+
+test('legacy empty-context ConfChange remains valid', (t) => {
+  const {cluster, leader} = electedWithoutTargetRegistration(t,
+    'legacy-empty-context');
+  const targetPeer = deriveRaftRsPeerId(TARGET);
+  const legacy = cluster.node(leader).proposeConfChange({
+    transition: 0,
+    changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
+      nodeId: targetPeer}],
+  });
+  assert.equal(legacy.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    'empty legacy ConfChange context remains valid');
+  assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
+    .confState.learners.includes(targetPeer)));
+});
+
+test('committed context validates exact logical identity binding and rolls ' +
+  'back registry writes with applied-state failure', (t) => {
+  const {cluster, leader} = electedWithoutTargetRegistration(t,
+    'managed-context-atomicity');
+  const follower = FOUNDERS.find((replicaId) => replicaId !== leader);
+  const targetPeer = new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
+    .registerReplica(TARGET);
+  const followerDb = cluster.replica(follower).db;
+  const before = followerDb.prepare(
+    'SELECT applied_index, membership_generation_index FROM ' +
+    '_raft_rs_applied_state WHERE group_id = ?').get(cluster.partitionId);
+  followerDb.prepare(
+    'INSERT INTO raft_rs_peer_identity (replica_identity, raft_peer_id) ' +
+    'VALUES (?, ?)').run('conflicting-logical-replica', targetPeer);
+  const answer = propose(cluster, leader, permit(cluster, leader,
+    RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER, 1));
+  assert.equal(answer.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
+  assert.ok(cluster.settle(() => cluster.node(follower).readStatus()
+    .outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE, {rounds: 400}),
+  'follower fails conservatively after native apply cannot commit registry');
+  assert.equal(new RaftRsPeerIdentityRegistry(followerDb)
+    .raftPeerIdOf(TARGET), null,
+  'failed committed-context reservation leaves no target registry row');
+  const after = followerDb.prepare(
+    'SELECT applied_index, membership_generation_index FROM ' +
+    '_raft_rs_applied_state WHERE group_id = ?').get(cluster.partitionId);
+  assert.equal(after.membership_generation_index,
+    before.membership_generation_index,
+    'membership generation rolls back with the failed registry write');
+  assert.ok(after.applied_index < answer.proposalIndex,
+    'applied state does not advance to the failed ConfChange index');
+});
+
+test('committed context never treats an address as the replica identity', (t) => {
+  const {cluster, leader} = electedWithoutTargetRegistration(t,
+    'address-as-identity');
+  const targetPeer = deriveRaftRsPeerId(TARGET);
+  const proposed = cluster.node(leader).proposeConfChange({
+    transition: 0,
+    changes: [{changeType: RAFT_RS_CONF_CHANGE_TYPE.ADD_LEARNER_NODE,
+      nodeId: targetPeer}],
+    context: Buffer.from(JSON.stringify({
+      operationId: 'address-as-identity-operation',
+      transitionIdentity: 'address-as-identity-transition',
+      permitSequence: 1,
+      stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
+      replicaIdentity: cluster.addressOf(TARGET),
+      peerId: targetPeer,
+    })).toString('base64'),
+  });
+  assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+  assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
+    .outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE, {rounds: 400}));
+  const failed = cluster.node(leader).readStatus();
+  assert.equal(failed.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE);
+  assert.equal(failed.recoveryRequired, true);
+  assert.equal(new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
+    .raftPeerIdOf(TARGET), null);
 });

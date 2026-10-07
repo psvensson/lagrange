@@ -223,6 +223,8 @@ function createRaftRsOperationPort(request) {
       registry.resolveReplicaIdentity(raftPeerId),
     applyCommittedEntry: committedEntryApplication(required(
       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
+    applyCommittedMembershipContext: (context) =>
+      registry.reserveCommittedReplica(context.replicaIdentity, context.peerId),
     applyTransactionRolledBack:
       request[RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
     // Each committed entry's whole SQLite commit+apply transaction is the

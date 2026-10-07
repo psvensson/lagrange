@@ -46,6 +46,9 @@ const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
     `raft peer id ${raftPeerId} is already reserved for ${holder}, so ` +
     `${replicaIdentity} cannot take it. Two logical replicas may never ` +
     'share one raft peer id',
+  bindingMismatch: (replicaIdentity, raftPeerId, expectedPeerId) =>
+    `committed membership context binds ${replicaIdentity} to raft peer id ` +
+    `${raftPeerId}, expected ${expectedPeerId}`,
 });
 
 export {
