@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2773653,
-        "sha256": "fe0ef3f7f91a5ae907cd83061f89d59cd337710f001cd9b443bf383782269708"
+        "bytes": 2774002,
+        "sha256": "90865306ddf657b16ebe4fcc3c70fecaa241a3658539014b4230247716670d84"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "e4b7c09bb162b60ca87a1c3397a40443ca3254d318d322cbc0a44ae861b8bcd6"
+        "sha256": "e89f193842298fde7112d42273eb96a481d984457cfcc22e5f870bced85c951b"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "53efcbebc2c6dc5be2063f8b2f8cfb171b6ff8d7c3fdcfa606a3d90c7c16b3e5"
+    "inputDigest": "ef9bfbdc8d46a81dfb33f4255c2fb160404a38bf2eab6750a454fb821807d059"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "e4b7c09bb162b60ca87a1c3397a40443ca3254d318d322cbc0a44ae861b8bcd6"
+          "sha256": "e89f193842298fde7112d42273eb96a481d984457cfcc22e5f870bced85c951b"
         },
         "cloneGroups": 697,
         "duplicatedLines": 26369,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2773653,
-        "sha256": "fe0ef3f7f91a5ae907cd83061f89d59cd337710f001cd9b443bf383782269708"
+        "bytes": 2774002,
+        "sha256": "90865306ddf657b16ebe4fcc3c70fecaa241a3658539014b4230247716670d84"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "64eb54e9f99a768fd9f8af51d86609f792bed72fa0dee49f055f645aa259d540",
+      "sourceDigest": "9c19629387ba56381e145a68dea75586914f05283e514bcffedc8ad488f572dc",
       "moduleCount": 5233,
-      "edgeCount": 26249,
+      "edgeCount": 26252,
       "unresolvedCount": 36
     }
   },
@@ -304,7 +304,7 @@
       "cycleGroups": 0,
       "lintExclusions": 5,
       "importIn": 71,
-      "importOut": 302,
+      "importOut": 305,
       "score": 670.1,
       "topPaths": [
         "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js",
