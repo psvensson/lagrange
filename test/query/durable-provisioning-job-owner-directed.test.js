@@ -1,5 +1,12 @@
 import {test} from '../../src/test-helpers/tap.js';
+import Database from 'better-sqlite3';
 import {TABLES} from '../../src/constants/index.js';
+import {STORAGE_RESERVATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  generateCreateIndexSQL,
+  generateCreateTableSQL,
+} from '../../src/bootstrap/system-table-schema-sql.js';
 import {OWNER_CONTRACT_STATE} from
   '../../src/control-plane/owner-contract-outcome.js';
 import {createTimeoutBudget} from
@@ -72,9 +79,40 @@ function applyDirectedUpdate(rows, mutation) {
   return {success: true, affectedRows: 1, visibilityState: 'visible'};
 }
 
-function createDurableGateway(serviceRows) {
+function createDurableGateway(t, serviceRows) {
   const rows = new Map();
   const writes = [];
+  const reservationReadRows = [];
+  const reservationDatabase = new Database(':memory:');
+  reservationDatabase.exec(generateCreateTableSQL(STORAGE_RESERVATIONS_SCHEMA));
+  for (const indexSql of generateCreateIndexSQL(STORAGE_RESERVATIONS_SCHEMA)) {
+    reservationDatabase.exec(indexSql);
+  }
+  t.teardown(() => reservationDatabase.close());
+
+  function executeReservationSql(sql, params) {
+    try {
+      const statement = reservationDatabase.prepare(sql);
+      if (statement.reader) {
+        const resultRows = statement.all(...params);
+        reservationReadRows.push(...resultRows.map((row) => ({...row})));
+        return {
+          success: true,
+          rows: resultRows,
+          affectedRows: resultRows.length,
+        };
+      }
+      const result = statement.run(...params);
+      return {
+        success: true,
+        rows: [],
+        changes: result.changes,
+        affectedRows: result.changes,
+      };
+    } catch (error) {
+      return {success: false, error: error.message, errorCode: error.code};
+    }
+  }
 
   function tableRows(tableName) {
     return [...rows.entries()]
@@ -105,6 +143,9 @@ function createDurableGateway(serviceRows) {
 
   async function readRows(tableName, sql = '', params = []) {
     if (tableName === TABLES.SERVICES) return {success: true, rows: serviceRows};
+    if (tableName === TABLES.STORAGE_RESERVATIONS) {
+      return executeReservationSql(sql, params);
+    }
     if (tableName === TABLES.REPLICA_OPERATIONS) {
       return {success: true, rows: readReplicaOperations(sql, params)};
     }
@@ -126,6 +167,12 @@ function createDurableGateway(serviceRows) {
   return {
     rows,
     writes,
+    reservationReadRows,
+    readStoredReservation(reservationId) {
+      return reservationDatabase.prepare(
+        'SELECT * FROM storage_reservations WHERE reservation_id = ?',
+      ).get(reservationId) || null;
+    },
     cdcIntegrationService: {
       insertSystemTableRow() {},
       updateSystemTableRow() {},
@@ -145,6 +192,9 @@ function createDurableGateway(serviceRows) {
     readRows,
     readAuthoritativeRows: readRows,
     async executeQuery(sql, params = []) {
+      if (sql.includes('storage_reservations')) {
+        return executeReservationSql(sql, params);
+      }
       if (sql.includes('replica_operations')) {
         return readRows(TABLES.REPLICA_OPERATIONS, sql, params);
       }
@@ -329,7 +379,7 @@ async function runDurableProvisioningDirectedScenario(t) {
     dispatches: [],
   };
   const serviceRows = [];
-  const gateway = createDurableGateway(serviceRows);
+  const gateway = createDurableGateway(t, serviceRows);
   const firstRuntime = createRuntime({
     capacity,
     clock,
@@ -407,6 +457,19 @@ async function runDurableProvisioningDirectedScenario(t) {
   t.equal(capacity.dispatches.length, NODE_IDS.length,
     'all child work crossed the real coordinator dispatch owner');
   t.equal(operations.every((row) => row.workflow_step === 'ACTIVE'), true);
+  for (const operation of operations) {
+    const reservation = gateway.readStoredReservation(
+      `res-${operation.operation_id}`,
+    );
+    t.ok(reservation,
+      'strict reservation birth persists in the canonical SQLite table');
+    t.equal(reservation.operation_id, operation.operation_id);
+    t.ok(gateway.reservationReadRows.some((row) =>
+      row.operation_id === operation.operation_id && row.status === 'active',
+    ), 'dispatch adopted an authoritative ACTIVE reservation row');
+    t.equal(reservation.status, 'released',
+      'legitimate terminal provisioning releases the adopted reservation');
+  }
 
   const replay = await recoveredRuntime.service.createTable(createAst());
   t.equal(replay.jobId, completed.jobId);

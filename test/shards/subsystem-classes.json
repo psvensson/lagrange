@@ -28,7 +28,7 @@
   "censusSize": 2312,
   "digest": "fnv1a32-59c299ef",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fb26322c",
+  "observationDigest": "fnv1a32-f2add562",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8894,6 +8894,7 @@
     },
     "test/query/durable-provisioning-job-owner-directed.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/owner-contract-outcome.js",
         "src/control-plane/timeout-budget.js",
         "src/query/table-creation-service.js",
