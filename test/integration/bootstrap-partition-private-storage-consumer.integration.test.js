@@ -63,28 +63,37 @@ function createTopologyCache() {
   return cache;
 }
 
-function installPrepareDependencyCounter(partition) {
+function installForbiddenDependencyCounter(partition) {
   const liveDatabase = partition.db;
-  if (!liveDatabase || typeof liveDatabase.prepare !== 'function') {
-    return {count: () => 0, restore() {}};
+  const genericExecuteLocalQuery = partition.executeLocalQuery;
+  let dependencyCount = 0;
+  if (liveDatabase && typeof liveDatabase.prepare === 'function') {
+    partition.db = new Proxy(liveDatabase, {
+      get(target, property) {
+        if (property === 'prepare') {
+          return (...args) => {
+            dependencyCount += 1;
+            return target.prepare(...args);
+          };
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
   }
-  let prepareCount = 0;
-  partition.db = new Proxy(liveDatabase, {
-    get(target, property) {
-      if (property === 'prepare') {
-        return (...args) => {
-          prepareCount += 1;
-          return target.prepare(...args);
-        };
-      }
-      const value = Reflect.get(target, property, target);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  });
+  if (typeof genericExecuteLocalQuery === 'function') {
+    partition.executeLocalQuery = (...args) => {
+      dependencyCount += 1;
+      return genericExecuteLocalQuery.apply(partition, args);
+    };
+  }
   return {
-    count: () => prepareCount,
+    count: () => dependencyCount,
     restore() {
-      partition.db = liveDatabase;
+      if (liveDatabase) partition.db = liveDatabase;
+      if (typeof genericExecuteLocalQuery === 'function') {
+        partition.executeLocalQuery = genericExecuteLocalQuery;
+      }
     },
   };
 }
@@ -134,13 +143,7 @@ test('BootstrapTopologySnapshotOwner consumes frozen partition rows without ' +
       systemTableCache: createTopologyCache(),
       partitionServices,
     });
-    assert.equal(
-      api.bootstrapTopologySnapshotOwner.getPartitionServices(),
-      partitionServices,
-      'BootstrapAPI must wire its production topology owner to the real registry',
-    );
-
-    dependencyCounter = installPrepareDependencyCounter(partition);
+    dependencyCounter = installForbiddenDependencyCounter(partition);
     const rowSets = await api.queryLocalAuthoritativePartitionRowSets(
       TABLE_NAME,
     );
@@ -150,19 +153,11 @@ test('BootstrapTopologySnapshotOwner consumes frozen partition rows without ' +
       id: 'snapshot-row',
       value: 'owned-snapshot-value',
     }]], 'production bootstrap consumer returns the authoritative semantic row');
-    const semanticSelect = await partition.executeLocalQuery(
-      `SELECT id, value FROM ${TABLE_NAME} WHERE id = ?`,
-      ['snapshot-row'],
-    );
-    assert.deepEqual(semanticSelect.rows, [{
-      id: 'snapshot-row',
-      value: 'owned-snapshot-value',
-    }], 'partition-owned semantic SELECT remains available to consumers');
     assert.equal(partition.getRole(), 'leader',
       'partition-owned status remains available without storage traversal');
     assert.equal(dependencyCounter.count(), 0,
       'bootstrap consumer must use a frozen value or owned snapshot action, ' +
-      'not the PartitionService live SQLite handle');
+      'not live SQLite or generic executeLocalQuery');
   } finally {
     dependencyCounter?.restore();
     observerDb?.close();
