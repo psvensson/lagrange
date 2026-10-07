@@ -156,24 +156,6 @@ function assertSplitRoutingDescriptorEpochForService(service, metadata) {
   });
 }
 
-function isSameSplitReplicationMetadata(left, right) {
-  if (!left || !right) {
-    return false;
-  }
-  return (
-    left.primaryKeyColumn === right.primaryKeyColumn &&
-    left.sourcePartitionId === right.sourcePartitionId &&
-    left.splitKey === right.splitKey &&
-    left.targetPartitionVersion === right.targetPartitionVersion &&
-    Array.isArray(left.targetPartitionIds) &&
-    Array.isArray(right.targetPartitionIds) &&
-    left.targetPartitionIds.length === right.targetPartitionIds.length &&
-    left.targetPartitionIds.every(
-      (partitionId, index) => partitionId === right.targetPartitionIds[index],
-    )
-  );
-}
-
 function reconstructSplitExecutionStateForService(service, durableState) {
   if (!durableState || !durableState.phase || !durableState.metadata) {
     return null;
@@ -224,7 +206,6 @@ function reconstructSplitExecutionStateForService(service, durableState) {
 
 export {
   assertSplitRoutingDescriptorEpochForService,
-  isSameSplitReplicationMetadata,
   normalizeSplitTransitionMetadataForService,
   reconstructSplitExecutionStateForService,
   resolveSplitDescriptorEpochEvidenceForService,

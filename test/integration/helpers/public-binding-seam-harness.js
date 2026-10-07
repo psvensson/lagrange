@@ -91,6 +91,11 @@ const REDUCE_WITNESS_SQL =
   'SELECT result_id, source_snapshot_json FROM call_cell_reduce_results';
 const SPLIT_PARTITION_COUNT = 2;
 const SINGLE_NODE_SHAPING_REPLICA_COUNT = 1;
+const MERGE_DISABLED_THRESHOLD = 1;
+const MERGE_DISABLED_TABLE_POLICY = Object.freeze({
+  mergeStorageThreshold: MERGE_DISABLED_THRESHOLD,
+  mergeTrafficThreshold: MERGE_DISABLED_THRESHOLD,
+});
 const GUEST_SOURCE_URL = new URL(
   '../../wasm-service/fixtures/call-cell-world/guest.js',
   import.meta.url,
@@ -111,7 +116,13 @@ const HARNESS_ERROR = Object.freeze({
   READY_TIMEOUT: 'the embedded runtime never reported /readyz 200',
   WITNESS_TIMEOUT: 'no new reduce result snapshot became readable',
   MANIFEST_INVALID: 'seam manifest rejected by the manifest owner',
+  LIVE_CHILD_METRICS_REQUIRED:
+    'both live child leader metrics did not become nonvacuous through the ' +
+    'production manager',
+  POLICY_OWNER_REQUIRED: 'the embedded runtime has no table policy owner',
+  SPLIT_MANAGER_REQUIRED: 'the embedded runtime has no split/merge manager',
   SPLIT_TIMEOUT: 'managed split did not produce two routable partitions',
+  TABLE_ID_REQUIRED: 'the shaped table has no canonical table id',
 });
 
 /**
@@ -120,7 +131,7 @@ const HARNESS_ERROR = Object.freeze({
  *
  * @param {object} options - {nodeId, dataDir, restPort, credentials,
  *   configuration}.
- * @return {Promise<object>} {handle, engine, restoreEnvironment}.
+ * @return {Promise<object>} Internal runtime surfaces for harness shaping.
  */
 async function startSeamRuntime(options) {
   const previous = new Map();
@@ -160,8 +171,10 @@ async function startSeamRuntime(options) {
   return {
     engine: internalRuntime.startupOwner.sqlQueryEngine,
     handle,
+    partitionServices: internalRuntime.startupOwner.partitionServices,
     runtimeDriverRegistry: internalRuntime.startupOwner.runtimeDriverRegistry,
     restoreEnvironment,
+    tablePolicyService: internalRuntime.startupOwner.tablePolicyService,
   };
 }
 
@@ -314,6 +327,114 @@ async function splitTableOnce(engine, tableName, wait) {
   }, wait, HARNESS_ERROR.SPLIT_TIMEOUT);
 }
 
+function partitionIdOf(partition) {
+  return partition?.partition_id || partition?.partitionId || null;
+}
+
+function findLiveLeaderPartitionService(partitionServices, partitionId) {
+  for (const service of partitionServices?.values?.() || []) {
+    if (service?.partitionId === partitionId &&
+        service.isLeader === true &&
+        typeof service.getSize === 'function') {
+      return service;
+    }
+  }
+  return null;
+}
+
+async function waitForLiveChildMetrics(runtime, manager, partitions, wait) {
+  return pollUntil(async () => {
+    const metrics = [];
+    for (const partition of partitions) {
+      const partitionId = partitionIdOf(partition);
+      const service = findLiveLeaderPartitionService(
+        runtime.partitionServices, partitionId);
+      if (!service) return null;
+      const liveSizeBytes = Number(service.getSize());
+      const managerMetrics = await manager.resolvePartitionMetrics(partition);
+      if (!Number.isFinite(liveSizeBytes) ||
+          Number(managerMetrics.sizeBytes) !== liveSizeBytes) {
+        return null;
+      }
+      metrics.push({liveSizeBytes, managerMetrics});
+    }
+    const combinedSizeBytes = metrics.reduce(
+      (total, metric) => total + metric.liveSizeBytes, 0);
+    return combinedSizeBytes > MERGE_DISABLED_THRESHOLD ?
+      {combinedSizeBytes, metrics} : null;
+  }, wait, HARNESS_ERROR.LIVE_CHILD_METRICS_REQUIRED);
+}
+
+/**
+ * Persist the repository's canonical merge-disabled table policy, drive one
+ * managed split, then report the production manager's policy, live metrics,
+ * and merge decision for the test's independent assertions. This is harness
+ * shaping only: every decision surface used here is production.
+ *
+ * @param {object} runtime - Internal runtime retained by startSeamRuntime.
+ * @param {string} tableName - Table whose two-partition proof is required.
+ * @param {{deadlineMs: number, pause: Function}} wait - Existing split wait.
+ * @return {Promise<object>} Frozen partitions and owner-decision evidence.
+ */
+async function shapeStableTwoPartitionFanout(runtime, tableName, wait) {
+  const tablePolicyService = runtime?.tablePolicyService;
+  if (!tablePolicyService) {
+    throw new Error(HARNESS_ERROR.POLICY_OWNER_REQUIRED);
+  }
+  const table = runtime.engine.getTableInfo(tableName);
+  const tableId = table?.table_id || table?.tableId || null;
+  if (!tableId) {
+    throw new Error(HARNESS_ERROR.TABLE_ID_REQUIRED);
+  }
+
+  await tablePolicyService.updateTablePolicy(
+    tableId,
+    MERGE_DISABLED_TABLE_POLICY,
+  );
+  const visiblePolicy = await tablePolicyService.getTablePolicy(tableId);
+
+  const partitions = await splitTableOnce(runtime.engine, tableName, wait);
+  const manager = runtime.engine.partitionSplitMergeManager;
+  if (!manager) {
+    throw new Error(HARNESS_ERROR.SPLIT_MANAGER_REQUIRED);
+  }
+  const [leftPartition, rightPartition] = partitions;
+  const leftPartitionId = partitionIdOf(leftPartition);
+  const rightPartitionId = partitionIdOf(rightPartition);
+  const liveMetrics = await waitForLiveChildMetrics(
+    runtime, manager, partitions, wait);
+  const [leftMetrics, rightMetrics] = liveMetrics.metrics.map(
+    (metric) => metric.managerMetrics);
+  const combinedSizeBytes = liveMetrics.combinedSizeBytes;
+  const effectivePolicy = await manager.getTablePolicy(leftPartitionId);
+  const mergeEligible = manager.evaluateMergeCriteria(
+    leftPartitionId,
+    rightPartitionId,
+    leftMetrics,
+    rightMetrics,
+    effectivePolicy,
+  );
+
+  return Object.freeze({
+    combinedSizeBytes,
+    effectivePolicy: Object.freeze({
+      mergeStorageThreshold: effectivePolicy.mergeStorageThreshold,
+      mergeTrafficThreshold: effectivePolicy.mergeTrafficThreshold,
+    }),
+    liveSizeBytes: Object.freeze(
+      liveMetrics.metrics.map((metric) => metric.liveSizeBytes)),
+    managerSizeBytes: Object.freeze(
+      liveMetrics.metrics.map((metric) => metric.managerMetrics.sizeBytes)),
+    mergeEligible,
+    partitions: Object.freeze([...partitions]),
+    tableId,
+    visiblePolicy: Object.freeze({
+      mergeStorageThreshold: visiblePolicy.mergeStorageThreshold,
+      mergeTrafficThreshold: visiblePolicy.mergeTrafficThreshold,
+    }),
+  });
+}
+
 /**
  * Harness evidence only: the shard plan the canonical call planner makes
  * for a declared statement, through the same batch-executor factory and
@@ -444,9 +565,11 @@ export {
   acceptsConnections,
   buildCallArtifact,
   enablePasswordPgwire,
+  MERGE_DISABLED_TABLE_POLICY,
   planShardPartitions,
   newReducedShardCounts,
   readReducedShardCounts,
+  shapeStableTwoPartitionFanout,
   splitTableOnce,
   startSeamRuntime,
   stopPlacedPgwireReplicas,

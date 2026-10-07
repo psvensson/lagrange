@@ -1,0 +1,277 @@
+diff --git a/test/integration/helpers/public-binding-seam-harness.js b/test/integration/helpers/public-binding-seam-harness.js
+index b8cbcd470..147858310 100644
+--- a/test/integration/helpers/public-binding-seam-harness.js
++++ b/test/integration/helpers/public-binding-seam-harness.js
+@@ -91,6 +91,11 @@ const REDUCE_WITNESS_SQL =
+   'SELECT result_id, source_snapshot_json FROM call_cell_reduce_results';
+ const SPLIT_PARTITION_COUNT = 2;
+ const SINGLE_NODE_SHAPING_REPLICA_COUNT = 1;
++const MERGE_DISABLED_THRESHOLD = 1;
++const MERGE_DISABLED_TABLE_POLICY = Object.freeze({
++  mergeStorageThreshold: MERGE_DISABLED_THRESHOLD,
++  mergeTrafficThreshold: MERGE_DISABLED_THRESHOLD,
++});
+ const GUEST_SOURCE_URL = new URL(
+   '../../wasm-service/fixtures/call-cell-world/guest.js',
+   import.meta.url,
+@@ -111,7 +116,12 @@ const HARNESS_ERROR = Object.freeze({
+   READY_TIMEOUT: 'the embedded runtime never reported /readyz 200',
+   WITNESS_TIMEOUT: 'no new reduce result snapshot became readable',
+   MANIFEST_INVALID: 'seam manifest rejected by the manifest owner',
++  NONVACUOUS_CHILDREN_REQUIRED:
++    'the live split children do not exceed the merge-disabled byte threshold',
++  POLICY_OWNER_REQUIRED: 'the embedded runtime has no table policy owner',
++  SPLIT_MANAGER_REQUIRED: 'the embedded runtime has no split/merge manager',
+   SPLIT_TIMEOUT: 'managed split did not produce two routable partitions',
++  TABLE_ID_REQUIRED: 'the shaped table has no canonical table id',
+ });
+ 
+ /**
+@@ -120,7 +130,7 @@ const HARNESS_ERROR = Object.freeze({
+  *
+  * @param {object} options - {nodeId, dataDir, restPort, credentials,
+  *   configuration}.
+- * @return {Promise<object>} {handle, engine, restoreEnvironment}.
++ * @return {Promise<object>} Internal runtime surfaces for harness shaping.
+  */
+ async function startSeamRuntime(options) {
+   const previous = new Map();
+@@ -162,6 +172,7 @@ async function startSeamRuntime(options) {
+     handle,
+     runtimeDriverRegistry: internalRuntime.startupOwner.runtimeDriverRegistry,
+     restoreEnvironment,
++    tablePolicyService: internalRuntime.startupOwner.tablePolicyService,
+   };
+ }
+ 
+@@ -314,6 +325,77 @@ async function splitTableOnce(engine, tableName, wait) {
+   }, wait, HARNESS_ERROR.SPLIT_TIMEOUT);
+ }
+ 
++function partitionIdOf(partition) {
++  return partition?.partition_id || partition?.partitionId || null;
++}
++
++/**
++ * Persist the repository's canonical merge-disabled table policy, drive one
++ * managed split, then report the production manager's policy, live metrics,
++ * and merge decision for the test's independent assertions. This is harness
++ * shaping only: every decision surface used here is production.
++ *
++ * @param {object} runtime - Internal runtime retained by startSeamRuntime.
++ * @param {string} tableName - Table whose two-partition proof is required.
++ * @param {{deadlineMs: number, pause: Function}} wait - Existing split wait.
++ * @return {Promise<object>} Frozen partitions and owner-decision evidence.
++ */
++async function shapeStableTwoPartitionFanout(runtime, tableName, wait) {
++  const tablePolicyService = runtime?.tablePolicyService;
++  if (!tablePolicyService) {
++    throw new Error(HARNESS_ERROR.POLICY_OWNER_REQUIRED);
++  }
++  const table = runtime.engine.getTableInfo(tableName);
++  const tableId = table?.table_id || table?.tableId || null;
++  if (!tableId) {
++    throw new Error(HARNESS_ERROR.TABLE_ID_REQUIRED);
++  }
++
++  await tablePolicyService.updateTablePolicy(
++    tableId,
++    MERGE_DISABLED_TABLE_POLICY,
++  );
++  const visiblePolicy = await tablePolicyService.getTablePolicy(tableId);
++
++  const partitions = await splitTableOnce(runtime.engine, tableName, wait);
++  const manager = runtime.engine.partitionSplitMergeManager;
++  if (!manager) {
++    throw new Error(HARNESS_ERROR.SPLIT_MANAGER_REQUIRED);
++  }
++  const [leftPartition, rightPartition] = partitions;
++  const leftPartitionId = partitionIdOf(leftPartition);
++  const rightPartitionId = partitionIdOf(rightPartition);
++  const leftMetrics = await manager.resolvePartitionMetrics(leftPartition);
++  const rightMetrics = await manager.resolvePartitionMetrics(rightPartition);
++  const combinedSizeBytes = leftMetrics.sizeBytes + rightMetrics.sizeBytes;
++  if (combinedSizeBytes <= MERGE_DISABLED_THRESHOLD) {
++    throw new Error(HARNESS_ERROR.NONVACUOUS_CHILDREN_REQUIRED);
++  }
++  const effectivePolicy = await manager.getTablePolicy(leftPartitionId);
++  const mergeEligible = manager.evaluateMergeCriteria(
++    leftPartitionId,
++    rightPartitionId,
++    leftMetrics,
++    rightMetrics,
++    effectivePolicy,
++  );
++
++  return Object.freeze({
++    combinedSizeBytes,
++    effectivePolicy: Object.freeze({
++      mergeStorageThreshold: effectivePolicy.mergeStorageThreshold,
++      mergeTrafficThreshold: effectivePolicy.mergeTrafficThreshold,
++    }),
++    mergeEligible,
++    partitions: Object.freeze([...partitions]),
++    tableId,
++    visiblePolicy: Object.freeze({
++      mergeStorageThreshold: visiblePolicy.mergeStorageThreshold,
++      mergeTrafficThreshold: visiblePolicy.mergeTrafficThreshold,
++    }),
++  });
++}
++
+ /**
+  * Harness evidence only: the shard plan the canonical call planner makes
+  * for a declared statement, through the same batch-executor factory and
+@@ -444,9 +526,11 @@ export {
+   acceptsConnections,
+   buildCallArtifact,
+   enablePasswordPgwire,
++  MERGE_DISABLED_TABLE_POLICY,
+   planShardPartitions,
+   newReducedShardCounts,
+   readReducedShardCounts,
++  shapeStableTwoPartitionFanout,
+   splitTableOnce,
+   startSeamRuntime,
+   stopPlacedPgwireReplicas,
+diff --git a/test/integration/public-binding-cell-invocation-seam.integration.test.js b/test/integration/public-binding-cell-invocation-seam.integration.test.js
+index 24aed0b2b..bf795beff 100644
+--- a/test/integration/public-binding-cell-invocation-seam.integration.test.js
++++ b/test/integration/public-binding-cell-invocation-seam.integration.test.js
+@@ -61,10 +61,11 @@ import {
+   acceptsConnections,
+   buildCallArtifact,
+   enablePasswordPgwire,
++  MERGE_DISABLED_TABLE_POLICY,
+   planShardPartitions,
+   newReducedShardCounts,
+   readReducedShardCounts,
+-  splitTableOnce,
++  shapeStableTwoPartitionFanout,
+   startSeamRuntime,
+   stopPlacedPgwireReplicas,
+   useSingleNodeReplicaShape,
+@@ -215,6 +216,16 @@ function partitionsIntersecting(partitions, range) {
+   }).map((partition) => partition.partition_id || partition.partitionId);
+ }
+ 
++function sortedPartitionIds(partitions) {
++  return partitions.map((partition) =>
++    typeof partition === 'string' ? partition :
++      partition.partition_id || partition.partitionId).sort();
++}
++
++function currentPartitionIds(engine) {
++  return sortedPartitionIds(engine.getTablePartitions(TABLE) || []);
++}
++
+ function importSpecifiers(source) {
+   return [
+     ...source.matchAll(IMPORT_SPECIFIER_PATTERN),
+@@ -342,11 +353,26 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+     }
+   });
+   mark('rowsInserted');
+-  const partitions = await readable(
+-    () => splitTableOnce(runtime.engine, TABLE, wait()));
++  const fanoutShape = await readable(
++    () => shapeStableTwoPartitionFanout(runtime, TABLE, wait()));
++  const partitions = fanoutShape.partitions;
+   mark('tableSplit');
+-  const ownedPartitions = partitionsIntersecting(partitions, LOW_RANGE);
+-  t.equal(ownedPartitions.length, 1,
++  const partitionIds = sortedPartitionIds(partitions);
++  t.same(fanoutShape.visiblePolicy, MERGE_DISABLED_TABLE_POLICY,
++    'harness: the canonical merge-disabled policy is visible before split');
++  t.same(fanoutShape.effectivePolicy, MERGE_DISABLED_TABLE_POLICY,
++    'harness: the production manager consumes the same table policy');
++  const childPairIsNonvacuous = fanoutShape.combinedSizeBytes >
++    MERGE_DISABLED_TABLE_POLICY.mergeStorageThreshold;
++  t.ok(childPairIsNonvacuous,
++    'harness: the live child pair contains more than one byte');
++  t.notOk(fanoutShape.mergeEligible,
++    'harness: the production manager keeps the live children merge-ineligible');
++  t.same(currentPartitionIds(runtime.engine), partitionIds,
++    'harness: both exact split children are current after shaping');
++  const ownedPartitionIds = sortedPartitionIds(
++    partitionsIntersecting(partitions, LOW_RANGE));
++  t.equal(ownedPartitionIds.length, 1,
+     'harness: the literal key range lies inside exactly one partition');
+ 
+ 
+@@ -412,6 +438,8 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+     st.comment(`pg receives on cross-pinned Binding: ${
+       JSON.stringify(crossPinned)}`);
+   });
++  t.same(currentPartitionIds(runtime.engine), partitionIds,
++    'both exact split children remain current after Artifact installation');
+ 
+   await t.test('Binding is the durable, create-only execution intent',
+     async (st) => {
+@@ -443,9 +471,13 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+       st.comment(`pg receives on changed Binding: ${JSON.stringify(changed)}`);
+     });
+   mark('deployed');
++  t.same(currentPartitionIds(runtime.engine), partitionIds,
++    'both exact split children remain current after Binding deployment');
+ 
+   await t.test('key-anchored call runs only the owning partition',
+     async (st) => {
++      st.same(currentPartitionIds(runtime.engine), partitionIds,
++        'the literal call starts on the exact two-child topology');
+       mark('callStart');
+       const served = await callWhenReady(BINDING_NAME.OWNED_RANGE);
+       mark('firstCallServed');
+@@ -468,15 +500,20 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+         client, BINDING_NAME.OWNED_RANGE, {topN: TOP_N_ALL}), expected);
+       const witnessed = await newReducedShardCounts(db, before, wait());
+       st.comment(`witnessed shard slots of the new result: ${witnessed}`);
+-      st.same(witnessed, [ownedPartitions.length],
++      st.same(witnessed, [ownedPartitionIds.length],
+         'the published result snapshot witnesses exactly one shard');
+-      st.same(planShardPartitions(runtime.engine, OWNED_RANGE_STATEMENT),
+-        ownedPartitions,
+-        'harness evidence: the canonical planner plans the owning shard only');
++      st.same(sortedPartitionIds(
++        planShardPartitions(runtime.engine, OWNED_RANGE_STATEMENT)),
++      ownedPartitionIds,
++      'harness evidence: the canonical planner plans the owning shard only');
++      st.same(currentPartitionIds(runtime.engine), partitionIds,
++        'the literal call retains both exact split children');
+     });
+ 
+   await t.test('the unbounded Binding fans out to every partition',
+     async (st) => {
++      st.same(currentPartitionIds(runtime.engine), partitionIds,
++        'the unbounded call starts on the exact two-child topology');
+       const served = await callWhenReady(BINDING_NAME.UNBOUNDED);
+       st.equal(served.outcome, CONSUMER_RETRY_OUTCOME.SERVED,
+         JSON.stringify(served.lastFailure));
+@@ -486,11 +523,14 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+       st.same(await callBinding(
+         client, BINDING_NAME.UNBOUNDED, {topN: TOP_N_ALL}), expected);
+       st.same(await newReducedShardCounts(db, before, wait()),
+-        [partitions.length],
++        [partitionIds.length],
+         'the published result snapshot witnesses every shard');
+-      st.equal(
+-        planShardPartitions(runtime.engine, UNBOUNDED_STATEMENT).length,
+-        partitions.length);
++      st.same(sortedPartitionIds(
++        planShardPartitions(runtime.engine, UNBOUNDED_STATEMENT)),
++      partitionIds,
++      'the canonical planner fans out to both exact split children');
++      st.same(currentPartitionIds(runtime.engine), partitionIds,
++        'the unbounded call retains both exact split children');
+     });
+   mark('callsServed');
+ 
+@@ -558,5 +598,8 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+       }
+     });
+ 
++  t.same(currentPartitionIds(runtime.engine), partitionIds,
++    'both exact split children remain current through the full exercise');
++
+   t.comment(`seam wall-clock ms: ${JSON.stringify(clock.marks)}`);
+ });

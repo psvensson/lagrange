@@ -10,6 +10,8 @@ import {createPartitionServiceMergeReplicationMethods} from './partition-service
 import {createPartitionServiceMergeReplicationResumptionMethods} from './partition-service-merge-replication-resumption-methods.js';
 import {createPartitionServiceSplitMirrorQueueMethods} from './partition-service-split-mirror-queue-methods.js';
 import {PartitionServiceSplitAccessorBase} from './partition-service-split-accessor-base.js';
+import {createPartitionServiceSourceReplicationStartMethods} from
+  './partition-service-source-replication-start-methods.js';
 
 class PartitionService extends PartitionServiceSplitAccessorBase {}
 
@@ -26,6 +28,7 @@ Object.assign(
   createPartitionServiceMergeReplicationMethods(),
   createPartitionServiceMergeReplicationResumptionMethods(),
   createPartitionServiceSplitMirrorQueueMethods(),
+  createPartitionServiceSourceReplicationStartMethods(),
 );
 
 export {PartitionService};

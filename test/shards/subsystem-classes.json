@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 166,
+    "storage-partition": 167,
     "storage-raft": 114,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2305,
-  "digest": "fnv1a32-2ca9a248",
+  "censusSize": 2306,
+  "digest": "fnv1a32-e5563ba3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f2ae9255",
+  "observationDigest": "fnv1a32-75cbe8d7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1259,6 +1259,7 @@
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": "storage-partition",
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": "storage-partition",
+    "test/partition/partition-replication-restart-attempt-handoff.test.js": "storage-partition",
     "test/partition/partition-retiring-row-peer-retirement.test.js": "storage-partition",
     "test/partition/partition-runtime-reconstruction-leadership.test.js": "storage-partition",
     "test/partition/partition-service-cdc-log-suppression.test.js": "storage-partition",
@@ -8408,6 +8409,17 @@
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/partition/partition-replication-restart-attempt-handoff.test.js": {
+      "files": [
+        "src/partition/managed-merge-topology-adapter.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/partition-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-shared.js",
+        "src/query/sql-query-engine-partition-routing-readiness.js",
+        "test/contract/message-router-contract-support.js"
       ]
     },
     "test/partition/partition-retiring-row-peer-retirement.test.js": {

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2016,
+    "unit": 2017,
     "integration": 80,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2305,
-  "digest": "fnv1a32-e307ac16",
+  "censusSize": 2306,
+  "digest": "fnv1a32-6cc72b71",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1240,6 +1240,7 @@
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "unit",
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": "unit",
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": "unit",
+    "test/partition/partition-replication-restart-attempt-handoff.test.js": "unit",
     "test/partition/partition-retiring-row-peer-retirement.test.js": "unit",
     "test/partition/partition-runtime-reconstruction-leadership.test.js": "unit",
     "test/partition/partition-service-cdc-log-suppression.test.js": "unit",
