@@ -49,6 +49,23 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         entity_id: entityId,
         membership_publication_epoch:
           operation.membershipPublicationEpoch,
+        source_replica_id: operation.sourceReplicaId ?? null,
+        message_group_membership_lane_key:
+          operation.messageGroupMembershipLaneKey ?? null,
+        message_group_membership_phase:
+          operation.messageGroupMembershipPhase ?? null,
+        message_group_membership_obligation_state:
+          operation.messageGroupMembershipObligationState ?? null,
+        message_group_membership_identity:
+          operation.messageGroupMembershipIdentity ?? null,
+        message_group_learner_stamp:
+          operation.messageGroupLearnerStamp ?? null,
+        message_group_voter_stamp:
+          operation.messageGroupVoterStamp ?? null,
+        message_group_removal_stamp:
+          operation.messageGroupRemovalStamp ?? null,
+        message_group_source_lifecycle_claim:
+          operation.messageGroupSourceLifecycleClaim ?? null,
         create_admission_state: operation.createAdmissionState ?? null,
         create_admission_token: operation.createAdmissionToken ?? null,
         create_admission_replica_created_at:

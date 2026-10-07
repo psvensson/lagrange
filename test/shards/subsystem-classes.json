@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 304,
+    "bootstrap-membership": 305,
     "cdc-metadata": 62,
     "cli-tooling": 96,
     "control-plane": 213,
@@ -12,7 +12,7 @@
     "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 21,
-    "placement-rebalance": 265,
+    "placement-rebalance": 266,
     "query-sql": 172,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -22,13 +22,13 @@
     "storage-raft": 114,
     "test-infrastructure": 142,
     "transactions": 16,
-    "transport-messaging": 89,
+    "transport-messaging": 90,
     "wasm-toolchain": 57
   },
-  "censusSize": 2310,
-  "digest": "fnv1a32-cf1cfe0d",
+  "censusSize": 2313,
+  "digest": "fnv1a32-033b5891",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b7977ea9",
+  "observationDigest": "fnv1a32-52693935",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1025,6 +1025,7 @@
     "test/integration/managed-split-admission-reliability.integration.test.js": "storage-partition",
     "test/integration/managed-split-writes-after-cutover.integration.test.js": "storage-partition",
     "test/integration/membership-consistency.integration.test.js": "bootstrap-membership",
+    "test/integration/message-group-fresh-identity-replacement.integration.test.js": "transport-messaging",
     "test/integration/message-group-multi-join-formation.integration.test.js": "transport-messaging",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "services-runtime",
     "test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js": "services-runtime",
@@ -1141,6 +1142,7 @@
     "test/node/local-only-reconcile-activation-boundary.test.js": "bootstrap-membership",
     "test/node/message-group-executor-activation-handler-boundary.test.js": "bootstrap-membership",
     "test/node/message-group-registration-redrive-owner.test.js": "bootstrap-membership",
+    "test/node/message-group-service-handler-membership.test.js": "bootstrap-membership",
     "test/node/message-group-service-handler.test.js": "bootstrap-membership",
     "test/node/metrics-accuracy.property.test.js": "bootstrap-membership",
     "test/node/node-lifecycle-service.test.js": "bootstrap-membership",
@@ -1669,6 +1671,7 @@
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "placement-rebalance",
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "placement-rebalance",
     "test/rebalancer/message-group-membership-change-parked.test.js": "placement-rebalance",
+    "test/rebalancer/message-group-membership-operation-lane.test.js": "placement-rebalance",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "placement-rebalance",
     "test/rebalancer/message-group-rebalancer-wiring.test.js": "placement-rebalance",
     "test/rebalancer/move-planner-capacity-gating.test.js": "placement-rebalance",
@@ -7934,6 +7937,14 @@
         "test/test-helpers/message-group-activation-boundary-fixture.js"
       ]
     },
+    "test/node/message-group-service-handler-membership.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/node/message-group-service-handler.test.js": {
       "files": [
         "src/node/message-group-service-handler.js",
@@ -10360,6 +10371,14 @@
     "test/rebalancer/message-group-membership-change-parked.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/message-group-membership-operation-lane.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-status.js"
       ]
     },
     "test/rebalancer/message-group-operation-routing.integration.test.js": {

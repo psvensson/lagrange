@@ -1,0 +1,65 @@
+import {COLUMN_TYPE} from './system-table-schema-shared-constants.js';
+
+const REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN = Object.freeze({
+  SOURCE_REPLICA_ID: 'source_replica_id',
+  LANE_KEY: 'message_group_membership_lane_key',
+  PHASE: 'message_group_membership_phase',
+  OBLIGATION_STATE: 'message_group_membership_obligation_state',
+  IDENTITY: 'message_group_membership_identity',
+  LEARNER_STAMP: 'message_group_learner_stamp',
+  VOTER_STAMP: 'message_group_voter_stamp',
+  REMOVAL_STAMP: 'message_group_removal_stamp',
+  SOURCE_LIFECYCLE_CLAIM: 'message_group_source_lifecycle_claim',
+});
+
+const REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS = Object.freeze([
+  {
+    name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.SOURCE_REPLICA_ID,
+    type: COLUMN_TYPE.TEXT,
+  },
+  {
+    name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.LANE_KEY,
+    type: COLUMN_TYPE.TEXT,
+  },
+  {
+    name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.PHASE,
+    type: COLUMN_TYPE.TEXT,
+  },
+  {
+    name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.OBLIGATION_STATE,
+    type: COLUMN_TYPE.TEXT,
+  },
+  {
+    name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.IDENTITY,
+    type: COLUMN_TYPE.TEXT,
+  },
+  {
+    name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.LEARNER_STAMP,
+    type: COLUMN_TYPE.TEXT,
+  },
+  {
+    name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.VOTER_STAMP,
+    type: COLUMN_TYPE.TEXT,
+  },
+  {
+    name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.REMOVAL_STAMP,
+    type: COLUMN_TYPE.TEXT,
+  },
+  {
+    name:
+      REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.SOURCE_LIFECYCLE_CLAIM,
+    type: COLUMN_TYPE.TEXT,
+  },
+]);
+
+const REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_LANE_INDEX = Object.freeze({
+  name: 'idx_replica_ops_message_group_membership_lane',
+  columns: [REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.LANE_KEY],
+  unique: true,
+});
+
+export {
+  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN,
+  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS,
+  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_LANE_INDEX,
+};

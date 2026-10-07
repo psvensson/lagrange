@@ -4,13 +4,23 @@ import {
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
+} from './replica-operation-message-group-membership-fields.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
+const SQLITE_CONSTRAINT_PRIMARY_KEY = 'SQLITE_CONSTRAINT_PRIMARYKEY';
 const REPLICA_OPERATION_VISIBILITY_WAIT = Object.freeze({
   wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
   awaited: 'persisted replica operation authoritatively visible',
 });
+const REPLICA_OPERATION_OWNED_UNIQUE_CONSTRAINTS = Object.freeze([
+  'UNIQUE constraint failed: replica_operations.operation_id',
+  'UNIQUE constraint failed: replica_operations.target_claim_key',
+  'UNIQUE constraint failed: ' +
+    'replica_operations.message_group_membership_lane_key',
+]);
 
 /**
  * The post-persist visibility confirmation spent its deadline (the result
@@ -53,6 +63,14 @@ function nullableOperationValue(value) {
   return value ?? null;
 }
 
+function isReplicaOperationUniqueConstraintFailure(result) {
+  const code = String(result?.code || result?.errorCode || '');
+  const message = String(result?.error || result?.message || '');
+  return code === SQLITE_CONSTRAINT_PRIMARY_KEY ||
+    REPLICA_OPERATION_OWNED_UNIQUE_CONSTRAINTS.some((ownedConstraint) =>
+      message.includes(ownedConstraint));
+}
+
 function buildReplicaOperationInsertParams(operation) {
   return [
     operation.operationId,
@@ -72,6 +90,15 @@ function buildReplicaOperationInsertParams(operation) {
     operation.entityType,
     operation.entityId,
     nullableOperationValue(operation.membershipPublicationEpoch),
+    nullableOperationValue(operation.sourceReplicaId),
+    nullableOperationValue(operation.messageGroupMembershipLaneKey),
+    nullableOperationValue(operation.messageGroupMembershipPhase),
+    nullableOperationValue(operation.messageGroupMembershipObligationState),
+    nullableOperationValue(operation.messageGroupMembershipIdentity),
+    nullableOperationValue(operation.messageGroupLearnerStamp),
+    nullableOperationValue(operation.messageGroupVoterStamp),
+    nullableOperationValue(operation.messageGroupRemovalStamp),
+    nullableOperationValue(operation.messageGroupSourceLifecycleClaim),
     nullableOperationValue(operation.createAdmissionState),
     nullableOperationValue(operation.createAdmissionToken),
     nullableOperationValue(operation.createAdmissionReplicaCreatedAt),
@@ -137,6 +164,20 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       });
     if (!existingOperation) {
+      const conflictingMembershipOperation =
+        await repository.queryAuthoritativeOperationByMessageGroupMembershipLane(
+          operation.messageGroupMembershipLaneKey,
+        );
+      if (conflictingMembershipOperation) {
+        repository.emitReplicaOperationPersistenceDivergence(
+          conflictingMembershipOperation,
+        );
+        return buildNewOperationPersistResult(
+          resultOptions,
+          REPLICA_OPERATION_INSERT_DISPOSITION.MEMBERSHIP_LANE_CONFLICT,
+          conflictingMembershipOperation,
+        );
+      }
       const conflictingTargetOperation =
         await repository.queryAuthoritativeOperationByTargetClaimKey(
           operation.targetClaimKey,
@@ -238,6 +279,13 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
                 operation,
                 result,
               );
+        if (
+          !recoveredPersistedMutation &&
+          options?.returnDisposition === true &&
+          isReplicaOperationUniqueConstraintFailure(result)
+        ) {
+          return resolveNewOperationInsertCollision(this, operation, options);
+        }
         if (!recoveredPersistedMutation) {
           const persistError = this.buildOperationPersistError(result);
           this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
@@ -557,6 +605,18 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         ];
         if (admissionFields.some((field) =>
           observedOperation[field] !== expectedOperation[field])) return false;
+      }
+      const membershipFields = [
+        'sourceReplicaId',
+        ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
+      ];
+      if (membershipFields.some((field) =>
+        expectedOperation[field] !== null &&
+          expectedOperation[field] !== undefined) &&
+        membershipFields.some((field) =>
+          nullableOperationValue(observedOperation[field]) !==
+            nullableOperationValue(expectedOperation[field]))) {
+        return false;
       }
       return true;
     }

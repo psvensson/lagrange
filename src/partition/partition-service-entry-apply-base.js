@@ -11,6 +11,9 @@ import {
   PARTITION_COMMITTED_COMMAND_OUTCOME,
 } from './partition-service-constants.js';
 import {
+  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS,
+} from '../bootstrap/replica-operation-message-group-membership-schema-constants.js';
+import {
   isCommittedCommandType,
   isCommittedSqlCommandType,
 } from './partition-committed-command-admission.js';
@@ -105,6 +108,11 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         PARTITION_SERVICE_COLUMN_SQL
           .ADD_CREATE_ADMISSION_OWNER_INCARNATION],
     ];
+    const membershipColumns =
+      REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS.map((column) => [
+        column.name,
+        `ADD COLUMN ${column.name} ${column.type}`,
+      ]);
     if (!hasTargetClaimKey) {
       this.db.exec(
         `ALTER TABLE ${this.tableName} ` +
@@ -133,6 +141,15 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       this.logger.info(
         PARTITION_SERVICE_LOG_MSG
           .ADDED_REPLICA_OPERATIONS_CREATE_ADMISSION_COLUMN,
+        {tableName: this.tableName, partitionId: this.partitionId, columnName},
+      );
+    }
+    for (const [columnName, addColumnSql] of membershipColumns) {
+      if (columns.some((column) => column.name === columnName)) continue;
+      this.db.exec(`ALTER TABLE ${this.tableName} ${addColumnSql}`);
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG
+          .ADDED_REPLICA_OPERATIONS_MESSAGE_GROUP_MEMBERSHIP_COLUMN,
         {tableName: this.tableName, partitionId: this.partitionId, columnName},
       );
     }
