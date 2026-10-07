@@ -12,8 +12,13 @@ import {
   createRaftOperationPort,
   deepFreeze,
 } from '../../src/raft/raft-operation-port.js';
-import {RAFT_OPERATION_OUTCOME} from
+import {
+  RAFT_MEMBERSHIP_TRANSITION_REASON,
+  RAFT_OPERATION_OUTCOME,
+} from
   '../../src/raft/raft-operation-port-constants.js';
+import {membershipTransitionRefusal} from
+  '../../src/raft/raft-rs-membership-transition.js';
 import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
   COMMITTED_MEMBERSHIP_REFUSAL,
@@ -88,6 +93,9 @@ export class ControllableConsensusPort {
     this.campaignHandler = null;
     this.confChangeHandler = null;
     this.confChangeOutcomes = [];
+    this.membershipTransitionHandler = null;
+    this.membershipTransitions = [];
+    this.membershipTransitionOutcomes = [];
     this.transferRequests = [];
     this.transferHandler = null;
     this.listeners = new Map();
@@ -178,6 +186,19 @@ export class ControllableConsensusPort {
         this.confChangeOutcomes.push(proposed);
         return proposed;
       },
+      proposeMembershipTransition: (transition) => {
+        this.membershipTransitions.push(transition);
+        const answered = this.membershipTransitionHandler ?
+          this.membershipTransitionHandler(transition) :
+          null;
+        const outcome = answered?.outcome ? answered :
+          membershipTransitionRefusal(
+            RAFT_MEMBERSHIP_TRANSITION_REASON
+              .CONFIGURATION_GENERATION_UNAVAILABLE,
+          );
+        this.membershipTransitionOutcomes.push(outcome);
+        return outcome;
+      },
       transferLeadership: (request) => {
         this.transferRequests.push(request);
         const answered = this.transferHandler ?
@@ -266,5 +287,9 @@ export class ControllableConsensusPort {
 
   setConfChangeHandler(handler) {
     this.confChangeHandler = handler;
+  }
+
+  setMembershipTransitionHandler(handler) {
+    this.membershipTransitionHandler = handler;
   }
 }

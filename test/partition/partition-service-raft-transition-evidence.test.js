@@ -2,10 +2,37 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {wirePartitionRaftLifecycleEvents} from
   '../../src/partition/partition-service-raft-lifecycle-wiring.js';
+import {
+  RAFT_MEMBERSHIP_TRANSITION_REASON,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
 import {ControllableConsensusPort} from
   './partition-service-test-support.js';
 
 const TRANSITION_MESSAGE = 'Raft leadership transition evidence';
+
+test('controllable consensus refuses semantic membership without an owner',
+  () => {
+    const consensusPort = new ControllableConsensusPort();
+    const raft = consensusPort.createOperationPort({peerId: 'orders-p1-r2'});
+    const refused = raft.proposeMembershipTransition({operationId: 'op-1'});
+    assert.equal(refused.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+    assert.equal(
+      refused.reason,
+      RAFT_MEMBERSHIP_TRANSITION_REASON.CONFIGURATION_GENERATION_UNAVAILABLE,
+    );
+
+    consensusPort.setMembershipTransitionHandler(() => ({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+      reason: RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED,
+    }));
+    const proposed = raft.proposeMembershipTransition({operationId: 'op-2'});
+    assert.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    assert.deepEqual(consensusPort.membershipTransitions, [
+      {operationId: 'op-1'},
+      {operationId: 'op-2'},
+    ]);
+  });
 
 function buildService() {
   const records = [];
