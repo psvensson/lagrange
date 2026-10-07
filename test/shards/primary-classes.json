@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2027,
+    "unit": 2029,
     "integration": 81,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2317,
-  "digest": "fnv1a32-13020852",
+  "censusSize": 2319,
+  "digest": "fnv1a32-c2c58e15",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1066,6 +1066,7 @@
     "test/message-group/maximum-retry-limiting.property.test.js": "unit",
     "test/message-group/message-delivery-reliability.property.test.js": "unit",
     "test/message-group/message-group-failover-cdc-continuity.test.js": "unit",
+    "test/message-group/message-group-fresh-learner-snapshot.test.js": "unit",
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": "unit",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "unit",
     "test/message-group/message-group-replica-distribution.property.test.js": "unit",
@@ -1552,6 +1553,7 @@
     "test/raft/raft-rs-backend/persistence-admission.test.js": "unit",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "unit",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "unit",
+    "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "unit",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "unit",
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "unit",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "unit",

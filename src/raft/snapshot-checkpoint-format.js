@@ -14,10 +14,18 @@ import {
   RAFT_CHECKPOINT_PAYLOAD_KIND,
   RAFT_CHECKPOINT_PAYLOAD_VERSION,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
+  RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS,
+  RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS,
+  RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS,
+  RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS,
+  RAFT_RS_CHECKPOINT_REASON,
 } from './snapshot-checkpoint-constants.js';
+import {validatedRaftRsPeerIdentityReservations} from
+  './raft-rs-peer-identity.js';
 
 const DIGEST_PREFIX = 'sha256:';
 const OUTCOME = RAFT_CHECKPOINT_VALIDATION_OUTCOME;
+const MAX_SAFE_EXACT = BigInt(Number.MAX_SAFE_INTEGER);
 const SUPPORTED_PAYLOAD_KINDS = Object.freeze(
   Object.values(RAFT_CHECKPOINT_PAYLOAD_KIND),
 );
@@ -48,7 +56,7 @@ function isPayloadDigest(value) {
  * @return {Object} frozen descriptor value
  */
 function buildCheckpointDescriptor(facts) {
-  return Object.freeze({
+  const descriptor = {
     envelopeVersion: RAFT_CHECKPOINT_ENVELOPE_VERSION,
     clusterId: facts.clusterId,
     raftGroupId: facts.raftGroupId,
@@ -64,7 +72,83 @@ function buildCheckpointDescriptor(facts) {
     payloadVersion: facts.payloadVersion,
     payloadByteLength: facts.payloadByteLength,
     payloadDigest: facts.payloadDigest,
-  });
+  };
+  if (facts.payloadKind === RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE) {
+    descriptor.raftRs = Object.freeze({...facts.raftRs,
+      confState: Object.freeze({...facts.raftRs.confState,
+        voters: Object.freeze([...facts.raftRs.confState.voters]),
+        learners: Object.freeze([...facts.raftRs.confState.learners]),
+        votersOutgoing: Object.freeze([
+          ...facts.raftRs.confState.votersOutgoing]),
+        learnersNext: Object.freeze([...facts.raftRs.confState.learnersNext]),
+      }),
+      peerReservations: Object.freeze(facts.raftRs.peerReservations.map(
+        (reservation) => Object.freeze({...reservation}))),
+    });
+  }
+  return Object.freeze(descriptor);
+}
+
+function isDecimalInteger(value) {
+  return typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
+}
+
+function isSafeDecimalInteger(value) {
+  return isDecimalInteger(value) && BigInt(value) <= MAX_SAFE_EXACT;
+}
+
+function unique(values) {
+  return new Set(values).size === values.length;
+}
+
+function validPeerReservations(reservations) {
+  try {
+    validatedRaftRsPeerIdentityReservations(reservations);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validRaftRsConfState(confState) {
+  return exactKeys(confState, RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS) &&
+    RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS.slice(0, -1).every(
+      (field) => Array.isArray(confState[field]) &&
+        confState[field].every(isDecimalInteger) &&
+        unique(confState[field])) &&
+    typeof confState.autoLeave === 'boolean';
+}
+
+function validRaftRsReservationShapes(reservations) {
+  return Array.isArray(reservations) &&
+    reservations.every((reservation) =>
+      exactKeys(reservation, RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS) &&
+      isNonEmptyString(reservation.replicaIdentity) &&
+      isDecimalInteger(reservation.peerId)) &&
+    unique(reservations.map(({replicaIdentity}) => replicaIdentity)) &&
+    unique(reservations.map(({peerId}) => peerId));
+}
+
+function validRaftRsDescriptor(raftRs) {
+  return exactKeys(raftRs, RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS) &&
+    isNonEmptyString(raftRs.groupId) &&
+    isSafeDecimalInteger(raftRs.appliedIndex) &&
+    isSafeDecimalInteger(raftRs.appliedTerm) &&
+    isSafeDecimalInteger(raftRs.membershipGenerationIndex) &&
+    BigInt(raftRs.membershipGenerationIndex) <= BigInt(raftRs.appliedIndex) &&
+    validRaftRsConfState(raftRs.confState) &&
+    validRaftRsReservationShapes(raftRs.peerReservations) &&
+    validPeerReservations(raftRs.peerReservations);
+}
+
+function raftRsDescriptorMatchesEnvelope(descriptor) {
+  const raftRs = descriptor.raftRs;
+  return validRaftRsDescriptor(raftRs) &&
+    raftRs.groupId === descriptor.raftGroupId &&
+    BigInt(raftRs.appliedIndex) === BigInt(descriptor.lastIncludedIndex) &&
+    BigInt(raftRs.appliedTerm) === BigInt(descriptor.lastIncludedTerm) &&
+    BigInt(raftRs.membershipGenerationIndex) ===
+      BigInt(descriptor.membershipEpoch);
 }
 
 // Structural field checks beyond exact-object shape, evaluated as one table:
@@ -117,7 +201,11 @@ const DESCRIPTOR_FIELD_RULES = Object.freeze([
  * @return {{outcome: string, reasons: string[]}} typed structural outcome
  */
 function validateCheckpointDescriptor(descriptor) {
-  if (!exactKeys(descriptor, RAFT_CHECKPOINT_DESCRIPTOR_FIELDS)) {
+  const raftRsImage = descriptor?.payloadKind ===
+    RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE;
+  const fields = raftRsImage ? RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS :
+    RAFT_CHECKPOINT_DESCRIPTOR_FIELDS;
+  if (!exactKeys(descriptor, fields)) {
     return checkpointResult(OUTCOME.CORRUPT_DESCRIPTOR, ['descriptor_shape']);
   }
   const fieldReasons = DESCRIPTOR_FIELD_RULES
@@ -144,6 +232,10 @@ function validateCheckpointDescriptor(descriptor) {
       OUTCOME.UNSUPPORTED_PAYLOAD_KIND,
       [`payloadVersion:${descriptor.payloadVersion}`],
     );
+  }
+  if (raftRsImage && !raftRsDescriptorMatchesEnvelope(descriptor)) {
+    return checkpointResult(OUTCOME.CORRUPT_DESCRIPTOR,
+      [RAFT_RS_CHECKPOINT_REASON.DESCRIPTOR]);
   }
   return checkpointResult(OUTCOME.VALID);
 }

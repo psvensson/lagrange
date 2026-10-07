@@ -49,6 +49,8 @@ const RAFT_SNAPSHOT_INSTALL_REJECTION = Object.freeze({
   IDENTITY_MISMATCH: 'identity_mismatch',
   CHECKPOINT_INVALID: 'checkpoint_invalid',
   WORKER_PATH_UNSUPPORTED: 'worker_path_unsupported',
+  CREATE_ADMISSION_REQUIRED: 'create_admission_required',
+  RAFT_RS_DESCRIPTOR_MISMATCH: 'raft_rs_descriptor_mismatch',
 });
 
 // Marker exact-object shape.
