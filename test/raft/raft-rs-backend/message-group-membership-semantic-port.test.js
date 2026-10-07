@@ -249,15 +249,43 @@ test('same-turn runtime, lifecycle, term, configuration, address and stage ' +
   }
   const add = propose(cluster, leader, base);
   assert.equal(add.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
+  const targetPeer = new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
+    .raftPeerIdOf(TARGET);
+  assert.ok(cluster.settle(() => cluster.node(leader).readStatus()
+    .confState.learners.includes(targetPeer)));
   const remove = permit(cluster, leader,
     RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE, 2);
   assert.equal(propose(cluster, leader, remove).reason,
-    RAFT_MEMBERSHIP_TRANSITION_REASON.ALREADY_ABSENT);
+    RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
+  assert.ok(cluster.settle(() => !cluster.node(leader).readStatus()
+    .confState.learners.includes(targetPeer)));
+  const before = durableLog(cluster.replica(leader).dbFile, GROUP).length;
   const regressed = propose(cluster, leader, {...remove,
     stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
-    permitSequence: 3});
+    permitSequence: 1});
   assert.equal(regressed.reason,
+    RAFT_MEMBERSHIP_TRANSITION_REASON.STALE_CONFIGURATION);
+  assert.equal(durableLog(cluster.replica(leader).dbFile, GROUP).length,
+    before, 'stale lower-stage delivery appends no proposal');
+});
+
+test('already-absent REMOVE still fences a delayed lower-sequence ADD', (t) => {
+  const {cluster, leader} = elected(t);
+  const removed = propose(cluster, leader, permit(cluster, leader,
+    RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE, 2));
+  assert.equal(removed.reason,
+    RAFT_MEMBERSHIP_TRANSITION_REASON.ALREADY_ABSENT);
+  const before = durableLog(cluster.replica(leader).dbFile, GROUP).length;
+  const delayed = propose(cluster, leader, permit(cluster, leader,
+    RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER, 1));
+  assert.equal(delayed.reason,
     RAFT_MEMBERSHIP_TRANSITION_REASON.STALE_PERMIT);
+  assert.equal(durableLog(cluster.replica(leader).dbFile, GROUP).length,
+    before);
+  const targetPeer = new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
+    .raftPeerIdOf(TARGET);
+  assert.equal(cluster.node(leader).readStatus().confState.learners
+    .includes(targetPeer), false);
 });
 
 test('an exact old port cannot rebind to a same-core reopen', (t) => {

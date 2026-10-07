@@ -1,4 +1,8 @@
 import {confChangeProposalRefusal} from './raft-rs-conf-change-admission.js';
+import {
+  LEARNER_PROMOTION_PROOF_DECISION,
+  evaluateLearnerPromotionProof,
+} from './learner-promotion-progress.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 import {
   membershipTransitionRefusal,
@@ -19,6 +23,14 @@ const MEMBERSHIP_TRANSITION_MEMBER_ROLE = Object.freeze({
   ABSENT: 'absent',
 });
 const NO_MEMBERSHIP_TRANSITION_ROLE_OUTCOME = undefined;
+const arrayIsArray = Array.isArray;
+const numberIsSafeInteger = Number.isSafeInteger;
+const objectIs = Object.is;
+const bigIntFn = globalThis.BigInt;
+const numberFn = globalThis.Number;
+const MAX_SAFE_INDEX = bigIntFn(numberFn.MAX_SAFE_INTEGER);
+const DECIMAL_LOWEST_DIGIT = '0';
+const DECIMAL_HIGHEST_DIGIT = '9';
 
 function transitionOk(reason, fields = {}) {
   return deepFreeze({outcome: RAFT_OPERATION_OUTCOME.CORE_OK, reason,
@@ -59,15 +71,95 @@ function transitionRoleOutcome(command, role) {
     return membershipTransitionRefusal(
       RAFT_MEMBERSHIP_TRANSITION_REASON.NOT_LEARNER);
   }
-  if (command.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE) {
-    // Promotion is a different semantic turn: it must compare the target's
-    // own applied membership generation with leader-owned follower progress
-    // before proposing. This generic transition port cannot supply that
-    // proof and therefore keeps the stage parked.
-    return membershipTransitionRefusal(
-      RAFT_MEMBERSHIP_TRANSITION_REASON.PROMOTION_PROOF_REQUIRED);
-  }
   return NO_MEMBERSHIP_TRANSITION_ROLE_OUTCOME;
+}
+
+function canonicalDecimalString(value) {
+  if (value.length === 0 ||
+      (value.length > 1 && value[0] === DECIMAL_LOWEST_DIGIT)) {
+    return false;
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] < DECIMAL_LOWEST_DIGIT ||
+        value[index] > DECIMAL_HIGHEST_DIGIT) return false;
+  }
+  return true;
+}
+
+function canonicalUnsignedBigInt(value) {
+  if (typeof value === 'number') {
+    return numberIsSafeInteger(value) && !objectIs(value, -0) && value >= 0 ?
+      bigIntFn(value) : null;
+  }
+  if (typeof value === 'bigint') return value < 0n ? null : value;
+  return typeof value === 'string' && canonicalDecimalString(value) ?
+    bigIntFn(value) : null;
+}
+
+function canonicalIndexValue(value) {
+  const exact = canonicalUnsignedBigInt(value);
+  return exact === null || exact > MAX_SAFE_INDEX ? null : numberFn(exact);
+}
+
+function canonicalPeerId(value) {
+  const exact = canonicalUnsignedBigInt(value);
+  return exact === null || exact === 0n ? null : exact;
+}
+
+function progressForPeer(progress, peerId) {
+  if (peerId === null || !arrayIsArray(progress)) return null;
+  for (let index = 0; index < progress.length; index += 1) {
+    const entry = progress[index];
+    if (canonicalPeerId(entry?.id) === peerId) return entry;
+  }
+  return null;
+}
+
+function promotionRefusal(command, status, currentTerm) {
+  if (command.stage !== RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE) {
+    return null;
+  }
+  const target = command.targetStatusObservation;
+  if (target.replicaIdentity !== command.replicaIdentity ||
+      target.peerId !== command.peerId) {
+    return membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_TRANSITION_REASON.IDENTITY_MISMATCH);
+  }
+  // The target runtime/lifecycle values are provenance carried from its real
+  // port. This leader cannot authenticate them; their owner validates the
+  // transport binding. The leader can independently compare only the target's
+  // applied term/configuration claim with its own native turn.
+  if (target.term !== command.expectedLeaderTerm ||
+      target.configurationKey !== command.expectedConfigurationKey ||
+      target.membershipGenerationIndex !==
+        command.expectedMembershipGenerationIndex) {
+    return membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_TRANSITION_REASON.TARGET_OBSERVATION_STALE);
+  }
+  const committedIndex = canonicalIndexValue(status.commit);
+  if (committedIndex === null || committedIndex === 0) {
+    return membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_TRANSITION_REASON.PROMOTION_PROGRESS_UNAVAILABLE);
+  }
+  const progress = progressForPeer(
+    status.progress, canonicalPeerId(command.peerId));
+  const learnerMatchIndex = progress ?
+    canonicalIndexValue(progress.matched) : null;
+  if (learnerMatchIndex === null) {
+    return membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_TRANSITION_REASON.PROMOTION_PROGRESS_UNAVAILABLE);
+  }
+  const proof = evaluateLearnerPromotionProof({
+    raftIsLeader: true,
+    currentTerm,
+    committedIndex,
+    learnerMatchIndex,
+    leaderMembershipEpoch: command.expectedMembershipGenerationIndex,
+    learnerMembershipEpoch: target.membershipGenerationIndex,
+  });
+  return proof.decision === LEARNER_PROMOTION_PROOF_DECISION.GRANTED ? null :
+    membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_TRANSITION_REASON.PROMOTION_PROGRESS_BEHIND);
 }
 
 function staleTransitionFence(group, command) {
@@ -117,8 +209,9 @@ function transitionState(context) {
     return {refusal: membershipTransitionRefusal(
       RAFT_MEMBERSHIP_TRANSITION_REASON.CONFIGURATION_GENERATION_UNAVAILABLE)};
   }
+  const currentTerm = canonicalIndexValue(status.value.term);
   if (ROLE[status.value.raftState] !== ROLE_LEADER ||
-      Number(status.value.term) !== command.expectedLeaderTerm) {
+      currentTerm === null || currentTerm !== command.expectedLeaderTerm) {
     return {refusal: membershipTransitionRefusal(
       RAFT_MEMBERSHIP_TRANSITION_REASON.STALE_LEADERSHIP)};
   }
@@ -140,10 +233,12 @@ function transitionState(context) {
   }
   const roleOutcome = transitionRoleOutcome(
     command, memberRole(conf.value, command.peerId));
+  const refusal = promotionRefusal(command, status.value, currentTerm);
   const nativeRefusal = confChangeProposalRefusal({status: status.value,
     confState: conf.value, change: command.change,
     leaderReplicaIdOf: (lead) => leaderReplicaIdOf(group, lead)});
-  return {status: status.value, roleOutcome, nativeRefusal};
+  return {status: status.value, roleOutcome, nativeRefusal,
+    refusal};
 }
 
 function admittedTransitionOutcome(admitted) {
@@ -189,8 +284,8 @@ function proposeMembershipTransition(context) {
   if (admitted.refusal) {
     return admitted.refusal;
   }
-  const immediate = admittedTransitionOutcome(admitted) ??
-    staleTransitionFence(context.group, context.command) ??
+  const immediate = staleTransitionFence(context.group, context.command) ??
+    admittedTransitionOutcome(admitted) ?? admitted.refusal ??
     admitted.roleOutcome ?? admitted.nativeRefusal;
   return immediate ?? anchoredProposal(context, admitted);
 }

@@ -53,6 +53,14 @@ const RAFT_MEMBERSHIP_TRANSITION_REASON = Object.freeze({
   ALREADY_ABSENT: 'membership-transition-already-absent',
   NOT_LEARNER: 'membership-transition-target-not-learner',
   PROMOTION_PROOF_REQUIRED: 'membership-transition-promotion-proof-required',
+  TARGET_OBSERVATION_INVALID:
+    'membership-transition-target-observation-invalid',
+  TARGET_OBSERVATION_STALE:
+    'membership-transition-target-observation-stale',
+  PROMOTION_PROGRESS_UNAVAILABLE:
+    'membership-transition-promotion-progress-unavailable',
+  PROMOTION_PROGRESS_BEHIND:
+    'membership-transition-promotion-progress-behind',
   STALE_PERMIT: 'membership-transition-stale-permit',
   STALE_RUNTIME: 'membership-transition-stale-runtime',
   STALE_LIFECYCLE: 'membership-transition-stale-lifecycle',
