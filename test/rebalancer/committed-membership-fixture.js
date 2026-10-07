@@ -14,6 +14,7 @@ import {SYSTEM_TABLE_NAME} from
 import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
 } from '../../src/raft/raft-committed-membership-constants.js';
+import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {
   ReplicaOperationField,
@@ -57,12 +58,14 @@ function fixtureCommittedMembershipAnswer(cache, partitionId) {
     identities[deriveRaftRsPeerId(unnamed)] = unnamed;
   }
   const voters = Object.keys(identities);
+  const confState = {voters, votersOutgoing: [], learners: [],
+    learnersNext: []};
   return {
     kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
-    voters,
-    votersOutgoing: [],
-    learners: [],
+    ...confState,
     appliedIndex: FIXTURE_COMMITTED_INDEX,
+    configurationKey: raftRsConfStateKey(confState),
+    membershipGenerationIndex: FIXTURE_COMMITTED_INDEX,
     commitIndex: FIXTURE_COMMITTED_INDEX,
     term: FIXTURE_TERM,
     leaderId: Object.values(identities)[0],

@@ -1,7 +1,6 @@
 /**
  * Runtime and service system table schema definitions.
  */
-
 import {
   SD_COL,
   SERVICE_DEFINITION_COLUMN_LIST,
@@ -15,6 +14,9 @@ import {
 } from './system-table-schema-shared-constants.js';
 import {REPLICA_OPERATION_CREATE_ADMISSION_COLUMNS} from
   './replica-operation-create-admission-schema-constants.js';
+import {REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS,
+  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_LANE_INDEX} from
+  './replica-operation-message-group-membership-schema-constants.js';
 
 const CONTROL_PLANE_PUBLICATIONS_SCHEMA = {
   tableName: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
@@ -63,6 +65,7 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'entity_type', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'entity_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'membership_publication_epoch', type: COLUMN_TYPE.INTEGER},
+    ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS,
     ...REPLICA_OPERATION_CREATE_ADMISSION_COLUMNS,
     {name: 'replica_id', type: COLUMN_TYPE.TEXT},
     {name: 'target_claim_key', type: COLUMN_TYPE.TEXT},
@@ -86,6 +89,7 @@ const REPLICA_OPERATIONS_SCHEMA = {
       columns: ['target_claim_key'],
       unique: true,
     },
+    REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_LANE_INDEX,
     {
       name: 'idx_replica_ops_source_step_type',
       columns: ['source_node_id', 'workflow_step', 'type'],

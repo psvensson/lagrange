@@ -59,7 +59,8 @@ const RAFT_RS_SQL = Object.freeze({
       learners_next TEXT NOT NULL,
       auto_leave INTEGER NOT NULL,
       bootstrap_index INTEGER,
-      admission_index INTEGER
+      admission_index INTEGER,
+      membership_generation_index INTEGER NOT NULL DEFAULT 0
     )
   `,
   CREATE_SNAPSHOT_TABLE: `
@@ -72,7 +73,8 @@ const RAFT_RS_SQL = Object.freeze({
       learners TEXT NOT NULL,
       voters_outgoing TEXT NOT NULL,
       learners_next TEXT NOT NULL,
-      auto_leave INTEGER NOT NULL
+      auto_leave INTEGER NOT NULL,
+      membership_generation_index INTEGER
     )
   `,
   DELETE_LOG_FROM: `
@@ -144,19 +146,21 @@ const RAFT_RS_SQL = Object.freeze({
   UPSERT_APPLIED_STATE: `
     INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE}
       (group_id, applied_index, voters, learners, voters_outgoing,
-       learners_next, auto_leave)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+       learners_next, auto_leave, membership_generation_index)
+    VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, 0))
     ON CONFLICT(group_id) DO UPDATE SET
       applied_index = excluded.applied_index,
       voters = excluded.voters,
       learners = excluded.learners,
       voters_outgoing = excluded.voters_outgoing,
       learners_next = excluded.learners_next,
-      auto_leave = excluded.auto_leave
+      auto_leave = excluded.auto_leave,
+      membership_generation_index = COALESCE(?, membership_generation_index)
   `,
   SELECT_APPLIED_STATE: `
     SELECT applied_index, voters, learners, voters_outgoing, learners_next,
-           auto_leave, bootstrap_index, admission_index
+           auto_leave, bootstrap_index, admission_index,
+           membership_generation_index
     FROM ${RAFT_RS_TABLE.APPLIED_STATE}
     WHERE group_id = ?
   `,
@@ -169,8 +173,9 @@ const RAFT_RS_SQL = Object.freeze({
   UPSERT_BOOTSTRAP_APPLIED_STATE: `
     INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE}
       (group_id, applied_index, voters, learners, voters_outgoing,
-       learners_next, auto_leave, bootstrap_index, admission_index)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       learners_next, auto_leave, bootstrap_index, admission_index,
+       membership_generation_index)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(group_id) DO UPDATE SET
       applied_index = excluded.applied_index,
       voters = excluded.voters,
@@ -179,12 +184,23 @@ const RAFT_RS_SQL = Object.freeze({
       learners_next = excluded.learners_next,
       auto_leave = excluded.auto_leave,
       bootstrap_index = excluded.bootstrap_index,
-      admission_index = excluded.admission_index
+      admission_index = excluded.admission_index,
+      membership_generation_index = excluded.membership_generation_index
   `,
   // The applied-state table's columns, asked of the schema: a record written
   // before the participation gate lacks the gate's columns.
   SELECT_APPLIED_STATE_COLUMNS:
     `SELECT name FROM pragma_table_info('${RAFT_RS_TABLE.APPLIED_STATE}')`,
+  SELECT_SNAPSHOT_COLUMNS:
+    `SELECT name FROM pragma_table_info('${RAFT_RS_TABLE.SNAPSHOT}')`,
+  ADD_APPLIED_MEMBERSHIP_GENERATION: `
+    ALTER TABLE ${RAFT_RS_TABLE.APPLIED_STATE}
+    ADD COLUMN membership_generation_index INTEGER NOT NULL DEFAULT 0
+  `,
+  ADD_SNAPSHOT_MEMBERSHIP_GENERATION: `
+    ALTER TABLE ${RAFT_RS_TABLE.SNAPSHOT}
+    ADD COLUMN membership_generation_index INTEGER
+  `,
   UPDATE_ADMISSION_INDEX: `
     UPDATE ${RAFT_RS_TABLE.APPLIED_STATE}
     SET admission_index = ?
@@ -193,8 +209,9 @@ const RAFT_RS_SQL = Object.freeze({
   UPSERT_SNAPSHOT: `
     INSERT INTO ${RAFT_RS_TABLE.SNAPSHOT}
       (group_id, snapshot_index, snapshot_term, data, voters, learners,
-       voters_outgoing, learners_next, auto_leave)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       voters_outgoing, learners_next, auto_leave,
+       membership_generation_index)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(group_id) DO UPDATE SET
       snapshot_index = excluded.snapshot_index,
       snapshot_term = excluded.snapshot_term,
@@ -203,11 +220,13 @@ const RAFT_RS_SQL = Object.freeze({
       learners = excluded.learners,
       voters_outgoing = excluded.voters_outgoing,
       learners_next = excluded.learners_next,
-      auto_leave = excluded.auto_leave
+      auto_leave = excluded.auto_leave,
+      membership_generation_index = excluded.membership_generation_index
   `,
   SELECT_SNAPSHOT: `
     SELECT snapshot_index, snapshot_term, data, voters, learners,
-           voters_outgoing, learners_next, auto_leave
+           voters_outgoing, learners_next, auto_leave,
+           membership_generation_index
     FROM ${RAFT_RS_TABLE.SNAPSHOT}
     WHERE group_id = ?
   `,
@@ -273,6 +292,7 @@ const RAFT_RS_RECORD_COMPATIBILITY = Object.freeze({
 });
 const RAFT_RS_PARTICIPATION_GATE_COLUMNS = Object.freeze([
   'bootstrap_index', 'admission_index']);
+const RAFT_RS_MEMBERSHIP_GENERATION_COLUMN = 'membership_generation_index';
 
 const RAFT_RS_STORE_ERROR_CODE = Object.freeze({
   USER_TRANSACTION_OPEN: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN',
@@ -303,6 +323,7 @@ export {
   RAFT_RS_COMMIT_DURABILITY,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_MEMBERSHIP_GENERATION_COLUMN,
   RAFT_RS_PARTICIPATION_GATE_COLUMNS,
   RAFT_RS_PERSISTENCE_ADMISSION,
   RAFT_RS_RECORD_COMPATIBILITY,

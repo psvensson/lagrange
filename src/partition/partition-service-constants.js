@@ -471,6 +471,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Added target_claim_key column to replica_operations table',
   ADDED_REPLICA_OPERATIONS_MEMBERSHIP_PUBLICATION_EPOCH:
     'Added membership_publication_epoch column to replica_operations table',
+  ADDED_REPLICA_OPERATIONS_MESSAGE_GROUP_MEMBERSHIP_COLUMN:
+    'Added message-group membership column to replica_operations table',
   UNKNOWN_MESSAGE_TYPE: 'Unknown application message type',
   HANDLING_SYSTEM_TABLE_WRITE: 'Handling system table write from remote node',
   HANDLING_REMOTE_QUERY: 'Handling remote query',

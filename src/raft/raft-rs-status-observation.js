@@ -124,6 +124,9 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     // The runtime's applied index of this same observation (the one its
     // confState came from).
     appliedIndex: observation.appliedIndex,
+    configurationKey: observation.configurationKey,
+    membershipGenerationIndex: observation.membershipGenerationIndex,
+    lifecycleIncarnation: observation.lifecycleIncarnation,
     role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
     ...leader,
     peerCount: Math.max(0,

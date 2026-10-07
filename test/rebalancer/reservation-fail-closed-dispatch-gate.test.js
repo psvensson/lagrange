@@ -139,6 +139,29 @@ test('gate row repair refuses a cached operation carrying CREATE admission',
       'the alternate reservation repair performs no INSERT');
   });
 
+test('gate row repair refuses a cached operation carrying message-group ' +
+  'membership authority', async (t) => {
+  const persisted = [];
+  const operation = {
+    ...buildStorageIncreasingOperation(),
+    messageGroupMembershipLaneKey: 'message-group:mg-1',
+    messageGroupMembershipPhase: 'learner_requested',
+    messageGroupMembershipObligationState: 'intent_recorded',
+  };
+  const attempted = await repairOperationRowForGateRepairedReservation({
+    repository: {
+      async persistNewOperation(candidate) {
+        persisted.push(candidate);
+      },
+    },
+  }, operation);
+
+  t.equal(attempted, false,
+    'row absence cannot resurrect membership-bearing cached state');
+  t.equal(persisted.length, 0,
+    'the alternate reservation repair performs no INSERT');
+});
+
 test('post-insert authority deferral: zero-change INSERT adoption retains ' +
   'the exact hold and redrives through the same gate', async (t) => {
   initializeConfig();

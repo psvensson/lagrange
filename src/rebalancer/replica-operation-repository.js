@@ -13,7 +13,6 @@
  * - replica status observation (cache + authoritative)
  * - entity service row lookups
  */
-
 import {v4 as uuidv4} from 'uuid';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
@@ -118,7 +117,6 @@ import {
 import {
   assignReplicaOperationRepositoryRowMethods,
 } from './replica-operation-repository-row-methods.js';
-
 /**
  * SQL queries for replica_operations table access.
  * All system information access must go through SQL engine.
@@ -157,6 +155,9 @@ const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID: 'SELECT * FROM replica_operations WHERE operation_id = ?',
   SELECT_OPERATION_BY_TARGET_CLAIM:
     'SELECT * FROM replica_operations WHERE target_claim_key = ?',
+  SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE:
+    'SELECT * FROM replica_operations WHERE ' +
+      'message_group_membership_lane_key = ?',
   SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations
     WHERE (source_node_id = ? OR target_node_id = ?)
     AND type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})

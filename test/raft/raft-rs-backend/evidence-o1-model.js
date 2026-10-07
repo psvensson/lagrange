@@ -45,6 +45,8 @@ import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
+import {raftRsConfStateKey} from
+  '../../../src/raft/raft-rs-conf-state-key.js';
 
 const WIRE = bindingWireNumbers();
 const LEADER_ROLE = 'leader';
@@ -238,7 +240,11 @@ function oracleStamp(cluster, leader, genesisPeerIds) {
     voters: at.voters,
     votersOutgoing: [],
     learners: at.learners,
+    learnersNext: [],
     appliedIndex: applied.appliedIndex,
+    configurationKey: raftRsConfStateKey({voters: at.voters,
+      learners: at.learners}),
+    membershipGenerationIndex: applied.membershipGenerationIndex,
     commitIndex: Number(hard.commit),
     term: Number(hard.term),
     leaderId: leader,

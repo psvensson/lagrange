@@ -109,19 +109,41 @@ class RaftRsPeerIdentityRegistry {
    * @return {string} Its identity, as an exact decimal string.
    */
   registerReplica(replicaIdentity) {
+    return this.reserveCommittedReplica(
+      replicaIdentity, deriveRaftRsPeerId(replicaIdentity));
+  }
+
+  /**
+   * Reserve the exact logical identity carried by a committed configuration
+   * entry. The peer id is still checked against this registry's deterministic
+   * derivation, so committed context cannot authorize address-as-identity or
+   * remap one logical replica to another peer id.
+   * @param {string} replicaIdentity - The logical replica.
+   * @param {string} raftPeerId - The committed raft peer id.
+   * @return {string} Its identity, as an exact decimal string.
+   */
+  reserveCommittedReplica(replicaIdentity, raftPeerId) {
     const derived = deriveRaftRsPeerId(replicaIdentity);
+    if (raftPeerId !== derived) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.bindingMismatch(
+        replicaIdentity, raftPeerId, derived));
+    }
     const existing = this.reservationFor(replicaIdentity);
     if (existing !== undefined) {
+      if (existing.raft_peer_id !== raftPeerId) {
+        throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.bindingMismatch(
+          replicaIdentity, raftPeerId, existing.raft_peer_id));
+      }
       return existing.raft_peer_id;
     }
-    const holder = this.reservationOfPeerId(derived);
+    const holder = this.reservationOfPeerId(raftPeerId);
     if (holder !== undefined) {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.collision(
-        replicaIdentity, holder.replica_identity, derived));
+        replicaIdentity, holder.replica_identity, raftPeerId));
     }
     this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.INSERT_RESERVATION)
-      .run(replicaIdentity, derived);
-    return derived;
+      .run(replicaIdentity, raftPeerId);
+    return raftPeerId;
   }
 
   /**

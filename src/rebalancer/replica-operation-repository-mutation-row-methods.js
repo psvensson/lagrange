@@ -8,6 +8,10 @@ import {
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const SQL_NULL_VALUE = null;
 
+function nullableOperationValue(value) {
+  return value === undefined ? null : value;
+}
+
 function assignReplicaOperationRepositoryMutationRowMethods(
   ReplicaOperationRepository,
 ) {
@@ -49,20 +53,40 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         entity_id: entityId,
         membership_publication_epoch:
           operation.membershipPublicationEpoch,
-        create_admission_state: operation.createAdmissionState ?? null,
-        create_admission_token: operation.createAdmissionToken ?? null,
+        source_replica_id: nullableOperationValue(operation.sourceReplicaId),
+        message_group_membership_lane_key:
+          nullableOperationValue(operation.messageGroupMembershipLaneKey),
+        message_group_membership_phase:
+          nullableOperationValue(operation.messageGroupMembershipPhase),
+        message_group_membership_obligation_state:
+          nullableOperationValue(
+            operation.messageGroupMembershipObligationState),
+        message_group_membership_identity:
+          nullableOperationValue(operation.messageGroupMembershipIdentity),
+        message_group_learner_stamp:
+          nullableOperationValue(operation.messageGroupLearnerStamp),
+        message_group_voter_stamp:
+          nullableOperationValue(operation.messageGroupVoterStamp),
+        message_group_removal_stamp:
+          nullableOperationValue(operation.messageGroupRemovalStamp),
+        message_group_source_lifecycle_claim:
+          nullableOperationValue(operation.messageGroupSourceLifecycleClaim),
+        create_admission_state:
+          nullableOperationValue(operation.createAdmissionState),
+        create_admission_token:
+          nullableOperationValue(operation.createAdmissionToken),
         create_admission_replica_created_at:
-          operation.createAdmissionReplicaCreatedAt ?? null,
+          nullableOperationValue(operation.createAdmissionReplicaCreatedAt),
         create_admission_attempt_token:
-          operation.createAdmissionAttemptToken ?? null,
+          nullableOperationValue(operation.createAdmissionAttemptToken),
         create_admission_previous_attempt_token:
-          operation.createAdmissionPreviousAttemptToken ?? null,
+          nullableOperationValue(operation.createAdmissionPreviousAttemptToken),
         create_admission_attempt_seq:
-          operation.createAdmissionAttemptSeq ?? null,
+          nullableOperationValue(operation.createAdmissionAttemptSeq),
         create_admission_workflow_updated_at:
-          operation.createAdmissionWorkflowUpdatedAt ?? null,
+          nullableOperationValue(operation.createAdmissionWorkflowUpdatedAt),
         create_admission_owner_incarnation:
-          operation.createAdmissionOwnerIncarnation ?? null,
+          nullableOperationValue(operation.createAdmissionOwnerIncarnation),
       };
     }
 

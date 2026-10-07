@@ -111,6 +111,23 @@ function assignReplicaOperationRepositoryRowMethods(
         completedAt: row.completed_at,
         errorMessage: row.error_message,
         stepsHistory,
+        sourceReplicaId: nullableValue(row.source_replica_id),
+        messageGroupMembershipLaneKey:
+          nullableValue(row.message_group_membership_lane_key),
+        messageGroupMembershipPhase:
+          nullableValue(row.message_group_membership_phase),
+        messageGroupMembershipObligationState:
+          nullableValue(row.message_group_membership_obligation_state),
+        messageGroupMembershipIdentity:
+          nullableValue(row.message_group_membership_identity),
+        messageGroupLearnerStamp:
+          nullableValue(row.message_group_learner_stamp),
+        messageGroupVoterStamp:
+          nullableValue(row.message_group_voter_stamp),
+        messageGroupRemovalStamp:
+          nullableValue(row.message_group_removal_stamp),
+        messageGroupSourceLifecycleClaim:
+          nullableValue(row.message_group_source_lifecycle_claim),
         createAdmissionState: nullableValue(row.create_admission_state),
         createAdmissionToken: nullableValue(row.create_admission_token),
         createAdmissionReplicaCreatedAt: nullableSafeInteger(

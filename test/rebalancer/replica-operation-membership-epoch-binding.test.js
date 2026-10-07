@@ -299,14 +299,7 @@ function insertMalformedDurableRow(db, operationId, partitionId, rawEpoch) {
     MALFORMED_ENTITY_TYPE,
     partitionId,
     rawEpoch,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
+    ...Array(17).fill(null),
   );
 }
 

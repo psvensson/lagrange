@@ -161,6 +161,14 @@ class RaftRsReplicaLifecycleOwner {
     return this.#replicaIdentity;
   }
 
+  get incarnation() {
+    const row = this.#db.prepare(`
+      SELECT incarnation FROM ${LIFECYCLE_TABLE}
+      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
+    `).get(this.#groupId, this.#peerId, this.#replicaIdentity);
+    return typeof row?.incarnation === 'string' ? row.incarnation : null;
+  }
+
   get active() {
     return this.#state === LIFECYCLE_STATE.ACTIVE && !this.#retiring;
   }

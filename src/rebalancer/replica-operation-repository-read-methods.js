@@ -18,6 +18,8 @@ const REPLICA_OPERATION_ENTITY_READ_COALESCING_KEY_PREFIX =
   'replica-operation-entity';
 const REPLICA_OPERATION_ENTITY_NODE_READ_COALESCING_KEY_PREFIX =
   'replica-operation-entity-node';
+const REPLICA_OPERATION_MEMBERSHIP_LANE_READ_COALESCING_KEY_PREFIX =
+  'replica-operation-membership-lane';
 const REPLICA_OPERATION_READ_DELIVERY_SOURCE_PREFIX = 'control-plane:read';
 const REPLICA_OPERATION_READ_RETRY_WAIT = Object.freeze({
   wait: 'REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS',
@@ -258,6 +260,12 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           REPLICA_OPERATION_ENTITY_NODE_READ_COALESCING_KEY_PREFIX,
           params[0],
           params[1],
+        );
+      }
+      if (sql === SQL.SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE) {
+        return this.buildReplicaOperationReadCoalescingKey(
+          REPLICA_OPERATION_MEMBERSHIP_LANE_READ_COALESCING_KEY_PREFIX,
+          params[0],
         );
       }
       return null;
@@ -502,6 +510,40 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATION_BY_TARGET_CLAIM,
         [targetClaimKey],
+        {
+          ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+          retryOnRetryableFailure: true,
+        },
+      );
+      if (
+        result?.success !== true ||
+        !Array.isArray(result.rows) ||
+        result.rows.length === 0
+      ) {
+        return null;
+      }
+      const operation = this.rowToOperation(result.rows[0]);
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        operation :
+        null;
+    }
+
+    /**
+     * Query the authoritative operation retaining one message-group
+     * membership lane. The nullable unique key is released only by the
+     * membership owner after it proves definitive non-admission or a fresh
+     * committed absence.
+     * @param {string} laneKey
+     * @return {Promise<object|null>}
+     */
+    async queryAuthoritativeOperationByMessageGroupMembershipLane(laneKey) {
+      if (typeof laneKey !== 'string' || laneKey.length === 0) {
+        return null;
+      }
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE,
+        [laneKey],
         {
           ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
           leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,

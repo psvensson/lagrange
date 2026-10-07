@@ -6,6 +6,8 @@ import {
 } from './replica-operation-owner-lease.js';
 import {operationCarriesReplicaCreateAdmission} from
   './replica-operation-create-admission-fields.js';
+import {operationCarriesMessageGroupMembership} from
+  './replica-operation-message-group-membership-fields.js';
 
 // A terminal write that is also a step CAS (a REPLACE FAILED admitted
 // against its durable step, quest replace-source-removal-owner): both guards,
@@ -427,7 +429,10 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         // the snapshot was taken. Only admission-free operation rows retain
         // the older divergence-repair authority; admitted work must defer to
         // startup/operation recovery without recreating its authority.
-        if (operationCarriesReplicaCreateAdmission(operation)) {
+        if (
+          operationCarriesReplicaCreateAdmission(operation) ||
+          operationCarriesMessageGroupMembership(operation)
+        ) {
           return buildOperationUpdatePersistResult(
             resultOptions,
             false,
