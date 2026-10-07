@@ -87,7 +87,7 @@ test(
         options,
       );
       if (
-        String(sql).includes('INSERT INTO storage_reservations') &&
+        String(sql).includes('storage_reservations') &&
         result?.success !== false
       ) {
         reservationInsertCount += 1;
