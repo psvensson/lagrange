@@ -36,8 +36,40 @@ test(
     });
     const gateway = coordinator.controlPlaneSystemTableGateway;
     const originalExecuteQuery = gateway.executeQuery.bind(gateway);
+    const originalSubmitMutation = gateway.submitMutation.bind(gateway);
     const originalReadAuthoritativeRows =
       gateway.readAuthoritativeRows.bind(gateway);
+
+    const planningIdentity = Object.freeze({
+      globalPlanningGeneration: 1,
+      nodePlanningGeneration: 1,
+      saturated: false,
+    });
+    coordinator.controlPlaneReadinessService = {
+      ...coordinator.controlPlaneReadinessService,
+      readCurrentPlanningProjectionIdentity: () => planningIdentity,
+    };
+    coordinator.observeReplicaOperationMutationRoute = () => Object.freeze({
+      allowed: true,
+      reasonCode: null,
+      retryAfterMs: 0,
+      routingSnapshot: Object.freeze({
+        canonicalLeaderNodeId: NODE_ID,
+        routableServiceCount: 1,
+        candidateCount: 1,
+      }),
+    });
+    coordinator.assertLocalControlPlaneMutationReady = () => {};
+    coordinator.resolveProvisioningLedgerInterlockDeferral = async () => null;
+    coordinator.ensureNoConflictingInFlightReplaceForRemove = async () => {};
+    coordinator.ensurePriorityControlPlaneRemoveLaneAvailable = async () => {};
+    coordinator.ensurePrioritySurplusRemovePlacementFenceAllowed =
+      async () => {};
+    coordinator.ensureEntityAddLikeCreateLaneAvailable = async () => {};
+    coordinator.ensureCriticalPartitionCreateLaneAvailable = async () => {};
+    coordinator.ensureCreateTopologyGuardAllowed = async () => {};
+    coordinator.ensureProvisioningAdmissionAllowed = async () => {};
+    coordinator.resolveEntitySizeBytes = () => 1;
 
     let reservationInsertCount = 0;
     let operationInsertCount = 0;
@@ -46,11 +78,18 @@ test(
     let operationAuthorityAvailable = false;
     const armedOperationIds = [];
 
-    gateway.executeQuery = async (sql, params = [], options = {}) => {
-      const statement = String(sql);
-      if (statement.includes('INSERT INTO replica_operations')) {
+    gateway.submitMutation = async (mutation) => {
+      if (
+        mutation?.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+        mutation?.operation === 'insert'
+      ) {
         operationInsertCount += 1;
       }
+      return originalSubmitMutation(mutation);
+    };
+
+    gateway.executeQuery = async (sql, params = [], options = {}) => {
+      const statement = String(sql);
       if (statement.includes('INSERT INTO storage_reservations')) {
         reservationInsertCount += 1;
         reservationInserted = true;
@@ -92,7 +131,7 @@ test(
       };
 
     try {
-      const created = await coordinator.createOperation({
+      const move = {
         type: OperationType.ADD,
         partitionId: PARTITION_ID,
         entityType: 'partition',
@@ -100,9 +139,18 @@ test(
         nodeId: TARGET_NODE_ID,
         replicaIntentId: REPLICA_ID,
         operationIntentId: OPERATION_ID,
-        operationCreationAdmission: {allowed: true},
         deferDispatchUntilBootstrapTopology: true,
         emitOperationCreated: true,
+      };
+      const admission = await coordinator.checkProvisioningAdmission(move);
+      t.equal(
+        admission.allowed,
+        true,
+        'precondition: the real operation-creation owner admits the stable move',
+      );
+      const created = await coordinator.createOperation({
+        ...move,
+        operationCreationAdmission: admission.operationCreationAdmission,
       });
 
       t.equal(
