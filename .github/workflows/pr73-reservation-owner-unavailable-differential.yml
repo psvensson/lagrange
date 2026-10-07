@@ -1,0 +1,51 @@
+name: pr73-reservation-owner-unavailable-differential
+
+on:
+  push:
+    branches:
+      - "proof/pr73-reservation-progress-owner-unavailable-20261007"
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: aggregate
+            target: 3bd0128bc361ce459ca74392c43c6dd913bc2130
+          - label: restart
+            target: c280049f783c77b23f5070f1a2c389383c18527f
+          - label: reservation-carrier
+            target: 24dcf2abb16c17bbcb55a4148a83e17d7b14a857
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout target product
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ matrix.target }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Overlay semantic reservation-progress witness
+        env:
+          WITNESS_REF: proof/pr73-reservation-progress-owner-unavailable-20261007
+        run: |
+          set -euo pipefail
+          git fetch origin "$WITNESS_REF"
+          git show FETCH_HEAD:test/rebalancer/formation-cure-reservation-progress-obligation.test.js             > test/rebalancer/formation-cure-reservation-progress-obligation.test.js
+          echo "target=${{ matrix.label }} ${{ matrix.target }}"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - run: npm ci
+
+      - name: Formation cure reservation-to-progress witness
+        run: node test/rebalancer/formation-cure-reservation-progress-obligation.test.js
