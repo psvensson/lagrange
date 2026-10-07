@@ -81,11 +81,19 @@ test(
       params = [],
       options = {},
     ) => {
-      if (String(sql).includes('INSERT INTO storage_reservations')) {
+      const result = await originalExecuteOperationMutationWithRetry(
+        sql,
+        params,
+        options,
+      );
+      if (
+        String(sql).includes('INSERT INTO storage_reservations') &&
+        result?.success !== false
+      ) {
         reservationInsertCount += 1;
         reservationInserted = true;
       }
-      return originalExecuteOperationMutationWithRetry(sql, params, options);
+      return result;
     };
 
     coordinator.queryAuthoritativeOperationVisibilityObservation = async (
