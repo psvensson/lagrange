@@ -81,6 +81,7 @@ import {
   createMockPolicyService,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
@@ -463,50 +464,51 @@ function createCohortServiceRow(replicaId, nodeId) {
 
 function createCohortSqlEngine({authoritativeServices}) {
   const operations = new Map();
+  const executeQuery = async (sql, params = []) => {
+    if (
+      sql.includes('SELECT * FROM services') &&
+        sql.includes('service_type = ?')
+    ) {
+      const rows = authoritativeServices.filter(
+        (row) => row.partition_id === params[1],
+      );
+      return {success: true, rows};
+    }
+    if (sql.includes('INSERT INTO replica_operations')) {
+      const [
+        operationId, type, partitionId, replicaId, targetClaimKey,
+        sourceNodeId, targetNodeId, status, workflowStep, createdAt,
+        updatedAt, completedAt, errorMessage, stepsHistory, entityType,
+        entityId,
+      ] = params;
+      operations.set(operationId, {
+        operation_id: operationId,
+        type,
+        partition_id: partitionId,
+        replica_id: replicaId,
+        target_claim_key: targetClaimKey,
+        source_node_id: sourceNodeId,
+        target_node_id: targetNodeId,
+        status,
+        workflow_step: workflowStep,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        completed_at: completedAt,
+        error_message: errorMessage,
+        steps_history: stepsHistory,
+        entity_type: entityType,
+        entity_id: entityId,
+      });
+      return {success: true, changes: 1};
+    }
+    if (sql.includes('replica_operations')) {
+      return {success: true, rows: [...operations.values()]};
+    }
+    return {success: true, rows: []};
+  };
   return {
     operations,
-    executeQuery: async (sql, params = []) => {
-      if (
-        sql.includes('SELECT * FROM services') &&
-        sql.includes('service_type = ?')
-      ) {
-        const rows = authoritativeServices.filter(
-          (row) => row.partition_id === params[1],
-        );
-        return {success: true, rows};
-      }
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-          entityId,
-        ] = params;
-        operations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          entity_type: entityType,
-          entity_id: entityId,
-        });
-        return {success: true, changes: 1};
-      }
-      if (sql.includes('replica_operations')) {
-        return {success: true, rows: [...operations.values()]};
-      }
-      return {success: true, rows: []};
-    },
+    executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
   };
 }
 

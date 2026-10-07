@@ -12,7 +12,7 @@
     "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 21,
-    "placement-rebalance": 261,
+    "placement-rebalance": 265,
     "query-sql": 172,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2306,
-  "digest": "fnv1a32-e5563ba3",
+  "censusSize": 2310,
+  "digest": "fnv1a32-cf1cfe0d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-75cbe8d7",
+  "observationDigest": "fnv1a32-b7977ea9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1657,6 +1657,8 @@
     "test/rebalancer/failed-authoritative-read-admission-verdict.test.js": "placement-rebalance",
     "test/rebalancer/formation-barrier-recovery-mutation-admission.test.js": "placement-rebalance",
     "test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js": "placement-rebalance",
+    "test/rebalancer/formation-cure-reservation-progress-obligation.test.js": "placement-rebalance",
+    "test/rebalancer/formation-cure-reservation-progress-successor.test.js": "placement-rebalance",
     "test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js": "placement-rebalance",
     "test/rebalancer/formation-liveness-dependency-serial-planner.test.js": "placement-rebalance",
     "test/rebalancer/formation-placement-target-evidence-absent.test.js": "placement-rebalance",
@@ -1804,6 +1806,7 @@
     "test/rebalancer/replica-status-completeness.property.test.js": "placement-rebalance",
     "test/rebalancer/reservation-expiry-operation-aware.test.js": "placement-rebalance",
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": "placement-rebalance",
+    "test/rebalancer/reservation-file-backed-restart.test.js": "placement-rebalance",
     "test/rebalancer/reservation-reconcile-premature-orphan-release.test.js": "placement-rebalance",
     "test/rebalancer/rolling-restart-rebalancer-handoff-witness.test.js": "placement-rebalance",
     "test/rebalancer/runtime-service-affinity-policy-lift.test.js": "placement-rebalance",
@@ -1836,6 +1839,7 @@
     "test/rebalancer/storage-capacity-ownership.test.js": "placement-rebalance",
     "test/rebalancer/storage-capacity-semantic-projection-owner.test.js": "placement-rebalance",
     "test/rebalancer/storage-pressure-behavior.test.js": "placement-rebalance",
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": "placement-rebalance",
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": "placement-rebalance",
@@ -10273,6 +10277,18 @@
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
+    "test/rebalancer/formation-cure-reservation-progress-obligation.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/rebalancer/formation-cure-reservation-progress-successor.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/rebalancer-constants.js",
+        "src/rebalancer/storage-capacity-constants.js"
+      ]
+    },
     "test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
@@ -10863,6 +10879,7 @@
         "src/rebalancer/replica-operation-repository-row-methods.js",
         "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/replica-status.js",
+        "src/rebalancer/storage-reservation-authority.js",
         "src/rebalancer/unified-rebalancer-move-execution.js",
         "src/rebalancer/unified-rebalancer-rebalance-loop.js"
       ],
@@ -10932,8 +10949,19 @@
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
         "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
-        "src/rebalancer/rebalance-coordinator.js"
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-status.js",
+        "src/rebalancer/storage-capacity-constants.js"
+      ]
+    },
+    "test/rebalancer/reservation-file-backed-restart.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/storage-capacity-constants.js"
       ]
     },
     "test/rebalancer/reservation-reconcile-premature-orphan-release.test.js": {
@@ -11069,6 +11097,12 @@
       ],
       "directories": [
         "src/rebalancer"
+      ]
+    },
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/rebalance-coordinator.js"
       ]
     },
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": {

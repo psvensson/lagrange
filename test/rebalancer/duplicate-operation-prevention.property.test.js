@@ -122,8 +122,11 @@ function createMockSqlQueryEngine(options = {}) {
         };
       }
 
-      if (sql.includes('INSERT INTO replica_operations') ||
-          sql.includes('INSERT OR IGNORE')) {
+      if (sql.includes('INSERT OR IGNORE INTO storage_reservations')) {
+        return {success: true, changes: 1};
+      }
+
+      if (sql.includes('INSERT INTO replica_operations')) {
         // Insert new operation
         const [
           operationId, type, partitionId, replicaId, targetClaimKey,

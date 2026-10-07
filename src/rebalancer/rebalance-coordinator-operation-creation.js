@@ -2,6 +2,7 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
+  buildReservationAuthorityUnavailableError,
 } from './operation-reservation-attempt-outcome.js';
 import {
   applyReplaceIntentIdentity,
@@ -864,6 +865,8 @@ class RebalanceCoordinatorOperationCreation {
     // rejects here, and the dispatch-time gate re-attempts the deterministic
     // insert through ensureReservationForOperation for any row that
     // predates this guard.
+    const reservationOwnershipFenceEpoch =
+      this.workflowOwner?.getOperationOwnershipFenceEpoch?.();
     const reservationAttempt = await this.createReservationForOperation(
       operation,
       {resolvedEntitySizeBytes},
@@ -872,11 +875,26 @@ class RebalanceCoordinatorOperationCreation {
       reservationAttempt?.outcome ===
       OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED
     ) {
-      throw new Error(
+      const reservationErrorMessage =
         RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX +
           `${operation.operationId}: ` +
-          (reservationAttempt.error || RESERVATION_INSERT_REJECTED_FALLBACK),
-      );
+          (reservationAttempt.error || RESERVATION_INSERT_REJECTED_FALLBACK);
+      const reservationError = reservationAttempt.authorityUnavailable === true ?
+        buildReservationAuthorityUnavailableError(reservationErrorMessage) :
+        new Error(reservationErrorMessage);
+      if (reservationAttempt.authorityUnavailable === true) {
+        this.workflowOwner?.deferCoordinatorCreatedOperationTransitionRetry?.(
+          operation.operationId,
+          operation,
+          reservationError,
+          {
+            includeOperationSnapshot: true,
+            operationOwnershipFenceEpoch: reservationOwnershipFenceEpoch,
+            partitionId: operation.partitionId || null,
+          },
+        );
+      }
+      throw reservationError;
     }
 
     if (shouldEmitOperationCreated) {

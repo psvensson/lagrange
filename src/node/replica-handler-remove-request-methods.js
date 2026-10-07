@@ -121,6 +121,40 @@ async function applyFailedCreateCleanupTransition(
   }
 }
 
+function hasConflictingRemoveAuthorities(
+  groupRetirement,
+  failedCreatePrecondition,
+) {
+  return groupRetirement !== undefined && groupRetirement !== null &&
+    failedCreatePrecondition !== undefined;
+}
+
+function hasRequiredRemoveIdentity(operationId, partitionId, replicaId) {
+  return Boolean(operationId && partitionId && replicaId);
+}
+
+function hasMismatchedRemovePartition(replica, partitionId) {
+  return typeof replica.partitionId === 'string' &&
+    replica.partitionId !== partitionId;
+}
+
+function isSameReplicaRemoval(operation, replicaId, partitionId) {
+  return operation?.type === ReplicaOperationMessageType.REMOVE_REPLICA &&
+    operation.replicaId === replicaId &&
+    operation.partitionId === partitionId;
+}
+
+function allowsLocalRemovalShortcut(precondition, removalAlreadyInProgress) {
+  return precondition === undefined || removalAlreadyInProgress;
+}
+
+function canReconcileRemovedReplica(replica, partitionId, shortcutAllowed) {
+  return replica.status === ReplicaStatus.REMOVED &&
+    (typeof replica.partitionId !== 'string' ||
+      replica.partitionId === partitionId) &&
+    shortcutAllowed;
+}
+
 function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
   class ReplicaHandlerRemoveRequestMethods {
     /**
@@ -305,7 +339,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         reason,
         nodeId: this.nodeId,
       });
-      if (!operationId || !partitionId || !replicaId) {
+      if (!hasRequiredRemoveIdentity(operationId, partitionId, replicaId)) {
         this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_MISSING_FIELDS, {
           operationId,
           partitionId,
@@ -326,9 +360,10 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       const failedCreateCleanupPrecondition = request?.[
         ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
       ];
-      if (requestedGroupRetirement !== undefined &&
-          requestedGroupRetirement !== null &&
-          failedCreateCleanupPrecondition !== undefined) {
+      if (hasConflictingRemoveAuthorities(
+        requestedGroupRetirement,
+        failedCreateCleanupPrecondition,
+      )) {
         this.logger.warn(
           REPLICA_HANDLER_LOG_MSG.REMOVE_CLEANUP_PRECONDITION_REFUSED,
           {operationId, replicaId, partitionId, nodeId: this.nodeId},
@@ -364,10 +399,7 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       // Cross-check partition identity before any status write or shutdown:
       // a mismatched request must never shut down the wrong replica, corrupt
       // local metadata, or silently no-op the partition-scoped row delete.
-      if (
-        typeof replica.partitionId === 'string' &&
-        replica.partitionId !== partitionId
-      ) {
+      if (hasMismatchedRemovePartition(replica, partitionId)) {
         this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_PARTITION_MISMATCH, {
           operationId,
           replicaId,
@@ -391,13 +423,15 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         );
       }
       const trackedOperation = this.inProgressOperations.get(operationId);
-      const sameRemovalAlreadyInProgress =
-        trackedOperation?.type === ReplicaOperationMessageType.REMOVE_REPLICA &&
-        trackedOperation?.replicaId === replicaId &&
-        trackedOperation?.partitionId === partitionId;
-      const mayUseLocalRemovalShortcut =
-        failedCreateCleanupPrecondition === undefined ||
-        sameRemovalAlreadyInProgress;
+      const sameRemovalAlreadyInProgress = isSameReplicaRemoval(
+        trackedOperation,
+        replicaId,
+        partitionId,
+      );
+      const mayUseLocalRemovalShortcut = allowsLocalRemovalShortcut(
+        failedCreateCleanupPrecondition,
+        sameRemovalAlreadyInProgress,
+      );
       // Check idempotency - already removing
       if (replica.status === ReplicaStatus.REMOVING &&
           mayUseLocalRemovalShortcut) {
@@ -415,12 +449,11 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
       // when the request targets the replica's recorded partition; a
       // mismatched partitionId would no-op the partition-scoped row delete
       // and could drive filesystem cleanup against the wrong identity.
-      if (
-        replica.status === ReplicaStatus.REMOVED &&
-        (typeof replica.partitionId !== 'string' ||
-          replica.partitionId === partitionId) &&
-        mayUseLocalRemovalShortcut
-      ) {
+      if (canReconcileRemovedReplica(
+        replica,
+        partitionId,
+        mayUseLocalRemovalShortcut,
+      )) {
         try {
           await this.reconcileRemovedReplicaCleanup(replicaId, partitionId);
         } catch (error) {

@@ -3,6 +3,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
+import {createTimeoutBudget} from '../../src/control-plane/timeout-budget.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -159,6 +160,47 @@ test('the retryable authoritative read settles on the repository clock', async (
   t.ok(timeSource.now() > START_MS, 'the deadline was reached virtually');
   t.end();
 });
+
+test('authoritative read retries stop at a tighter enclosing budget',
+  async (t) => {
+    const timeSource = new VirtualTimeSource({startMs: START_MS});
+    let reads = 0;
+    const waits = [];
+    const repository = createRepository({
+      timeSource,
+      readAuthoritativeRows: async () => {
+        reads += 1;
+        return RETRYABLE_FAILURE;
+      },
+    });
+    repository.waitForReplicaOperationReadRetry = async (delayMs) => {
+      waits.push(delayMs);
+      timeSource.advance(delayMs);
+    };
+    const tighterBudgetMs = 125;
+    const timeoutBudget = createTimeoutBudget({
+      configuredBudgetMs: tighterBudgetMs,
+      now: () => timeSource.now(),
+    });
+
+    const result = await repository.executeReplicaOperationsRead(
+      'SELECT 1',
+      [],
+      {retryOnRetryableFailure: true, timeoutBudget},
+    );
+
+    t.equal(result?.success, false,
+      'the final retryable owner answer remains honest');
+    t.ok(reads > 1, 'the owner retries inside the enclosing budget');
+    t.equal(
+      waits.reduce((total, delayMs) => total + delayMs, 0),
+      tighterBudgetMs,
+      'all retry waits together consume only the tighter caller budget',
+    );
+    t.equal(timeSource.now() - START_MS, tighterBudgetMs,
+      'the injected owner clock never advances to the independent local bound');
+    t.end();
+  });
 
 test('the persist retry settles on the repository clock', async (t) => {
   const timeSource = new VirtualTimeSource({startMs: START_MS});

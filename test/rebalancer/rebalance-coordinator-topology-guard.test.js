@@ -22,6 +22,7 @@ import {
   createMockCache,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
 
 const ReplicaStatusForTest = {REMOVING: 'removing'};
@@ -75,78 +76,80 @@ function createSqlEngine(options = {}) {
   } = options;
   const operations = new Map();
 
-  return {
-    executeQuery: async (sql, params = []) => {
-      if (sql.includes('SELECT * FROM services') &&
+  const executeQuery = async (sql, params = []) => {
+    if (sql.includes('SELECT * FROM services') &&
           sql.includes('partition_id = ?')) {
-        const [, partitionId] = params;
-        return {
-          success: true,
-          rows: authoritativeServices.filter(
-            (row) => row.partition_id === partitionId,
-          ),
-        };
-      }
-      if (sql.includes('SELECT * FROM replica_operations') &&
+      const [, partitionId] = params;
+      return {
+        success: true,
+        rows: authoritativeServices.filter(
+          (row) => row.partition_id === partitionId,
+        ),
+      };
+    }
+    if (sql.includes('SELECT * FROM replica_operations') &&
           sql.includes('target_node_id = ?')) {
-        const [partitionId, targetNodeId] = params;
-        const existing = [...operations.values()].filter((operation) =>
-          operation.partition_id === partitionId &&
+      const [partitionId, targetNodeId] = params;
+      const existing = [...operations.values()].filter((operation) =>
+        operation.partition_id === partitionId &&
           operation.target_node_id === targetNodeId,
-        );
-        return {
-          success: true,
-          rows: existing,
-        };
-      }
-      if (sql.includes('SELECT * FROM replica_operations') &&
+      );
+      return {
+        success: true,
+        rows: existing,
+      };
+    }
+    if (sql.includes('SELECT * FROM replica_operations') &&
           sql.includes('entity_type = ?')) {
-        const [entityType, entityId] = params;
-        const existing = [...operations.values()].filter((operation) =>
-          operation.entity_type === entityType &&
+      const [entityType, entityId] = params;
+      const existing = [...operations.values()].filter((operation) =>
+        operation.entity_type === entityType &&
           operation.entity_id === entityId);
-        return {
-          success: true,
-          rows: existing,
-        };
-      }
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-          entityId,
-        ] = params;
-        operations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          entity_type: entityType,
-          entity_id: entityId,
-        });
-        return {success: true, changes: 1};
-      }
-      if (sql.includes('SELECT * FROM replica_operations') &&
+      return {
+        success: true,
+        rows: existing,
+      };
+    }
+    if (sql.includes('INSERT INTO replica_operations')) {
+      const [
+        operationId, type, partitionId, replicaId, targetClaimKey,
+        sourceNodeId, targetNodeId, status, workflowStep, createdAt,
+        updatedAt, completedAt, errorMessage, stepsHistory, entityType,
+        entityId,
+      ] = params;
+      operations.set(operationId, {
+        operation_id: operationId,
+        type,
+        partition_id: partitionId,
+        replica_id: replicaId,
+        target_claim_key: targetClaimKey,
+        source_node_id: sourceNodeId,
+        target_node_id: targetNodeId,
+        status,
+        workflow_step: workflowStep,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        completed_at: completedAt,
+        error_message: errorMessage,
+        steps_history: stepsHistory,
+        entity_type: entityType,
+        entity_id: entityId,
+      });
+      return {success: true, changes: 1};
+    }
+    if (sql.includes('SELECT * FROM replica_operations') &&
           sql.includes('operation_id = ?')) {
-        const [operationId] = params;
-        return {
-          success: true,
-          rows: operations.has(operationId) ? [operations.get(operationId)] : [],
-        };
-      }
-      return {success: true, rows: []};
-    },
+      const [operationId] = params;
+      return {
+        success: true,
+        rows: operations.has(operationId) ? [operations.get(operationId)] : [],
+      };
+    }
+    return {success: true, rows: []};
+  };
+
+  return {
+    executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
     getOperations() {
       return [...operations.values()];
     },

@@ -92,6 +92,8 @@ function normalizeReplicaOperationRow(row = {}) {
         JSON.stringify(stepsHistory);
   const entityType = row.entity_type ?? row.entityType ?? null;
   const entityId = row.entity_id ?? row.entityId ?? null;
+  const membershipPublicationEpoch =
+    row.membership_publication_epoch ?? row.membershipPublicationEpoch ?? null;
 
   normalized.operation_id = operationId;
   normalized.operationId = operationId;
@@ -123,12 +125,25 @@ function normalizeReplicaOperationRow(row = {}) {
   normalized.entityType = entityType;
   normalized.entity_id = entityId;
   normalized.entityId = entityId;
+  normalized.membership_publication_epoch = membershipPublicationEpoch;
+  normalized.membershipPublicationEpoch = membershipPublicationEpoch;
 
   return normalized;
 }
 
 function isSuccessfulMutationResult(result) {
   return !result || result.success !== false;
+}
+
+function withSuccessfulStorageReservationInsert(executeQuery) {
+  return async (sql, params = []) => {
+    if (String(sql).includes(
+      'INSERT OR IGNORE INTO storage_reservations',
+    )) {
+      return {success: true, affectedRows: 1, changes: 1};
+    }
+    return executeQuery(sql, params);
+  };
 }
 
 /**
@@ -708,6 +723,7 @@ function createTestCoordinator(options = {}) {
 
   // Track operations via SQL engine (not CDC)
   const trackedOperations = new Map();
+  const trackedReservations = new Map();
 
   // CDC service (not used for persistence in new architecture)
   const mockCdcService = options.cdcIntegrationService || {
@@ -829,12 +845,40 @@ function createTestCoordinator(options = {}) {
       }
 
       // Handle INSERT operations
+      if (sql.includes('INSERT OR IGNORE INTO storage_reservations')) {
+        const [
+          reservationId, operationId, entityType, entityId,
+          partitionId, targetNodeId, estimatedBytes, amplificationFactor,
+          status, reasonCode, createdAt, updatedAt, expiresAt,
+        ] = params;
+        if (trackedReservations.has(reservationId)) {
+          return {success: true, affectedRows: 0, changes: 0};
+        }
+        trackedReservations.set(reservationId, {
+          reservation_id: reservationId,
+          operation_id: operationId,
+          entity_type: entityType,
+          entity_id: entityId,
+          partition_id: partitionId,
+          target_node_id: targetNodeId,
+          estimated_bytes: estimatedBytes,
+          amplification_factor: amplificationFactor,
+          status,
+          reason_code: reasonCode,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          expires_at: expiresAt,
+          released_at: null,
+        });
+        return {success: true, affectedRows: 1, changes: 1};
+      }
+
       if (sql.includes('INSERT INTO replica_operations')) {
         const [
           operationId, type, partitionId, replicaId, targetClaimKey,
           sourceNodeId, targetNodeId,
           status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
-          stepsHistory, entityType, entityId,
+          stepsHistory, entityType, entityId, membershipPublicationEpoch,
         ] = params;
 
         syncReplicaOperationRow({
@@ -854,8 +898,25 @@ function createTestCoordinator(options = {}) {
           steps_history: stepsHistory,
           entity_type: entityType,
           entity_id: entityId,
+          membership_publication_epoch: membershipPublicationEpoch,
         });
-        return {success: true};
+        return {success: true, affectedRows: 1, changes: 1};
+      }
+
+      if (sql.includes('UPDATE storage_reservations')) {
+        const [status, updatedAt, releasedAt, reservationId, expectedStatus] =
+          params;
+        const existing = trackedReservations.get(reservationId);
+        if (!existing || existing.status !== expectedStatus) {
+          return {success: true, affectedRows: 0, changes: 0};
+        }
+        trackedReservations.set(reservationId, {
+          ...existing,
+          status,
+          updated_at: updatedAt,
+          released_at: releasedAt,
+        });
+        return {success: true, affectedRows: 1, changes: 1};
       }
 
       // Handle UPDATE operations. The terminal-transition statement guards on
@@ -890,6 +951,24 @@ function createTestCoordinator(options = {}) {
           replica_id: replicaId,
         });
         return {success: true};
+      }
+
+      if (sql.includes('FROM storage_reservations')) {
+        let rows = Array.from(trackedReservations.values());
+        let paramIndex = 0;
+        if (sql.includes('operation_id = ?')) {
+          const operationId = params[paramIndex++];
+          rows = rows.filter((row) => row.operation_id === operationId);
+        }
+        if (sql.includes('status = ?')) {
+          const status = params[paramIndex++];
+          rows = rows.filter((row) => row.status === status);
+        }
+        if (sql.includes('expires_at <= ?')) {
+          const expiresAt = params[paramIndex++];
+          rows = rows.filter((row) => row.expires_at <= expiresAt);
+        }
+        return {success: true, rows};
       }
 
       // Handle SELECT queries for replica_operations
@@ -1267,5 +1346,6 @@ export {
   initializeSpreadTestEnvironment,
   installActualReplicaObservationResolver,
   isAddLikeMoveResult,
+  withSuccessfulStorageReservationInsert,
   withFixtureReplaceWitness,
 };

@@ -224,8 +224,10 @@ const RATCHET_TARGETS = [
     // then tightened 708/26738 -> 706/26671 on the checker's hint.
     // Identity's shared routed-CREATE fixtures tighten the combined test
     // surface to the measured 697 groups / 26385 lines.
+    // Reservation's shared dispatch/restart witnesses tighten the line count
+    // to the measured 26369 without changing the exact 697 groups.
     baselineCloneGroupCount: 697,
-    baselineDuplicatedLineCount: 26385,
+    baselineDuplicatedLineCount: 26369,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
