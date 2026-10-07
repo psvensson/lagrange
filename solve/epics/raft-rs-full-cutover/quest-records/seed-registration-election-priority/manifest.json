@@ -1,0 +1,78 @@
+{
+  "schema": "historical-red-control/1",
+  "quest": "seed-registration-election-priority",
+  "positivePopulation": false,
+  "sealedSource": {
+    "head": "89365eb925f9aad16b063d9cb8a550ebef7a90d4",
+    "testCommand": "npm run test:file -- test/bootstrap/seed-registration-election-scheduling.test.js"
+  },
+  "redArtifact": {
+    "path": "solve/epics/raft-rs-full-cutover/quest-records/seed-registration-election-priority/base-red.tap",
+    "sha256": "4f66ee9398e1c71e59ed4231962dee979aff8ccfe5869cd031b8042811f32ee7",
+    "bytes": 10140,
+    "expected": {
+      "exitCode": 1,
+      "classification": "behavioral scheduling red followed by missing-method noise",
+      "firstFailures": [
+        "ordinary election started before registration dependency cohort",
+        "dependency wait and failure propagation absent"
+      ]
+    }
+  },
+  "positiveWitness": {
+    "path": "test/bootstrap/seed-registration-election-scheduling.test.js",
+    "sha256": "4b54500fc17a50b3e0add36168676a2b00fcb31823bdaebabc50ea1d61382fd7",
+    "bytes": 7878
+  },
+  "correctedProductionSource": {
+    "aggregate": "path-sha256-v1:7249e25f59a62f35552efae854110b6498cee8a82109e27938adc24176432c82",
+    "files": [
+      {
+        "path": "src/bootstrap/bootstrap-service-seed-delegates.js",
+        "sha256": "51c194b52ab63ceed6a430d64010b515baba4e93299a174eb2ed661f3f236095",
+        "bytes": 18422
+      },
+      {
+        "path": "src/bootstrap/phases/seed-partitions-phase.js",
+        "sha256": "6f5e3d220a6ebcc907d1ebaa9e5126d3cd810e8b9732ecf419e543f5e18c1581",
+        "bytes": 25111
+      },
+      {
+        "path": "src/bootstrap/phases/seed-registration-phase.js",
+        "sha256": "ea726696d17f4611e3b46f57f054bcc37cb8ab3233b0c42db58dbf2d532784f0",
+        "bytes": 22411
+      }
+    ]
+  },
+  "candidateHistory": {
+    "reviewedBeforeCorrection": {
+      "contentFingerprint": "f9b462e5ebca71f4efb05ad0a717828fd3b27215d34dbb4349726c5116513b9d",
+      "pathFingerprint": "91c0b6ec2cacc65e7513939c9b3b7e1ceafbe8836e3db45b8a8d937a818c3f14"
+    },
+    "physicalCarrierBeforeCorrection": "75ff27ec82461aeebd2ca7326365598a3fc5585a",
+    "correctedPhysicalCarrier": "f26b811e382e5bb177934b374d38d66a26060c0a"
+  },
+  "physicalProof": {
+    "carrier": "f26b811e382e5bb177934b374d38d66a26060c0a",
+    "productionSourceAggregate": "path-sha256-v1:7249e25f59a62f35552efae854110b6498cee8a82109e27938adc24176432c82",
+    "target": {
+      "path": "test/integration/critical-partition-learner-safety.integration.test.js",
+      "sha256": "bc629e699c374f3796cc20d8773a6c0d287de18228e7e608e80207b8964ea943",
+      "bytes": 11804
+    },
+    "result": {
+      "assertions": 10,
+      "passed": 10,
+      "durationMs": 98274,
+      "machine": "lenovo-laptop"
+    },
+    "rawLog": {
+      "path": "/tmp/raft-rs-takeover-20261006/lenovo-seed-election-scheduling-f26b811e-r1.log",
+      "sha256": "5828d6c30e9e188eb12e54aa897210d09500d7360d2d72818852b174a74467d8"
+    }
+  },
+  "notes": [
+    "The archived failing TAP is historical negative evidence and is excluded from every positive test population.",
+    "The corrected carrier has byte-identical production scheduling files to the candidate; its later test-only bootstrap fixture correction does not change the physical target or production source."
+  ]
+}

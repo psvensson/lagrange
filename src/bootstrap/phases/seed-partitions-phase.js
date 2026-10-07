@@ -397,6 +397,13 @@ class SeedPartitionsPhase {
         [...INITIAL_MESSAGE_GROUP_REPLICA_IDS],
       );
 
+      // Shutdown may begin while message-group leadership is pending. Cleanup
+      // then owns every unstarted replica; do not begin either partition
+      // cohort after that lifecycle boundary.
+      if (d.isShuttingDown()) {
+        return;
+      }
+
       logger.debug(
         BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_LEADERSHIP_READY, {
           groupId: INITIAL_MESSAGE_GROUP_ID,
@@ -411,8 +418,35 @@ class SeedPartitionsPhase {
       nodeId: d.getNodeId(),
     });
 
+    const registrationRequiredPartitionIds = new Set(
+      d.getRegistrationRequiredLeaderPartitionIds(),
+    );
+    const registrationRequiredReplicas = [];
+    const remainingReplicas = [];
     for (const partition of partitionReplicas) {
+      const cohort = registrationRequiredPartitionIds.has(
+        partition.partitionId,
+      ) ? registrationRequiredReplicas : remainingReplicas;
+      cohort.push(partition);
+    }
+
+    for (const partition of registrationRequiredReplicas) {
       partition.startElection();
+    }
+
+    try {
+      await d.waitForPartitionLeadership({
+        partitionIds: [...registrationRequiredPartitionIds],
+      });
+    } finally {
+      // A failed dependency gate must not strand otherwise independent
+      // partition groups. During shutdown, cleanup owns every unstarted
+      // replica and this scheduler must not restart them.
+      if (!d.isShuttingDown()) {
+        for (const partition of remainingReplicas) {
+          partition.startElection();
+        }
+      }
     }
   }
 

@@ -1,0 +1,67 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-registration-election-priority",
+  "status": "pass",
+  "testFileDigests": {
+    "test/bootstrap/seed-registration-election-scheduling.test.js": "4b54500fc17a50b3e0add36168676a2b00fcb31823bdaebabc50ea1d61382fd7"
+  },
+  "generatedAt": "2026-10-06T13:12:00.000Z",
+  "receipts": [
+    {
+      "id": "dependency-cohort-first-and-once",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-registration-election-scheduling.test.js",
+      "detail": "The deterministic production-shaped witness starts all 12 replicas belonging to registration's four-partition cut before observing the existing partition-owner gate, holds all other elections until it settles, and starts each replica once.",
+      "testFile": "test/bootstrap/seed-registration-election-scheduling.test.js"
+    },
+    {
+      "id": "active-failure-releases-remaining-cohort",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-registration-election-scheduling.test.js",
+      "detail": "The deterministic rejected-gate witness releases every remaining election exactly once while bootstrap is active and preserves the original failure as the outcome.",
+      "testFile": "test/bootstrap/seed-registration-election-scheduling.test.js"
+    },
+    {
+      "id": "shutdown-preserves-cleanup-authority",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-registration-election-scheduling.test.js",
+      "detail": "When shutdown begins during either held gate, including message-group leadership before any partition election, no later cohort starts; cleanup stays authoritative and no partition leadership budget is spent after shutdown.",
+      "testFile": "test/bootstrap/seed-registration-election-scheduling.test.js"
+    },
+    {
+      "id": "registration-owns-cut-and-single-gate",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-registration-election-scheduling.test.js",
+      "detail": "SeedRegistrationPhase publishes a defensive copy of its exact dependency cut while SeedPartitionsPhase remains the sole satisfaction/memo owner; sequential consumers reuse one underlying wait budget without a duplicate boolean.",
+      "testFile": "test/bootstrap/seed-registration-election-scheduling.test.js"
+    },
+    {
+      "id": "owner-interaction-registered",
+      "passed": true,
+      "command": "npm run audit:impact-contracts",
+      "detail": "impact-contracts registers the registration authority and partition scheduler as a coupled pair with the deterministic scheduling witness; audit passes with 49 contracts and 20 pairs.",
+      "testFile": "test/shards/impact-contracts.json"
+    },
+    {
+      "id": "full-sync-physical-target-reached",
+      "passed": true,
+      "command": "locked physical lab run of critical-partition-learner-safety.integration.test.js",
+      "detail": "Corrected production carrier f26b811e382e5bb177934b374d38d66a26060c0a passed 10/10 in 98274ms on locked lenovo-laptop. The full target reached seed registration, cache hydration, join, replacement learner safety, and shutdown under unchanged FULL durability; raw log /tmp/raft-rs-takeover-20261006/lenovo-seed-election-scheduling-f26b811e-r1.log SHA256 5828d6c30e9e188eb12e54aa897210d09500d7360d2d72818852b174a74467d8.",
+      "testFile": "test/integration/critical-partition-learner-safety.integration.test.js"
+    },
+    {
+      "id": "durability-timeouts-and-census-preserved",
+      "passed": true,
+      "command": "focused source audit and current-tip change gate",
+      "detail": "The exact diff changes no raft durability or timing constant. A current-source census reports 45 system-table partitions and 135 replicas, correcting the earlier 47/141 note.",
+      "testFile": "src/bootstrap/phases/seed-partitions-phase.js"
+    },
+    {
+      "id": "base-red-preserved",
+      "passed": true,
+      "command": "historical sealed-base control; excluded from positive population",
+      "detail": "The exact base red TAP is preserved under the epic historical record with base, source, carrier, witness and positive-exclusion provenance in manifest.json.",
+      "testFile": "solve/epics/raft-rs-full-cutover/quest-records/seed-registration-election-priority/base-red.tap"
+    }
+  ]
+}

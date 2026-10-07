@@ -4,12 +4,12 @@
   "counts": {
     "unit": 1996,
     "integration": 80,
-    "bootstrap": 198,
+    "bootstrap": 199,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2281,
-  "digest": "fnv1a32-f3eb43e2",
+  "censusSize": 2282,
+  "digest": "fnv1a32-1dfe0f47",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -252,6 +252,7 @@
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap",
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "bootstrap",
+    "test/bootstrap/seed-registration-election-scheduling.test.js": "bootstrap",
     "test/bootstrap/seed-registration-phase.test.js": "bootstrap",
     "test/bootstrap/seed-restart-recovery-gate.test.js": "bootstrap",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap",

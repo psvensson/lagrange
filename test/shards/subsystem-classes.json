@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 297,
+    "bootstrap-membership": 298,
     "cdc-metadata": 62,
     "cli-tooling": 96,
     "control-plane": 212,
@@ -25,10 +25,10 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2281,
-  "digest": "fnv1a32-8217b541",
+  "censusSize": 2282,
+  "digest": "fnv1a32-d01c5677",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2d7604be",
+  "observationDigest": "fnv1a32-ff264202",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -271,6 +271,7 @@
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-registration-election-scheduling.test.js": "bootstrap-membership",
     "test/bootstrap/seed-registration-phase.test.js": "bootstrap-membership",
     "test/bootstrap/seed-restart-recovery-gate.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
@@ -3089,6 +3090,12 @@
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": {
       "files": [
         "src/bootstrap/phases/seed-infrastructure-phase.js"
+      ]
+    },
+    "test/bootstrap/seed-registration-election-scheduling.test.js": {
+      "files": [
+        "src/bootstrap/phases/seed-partitions-phase.js",
+        "src/bootstrap/phases/seed-registration-phase.js"
       ]
     },
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": {
