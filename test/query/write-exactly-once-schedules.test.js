@@ -16,10 +16,6 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {
-  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
-  RAFT_OPERATION_OUTCOME,
-} from '../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../src/raft/raft-rs-ingress-constants.js';
 import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
@@ -64,17 +60,6 @@ function loseFirstAnswerFromR1({interceptors, services, members, dbFileOf,
   return lost;
 }
 
-async function transferLeadershipToR2(services) {
-  const transfer = await services[0].raft.transferLeadership({
-    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-    replicaIdentity: services[1].replicaId,
-  });
-  assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
-    `setup: the live leader transfers to r2 (${JSON.stringify(transfer)})`);
-  assert.equal(await waitFor(() => services[1].raft.readStatus().role ===
-    RAFT_ROLE.LEADER), true, 'setup: r2 leads');
-}
-
 async function driveNativeR2Election(services) {
   for (const service of services.slice(1)) {
     service.raft.stopScheduling();
@@ -114,7 +99,9 @@ test('(c1) two log entries for one entryId, both committed: applied once, ' +
       .success, true, 'setup: the group serves a write');
     const [p1, p2, p3] = peers;
     // r1's appends reach r2 only and nothing reaches r1: the first copy is
-    // on r1's and r2's logs, uncommitted.
+    // on r1's and r2's logs, uncommitted. r1 is not cut off from r2 until
+    // after that copy is durably visible on r2, preserving the retained-entry
+    // claim this case exists to prove.
     for (const pair of [`${p1}>${p3}`, `${p2}>${p1}`, `${p3}>${p1}`]) {
       blocked.add(pair);
     }
@@ -125,11 +112,18 @@ test('(c1) two log entries for one entryId, both committed: applied once, ' +
     const lost = loseFirstAnswerFromR1({interceptors, services, members,
       dbFileOf,
       afterProposed: async () => {
-        assert.equal(await waitFor(() => lastLogIndexOf(dbFileOf(members[1])) ===
-          lastLogIndexOf(dbFileOf(members[0]))), true,
+        assert.equal(await waitFor(() => lost.entryId !== null &&
+          logEntriesOf(dbFileOf(members[1]), lost.entryId).length === 1 &&
+          lastLogIndexOf(dbFileOf(members[1])) ===
+            lastLogIndexOf(dbFileOf(members[0]))), true,
         'setup: the first copy reached r2');
+        blocked.add(`${p1}>${p2}`);
         dropIf.add(holdR2);
-        await transferLeadershipToR2(services);
+        dropIf.add((packet) => packet?.from === p3 && [
+          RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE,
+          RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE,
+        ].includes(packet?.message?.msgType));
+        await driveNativeR2Election(services);
       }});
     const write = engine.executeQuery(SURFACE_INSERT, ['row-1', 'v'],
       {timeoutMs: SETTLE_BUDGET_MS});

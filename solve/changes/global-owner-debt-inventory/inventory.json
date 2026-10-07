@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2775895,
-        "sha256": "4320e103958ad396788b42a708eb3885efbd8eb23c8ed944dee7ef004456c14c"
+        "bytes": 2775941,
+        "sha256": "b7c00e4b71f3f71eb3026d6dfc139c4d862b379a44e25dcb4897287a09be61a5"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "5f264e77fb165c9498f987756b03663976eed1c2d1974d1476a5bd6cc66bc544"
+        "sha256": "1892ca992a49626678b82f15262042915c475f100dbfbfd3a4b28ca48e7060f9"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "bf9b31b1f3097e71af17d92346d8a563cbf840d923cc488f75340ddc8ae714f7"
+    "inputDigest": "5991aae065cd2a999dc7c5c3419b01e22a2f5ee72d420e9c039c01234bd05035"
   },
   "reconciliation": {
     "complexity": {
@@ -130,13 +130,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "5f264e77fb165c9498f987756b03663976eed1c2d1974d1476a5bd6cc66bc544"
+          "sha256": "1892ca992a49626678b82f15262042915c475f100dbfbfd3a4b28ca48e7060f9"
         },
-        "cloneGroups": 696,
-        "duplicatedLines": 26345,
-        "sourceCloneTouches": 1392,
-        "sourceDuplicatedLineTouches": 52690,
-        "nonzeroSourceCount": 446,
+        "cloneGroups": 697,
+        "duplicatedLines": 26390,
+        "sourceCloneTouches": 1394,
+        "sourceDuplicatedLineTouches": 52780,
+        "nonzeroSourceCount": 448,
         "touchMultiplicity": 2
       }
     ],
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2775895,
-        "sha256": "4320e103958ad396788b42a708eb3885efbd8eb23c8ed944dee7ef004456c14c"
+        "bytes": 2775941,
+        "sha256": "b7c00e4b71f3f71eb3026d6dfc139c4d862b379a44e25dcb4897287a09be61a5"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "1b1dbbf6f76aedb4e7e9cf0458e0b468965f9b29245cf0dfc120d56d5a5a6f6d",
+      "sourceDigest": "33f723f949715d1e93608acb8cc2d3a484ec2175fd0a963c2ac5c02724cb5edf",
       "moduleCount": 5235,
-      "edgeCount": 26274,
+      "edgeCount": 26275,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2499,
-    "assignedSignalCount": 2499,
-    "uniqueAssignmentCount": 2499,
-    "digest": "9199daa0d004ead7cfe9a000e0218af2a8d01c1690344e15824841c9fb38d355"
+    "sourceSignalCount": 2501,
+    "assignedSignalCount": 2501,
+    "uniqueAssignmentCount": 2501,
+    "digest": "173486ab0e4cfd9ca26c7cf2cf2fa69dbb3632cc204dd69f0c2b1691a0e81f0e"
   },
   "signalCounts": {
     "cognitive": 152,
     "complexity": 1755,
-    "duplication": 505,
+    "duplication": 507,
     "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1284,
+    "filesWithDebt": 1286,
     "rankedBoundaryCount": 113,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 93,
@@ -434,18 +434,18 @@
       "ownerAreas": [
         "test/query"
       ],
-      "fileCount": 38,
-      "signalCount": 40,
+      "fileCount": 40,
+      "signalCount": 42,
       "complexity": 6,
       "cognitive": 0,
       "oversizedFiles": 0,
-      "duplicatedLines": 2685,
-      "cloneTouches": 81,
+      "duplicatedLines": 2775,
+      "cloneTouches": 83,
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 2,
-      "importOut": 246,
-      "score": 292.5,
+      "importOut": 268,
+      "score": 301.5,
       "topPaths": [
         "test/query/query-executor-recovery-owned-routing.test.js",
         "test/query/deferred-hash.test.js",
@@ -3949,11 +3949,11 @@
           }
         ],
         "baseline": {
-          "score": 292.5,
+          "score": 301.5,
           "complexity": 6,
           "cognitive": 0,
           "oversizedFiles": 0,
-          "duplicatedLines": 2685,
+          "duplicatedLines": 2775,
           "lintExclusions": 0
         },
         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"

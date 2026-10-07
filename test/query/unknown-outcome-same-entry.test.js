@@ -30,6 +30,9 @@ import {TABLES} from '../../src/constants/index.js';
 import {ERRORS} from '../../src/constants/errors.js';
 import * as writeKernel from '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {RAFT_RS_MESSAGE_TYPE} from
+  '../../src/raft/raft-rs-ingress-constants.js';
+import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
 import {
   NODE_REGISTRATION_OUTCOME,
   writeNodeRegistrationAtIncarnation,
@@ -79,8 +82,57 @@ const TEST_TIMEOUT_MS = 60000;
 // at least the CDC service's one-second floor).
 const CDC_ROUTED_BUDGET_MS = 4000;
 const BOOT_INCARNATION = 7;
+const MSG_APPEND = 3;
+const MSG_HEARTBEAT = 8;
+const ROUTER_CONNECTION_CLOSED = 'ROUTER_CONNECTION_CLOSED';
 
 const unavailableAuthority = async () => ({available: false, row: null});
+
+
+function loseFirstAnswerFromR1({interceptors, services, members, dbFileOf,
+  afterProposed}) {
+  const lost = {entryId: null, done: false};
+  interceptors.push(async (entry, message) => {
+    if (lost.done || entry.index !== 0) {
+      return undefined;
+    }
+    lost.done = true;
+    lost.entryId = message.entryId;
+    services[0].handleRemoteQuery(message).catch(() => undefined);
+    assert.equal(await waitFor(() =>
+      logEntriesOf(dbFileOf(members[0]), message.entryId).length === 1),
+    true, 'setup: the first delivery is on r1\'s log');
+    await afterProposed();
+    const error = new Error(`connection to ${members[0][1]} closed`);
+    error.code = ROUTER_CONNECTION_CLOSED;
+    throw error;
+  });
+  return lost;
+}
+
+async function driveNativeR2Election(services) {
+  for (const service of services.slice(1)) {
+    service.raft.stopScheduling();
+  }
+  const rounds = 2 * Math.max(...services.slice(1).map((service) =>
+    tuningOf({
+      heartbeatMs: service.raftTimingConfig.heartbeatMs,
+      electionMinMs: service.raftTimingConfig.electionMinMs,
+      tickIntervalMs: service.raftTimingConfig.tickIntervalMs,
+    }).electionTick)) + 1;
+  for (let round = 0; round < rounds; round += 1) {
+    await services[1].raft.tick();
+    await services[2].raft.tick();
+    if (services[1].raft.readStatus().role === RAFT_ROLE.LEADER) {
+      for (const service of services.slice(1)) {
+        service.raft.startScheduling();
+      }
+      return;
+    }
+  }
+  assert.fail('setup: r2 did not lead after the native lease/election bound');
+}
+
 
 // ---------------------------------------------------------------------------
 // W1: the verifier's R6-B scenario, end to end with no authoritative read.
@@ -558,8 +610,7 @@ test('W2: an INSERT whose proposer loses leadership mid-write commits ' +
   'exactly once', {timeout: TEST_TIMEOUT_MS}, async () => {
   await withGroupSurface({partitionId: 'uo-lc', table: USER_TABLE,
     tempPrefix: TEMP_PREFIX}, async ({engine, services, members, peers,
-    blocked, sent, dbFileOf}) => {
-    const [, r2] = services;
+    blocked, dropIf, interceptors, sent, dbFileOf, rowsEverywhere}) => {
     const served = await engine.executeQuery(SURFACE_INSERT, ['row-0', 's']);
     assert.equal(served.success, true, 'setup: the group serves a write ' +
       `(${JSON.stringify(served.error ?? null)} ` +
@@ -567,32 +618,51 @@ test('W2: an INSERT whose proposer loses leadership mid-write commits ' +
     sent.length = 0;
     const [p1, p2, p3] = peers;
     // r1's appends reach r2 only, and no follower's answer reaches r1: the
-    // write is on r1's and r2's logs, uncommitted.
+    // first copy is retained on r2 before r1 is fully cut off.
     for (const pair of [`${p1}>${p3}`, `${p2}>${p1}`, `${p3}>${p1}`]) {
       blocked.add(pair);
     }
+    const holdR2 = (packet) => packet?.from === p2 &&
+      [MSG_APPEND, MSG_HEARTBEAT].includes(packet?.message?.msgType);
+    const lost = loseFirstAnswerFromR1({interceptors, services, members,
+      dbFileOf,
+      afterProposed: async () => {
+        assert.equal(await waitFor(() => lost.entryId !== null &&
+          logEntriesOf(dbFileOf(members[1]), lost.entryId).length === 1 &&
+          lastLogIndexOf(dbFileOf(members[1])) ===
+            lastLogIndexOf(dbFileOf(members[0]))), true,
+        'setup: the first copy reached r2 uncommitted');
+        blocked.add(`${p1}>${p2}`);
+        dropIf.add(holdR2);
+        dropIf.add((packet) => packet?.from === p3 && [
+          RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE,
+          RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE,
+        ].includes(packet?.message?.msgType));
+        await driveNativeR2Election(services);
+      }});
     const write = engine.executeQuery(SURFACE_INSERT, ['row-1', 'v'],
       {timeoutMs: SETTLE_BUDGET_MS});
-    assert.equal(await waitFor(() => lastLogIndexOf(dbFileOf(members[1])) ===
-      lastLogIndexOf(dbFileOf(members[0])) &&
-      sent.some((d) => d.entryId && logEntriesOf(dbFileOf(members[1]),
-        d.entryId).length === 1)), true, 'setup: the entry reached r2');
-    await r2.raft.campaign();
-    assert.equal(await waitFor(() => r2.raft.readStatus().role ===
-      RAFT_ROLE.LEADER), true, 'setup: r2 leads');
-    assert.equal(await waitFor(() => rowsOf(dbFileOf(members[1]), USER_TABLE,
-      'node_id').includes('row-1')), true,
-    'setup: the new leader committed the entry');
+    assert.equal(await waitFor(() => lost.entryId !== null &&
+      logEntriesOf(dbFileOf(members[1]), lost.entryId).length === 2), true,
+    'setup: the redelivery is proposed again on r2 - two entries');
+    dropIf.delete(holdR2);
     blocked.clear();
     const answered = await write;
+    const r2Copies = logEntriesOf(dbFileOf(members[1]), lost.entryId);
+    assert.equal(r2Copies.length, 2, 'both copies reached the new leader log ' +
+      `under one entryId (${JSON.stringify(r2Copies)})`);
+    assert.ok(r2Copies[0].term < r2Copies[1].term,
+      'the first copy is in the old term and the redelivery in the new term');
     assert.equal(answered.success, true, 'the caller is told it applied ' +
-      `(${JSON.stringify(answered.error ?? null)})`);
+      `(${JSON.stringify(answered.error ?? null)} ` +
+      `${JSON.stringify(answered.participantFailures ?? null)})`);
     assert.equal(answered.affectedRows, 1, 'with its original result');
     assert.ok(sent.length >= 2, `re-delivered (${JSON.stringify(sent)})`);
     assert.equal(new Set(sent.map((d) => d.entryId)).size, 1,
       'every delivery of the write under its one entryId');
-    assert.equal(await waitFor(() => members.every((member) =>
-      rowsOf(dbFileOf(member), USER_TABLE, 'node_id').sort().join() ===
-      'row-0,row-1')), true, 'every replica holds the row once');
+    assert.equal(await waitFor(() => rowsEverywhere(`SELECT node_id FROM ${USER_TABLE} ` +
+      'ORDER BY node_id').every((rows) => rows.map((row) => row.node_id)
+      .join() === 'row-0,row-1')), true,
+    'every replica holds the row once');
   });
 });
