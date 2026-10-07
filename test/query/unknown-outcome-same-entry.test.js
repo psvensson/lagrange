@@ -39,9 +39,12 @@ import {MembershipPublicationRuntimeOwner} from
 import {ENDPOINT_INCARNATION_OUTCOME} from
   '../../src/control-plane/owners/endpoint-incarnation-authority.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
-import {RebalanceCoordinator} from
-  '../../src/rebalancer/rebalance-coordinator.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  OperationType,
+  createOperation,
+} from '../../src/rebalancer/replica-status.js';
 import {PARTITION_SETTLED_REPLAY} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {
@@ -56,9 +59,10 @@ import {
   appliedRow,
   lastLogIndexOf,
   logEntriesOf,
-  authoritativeLeaderReads,
   nodeRow,
   rowsOf,
+  releaseTrapOnAuthoritativeRead,
+  reservationCoordinator,
   spendFirstAttempt,
   trapCore,
   waitFor,
@@ -448,54 +452,55 @@ test('W5/W6: the rebalancer\'s reservation birth (its own method) created ' +
   'again after its unknown outcome resolves the first entry and is answered ' +
   'by the authority - ALREADY_ACTIVE, one row', {timeout: TEST_TIMEOUT_MS},
 async () => {
-  await withSurface([TABLES.STORAGE_RESERVATIONS], async ({engine, gateway,
-    deliveries, of}) => {
-    const surface = of(TABLES.STORAGE_RESERVATIONS);
-    // The coordinator's reservation owner over the real gateway; its retry
-    // loop's own delivery is the gateway's.
-    const coordinator = Object.create(RebalanceCoordinator.prototype);
-    Object.assign(coordinator, {
-      storageAccountingService: {estimateReplicaBytes: () => 1},
-      resolveEntitySizeBytes: () => 1,
-      config: {reservationTtlMs: 60000},
-      stats: {reservationsCreated: 0},
-      logger: {warn: () => undefined, info: () => undefined,
-        debug: () => undefined, error: () => undefined},
-      emit: () => undefined,
-      controlPlaneSystemTableGateway: gateway,
-      executeOperationMutationWithRetry: (sql, params, options) =>
-        gateway.executeQuery(sql, params, {...options, skipCacheWait: true}),
-    });
-    const operation = {operationId: 'op-w5', type: OperationType.ADD,
-      entityType: 'partition', entityId: 'p-w5', partitionId: 'p-w5',
-      targetNodeId: 'n-w5'};
-    authoritativeLeaderReads(gateway, surface);
-    const {first} = await spendFirstAttempt({engine, surface,
-      attempt: () => coordinator.createReservationForOperation(operation)});
-    assert.notEqual(first.outcome, 'created',
-      `setup: the first birth is not confirmed (${JSON.stringify(first)})`);
-    assert.ok(await appliedRow(surface, 'res-op-w5'), 'setup: it commits');
-    const [firstEntry] = new Set(deliveries.map((d) => d.entryId));
-    const mark = deliveries.length;
-    engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
-    // Created again: its timestamps are new, so it is a new logical write of
-    // the name. The first entry is resolved first; it applied, which settles
-    // a reservation birth: the new one is not issued, the authority answers.
-    const again = await coordinator.createReservationForOperation(operation);
-    assert.equal(again.outcome, 'already_active', 'answered by the ' +
+  await withSurface([TABLES.REPLICA_OPERATIONS, TABLES.STORAGE_RESERVATIONS],
+    async ({engine, gateway, deliveries, messageRouter,
+      cdcIntegrationService, of}) => {
+      const surface = of(TABLES.STORAGE_RESERVATIONS);
+      const coordinator = reservationCoordinator({engine, gateway,
+        messageRouter, cdcIntegrationService});
+      const operation = Object.assign(createOperation({operationId: 'op-w5',
+        type: OperationType.ADD, partitionId: 'p-w5', sourceNodeId: NODE_ID,
+        targetNodeId: 'n-w5'}), {entityType: 'partition', entityId: 'p-w5'});
+      await coordinator.persistNewOperation(operation);
+      deliveries.length = 0;
+      const authorityReads = releaseTrapOnAuthoritativeRead(gateway);
+      const {first} = await spendFirstAttempt({engine, surface, attempt: () =>
+        coordinator.createReservationForOperation(operation)});
+      assert.notEqual(first.outcome, 'created',
+        `setup: the first birth is not confirmed (${JSON.stringify(first)})`);
+      assert.ok(await appliedRow(surface, 'res-op-w5'), 'setup: it commits');
+      const [firstEntry] = new Set(deliveries.map((d) => d.entryId));
+      const mark = deliveries.length;
+      authorityReads.length = 0;
+      engine.queryExecutor.queryTimeoutMs = SETTLE_BUDGET_MS;
+      // Created again: its timestamps are new, so it is a new logical write of
+      // the name. The first entry is resolved first; it applied, which settles
+      // a reservation birth: the new one is not issued, the authority answers.
+      const again = await coordinator.createReservationForOperation(operation);
+      assert.equal(again.outcome, 'already_active', 'answered by the ' +
       `authority: the first birth's reservation is ACTIVE (${JSON.stringify(
         again)})`);
-    const redriven = deliveries.slice(mark);
-    assert.equal(redriven[0].entryId, firstEntry,
-      'the first entry is resolved first');
-    assert.equal(redriven[0].answer.success, true,
-      'answered applied from its outcome row');
-    assert.equal(redriven.length, 1, 'nothing else is delivered');
-    assert.ok(!JSON.stringify(deliveries.map((d) => d.answer))
-      .includes('UNIQUE'), 'never answered UNIQUE');
-    assert.deepEqual(rowsOf(surface.dbPath, TABLES.STORAGE_RESERVATIONS,
-      'reservation_id'), ['res-op-w5'], 'one row (W6)');
-  });
+      const redriven = deliveries.slice(mark);
+      const redrivenWrites = redriven.filter((delivery) =>
+        /^\s*(INSERT|UPDATE|DELETE)\b/iu.test(delivery.sql || ''));
+      assert.equal(redrivenWrites[0].entryId, firstEntry,
+        'the first entry is resolved first');
+      assert.equal(redrivenWrites[0].answer.success, true,
+        'answered applied from its outcome row');
+      assert.equal(redrivenWrites.length, 1,
+        'no second reservation mutation is delivered');
+      assert.equal(authorityReads.some((read) =>
+        read.tableName === TABLES.REPLICA_OPERATIONS &&
+      read.options?.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED &&
+      read.result?.success === true), true,
+      'the retry consumes the strict durable operation owner');
+      assert.ok(!JSON.stringify(deliveries.map((d) => d.answer))
+        .includes('UNIQUE'), 'never answered UNIQUE');
+      assert.deepEqual(rowsOf(surface.dbPath, TABLES.STORAGE_RESERVATIONS,
+        'reservation_id'), ['res-op-w5'], 'one row (W6)');
+      await coordinator.shutdown();
+    }, {cdc: true});
 });
 
 test('W5/W6: the CDC service\'s routed write retries every engine attempt ' +

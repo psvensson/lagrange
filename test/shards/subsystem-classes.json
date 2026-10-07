@@ -28,7 +28,7 @@
   "censusSize": 2310,
   "digest": "fnv1a32-cf1cfe0d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b7977ea9",
+  "observationDigest": "fnv1a32-9b588e90",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -9114,6 +9114,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -9148,6 +9149,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -9163,6 +9165,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -9181,7 +9184,6 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/rebalancer/rebalance-coordinator.js",
-        "src/rebalancer/replica-operation-repository.js",
         "src/runtime/runtime-endpoint-publication-wiring.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
