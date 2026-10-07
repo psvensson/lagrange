@@ -24,7 +24,11 @@ import {
 } from './replica-create-admission-token.js';
 import {bindReplaceCreateTargetReplicaId} from
   './operation-workflow-replace-target-binding.js';
-import {resolveAmbiguousCreateDeliveryFailure} from
+import {
+  isRetainedCreateDeliveryResolution,
+  resolveAmbiguousCreateDeliveryFailure,
+  scheduleUnretainedCreateDelivery,
+} from
   './operation-workflow-ambiguous-create-delivery.js';
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -686,6 +690,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       replaceRemovePhase: replaceRemoveDispatchPhase,
     });
     let response;
+    let retainedCreateDeliveryResolution = null;
     try {
       response = classifyTransportDeliveryOutcome(
         await this.deliverReplicaOperationRequest(
@@ -708,9 +713,15 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           replaceRemoveDispatchPhase,
         );
       if (ambiguousCreateResult) {
-        return ambiguousCreateResult;
+        if (!isRetainedCreateDeliveryResolution(ambiguousCreateResult)) {
+          return ambiguousCreateResult;
+        }
+        retainedCreateDeliveryResolution = ambiguousCreateResult;
+        operation = ambiguousCreateResult.operation;
+        response = ambiguousCreateResult.response;
       }
-      if (this.deferDispatchRetry(operation, error)) {
+      if (!retainedCreateDeliveryResolution &&
+          this.deferDispatchRetry(operation, error)) {
         return this.buildSkippedOperationResult(
           REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
           operation.operationId,
@@ -719,16 +730,20 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           },
         );
       }
-      await this.failOperation(operation, errorMsg);
-      return this.buildFailedOperationResult(operation.operationId, errorMsg);
+      if (!retainedCreateDeliveryResolution) {
+        await this.failOperation(operation, errorMsg);
+        return this.buildFailedOperationResult(operation.operationId, errorMsg);
+      }
     }
     if (
+      !retainedCreateDeliveryResolution &&
       response?.success === false &&
       response?.reason === REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING
     ) {
       return response;
     }
-    if (!isDeliveredTransportDeliveryOutcome(response)) {
+    if (!retainedCreateDeliveryResolution &&
+        !isDeliveredTransportDeliveryOutcome(response)) {
       const errorLike = resolveDispatchDeliveryErrorLike(response);
       const errorMsg = this.normalizeErrorMessage(
         errorLike,
@@ -742,9 +757,15 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           replaceRemoveDispatchPhase,
         );
       if (ambiguousCreateResult) {
-        return ambiguousCreateResult;
+        if (!isRetainedCreateDeliveryResolution(ambiguousCreateResult)) {
+          return ambiguousCreateResult;
+        }
+        retainedCreateDeliveryResolution = ambiguousCreateResult;
+        operation = ambiguousCreateResult.operation;
+        response = ambiguousCreateResult.response;
       }
-      if (this.deferDispatchRetry(operation, errorLike)) {
+      if (!retainedCreateDeliveryResolution &&
+          this.deferDispatchRetry(operation, errorLike)) {
         return this.buildSkippedOperationResult(
           REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
           operation.operationId,
@@ -753,21 +774,37 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
           },
         );
       }
-      await this.failOperation(operation, errorMsg);
-      return this.buildFailedOperationResult(operation.operationId, errorMsg);
+      if (!retainedCreateDeliveryResolution) {
+        await this.failOperation(operation, errorMsg);
+        return this.buildFailedOperationResult(operation.operationId, errorMsg);
+      }
     }
-    noteReplaceSourceRemovalEffect(
-      this, operation, response, replaceRemoveDispatchPhase);
-    this.retainDeliveredCreateProgress(
-      operation,
-      response,
-      replaceRemoveDispatchPhase,
-    );
-    return this._handleDispatchResponse(
-      operation,
-      response,
-      replaceRemoveDispatchPhase,
-    );
+    while (true) {
+      noteReplaceSourceRemovalEffect(
+        this, operation, response, replaceRemoveDispatchPhase);
+      const retainedCreateDelivery = this.retainDeliveredCreateProgress(
+        operation,
+        response,
+        replaceRemoveDispatchPhase,
+      );
+      if (retainedCreateDeliveryResolution) {
+        if (!retainedCreateDelivery) {
+          scheduleUnretainedCreateDelivery(this, operation);
+        }
+        return retainedCreateDeliveryResolution.result;
+      }
+      const reconciled = await this._handleDispatchResponse(
+        operation,
+        response,
+        replaceRemoveDispatchPhase,
+      );
+      if (!isRetainedCreateDeliveryResolution(reconciled)) {
+        return reconciled;
+      }
+      retainedCreateDeliveryResolution = reconciled;
+      operation = reconciled.operation;
+      response = reconciled.response;
+    }
   },
   async _handleDispatchResponse(operation, response, replaceRemovePhase) {
     this.clearDispatchRetry(operation?.operationId);

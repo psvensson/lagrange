@@ -24,6 +24,9 @@ const CREATE_DISPATCH_IDENTITY_FIELDS = Object.freeze([
   'targetNodeId',
 ]);
 const AMBIGUOUS_CREATE_DELIVERY_NOT_HANDLED = false;
+const AMBIGUOUS_CREATE_DELIVERY_ACTION = Object.freeze({
+  RETAIN: 'RETAIN',
+});
 
 function isCreateDispatchPhase(operation, replaceRemoveDispatchPhase) {
   return replaceRemoveDispatchPhase !== true &&
@@ -68,16 +71,23 @@ function buildDeferredCreateDelivery(owner, operation, errorMsg) {
   );
 }
 
-function retainAdmittedCreateDelivery(owner, operation, errorMsg) {
-  const retained = owner.retainDeliveredCreateProgress(
+function buildRetainedCreateDelivery(operation, errorMsg, owner) {
+  return Object.freeze({
+    action: AMBIGUOUS_CREATE_DELIVERY_ACTION.RETAIN,
     operation,
-    {status: ReplicaOperationResponseStatus.IN_PROGRESS},
-    false,
-  );
-  if (!retained) {
-    scheduleCreateDeliveryObservation(owner, operation);
-  }
-  return buildDeferredCreateDelivery(owner, operation, errorMsg);
+    response: Object.freeze({
+      status: ReplicaOperationResponseStatus.IN_PROGRESS,
+    }),
+    result: buildDeferredCreateDelivery(owner, operation, errorMsg),
+  });
+}
+
+function isRetainedCreateDeliveryResolution(value) {
+  return value?.action === AMBIGUOUS_CREATE_DELIVERY_ACTION.RETAIN;
+}
+
+function scheduleUnretainedCreateDelivery(owner, operation) {
+  scheduleCreateDeliveryObservation(owner, operation);
 }
 
 function resolveTerminalCreateDelivery(owner, operation, errorMsg) {
@@ -120,7 +130,7 @@ async function resolveAmbiguousCreateDeliveryFailure(
   const authoritativeOperation = observation?.operation || null;
   if (isRetainedAdmission(owner, operation, authoritativeOperation)) {
     Object.assign(operation, authoritativeOperation);
-    return retainAdmittedCreateDelivery(owner, operation, errorMsg);
+    return buildRetainedCreateDelivery(operation, errorMsg, owner);
   }
   if (createDeliveryAuthorityDiverged(operation, authoritativeOperation)) {
     scheduleCreateDeliveryObservation(owner, operation);
@@ -130,13 +140,16 @@ async function resolveAmbiguousCreateDeliveryFailure(
     Object.assign(operation, authoritativeOperation);
     return resolveTerminalCreateDelivery(owner, operation, errorMsg);
   }
+  if (owner.deferDispatchRetry(operation, errorLike)) {
+    return buildDeferredCreateDelivery(owner, operation, errorMsg);
+  }
   const terminalOutcome = await owner.failOperation(operation, errorMsg, {
     requireCreateAdmissionAbsent: true,
     deferWhenCreateAdmissionWins: true,
   });
   if (terminalOutcome?.createAdmissionWon === true) {
     Object.assign(operation, terminalOutcome.operation);
-    return retainAdmittedCreateDelivery(owner, operation, errorMsg);
+    return buildRetainedCreateDelivery(operation, errorMsg, owner);
   }
   if (Number.isFinite(operation.completedAt)) {
     return resolveTerminalCreateDelivery(owner, operation, errorMsg);
@@ -145,4 +158,8 @@ async function resolveAmbiguousCreateDeliveryFailure(
   return buildDeferredCreateDelivery(owner, operation, errorMsg);
 }
 
-export {resolveAmbiguousCreateDeliveryFailure};
+export {
+  isRetainedCreateDeliveryResolution,
+  resolveAmbiguousCreateDeliveryFailure,
+  scheduleUnretainedCreateDelivery,
+};

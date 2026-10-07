@@ -669,8 +669,14 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
             options: {
               allowPriorityRecoveryDeferredVisibility: true,
             },
+          }, {
+            operationId: operation.operationId,
+            options: {
+              authoritativeReadMode: 'owner_rpc_required',
+              allowOwnerPersistedTransitionDeferredVisibility: false,
+            },
           }],
-          'transition resume should load operation visibility through the repository-owned observation contract',
+          'transition resume and CREATE dispatch should both load visibility through the repository-owned observation contract',
         );
       } finally {
         await coordinator.shutdown();
