@@ -35,6 +35,7 @@ import {PartitionNodeCluster} from './partition-node-cluster.js';
 
 const FOUNDING = Object.freeze(['replica-a', 'replica-b', 'replica-c']);
 const LEADER_STATE = 2;
+const PRE_CANDIDATE_STATE = 3;
 const SETTLE_ROUNDS = 200;
 const DELIVERY_ROUNDS = 12;
 const SEEDS = 200;
@@ -295,23 +296,43 @@ test('a vote granted before a power loss is never cast again in the same ' +
     }
     const formedTerm = model.cluster.coreStatus(a).term;
 
-    // a is cut off; c campaigns and wins the next term with b's vote.
+    // Once a is cut off, first let b's native lease expire into pre-candidate
+    // while c still holds its lease; then let c's own lease expire. The core's
+    // ordinary pre-vote/vote path elects c with b's vote — no host campaign
+    // bypasses check-quorum or the lease.
     model.cut(a);
-    model.cluster.node(c).campaign();
-    model.deliver(DELIVERY_ROUNDS);
+    model.cluster.tickers = [b];
+    assert.ok(model.cluster.settle(() =>
+      model.cluster.coreStatus(b).raftState === PRE_CANDIDATE_STATE,
+    {rounds: SETTLE_ROUNDS}),
+    'replica-b reaches pre-candidate only after its native lease expires');
+    model.cluster.tickers = [c];
+    assert.ok(model.cluster.settle(() =>
+      model.cluster.coreStatus(c).raftState === LEADER_STATE,
+    {rounds: SETTLE_ROUNDS}),
+    'replica-c leads after its native lease expires');
     const cTerm = model.cluster.coreStatus(c).term;
-    assert.equal(model.cluster.coreStatus(c).raftState, LEADER_STATE,
-      'replica-c leads with replica-b\'s vote');
     assert.equal(BigInt(cTerm), BigInt(formedTerm) + 1n);
 
-    // b loses power, c is cut off, b and a talk, and b campaigns.
+    // b loses power, c is cut off, and b and a become the reachable pair.
+    // Expire a's surviving old-leader lease before b's own election timeout;
+    // b must win through the ordinary pre-vote/vote path using the vote that
+    // survived its power loss.
     model.powerLoss(b);
     model.heal(a);
     model.cut(c);
-    model.cluster.node(b).campaign();
-    model.deliver(DELIVERY_ROUNDS);
-    assert.equal(model.cluster.coreStatus(b).raftState, LEADER_STATE,
-      'replica-b leads the partition it can reach');
+    model.blocked.add(`${a}>${b}`);
+    model.cluster.tickers = [a];
+    assert.ok(model.cluster.settle(() =>
+      model.cluster.coreStatus(a).raftState === PRE_CANDIDATE_STATE,
+    {rounds: SETTLE_ROUNDS}),
+    'replica-a reaches pre-candidate only after its native lease expires');
+    model.blocked.delete(`${a}>${b}`);
+    model.cluster.tickers = [b];
+    assert.ok(model.cluster.settle(() =>
+      model.cluster.coreStatus(b).raftState === LEADER_STATE,
+    {rounds: SETTLE_ROUNDS}),
+    'replica-b leads the partition it can reach after native lease expiry');
 
     const recast = model.violations.filter((violation) =>
       violation.kind === 'two-leaders-in-one-term');

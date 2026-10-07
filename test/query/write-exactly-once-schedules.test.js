@@ -17,6 +17,13 @@ import {test} from 'node:test';
 
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_RS_MESSAGE_TYPE} from
+  '../../src/raft/raft-rs-ingress-constants.js';
+import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
+import {
   SETTLE_BUDGET_MS,
   SURFACE_INSERT,
   USER_TABLE,
@@ -57,10 +64,38 @@ function loseFirstAnswerFromR1({interceptors, services, members, dbFileOf,
   return lost;
 }
 
-async function campaignR2(services) {
-  await services[1].raft.campaign();
+async function transferLeadershipToR2(services) {
+  const transfer = await services[0].raft.transferLeadership({
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+    replicaIdentity: services[1].replicaId,
+  });
+  assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    `setup: the live leader transfers to r2 (${JSON.stringify(transfer)})`);
   assert.equal(await waitFor(() => services[1].raft.readStatus().role ===
     RAFT_ROLE.LEADER), true, 'setup: r2 leads');
+}
+
+async function driveNativeR2Election(services) {
+  for (const service of services.slice(1)) {
+    service.raft.stopScheduling();
+  }
+  const rounds = 2 * Math.max(...services.slice(1).map((service) =>
+    tuningOf({
+      heartbeatMs: service.raftTimingConfig.heartbeatMs,
+      electionMinMs: service.raftTimingConfig.electionMinMs,
+      tickIntervalMs: service.raftTimingConfig.tickIntervalMs,
+    }).electionTick)) + 1;
+  for (let round = 0; round < rounds; round += 1) {
+    await services[1].raft.tick();
+    await services[2].raft.tick();
+    if (services[1].raft.readStatus().role === RAFT_ROLE.LEADER) {
+      for (const service of services.slice(1)) {
+        service.raft.startScheduling();
+      }
+      return;
+    }
+  }
+  assert.fail('setup: r2 did not lead after the native lease/election bound');
 }
 
 async function everyReplicaHoldsOnce(rowsEverywhere) {
@@ -94,7 +129,7 @@ test('(c1) two log entries for one entryId, both committed: applied once, ' +
           lastLogIndexOf(dbFileOf(members[0]))), true,
         'setup: the first copy reached r2');
         dropIf.add(holdR2);
-        await campaignR2(services);
+        await transferLeadershipToR2(services);
       }});
     const write = engine.executeQuery(SURFACE_INSERT, ['row-1', 'v'],
       {timeoutMs: SETTLE_BUDGET_MS});
@@ -123,7 +158,7 @@ test('(c2/d) the first copy on the deposed leader only, the redelivery on ' +
   'redelivery applies once', {timeout: TEST_TIMEOUT_MS}, async () => {
   await withGroupSurface({partitionId: 'xo-c2', table: USER_TABLE,
     tempPrefix: TEMP_PREFIX}, async ({engine, services, members, peers,
-    blocked, interceptors, dbFileOf, rowsEverywhere}) => {
+    blocked, dropIf, interceptors, dbFileOf, rowsEverywhere}) => {
     assert.equal((await engine.executeQuery(SURFACE_INSERT, ['row-0', 's']))
       .success, true, 'setup: the group serves a write');
     const [p1, p2, p3] = peers;
@@ -133,11 +168,18 @@ test('(c2/d) the first copy on the deposed leader only, the redelivery on ' +
       `${p3}>${p1}`]) {
       blocked.add(pair);
     }
+    // Both followers keep ticking so their native leader leases expire. Hold
+    // only r3's competing election requests; its vote responses to r2 still
+    // flow, so r2 wins through the ordinary pre-vote/vote protocol.
+    dropIf.add((packet) => packet?.from === p3 && [
+      RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE,
+      RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE,
+    ].includes(packet?.message?.msgType));
     let firstCopy = null;
     const lost = loseFirstAnswerFromR1({interceptors, services, members,
       dbFileOf,
       afterProposed: async () => {
-        await campaignR2(services);
+        await driveNativeR2Election(services);
         assert.equal(services[0].raft.readStatus().role, RAFT_ROLE.LEADER,
           'setup: r1 still leads its own term (the race)');
       }});
