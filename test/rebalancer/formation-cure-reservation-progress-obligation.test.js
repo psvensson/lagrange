@@ -16,7 +16,6 @@ const PARTITION_ID = 'sql_transactions-p1';
 const OPERATION_ID = 'formation-cure-progress-op';
 const RESERVATION_ID = 'res-' + OPERATION_ID;
 const REPLICA_ID = 'sql_transactions-p1-r4';
-const OWNER_UNAVAILABLE_ERROR = 'fixture-owner-rpc-temporarily-unavailable';
 const OWNER_RPC_SOURCE = 'owner_rpc_lane';
 const RESERVATION_INSERT_PATTERN =
   /^insert(?:\s+or\s+ignore)?\s+into\s+storage_reservations\b/iu;
@@ -68,6 +67,9 @@ test(
       coordinator.workflowOwner.repository.resolveOperationOwnerNodeId.bind(
         coordinator.workflowOwner.repository,
       );
+    const originalQueryAuthoritativeOperationById =
+      coordinator.workflowOwner.repository.queryAuthoritativeOperationById
+        .bind(coordinator.workflowOwner.repository);
 
     const planningIdentity = Object.freeze({
       globalPlanningGeneration: 1,
@@ -176,19 +178,6 @@ test(
           ),
         };
       }
-      if (
-        reservationRows.has(RESERVATION_ID) &&
-        tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-        operationAuthorityAvailable !== true
-      ) {
-        postReservationOperationOwnerReadCount += 1;
-        return {
-          success: false,
-          rows: [],
-          error: OWNER_UNAVAILABLE_ERROR,
-          source: OWNER_RPC_SOURCE,
-        };
-      }
       return originalReadAuthoritativeRows(
         tableName,
         sql,
@@ -196,6 +185,19 @@ test(
         options,
       );
     };
+
+    coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
+      async (operationId, options = {}) => {
+        if (
+          reservationRows.has(RESERVATION_ID) &&
+          operationId === OPERATION_ID &&
+          operationAuthorityAvailable !== true
+        ) {
+          postReservationOperationOwnerReadCount += 1;
+          return null;
+        }
+        return originalQueryAuthoritativeOperationById(operationId, options);
+      };
 
     try {
       const move = {
