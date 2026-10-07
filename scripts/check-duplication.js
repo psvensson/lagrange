@@ -221,8 +221,10 @@ const RATCHET_TARGETS = [
     // on the checker's hint for the merged tree.
     // 2026-10-05: merge of quest/one-spread-authority keeps the lower values,
     // then tightened 708/26738 -> 706/26671 on the checker's hint.
+    // 2026-10-06: shared reservation-insert fixtures tightened duplicated
+    // lines from 26671 -> 26655 on the checker's hint.
     baselineCloneGroupCount: 706,
-    baselineDuplicatedLineCount: 26671,
+    baselineDuplicatedLineCount: 26655,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

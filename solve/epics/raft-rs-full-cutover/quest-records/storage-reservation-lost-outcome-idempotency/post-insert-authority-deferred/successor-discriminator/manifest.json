@@ -1,0 +1,44 @@
+{
+  "schema": "reservation-successor-discriminator/1",
+  "base": "c280049f783c77b23f5070f1a2c389383c18527f",
+  "pre_fix_product_fingerprint": "f1d11e5617d4bc7b5b60d75ce65522b64274961e842711b2c213d53a8311f7d8",
+  "pre_fix_product_manifest_sha256": "e402c5955ceee47cbd65e23a570942520726fee2fcad5c39e88cf83f5eb435f8",
+  "interpretation": "Historical 9dede witness red is SQL spelling selectivity only. Successor r2 proves the real runtime ingress and retained progress path, then isolates stale retry registration after shutdown fence advance and reinitialize. R1 unfinished is preserved and excluded from positive evidence.",
+  "entries": [
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/post-insert-authority-deferred/successor-discriminator/historical-witness.test.js.txt",
+      "sha256": "ec2b2bc1ba59454981573364100bac6ad5b33448f8557da7fe13e9dfce68bf50",
+      "bytes": 6157
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/post-insert-authority-deferred/successor-discriminator/successor-witness.test.js.txt",
+      "sha256": "986e750396f5c7331f993383bc017387baf21ec3f7db179326b065780345e755",
+      "bytes": 10071
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/post-insert-authority-deferred/successor-discriminator/successor-harness.js.txt",
+      "sha256": "48b551162bb52baca482df97e10e58664efb8462dd14ecc81654b2d3777c5194",
+      "bytes": 8861
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/post-insert-authority-deferred/successor-discriminator/dirty-successor-r1-unfinished.tap",
+      "sha256": "f18fcbb1f8f42349f93908894177d613b54a2096f9f7a8d5a4af5bed9f013d21",
+      "bytes": 3986
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/post-insert-authority-deferred/successor-discriminator/dirty-successor-r2-stale-fence-red.tap",
+      "sha256": "0760dd4649b4ffd88d4bdb75367aa74114cb570d8fa7ff9edf9d3cfd038e6884",
+      "bytes": 4688
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/post-insert-authority-deferred/successor-discriminator/clean-c280-successor.tap",
+      "sha256": "82df6fd60d4f3ce4e2b9f3b9c8b5beb846930473cadd274fd2fba451616fe601",
+      "bytes": 2859
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/post-insert-authority-deferred/successor-discriminator/post-fix-successor-green.tap",
+      "sha256": "09505cbb171608ec53c6552ce479cb5b39f3e972da92bfbbece5e6c36efb9075",
+      "bytes": 3545
+    }
+  ]
+}

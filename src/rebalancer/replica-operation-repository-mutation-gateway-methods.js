@@ -45,6 +45,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     SYSTEM_TABLE_NAME,
     TRANSPORT_ERROR_MSG,
     cloneControlPlaneFailureParticipants,
+    createTimeoutBudget,
     getControlPlaneErrorCode,
     getControlPlaneRetryAfterMs,
     getRemainingBudgetMs,
@@ -55,6 +56,14 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
   } = options;
 
   class ReplicaOperationRepositoryMutationGatewayMethods {
+    createOperationMutationTimeoutBudget(timeoutBudget = null) {
+      if (timeoutBudget && typeof timeoutBudget ===
+          REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT) return timeoutBudget;
+      return createTimeoutBudget({
+        configuredBudgetMs: OPERATION_PERSIST_RETRY_TIMEOUT_MS,
+        now: () => this.timeSource.now()});
+    }
+
     async executeOperationMutationWithRetry(sql, params, options = {}) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
@@ -613,7 +622,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       ) {
         return localRemainingMs;
       }
-      const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
+      const budgetRemainingMs = getRemainingBudgetMs(
+        timeoutBudget, {now: () => this.timeSource.now()});
       return Math.min(localRemainingMs, budgetRemainingMs);
     }
 
@@ -624,7 +634,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       ) {
         return REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS;
       }
-      const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
+      const budgetRemainingMs = getRemainingBudgetMs(
+        timeoutBudget, {now: () => this.timeSource.now()});
       if (budgetRemainingMs <= 0) {
         return 1;
       }

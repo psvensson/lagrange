@@ -88,7 +88,7 @@ function createTrackingSqlEngine() {
         return {success: true, changes: 1};
       }
 
-      if (sql.includes('INSERT INTO storage_reservations')) {
+      if (sql.includes('INTO storage_reservations')) {
         const [resId, opId, eType, eId, partId, tgtNode,
           estBytes, ampFactor, status, reason,
           created, updated, expires] = params;
@@ -330,7 +330,7 @@ test('createOperation uses isolated SQL sessions for operation and reservation w
     const sqlEngine = {
       async executeQuery(sql, params, options = {}) {
         if (sql.includes('INSERT INTO replica_operations') ||
-            sql.includes('INSERT INTO storage_reservations')) {
+            sql.includes('INTO storage_reservations')) {
           observedSessions.push(options.sessionId || null);
           if (!options.sessionId || options.sessionId === 'default') {
             return {

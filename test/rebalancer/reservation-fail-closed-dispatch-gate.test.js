@@ -22,14 +22,13 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from
+  '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {
-  RESERVATION_STATUS,
-  STORAGE_CAPACITY_DEFAULT,
-} from '../../src/rebalancer/storage-capacity-constants.js';
-import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {RESERVATION_STATUS} from
+  '../../src/rebalancer/storage-capacity-constants.js';
+import {OperationType, ReplicaStatus} from
+  '../../src/rebalancer/replica-status.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
 } from '../../src/rebalancer/rebalancer-constants.js';
@@ -39,295 +38,22 @@ import {
 import {
   OPERATION_WORKFLOW_OWNER_SHARED,
 } from '../../src/rebalancer/operation-workflow-owner-shared.js';
+import {
+  TEST_OPERATION_ID,
+  TEST_PARTITION_ID,
+  TEST_RESERVATION_ID,
+  TEST_TARGET_NODE_ID,
+  buildStorageIncreasingOperation,
+  createCoordinatorWithStorage,
+  createDeterministicTimerQueue,
+  createRuntimeServiceDeferralFixture,
+  createTrackingSqlEngine,
+  initializeConfig,
+  seedActiveReservation,
+  seedAuthoritativeOperation,
+} from './reservation-dispatch-gate-test-harness.js';
 
 const {OPERATION_WORKFLOW_OWNER_REASON} = OPERATION_WORKFLOW_OWNER_SHARED;
-import {
-  StorageCapacityAccountingService,
-} from '../../src/rebalancer/storage-capacity-accounting-service.js';
-import {RebalanceCoordinator} from
-  '../../src/rebalancer/rebalance-coordinator.js';
-import {
-  createMockCache,
-  createMockCdcService,
-  createMockPolicyService,
-  createMockMessageRouter,
-  createMockControlPlaneReadinessService,
-  createMockTransactionCoordinator,
-} from './test-helpers.js';
-
-const TEST_NODE_ID = 'reservation-gate-node';
-const TEST_PARTITION_ID = 'p-gate';
-const TEST_TARGET_NODE_ID = 'target-node';
-const TEST_OPERATION_ID = 'op-gate';
-const TEST_RESERVATION_ID = `res-${TEST_OPERATION_ID}`;
-
-function initializeConfig(overrides = {}) {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize({
-    rebalancer: {
-      minimumReplicaBytes: NUM.TEN,
-      partitionReplicaOverheadBytes: NUM.FIVE,
-      messageGroupReplicaOverheadBytes: 2,
-      serviceReplicaOverheadBytes: 1,
-      storageReservationTtlMs:
-        STORAGE_CAPACITY_DEFAULT.RESERVATION_TTL_MS,
-      ...overrides,
-    },
-  });
-}
-
-/**
- * In-memory SQL engine tracking operations and reservations; mirrors
- * coordinator-reservation-lifecycle.test.js createTrackingSqlEngine with an
- * injectable reservation-insert failure.
- */
-function insertOperationRow(operations, params) {
-  const [
-    opId, type, partId, repId, targetClaimKey, srcNode, tgtNode,
-    status, step, created, updated, completed, err, history,
-    entityType, entityId,
-  ] = params;
-  operations.set(opId, {
-    operation_id: opId, type, partition_id: partId,
-    replica_id: repId, target_claim_key: targetClaimKey,
-    source_node_id: srcNode,
-    target_node_id: tgtNode, status, workflow_step: step,
-    created_at: created, updated_at: updated,
-    completed_at: completed, error_message: err,
-    steps_history: history,
-    entity_type: entityType, entity_id: entityId,
-  });
-  return {success: true, changes: 1};
-}
-
-function insertReservationRow(reservations, params, options) {
-  if (options.failReservationInsert === true) {
-    // NON-retryable failure signature: a retryable control-plane error
-    // would (correctly) re-drive the insert through the mutation retry
-    // lane; the fail-closed contract governs the terminal failure.
-    return {
-      success: false,
-      error: 'injected storage_reservations constraint violation',
-    };
-  }
-  const [resId, opId, eType, eId, partId, tgtNode,
-    estBytes, ampFactor, status, reason,
-    created, updated, expires] = params;
-  reservations.set(resId, {
-    reservation_id: resId, operation_id: opId,
-    entity_type: eType, entity_id: eId,
-    partition_id: partId, target_node_id: tgtNode,
-    estimated_bytes: estBytes,
-    amplification_factor: ampFactor,
-    status, reason_code: reason,
-    created_at: created, updated_at: updated,
-    expires_at: expires, released_at: null,
-  });
-  return {success: true, changes: 1};
-}
-
-function updateReservationRows(reservations, sql, params) {
-  const [newStatus, updated, released, reservationIdOrOperationId,
-    activeStatus] = params;
-  let changes = 0;
-  for (const [key, row] of reservations) {
-    const matchesOperation = row.operation_id === reservationIdOrOperationId;
-    const matchesReservation =
-      row.reservation_id === reservationIdOrOperationId;
-    const matchesIdentity = sql.includes('reservation_id = ?') ?
-      matchesReservation :
-      matchesOperation;
-    if (matchesIdentity && row.status === activeStatus) {
-      reservations.set(key, {
-        ...row,
-        status: newStatus,
-        updated_at: updated,
-        released_at: released,
-      });
-      changes++;
-    }
-  }
-  return {success: true, changes};
-}
-
-function updateOperationRow(operations, params) {
-  const [status, step, updated, completed, err,
-    history, repId, opId] = params;
-  const existing = operations.get(opId);
-  if (existing) {
-    operations.set(opId, {
-      ...existing, status, workflow_step: step,
-      updated_at: updated, completed_at: completed,
-      error_message: err, steps_history: history,
-      replica_id: repId,
-    });
-  }
-  return {success: true};
-}
-
-function selectReservationRows(reservations, sql, params) {
-  if (sql.includes('WHERE operation_id = ?')) {
-    const [opId, status] = params;
-    const rows = Array.from(reservations.values())
-      .filter((row) => row.operation_id === opId && row.status === status);
-    return {success: true, rows};
-  }
-  if (params.length > 0) {
-    const [status] = params;
-    const active = Array.from(reservations.values())
-      .filter((r) => r.status === status);
-    return {success: true, rows: active};
-  }
-  return {success: true, rows: Array.from(reservations.values())};
-}
-
-function selectOperationRows(operations, sql, params) {
-  const allOps = Array.from(operations.values());
-  if (sql.includes('operation_id = ?')) {
-    const [opId] = params;
-    const op = operations.get(opId);
-    return {success: true, rows: op ? [op] : []};
-  }
-  return {success: true, rows: allOps};
-}
-
-function createTrackingSqlEngine(options = {}) {
-  const operations = new Map();
-  const reservations = new Map();
-
-  return {
-    operations,
-    reservations,
-    executeQuery: async (sql, params) => {
-      if (sql.includes('INSERT INTO replica_operations')) {
-        return insertOperationRow(operations, params);
-      }
-      if (sql.includes('INSERT INTO storage_reservations')) {
-        return insertReservationRow(reservations, params, options);
-      }
-      if (sql.includes('UPDATE storage_reservations')) {
-        return updateReservationRows(reservations, sql, params);
-      }
-      if (sql.includes('UPDATE replica_operations')) {
-        return updateOperationRow(operations, params);
-      }
-      if (sql.includes('SELECT * FROM storage_reservations')) {
-        return selectReservationRows(reservations, sql, params);
-      }
-      if (sql.includes('replica_operations')) {
-        return selectOperationRows(operations, sql, params);
-      }
-      return {success: true, rows: []};
-    },
-  };
-}
-
-function createMockAdmissionService() {
-  const admittedResult = Object.freeze({
-    allowed: true,
-    decisionType: 'admitted',
-    blockingReasons: [],
-    eligibleNodeIds: [],
-    ineligibleNodes: [],
-  });
-  return {
-    async checkAdd() {
-      return admittedResult;
-    },
-    async checkReplace() {
-      return admittedResult;
-    },
-  };
-}
-
-function createCoordinatorWithStorage(options = {}) {
-  const sqlEngine = options.sqlQueryEngine || createTrackingSqlEngine();
-  const cache = options.systemTableCache || createMockCache();
-  const accounting = new StorageCapacityAccountingService({
-    systemTableCache: cache,
-  });
-  accounting.initialize({systemTableCache: cache});
-
-  const coordinator = new RebalanceCoordinator({
-    nodeId: options.nodeId || TEST_NODE_ID,
-    systemTableCache: cache,
-    cdcIntegrationService: createMockCdcService(),
-    controlPlaneSystemTableGateway: {
-      readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-      readRows: async (_tableName, sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-      executeQuery: async (sql, params = [], queryOptions = {}) =>
-        sqlEngine.executeQuery(sql, params, queryOptions),
-    },
-    tablePolicyService: createMockPolicyService(),
-    messageRouter: createMockMessageRouter(),
-    sqlQueryEngine: sqlEngine,
-    transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService({
-      systemTableCache: cache,
-    }),
-    // Keep the authoritative-visibility confirmation loop fast: the in-memory
-    // engine never publishes CDC witnesses, so the default 5s timeout would
-    // fire on every persisted claim transition.
-    authoritativeVisibilityTimeoutMs: 25,
-    authoritativeVisibilityRetryDelayMs: 5,
-    enableTimeouts: false,
-    storageAccountingService: accounting,
-    storageAdmissionService: createMockAdmissionService(),
-  });
-  coordinator.initialize();
-  const baseCreateOperation = coordinator.createOperation.bind(coordinator);
-  coordinator.createOperation = async (move = {}) => {
-    const normalizedMove = Object.hasOwn(move, 'emitOperationCreated') ?
-      move :
-      {
-        ...move,
-        emitOperationCreated: false,
-      };
-    return baseCreateOperation(normalizedMove);
-  };
-  return {coordinator, sqlEngine, accounting};
-}
-
-function seedActiveReservation(sqlEngine, operationId) {
-  const now = Date.now();
-  sqlEngine.reservations.set(`res-${operationId}`, {
-    reservation_id: `res-${operationId}`,
-    operation_id: operationId,
-    entity_type: SERVICE_TYPE.PARTITION,
-    entity_id: TEST_PARTITION_ID,
-    partition_id: TEST_PARTITION_ID,
-    target_node_id: TEST_TARGET_NODE_ID,
-    estimated_bytes: NUM.HUNDRED,
-    amplification_factor: 1,
-    status: RESERVATION_STATUS.ACTIVE,
-    reason_code: 'add_replica',
-    created_at: now,
-    updated_at: now,
-    expires_at: now + NUM.THOUSAND,
-    released_at: null,
-  });
-}
-
-function buildStorageIncreasingOperation(overrides = {}) {
-  return {
-    operationId: TEST_OPERATION_ID,
-    type: OperationType.ADD,
-    partitionId: TEST_PARTITION_ID,
-    targetNodeId: TEST_TARGET_NODE_ID,
-    entityType: SERVICE_TYPE.PARTITION,
-    entityId: TEST_PARTITION_ID,
-    status: 'pending',
-    workflowStep: WORKFLOW_STEP.PENDING,
-    stepsHistory: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    completedAt: null,
-    ...overrides,
-  };
-}
 
 // --- reservation-failure-blocks-dispatch ---
 
@@ -379,8 +105,254 @@ async (t) => {
       0,
       'no reservation row exists after the failed insert',
     );
+    t.equal(
+      coordinator.workflowOwner.transitionRetryTimerByOperationId.size,
+      0,
+      'a confirmed INSERT failure installs no reservation progress retry',
+    );
   } finally {
     await coordinator.shutdown();
+  }
+});
+
+test('post-insert authority deferral: zero-change INSERT adoption retains ' +
+  'the exact hold and redrives through the same gate', async (t) => {
+  initializeConfig();
+  const {coordinator, dispatchCalls, move, sqlEngine, timers} =
+    createRuntimeServiceDeferralFixture({
+      sqlEngineOptions: {reservationInsertChangeCount: 0},
+    });
+
+  try {
+    await t.rejects(
+      coordinator.createOperation(move),
+      /Storage reservation creation failed/,
+      'ambiguous INSERT adoption remains fail closed while authority is unavailable',
+    );
+    t.equal(
+      sqlEngine.reservations.get(TEST_RESERVATION_ID)?.status,
+      RESERVATION_STATUS.ACTIVE,
+      'the authoritative ACTIVE row remains the sole capacity hold',
+    );
+    t.equal(coordinator.stats.reservationsCreated, 0,
+      'ambiguous INSERT adoption emits no creation accounting');
+    coordinator.restoreOperationAuthority();
+    t.equal(await timers.runNext(), true,
+      'the canonical retry observes restored operation authority');
+    t.same(dispatchCalls, [TEST_OPERATION_ID],
+      'restored authority dispatches exactly once through the existing gate');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('post-insert authority deferral: terminal settlement wins before rearm ' +
+  'and releases the exact hold', async (t) => {
+  initializeConfig();
+  const {coordinator, dispatchCalls, move, sqlEngine, timers} =
+    createRuntimeServiceDeferralFixture();
+
+  try {
+    await t.rejects(
+      coordinator.createOperation(move),
+      /Storage reservation creation failed/,
+      'temporary authority loss leaves one retained retry before terminal settlement',
+    );
+    const operation = await coordinator.repository.queryOperationById(
+      TEST_OPERATION_ID,
+    );
+    await coordinator.workflowOwner.failOperation(
+      operation,
+      'terminal owner won before reservation rearm',
+    );
+    await timers.runNext();
+    t.equal(dispatchCalls.length, 0,
+      'a queued retry cannot dispatch after terminal settlement');
+    t.equal(
+      sqlEngine.reservations.get(TEST_RESERVATION_ID)?.status,
+      RESERVATION_STATUS.RELEASED,
+      'terminal settlement releases the exact retained hold',
+    );
+    t.equal(
+      sqlEngine.operations.get(TEST_OPERATION_ID)?.workflow_step,
+      WORKFLOW_STEP.FAILED,
+      'the durable terminal operation remains authoritative',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('post-insert authority deferral: shutdown cancels the retained retry ' +
+  'without dispatch', async (t) => {
+  initializeConfig();
+  const {coordinator, dispatchCalls, move, sqlEngine, timers} =
+    createRuntimeServiceDeferralFixture();
+
+  await t.rejects(
+    coordinator.createOperation(move),
+    /Storage reservation creation failed/,
+    'temporary authority loss installs one retry before shutdown',
+  );
+  await coordinator.shutdown();
+  t.equal(await timers.runNext(), false,
+    'shutdown clears the retained owner retry');
+  t.equal(dispatchCalls.length, 0,
+    'no physical dispatch runs during or after shutdown');
+  t.equal(
+    sqlEngine.reservations.get(TEST_RESERVATION_ID)?.status,
+    RESERVATION_STATUS.ACTIVE,
+    'shutdown preserves the durable hold for restart recovery',
+  );
+});
+
+test('post-insert authority deferral: runtime-service create keeps its exact ' +
+  'ACTIVE hold and re-enters the canonical dispatch gate once authority recovers',
+async (t) => {
+  initializeConfig();
+  const {coordinator, dispatchCalls, move, sqlEngine, timers} =
+    createRuntimeServiceDeferralFixture({
+      unavailableOperationAuthorityReadsAfterReservationInsert: 4,
+    });
+  let operationCreatedCount = 0;
+  let reservationCreatedCount = 0;
+  coordinator.on(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, () => {
+    operationCreatedCount++;
+  });
+  coordinator.on(REBALANCE_COORDINATOR_EVENT.RESERVATION_CREATED, () => {
+    reservationCreatedCount++;
+  });
+  try {
+    await t.rejects(
+      coordinator.createOperation(move),
+      /Storage reservation creation failed/,
+      'temporary operation authority loss remains fail closed to the caller',
+    );
+
+    t.equal(
+      sqlEngine.reservations.get(TEST_RESERVATION_ID)?.status,
+      RESERVATION_STATUS.ACTIVE,
+      'the exact successfully inserted capacity hold remains ACTIVE',
+    );
+    t.equal(reservationCreatedCount, 0,
+      'ambiguous authority does not publish a reservation creation event');
+    t.equal(coordinator.stats.reservationsCreated, 0,
+      'ambiguous authority does not increment reservation creation stats');
+    t.equal(operationCreatedCount, 0,
+      'the coordinator-created dispatch event is not published prematurely');
+    t.equal(dispatchCalls.length, 0,
+      'no physical dispatch occurs before authoritative adoption');
+    t.ok(
+      coordinator.workflowOwner.transitionRetryTimerByOperationId.has(
+        TEST_OPERATION_ID,
+      ),
+      'the operation owner retains one retry obligation for the durable PENDING row',
+    );
+    const reusedOperation = await coordinator.createOperation(move);
+    t.equal(reusedOperation.operationId, TEST_OPERATION_ID,
+      'a caller retry reuses the durable operation generation');
+    t.equal(dispatchCalls.length, 0,
+      'a caller retry cannot bypass the live canonical retry owner');
+    t.equal(coordinator.stats.operationsCreated, 1,
+      'a caller retry does not duplicate operation creation accounting');
+
+    t.equal(await timers.runNext(), true, 'the retained owner retry fires');
+    t.equal(dispatchCalls.length, 0,
+      'continued authority loss remains non-dispatching');
+    t.ok(
+      coordinator.workflowOwner.transitionRetryTimerByOperationId.has(
+        TEST_OPERATION_ID,
+      ),
+      'the same owner retry obligation is re-armed within the existing deadline',
+    );
+    coordinator.restoreOperationAuthority();
+    t.equal(await timers.runNext(), true,
+      'the re-armed owner retry observes recovered authority');
+    t.same(dispatchCalls, [TEST_OPERATION_ID],
+      'recovered authority crosses the existing reservation gate exactly once');
+    t.equal(reservationCreatedCount, 0,
+      'adopting the exact existing hold emits no duplicate creation event');
+    t.equal(coordinator.stats.reservationsCreated, 0,
+      'adopting the exact existing hold increments no duplicate creation stat');
+    t.equal(coordinator.stats.operationsCreated, 1,
+      'the retry does not account a second operation creation');
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('post-insert authority deferral: restart recovery discovers the durable ' +
+  'PENDING runtime-service operation and exact ACTIVE hold', async (t) => {
+  initializeConfig();
+  const firstTimers = createDeterministicTimerQueue();
+  const sqlEngine = createTrackingSqlEngine();
+  const runtimeServiceId = 'sys-postgres-wire';
+  const runtimeReplicaId = `${runtimeServiceId}-r1`;
+  const first = createCoordinatorWithStorage({
+    sqlQueryEngine: sqlEngine,
+    unavailableOperationAuthorityReadsAfterReservationInsert: 1,
+    setTimeoutFn: firstTimers.setTimeoutFn,
+    clearTimeoutFn: firstTimers.clearTimeoutFn,
+  }).coordinator;
+
+  await t.rejects(
+    first.createOperation({
+      type: OperationType.ADD,
+      operationIntentId: TEST_OPERATION_ID,
+      replicaIntentId: runtimeReplicaId,
+      partitionId: runtimeServiceId,
+      nodeId: TEST_TARGET_NODE_ID,
+      entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+      entityId: runtimeServiceId,
+      emitOperationCreated: true,
+    }),
+    /Storage reservation creation failed/,
+    'the first owner leaves a durable retryable PENDING operation',
+  );
+  await first.shutdown();
+
+  const restartTimers = createDeterministicTimerQueue();
+  const restarted = createCoordinatorWithStorage({
+    sqlQueryEngine: sqlEngine,
+    unavailableOperationAuthorityReadsAfterReservationInsert: 1,
+    setTimeoutFn: restartTimers.setTimeoutFn,
+    clearTimeoutFn: restartTimers.clearTimeoutFn,
+  }).coordinator;
+  const dispatchCalls = [];
+  restarted.workflowOwner.repository.isOperationLocallyOwned = () => true;
+  restarted.workflowOwner.executeOperationInternal = async (operation) => {
+    dispatchCalls.push(operation.operationId);
+    return {success: true, operationId: operation.operationId};
+  };
+  try {
+    const recoveryResult = await restarted.workflowOwner.handleRecovery();
+    t.equal(dispatchCalls.length, 0,
+      'restart remains fail closed while operation authority is unavailable');
+    t.ok(
+      restarted.workflowOwner.transitionRetryTimerByOperationId.has(
+        TEST_OPERATION_ID,
+      ),
+      'startup recovery transfers the durable obligation to the canonical retry owner',
+    );
+    t.equal(recoveryResult.markedFailed, 0,
+      'restart does not report the reservation-backed PENDING row as failed');
+    restarted.restoreOperationAuthority();
+    t.equal(await restartTimers.runNext(), true,
+      'recovered startup authority wakes the retained owner retry');
+    t.same(dispatchCalls, [TEST_OPERATION_ID],
+      'startup recovery re-enters the canonical owner dispatch path once');
+    t.not(
+      sqlEngine.operations.get(TEST_OPERATION_ID)?.workflow_step,
+      WORKFLOW_STEP.FAILED,
+      'restart does not terminalize the reservation-backed progress obligation',
+    );
+    t.equal(
+      sqlEngine.reservations.get(TEST_RESERVATION_ID)?.status,
+      RESERVATION_STATUS.ACTIVE,
+      'restart adopts the same exact capacity hold',
+    );
+  } finally {
+    await restarted.shutdown();
   }
 });
 
@@ -396,6 +368,7 @@ async (t) => {
   });
 
   const operation = buildStorageIncreasingOperation();
+  seedAuthoritativeOperation(sqlEngine, operation);
   const owner = coordinator.workflowOwner;
   owner.repository.isOperationLocallyOwned = () => true;
   owner.executeOperationInternal = async (dispatchedOperation) => ({
@@ -437,6 +410,7 @@ async (t) => {
   });
 
   const operation = buildStorageIncreasingOperation();
+  seedAuthoritativeOperation(sqlEngine, operation);
   const owner = coordinator.workflowOwner;
   owner.repository.isOperationLocallyOwned = () => true;
   const dispatchCalls = [];
