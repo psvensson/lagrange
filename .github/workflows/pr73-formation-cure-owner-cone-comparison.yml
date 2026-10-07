@@ -72,3 +72,9 @@ jobs:
           node test/convergence/dt6-operation-ledger-self-move-holder-release.test.js
           node test/convergence/dt6-operation-ledger-terminal-hold.test.js
           node test/convergence/dt-ledger-completion-continuity-discriminator.test.js
+
+      - name: Historical formation self-move and priority-dispatch liveness
+        run: |
+          node test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js
+          node test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js
+          node test/convergence/dt6-priority-recovery-drain-parked-self-move.test.js
