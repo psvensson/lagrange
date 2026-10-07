@@ -30,6 +30,8 @@ jobs:
         run: node test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js
       - name: Coordinator-created progress continuity
         run: node test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+      - name: Formation cure reservation-to-progress obligation
+        run: node test/rebalancer/formation-cure-reservation-progress-obligation.test.js
       - name: Reservation owner visibility and expiry
         run: |
           node test/rebalancer/reservation-reconcile-premature-orphan-release.test.js
