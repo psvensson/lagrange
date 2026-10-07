@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2302,
+    "ordinary": 2303,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2319,
-  "digest": "fnv1a32-aee01269",
+  "censusSize": 2320,
+  "digest": "fnv1a32-2491e909",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1065,6 +1065,7 @@
     "test/message-group/maximum-retry-limiting.property.test.js": "ordinary",
     "test/message-group/message-delivery-reliability.property.test.js": "ordinary",
     "test/message-group/message-group-failover-cdc-continuity.test.js": "ordinary",
+    "test/message-group/message-group-fresh-learner-promotion.test.js": "ordinary",
     "test/message-group/message-group-fresh-learner-snapshot.test.js": "ordinary",
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": "ordinary",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "ordinary",

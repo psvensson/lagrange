@@ -142,7 +142,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             const start = async () => {
               if (this.shuttingDown) {
                 this.getReplicaCreateAdmissionOwner()
-                  .releasePhysicalWorker(operationId);
+                  .releasePhysicalWorker(request?.createPhysicalWorkerClaim);
                 this.inProgressOperations.delete(operationId);
                 this.localServices.delete(replicaId);
                 this.localReplicas.delete(replicaId);
@@ -150,7 +150,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               }
               const evidence = request?.createAdmissionEvidence;
               if (evidence && !await this.getReplicaCreateAdmissionOwner()
-                .revalidatePhysicalWorker(evidence)) {
+                .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
                 throw Object.assign(
                   new Error(
                     `Current boot lost before queued CREATE ${operationId}`,
@@ -169,7 +169,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             resolve(start().catch((error) => {
               if (!createStarted) {
                 this.getReplicaCreateAdmissionOwner()
-                  .releasePhysicalWorker(operationId);
+                  .releasePhysicalWorker(request?.createPhysicalWorkerClaim);
                 this.inProgressOperations.delete(operationId);
                 this.localServices.delete(replicaId);
                 this.localReplicas.delete(replicaId);
@@ -250,6 +250,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             pendingStatusPersisted,
             createAdmissionEvidence,
             createAttemptToken,
+            createPhysicalWorkerClaim: request.createPhysicalWorkerClaim,
           };
           const initialStatusPersisted =
             await this.persistReplicaCreateInitialStatus(initialStatusOptions);
@@ -311,7 +312,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         });
         if (createAdmissionEvidence &&
             !await this.getReplicaCreateAdmissionOwner()
-              .revalidatePhysicalWorker(createAdmissionEvidence)) {
+              .revalidatePhysicalWorker(request.createPhysicalWorkerClaim)) {
           throw Object.assign(
             new Error(`Current boot lost before physical CREATE ${operationId}`),
             {
@@ -442,7 +443,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         if (operationId) {
           this.inProgressOperations.delete(operationId);
           this.getReplicaCreateAdmissionOwner()
-            .releasePhysicalWorker(operationId);
+            .releasePhysicalWorker(request.createPhysicalWorkerClaim);
         }
         this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_COMPLETED, {
           operationId,
@@ -472,7 +473,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           if (operationId) {
             this.inProgressOperations.delete(operationId);
             this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(operationId);
+              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
           }
           this.localServices.delete(replicaId);
           this.localReplicas.delete(replicaId);
@@ -484,7 +485,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           if (operationId) {
             this.inProgressOperations.delete(operationId);
             this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(operationId);
+              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
           }
           this.localServices.delete(replicaId);
           this.localReplicas.delete(replicaId);
@@ -512,7 +513,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           if (operationId) {
             this.inProgressOperations.delete(operationId);
             this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(operationId);
+              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
           }
           this.localServices.delete(replicaId);
           this.localReplicas.delete(replicaId);
@@ -600,7 +601,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           if (operationId) {
             this.inProgressOperations.delete(operationId);
             this.getReplicaCreateAdmissionOwner()
-              .releasePhysicalWorker(operationId);
+              .releasePhysicalWorker(request.createPhysicalWorkerClaim);
           }
         }
         this.emit(REPLICA_HANDLER_EVENT.CREATION_FAILED, {

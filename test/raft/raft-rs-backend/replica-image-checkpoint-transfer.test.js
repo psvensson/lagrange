@@ -15,13 +15,15 @@ import {RaftRsDurableStore} from
   '../../../src/raft/raft-rs-durable-store.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
-import {requestSnapshotInstall, resolvePendingSnapshotInstall} from
+import {removeSnapshotInstallArtifactsForGeneration, requestSnapshotInstall,
+  recoverPendingSnapshotInstall} from
   '../../../src/raft/snapshot-install.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME,
   RAFT_SNAPSHOT_INSTALL_REJECTION, RAFT_SNAPSHOT_INSTALL_DIRNAME,
-  RAFT_SNAPSHOT_INSTALL_MARKER_FILE} from
+  RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
+  RAFT_SNAPSHOT_INSTALL_STAGING_FILE} from
   '../../../src/raft/snapshot-install-constants.js';
-import {ReplicaCreateAdmissionOwner} from
+import {CREATE_ADMISSION_ERROR_CODE, ReplicaCreateAdmissionOwner} from
   '../../../src/node/replica-create-admission-owner.js';
 import {OperationType} from '../../../src/rebalancer/replica-status.js';
 
@@ -42,8 +44,58 @@ function identity() {
   };
 }
 
-function admissionFixture({terminal = false} = {}) {
-  const row = {operation_id: 'fresh-mg-install', type: OperationType.REPLACE,
+function admissionRepository() {
+  const rows = new Map();
+  let bootIncarnation = 7;
+  const gateway = {
+    async readAuthoritativeRows(_table, sql, params) {
+      if (sql.includes('FROM nodes')) {
+        return {success: true, rows: [{
+          node_id: 'node-d', boot_incarnation: bootIncarnation,
+        }]};
+      }
+      if (sql.includes('WHERE operation_id = ?')) {
+        const row = rows.get(params[0]);
+        return {success: true, rows: row ? [row] : []};
+      }
+      if (sql.includes('WHERE replica_id = ?')) {
+        return {success: true, rows: [...rows.values()].filter((row) =>
+          row.replica_id === params[0] && row.target_node_id === params[1] &&
+          row.create_admission_state !== null)};
+      }
+      return {success: true, rows: [...rows.values()].filter((row) =>
+        row.target_node_id === params[0] &&
+        row.create_admission_state !== null)};
+    },
+    async updateSystemTableRow(_table, where, data) {
+      const row = rows.get(where.operation_id);
+      const matches = row && Object.entries(where)
+        .every(([field, value]) => row[field] === value);
+      if (!matches) return {success: true, outcome: 'no_op'};
+      Object.assign(row, data);
+      return {success: true, outcome: 'applied'};
+    },
+  };
+  return {
+    rows,
+    ownerAt(ownerIncarnation, now) {
+      return new ReplicaCreateAdmissionOwner({
+        gateway, nodeId: 'node-d', ownerIncarnation, now,
+      });
+    },
+    currentBootIncarnation() {
+      return bootIncarnation;
+    },
+    setBootIncarnation(value) {
+      bootIncarnation = value;
+    },
+  };
+}
+
+function admissionFixture({terminal = false, operationId = 'fresh-mg-install',
+  attemptToken = 'attempt-fresh-mg', now = 20,
+  repository = admissionRepository(), owner = null} = {}) {
+  const row = {operation_id: operationId, type: OperationType.REPLACE,
     entity_type: 'message-group', entity_id: GROUP, partition_id: GROUP,
     replica_id: TARGET, target_node_id: 'node-d', workflow_step: 'SENDING',
     updated_at: 11, completed_at: terminal ? 12 : null,
@@ -54,28 +106,37 @@ function admissionFixture({terminal = false} = {}) {
     create_admission_attempt_seq: null,
     create_admission_workflow_updated_at: null,
     create_admission_owner_incarnation: null};
-  const matches = (where) => Object.entries(where)
-    .every(([field, value]) => row[field] === value);
-  const gateway = {
-    async readAuthoritativeRows(_table, sql, params) {
-      return sql.includes('FROM nodes') ? {success: true, rows: [{
-        node_id: 'node-d', boot_incarnation: 7,
-      }]} : {success: true, rows: row.operation_id === params[0] ? [row] : []};
-    },
-    async updateSystemTableRow(_table, where, data) {
-      if (!matches(where)) return {success: true, outcome: 'no_op'};
-      Object.assign(row, data);
-      return {success: true, outcome: 'applied'};
-    },
-  };
-  const owner = new ReplicaCreateAdmissionOwner({gateway, nodeId: 'node-d',
-    ownerIncarnation: 7, now: () => 20});
+  repository.rows.set(operationId, row);
+  const ownerAt = (ownerIncarnation) =>
+    repository.ownerAt(ownerIncarnation, () => now);
+  const fixtureOwner = owner || ownerAt(repository.currentBootIncarnation());
   const request = {operationId: row.operation_id,
     operationType: row.type, entityType: row.entity_type,
     entityId: GROUP, partitionId: GROUP, replicaId: TARGET,
-    admissionToken: 'admission-fresh-mg', attemptToken: 'attempt-fresh-mg',
+    admissionToken: `admission-${operationId}`, attemptToken,
     attemptSeq: 1, workflowUpdatedAt: 11};
-  return {owner, request, row};
+  return {owner: fixtureOwner, ownerAt, repository, request, row,
+    setBootIncarnation(value) {
+      repository.setBootIncarnation(value);
+    }};
+}
+
+async function withRenameFault(options, work) {
+  const originalRename = fs.renameSync;
+  fs.renameSync = (source, destination) => {
+    if (source !== options.source || destination !== options.destination) {
+      return originalRename(source, destination);
+    }
+    if (options.afterRename) originalRename(source, destination);
+    const error = new Error(options.message);
+    error.code = options.code;
+    throw error;
+  };
+  try {
+    return await work();
+  } finally {
+    fs.renameSync = originalRename;
+  }
 }
 
 test('the canonical checkpoint owner seals a group-neutral raft-rs image',
@@ -213,8 +274,9 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
 
       const admission = admissionFixture();
       const evidence = await admission.owner.claim(admission.request);
-      t.equal(await admission.owner.claimPhysicalWorker(evidence), true,
-        'the real CREATE owner grants the sole physical worker');
+      const physicalClaim = await admission.owner.claimPhysicalWorker(evidence);
+      t.ok(physicalClaim, 'the real CREATE owner grants the sole physical worker');
+      admission.row.completed_at = 21;
       const installed = await requestSnapshotInstall({
         replicaDbPath: targetDbPath,
         checkpointsRoot: path.join(root, 'checkpoints'),
@@ -222,9 +284,10 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
         createAdmissionOwner: admission.owner,
         createAdmissionEvidence: evidence,
+        createPhysicalWorkerClaim: physicalClaim,
       });
       t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-        'the admitted fresh learner installs through the canonical owner');
+        'terminal settlement after admission preserves the exact install');
       const targetDb = new Database(targetDbPath);
       try {
         const restored = new RaftRsDurableStore(targetDb).readDurableRecord(GROUP);
@@ -242,14 +305,257 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       } finally {
         targetDb.close();
       }
-      const marker = path.join(root, 'checkpoints',
-        RAFT_SNAPSHOT_INSTALL_DIRNAME, RAFT_SNAPSHOT_INSTALL_MARKER_FILE);
-      writeAtomicDurable(marker, {state: 'staged', installId: 'lost-update',
-        generationIndex: Number(APPLIED_INDEX), rejectionReason: 'none'});
-      const recovered = resolvePendingSnapshotInstall({replicaDbPath: targetDbPath,
-        checkpointsRoot: path.join(root, 'checkpoints')});
+      const terminalRoot = path.join(root, 'terminal-restart');
+      fs.cpSync(path.join(root, 'checkpoints', APPLIED_INDEX),
+        path.join(terminalRoot, APPLIED_INDEX), {recursive: true});
+      const terminalTarget = path.join(root, 'terminal-target.db');
+      const terminalAdmission = admissionFixture({
+        operationId: 'terminal-after-admission-crash',
+        attemptToken: 'terminal-attempt', now: 40,
+      });
+      const terminalEvidence = await terminalAdmission.owner.claim(
+        terminalAdmission.request);
+      const terminalClaim = await terminalAdmission.owner
+        .claimPhysicalWorker(terminalEvidence);
+      terminalAdmission.row.completed_at = 41;
+      const terminalInstallDir = path.join(terminalRoot,
+        RAFT_SNAPSHOT_INSTALL_DIRNAME);
+      const terminalStaging = path.join(terminalInstallDir,
+        RAFT_SNAPSHOT_INSTALL_STAGING_FILE);
+      const terminalMarker = path.join(terminalInstallDir,
+        RAFT_SNAPSHOT_INSTALL_MARKER_FILE);
+      await t.rejects(withRenameFault({source: terminalStaging,
+        destination: terminalTarget, afterRename: true,
+        code: 'SIMULATED_CRASH_AFTER_RENAME',
+        message: 'crash after snapshot install rename'}, () =>
+        requestSnapshotInstall({
+          replicaDbPath: terminalTarget, checkpointsRoot: terminalRoot,
+          generationIndex: Number(APPLIED_INDEX), expectedIdentity: identity(),
+          expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
+          createAdmissionOwner: terminalAdmission.owner,
+          createAdmissionEvidence: terminalEvidence,
+          createPhysicalWorkerClaim: terminalClaim,
+        })), {code: 'SIMULATED_CRASH_AFTER_RENAME'},
+      'the real request stops after rename before its marker update');
+      t.equal(JSON.parse(fs.readFileSync(terminalMarker, 'utf8')).state,
+        'staged', 'the post-rename crash retains the real durable STAGED marker');
+      t.equal(fs.existsSync(terminalStaging), false,
+        'the real atomic rename consumed staging before the crash');
+      t.equal(terminalAdmission.row.completed_at, 41,
+        'ordinary operation settlement remains independent of install recovery');
+
+      terminalAdmission.setBootIncarnation(8);
+      const restartOwner = terminalAdmission.ownerAt(8);
+      const restartEvidence = await restartOwner.takeoverRetained(
+        {...terminalAdmission.row});
+      const restartClaim = await restartOwner.claimPhysicalWorker(
+        restartEvidence);
+      t.ok(restartClaim, 'the current boot reclaims the exact durable CREATE');
+      const authoritativeRead = restartOwner.readOperation.bind(restartOwner);
+      restartOwner.readOperation = async () => {
+        throw Object.assign(new Error('authority temporarily unavailable'),
+          {code: 'OWNER_RPC_REQUIRED'});
+      };
+      await t.rejects(recoverPendingSnapshotInstall({
+        replicaDbPath: terminalTarget, checkpointsRoot: terminalRoot,
+        createAdmissionOwner: restartOwner,
+        createAdmissionEvidence: restartEvidence,
+        createPhysicalWorkerClaim: restartClaim}),
+      {code: 'OWNER_RPC_REQUIRED'});
+      t.ok(fs.existsSync(terminalMarker),
+        'temporary authority loss retains recoverable install progress');
+      restartOwner.readOperation = authoritativeRead;
+      const recovered = await recoverPendingSnapshotInstall({
+        replicaDbPath: terminalTarget, checkpointsRoot: terminalRoot,
+        createAdmissionOwner: restartOwner,
+        createAdmissionEvidence: restartEvidence,
+        createPhysicalWorkerClaim: restartClaim});
       t.equal(recovered.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-        'a crash after raft-rs rename is recognized from the installed image');
+        'current boot recovers the terminal-after-admission rename');
+
+      const staleRoot = path.join(root, 'stale-install');
+      fs.cpSync(path.join(root, 'checkpoints', APPLIED_INDEX),
+        path.join(staleRoot, APPLIED_INDEX), {recursive: true});
+      const crashTargetDir = path.join(root, 'crash-target');
+      fs.mkdirSync(crashTargetDir);
+      const successorDbPath = path.join(crashTargetDir, 'successor.db');
+      const canonicalAdmissionRepository = admissionRepository();
+      const stagedAdmission = admissionFixture({
+        operationId: 'fresh-mg-install-a',
+        attemptToken: 'attempt-staged-a', now: 50,
+        repository: canonicalAdmissionRepository,
+      });
+      const stagedEvidence = await stagedAdmission.owner.claim(
+        stagedAdmission.request);
+      const stagedClaim = await stagedAdmission.owner
+        .claimPhysicalWorker(stagedEvidence);
+      const staleInstallDir = path.join(staleRoot,
+        RAFT_SNAPSHOT_INSTALL_DIRNAME);
+      const staleStaging = path.join(staleInstallDir,
+        RAFT_SNAPSHOT_INSTALL_STAGING_FILE);
+      const staleMarkerPath = path.join(staleInstallDir,
+        RAFT_SNAPSHOT_INSTALL_MARKER_FILE);
+      await t.rejects(withRenameFault({source: staleStaging,
+        destination: successorDbPath, afterRename: false,
+        code: 'EACCES', message: 'snapshot rename refused'}, () =>
+        requestSnapshotInstall({
+          replicaDbPath: successorDbPath, checkpointsRoot: staleRoot,
+          generationIndex: Number(APPLIED_INDEX), expectedIdentity: identity(),
+          expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
+          createAdmissionOwner: stagedAdmission.owner,
+          createAdmissionEvidence: stagedEvidence,
+          createPhysicalWorkerClaim: stagedClaim,
+        })), {code: 'EACCES'},
+      'the real request stops after durable STAGED before rename');
+      const staleMarker = JSON.parse(fs.readFileSync(staleMarkerPath, 'utf8'));
+      t.equal(staleMarker.state, 'staged',
+        'failed real install retains its durable STAGED boundary');
+      const delayedA = path.join(root, 'delayed-a-install');
+      fs.cpSync(staleInstallDir, delayedA, {recursive: true});
+      t.equal(await stagedAdmission.owner.closeForLifecycle({
+        replicaId: stagedEvidence.replicaId,
+        createdAt: stagedEvidence.replicaCreatedAt,
+        createAttemptToken: stagedEvidence.attemptToken,
+      }), false, 'lifecycle close waits for A physical ownership');
+      t.equal(stagedAdmission.owner.releasePhysicalWorker(stagedClaim), true,
+        'A releases its exact physical claim before cleanup');
+      t.equal(await stagedAdmission.owner.closeForLifecycle({
+        replicaId: stagedEvidence.replicaId,
+        createdAt: stagedEvidence.replicaCreatedAt,
+        createAttemptToken: stagedEvidence.attemptToken,
+      }), true, 'lifecycle close settles A before successor admission');
+      t.equal(stagedAdmission.row.create_admission_state, 'CLOSED',
+        'the canonical durable repository records A CLOSED');
+      const removed = await removeSnapshotInstallArtifactsForGeneration({
+        checkpointsRoot: staleRoot, replicaId: TARGET,
+        replicaCreatedAt: stagedEvidence.replicaCreatedAt,
+        attemptToken: stagedEvidence.attemptToken,
+      });
+      t.equal(removed.allAbsent, true,
+        'exact A cleanup removes only A install artifacts');
+
+      stagedAdmission.owner.now = () => 60;
+      const successorAdmission = admissionFixture({
+        operationId: 'fresh-mg-install-b',
+        attemptToken: 'attempt-successor-b', now: 60,
+        repository: canonicalAdmissionRepository,
+        owner: stagedAdmission.owner});
+      const successorEvidence = await successorAdmission.owner.claim(
+        successorAdmission.request);
+      t.ok(successorEvidence.replicaCreatedAt > stagedEvidence.replicaCreatedAt,
+        'successor B owns a later durable replica generation than A');
+      const canonicalCensus = await stagedAdmission.owner
+        .readReplicaAdmissions(TARGET);
+      t.same(canonicalCensus.map((row) => [row.operation_id,
+        row.create_admission_state]), [
+        ['fresh-mg-install-a', 'CLOSED'],
+        ['fresh-mg-install-b', 'ADMITTED'],
+      ], 'A CLOSED and B ADMITTED coexist in one authoritative census');
+      await t.rejects(stagedAdmission.owner.claim(stagedAdmission.request),
+        {code: CREATE_ADMISSION_ERROR_CODE.STALE},
+        'a late A CREATE claim is refused after close and B admission');
+      const successorClaim = await successorAdmission.owner
+        .claimPhysicalWorker(successorEvidence);
+      t.ok(successorClaim, 'successor B claims canonical CREATE');
+      const successorRoot = path.join(root, 'successor-checkpoints');
+      fs.cpSync(path.join(root, 'checkpoints', APPLIED_INDEX),
+        path.join(successorRoot, APPLIED_INDEX), {recursive: true});
+      const successorInstall = await requestSnapshotInstall({
+        replicaDbPath: successorDbPath, checkpointsRoot: successorRoot,
+        generationIndex: Number(APPLIED_INDEX), expectedIdentity: identity(),
+        expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
+        createAdmissionOwner: successorAdmission.owner,
+        createAdmissionEvidence: successorEvidence,
+        createPhysicalWorkerClaim: successorClaim});
+      t.equal(successorInstall.outcome,
+        RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+        'successor B materializes through canonical CREATE');
+
+      fs.cpSync(delayedA, staleInstallDir, {recursive: true});
+      const successorDigest = sha256Digest(fs.readFileSync(successorDbPath));
+      const staleRetry = await requestSnapshotInstall({
+        replicaDbPath: successorDbPath, checkpointsRoot: staleRoot,
+        generationIndex: Number(APPLIED_INDEX), expectedIdentity: identity(),
+        expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
+        createAdmissionOwner: stagedAdmission.owner,
+        createAdmissionEvidence: stagedEvidence,
+        createPhysicalWorkerClaim: stagedClaim});
+      t.equal(staleRetry.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+        'closed A cannot begin a late snapshot install after B admission');
+      t.equal(staleRetry.reason,
+        RAFT_SNAPSHOT_INSTALL_REJECTION.CREATE_ADMISSION_REQUIRED,
+        'late A install is refused by exact CREATE authority');
+      t.equal(sha256Digest(fs.readFileSync(successorDbPath)), successorDigest,
+        'late A install preserves successor B bytes');
+      const staleRecovery = await recoverPendingSnapshotInstall({
+        replicaDbPath: successorDbPath, checkpointsRoot: staleRoot,
+        createAdmissionOwner: stagedAdmission.owner,
+        createAdmissionEvidence: stagedEvidence,
+        createPhysicalWorkerClaim: stagedClaim});
+      t.equal(staleRecovery.outcome,
+        RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT,
+        'stale A cannot overwrite a successor database at restart');
+      const successorRead = new Database(successorDbPath, {readonly: true});
+      const successorBinding = JSON.parse(successorRead.prepare(
+        'SELECT create_authority FROM _raft_snapshot_install_binding')
+        .pluck().get());
+      t.equal(successorBinding.operationId, successorEvidence.operationId,
+        'successor B remains byte-owner after refusal');
+      successorRead.close();
+      const lateRemoved = await removeSnapshotInstallArtifactsForGeneration({
+        checkpointsRoot: staleRoot, replicaId: TARGET,
+        replicaCreatedAt: stagedEvidence.replicaCreatedAt,
+        attemptToken: stagedEvidence.attemptToken,
+      });
+      t.equal(lateRemoved.allAbsent, true,
+        'late A cleanup removes only its rebound artifacts');
+      t.equal(sha256Digest(fs.readFileSync(successorDbPath)), successorDigest,
+        'late A recovery and cleanup preserve successor B bytes');
+      const successorAuthority = successorAdmission.owner
+        .snapshotInstallAuthority(successorClaim);
+      writeAtomicDurable(staleMarkerPath, {...staleMarker,
+        createAuthority: successorAuthority});
+      fs.writeFileSync(staleStaging, 'successor-staging');
+      const staleCleanup = await removeSnapshotInstallArtifactsForGeneration({
+        checkpointsRoot: staleRoot, replicaId: TARGET,
+        replicaCreatedAt: staleMarker.createAuthority.replicaCreatedAt,
+        attemptToken: staleMarker.createAuthority.attemptToken,
+      });
+      t.equal(staleCleanup.allAbsent, false,
+        'stale A cleanup defers on successor B install artifacts');
+      t.equal(fs.existsSync(staleStaging), true,
+        'successor B staging survives stale cleanup');
+
+      const rotated = admissionFixture({operationId: 'rotated-attempt'});
+      const rotatedAdmitted = await rotated.owner.claim(rotated.request);
+      const rotatedMaterialized = await rotated.owner.markMaterialized(
+        rotatedAdmitted);
+      const rotatedEvidence = await rotated.owner.markProgress(
+        rotatedMaterialized, 'FAILED');
+      const rotatedClaim = await rotated.owner
+        .claimPhysicalWorker(rotatedEvidence);
+      t.ok(rotatedClaim, 'rotation attack begins with real physical authority');
+      const rotating = await rotated.owner.beginFailedAttemptRotation(
+        rotatedEvidence, rotatedClaim);
+      const rotatedSuccessor = await rotated.owner.finishFailedAttemptRotation(
+        rotating, rotatedClaim);
+      t.equal(rotatedSuccessor.attemptSeq, 2,
+        'the owner durably rotates to the successor attempt');
+      const rotatedTarget = path.join(root, 'rotated-target.db');
+      const rotatedInstall = await requestSnapshotInstall({
+        replicaDbPath: rotatedTarget,
+        checkpointsRoot: path.join(root, 'checkpoints'),
+        generationIndex: Number(APPLIED_INDEX), expectedIdentity: identity(),
+        expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
+        createAdmissionOwner: rotated.owner,
+        createAdmissionEvidence: rotatedEvidence,
+        createPhysicalWorkerClaim: rotatedClaim,
+      });
+      t.equal(rotatedInstall.reason,
+        RAFT_SNAPSHOT_INSTALL_REJECTION.CREATE_ADMISSION_REQUIRED,
+        'attempt rotation refuses stale evidence before staging');
+      t.equal(fs.existsSync(rotatedTarget), false,
+        'attempt rotation cannot materialize stale bytes');
 
       const terminal = admissionFixture({terminal: true});
       await t.rejects(terminal.owner.claim(terminal.request),

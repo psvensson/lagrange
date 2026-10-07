@@ -528,8 +528,12 @@ function isPendingCreateStatus(status) {
 
 async function claimCreatePhysicalWorker(handler, createRequest) {
   const evidence = createRequest.createAdmissionEvidence;
-  return !evidence || handler.getReplicaCreateAdmissionOwner()
+  if (!evidence) return true;
+  const claim = await handler.getReplicaCreateAdmissionOwner()
     .claimPhysicalWorker(evidence);
+  if (!claim) return false;
+  createRequest.createPhysicalWorkerClaim = claim;
+  return true;
 }
 
 function inProgressCreateResponse(handler, operationId, replicaId,

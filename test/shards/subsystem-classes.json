@@ -22,13 +22,13 @@
     "storage-raft": 117,
     "test-infrastructure": 142,
     "transactions": 16,
-    "transport-messaging": 91,
+    "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2319,
-  "digest": "fnv1a32-c22386bf",
+  "censusSize": 2320,
+  "digest": "fnv1a32-67a8a185",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-aa791c7d",
+  "observationDigest": "fnv1a32-14a7c8ab",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1085,6 +1085,7 @@
     "test/message-group/maximum-retry-limiting.property.test.js": "transport-messaging",
     "test/message-group/message-delivery-reliability.property.test.js": "transport-messaging",
     "test/message-group/message-group-failover-cdc-continuity.test.js": "transport-messaging",
+    "test/message-group/message-group-fresh-learner-promotion.test.js": "transport-messaging",
     "test/message-group/message-group-fresh-learner-snapshot.test.js": "transport-messaging",
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "transport-messaging",
@@ -7550,6 +7551,16 @@
         "test/test-helpers/controllable-consensus-port.js"
       ]
     },
+    "test/message-group/message-group-fresh-learner-promotion.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-membership-transition-runtime.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
     "test/message-group/message-group-fresh-learner-snapshot.test.js": {
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
@@ -8136,6 +8147,7 @@
         "src/node/replica-lifecycle-manager.js",
         "src/node/replica-lifecycle-recovery.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/runtime/oci-host-agent-durable-files.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },

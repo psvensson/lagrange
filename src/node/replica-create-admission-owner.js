@@ -19,9 +19,15 @@ import {
   adoptReplicaCreateAdmissionGeneration,
   reserveReplicaCreateAdmissionGeneration,
 } from './replica-create-admission-evidence.js';
-import {claimReplicaCreatePhysicalWorker, releaseReplicaCreatePhysicalWorker,
-  revalidateReplicaCreatePhysicalWorker, runReplicaCreateExclusive} from
+import {claimReplicaCreateDurablePhysicalWorker,
+  commitReplicaCreateSnapshotInstall, releaseReplicaCreatePhysicalWorker,
+  requireReplicaCreateRotationWorkerClaim,
+  revalidateReplicaCreatePhysicalWorker, runReplicaCreateExclusive,
+  advanceReplicaCreatePhysicalWorker,
+  snapshotReplicaCreateInstallAuthority} from
   './replica-create-process-owner.js';
+import {closeReplicaCreateAdmissionForLifecycle} from
+  './replica-create-lifecycle-close.js';
 
 const CREATE_ADMISSION_STATE = Object.freeze({
   ADMITTED: 'ADMITTED',
@@ -263,47 +269,6 @@ function rowMatchesAdvanceResult(row, evidence, nextState, ownerIncarnation,
     Object.entries(data).every(([field, value]) => row?.[field] === value);
 }
 
-function lifecycleReplicaId(lifecycle) {
-  return lifecycle?.replicaId ?? lifecycle?.replicaIdentity ??
-    lifecycle?.serviceId ?? null;
-}
-
-function isOpenAdmissionForIncarnation(row, createdAt) {
-  return nullableSafeInteger(row.create_admission_replica_created_at) ===
-    createdAt && row.create_admission_state !== CREATE_ADMISSION_STATE.CLOSED;
-}
-
-function attemptTokenMatches(row, attemptToken) {
-  return (row.create_admission_attempt_token ?? null) === attemptToken;
-}
-
-async function closeAdmissionRow(owner, row, createdAt, attemptToken) {
-  const result = await owner.gateway.updateSystemTableRow(
-    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-    {
-      operation_id: row.operation_id,
-      create_admission_state: row.create_admission_state,
-      create_admission_token: row.create_admission_token,
-      create_admission_replica_created_at: createdAt,
-      create_admission_attempt_token: attemptToken,
-      create_admission_attempt_seq: row.create_admission_attempt_seq,
-    },
-    {
-      create_admission_state: CREATE_ADMISSION_STATE.CLOSED,
-      create_admission_owner_incarnation: owner.ownerIncarnation,
-    },
-    {allowCoalescing: false, deliveryPriority: 'critical', workClass: 'critical'},
-  );
-  if (classifyControlPlaneMutationResult(result).applied) return true;
-  const current = await owner.readOperation(row.operation_id);
-  const retainedEvidence = admissionEvidenceFromRow(
-    row,
-    requestFromAdmissionRow(row),
-  );
-  return current?.create_admission_state === CREATE_ADMISSION_STATE.CLOSED &&
-    rowMatchesAdmissionIdentity(current, retainedEvidence);
-}
-
 class ReplicaCreateAdmissionOwner {
   static acquire(options = {}) {
     const ownerIncarnation = nullableSafeInteger(options.ownerIncarnation);
@@ -345,7 +310,8 @@ class ReplicaCreateAdmissionOwner {
     this.ownerIncarnation = Number(options.ownerIncarnation) || null;
     this.now = typeof options.now === 'function' ? options.now : Date.now;
     this.laneTailByOperationId = new Map();
-    this.activePhysicalWorkerOperationIds = new Set();
+    this.activePhysicalWorkerOperationIds = new Map();
+    this.physicalWorkerCommitClaim = null;
   }
 
   runExclusive(operationId, work) {
@@ -353,15 +319,25 @@ class ReplicaCreateAdmissionOwner {
   }
 
   async claimPhysicalWorker(evidence) {
-    return claimReplicaCreatePhysicalWorker(this, evidence);
+    return claimReplicaCreateDurablePhysicalWorker(this, evidence);
   }
 
-  async revalidatePhysicalWorker(evidence) {
-    return revalidateReplicaCreatePhysicalWorker(this, evidence);
+  async revalidatePhysicalWorker(claim, expectedEvidence = null) {
+    return revalidateReplicaCreatePhysicalWorker(
+      this, claim, expectedEvidence);
   }
 
-  releasePhysicalWorker(operationId) {
-    return releaseReplicaCreatePhysicalWorker(this, operationId);
+  snapshotInstallAuthority(claim, expectedEvidence = null) {
+    return snapshotReplicaCreateInstallAuthority(
+      this, claim, expectedEvidence);
+  }
+
+  async commitSnapshotInstall(claim, mutation) {
+    return commitReplicaCreateSnapshotInstall(this, claim, mutation);
+  }
+
+  releasePhysicalWorker(claim) {
+    return releaseReplicaCreatePhysicalWorker(this, claim);
   }
 
   async readOperation(operationId) {
@@ -699,7 +675,8 @@ class ReplicaCreateAdmissionOwner {
     );
   }
 
-  async beginFailedAttemptRotation(evidence) {
+  async beginFailedAttemptRotation(evidence, physicalClaim = null) {
+    requireReplicaCreateRotationWorkerClaim(this, evidence, physicalClaim);
     const row = await this.readOperation(evidence.operationId);
     if (!rowMatchesAdmission(row, requestFromAdmissionRow(row)) ||
         !rowMatchesAdmissionIdentity(row, evidence) ||
@@ -735,16 +712,21 @@ class ReplicaCreateAdmissionOwner {
         `CREATE attempt rotation deferred ${evidence.operationId}`,
       );
     }
+    if (physicalClaim && !advanceReplicaCreatePhysicalWorker(
+      this, physicalClaim, evidence, rotating)) return null;
     return rotating;
   }
 
-  async finishFailedAttemptRotation(evidence) {
-    return this.advance(
+  async finishFailedAttemptRotation(evidence, physicalClaim = null) {
+    const materialized = await this.advance(
       evidence,
       CREATE_ADMISSION_STATE.ROTATING,
       CREATE_ADMISSION_STATE.MATERIALIZED,
       {create_admission_previous_attempt_token: null},
     );
+    if (physicalClaim && materialized && !advanceReplicaCreatePhysicalWorker(
+      this, physicalClaim, evidence, materialized)) return null;
+    return materialized;
   }
 
   async close(evidence) {
@@ -765,26 +747,7 @@ class ReplicaCreateAdmissionOwner {
   }
 
   async closeForLifecycle(lifecycle) {
-    const replicaId = lifecycleReplicaId(lifecycle);
-    const createdAt = nullableSafeInteger(lifecycle?.createdAt);
-    const attemptToken = lifecycle?.createAttemptToken ?? null;
-    if (!replicaId || createdAt === null) return false;
-    if (attemptToken === null) return true;
-    const rows = await this.readReplicaAdmissions(replicaId);
-    const sameIncarnation = rows.filter((row) =>
-      isOpenAdmissionForIncarnation(row, createdAt));
-    if (sameIncarnation.some((row) =>
-      !attemptTokenMatches(row, attemptToken))) {
-      return false;
-    }
-    const matching = sameIncarnation.filter((row) =>
-      attemptTokenMatches(row, attemptToken));
-    for (const row of matching) {
-      if (!await closeAdmissionRow(this, row, createdAt, attemptToken)) {
-        return false;
-      }
-    }
-    return true;
+    return closeReplicaCreateAdmissionForLifecycle(this, lifecycle);
   }
 }
 

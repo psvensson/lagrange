@@ -55,15 +55,24 @@ function cleanupAuthorityFromRow(row) {
     ownerToken: row.cleanup_token,
     partitionId: row.partition_id,
     replicaId: row.service_id,
+    replicaCreatedAt: row.created_at,
+    createAttemptToken: row.create_attempt_token ?? null,
     updatedAt: row.updated_at,
   });
 }
 
 function rowMatchesCleanupIdentity(row, authority) {
-  return row.service_id === authority?.replicaId &&
-    row.partition_id === authority?.partitionId &&
-    row.node_id === authority?.nodeId &&
-    row.cleanup_token === authority?.ownerToken;
+  if (!authority) return false;
+  const expected = {
+    service_id: authority.replicaId,
+    partition_id: authority.partitionId,
+    node_id: authority.nodeId,
+    cleanup_token: authority.ownerToken,
+    created_at: authority.replicaCreatedAt,
+    create_attempt_token: authority.createAttemptToken,
+  };
+  return Object.entries(expected).every(([field, value]) =>
+    (row[field] ?? null) === value);
 }
 
 function rowMatchesCleanupAuthority(row, authority) {
@@ -189,7 +198,8 @@ class ReplicaCleanupTombstoneOwner {
       this.gateway,
       TABLES.SERVICES,
       'SELECT service_id, service_type, node_id, partition_id, status, ' +
-        'cleanup_token, updated_at FROM services WHERE service_type = ? ' +
+        'cleanup_token, created_at, create_attempt_token, updated_at ' +
+        'FROM services WHERE service_type = ? ' +
         'AND node_id = ?',
       [REPLICA_CLEANUP_SERVICE_TYPE, nodeId],
       {
