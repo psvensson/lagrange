@@ -57,6 +57,7 @@ const TRIGGERING_FILES = Object.freeze([
   'scripts/plan-test-lane.js',
   'scripts/select-change-tests.js',
   'scripts/check-subsystem.js',
+  'scripts/checks/wait-for-load-headroom.js',
   'scripts/checks/change-selection.js',
   'scripts/checks/change-selection-constants.js',
   'scripts/checks/changed-paths.js',
