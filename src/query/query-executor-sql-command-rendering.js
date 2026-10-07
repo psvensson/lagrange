@@ -4,6 +4,8 @@ import {
   affectedRowsField,
   sumAffectedRowCounts,
 } from './application-database-result.js';
+import {isAppliedWithUnknownCount} from
+  '../partition/partition-write-kernel.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -18,18 +20,21 @@ const {
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
 
+function stringOrNull(value) {
+  return typeof value === LOCAL_STR_STRING ? value : null;
+}
+
 function copyParticipantDisposition(error, result) {
   Object.assign(error, {
-    failureCode: typeof result?.failureCode === LOCAL_STR_STRING ?
-      result.failureCode : null,
+    failureCode: stringOrNull(result?.failureCode),
     committed: result?.committed === true,
-    outcome: typeof result?.outcome === LOCAL_STR_STRING ?
-      result.outcome : null,
-    disposition: typeof result?.disposition === LOCAL_STR_STRING ?
-      result.disposition : null,
+    outcome: stringOrNull(result?.outcome),
+    disposition: stringOrNull(result?.disposition),
     logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
-    entryId: typeof result?.entryId === LOCAL_STR_STRING ?
-      result.entryId : null,
+    entryId: stringOrNull(result?.entryId),
+    // The redelivery owner's report of the wait it spent on an unknown
+    // outcome travels with the typed failure.
+    spentWait: result?.spentWait ?? null,
   });
 }
 
@@ -40,11 +45,12 @@ function buildDistributedMutationResult(
   fanoutMetrics,
 ) {
   const failedResults = results.filter((result) => !result.success);
-  // The partitions' own `changes` counts; one answer without a count leaves
-  // the statement's count unknown (absent), never summed as zero rows.
-  const affectedRows = sumAffectedRowCounts(results
-    .filter((result) => result.success)
-    .map((result) => result.changes));
+  const successfulResults = results.filter((result) => result.success);
+  const unknownCount = successfulResults.find(isAppliedWithUnknownCount);
+  const mutationResult = unknownCount === undefined ?
+    affectedRowsField(sumAffectedRowCounts(successfulResults
+      .map((result) => result.changes))) :
+    {settledReplay: unknownCount.settledReplay};
   const rows = results.flatMap((result) =>
     result.success && Array.isArray(result.rows) ? result.rows : [],
   );
@@ -55,7 +61,7 @@ function buildDistributedMutationResult(
     results.every((result) => result.originHlc === originHlc);
   const commonResult = {
     operation,
-    ...affectedRowsField(affectedRows),
+    ...mutationResult,
     partitions: partitionIds,
     rows,
     ...(hasSharedOriginHlc ? {originHlc} : {}),
@@ -413,9 +419,9 @@ const queryExecutorSqlCommandMethods = {
     return {
       success: true,
       operation: QUERY_EXECUTOR_LITERAL.STRING_INSERT,
-      // The partition's own count, or no count: never guessed from the
-      // number of VALUES rows (ON CONFLICT DO NOTHING inserts fewer).
-      ...affectedRowsField(sumAffectedRowCounts([result?.changes])),
+      ...(isAppliedWithUnknownCount(result) ?
+        {settledReplay: result.settledReplay} :
+        affectedRowsField(sumAffectedRowCounts([result?.changes]))),
       rows: Array.isArray(result.rows) ? result.rows : [],
       partitions: [partitionId],
       durableCommitWitness: result.durableCommitWitness,

@@ -22,6 +22,10 @@ import {
   settleFailedCommittedStatement,
   settleRecordedCommittedStatement,
 } from './partition-committed-statement-outcome.js';
+import {
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+  pickTypedWriteAnswer,
+} from './partition-write-kernel.js';
 
 const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
   DEADLINE_MS: 'resultDeadlineMs',
@@ -670,6 +674,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         acknowledged: true,
         success: false,
         error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+        // Typed as the write kernel types it: not proposed here.
+        failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
         partitionId: this.partitionId,
       };
     }
@@ -717,8 +723,18 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         ...(resultSuccess || !result?.errorCode ?
           {} :
           {errorCode: result.errorCode}),
+        // What is known of a write that did not succeed crosses this hop as
+        // its typed fields - its code and the entry it was proposed under
+        // among them - never as its text alone: a caller re-delivers an
+        // unknown outcome only under that entryId.
+        ...(resultSuccess ? {} : pickTypedWriteAnswer(result)),
         rows: result.rows,
         changes: result.changes,
+        // A settled replay names itself (PARTITION_SETTLED_REPLAY): with an
+        // unknown count it carries no `changes`, and the router's caller
+        // decides on the named state, never on the absent count.
+        ...(result?.settledReplay === undefined ? {} :
+          {settledReplay: result.settledReplay}),
         count: result.count,
         partitionId: this.partitionId,
         durableCommitWitness: result.durableCommitWitness,
@@ -1058,6 +1074,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
           index,
           term,
+          result: info,
         });
         if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
           afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));

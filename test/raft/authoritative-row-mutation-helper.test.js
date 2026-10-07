@@ -30,7 +30,12 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
     const result = await helper.flush();
 
     t.equal(updates.length, 1, 'should issue a single authoritative update');
-    t.same(updates[0], {
+    // The gateway delivers the write under one idempotency key (minted for
+    // this call): every retry beneath it is the same entry.
+    const {idempotencyKey, ...updateOptions} = updates[0].options;
+    t.ok(typeof idempotencyKey === 'string' && idempotencyKey.length > 0,
+      'the update carries its one idempotency key');
+    t.same({...updates[0], options: updateOptions}, {
       tableName: 'services',
       whereClause: {service_id: 'replica-1'},
       data: {

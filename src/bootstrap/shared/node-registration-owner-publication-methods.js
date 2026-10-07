@@ -462,7 +462,7 @@ class NodeRegistrationOwnerPublicationMethods {
     const joinTimeOptions = this.getJoinTimeUpsertOptions();
     const queryTimeoutMs = this.getJoinAdmissionWriteRetryTimeoutMs();
     return runRetryableControlPlaneWrite(
-      () => controlPlaneSystemTableGateway.submitMutation(
+      (attemptIdentity) => controlPlaneSystemTableGateway.submitMutation(
         {
           operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
           tableName: TABLES.SERVICES,
@@ -470,6 +470,7 @@ class NodeRegistrationOwnerPublicationMethods {
         },
         {
           ...joinTimeOptions,
+          ...attemptIdentity,
           queryTimeoutMs,
         },
       ),
@@ -509,12 +510,13 @@ class NodeRegistrationOwnerPublicationMethods {
     const joinTimeOptions = this.getJoinTimeUpsertOptions();
     const queryTimeoutMs = this.getJoinAdmissionWriteRetryTimeoutMs();
     return runRetryableControlPlaneWrite(
-      () => controlPlaneSystemTableGateway.updateSystemTableRow(
+      (attemptIdentity) => controlPlaneSystemTableGateway.updateSystemTableRow(
         tableName,
         whereClause,
         data,
         {
           ...joinTimeOptions,
+          ...attemptIdentity,
           queryTimeoutMs,
         },
       ),

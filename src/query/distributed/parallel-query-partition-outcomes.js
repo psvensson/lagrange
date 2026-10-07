@@ -1,3 +1,6 @@
+import {pickTypedWriteAnswer} from
+  '../../partition/partition-write-kernel.js';
+
 
 function normalizeRetryAfterMs(value) {
   return Number.isFinite(value) && value >= 0 ?
@@ -37,6 +40,9 @@ function normalizePartitionExecutionFailureSnapshot(
   fallbackErrorMessage,
 ) {
   return {
+    // The typed fields of the answer the partition failed with (its code,
+    // entryId, spent wait): a fan-out never degrades them to the text.
+    ...pickTypedWriteAnswer(failure),
     partitionId,
     status: partitionMetrics.status,
     error: normalizeFailureString(failure?.error) ||
@@ -65,6 +71,7 @@ function normalizePartitionExecutionFailureSnapshot(
  */
 function buildPartitionExecutionFailureOutcome(snapshot) {
   return {
+    ...pickTypedWriteAnswer(snapshot),
     partitionId: snapshot.partitionId,
     success: false,
     status: snapshot.status,
@@ -99,6 +106,10 @@ function buildPartitionExecutionSuccessOutcome(
     status: partitionMetrics.status,
     rows: result.rows || [],
     changes: result.changes,
+    // A settled replay's named state travels with its count (or in place of
+    // a count it does not know).
+    ...(result.settledReplay === undefined ? {} :
+      {settledReplay: result.settledReplay}),
   };
 }
 

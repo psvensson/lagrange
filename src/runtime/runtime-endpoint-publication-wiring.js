@@ -125,10 +125,11 @@ function wireRuntimeEndpointPublication(options = {}) {
       observe: () => readAuthoritativeEndpointRow(
         serviceEndpointsOwner.getGateway(), SERVICE_ENDPOINTS_TABLE,
         endpointRow[COLUMN.ENDPOINT_ID]),
-      insert: (row) => serviceEndpointsOwner.insertEndpoint(row,
-        mutationContext),
-      update: (whereClause, data) => serviceEndpointsOwner.updateWhere(
-        whereClause, data, mutationContext),
+      insert: (row, identity) => serviceEndpointsOwner.insertEndpoint(row,
+        {...mutationContext, ...identity}),
+      update: (whereClause, data, identity) =>
+        serviceEndpointsOwner.updateWhere(whereClause, data,
+          {...mutationContext, ...identity}),
     }));
   };
   serviceRuntimeLifecycle.setEndpointWriter(writeRuntimeEndpointAtIncarnation);

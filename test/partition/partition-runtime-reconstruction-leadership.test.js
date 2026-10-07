@@ -77,6 +77,8 @@ import * as runtimeConstants from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
 import * as runtimeTuning from '../../src/raft/raft-rs-runtime-tuning.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {PARTITION_SETTLED_REPLAY} from
+  '../../src/partition/partition-committed-statement-outcome-constants.js';
 
 const {
   PARTITION_SERVICE_ERROR_MSG,
@@ -1058,7 +1060,9 @@ test('F-z: a pending write released when its leader stops leading is ' +
       'durable outcome row', () => {
       assert.equal(retry.success, true, 'the retry is acknowledged ' +
         `(${JSON.stringify(retry)})`);
-      assert.equal(retry.idempotentReplay, true, 'as an idempotent replay');
+      assert.equal(retry.settledReplay, PARTITION_SETTLED_REPLAY
+        .OUTCOME_RETAINED, 'as a replay of the applied statement');
+      assert.equal(retry.changes, 1, 'with the row it inserted');
     });
   } finally {
     network.deliver = deliver;

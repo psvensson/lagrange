@@ -259,6 +259,7 @@ class CDCIntegrationServiceMutationOperations {
           coalescingKey: options?.coalescingKey,
           recoveryCandidateSelectionKey:
             options?.recoveryCandidateSelectionKey,
+          idempotencyKey: options?.idempotencyKey,
         });
         const sqlDurationMs = this.timeSource.now() - sqlStartMs;
         if (!result.success) {
@@ -433,6 +434,7 @@ class CDCIntegrationServiceMutationOperations {
             coalescingKey: options?.coalescingKey,
             recoveryCandidateSelectionKey:
               options?.recoveryCandidateSelectionKey,
+            idempotencyKey: options?.idempotencyKey,
             routingReadinessDimension: options?.routingReadinessDimension,
             workloadClass: options?.workloadClass,
             workClass: options?.workClass,

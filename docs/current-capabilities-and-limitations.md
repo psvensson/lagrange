@@ -162,6 +162,7 @@ turning evidence into a product claim.
 | Query routing | Production partition narrowing effectively requires a key column named id; other predicates may scatter to every partition. |
 | Query routing | Partition range comparison is string-based, so numeric strings sort lexicographically. |
 | Indexes | CREATE INDEX is unsupported and no secondary-index runtime path is active. |
+| SQL writes | A SQL write whose proposal reached consensus but whose outcome the serving replica cannot confirm is re-delivered under its own entry identity (backing off to 2 s) until the statement deadline, or query.timeoutMs (30 s) when the caller passed none, and then fails typed as partition_write_outcome_unknown; it may have applied. Re-issuing it is safe only under the same idempotency key, which the PostgreSQL wire and embedded application database surfaces do not yet accept. |
 | Replication | SQLite partition logs use the active snapshot and proof-gated compaction path; in-memory message-group logs still grow without bound and recover by full replay. |
 | Replication | Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress. |
 | Replication | Message group mg-1 keeps all of its replicas on the seed node until a fresh-replica-identity ADD path for message groups exists: losing the seed's disk loses mg-1's committed state, with no recovery path. A replica held for reseed after proven history loss stays out of consensus for good; there is no reseed procedure yet. |

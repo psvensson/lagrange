@@ -132,6 +132,8 @@ function resolvePartitionExecutionBuilders({
         success: true,
         rows: response.rows || [],
         changes: response.changes,
+        ...(response.settledReplay === undefined ? {} :
+          {settledReplay: response.settledReplay}),
         durableCommitWitness: response.durableCommitWitness,
         originHlc: response.originHlc,
         acceptingNodeId: response.acceptingNodeId,

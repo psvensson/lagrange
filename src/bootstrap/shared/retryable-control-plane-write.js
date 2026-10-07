@@ -7,6 +7,10 @@ import {
   TIME_MS,
 } from '../../constants/index.js';
 import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+import {
+  mintControlPlaneWriteKey,
+  releaseControlPlaneWriteIdentity,
+} from '../../control-plane/control-plane-write-identity.js';
 
 const DEFAULT_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY; // ends-on: the control-plane write is accepted (non-retryable result)
 const RETRYABLE_CONTROL_PLANE_WRITE_WAIT = Object.freeze({
@@ -109,6 +113,21 @@ async function delayRetryableControlPlaneWrite(
   );
 }
 
+
+// Every attempt is the same logical write. A caller-owned identity wins;
+// otherwise this retry owner mints one identity and releases it when the loop
+// terminates, so an ambiguous attempt can never become a second apply.
+function loopWriteIdentity(options) {
+  if (typeof options.writeIdentity === 'string' &&
+    options.writeIdentity.length > 0) {
+    return {identity: Object.freeze({writeIdentity: options.writeIdentity}),
+      release: () => undefined};
+  }
+  const writeIdentity = mintControlPlaneWriteKey();
+  return {identity: Object.freeze({writeIdentity}),
+    release: () => releaseControlPlaneWriteIdentity(writeIdentity)};
+}
+
 async function runRetryableControlPlaneWrite(executor, options = {}) {
   const now = typeof options.now === 'function' ? options.now : Date.now;
   const sleep =
@@ -128,57 +147,46 @@ async function runRetryableControlPlaneWrite(executor, options = {}) {
   const deadlineMs = now() + timeoutMs;
   let nextDelayMs = baseDelayMs;
   let attempt = 0;
+  const loopIdentity = loopWriteIdentity(options);
+  const retryOptions = {baseDelayMs, maxDelayMs, now,
+    onRetry: options.onRetry, sleep};
 
-  while (true) {
-    attempt += 1;
-    try {
-      const result = await executor();
-      if (result?.success !== false) {
-        return result;
-      }
-      if (!shouldRetryControlPlaneWrite(result, deadlineMs, now, {
-        options,
-        attempt,
-        timeoutMs,
-      })) {
-        return result;
+  try {
+    while (true) {
+      attempt += 1;
+      let resultOrError;
+      try {
+        const result = await executor(loopIdentity.identity);
+        if (result?.success !== false) {
+          return result;
+        }
+        if (!shouldRetryControlPlaneWrite(result, deadlineMs, now, {
+          options,
+          attempt,
+          timeoutMs,
+        })) {
+          return result;
+        }
+        resultOrError = result;
+      } catch (error) {
+        if (!shouldRetryControlPlaneWrite(error, deadlineMs, now, {
+          options,
+          attempt,
+          timeoutMs,
+        })) {
+          throw error;
+        }
+        resultOrError = error;
       }
       nextDelayMs = await delayRetryableControlPlaneWrite(
         deadlineMs,
         nextDelayMs,
-        result,
-        {
-          attempt,
-          baseDelayMs,
-          maxDelayMs,
-          now,
-          onRetry: options.onRetry,
-          sleep,
-        },
-      );
-      continue;
-    } catch (error) {
-      if (!shouldRetryControlPlaneWrite(error, deadlineMs, now, {
-        options,
-        attempt,
-        timeoutMs,
-      })) {
-        throw error;
-      }
-      nextDelayMs = await delayRetryableControlPlaneWrite(
-        deadlineMs,
-        nextDelayMs,
-        error,
-        {
-          attempt,
-          baseDelayMs,
-          maxDelayMs,
-          now,
-          onRetry: options.onRetry,
-          sleep,
-        },
+        resultOrError,
+        {...retryOptions, attempt},
       );
     }
+  } finally {
+    loopIdentity.release();
   }
 }
 

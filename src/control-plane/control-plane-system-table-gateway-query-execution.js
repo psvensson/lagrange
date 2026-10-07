@@ -28,6 +28,7 @@ import {
   getSchemaByTableName,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {runControlPlaneWrite} from './control-plane-write-identity.js';
 
 function buildSchemaFilteredSqlMutationEntries(tableName, data) {
   const schema = getSchemaByTableName(tableName);
@@ -394,20 +395,22 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       params,
       options,
     );
+    // A write is delivered under its one identity (the caller's key, its
+    // named write's instance, or one for this call): every retry beneath
+    // this call - and a named write's re-drive - is the same entry.
+    const queryOptions = this.buildQueryOptions(options, {
+      tableName: descriptor.tableName || null,
+      sql,
+      operationKind: descriptor.sqlOperation || null,
+    });
     const result = await this.runSingleFlight(
       this.inFlightQueryRequestsByKey,
       queryKey,
-      () => {
-        return sqlQueryEngine.executeQuery(
-          sql,
-          params,
-          this.buildQueryOptions(options, {
-            tableName: descriptor.tableName || null,
-            sql,
-            operationKind: descriptor.sqlOperation || null,
-          }),
-        );
-      },
+      () => (descriptor.operationKind === CONTROL_PLANE_SQL_OPERATION.WRITE ?
+        runControlPlaneWrite(options, {sql, params}, (idempotencyKey) =>
+          sqlQueryEngine.executeQuery(sql, params,
+            {...queryOptions, idempotencyKey})) :
+        sqlQueryEngine.executeQuery(sql, params, queryOptions)),
       {
         joinMetricName: 'querySingleFlightJoinCount',
         bypassMetricName: 'queryTrackingBypassCount',

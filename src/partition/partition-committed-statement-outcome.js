@@ -23,9 +23,11 @@
 // The outcome row (PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL) is the
 // authority for an entry key the partition has already settled: a retry of
 // the same entry key - in process, on another replica, or after a restart -
-// is never executed again. It resolves from the row: an APPLIED row as an
-// idempotent replay, a STATEMENT_FAILED row as the original failure, each
-// with `replayOfLogIndex`. There is no in-memory replay state: a retry is
+// is never executed again. It resolves from the row: an APPLIED row as the
+// applied statement's own result again (the affected-row count and last
+// insert rowid the row retained, named by PARTITION_SETTLED_REPLAY - a replay
+// never reports an applied write as zero rows), a STATEMENT_FAILED row as the
+// original failure, each with `replayOfLogIndex`. There is no in-memory replay state: a retry is
 // answered from the row before it is proposed, and one that was proposed
 // anyway (its original not yet applied here when it was proposed) is answered
 // from the row when it is applied - the same answer either way.
@@ -37,8 +39,10 @@ import {
 import {
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
   PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
+  PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS,
   PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS,
   PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
+  PARTITION_SETTLED_REPLAY,
   PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
@@ -53,11 +57,22 @@ const {
 
 /**
  * Create the outcome table (DDL; run once at partition initialization, after
- * the legacy-state detector).
+ * the legacy-state detector). A table created before APPLIED rows retained
+ * their result gains the result columns here; the rows it holds keep NULL
+ * there (they retain no result).
  * @param {Object} db - The partition's connection.
  */
 function createCommittedStatementOutcomeTable(db) {
   db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
+  const present = new Set(db
+    .prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.TABLE_COLUMNS)
+    .all().map((column) => column.name));
+  for (const [column, addColumn] of Object.entries(
+    PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS)) {
+    if (!present.has(column)) {
+      db.exec(addColumn);
+    }
+  }
 }
 
 const UNSETTLED_RECORD = Object.freeze({
@@ -70,7 +85,9 @@ const UNSETTLED_RECORD = Object.freeze({
  * @param {Object} service - The partition (its `db`).
  * @param {string} entryKey - The committed entry key.
  * @return {Object} Frozen {state} (a PARTITION_COMMITTED_STATEMENT_RECORD_STATE)
- *   and, when SETTLED, {outcome, logIndex, term, failureCode, failureMessage}.
+ *   and, when SETTLED, {outcome, logIndex, term, failureCode, failureMessage,
+ *   changes, lastInsertRowid}; the last two are null for a row that retains
+ *   no result.
  */
 function readCommittedStatementOutcome(service, entryKey) {
   const row = service.db
@@ -86,6 +103,8 @@ function readCommittedStatementOutcome(service, entryKey) {
     term: Number(row.term),
     failureCode: row.failure_code,
     failureMessage: row.failure_message,
+    changes: row.changes,
+    lastInsertRowid: row.last_insert_rowid,
   });
 }
 
@@ -93,15 +112,36 @@ function readCommittedStatementOutcome(service, entryKey) {
  * Record an entry key's terminal outcome, inside the application
  * transaction.
  * @param {Object} service - The partition (its `db`).
- * @param {Object} outcome - {entryKey, outcome, index, term, error}; `error`
- *   only for STATEMENT_FAILED.
+ * @param {Object} outcome - {entryKey, outcome, index, term, error, result};
+ *   `error` only for STATEMENT_FAILED, `result` (the statement's
+ *   {changes, lastInsertRowid}) only for APPLIED.
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
-  term, error = null}) {
+  term, error = null, result = null}) {
   service.db.prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
     entryKey, outcome, index, term,
     error === null ? null : failureCodeOf(error),
-    error === null ? null : String(error.message));
+    error === null ? null : String(error.message),
+    result === null ? null : result.changes,
+    result === null ? null : result.lastInsertRowid);
+}
+
+/**
+ * The applied result a settled APPLIED record answers with: the retained
+ * affected-row count and last insert rowid, or - for a row that retains none
+ * - no count at all; each named by its PARTITION_SETTLED_REPLAY state.
+ * @param {Object} recorded - The SETTLED APPLIED record.
+ * @return {Object} The result fields of the answer.
+ */
+function settledAppliedResult(recorded) {
+  if (recorded.changes === null || recorded.changes === undefined) {
+    return {settledReplay: PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED};
+  }
+  return {
+    changes: recorded.changes,
+    lastInsertRowid: recorded.lastInsertRowid,
+    settledReplay: PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
+  };
 }
 
 /**
@@ -168,10 +208,10 @@ function statementEnvironmentFailure(error) {
  * The answer to a settled entry key, built from its outcome row alone: the
  * same answer wherever and whenever it is asked - a retry before it is
  * proposed, in process or after a restart, or a retry that was proposed and
- * reached the application. An APPLIED row answers an idempotent replay with
- * the durable commit witness this replica attests (the entry and the term and
- * index it was applied at); a STATEMENT_FAILED row answers the original
- * failure.
+ * reached the application. An APPLIED row answers the applied statement's
+ * result it retained (settledAppliedResult), with the durable commit witness
+ * this replica attests (the entry and the term and index it was applied at);
+ * a STATEMENT_FAILED row answers the original failure.
  * @param {Object} service - The partition (its identity).
  * @param {Object} settled - {recorded, command}: the SETTLED record and the
  *   command asking.
@@ -188,8 +228,7 @@ function answerSettledStatement(service, {recorded, command}) {
   if (recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED) {
     return {
       success: true,
-      changes: 0,
-      idempotentReplay: true,
+      ...settledAppliedResult(recorded),
       ...settledAt,
       ...(typeof command.entryId === 'string' && command.entryId.length > 0 ?
         {durableCommitWitness: buildDurableCommitWitness({

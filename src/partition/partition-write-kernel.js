@@ -6,6 +6,8 @@ import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
 import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
   './partition-service-constants.js';
+import {PARTITION_SETTLED_REPLAY} from
+  './partition-committed-statement-outcome-constants.js';
 import {
   PROPOSAL_QUEUE_BACKPRESSURE_CODE,
   PROPOSAL_QUEUE_PROPOSAL_STATE,
@@ -122,6 +124,64 @@ function isRetryableWriteFailureCode(code) {
 function isReroutableWriteFailureCode(code, {carriesEntryId = false} = {}) {
   return isRetryableWriteFailureCode(code) &&
     (code !== REFUSAL.OUTCOME_UNKNOWN || carriesEntryId === true);
+}
+
+// The typed fields of a write answer that did not succeed: what is known of
+// the write - its code, the entry it was proposed under and that entry's log
+// index, the consensus state that answered it, whether a committed statement
+// failed - and, from the redelivery owner, the wait it spent on an unknown
+// outcome. Every hop between the partition and the write's caller carries
+// them as they are (R07: a typed outcome never degrades to its text).
+const TYPED_WRITE_ANSWER_FIELDS = Object.freeze([
+  'failureCode',
+  'entryId',
+  'logIndex',
+  'consensus',
+  'committed',
+  'outcome',
+  'spentWait',
+]);
+
+/**
+ * The typed fields a failed write answer carries (TYPED_WRITE_ANSWER_FIELDS),
+ * for a hop to carry on beside its text.
+ * @param {*} answer - A failed write answer, or a result built from one.
+ * @return {Object} The fields it carries (absent ones are left out).
+ */
+function pickTypedWriteAnswer(answer) {
+  const typed = {};
+  for (const field of TYPED_WRITE_ANSWER_FIELDS) {
+    const value = answer?.[field];
+    if (value !== undefined && value !== null) {
+      typed[field] = value;
+    }
+  }
+  return typed;
+}
+
+/**
+ * Whether a write answer says its write's outcome is not known: it was handed
+ * to consensus and may commit whatever this answer says. Only a re-delivery
+ * under the answer's own entryId resolves it.
+ * @param {*} answer - A write answer.
+ * @return {boolean} Whether it is the typed unknown outcome.
+ */
+function isWriteOutcomeUnknown(answer) {
+  return answer?.failureCode === REFUSAL.OUTCOME_UNKNOWN;
+}
+
+/**
+ * Whether a write answer is a settled replay whose affected-row count is not
+ * known (PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED): the write was
+ * applied, and it carries no count. Every consumer that turns an answer's
+ * count into an outcome asks this first - an unknown count is never zero
+ * rows.
+ * @param {*} answer - A partition write answer, or a result built from
+ *   answers that carries their named replay state.
+ * @return {boolean} Whether the answer is applied with an unknown count.
+ */
+function isAppliedWithUnknownCount(answer) {
+  return answer?.settledReplay === PARTITION_SETTLED_REPLAY.OUTCOME_NOT_RETAINED;
 }
 
 const PARTITION_WRITE_KERNEL_LITERAL = Object.freeze({
@@ -451,9 +511,12 @@ export {
   buildPartitionWriteProposalRefusal,
   buildPartitionWriteSideEffectPlan,
   buildReleasedPendingWriteAnswer,
+  isAppliedWithUnknownCount,
   isHeldByHostFailure,
   isPartitionWriteFailureCode,
   isReroutableWriteFailureCode,
   isRetryableWriteFailureCode,
+  isWriteOutcomeUnknown,
+  pickTypedWriteAnswer,
   resolvePartitionWriteCommitMode,
 };
