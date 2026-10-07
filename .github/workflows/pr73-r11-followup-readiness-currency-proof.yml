@@ -1,0 +1,68 @@
+name: pr73-r11-followup-readiness-currency-proof
+
+on:
+  push:
+    branches:
+      - "proof/pr73-r11-followup-readiness-currency-20261007"
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout proof branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Red-first R11 currency witness
+        run: |
+          set -euo pipefail
+          set +e
+          node test/rebalancer/pr73-r11-followup-readiness-currency.test.js >"$RUNNER_TEMP/r11.tap" 2>&1
+          STATUS=$?
+          set -e
+          cat "$RUNNER_TEMP/r11.tap"
+          if [ "$STATUS" -eq 0 ]; then
+            echo "::error::R11 currency witness unexpectedly GREEN"
+            exit 1
+          fi
+          grep -q "ok 1 - fixture is typed evidence-absent PENDING" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 2 - replica inventory sees all three ACTIVE rows" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 3 - follow-up inventory independently claims topology increase is usable" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 4 - serve-readiness excludes the third replica" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 5 - R11 placeholder-neg also excludes the third replica" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 6 - canonical liveness simultaneously says the third node is live" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 7 - current R11 path re-mints an ADD despite three ACTIVE rows" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 8 - the re-minted ADD is exactly the live October deficit cure" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 9 - the ADD targets the unused recovery-eligible node" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 10 - canonical liveness restores the historical occupied-slot invariant" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 11 - with the occupied slot restored, no redundant ADD is minted" "$RUNNER_TEMP/r11.tap"
+          grep -q "ok 12 - existing count-aware gate owns the no-ADD outcome" "$RUNNER_TEMP/r11.tap"
+          grep -q "RED-ON-CURRENT: evidence-absent PENDING must not make a canonically-live replica disappear" "$RUNNER_TEMP/r11.tap"
+          test "$(grep -c '^    not ok ' "$RUNNER_TEMP/r11.tap")" -eq 1
+
+      - name: Historical anti-storm and readiness siblings remain green
+        run: |
+          set -euo pipefail
+          node test/rebalancer/priority-recovery-follow-up-count-aware-add-gate.test.js
+          node test/rebalancer/topology-settling-node-ready-lease-wake.test.js
+          node test/control-plane/readiness-deferred-denial-evidence-absent.test.js
+          node test/control-plane/node-liveness-semantic-projection-owner.test.js
+          node test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js
+
+      - name: Scoped lint
+        run: npx eslint test/rebalancer/pr73-r11-followup-readiness-currency.test.js
