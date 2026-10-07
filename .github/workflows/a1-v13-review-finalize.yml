@@ -1,0 +1,143 @@
+name: a1-v13-post-attempt-review-finalize
+
+on:
+  push:
+    branches:
+      - review/a1-v13-post-attempt-final
+    paths:
+      - .github/workflows/a1-v13-review-finalize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      RS_RAFT_COMPAT_SHA: 26bdc07e3dbeb3e1d8cb49e658cff9e758c0db5c
+      BRANCH: review/a1-v13-post-attempt-final
+    steps:
+      - name: Checkout exact review head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Exact A1-v13 review-head proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/checks/partition-key-ordering-owner-completion-v13.js
+          npx tap --timeout=120 test/partition/partition-split-routing.test.js
+          paths=(
+            src/partition/partition-split-routing.js
+            src/partition/partition-sql-parser.js
+            test/partition/partition-split-routing.test.js
+          )
+          node node_modules/eslint/bin/eslint.js --no-warn-ignored "${paths[@]}"
+          node scripts/check-guideline-literals.js "${paths[@]}"
+          node scripts/check-guideline-decision-boundaries.js "${paths[@]}"
+          node scripts/check-guideline-ambient-intrinsics.js "${paths[@]}"
+          node scripts/check-guideline-silent-catch.js "${paths[@]}"
+          git diff --check
+          sha256sum \
+            src/partition/partition-constants.js \
+            src/partition/partition-service-shared.js \
+            src/partition/partition-split-merge-evaluation-context.js \
+            src/partition/partition-split-merge-manager-core-methods.js \
+            src/partition/partition-split-merge-manager-evaluation-methods.js \
+            src/partition/partition-split-merge-manager-transition-methods.js \
+            src/partition/partition-split-merge-manager.js \
+            src/partition/partition-split-routing.js \
+            src/partition/partition-sql-parser.js \
+            src/partition/split-key-comparator.js \
+            src/utils/strict-own-data.js \
+            test/partition/merge-auto-execution.test.js \
+            test/partition/partition-split-routing.test.js \
+            test/partition/routing-key-comparator.test.js
+
+      - name: Prove exact candidate on latest pinned rs-raft head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin finalize/zero-liferaft-2026-10-02
+          observed="$(git rev-parse FETCH_HEAD)"
+          if [ "$observed" != "$RS_RAFT_COMPAT_SHA" ]; then
+            echo "::error::zero-Liferaft branch advanced from pinned compatibility SHA $RS_RAFT_COMPAT_SHA to $observed; re-evaluate compatibility before review"
+            exit 1
+          fi
+          wt="$RUNNER_TEMP/rs-raft-a1-v13"
+          git worktree add --detach "$wt" "$RS_RAFT_COMPAT_SHA"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$wt/node_modules"
+          candidate_paths=(
+            src/partition/partition-constants.js
+            src/partition/partition-service-shared.js
+            src/partition/partition-split-merge-evaluation-context.js
+            src/partition/partition-split-merge-manager-core-methods.js
+            src/partition/partition-split-merge-manager-evaluation-methods.js
+            src/partition/partition-split-merge-manager-transition-methods.js
+            src/partition/partition-split-merge-manager.js
+            src/partition/partition-split-routing.js
+            src/partition/partition-sql-parser.js
+            src/partition/split-key-comparator.js
+            src/utils/strict-own-data.js
+            test/partition/merge-auto-execution.test.js
+            test/partition/partition-split-routing.test.js
+            test/partition/routing-key-comparator.test.js
+          )
+          for file in "${candidate_paths[@]}"; do
+            mkdir -p "$wt/$(dirname "$file")"
+            cp "$GITHUB_WORKSPACE/$file" "$wt/$file"
+          done
+          cp "$GITHUB_WORKSPACE/scripts/checks/partition-key-ordering-owner-completion-v13.js" \
+            "$wt/scripts/checks/partition-key-ordering-owner-completion-v13.js"
+          (
+            cd "$wt"
+            node scripts/checks/partition-key-ordering-owner-completion-v13.js
+            npx tap --timeout=120 test/partition/partition-split-routing.test.js
+            npx tap --timeout=120 test/query/sql-parser.test.js test/query/sql-parser-pg.test.js
+          )
+          git worktree remove --force "$wt"
+
+      - name: Refresh canonical generated state
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/generate-global-owner-debt-inventory.js --refresh
+          node scripts/generate-priority-recovery-owner-inventory.js
+          npm run -s test:metadata:refresh
+
+      - name: Commit clean generated-state-current review head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/a1-v13-review-finalize.yml
+          git add -- \
+            solve/changes/global-owner-debt-inventory/inventory.json \
+            solve/changes/priority-recovery-owner-inventory/inventory.json \
+            test/shards/primary-classes.json \
+            test/shards/resource-classes.json \
+            test/shards/subsystem-classes.json \
+            test/shards/impact-graph-seal.json
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m "review: finalize A1-v13 generated state and rs-raft proof"
+          test -z "$(git status --porcelain)"
+          git fetch origin "$BRANCH"
+          remote_sha="$(git rev-parse "origin/$BRANCH")"
+          if [ "$remote_sha" != "$GITHUB_SHA" ]; then
+            echo "::error::review branch advanced from $GITHUB_SHA to $remote_sha"
+            exit 1
+          fi
+          git push origin HEAD:refs/heads/"$BRANCH"
