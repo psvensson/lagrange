@@ -240,6 +240,29 @@ const RAFT_RS_PERSISTENCE_ADMISSION = Object.freeze({
   USER_TRANSACTION_OPEN: 'user-transaction-open',
 });
 
+// How durably one store transaction commits (owner decision O4, 2026-10-05,
+// "option 2"). The replica database runs journal_mode WAL with synchronous
+// NORMAL: a NORMAL commit survives a process crash but not a power loss or
+// an OS crash, because SQLite does not sync the WAL on commit. What raft-rs
+// requires on disk before the Ready's messages leave (`Ready::must_sync`:
+// a changed term or vote, appended entries, a snapshot) commits SYNCED: the
+// connection is raised to synchronous FULL for that one transaction, so
+// SQLite fsyncs the WAL as part of COMMIT, and set back afterwards. Every
+// other transaction keeps the connection's own setting.
+const RAFT_RS_COMMIT_DURABILITY = Object.freeze({
+  SYNCED: 'synced',
+  CONNECTION_DEFAULT: 'connection-default',
+});
+// SQLite's own levels and pragma text for the durable commit. A level is a
+// number SQLite returned (0 OFF, 1 NORMAL, 2 FULL, 3 EXTRA); FULL and above
+// sync the WAL on every commit in WAL mode.
+const RAFT_RS_SYNCHRONOUS_PRAGMA = Object.freeze({
+  READ: 'synchronous',
+  FULL_LEVEL: 2,
+  SET_FULL: 'synchronous = FULL',
+  setLevel: (level) => `synchronous = ${Number(level)}`,
+});
+
 // Whether a durable record's schema carries the participation gate.
 const RAFT_RS_RECORD_COMPATIBILITY = Object.freeze({
   COMPATIBLE: 'compatible',
@@ -253,6 +276,8 @@ const RAFT_RS_PARTICIPATION_GATE_COLUMNS = Object.freeze([
 
 const RAFT_RS_STORE_ERROR_CODE = Object.freeze({
   USER_TRANSACTION_OPEN: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN',
+  DURABLE_COMMIT_INSIDE_TRANSACTION:
+    'RAFT_RS_STORE_DURABLE_COMMIT_INSIDE_TRANSACTION',
 });
 
 const RAFT_RS_ZERO_INDEX = '0';
@@ -267,10 +292,15 @@ const RAFT_RS_STORE_ERROR_MSG = Object.freeze({
   USER_TRANSACTION_OPEN:
     'the rs-raft store refuses to write while its connection is inside a ' +
     'transaction the store did not open',
+  DURABLE_COMMIT_INSIDE_TRANSACTION:
+    'a durable rs-raft commit must be its own transaction: SQLite cannot ' +
+    'raise the synchronous level inside an open one, and an enclosing ' +
+    'commit would not be synced',
 });
 
 export {
   RAFT_RS_BOOLEAN_COLUMN,
+  RAFT_RS_COMMIT_DURABILITY,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
   RAFT_RS_PARTICIPATION_GATE_COLUMNS,
@@ -281,6 +311,7 @@ export {
   RAFT_RS_SQL,
   RAFT_RS_STORE_ERROR_CODE,
   RAFT_RS_STORE_ERROR_MSG,
+  RAFT_RS_SYNCHRONOUS_PRAGMA,
   RAFT_RS_TABLE,
   RAFT_RS_ZERO_INDEX,
 };

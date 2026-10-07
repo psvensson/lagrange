@@ -33,6 +33,37 @@ consensus lifecycle is a separate state-replication path and does not invent
 membership locally: it requires placement/topology to supply the founding
 replica set.
 
+### What a replica's disk keeps: process crash versus power loss
+
+Every consensus-owning replica database (partition, message group and WASM
+service alike) runs SQLite in WAL mode with `synchronous = NORMAL`. A NORMAL
+commit survives a process crash, but SQLite does not sync the WAL on commit,
+so a power loss or an OS crash can lose the commits made since the last sync.
+
+What Raft promises to its peers is therefore synced to disk before any message
+that depends on it is sent (owner decision O4, 2026-10-05). raft-rs says which
+Ready must be synced (`Ready::must_sync`: a changed term or vote, appended log
+entries, or a snapshot); the durable store commits that Ready's transaction
+with `synchronous = FULL`, so SQLite fsyncs the WAL as part of the COMMIT, and
+the runtime hands the Ready's messages to the transport only afterwards. A
+granted vote, an acknowledged append and a leader's own appended entries are
+synced to disk before they are sent and survive a power loss. The replica's
+lifecycle row (retired, or held for reseed) is synced the same way, because
+the open-time refusal reads it.
+
+Everything else keeps NORMAL: a hard state whose only change is its commit
+index, the applied index and configuration it carries, and the application's
+own rows. After a power loss these can roll back to an earlier point, and the
+replica re-applies the committed entries from its synced log. Because the WAL
+is append-only, a synced commit also makes every earlier commit of the same
+file durable.
+
+The guarantee assumes the disk honours a flush. A device or virtualisation
+layer that acknowledges a flush while the data is still in a volatile write
+cache without power-loss protection voids it. On Linux SQLite issues `fsync`
+on the WAL (and on its directory when the WAL is created); `PRAGMA fullfsync`
+only applies to macOS.
+
 ### A replica held for reseed
 
 A raft-rs replica whose own log is proven shorter than what its group's leader

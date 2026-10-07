@@ -20,6 +20,7 @@ const FIXTURE_PATHS = Object.freeze([
   'docs/service-portability-capabilities.json',
   'src/transport/router-server-manager.js',
   'src/service/request-cell-http-authenticator.js',
+  'src/raft/raft-rs-durable-store-constants.js',
 ]);
 
 function createFixture() {

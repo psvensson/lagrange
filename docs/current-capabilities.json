@@ -50,7 +50,8 @@
     "snapshotTransferInstall": "active_sqlite_partition_path",
     "physicalLogCompaction": "active_sqlite_partition_path",
     "messageGroupLogCompaction": "unsupported",
-    "learnerPromotion": "time_based_not_progress_based"
+    "learnerPromotion": "time_based_not_progress_based",
+    "raftPersistDurability": "raft_promises_synced_before_send"
   },
   "deployment": {
     "publicModel": [
@@ -163,6 +164,11 @@
       "id": "message-group-seed-placement",
       "area": "Replication",
       "summary": "Message group mg-1 keeps all of its replicas on the seed node until a fresh-replica-identity ADD path for message groups exists: losing the seed's disk loses mg-1's committed state, with no recovery path. A replica held for reseed after proven history loss stays out of consensus for good; there is no reseed procedure yet."
+    },
+    {
+      "id": "raft-durability-scope",
+      "area": "Replication",
+      "summary": "Only what Raft promises to peers (a vote, appended log entries, a snapshot) and the replica lifecycle row are synced to disk before they are acknowledged; other writes (commit index, applied progress, application rows) survive a process crash but may roll back on power loss and are re-applied from the synced log. A disk that acknowledges a flush from a volatile write cache without power-loss protection voids the power-loss guarantee."
     },
     {
       "id": "single-process-data-directory",

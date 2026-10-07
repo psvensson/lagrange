@@ -109,6 +109,7 @@ constructors refuse its absence.
 | SQLite partition proof-gated log compaction | Active for file-backed SQLite partitions |
 | In-memory message-group log compaction | Unsupported |
 | Learner promotion | time based not progress based |
+| Raft votes, appended entries and snapshots | Synced to disk before any dependent message is sent (survives power loss) |
 
 Snapshot recovery is replica repair, not a user backup or PITR product.
 
@@ -164,6 +165,7 @@ turning evidence into a product claim.
 | Replication | SQLite partition logs use the active snapshot and proof-gated compaction path; in-memory message-group logs still grow without bound and recover by full replay. |
 | Replication | Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress. |
 | Replication | Message group mg-1 keeps all of its replicas on the seed node until a fresh-replica-identity ADD path for message groups exists: losing the seed's disk loses mg-1's committed state, with no recovery path. A replica held for reseed after proven history loss stays out of consensus for good; there is no reseed procedure yet. |
+| Replication | Only what Raft promises to peers (a vote, appended log entries, a snapshot) and the replica lifecycle row are synced to disk before they are acknowledged; other writes (commit index, applied progress, application rows) survive a process crash but may roll back on power loss and are re-applied from the synced log. A disk that acknowledges a flush from a volatile write cache without power-loss protection voids the power-loss guarantee. |
 | Storage lifecycle | Replica cleanup and recreation are durably serialized by services.service_id. A directory-local SQLite ownership lock rejects a second live OS process before provenance, rejoin, or replica storage activity. |
 | Service execution | Request and call Bindings are publicly invocable. Change, time, once, boot, and pushdown Bindings may be declared but have no public invocation adapter. |
 | Service execution | A call selects one bounded shard batch; the public path does not stream or page an unbounded partition scan. |

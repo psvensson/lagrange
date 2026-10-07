@@ -7,6 +7,7 @@ import {
 import {
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from './raft-committed-membership-constants.js';
+import {commitDurably} from './raft-rs-durable-store.js';
 
 const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 // Columns added after the table first shipped: an older database gains them
@@ -248,7 +249,7 @@ class RaftRsReplicaLifecycleOwner {
    * @param {Object|null} [evidence] - Verified group-retirement evidence.
    */
   #writeRetired(reason, evidence = null) {
-    this.#db.prepare(`
+    commitDurably(this.#db, () => this.#db.prepare(`
       UPDATE ${LIFECYCLE_TABLE}
       SET state = 'retired', reason = ?, changed_at = ?,
         retirement_evidence = ?
@@ -260,7 +261,7 @@ class RaftRsReplicaLifecycleOwner {
       this.#groupId,
       this.#peerId,
       this.#replicaIdentity,
-    );
+    ));
   }
 
   #release() {

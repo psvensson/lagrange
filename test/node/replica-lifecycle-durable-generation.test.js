@@ -357,6 +357,10 @@ test('handler binds leader settlement before retire and durable deletion',
       peerId: 'peer-handler-order',
       replicaIdentity: row.service_id,
       db: {
+        // The members the lifecycle row's durable commit uses.
+        inTransaction: false,
+        pragma: () => 1,
+        transaction: (work) => work,
         exec() {},
         prepare(sql) {
           return {

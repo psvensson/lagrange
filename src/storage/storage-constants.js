@@ -15,8 +15,11 @@ const STORAGE_DEFAULT = Object.freeze({
 });
 
 // The durability pragmas of a consensus replica's own database file: one
-// choice for every group kind that keeps one (design R3 section 1.2, R06;
-// owner decision O4 records what they survive).
+// choice for every group kind that keeps one (design R3 section 1.2, R06).
+// A NORMAL commit survives a process crash, not a power loss. Owner decision
+// O4 (2026-10-05): what Raft promises its peers is committed at FULL by the
+// durable store for that one transaction (raft-rs-durable-store.js,
+// commitDurably); everything else keeps this setting.
 const REPLICA_DB_PRAGMA = Object.freeze({
   JOURNAL_MODE: 'journal_mode = WAL',
   SYNCHRONOUS: 'synchronous = NORMAL',

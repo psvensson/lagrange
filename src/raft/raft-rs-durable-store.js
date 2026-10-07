@@ -9,9 +9,22 @@
 // It keeps an ordered journal of the durable writes it made. The journal is
 // observability, not authority: it is what a caller reads to see the order the
 // writes happened in, while the record itself is what a restart reads.
+//
+// What survives what (owner decision O4, 2026-10-05, "option 2"): the
+// connection runs journal_mode WAL with synchronous NORMAL, so a commit
+// survives a process crash. A Ready raft-rs says must be synced (a changed
+// term or vote, appended entries, a snapshot) is committed SYNCED: SQLite
+// fsyncs the WAL as part of its COMMIT, before the runtime hands any of that
+// Ready's messages to the transport, so a granted vote and an acknowledged
+// append also survive a power loss or an OS crash. Because the WAL is
+// append-only, that sync also makes every earlier commit of the file durable.
+// Everything else - commit-index-only hard state, applied progress, the
+// application's own writes - keeps NORMAL and may be lost to a power loss;
+// it is recomputed from the synced log on restart.
 
 import {
   RAFT_RS_BOOLEAN_COLUMN,
+  RAFT_RS_COMMIT_DURABILITY,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
   RAFT_RS_PARTICIPATION_GATE_COLUMNS,
@@ -22,6 +35,7 @@ import {
   RAFT_RS_SQL,
   RAFT_RS_STORE_ERROR_CODE,
   RAFT_RS_STORE_ERROR_MSG,
+  RAFT_RS_SYNCHRONOUS_PRAGMA,
   RAFT_RS_TABLE,
   RAFT_RS_ZERO_INDEX,
 } from './raft-rs-durable-store-constants.js';
@@ -129,6 +143,51 @@ function readRecordTable(table, read) {
 }
 
 /**
+ * Run work as one SQLite transaction whose COMMIT is synced to disk.
+ *
+ * `PRAGMA synchronous` is a per-connection setting that SQLite refuses to
+ * change inside a transaction, and in WAL mode FULL makes every COMMIT fsync
+ * the WAL. So the connection is raised to FULL before BEGIN and set back to
+ * its own level after COMMIT or ROLLBACK. better-sqlite3 is synchronous and
+ * nothing here awaits, so no other transaction can run on the connection in
+ * between. A connection already at FULL or above is left as it is; a call
+ * made while a transaction is open is refused, typed, because its commit
+ * could not be synced here.
+ * @param {Object} db - A better-sqlite3 database.
+ * @param {Function} work - The transaction's work.
+ * @return {*} Whatever the work returned.
+ */
+function commitDurably(db, work) {
+  if (db.inTransaction) {
+    throw Object.assign(
+      new Error(RAFT_RS_STORE_ERROR_MSG.DURABLE_COMMIT_INSIDE_TRANSACTION),
+      {code: RAFT_RS_STORE_ERROR_CODE.DURABLE_COMMIT_INSIDE_TRANSACTION});
+  }
+  const level = db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.READ, {simple: true});
+  if (level >= RAFT_RS_SYNCHRONOUS_PRAGMA.FULL_LEVEL) {
+    return db.transaction(work)();
+  }
+  db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.SET_FULL);
+  try {
+    return db.transaction(work)();
+  } finally {
+    db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.setLevel(level));
+  }
+}
+
+/**
+ * How durably one Ready must commit: raft-rs's own `Ready::must_sync`, which
+ * the binding reports as `mustSync`. A Ready that does not say is synced.
+ * @param {Object} ready - A Ready from the core.
+ * @return {string} A RAFT_RS_COMMIT_DURABILITY state.
+ */
+function readyCommitDurability(ready) {
+  return ready.mustSync === false ?
+    RAFT_RS_COMMIT_DURABILITY.CONNECTION_DEFAULT :
+    RAFT_RS_COMMIT_DURABILITY.SYNCED;
+}
+
+/**
  * The durable Raft record for the raft-rs-wasm backend.
  */
 class RaftRsDurableStore {
@@ -220,19 +279,29 @@ class RaftRsDurableStore {
    * Run a unit of work as one SQLite transaction the store opens itself;
    * refused while a transaction the store did not open is in progress.
    * @param {Function} work - The work to run.
+   * @param {string} [durability] - A RAFT_RS_COMMIT_DURABILITY state; the
+   *   connection's own setting unless SYNCED.
    * @return {*} Whatever the work returned.
    */
-  transaction(work) {
+  transaction(work,
+    durability = RAFT_RS_COMMIT_DURABILITY.CONNECTION_DEFAULT) {
     this.admitWrite();
     this.ownTransactionDepth += 1;
     try {
-      return this.db.transaction(work)();
+      return durability === RAFT_RS_COMMIT_DURABILITY.SYNCED ?
+        commitDurably(this.db, work) : this.db.transaction(work)();
     } finally {
       this.ownTransactionDepth -= 1;
     }
   }
 
-  /** Persist the storage-bearing portion of one Ready atomically. */
+  /**
+   * Persist the storage-bearing portion of one Ready atomically, synced to
+   * disk when raft-rs says it must be (see the header). Called before any of
+   * the Ready's messages are sent.
+   * @param {string} groupId - The group.
+   * @param {Object} ready - A Ready from the core.
+   */
   persistReady(groupId, ready) {
     return this.transaction(() => {
       if (ready.snapshot) {
@@ -242,7 +311,7 @@ class RaftRsDurableStore {
       if (ready.hardState) {
         this.putHardState(groupId, ready.hardState);
       }
-    });
+    }, readyCommitDurability(ready));
   }
 
   /**
@@ -564,4 +633,4 @@ class RaftRsDurableStore {
   }
 }
 
-export {RaftRsDurableStore};
+export {RaftRsDurableStore, commitDurably};
