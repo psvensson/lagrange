@@ -78,3 +78,9 @@ jobs:
           node test/convergence/dt6-operation-ledger-self-move-hold-fairness.test.js
           node test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js
           node test/convergence/dt6-priority-recovery-drain-parked-self-move.test.js
+
+      - name: Historical missed-handoff and rearm closure
+        run: |
+          node test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js
+          node test/rebalancer/coordinator-reused-operation-rearm-guard.test.js
+          node test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
