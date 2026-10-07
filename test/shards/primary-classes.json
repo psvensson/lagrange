@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2004,
+    "unit": 2006,
     "integration": 80,
     "bootstrap": 200,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2291,
-  "digest": "fnv1a32-023083b0",
+  "censusSize": 2293,
+  "digest": "fnv1a32-0320a059",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1225,6 +1225,7 @@
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "unit",
     "test/partition/partition-commit-deadline-wait-bound-spent.test.js": "unit",
     "test/partition/partition-consensus-hold-log.test.js": "unit",
+    "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js": "unit",
     "test/partition/partition-descriptor-epoch-contract.test.js": "unit",
     "test/partition/partition-leader-row-publication-integrity.test.js": "unit",
     "test/partition/partition-legacy-consensus-state.test.js": "unit",
@@ -1290,6 +1291,7 @@
     "test/partition/split-execution-state-reconstruction.test.js": "unit",
     "test/partition/split-key-comparator.test.js": "unit",
     "test/partition/split-merge-capacity-preflight.test.js": "unit",
+    "test/partition/split-merge-hysteresis.test.js": "unit",
     "test/partition/split-merge-overlap-guard.test.js": "unit",
     "test/partition/split-mirror-flush-ordering.test.js": "unit",
     "test/partition/split-mirror-write-identity.test.js": "unit",

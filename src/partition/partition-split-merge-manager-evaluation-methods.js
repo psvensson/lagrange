@@ -4,6 +4,7 @@ import {
 import {
   SPLIT_MERGE_EVENT,
   SPLIT_MERGE_LOG_MSG,
+  SPLIT_MERGE_MERGE_DECISION,
   SPLIT_MERGE_REASON,
 } from './partition-constants.js';
 
@@ -235,6 +236,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         mergeCandidateCount: countResultList(normalized.mergeCandidates),
         executedMergeCount: countResultList(normalized.executedMerges),
         mergeDeferredCount: countResultList(normalized.mergeDeferred),
+        mergeIneligibleCount: countResultList(normalized.mergeIneligible),
         mergeErrorCount: countResultList(normalized.mergeErrors),
       };
       this.lastEvaluationError = null;
@@ -335,6 +337,10 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       }
 
       this.state = operationState.EVALUATING;
+      // Each periodic evaluation re-opens one span follow-up per pair.
+      if (this.lastEvaluationTrigger === periodicEvaluationTrigger) {
+        this.mergeTrafficSpanFollowUps.clear();
+      }
 
       try {
         const results = {
@@ -348,9 +354,18 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           executedMerges: [],
           mergeErrors: [],
           mergeDeferred: [],
+          mergeIneligible: [],
         };
 
         const partitions = await this.loadEvaluationPartitions();
+        const outstandingSplitProposals =
+          await this.loadOutstandingSplitProposals();
+        const redrives = this.resolveOutstandingSplitRedrives(
+          outstandingSplitProposals,
+          new Set(partitions.map((partition) =>
+            this.getPartitionId(partition))),
+        );
+        results.splitCandidates.push(...redrives);
         if (partitions.length === 0) {
           this.recordEvaluationSuccess(
             results,
@@ -363,7 +378,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
 
         for (const partition of partitions) {
           const partitionId = this.getPartitionId(partition);
-          if (!partitionId) {
+          if (!partitionId || results.splitCandidates.includes(partitionId)) {
             continue;
           }
           const metrics = await this.resolvePartitionMetrics(partition);
@@ -409,6 +424,8 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           }
         }
 
+        this.notePolicySplitSources(results.splitCandidates.filter(
+          (partitionId) => !redrives.includes(partitionId)));
         let splitExecutionAttempts = 0;
         for (const partitionId of results.splitCandidates) {
           if (
@@ -500,16 +517,23 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           const rightMetrics = await this.resolvePartitionMetrics(rightPartition);
           const policy = await this.getTablePolicy(leftId);
 
-          if (this.evaluateMergeCriteria(
+          const decision = this.evaluateMergeEligibility({
             leftId, rightId, leftMetrics, rightMetrics, policy,
-          )) {
-            results.mergeCandidates.push({leftId, rightId});
-            this.logger.debug(
-              SPLIT_MERGE_LOG_MSG.MERGE_ELIGIBLE_UNDER_PRESSURE, {
-                leftId,
-                rightId,
-              });
+          });
+          if (decision !== SPLIT_MERGE_MERGE_DECISION.ELIGIBLE) {
+            results.mergeIneligible.push({leftId, rightId, reason: decision});
+            if (decision ===
+                SPLIT_MERGE_MERGE_DECISION.TRAFFIC_SPAN_TOO_LONG) {
+              this.scheduleMergeTrafficSpanFollowUp(leftId, rightId);
+            }
+            continue;
           }
+          results.mergeCandidates.push({leftId, rightId});
+          this.logger.debug(
+            SPLIT_MERGE_LOG_MSG.MERGE_ELIGIBLE_UNDER_PRESSURE, {
+              leftId,
+              rightId,
+            });
         }
 
         await this.executeMergeCandidatesWithinBudget(
@@ -626,6 +650,8 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         mergeStorageThreshold: this.mergeStorageThreshold,
         mergeTrafficThreshold: this.mergeTrafficThreshold,
         evaluationIntervalMs: this.evaluationIntervalMs,
+        trafficWindowMs: this.trafficWindowMs,
+        mergeMinimumAgeMs: this.mergeMinimumAgeMs,
         maxAutoExecuteSplitsPerEvaluation:
           this.maxAutoExecuteSplitsPerEvaluation,
         maxAutoExecuteMergesPerEvaluation:
@@ -643,7 +669,8 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         evaluationIntervalMs: this.evaluationIntervalMs,
         reactiveEvaluationDebounceMs: this.reactiveEvaluationDebounceMs,
         inFlight: this.state === operationState.EVALUATING,
-        deferredRetryEvaluationPending: this.deferredRetryEvaluation !== null,
+        deferredRetryEvaluationPending:
+          this.deferredEvaluationObligations.size > 0,
         deferredRetryEvaluationDueAtMs: this.deferredRetryEvaluationDueAtMs,
         requestedEvaluationPending: this.requestedEvaluation !== null,
         requestedAtMs: this.lastEvaluationRequestedAtMs,
@@ -678,6 +705,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       }
       this.deferredRetryEvaluation = null;
       this.deferredRetryEvaluationDueAtMs = null;
+      this.deferredEvaluationObligations.clear();
       this.requestedEvaluation = null;
       this.clearRequestedEvaluationDiagnostics();
       this.removeAllListeners();

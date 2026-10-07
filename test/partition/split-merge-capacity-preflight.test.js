@@ -317,11 +317,15 @@ test('evaluateAllPartitions - merge candidates remain eligible ' +
   const {accounting, admission} =
     buildServices('node-1', NUM.TEN);
 
-  const keyRangeManager = new KeyRangeManager('test-table');
-  keyRangeManager.addPartition(
-    'partition-left', new KeyRange(null, 50));
-  keyRangeManager.addPartition(
-    'partition-right', new KeyRange(50, null));
+  // The production listing shape: partition rows carrying the durable
+  // partitions.created_at (long-lived partitions, past the merge age gate;
+  // a key-range-manager entry carries no durable age and never merges).
+  const listPartitions = () => [
+    {partition_id: 'partition-left', table_id: 'test-table',
+      partition_key_start: null, partition_key_end: '50', created_at: 1},
+    {partition_id: 'partition-right', table_id: 'test-table',
+      partition_key_start: '50', partition_key_end: null, created_at: 1},
+  ];
 
   const metricsMap = {
     'partition-left': {
@@ -335,7 +339,7 @@ test('evaluateAllPartitions - merge candidates remain eligible ' +
   };
 
   const manager = new PartitionSplitMergeManager({
-    keyRangeManager,
+    listPartitions,
     getPartitionMetrics: async (id) => metricsMap[id] || {},
     tablePolicyService: {
       getPolicyForPartition: async () => ({}),

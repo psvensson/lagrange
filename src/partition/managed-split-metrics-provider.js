@@ -1,8 +1,70 @@
+/**
+ * The one QPM authority for automatic split/merge decisions.
+ *
+ * Semantics: `queriesPerMinute` is the average write rate (the local
+ * leader's CDC `eventsGenerated` counter) over the most recent span of AT
+ * LEAST one traffic window during which this node continuously led the
+ * partition: one leadership tenure, one counter instance, no counter
+ * regression. The span runs from the anchor (the newest retained sample at
+ * least one window old) to the reading itself, and is reported as
+ * `trafficObservedMs`. Until such a span exists the QPM is null (no
+ * signal), never 0.
+ *
+ * Sampling is decoupled from how often anyone asks. The provider keeps,
+ * per led partition, a bounded ring of (time, counter) samples stored on
+ * its OWN fixed cadence (window / TRAFFIC_SAMPLES_PER_WINDOW): a call
+ * stores a sample only when the newest stored one is at least one cadence
+ * step old, so extra calls never add samples (dense calls cannot evict the
+ * anchor), and every call still reads the counter at its own time. With
+ * dense calls the span exceeds the window by less than one cadence step
+ * plus one call gap; with sparse calls (a node whose partitions take no
+ * writes evaluates only on the periodic timer) the span is the time since
+ * the previous call, so samples are retained for max(2 windows, evaluation
+ * interval + window) - a periodic-only partition has a signal from its
+ * second periodic evaluation on. A longer span is an average over more
+ * than one window: for a merge that is still "at or below the threshold on
+ * average over at least one window"; for a split it can only delay a
+ * split on a recent burst (conservative).
+ *
+ * Retention bounds the read path too: a sample older than the retention
+ * horizon is never an anchor, whenever the once-per-window sweep runs.
+ *
+ * Continuity is the service's leadership tenure token, compared by
+ * identity: the leadership edge (src/raft/replica-leadership-state.js)
+ * mints a new frozen token per tenure (election, a term observed while
+ * leading) and ends it on demotion and shutdown. Reading it is a property
+ * read: the provider never touches the consensus port (no status read, no
+ * runtime recovery, no inbound drive), so asking costs no port work and
+ * changes no consensus state.
+ *
+ * Durations come from the injected clock (default Date.now; the clock
+ * owner, src/time/time-source.js, has no monotonic source). A clock that
+ * steps back below the newest stored sample restarts the span.
+ *
+ * The sampling is lazily driven (no timer of its own): a partition nobody
+ * asks about needs no measurement, and a per-partition or node-level tick
+ * would add timer load for an answer the next call produces exactly.
+ */
+
 import {CDC_PIPELINE_METRIC} from '../constants/index.js';
+import {SPLIT_MERGE_DEFAULT} from './partition-constants.js';
+import {resolveTrafficMeasurement} from './partition-split-merge-policy.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
 const ONE_MINUTE_MS = 60 * 1000;
+// The ring never holds more than the anchor plus the samples newer than
+// one window, which the cadence (window / samples per window) spaces at
+// least one step apart.
+const TRAFFIC_SAMPLE_CAPACITY =
+  SPLIT_MERGE_DEFAULT.TRAFFIC_SAMPLES_PER_WINDOW + 1;
+// Retention is never below this many windows.
+const MINIMUM_RETENTION_WINDOWS = 2;
+
+const NO_TRAFFIC_SIGNAL = Object.freeze({
+  queriesPerMinute: null,
+  trafficObservedMs: 0,
+});
 
 function normalizePartitionSize(partition) {
   const sizeBytes = Number(partition?.size_bytes ?? partition?.sizeBytes ?? 0);
@@ -37,88 +99,226 @@ function normalizeCounterValue(value) {
   return parsed;
 }
 
-function resolveGeneratedWriteCount(partitionService) {
-  if (!partitionService?.cdcPipelineMetrics ||
-      typeof partitionService.cdcPipelineMetrics.getSnapshot !== LOCAL_STR_FUNCTION) {
-    return null;
+/**
+ * Read the leader's counter and the continuity it belongs to: the counter
+ * instance and the leadership tenure token. A different instance (service
+ * restart) or tenure (leadership lost and regained, or a new term, between
+ * two calls) is a new span even when the counter did not regress. No
+ * tenure (none minted, or ended) is no traffic signal.
+ * @param {Object} partitionService - Local leader partition service.
+ * @return {{count: number|null, counterSource: Object|null,
+ *   tenure: Object|null}}
+ */
+function readLeaderCounter(partitionService) {
+  const counterSource = partitionService?.cdcPipelineMetrics || null;
+  const tenure = partitionService?.leadershipTenure || null;
+  if (!tenure || !counterSource ||
+      typeof counterSource.getSnapshot !== LOCAL_STR_FUNCTION) {
+    return {count: null, counterSource: null, tenure: null};
   }
-  const snapshot = partitionService.cdcPipelineMetrics.getSnapshot();
-  return normalizeCounterValue(
-    snapshot?.[CDC_PIPELINE_METRIC.EVENTS_GENERATED],
-  );
+  const snapshot = counterSource.getSnapshot();
+  return {
+    count: normalizeCounterValue(
+      snapshot?.[CDC_PIPELINE_METRIC.EVENTS_GENERATED],
+    ),
+    counterSource,
+    tenure,
+  };
 }
 
-function calculateQueriesPerMinuteFromSample(
-  partitionId,
-  generatedWriteCount,
-  nowMs,
-  trafficSamples,
-) {
-  const previousSample = trafficSamples.get(partitionId);
-  trafficSamples.set(partitionId, {
-    sampledAtMs: nowMs,
-    generatedWriteCount,
-  });
-
-  if (!previousSample ||
-      !Number.isFinite(previousSample.sampledAtMs) ||
-      !Number.isFinite(previousSample.generatedWriteCount)) {
-    return 0;
-  }
-
-  const deltaMs = nowMs - previousSample.sampledAtMs;
-  const deltaWrites = generatedWriteCount - previousSample.generatedWriteCount;
-  if (deltaMs <= 0 || deltaWrites <= 0) {
-    return 0;
-  }
-
-  return (deltaWrites * ONE_MINUTE_MS) / deltaMs;
+/**
+ * Whether a reading continues the record's span.
+ * @param {Object} record - {counterSource, tenure, samples}.
+ * @param {Object} reading - {nowMs, count, counterSource, tenure}.
+ * @return {boolean}
+ */
+function continuesSpan(record, reading) {
+  const newest = record.samples[record.samples.length - 1];
+  return record.counterSource === reading.counterSource &&
+    record.tenure === reading.tenure &&
+    (!newest || (reading.count >= newest.count &&
+      reading.nowMs >= newest.atMs));
 }
 
+/**
+ * Observe one reading: restart the span on a continuity break, drop every
+ * sample older than the retention horizon or the anchor, store the reading
+ * only on the cadence, and resolve the rate over [anchor, now].
+ * @param {Object} record - Mutable {counterSource, tenure, samples}.
+ * @param {Object} reading - {nowMs, count, counterSource, tenure}.
+ * @param {Object} plan - Sampling plan {windowMs, cadenceMs, retentionMs}.
+ * @return {{queriesPerMinute: number|null, trafficObservedMs: number}}
+ */
+function observeTraffic(record, reading, plan) {
+  if (!continuesSpan(record, reading)) {
+    record.counterSource = reading.counterSource;
+    record.tenure = reading.tenure;
+    record.samples = [];
+  }
+  const retentionHorizonMs = reading.nowMs - plan.retentionMs;
+  const retainedFrom = record.samples.findIndex(
+    (sample) => sample.atMs >= retentionHorizonMs);
+  if (retainedFrom !== 0) {
+    record.samples = retainedFrom < 0 ? [] :
+      record.samples.slice(retainedFrom);
+  }
+  const samples = record.samples;
+  const anchorHorizonMs = reading.nowMs - plan.windowMs;
+  let anchorIndex = -1;
+  while (anchorIndex + 1 < samples.length &&
+      samples[anchorIndex + 1].atMs <= anchorHorizonMs) {
+    anchorIndex += 1;
+  }
+  if (anchorIndex > 0) {
+    samples.splice(0, anchorIndex);
+  }
+  const newest = samples[samples.length - 1];
+  if (!newest || reading.nowMs - newest.atMs >= plan.cadenceMs) {
+    samples.push({atMs: reading.nowMs, count: reading.count});
+  }
+  if (anchorIndex < 0) {
+    return {
+      queriesPerMinute: null,
+      trafficObservedMs: reading.nowMs - samples[0].atMs,
+    };
+  }
+  const anchor = samples[0];
+  const spanMs = reading.nowMs - anchor.atMs;
+  return {
+    queriesPerMinute: ((reading.count - anchor.count) * ONE_MINUTE_MS) /
+      spanMs,
+    trafficObservedMs: spanMs,
+  };
+}
+
+/**
+ * Forget partitions whose newest stored sample is older than the
+ * retention horizon (dissolved split and merge sources, partitions this
+ * node no longer leads and is no longer asked about).
+ * @param {Map} records - Records by partition id.
+ * @param {number} nowMs - Now.
+ * @param {number} retentionMs - Retention horizon.
+ */
+function forgetStaleTrafficRecords(records, nowMs, retentionMs) {
+  for (const [partitionId, record] of records) {
+    const newest = record.samples[record.samples.length - 1];
+    if (!newest || nowMs - newest.atMs > retentionMs) {
+      records.delete(partitionId);
+    }
+  }
+}
+
+/**
+ * Resolve the provider's sampling plan from the shared measurement
+ * resolver (the same one the manager uses).
+ * @param {Object} options - Provider options.
+ * @return {Object} {windowMs, cadenceMs, retentionMs, evaluationIntervalMs}.
+ */
+function resolveSamplingPlan(options) {
+  const {trafficWindowMs, evaluationIntervalMs, sampleCadenceMs} =
+    resolveTrafficMeasurement({
+      trafficWindowMs: options.trafficWindowMs,
+      evaluationIntervalMs: options.evaluationIntervalMs,
+    });
+  return {
+    windowMs: trafficWindowMs,
+    cadenceMs: sampleCadenceMs,
+    retentionMs: Math.max(
+      MINIMUM_RETENTION_WINDOWS * trafficWindowMs,
+      evaluationIntervalMs + trafficWindowMs,
+    ),
+    evaluationIntervalMs,
+  };
+}
+
+/**
+ * Describe the retained measurement state (diagnostics).
+ * @param {Map} records - Records by partition id.
+ * @param {Object} plan - Sampling plan.
+ * @return {Object}
+ */
+function describeTrafficRecords(records, plan) {
+  let maxSamplesPerPartition = 0;
+  for (const record of records.values()) {
+    maxSamplesPerPartition = Math.max(maxSamplesPerPartition,
+      record.samples.length);
+  }
+  return {
+    partitionCount: records.size,
+    maxSamplesPerPartition,
+    sampleCapacity: TRAFFIC_SAMPLE_CAPACITY,
+    trafficWindowMs: plan.windowMs,
+    cadenceMs: plan.cadenceMs,
+    retentionMs: plan.retentionMs,
+    evaluationIntervalMs: plan.evaluationIntervalMs,
+  };
+}
+
+/**
+ * Create the provider.
+ * @param {Object} [options={}] - {partitionServices, now, trafficWindowMs,
+ *   evaluationIntervalMs}: the raw configured window and evaluation
+ *   interval, resolved here through the shared resolver.
+ * @return {Function} (partitionId, partition) => metrics, with
+ *   `describeTrafficSamples()` for diagnostics.
+ */
 function createManagedSplitMetricsProvider(options = {}) {
   const partitionServices = options.partitionServices || null;
-  const nowFn = typeof options.now === 'function' ?
+  const nowFn = typeof options.now === LOCAL_STR_FUNCTION ?
     options.now :
     () => Date.now();
-  const trafficSamples = new Map();
+  const plan = resolveSamplingPlan(options);
+  const records = new Map();
+  let lastStaleSweepAtMs = null;
 
-  return (partitionId, partition) => {
+  const getPartitionMetrics = (partitionId, partition) => {
     const normalizedPartitionId =
       partitionId || partition?.partition_id || partition?.partitionId || null;
+    const nowMs = nowFn();
+    if (lastStaleSweepAtMs === null ||
+        nowMs - lastStaleSweepAtMs >= plan.windowMs) {
+      lastStaleSweepAtMs = nowMs;
+      forgetStaleTrafficRecords(records, nowMs, plan.retentionMs);
+    }
     const localLeaderService = findLocalLeaderPartitionService(
       partitionServices,
       normalizedPartitionId,
     );
 
-    if (localLeaderService) {
-      const liveSizeBytes = Number(localLeaderService.getSize());
-      const generatedWriteCount = resolveGeneratedWriteCount(localLeaderService);
-      const queriesPerMinute = generatedWriteCount === null ?
-        0 :
-        calculateQueriesPerMinuteFromSample(
-          normalizedPartitionId,
-          generatedWriteCount,
-          nowFn(),
-          trafficSamples,
-        );
-      if (Number.isFinite(liveSizeBytes)) {
-        return {
-          sizeBytes: liveSizeBytes,
-          queriesPerMinute,
-        };
-      }
+    if (!localLeaderService) {
+      // Not the local leader: this node observes no traffic for it, and a
+      // later leadership starts a fresh span.
+      records.delete(normalizedPartitionId);
+      return {
+        sizeBytes: normalizePartitionSize(partition),
+        ...NO_TRAFFIC_SIGNAL,
+      };
     }
 
+    const liveSizeBytes = Number(localLeaderService.getSize());
+    const sizeBytes = Number.isFinite(liveSizeBytes) ?
+      liveSizeBytes :
+      normalizePartitionSize(partition);
+    const reading = readLeaderCounter(localLeaderService);
+    if (reading.count === null) {
+      records.delete(normalizedPartitionId);
+      return {sizeBytes, ...NO_TRAFFIC_SIGNAL};
+    }
+    let record = records.get(normalizedPartitionId);
+    if (!record) {
+      record = {counterSource: null, tenure: null, samples: []};
+      records.set(normalizedPartitionId, record);
+    }
     return {
-      sizeBytes: normalizePartitionSize(partition),
-      queriesPerMinute: 0,
+      sizeBytes,
+      ...observeTraffic(record, {...reading, nowMs}, plan),
     };
   };
+  getPartitionMetrics.describeTrafficSamples = () =>
+    describeTrafficRecords(records, plan);
+  return getPartitionMetrics;
 }
 
 export {
-  calculateQueriesPerMinuteFromSample,
   createManagedSplitMetricsProvider,
-  findLocalLeaderPartitionService,
-  resolveGeneratedWriteCount,
 };

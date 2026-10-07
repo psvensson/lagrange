@@ -25,8 +25,18 @@ import {
   createPartitionSplitMergeManagerTransitionMethods,
 } from './partition-split-merge-manager-transition-methods.js';
 import {
+  createPartitionSplitMergeManagerDeferredSchedulerMethods,
+} from './partition-split-merge-manager-deferred-scheduler-methods.js';
+import {
   createPartitionSplitMergeManagerEvaluationMethods,
 } from './partition-split-merge-manager-evaluation-methods.js';
+import {
+  createPartitionSplitMergeManagerProposalMethods,
+} from './partition-split-merge-manager-proposal-methods.js';
+import {
+  resolveMergeMinimumAgeMs,
+  resolveTrafficMeasurement,
+} from './partition-split-merge-policy.js';
 
 const OperationState = SPLIT_MERGE_STATE;
 const DEFAULT_SPLIT_STORAGE_THRESHOLD = SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
@@ -97,6 +107,18 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.deletePartition = options.deletePartition || (() => {});
     this.executeSplitCandidate = options.executeSplitCandidate || null;
     this.executeMergeCandidate = options.executeMergeCandidate || null;
+    // Outstanding durable split proposals (retryable split transitions on
+    // the tables rows); the manager re-drives them (see the proposal
+    // methods for which are re-checked on the policy instead).
+    this.listOutstandingSplitProposals =
+        options.listOutstandingSplitProposals || null;
+    // Split sources this manager proposed on the policy (this process
+    // lifetime): their outstanding proposals are re-checked, not re-driven.
+    this.policySplitSources = new Set();
+    // Policy clock (merge minimum age against partitions.created_at).
+    this.now = typeof options.now === 'function' ?
+      options.now :
+      () => Date.now();
     this.autoExecuteCandidates = options.autoExecuteCandidates !== false;
     this.maxAutoExecuteSplitsPerEvaluation =
         Number.isInteger(options.maxAutoExecuteSplitsPerEvaluation) &&
@@ -130,9 +152,27 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.mergeTrafficThreshold =
         config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_QPM) ||
         SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESHOLD_QPM;
-    this.evaluationIntervalMs =
-        config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS) ||
-        SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
+    // The window and the evaluation interval resolve through the one
+    // validator the metrics provider uses too.
+    const measurement = resolveTrafficMeasurement({
+      trafficWindowMs: config.get(CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS),
+      evaluationIntervalMs:
+        config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS),
+    });
+    this.evaluationIntervalMs = measurement.evaluationIntervalMs;
+    this.trafficWindowMs = measurement.trafficWindowMs;
+    this.trafficSampleCadenceMs = measurement.sampleCadenceMs;
+    this.mergeTrafficSpanLimitMs = measurement.mergeTrafficSpanLimitMs;
+    // Pairs given a span follow-up since the last periodic evaluation.
+    this.mergeTrafficSpanFollowUps = new Set();
+    this.mergeMinimumAgeMs = resolveMergeMinimumAgeMs(
+      this.getNumericConfig(
+        config,
+        CONFIG_KEY.PARTITION_MERGE_MINIMUM_AGE_MS,
+        SPLIT_MERGE_DEFAULT.MERGE_MINIMUM_PARTITION_AGE_MS,
+      ),
+      this.trafficWindowMs,
+    );
     this.splitAmplificationFactor = this.getNumericConfig(
       config,
       STORAGE_CAPACITY_CONFIG_KEY.SPLIT_AMPLIFICATION_FACTOR,
@@ -154,6 +194,10 @@ class PartitionSplitMergeManager extends EventEmitter {
     this.deferredRetryEvaluation = null;
     this.deferredRetryEvaluationDueAtMs = null;
     this.deferredRetryEvaluationTimer = null;
+    // One retained entry per logical deferred context. The projection fields
+    // above expose only the earliest due batch for diagnostics and the
+    // deterministic simulation; this map owns every later obligation.
+    this.deferredEvaluationObligations = new Map();
     this.isShutdown = false;
     this.lastEvaluationRequestedAtMs = null;
     this.lastEvaluationStartedAtMs = null;
@@ -176,7 +220,9 @@ class PartitionSplitMergeManager extends EventEmitter {
 Object.assign(
   PartitionSplitMergeManager.prototype,
   createPartitionSplitMergeManagerCoreMethods(),
+  createPartitionSplitMergeManagerDeferredSchedulerMethods(),
   createPartitionSplitMergeManagerTransitionMethods(),
+  createPartitionSplitMergeManagerProposalMethods(),
   createPartitionSplitMergeManagerEvaluationMethods({
     cloneStringArray,
     operationState: OperationState,

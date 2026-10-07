@@ -130,7 +130,60 @@ Evaluation is threshold-driven and fires when **either** dimension is exceeded:
 | `partition.splitThresholdQpm` | 1000 | queries per minute at which it becomes one |
 | `partition.mergeThresholdBytes` | 2 GiB | size below which it becomes a merge candidate |
 | `partition.mergeThresholdQpm` | 200 | traffic below which it becomes one |
+| `partition.trafficWindowMs` | 60000 | window queries per minute are measured over |
+| `partition.mergeMinimumAgeMs` | 600000 | minimum durable partition age before an automatic merge |
 | `partition.evaluationIntervalMs` | 300000 | how often candidates are evaluated |
+
+Writes also request an evaluation (debounced to one per second) on the
+node that coordinates the write when that node also leads a target
+partition. A leader whose writes are coordinated elsewhere evaluates when a
+partition's size changes (checked every `partition.sizeUpdateIntervalMs`,
+60 s by default) and on the periodic timer, and a node whose partitions take
+no writes evaluates only every `partition.evaluationIntervalMs`. The traffic signal is therefore defined
+independently of how often evaluation runs. Queries per minute for a
+partition is **the average write rate (the local leader's CDC write
+counter) over the most recent span of at least one
+`partition.trafficWindowMs` during which this node continuously led the
+partition**: one leadership tenure, one counter instance, no counter
+regression. The span runs from the newest stored sample that is at least one
+window old (and inside the retention horizon below) to the moment of the
+reading. The tenure is a token the replica's leadership edge mints on every
+election and on every new term it observes while leading, and ends on
+demotion and shutdown. Reading it is a field read: the measurement never
+calls into the consensus port, so it costs no consensus work and cannot
+change consensus state.
+
+The node stores samples on its own fixed cadence (one twelfth of the window,
+5 s by default), whoever asks and however often, and keeps at most 13 per
+partition. Extra evaluations add no samples, so the window stays one window
+however many evaluations run; with an evaluation at least every few seconds
+the span exceeds the window by less than one cadence step plus the gap
+between two evaluations. When evaluations are sparse the span is longer: on
+a node that only runs the periodic evaluation, a partition has a signal from
+its second periodic evaluation on, averaged over the interval between the
+two. Samples are kept for the longer of two windows and one evaluation
+interval plus one window. A longer span is still an average over at least
+one window. For a merge that is the stated criterion, so it is safe; for a
+split it can only delay a split on a recent burst.
+
+The write counter is the CDC pipeline's generated-event counter. Tables on
+the default policy count every committed write, whether or not anything
+subscribes. A table whose policy sets `externalCdcAllowed: false` generates
+no CDC events while it has no subscriber, so its counter stays at zero and
+it reads a valid **0 queries per minute** forever: it can never split on
+traffic, and the traffic criterion of a merge always holds for it, so it
+splits and merges on size alone. The merge-under-load scenario's
+configuration opts out this way, so its traffic gate always passes. Counting
+committed writes at the partition apply path instead of the CDC counter is
+recorded as follow-up work.
+
+Until such a span exists, the partition has **no traffic signal** (not zero
+traffic). That is the case after it is created, after a leader change or a
+restart of its partition service, and on a node that does not lead it. With
+no traffic signal it cannot split on traffic and cannot merge. A size split
+needs no window. The window and the evaluation interval take effect at
+restart. One validator resolves them for both the measurement and the
+policy.
 
 Per-table policy overrides the cluster-level config, and `SPLIT AT <bytes>` in
 DDL sets that per-table policy field.
@@ -280,6 +333,55 @@ Merge is the mirror image, owned by `ManagedMergeWorkflow` with matching
 phases and the same admission gate. It applies to adjacent, range-compatible
 partitions that have fallen below their thresholds, and it reclaims the
 per-partition Raft-group overhead a table no longer needs.
+
+A merge must never undo a split it would immediately re-create, so an
+adjacent pair is merged only when all of these hold, checked in this order:
+
+1. **Minimum age.** Both partitions are at least
+   `partition.mergeMinimumAgeMs` old (default 10 minutes, never below two
+   traffic windows), measured from the durable `partitions.created_at` the
+   split or merge workflow stamps when it writes the child row. The age
+   survives a manager restart or a leader change; an unknown age is not
+   eligible. One split-merge cycle costs two full membership workflows with
+   group retirement, so this caps a key range at one such cycle per
+   10 minutes, and every merge decision rests on at least ten full traffic
+   windows.
+2. **A traffic signal.** Both partitions have one full window of
+   observations (see above); no signal is never read as low load.
+3. **A recent span.** Both rates were measured over at most two traffic
+   windows plus one sampling cadence step. On a node that evaluates only
+   every `partition.evaluationIntervalMs` the span is the whole interval,
+   and a burst that started seconds before the evaluation would be averaged
+   down to "idle". Such a pair is deferred, and the manager evaluates once
+   more one window plus one cadence step later, when the span is about one
+   window. This happens at most once per pair per periodic evaluation. An
+   idle pair on such a node therefore merges one window plus one cadence
+   step after the first periodic evaluation past the minimum age.
+4. **Hysteresis thresholds.** Combined size and combined queries per minute
+   are at or below the merge thresholds, each clamped to at most half of
+   the split threshold of the same dimension, so the merged partition is
+   below half its split threshold on both and does not qualify to split on
+   the measurement that merged it. The defaults (2 GiB / 200 QPM against
+   10 GiB / 1000 QPM) are already a fifth; the clamp only bites when a
+   policy configures merge thresholds close to or above the split ones.
+
+The minimum age applies to every split, including one requested explicitly
+through the engine: nothing durable distinguishes an explicit split's
+children from an automatic split's once the split has completed, so an
+explicit split is protected for the minimum age, not indefinitely.
+
+A split that admission refuses (`blocked` / `deferred`, for example
+`source_quorum_not_routable` right after `CREATE TABLE`) is not dropped: the
+refusal is persisted on the `tables` row with its retry schedule, and the
+split/merge manager on the source partition's leader re-drives every such
+outstanding split when its retry falls due. A split the manager itself
+proposed on the thresholds during this process lifetime is re-driven only
+while the thresholds still qualify it. Every other outstanding split
+(explicit, or proposed before a restart: the durable record does not say
+who requested it) is re-driven independent of the split thresholds. A write of that row and any change to the source partition's row wake
+the manager. After 10 attempts the manager stops and reports a
+`wait_bound_spent` line naming the split admission it waited for and the
+last blocking reasons; the refusal stays visible on the `tables` row.
 
 ## After a split: replicas still have to be placed
 

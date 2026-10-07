@@ -80,6 +80,8 @@ const DEFAULT_CONFIG = {
     mergeThresholdBytes: 2147483648, // 2GB
     mergeThresholdQpm: 200,
     evaluationIntervalMs: 300000, // 5 minutes
+    trafficWindowMs: 60000, // QPM measurement window
+    mergeMinimumAgeMs: 600000, // 10 minutes (never below 2 windows)
     sizeUpdateDebounceMs: 5000,
     sizeUpdateIntervalMs: 60000,
   },
@@ -437,8 +439,25 @@ const CONFIG_DEFINITIONS = {
   [CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS]: {
     defaultValue: DEFAULT_CONFIG.partition.evaluationIntervalMs,
     type: CONFIG_VALUE_TYPE.NUMBER,
-    requiresRestart: false,
+    // Read once by the split/merge manager (its periodic timer) and the
+    // traffic metrics provider (its sample retention) at construction.
+    requiresRestart: true,
     description: 'Partition evaluation interval in milliseconds',
+  },
+  [CONFIG_KEY.PARTITION_TRAFFIC_WINDOW_MS]: {
+    defaultValue: DEFAULT_CONFIG.partition.trafficWindowMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: true,
+    description: 'Window over which partition queries per minute are ' +
+      'measured; less than one window of observations is no signal',
+  },
+  [CONFIG_KEY.PARTITION_MERGE_MINIMUM_AGE_MS]: {
+    defaultValue: DEFAULT_CONFIG.partition.mergeMinimumAgeMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    // Read once by the split/merge manager at construction.
+    requiresRestart: true,
+    description: 'Minimum durable partition age before an automatic ' +
+      'merge; never below two traffic windows',
   },
 
   // Logging configuration

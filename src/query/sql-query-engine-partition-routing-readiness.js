@@ -2,6 +2,12 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineInitialPartitionProvisioning} from './sql-query-engine-initial-partition-provisioning.js';
 import {createSQLQueryEngineRoutingMetadataMethods} from './sql-query-engine-routing-metadata-methods.js';
 import {throwIfCancellationRequested} from './query-cancellation.js';
+import {
+  describeOutstandingSplitProposal,
+} from '../partition/partition-split-merge-manager-proposal-methods.js';
+import {
+  parseTablePartitionTransition,
+} from '../partition/partition-transition-row.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STEADY_STATE = 'steady_state';
@@ -70,6 +76,39 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         activeVersionByTableId.get(tableId) || DEFAULT_PARTITION_VERSION,
       );
     });
+  }
+
+  /**
+   * The outstanding durable split proposals: one per tables row whose
+   * transition is a retryable split (BLOCKED / DEFERRED / retryable
+   * FAILED) naming a source partition. The split/merge manager re-drives
+   * them; `localLeader` says whether this node's manager owns the re-drive.
+   * @return {Array<Object>} Proposal descriptors.
+   */
+  listOutstandingManagedSplitProposals() {
+    if (!this.systemCache || typeof this.systemCache.getAll !== LOCAL_STR_FUNCTION) {
+      return [];
+    }
+    const partitionsById = new Map();
+    for (const partition of this.systemCache.getAll(TABLES.PARTITIONS) || []) {
+      partitionsById.set(partition.partition_id || partition.partitionId, partition);
+    }
+    const proposals = [];
+    for (const table of this.systemCache.getAll(TABLES.TABLES) || []) {
+      const proposal = describeOutstandingSplitProposal(
+        parseTablePartitionTransition(table),
+        {tableId: table.table_id || table.tableId, nowMs: this.nowFn()},
+      );
+      if (proposal) {
+        proposals.push({
+          ...proposal,
+          localLeader: this.isLocalManagedSplitLeader(
+            partitionsById.get(proposal.partitionId),
+          ),
+        });
+      }
+    }
+    return proposals;
   }
 
   /**

@@ -7,6 +7,7 @@ import {
   reportReplicaHandlerRetirement,
   retireReplicaTransportHandler,
 } from '../node/replica-transport-handler-identity.js';
+import {endReplicaLeadershipTenure} from '../raft/replica-leadership-state.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -157,6 +158,8 @@ class PartitionServiceLifecycleMethods {
     // A tenure claim must not outlive its replica (see
     // clearLocalCanonicalLeaderClaimOnTeardown).
     this.clearLocalCanonicalLeaderClaimOnTeardown?.();
+    // No reader continues a closed replica's leadership.
+    endReplicaLeadershipTenure(this);
     closePartitionConsensusResources(this);
     this.stopPeriodicSizeUpdates();
     this.stopPreparedStateHoldTimeoutSweep();

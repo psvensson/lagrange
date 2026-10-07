@@ -45,9 +45,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // (origin/main 2026-10-03 tightened 1434 -> 1433: renderRunSummary gained
 // its first importer; superseded by the lower value here.)
 // 2026-10-04: the integrated branch had already tightened 1424 -> 1422.
-// 2026-10-05: replay tightened 1422 -> 1418: the one participant failure
-// builder retired the executor's duplicate helpers on the combined tree.
-const BASELINE_UNUSED_EXPORT_COUNT = 1418;
+// 2026-10-05: replay and hysteresis tightened 1422 -> 1416: the participant
+// failure builder retired the executor's duplicate helpers and hysteresis
+// de-exported its managed-split metrics helpers on the combined tree.
+const BASELINE_UNUSED_EXPORT_COUNT = 1416;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
