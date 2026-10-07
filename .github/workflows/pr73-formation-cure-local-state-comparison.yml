@@ -1,0 +1,59 @@
+name: pr73-formation-cure-local-state-comparison
+
+on:
+  push:
+    branches:
+      - "proof/pr73-formation-cure-progress-20261007"
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: aggregate
+            target: 3bd0128bc361ce459ca74392c43c6dd913bc2130
+          - label: local-integration-baseline
+            target: 125bb12e761ef48e7f7b5387540e524a8c6c1c80
+          - label: identity
+            target: 611199334fdeddc861ae3318a9478437f60b4dad
+          - label: restart
+            target: c280049f783c77b23f5070f1a2c389383c18527f
+          - label: full-persistence
+            target: 89365eb925f9aad16b063d9cb8a550ebef7a90d4
+          - label: seed-scheduling
+            target: 453938ec09e6b21b5b84565604c64c1480ac08e4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout target product
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ matrix.target }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Overlay immutable qualification witness
+        env:
+          WITNESS_REF: proof/pr73-formation-cure-progress-20261007
+        run: |
+          set -euo pipefail
+          git fetch origin "$WITNESS_REF"
+          git show FETCH_HEAD:test/rebalancer/formation-cure-reservation-progress-obligation.test.js             > test/rebalancer/formation-cure-reservation-progress-obligation.test.js
+          echo "target=${{ matrix.label }} ${{ matrix.target }}"
+          git status --short
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Formation cure reservation-to-progress witness
+        run: node test/rebalancer/formation-cure-reservation-progress-obligation.test.js
