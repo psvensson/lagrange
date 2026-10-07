@@ -7,7 +7,7 @@
     "bootstrap-membership": 304,
     "cdc-metadata": 62,
     "cli-tooling": 96,
-    "control-plane": 213,
+    "control-plane": 214,
     "convergence-topology": 83,
     "distributed-harness": 177,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2311,
-  "digest": "fnv1a32-b2e0aa15",
+  "censusSize": 2312,
+  "digest": "fnv1a32-59c299ef",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0da99ebe",
+  "observationDigest": "fnv1a32-7a3859ca",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -679,6 +679,7 @@
     "test/control-plane/replica-dispatch-priority-lane-admission.test.js": "control-plane",
     "test/control-plane/replica-dispatch-priority-recovery-bootstrap-self-exemption.test.js": "control-plane",
     "test/control-plane/replica-dispatch-readiness-refresh-wait-bound-spent.test.js": "control-plane",
+    "test/control-plane/replica-dispatch-reservation-identity.test.js": "control-plane",
     "test/control-plane/replica-dispatch-routing.property.test.js": "control-plane",
     "test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js": "control-plane",
     "test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js": "control-plane",
@@ -4469,6 +4470,14 @@
         "src/control-plane/node-ready-lease-authority.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/logging/wait-bound-spent.js"
+      ]
+    },
+    "test/control-plane/replica-dispatch-reservation-identity.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/rebalance-coordinator.js"
       ]
     },
     "test/control-plane/replica-dispatch-routing.property.test.js": {

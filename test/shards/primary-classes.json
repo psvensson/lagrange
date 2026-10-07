@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2022,
+    "unit": 2023,
     "integration": 80,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2311,
-  "digest": "fnv1a32-68de82ca",
+  "censusSize": 2312,
+  "digest": "fnv1a32-e6658ec2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -660,6 +660,7 @@
     "test/control-plane/replica-dispatch-priority-lane-admission.test.js": "unit",
     "test/control-plane/replica-dispatch-priority-recovery-bootstrap-self-exemption.test.js": "unit",
     "test/control-plane/replica-dispatch-readiness-refresh-wait-bound-spent.test.js": "unit",
+    "test/control-plane/replica-dispatch-reservation-identity.test.js": "unit",
     "test/control-plane/replica-dispatch-routing.property.test.js": "unit",
     "test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js": "unit",
     "test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js": "unit",

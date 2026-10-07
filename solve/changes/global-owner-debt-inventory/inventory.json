@@ -6,7 +6,7 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 414803,
-        "sha256": "ebca21021039ef3980814c75b205620991a060e9c643c18eb1196950f4379c36"
+        "sha256": "3cf60d4a9bcecd337b39b9330fba0deffaad71a6967358982d70136bedbba68e"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2774943,
-        "sha256": "2132325926b06ca645c397bf6aee6cfb616a8fa484c5de281cfd1ddd6a67907c"
+        "bytes": 2775688,
+        "sha256": "5f1aaf23fa369c591d2895d0443e842a54381c7c0c68abf7e98e479a2b4db748"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "b9412885fe18b9c6a42e0f47dc6e8233ce6475f560b0a282edaca7e562630abe"
+    "inputDigest": "05fc339ee22b6d60e8de02bb08342109c0ae51f19c2ffd62ea2b83998c06f4a0"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 414803,
-        "sha256": "ebca21021039ef3980814c75b205620991a060e9c643c18eb1196950f4379c36"
+        "sha256": "3cf60d4a9bcecd337b39b9330fba0deffaad71a6967358982d70136bedbba68e"
       },
       "declaredCount": 1755,
       "observedCount": 1755,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2774943,
-        "sha256": "2132325926b06ca645c397bf6aee6cfb616a8fa484c5de281cfd1ddd6a67907c"
+        "bytes": 2775688,
+        "sha256": "5f1aaf23fa369c591d2895d0443e842a54381c7c0c68abf7e98e479a2b4db748"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "20164391914e3583b27c0b0764dfa090d19b8120e454f260ae13f0c83887d927",
-      "moduleCount": 5234,
-      "edgeCount": 26262,
+      "sourceDigest": "707582b212f8ca8e287348db3b8d31512d5066fce6d6183dc094cb65241d82c1",
+      "moduleCount": 5235,
+      "edgeCount": 26270,
       "unresolvedCount": 36
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2501,
     "assignedSignalCount": 2501,
     "uniqueAssignmentCount": 2501,
-    "digest": "56ced4d7847c4c88c069750029318450931eac4e9ce37199d5285cef9d8102d4"
+    "digest": "32e6cde3965cf45443bf8be0b0ff14798595c3c231931eb92678e41e87855e3c"
   },
   "signalCounts": {
     "cognitive": 152,
@@ -276,7 +276,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 702,
-      "importOut": 425,
+      "importOut": 426,
       "score": 1128.5,
       "topPaths": [
         "src/control-plane/control-plane-kernel-ingress.js",
@@ -1829,7 +1829,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 22,
+      "importIn": 23,
       "importOut": 11,
       "score": 24,
       "topPaths": [

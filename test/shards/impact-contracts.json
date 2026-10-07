@@ -768,14 +768,16 @@
         "src/rebalancer/operation-workflow-recovery-drain.js",
         "src/rebalancer/operation-workflow-recovery-reconcile.js",
         "src/rebalancer/operation-workflow-reservation-recovery.js",
-        "src/rebalancer/rebalance-coordinator-operation-creation.js"
+        "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "src/control-plane/replica-dispatch-readiness-capture.js"
       ],
       "tests": [
         "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
         "test/rebalancer/coordinator-reservation-lifecycle.test.js",
         "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
         "test/rebalancer/reservation-expiry-operation-aware.test.js",
-        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
+        "test/control-plane/replica-dispatch-reservation-identity.test.js"
       ]
     }
   },
@@ -1457,7 +1459,8 @@
             "src/rebalancer/replica-operation-repository-row-methods.js",
             "src/rebalancer/replica-operation-repository.js",
             "src/rebalancer/operation-workflow-recovery-drain.js",
-            "src/rebalancer/operation-workflow-recovery-reconcile.js"
+            "src/rebalancer/operation-workflow-recovery-reconcile.js",
+            "src/control-plane/replica-dispatch-readiness-capture.js"
           ]
         }
       ],
@@ -1465,7 +1468,8 @@
       "witnessTests": [
         "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
         "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
-        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
+        "test/control-plane/replica-dispatch-reservation-identity.test.js"
       ]
     }
   }

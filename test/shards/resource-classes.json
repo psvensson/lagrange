@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2294,
+    "ordinary": 2295,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2311,
-  "digest": "fnv1a32-5b39a1d8",
+  "censusSize": 2312,
+  "digest": "fnv1a32-dd20f7e8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -659,6 +659,7 @@
     "test/control-plane/replica-dispatch-priority-lane-admission.test.js": "ordinary",
     "test/control-plane/replica-dispatch-priority-recovery-bootstrap-self-exemption.test.js": "ordinary",
     "test/control-plane/replica-dispatch-readiness-refresh-wait-bound-spent.test.js": "ordinary",
+    "test/control-plane/replica-dispatch-reservation-identity.test.js": "ordinary",
     "test/control-plane/replica-dispatch-routing.property.test.js": "ordinary",
     "test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js": "ordinary",
     "test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js": "ordinary",
