@@ -171,6 +171,29 @@ async function closeWorld(world) {
   await world.partition.shutdown();
 }
 
+function membershipTuple(row) {
+  return {
+    sourceReplicaId: row.source_replica_id,
+    laneKey: row.message_group_membership_lane_key,
+    phase: row.message_group_membership_phase,
+    obligationState: row.message_group_membership_obligation_state,
+    identity: row.message_group_membership_identity,
+    learnerStamp: row.message_group_learner_stamp,
+    voterStamp: row.message_group_voter_stamp,
+    removalStamp: row.message_group_removal_stamp,
+    sourceLifecycleClaim: row.message_group_source_lifecycle_claim,
+  };
+}
+
+async function submitMutationWithLostAnswer(gateway, mutation) {
+  await gateway.submitMutation(mutation);
+  return {
+    success: false,
+    deferRetry: true,
+    error: 'injected generic mutation answer loss after real apply',
+  };
+}
+
 test('P4c owner INSERT keeps the exact membership tuple and unique lane',
   {timeout: TEST_TIMEOUT_MS}, async () => {
     initializeEnvironment();
@@ -204,6 +227,7 @@ test('P4c owner INSERT keeps the exact membership tuple and unique lane',
         operation.messageGroupMembershipIdentity);
       assert.equal(row.message_group_source_lifecycle_claim,
         operation.messageGroupSourceLifecycleClaim);
+      const insertedMembershipTuple = membershipTuple(row);
 
       operation.status = ReplicaStatus.FAILED;
       operation.workflowStep = WORKFLOW_STEP.FAILED;
@@ -216,10 +240,8 @@ test('P4c owner INSERT keeps the exact membership tuple and unique lane',
       assert.equal(terminal.disposition,
         REPLICA_OPERATION_UPDATE_DISPOSITION.APPLIED);
       const terminalRow = await readRow(world, operation.operationId);
-      assert.equal(terminalRow.message_group_membership_lane_key,
-        MEMBERSHIP_LANE_KEY);
-      assert.equal(terminalRow.message_group_membership_obligation_state,
-        'intent_recorded');
+      assert.deepEqual(membershipTuple(terminalRow), insertedMembershipTuple,
+        'terminal owner update preserves the full exact membership tuple');
     } finally {
       await closeWorld(world);
       fs.rmSync(root, {recursive: true, force: true});
@@ -271,40 +293,40 @@ test('P4c generic whole-row UPDATE is refused before owner workflow update',
     try {
       const operation = createMembershipOperation('p4c-generic-update');
       await repository.persistNewOperation(operation, {returnDisposition: true});
-      const destination = {
-        ...repository.buildReplicaOperationRow(operation),
-        status: ReplicaStatus.FAILED,
-        workflow_step: WORKFLOW_STEP.FAILED,
-        updated_at: 20,
-        completed_at: 20,
-        error_message: 'generic terminal overwrite',
-      };
-      const generic = await gateway.submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        whereClause: {operation_id: operation.operationId},
-        data: destination,
-      });
-      const rowAfterGeneric = await readRow(world, operation.operationId);
-
+      const rowBeforeGeneric = await readRow(world, operation.operationId);
       operation.status = ReplicaStatus.FAILED;
       operation.workflowStep = WORKFLOW_STEP.FAILED;
       operation.updatedAt = 20;
       operation.completedAt = 20;
-      operation.errorMessage = 'owner terminal transition';
+      operation.errorMessage = 'matching terminal transition';
+      const destination = repository.buildReplicaOperationUpdateData(operation);
+      const predicate = repository.buildReplicaOperationUpdateWhereClause(
+        operation,
+        null,
+        {terminalTransition: true},
+      );
+      const generic = await submitMutationWithLostAnswer(gateway, {
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        whereClause: predicate,
+        data: destination,
+      });
+      const rowAfterGeneric = await readRow(world, operation.operationId);
+
       const owner = await repository.persistOperationUpdate(operation, {
         terminalTransition: true,
       });
 
       assert.deepEqual({
-        genericAdmitted: generic.success === true &&
-          rowAfterGeneric?.workflow_step === WORKFLOW_STEP.FAILED,
-        ownerSucceeded: owner === true || owner?.persisted === true ||
-          owner?.disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.APPLIED,
+        genericReplySuccess: generic.success,
+        durableRowAfterGeneric: rowAfterGeneric,
+        ownerDisposition: owner?.disposition,
       }, {
-        genericAdmitted: false,
-        ownerSucceeded: true,
-      }, 'generic refusal must leave the owner workflow transition available');
+        genericReplySuccess: false,
+        durableRowAfterGeneric: rowBeforeGeneric,
+        ownerDisposition: REPLICA_OPERATION_UPDATE_DISPOSITION.APPLIED,
+      }, 'lost generic reply cannot hide durable mutation, and refusal must ' +
+        'leave the exact matching owner transition available');
     } finally {
       await closeWorld(world);
       fs.rmSync(root, {recursive: true, force: true});
