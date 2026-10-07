@@ -352,7 +352,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -363,7 +363,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -374,7 +374,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -749,6 +749,33 @@
       ],
       "tests": [
         "test/partition/partition-replication-restart-attempt-handoff.test.js"
+      ]
+    },
+    "storage-reservation-authoritative-adoption": {
+      "description": "The reservation lifecycle uses the deterministic operation-derived identity, write-if-absent insertion, and exact authoritative live operation plus ACTIVE reservation witnesses to converge a lost INSERT answer on one durable capacity hold without duplicating creation observations; temporary operation-authority loss retains that hold and one canonical owner retry which survives restart and remains gated before dispatch.",
+      "owners": [
+        "src/rebalancer/rebalance-coordinator-reservation-adoption.js",
+        "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+        "src/rebalancer/rebalance-coordinator-shared.js",
+        "src/rebalancer/rebalance-coordinator-owner-facade.js",
+        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "src/rebalancer/replica-operation-repository-read-methods.js",
+        "src/rebalancer/replica-operation-repository-row-methods.js",
+        "src/rebalancer/replica-operation-repository.js",
+        "src/rebalancer/storage-reservation-authority.js",
+        "src/rebalancer/operation-reservation-attempt-outcome.js",
+        "src/rebalancer/operation-workflow-dispatch-reservation-gate.js",
+        "src/rebalancer/operation-workflow-recovery-drain.js",
+        "src/rebalancer/operation-workflow-recovery-reconcile.js",
+        "src/rebalancer/operation-workflow-reservation-recovery.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation.js"
+      ],
+      "tests": [
+        "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+        "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+        "test/rebalancer/reservation-expiry-operation-aware.test.js",
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
       ]
     }
   },
@@ -1404,6 +1431,41 @@
       "contract": "partition-replication-start-authorization",
       "witnessTests": [
         "test/partition/partition-replication-restart-attempt-handoff.test.js"
+      ]
+    },
+    "storage-reservation-operation-and-retry-authority": {
+      "description": "The reservation owner may adopt an operation-derived hold only when the replica_operations owner proves the exact immutable generation is still non-terminal. Insertion and authoritative reconciliation consume the operation mutation owner single existing retry deadline; temporary operation-authority loss retains the exact hold and redrives only through the canonical transition and dispatch gate, including after restart.",
+      "endpoints": [
+        {
+          "id": "reservation-lifecycle",
+          "owners": [
+            "src/rebalancer/rebalance-coordinator-reservation-adoption.js",
+            "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+            "src/rebalancer/storage-reservation-authority.js",
+            "src/rebalancer/operation-reservation-attempt-outcome.js",
+            "src/rebalancer/operation-workflow-dispatch-reservation-gate.js",
+            "src/rebalancer/operation-workflow-reservation-recovery.js",
+            "src/rebalancer/rebalance-coordinator-operation-creation.js"
+          ]
+        },
+        {
+          "id": "operation-ledger-authority",
+          "owners": [
+            "src/rebalancer/rebalance-coordinator-owner-facade.js",
+            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+            "src/rebalancer/replica-operation-repository-read-methods.js",
+            "src/rebalancer/replica-operation-repository-row-methods.js",
+            "src/rebalancer/replica-operation-repository.js",
+            "src/rebalancer/operation-workflow-recovery-drain.js",
+            "src/rebalancer/operation-workflow-recovery-reconcile.js"
+          ]
+        }
+      ],
+      "contract": "storage-reservation-authoritative-adoption",
+      "witnessTests": [
+        "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
       ]
     }
   }

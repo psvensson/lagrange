@@ -148,6 +148,29 @@ function createTestCoordinator(options = {}) {
     return originalRunExclusive(ownerKey, factory);
   };
   const executeQuery = async (sql, params) => {
+    if (sql.includes('FROM storage_reservations') && operation) {
+      const now = Date.now();
+      return {
+        success: true,
+        rows: [{
+          reservation_id: `res-${operation.operationId}`,
+          operation_id: operation.operationId,
+          entity_type: operation.entityType,
+          entity_id: operation.entityId,
+          partition_id: operation.partitionId,
+          target_node_id: operation.targetNodeId,
+          estimated_bytes: 1,
+          amplification_factor: 1,
+          status: 'active',
+          reason_code: operation.type === 'REPLACE' ?
+            'replace_replica' : 'add_replica',
+          created_at: now,
+          updated_at: now,
+          expires_at: now + 300000,
+          released_at: null,
+        }],
+      };
+    }
     // SELECT by operation_id
     if (sql.includes('WHERE operation_id') && operation) {
       const opId = params?.[0];

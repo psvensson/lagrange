@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "storage-reservation-lost-outcome-idempotency",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A storage-reservation INSERT can commit while its answer is lost, after which the reservation owner blindly retries the same deterministic reservation_id and turns its own durable capacity hold into a UNIQUE failure. RebalanceCoordinator must converge through one existing mutation deadline on exactly one ACTIVE durable hold for the exact live replica_operations generation. A fresh insert reports CREATED; a proven exact pre-existing hold reports ALREADY_ACTIVE without duplicating creation events or statistics. Absent, terminal, mismatched, RELEASED, or EXPIRED authority fails closed. The durable admission-time estimated_bytes remains authoritative, and the current rule that an ACTIVE hold stays valid past expires_at while its exact operation is live is preserved.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/storage-reservation-lost-outcome-idempotency/evidence/receipt.json",
+      "requiredReceipts": [
+        "lost-answer-adopts-one-durable-hold",
+        "exact-live-operation-and-reservation-binding",
+        "terminal-and-conflicting-authority-refused",
+        "live-operation-expiry-semantics-preserved",
+        "single-existing-deadline-preserved",
+        "owner-interaction-registered"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "operation-id-is-generation",
+      "statement": "operation_id remains the reservation generation and reservation_id remains exactly res-${operationId}; no schema, generation, or alternate reservation identity is introduced."
+    },
+    {
+      "id": "exact-authoritative-live-witness",
+      "statement": "Already-active adoption requires an authoritative non-terminal replica_operations row matching the supplied immutable operation identity and one exact ACTIVE reservation row matching the durable reservation identity, entity, partition, target, reason, amplification, and valid admission-time estimate."
+    },
+    {
+      "id": "one-existing-retry-budget",
+      "statement": "Reservation insertion and lost-outcome reconciliation share the existing OPERATION_PERSIST_RETRY_TIMEOUT_MS or tighter caller budget; no nested deadline, new retry loop, timeout increase, or caller-side guard is added."
+    },
+    {
+      "id": "durable-estimate-and-expiry-semantics",
+      "statement": "The persisted positive estimated_bytes is the admission-time authority and is not compared with a later estimate. An ACTIVE reservation remains adoptable past expires_at while its exact operation is live; RELEASED and EXPIRED rows never reactivate."
+    },
+    {
+      "id": "observability-is-not-authority",
+      "statement": "Only a newly applied insert increments reservationsCreated and emits reservationCreated. Adoption never duplicates either observation; the Quest does not claim exactly-once telemetry across an ambiguous answer."
+    },
+    {
+      "id": "source-change-independent-verification",
+      "statement": "An independent verifier reviews the exact final fingerprint after the last source attempt and records approve before landing."
+    }
+  ],
+  "sealedAt": "125bb12e761ef48e7f7b5387540e524a8c6c1c80"
+}

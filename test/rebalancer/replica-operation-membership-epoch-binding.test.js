@@ -114,6 +114,7 @@ const DECODE_CONSUMERS = Object.freeze([
   'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
   'src/rebalancer/unified-rebalancer-rebalance-loop.js',
   'src/rebalancer/rebalance-coordinator-operation-creation-admission.js',
+  'src/rebalancer/storage-reservation-authority.js',
 ]);
 // Encode, SQL-text, schema, and pass-through sites: they mention the field
 // but never interpret its value.
@@ -155,8 +156,71 @@ function initializeEnvironment() {
  * NULL, not a JavaScript stand-in. Reads against other system tables
  * (services, nodes) answer empty, as the in-memory harness engine does.
  */
-function createSqliteQueryEngine(db) {
+function withStorageReservationFixture(sqlEngine) {
+  const reservations = new Map();
   return {
+    ...sqlEngine,
+    async executeQuery(sql, params = []) {
+      if (sql.includes('INSERT OR IGNORE INTO storage_reservations')) {
+        const [
+          reservationId, operationId, entityType, entityId, partitionId,
+          targetNodeId, estimatedBytes, amplificationFactor, status,
+          reasonCode, createdAt, updatedAt, expiresAt,
+        ] = params;
+        if (reservations.has(reservationId)) {
+          return {success: true, rows: [], changes: 0};
+        }
+        reservations.set(reservationId, {
+          reservation_id: reservationId,
+          operation_id: operationId,
+          entity_type: entityType,
+          entity_id: entityId,
+          partition_id: partitionId,
+          target_node_id: targetNodeId,
+          estimated_bytes: estimatedBytes,
+          amplification_factor: amplificationFactor,
+          status,
+          reason_code: reasonCode,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          expires_at: expiresAt,
+          released_at: null,
+        });
+        return {success: true, rows: [], changes: 1};
+      }
+      if (sql.includes('FROM storage_reservations')) {
+        let rows = Array.from(reservations.values());
+        if (sql.includes('operation_id = ?')) {
+          rows = rows.filter((row) => row.operation_id === params[0]);
+        }
+        if (sql.includes('status = ?')) {
+          const status = params[sql.includes('operation_id = ?') ? 1 : 0];
+          rows = rows.filter((row) => row.status === status);
+        }
+        return {success: true, rows, changes: 0};
+      }
+      if (sql.includes('UPDATE storage_reservations')) {
+        const [status, updatedAt, releasedAt, reservationId, expectedStatus] =
+          params;
+        const existing = reservations.get(reservationId);
+        if (!existing || existing.status !== expectedStatus) {
+          return {success: true, rows: [], changes: 0};
+        }
+        reservations.set(reservationId, {
+          ...existing,
+          status,
+          updated_at: updatedAt,
+          released_at: releasedAt,
+        });
+        return {success: true, rows: [], changes: 1};
+      }
+      return sqlEngine.executeQuery(sql, params);
+    },
+  };
+}
+
+function createSqliteQueryEngine(db) {
+  return withStorageReservationFixture({
     async executeQuery(sql, params = []) {
       if (!sql.includes(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)) {
         return {success: true, rows: [], changes: 0};
@@ -168,7 +232,7 @@ function createSqliteQueryEngine(db) {
       const info = statement.run(...params);
       return {success: true, rows: [], changes: info.changes};
     },
-  };
+  });
 }
 
 let sharedDurable = null;

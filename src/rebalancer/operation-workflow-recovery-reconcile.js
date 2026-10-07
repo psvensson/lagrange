@@ -1,4 +1,6 @@
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {OPERATION_RESERVATION_RECOVERY_OUTCOME} from
+  './operation-reservation-attempt-outcome.js';
 import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
@@ -331,8 +333,9 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         op.operationId,
       );
 
+      let recoveryOutcome;
       try {
-        await this.operationWorkflowRunExclusive(
+        recoveryOutcome = await this.operationWorkflowRunExclusive(
           singleFlightKey,
           () => this.reconcileRecoveryOperation(op),
         );
@@ -362,7 +365,12 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         continue;
       }
 
-      if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
+      if (
+        recoveryOutcome === OPERATION_RESERVATION_RECOVERY_OUTCOME
+          .RESERVATION_BACKED_PENDING_REDRIVEN
+      ) {
+        result.reconciled++;
+      } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
         result.markedFailed++;
       } else if (originalStep === WORKFLOW_STEP.SYNCING) {
         result.reconciled++;

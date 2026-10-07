@@ -26,6 +26,7 @@ import {
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
 
 function initEnv() {
@@ -336,43 +337,44 @@ test('Message-group operation routing integration', async (t) => {
     async (t) => {
       const queries = [];
       const trackedOperations = new Map();
+      const executeQuery = async (sql, params) => {
+        queries.push({sql, params});
+        if (sql.includes('INSERT INTO replica_operations')) {
+          const [
+            operationId, type, partitionId, replicaId, targetClaimKey,
+            sourceNodeId, targetNodeId, status, workflowStep, createdAt,
+            updatedAt, completedAt, errorMessage, stepsHistory, entityType,
+            entityId,
+          ] = params;
+          trackedOperations.set(operationId, {
+            operation_id: operationId,
+            type,
+            partition_id: partitionId,
+            replica_id: replicaId,
+            target_claim_key: targetClaimKey,
+            source_node_id: sourceNodeId,
+            target_node_id: targetNodeId,
+            status,
+            workflow_step: workflowStep,
+            created_at: createdAt,
+            updated_at: updatedAt,
+            completed_at: completedAt,
+            error_message: errorMessage,
+            steps_history: stepsHistory,
+            entity_type: entityType,
+            entity_id: entityId,
+          });
+          return {success: true, changes: 1};
+        }
+        if (sql.includes('SELECT') && sql.includes('operation_id = ?')) {
+          const [operationId] = params;
+          const row = trackedOperations.get(operationId);
+          return {success: true, rows: row ? [row] : []};
+        }
+        return {success: true, rows: []};
+      };
       const sqlQueryEngine = {
-        executeQuery: async (sql, params) => {
-          queries.push({sql, params});
-          if (sql.includes('INSERT INTO replica_operations')) {
-            const [
-              operationId, type, partitionId, replicaId, targetClaimKey,
-              sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-              updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-              entityId,
-            ] = params;
-            trackedOperations.set(operationId, {
-              operation_id: operationId,
-              type,
-              partition_id: partitionId,
-              replica_id: replicaId,
-              target_claim_key: targetClaimKey,
-              source_node_id: sourceNodeId,
-              target_node_id: targetNodeId,
-              status,
-              workflow_step: workflowStep,
-              created_at: createdAt,
-              updated_at: updatedAt,
-              completed_at: completedAt,
-              error_message: errorMessage,
-              steps_history: stepsHistory,
-              entity_type: entityType,
-              entity_id: entityId,
-            });
-            return {success: true, changes: 1};
-          }
-          if (sql.includes('SELECT') && sql.includes('operation_id = ?')) {
-            const [operationId] = params;
-            const row = trackedOperations.get(operationId);
-            return {success: true, rows: row ? [row] : []};
-          }
-          return {success: true, rows: []};
-        },
+        executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
       };
       const coordinator = new RebalanceCoordinator({
         nodeId: 'node-1',

@@ -2,6 +2,9 @@ import {
   assignReplicaOperationRepositoryMutationGatewayMethods,
 } from './replica-operation-repository-mutation-gateway-methods.js';
 import {
+  assignReplicaOperationRepositoryMutationBudgetMethods,
+} from './replica-operation-repository-mutation-budget-methods.js';
+import {
   assignReplicaOperationRepositoryMutationPersistenceMethods,
 } from './replica-operation-repository-mutation-persistence-methods.js';
 import {
@@ -16,6 +19,10 @@ function assignReplicaOperationRepositoryMutationMethods(
   options = {},
 ) {
   assignReplicaOperationRepositoryMutationPersistenceMethods(
+    ReplicaOperationRepository,
+    options,
+  );
+  assignReplicaOperationRepositoryMutationBudgetMethods(
     ReplicaOperationRepository,
     options,
   );

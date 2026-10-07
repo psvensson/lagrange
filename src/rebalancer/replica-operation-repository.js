@@ -55,10 +55,8 @@ import {
 } from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {ROUTER_ERROR_MSG, TRANSPORT_ERROR_MSG} from '../constants/transport.js';
-import {
-  buildControlPlaneQueryOptions,
-  getRemainingBudgetMs,
-} from '../control-plane/timeout-budget.js';
+import {buildControlPlaneQueryOptions, createTimeoutBudget,
+  getRemainingBudgetMs} from '../control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -700,6 +698,7 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   buildReplicaOperationVisibilityReadOptions,
   classifySystemPartition,
   getControlPlaneRetryAfterMs,
+  getRemainingBudgetMs,
   isCoordinatorOwnedOperationType,
   isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,
@@ -744,6 +743,7 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   buildDivergenceEvent,
   classifySystemPartition,
   cloneControlPlaneFailureParticipants,
+  createTimeoutBudget,
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,

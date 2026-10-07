@@ -54,7 +54,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     REBALANCE_COORDINATOR_LOG_MSG,
     REBALANCER_SUBSYSTEM,
     REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE,
-    REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS,
     RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES,
@@ -65,7 +64,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     cloneControlPlaneFailureParticipants,
     getControlPlaneErrorCode,
     getControlPlaneRetryAfterMs,
-    getRemainingBudgetMs,
     hasControlPlaneMutationRoutingGapFailureSignature,
     isRetryableControlPlaneError,
     isRetryableWorkflowParticipantLookupErrorMessage,
@@ -609,38 +607,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     // budget is never spent under a virtual one.
     async waitForOperationPersistRetry(delayMs) {
       await new Promise((resolve) => this.timeSource.setTimeout(resolve, delayMs));
-    }
-
-    resolveOperationMutationRemainingRetryMs(elapsedMs, timeoutBudget = null) {
-      const localRemainingMs = OPERATION_PERSIST_RETRY_TIMEOUT_MS - elapsedMs;
-      if (
-        !timeoutBudget ||
-        typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT
-      ) {
-        return localRemainingMs;
-      }
-      const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
-      return Math.min(localRemainingMs, budgetRemainingMs);
-    }
-
-    resolveOperationMutationQueryTimeoutMs(timeoutBudget = null) {
-      if (
-        !timeoutBudget ||
-        typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT
-      ) {
-        return REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS;
-      }
-      const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
-      if (budgetRemainingMs <= 0) {
-        return 1;
-      }
-      return Math.max(
-        1,
-        Math.min(
-          REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
-          budgetRemainingMs,
-        ),
-      );
     }
 
     buildOperationMutationQueryOptions(options = {}, retryAttempt = 0) {

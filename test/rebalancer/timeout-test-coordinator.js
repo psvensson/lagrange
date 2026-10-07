@@ -47,6 +47,7 @@ function createTimeoutTestCoordinator(options = {}) {
     options.trackedOperations instanceof Map ?
       options.trackedOperations :
       new Map();
+  const trackedReservations = new Map();
 
   // Mock CDC service (not used for persistence in the current architecture).
   const cdcService = {
@@ -65,7 +66,51 @@ function createTimeoutTestCoordinator(options = {}) {
           return {success: true, changes: 0};
         }
         trackedOperations.set(row.operation_id, row);
-        return {success: true};
+        return {success: true, changes: 1};
+      }
+
+      if (sql.includes('INSERT OR IGNORE INTO storage_reservations')) {
+        const [
+          reservationId, operationId, entityType, entityId, partitionId,
+          targetNodeId, estimatedBytes, amplificationFactor, status,
+          reasonCode, createdAt, updatedAt, expiresAt,
+        ] = params;
+        if (trackedReservations.has(reservationId)) {
+          return {success: true, changes: 0};
+        }
+        trackedReservations.set(reservationId, {
+          reservation_id: reservationId,
+          operation_id: operationId,
+          entity_type: entityType,
+          entity_id: entityId,
+          partition_id: partitionId,
+          target_node_id: targetNodeId,
+          estimated_bytes: estimatedBytes,
+          amplification_factor: amplificationFactor,
+          status,
+          reason_code: reasonCode,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          expires_at: expiresAt,
+          released_at: null,
+        });
+        return {success: true, changes: 1};
+      }
+
+      if (sql.includes('UPDATE storage_reservations')) {
+        const [status, updatedAt, releasedAt, reservationId, expectedStatus] =
+          params;
+        const existing = trackedReservations.get(reservationId);
+        if (!existing || existing.status !== expectedStatus) {
+          return {success: true, changes: 0};
+        }
+        trackedReservations.set(reservationId, {
+          ...existing,
+          status,
+          updated_at: updatedAt,
+          released_at: releasedAt,
+        });
+        return {success: true, changes: 1};
       }
 
       if (sql.includes('UPDATE replica_operations')) {
@@ -109,6 +154,18 @@ function createTimeoutTestCoordinator(options = {}) {
         const service = services.find((row) =>
           row.service_id === serviceId || row.replica_id === serviceId);
         return {success: true, rows: service ? [{status: service.status}] : []};
+      }
+
+      if (sql.includes('FROM storage_reservations')) {
+        let rows = Array.from(trackedReservations.values());
+        if (sql.includes('operation_id = ?')) {
+          rows = rows.filter((row) => row.operation_id === params[0]);
+        }
+        if (sql.includes('status = ?')) {
+          const status = params[sql.includes('operation_id = ?') ? 1 : 0];
+          rows = rows.filter((row) => row.status === status);
+        }
+        return {success: true, rows};
       }
 
       if (sql.includes('FROM services') &&
