@@ -79,6 +79,16 @@ function configurationInTransitionRefusal(status, votersOutgoing, purpose) {
       COMMITTED_MEMBERSHIP_REFUSAL.CONF_CHANGE_PENDING) : null;
 }
 
+function unavailableMembershipRefusal(status) {
+  if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
+  }
+  return status.membershipGenerationIndex === null ?
+    committedMembershipRefusal(
+      COMMITTED_MEMBERSHIP_REFUSAL.CONFIGURATION_GENERATION_UNAVAILABLE) :
+    null;
+}
+
 /**
  * The answer a shaped status (one recorded observation) gives the read.
  * @param {Object} group - The runtime group.
@@ -88,8 +98,9 @@ function configurationInTransitionRefusal(status, votersOutgoing, purpose) {
  * @return {Object} The frozen answer or refusal.
  */
 function answerCommittedMembership(group, status, purpose) {
-  if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-    return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
+  const unavailable = unavailableMembershipRefusal(status);
+  if (unavailable !== null) {
+    return unavailable;
   }
   const bootstrap = purpose !== COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS;
   if (bootstrap && status.role !== ROLE_LEADER) {
@@ -100,6 +111,7 @@ function answerCommittedMembership(group, status, purpose) {
   const voters = sortedIds(confState.voters);
   const votersOutgoing = sortedIds(confState.votersOutgoing);
   const learners = sortedIds(confState.learners);
+  const learnersNext = sortedIds(confState.learnersNext);
   const transitionRefusal = bootstrap ?
     configurationInTransitionRefusal(status, votersOutgoing, purpose) : null;
   if (transitionRefusal) {
@@ -108,7 +120,8 @@ function answerCommittedMembership(group, status, purpose) {
   let identities;
   try {
     identities = identitiesOf(group,
-      [...new Set([...voters, ...votersOutgoing, ...learners])]);
+      [...new Set([...voters, ...votersOutgoing, ...learners,
+        ...learnersNext])]);
   } catch {
     // The registry itself could not be read: the replica cannot answer.
     return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
@@ -123,7 +136,10 @@ function answerCommittedMembership(group, status, purpose) {
     voters,
     votersOutgoing,
     learners,
+    learnersNext,
     appliedIndex: status.appliedIndex,
+    configurationKey: status.configurationKey,
+    membershipGenerationIndex: status.membershipGenerationIndex,
     commitIndex: status.commitIndex,
     term: status.term,
     leaderId: status.leaderId ?? null,

@@ -21,6 +21,8 @@ import {bootstrapOfRequest} from
   '../../../src/raft/raft-rs-bootstrap-membership.js';
 import {deriveRaftRsPeerId} from
   '../../../src/raft/raft-rs-peer-identity.js';
+import {raftRsConfStateKey} from
+  '../../../src/raft/raft-rs-conf-state-key.js';
 import {readCommittedMembershipStamp} from
   '../../../src/rebalancer/committed-membership-bootstrap-read.js';
 import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
@@ -39,7 +41,10 @@ function committedStamp(overrides = {}) {
     voters: [PEER_ID],
     votersOutgoing: [],
     learners: [],
+    learnersNext: [],
     appliedIndex: 1,
+    configurationKey: raftRsConfStateKey({voters: [PEER_ID]}),
+    membershipGenerationIndex: 0,
     commitIndex: 1,
     term: 1,
     leaderId: REPLICA_ID,

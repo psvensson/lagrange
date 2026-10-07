@@ -35,6 +35,8 @@ import {
   encodeProposal,
 } from './raft-rs-proposal-codec.js';
 import {normalizedTransferRequest} from './raft-rs-leadership-transfer.js';
+import {normalizeMembershipTransition} from
+  './raft-rs-membership-transition.js';
 import {
   RaftRsReplicaLifecycleOwner,
   registerRuntimeLifecycle,
@@ -200,6 +202,7 @@ function createRaftRsOperationPort(request) {
     database,
     groupId,
     replicaIdentity,
+    lifecycleIncarnation: lifecycle.incarnation,
     peerId,
     bootstrap,
     identityRecordPending,
@@ -352,6 +355,14 @@ function createRaftRsOperationPort(request) {
         answered :
         committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
     },
+    [RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]: (request) =>
+      protocolTurn(() => {
+        const normalized = normalizeMembershipTransition(request, registry);
+        return normalized.refusal ?? dispatcher.execute({
+          type: RUNTIME_COMMAND.PROPOSE_MEMBERSHIP_TRANSITION,
+          transition: normalized.command,
+        });
+      }),
     configureTick: (nextTiming) => dispatch(() => {
       const command = typeof nextTiming === 'number' ?
         {tickIntervalMs: nextTiming} : nextTiming;

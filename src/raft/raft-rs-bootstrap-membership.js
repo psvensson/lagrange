@@ -86,6 +86,7 @@ function committedBootstrap(membership, registry, peerId) {
     learners: (joins ? [...learners, self] : learners)
       .sort(ascendingPeerIdOrder),
     bootstrapIndex: String(membership.appliedIndex),
+    membershipGenerationIndex: String(membership.membershipGenerationIndex),
     selfCommittedVoter,
   };
 }
@@ -111,6 +112,7 @@ function bootstrapOfRequest({membership, registry, peerId,
     return Object.freeze({source: durableRecord.stamp.kind,
       voters: [], learners: [],
       bootstrapIndex: null, selfCommittedVoter: false,
+      membershipGenerationIndex: null,
       identityExisted: existed});
   }
   const validation = validateBootstrapMembershipStamp(membership);
@@ -128,6 +130,7 @@ function bootstrapOfRequest({membership, registry, peerId,
       registry.registerReplica(identity)),
     learners: [],
     bootstrapIndex: GENESIS_BOOTSTRAP_INDEX,
+    membershipGenerationIndex: GENESIS_BOOTSTRAP_INDEX,
     selfCommittedVoter: false,
     joiningExistingGroup: joiningExistingGroup === true,
     identityExisted: existed,

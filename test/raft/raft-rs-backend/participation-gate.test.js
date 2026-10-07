@@ -47,6 +47,8 @@ import {
 } from '../../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
+import {raftRsConfStateKey} from
+  '../../../src/raft/raft-rs-conf-state-key.js';
 import {RealTimeSource} from '../../../src/time/time-source.js';
 import {
   REPLACE_COMPLETION_VERDICT,
@@ -184,7 +186,10 @@ function oracleStamp(cluster, leader, genesis) {
     voters,
     votersOutgoing: [],
     learners: [],
+    learnersNext: [],
     appliedIndex: applied.appliedIndex,
+    configurationKey: raftRsConfStateKey({voters}),
+    membershipGenerationIndex: applied.membershipGenerationIndex,
     commitIndex: applied.appliedIndex,
     term: 1,
     leaderId: leader,

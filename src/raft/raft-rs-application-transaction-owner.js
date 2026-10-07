@@ -44,7 +44,8 @@ function runIsolatedEffects(effects) {
  *   threw past the application's own reporting.
  */
 function applyCommittedEntryTransaction({store, groupId, entry, confState,
-  applyCommittedEntry, admitted = false, runApplySlice = null}) {
+  membershipGenerationIndex, applyCommittedEntry, admitted = false,
+  runApplySlice = null}) {
   const effects = {afterCommit: [], afterRollback: []};
   const transact = () => store.transaction(() => {
     if (carriesProposedCommand(entry) &&
@@ -55,7 +56,8 @@ function applyCommittedEntryTransaction({store, groupId, entry, confState,
         throw new TypeError(ASYNC_APPLICATION_CALLBACK_ERROR);
       }
     }
-    store.putAppliedState(groupId, entry.index, confState);
+    store.putAppliedState(groupId, entry.index, confState, undefined,
+      membershipGenerationIndex);
     // The entry that admitted this replica as a voter: its index is the
     // participation gate's admission index, durable with the entry itself.
     if (admitted) {

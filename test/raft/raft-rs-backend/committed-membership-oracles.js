@@ -77,7 +77,7 @@ function readOnly(dbFile, read) {
  * @param {string} dbFile - The replica's database file.
  * @param {string} groupId - The group.
  * @return {Object|null} {appliedIndex, voters, learners, votersOutgoing,
- *   bootstrapIndex, admissionIndex} (indices as numbers or null).
+ *   bootstrapIndex, admissionIndex, membershipGenerationIndex}.
  */
 function durableAppliedState(dbFile, groupId) {
   return readOnly(dbFile, (db) => {
@@ -96,6 +96,7 @@ function durableAppliedState(dbFile, groupId) {
       votersOutgoing: JSON.parse(row.voters_outgoing).map(String).sort(),
       bootstrapIndex: nullable(row.bootstrap_index),
       admissionIndex: nullable(row.admission_index),
+      membershipGenerationIndex: Number(row.membership_generation_index),
     };
   });
 }

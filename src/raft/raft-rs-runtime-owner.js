@@ -84,6 +84,7 @@ import {
   confChangeProposalRefusal,
   confChangeSettlement,
 } from './raft-rs-conf-change-admission.js';
+import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 import {
   admitsReplica,
   createdParticipationGate,
@@ -110,6 +111,8 @@ import {
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {PARTICIPATION_GATE} from './raft-committed-membership-constants.js';
+import {proposeMembershipTransition} from
+  './raft-rs-membership-transition-runtime.js';
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 
@@ -490,6 +493,9 @@ function openingParticipationRefusal(group, opening) {
     group.gate = withIdentityRecord(
       restoredParticipationGate(opening.record), group.identityRecorded);
     group.appliedIndex = BigInt(opening.record.appliedIndex);
+    const membershipGeneration = restoredMembershipGeneration(opening.record);
+    group.membershipGenerationKnown = membershipGeneration.known;
+    group.membershipGenerationIndex = membershipGeneration.index;
     return null;
   }
   const refused = openingWithoutRecordRefusal(group.bootstrap);
@@ -503,7 +509,27 @@ function openingParticipationRefusal(group, opening) {
     createdParticipationGate(group.bootstrap, group.peerId),
     group.identityRecorded);
   group.appliedIndex = BigInt(RAFT_RS_INITIAL_APPLIED);
+  group.membershipGenerationIndex = BigInt(
+    group.bootstrap.membershipGenerationIndex ?? RAFT_RS_INITIAL_APPLIED);
+  group.membershipGenerationKnown = true;
   return null;
+}
+
+function restoredMembershipGeneration(record) {
+  const applied = BigInt(record.membershipGenerationIndex);
+  const snapshot = record.snapshot?.metadata;
+  if (snapshot === undefined || applied > BigInt(snapshot.index)) {
+    return {known: true, index: applied};
+  }
+  const descriptor = snapshot.membershipGenerationIndex;
+  const contradictory = descriptor !== null &&
+    (BigInt(descriptor) < applied ||
+      (BigInt(descriptor) === applied &&
+       raftRsConfStateKey(snapshot.confState) !==
+         raftRsConfStateKey(record.confState)));
+  return descriptor === null || contradictory ?
+    {known: false, index: applied} :
+    {known: true, index: BigInt(descriptor)};
 }
 
 function openGroupInCurrentRuntime(group, opening) {
@@ -530,7 +556,9 @@ function openGroupInCurrentRuntime(group, opening) {
     }
     try {
       group.store.putBootstrapAppliedState(group.groupId, confState.value,
-        participationGateColumns(group.gate));
+        {...participationGateColumns(group.gate),
+          membershipGenerationIndex:
+            String(group.membershipGenerationIndex)});
     } catch (error) {
       return groupHostFailure(group, RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE,
         error);
@@ -884,12 +912,18 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
   if (resolvedConfState.decoded !== undefined) {
     group.confChangeEntriesApplied = (group.confChangeEntriesApplied ?? 0) + 1;
   }
+  const priorMembershipGeneration = group.membershipGenerationIndex;
+  const nextMembershipGeneration = resolvedConfState.decoded !== undefined &&
+      !foldedIntoBootstrap(group, entry) &&
+      BigInt(entry.index) > priorMembershipGeneration ?
+    BigInt(entry.index) : priorMembershipGeneration;
   try {
     applyCommittedEntryTransaction({
       store: group.store,
       groupId: group.groupId,
       entry,
       confState: resolvedConfState.value,
+      membershipGenerationIndex: String(nextMembershipGeneration),
       applyCommittedEntry: group.applyCommittedEntry,
       admitted,
       runApplySlice: group.runApplySlice,
@@ -898,6 +932,10 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
     group.applyTransactionRolledBack?.();
     return groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
       applicationFailureOf(error));
+  }
+  group.membershipGenerationIndex = nextMembershipGeneration;
+  if (resolvedConfState.decoded !== undefined) {
+    group.membershipGenerationKnown = true;
   }
   // The runtime's own applied index (the entry whose configuration the core
   // now holds, durable with it) and the participation gate it moves.
@@ -987,7 +1025,20 @@ function drainReady(group, expectedGeneration, cycles = 0) {
     return taken.result;
   }
   try {
+    // Native SnapshotMetadata does not carry the sender's configuration-only
+    // generation. Persist it as unknown until the group-neutral checkpoint
+    // owner supplies an exact descriptor; never substitute this receiver's
+    // current generation or the snapshot's ordinary applied index.
     group.store.persistReady(group.groupId, taken.value);
+    const snapshot = taken.value.snapshot?.metadata;
+    if (snapshot !== undefined) {
+      const generation = snapshot.membershipGenerationIndex;
+      group.membershipGenerationKnown = generation !== undefined &&
+        generation !== null;
+      if (group.membershipGenerationKnown) {
+        group.membershipGenerationIndex = BigInt(generation);
+      }
+    }
     group.persistedLastIndex = persistedLastIndexAfter(
       group.persistedLastIndex, taken.value);
   } catch (error) {
@@ -1067,22 +1118,11 @@ function refusedConfChange(group, expectedGeneration, change) {
 }
 
 // The configuration's voter-bearing and learner parts as one comparable key.
-function confStateKeyOf(confState) {
-  const sorted = (ids) => [...(ids || [])].map(String).sort();
-  return JSON.stringify([
-    sorted(confState.voters),
-    sorted(confState.votersOutgoing),
-    sorted(confState.learners),
-    sorted(confState.learnersNext),
-    confState.autoLeave === true,
-  ]);
-}
-
 // The applied ConfState is announced when it differs from the one last
 // announced, and first after every (re)construction: the transition the core
 // itself applied, never a prediction or a row.
 function announceMembership(group, {confState, appliedIndex}, status) {
-  const key = confStateKeyOf(confState);
+  const key = raftRsConfStateKey(confState);
   if (key === group.announcedConfStateKey) {
     return;
   }
@@ -1112,7 +1152,12 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   // configuration: the index whose apply left the core holding it (commit
   // may run ahead of it), never the core's status.applied.
   return {ok: true, value: {status: status.value, confState: conf.value,
-    ...observedParticipation(group), runtimeHealth, runtimeGeneration}};
+    ...observedParticipation(group),
+    configurationKey: raftRsConfStateKey(conf.value),
+    membershipGenerationIndex: group.membershipGenerationKnown ?
+      Number(group.membershipGenerationIndex) : null,
+    lifecycleIncarnation: group.lifecycleIncarnation,
+    runtimeHealth, runtimeGeneration}};
 }
 
 // One applied index per observation: the participation gate's, recorded with
@@ -1352,6 +1397,14 @@ const COMMAND_OPERATION = Object.freeze({
     probePeerProgress(group, generation, command.peerAddress),
   [RUNTIME_COMMAND.TRANSFER_LEADERSHIP]: (group, command, generation) =>
     transferLeadership(group, generation, command.transfer),
+  [RUNTIME_COMMAND.PROPOSE_MEMBERSHIP_TRANSITION]:
+    (group, command, generation) =>
+      proposeMembershipTransition({
+        group, expectedGeneration: generation, command: command.transition,
+        runtimeGeneration, invokeCoreAt,
+        leaderReplicaIdOf: semanticLeaderIdentity, answerRefusedProposal,
+        drainReady, thenMaybe,
+      }),
 });
 const PROPOSE_CONF_CHANGE = 'propose-conf-change';
 const TICK_COMMAND = 'tick';
@@ -1566,6 +1619,7 @@ function createRuntimeDispatcher(request) {
     groupId: request.groupId,
     replicaIdentity: request.replicaIdentity,
     peerId: request.peerId,
+    lifecycleIncarnation: request.lifecycleIncarnation,
     bootstrap: request.bootstrap,
     // Whether the opening's prior-existence fact is durable: false only for
     // an opening whose host writes that fact after the port opened (a
@@ -1573,6 +1627,8 @@ function createRuntimeDispatcher(request) {
     identityRecorded: request.identityRecordPending !== true,
     gate: null,
     appliedIndex: null,
+    membershipGenerationIndex: 0n,
+    membershipGenerationKnown: true,
     gateOpen: false,
     timing: request.timing,
     timers: request.timers,
@@ -1603,6 +1659,10 @@ function createRuntimeDispatcher(request) {
     inboundDrainScheduled: false,
     inboundDrainDeadline: null,
     peerDelivery: new Map(),
+    // One group-wide membership lane means one transient stage fence is
+    // sufficient. A committed ConfChange advances membershipGenerationIndex,
+    // making the retained fence stale without accumulating terminal keys.
+    membershipTransitionFence: null,
     inboundStepRefusals: new Map(),
     inboundRefusalReports: new Map(),
     closed: false,

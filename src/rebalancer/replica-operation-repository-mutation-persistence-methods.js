@@ -63,6 +63,19 @@ function nullableOperationValue(value) {
   return value ?? null;
 }
 
+function membershipVisibilitySatisfied(expectedOperation, observedOperation) {
+  const membershipFields = [
+    'sourceReplicaId',
+    ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
+  ];
+  const carriesMembership = membershipFields.some((field) =>
+    expectedOperation[field] !== null &&
+      expectedOperation[field] !== undefined);
+  return !carriesMembership || membershipFields.every((field) =>
+    nullableOperationValue(observedOperation[field]) ===
+      nullableOperationValue(expectedOperation[field]));
+}
+
 function isReplicaOperationUniqueConstraintFailure(result) {
   const code = String(result?.code || result?.errorCode || '');
   const message = String(result?.error || result?.message || '');
@@ -219,6 +232,38 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     );
   }
 
+  async function recoverNewOperationInsertFailure(
+    repository,
+    operation,
+    options,
+    result,
+  ) {
+    const recovered =
+      await repository.recoverPersistedReplicaOperationMutation(
+        operation,
+        result,
+      );
+    if (!recovered && options?.returnDisposition === true &&
+        isReplicaOperationUniqueConstraintFailure(result)) {
+      return resolveNewOperationInsertCollision(
+        repository, operation, options);
+    }
+    if (!recovered) {
+      const persistError = repository.buildOperationPersistError(result);
+      repository.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+        operationId: operation.operationId,
+        ...buildControlPlaneFailurePayload(repository.nodeId, result),
+      });
+      throw persistError;
+    }
+    repository.syncIncompleteOperationObservation(operation);
+    return buildNewOperationPersistResult(
+      options,
+      REPLICA_OPERATION_INSERT_DISPOSITION.UNKNOWN,
+      operation,
+    );
+  }
+
   class ReplicaOperationRepositoryMutationPersistenceMethods {
     async persistNewOperation(operation, options = {}) {
       return this.runReplicaOperationTransitionExclusive(
@@ -274,32 +319,8 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
               },
             );
       if (!result.success) {
-        const recoveredPersistedMutation =
-              await this.recoverPersistedReplicaOperationMutation(
-                operation,
-                result,
-              );
-        if (
-          !recoveredPersistedMutation &&
-          options?.returnDisposition === true &&
-          isReplicaOperationUniqueConstraintFailure(result)
-        ) {
-          return resolveNewOperationInsertCollision(this, operation, options);
-        }
-        if (!recoveredPersistedMutation) {
-          const persistError = this.buildOperationPersistError(result);
-          this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
-            operationId: operation.operationId,
-            ...buildControlPlaneFailurePayload(this.nodeId, result),
-          });
-          throw persistError;
-        }
-        this.syncIncompleteOperationObservation(operation);
-        return buildNewOperationPersistResult(
-          options,
-          REPLICA_OPERATION_INSERT_DISPOSITION.UNKNOWN,
-          operation,
-        );
+        return recoverNewOperationInsertFailure(
+          this, operation, options, result);
       }
       if (result.recoveredAfterRetryableFailure === true) {
         this.syncIncompleteOperationObservation(operation);
@@ -606,16 +627,8 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         if (admissionFields.some((field) =>
           observedOperation[field] !== expectedOperation[field])) return false;
       }
-      const membershipFields = [
-        'sourceReplicaId',
-        ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
-      ];
-      if (membershipFields.some((field) =>
-        expectedOperation[field] !== null &&
-          expectedOperation[field] !== undefined) &&
-        membershipFields.some((field) =>
-          nullableOperationValue(observedOperation[field]) !==
-            nullableOperationValue(expectedOperation[field]))) {
+      if (!membershipVisibilitySatisfied(expectedOperation,
+        observedOperation)) {
         return false;
       }
       return true;

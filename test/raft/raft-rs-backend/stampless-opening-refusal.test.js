@@ -40,6 +40,8 @@ import {
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
+import {raftRsConfStateKey} from
+  '../../../src/raft/raft-rs-conf-state-key.js';
 
 const PARTITION_ID = 'v1a-seed';
 const FOUNDER = 'v1a-seed-a';
@@ -68,7 +70,10 @@ function oracleStamp(cluster, leader, genesisPeerIds) {
     voters,
     votersOutgoing: [],
     learners: [],
+    learnersNext: [],
     appliedIndex: applied.appliedIndex,
+    configurationKey: raftRsConfStateKey({voters}),
+    membershipGenerationIndex: applied.membershipGenerationIndex,
     commitIndex: applied.appliedIndex,
     term: 1,
     leaderId: leader,

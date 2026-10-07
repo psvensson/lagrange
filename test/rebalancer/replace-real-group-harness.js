@@ -78,6 +78,7 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
+import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {
   COMMITTED_MEMBERSHIP_STAMP_KIND,
 } from '../../src/raft/raft-committed-membership-constants.js';
@@ -379,7 +380,10 @@ class RealGroup {
       voters,
       votersOutgoing: [],
       learners: [],
+      learnersNext: [],
       appliedIndex: applied.appliedIndex,
+      configurationKey: raftRsConfStateKey({voters}),
+      membershipGenerationIndex: applied.membershipGenerationIndex,
       commitIndex: applied.appliedIndex,
       term: 1,
       leaderId: leader,

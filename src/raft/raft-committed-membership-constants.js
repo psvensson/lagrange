@@ -92,6 +92,8 @@ const COMMITTED_MEMBERSHIP_REFUSAL = Object.freeze({
   DURABLE_RECORD_MISSING: 'durable-record-missing',
   RESEED_REQUIRED: 'reseed-required',
   CONF_CHANGE_PENDING: 'membership-conf-change-pending',
+  CONFIGURATION_GENERATION_UNAVAILABLE:
+    'membership-configuration-generation-unavailable',
 });
 
 // Why a dispatched stamp is STAMP_INVALID (the refusal's detail).
@@ -126,7 +128,10 @@ const COMMITTED_MEMBERSHIP_ANSWER_FIELD = Object.freeze({
   VOTERS: 'voters',
   VOTERS_OUTGOING: 'votersOutgoing',
   LEARNERS: 'learners',
+  LEARNERS_NEXT: 'learnersNext',
   APPLIED_INDEX: 'appliedIndex',
+  CONFIGURATION_KEY: 'configurationKey',
+  MEMBERSHIP_GENERATION_INDEX: 'membershipGenerationIndex',
   COMMIT_INDEX: 'commitIndex',
   TERM: 'term',
   LEADER_ID: 'leaderId',

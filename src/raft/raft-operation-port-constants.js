@@ -37,6 +37,33 @@ const RAFT_EVENT = Object.freeze({
 // amendment 1, section 3.1).
 const RAFT_OPERATION = Object.freeze({
   READ_COMMITTED_MEMBERSHIP: 'readCommittedMembership',
+  PROPOSE_MEMBERSHIP_TRANSITION: 'proposeMembershipTransition',
+});
+
+const RAFT_MEMBERSHIP_TRANSITION_STAGE = Object.freeze({
+  ADD_LEARNER: 'add-learner',
+  PROMOTE: 'promote',
+  REMOVE: 'remove',
+});
+
+const RAFT_MEMBERSHIP_TRANSITION_REASON = Object.freeze({
+  PROPOSED: 'membership-transition-proposed',
+  ALREADY_VOTER: 'membership-transition-already-voter',
+  ALREADY_LEARNER: 'membership-transition-already-learner',
+  ALREADY_ABSENT: 'membership-transition-already-absent',
+  NOT_LEARNER: 'membership-transition-target-not-learner',
+  PROMOTION_PROOF_REQUIRED: 'membership-transition-promotion-proof-required',
+  STALE_PERMIT: 'membership-transition-stale-permit',
+  STALE_RUNTIME: 'membership-transition-stale-runtime',
+  STALE_LIFECYCLE: 'membership-transition-stale-lifecycle',
+  STALE_LEADERSHIP: 'membership-transition-stale-leadership',
+  STALE_CONFIGURATION: 'membership-transition-stale-configuration',
+  CONFIGURATION_GENERATION_UNAVAILABLE:
+    'membership-transition-configuration-generation-unavailable',
+  IDENTITY_MISMATCH: 'membership-transition-identity-mismatch',
+  MALFORMED: 'membership-transition-malformed',
+  PROPOSAL_ANCHOR_UNAVAILABLE:
+    'membership-transition-proposal-anchor-unavailable',
 });
 
 const RAFT_OPERATION_OUTCOME = Object.freeze({
@@ -159,6 +186,8 @@ export {
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
+  RAFT_MEMBERSHIP_TRANSITION_REASON,
+  RAFT_MEMBERSHIP_TRANSITION_STAGE,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,

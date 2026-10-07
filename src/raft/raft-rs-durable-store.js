@@ -27,6 +27,7 @@ import {
   RAFT_RS_COMMIT_DURABILITY,
   RAFT_RS_CONF_STATE_FIELD,
   RAFT_RS_CONF_STATE_MEMBER_FIELDS,
+  RAFT_RS_MEMBERSHIP_GENERATION_COLUMN,
   RAFT_RS_PARTICIPATION_GATE_COLUMNS,
   RAFT_RS_PERSISTENCE_ADMISSION,
   RAFT_RS_RECORD_COMPATIBILITY,
@@ -42,11 +43,16 @@ import {
 import {RAFT_RS_HOST_WRITE} from './raft-rs-host-contract.js';
 import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
+import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 
 const DECIMAL_DIGITS = /^\d+$/u;
 const PAYLOAD_ENCODING = 'base64';
 // The log table and the applied-state table.
 const LOG_AND_APPLIED_STATE_TABLE_COUNT = 2;
+const MAX_SAFE_RAFT_POSITION = BigInt(Number.MAX_SAFE_INTEGER);
+const SNAPSHOT_MEMBERSHIP_GENERATION_BOUNDARY_ERROR =
+  'raft-rs snapshot membership generation exceeds or ' +
+  'contradicts its applied boundary';
 
 /**
  * Convert a raft-rs decimal string into the BigInt SQLite binds exactly.
@@ -77,6 +83,29 @@ function fromExactInteger(value) {
 function nullableExactInteger(value) {
   return value === null || value === undefined ? null :
     fromExactInteger(value);
+}
+
+function exactSnapshotMembershipGeneration({generation, snapshotIndex,
+  confState, appliedRow}) {
+  if (generation === null) {
+    return null;
+  }
+  const exactGeneration = toExactInteger(generation);
+  const exceedsBoundary = exactGeneration > snapshotIndex ||
+    exactGeneration > MAX_SAFE_RAFT_POSITION;
+  const currentGeneration = appliedRow === undefined ? null :
+    BigInt(appliedRow.membership_generation_index);
+  const regresses = currentGeneration !== null &&
+    exactGeneration < currentGeneration;
+  const contradictsCurrent = currentGeneration !== null &&
+    exactGeneration === currentGeneration &&
+    snapshotIndex >= BigInt(appliedRow.applied_index) &&
+    raftRsConfStateKey(confState) !==
+      raftRsConfStateKey(confStateFromRow(appliedRow));
+  if (exceedsBoundary || regresses || contradictsCurrent) {
+    throw new Error(SNAPSHOT_MEMBERSHIP_GENERATION_BOUNDARY_ERROR);
+  }
+  return exactGeneration;
 }
 
 /**
@@ -199,6 +228,7 @@ class RaftRsDurableStore {
     this.journal = [];
     this.ownTransactionDepth = 0;
     this.createRecordTables();
+    this.addMembershipGenerationColumns();
   }
 
   /**
@@ -226,6 +256,32 @@ class RaftRsDurableStore {
       this.db.exec(RAFT_RS_SQL.CREATE_APPLIED_STATE_TABLE);
       this.db.exec(RAFT_RS_SQL.CREATE_SNAPSHOT_TABLE);
     });
+  }
+
+  // The configuration-only generation was added after the record shipped.
+  // It is additive on every complete or partial record: missing record tables
+  // remain missing (and therefore fail closed). An applied row gains neutral
+  // generation 0; an old snapshot stays null because native metadata cannot
+  // identify the sender's configuration-only generation.
+  addMembershipGenerationColumns() {
+    const tablePresent = this.db.prepare(
+      RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
+    const upgrades = [
+      [RAFT_RS_TABLE.APPLIED_STATE, RAFT_RS_SQL.SELECT_APPLIED_STATE_COLUMNS,
+        RAFT_RS_SQL.ADD_APPLIED_MEMBERSHIP_GENERATION],
+      [RAFT_RS_TABLE.SNAPSHOT, RAFT_RS_SQL.SELECT_SNAPSHOT_COLUMNS,
+        RAFT_RS_SQL.ADD_SNAPSHOT_MEMBERSHIP_GENERATION],
+    ];
+    for (const [table, columnsSql, alterSql] of upgrades) {
+      if (tablePresent.get(table) === undefined) {
+        continue;
+      }
+      const columns = new Set(this.db.prepare(columnsSql).all()
+        .map(({name}) => name));
+      if (!columns.has(RAFT_RS_MEMBERSHIP_GENERATION_COLUMN)) {
+        this.db.exec(alterSql);
+      }
+    }
   }
 
   /**
@@ -382,14 +438,20 @@ class RaftRsDurableStore {
    * @param {string} [write] - Which contract write this is.
    */
   putAppliedState(groupId, appliedIndex, confState,
-    write = RAFT_RS_HOST_WRITE.CONF_STATE_AND_APPLIED) {
+    write = RAFT_RS_HOST_WRITE.CONF_STATE_AND_APPLIED,
+    membershipGenerationIndex = null) {
     this.admitWrite();
+    const generation = membershipGenerationIndex === null ? null :
+      toExactInteger(membershipGenerationIndex);
     this.db.prepare(RAFT_RS_SQL.UPSERT_APPLIED_STATE).run(
       groupId,
       toExactInteger(appliedIndex),
       ...confStateColumns(confState),
+      generation,
+      generation,
     );
-    this.record(write, {groupId, appliedIndex, confState});
+    this.record(write, {groupId, appliedIndex, confState,
+      membershipGenerationIndex});
   }
 
   /**
@@ -404,7 +466,7 @@ class RaftRsDurableStore {
    *   strings; admissionIndex null while this replica is not admitted.
    */
   putBootstrapAppliedState(groupId, confState, {bootstrapIndex,
-    admissionIndex}) {
+    admissionIndex, membershipGenerationIndex = RAFT_RS_ZERO_INDEX}) {
     this.admitWrite();
     this.db.prepare(RAFT_RS_SQL.UPSERT_BOOTSTRAP_APPLIED_STATE).run(
       groupId,
@@ -412,10 +474,11 @@ class RaftRsDurableStore {
       ...confStateColumns(confState),
       toExactInteger(bootstrapIndex),
       admissionIndex === null ? null : toExactInteger(admissionIndex),
+      toExactInteger(membershipGenerationIndex),
     );
     this.record(RAFT_RS_HOST_WRITE.CONF_STATE_AND_APPLIED, {groupId,
       appliedIndex: RAFT_RS_ZERO_INDEX, confState, bootstrapIndex,
-      admissionIndex});
+      admissionIndex, membershipGenerationIndex});
   }
 
   /**
@@ -433,21 +496,35 @@ class RaftRsDurableStore {
   /**
    * Durably store a snapshot and the configuration it carries.
    * @param {string} groupId - The group.
-   * @param {Object} snapshot - A Ready snapshot from the core.
+   * @param {Object} snapshot - A Ready snapshot from the core. Its optional
+   *   metadata.membershipGenerationIndex must come from the later checkpoint
+   *   owner; native SnapshotMetadata alone leaves it null.
    */
-  putSnapshot(groupId, snapshot) {
+  putSnapshot(groupId, snapshot, membershipGenerationIndex = null) {
     this.admitWrite();
     const metadata = snapshot.metadata || {};
+    const snapshotIndex = metadata.index || RAFT_RS_ZERO_INDEX;
+    const generation = metadata.membershipGenerationIndex ??
+      membershipGenerationIndex;
+    const exactSnapshotIndex = toExactInteger(snapshotIndex);
+    const confState = metadata.confState || emptyConfState();
+    const appliedRow = this.db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE)
+      .safeIntegers(true).get(groupId);
+    const exactGeneration = exactSnapshotMembershipGeneration({generation,
+      snapshotIndex: exactSnapshotIndex, confState, appliedRow});
     this.db.prepare(RAFT_RS_SQL.UPSERT_SNAPSHOT).run(
       groupId,
-      toExactInteger(metadata.index || RAFT_RS_ZERO_INDEX),
+      exactSnapshotIndex,
       toExactInteger(metadata.term || RAFT_RS_ZERO_INDEX),
       snapshot.data === undefined ? null : snapshot.data,
-      ...confStateColumns(metadata.confState || emptyConfState()),
+      ...confStateColumns(confState),
+      exactGeneration,
     );
     this.record(RAFT_RS_HOST_WRITE.SNAPSHOT, {
       groupId,
-      index: metadata.index || RAFT_RS_ZERO_INDEX,
+      index: snapshotIndex,
+      membershipGenerationIndex: generation === null ? null :
+        String(generation),
     });
   }
 
@@ -479,6 +556,9 @@ class RaftRsDurableStore {
       confState: appliedRow ? confStateFromRow(appliedRow) : emptyConfState(),
       bootstrapIndex: nullableExactInteger(appliedRow?.bootstrap_index),
       admissionIndex: nullableExactInteger(appliedRow?.admission_index),
+      membershipGenerationIndex: appliedRow ?
+        fromExactInteger(appliedRow.membership_generation_index) :
+        RAFT_RS_ZERO_INDEX,
       entries: entryRows.map((row) => ({
         index: fromExactInteger(row.log_index),
         term: fromExactInteger(row.term),
@@ -491,6 +571,8 @@ class RaftRsDurableStore {
           index: fromExactInteger(snapshotRow.snapshot_index),
           term: fromExactInteger(snapshotRow.snapshot_term),
           confState: confStateFromRow(snapshotRow),
+          membershipGenerationIndex:
+            nullableExactInteger(snapshotRow.membership_generation_index),
         },
       } : null,
     };
