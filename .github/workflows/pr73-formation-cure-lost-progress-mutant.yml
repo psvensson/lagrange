@@ -1,0 +1,78 @@
+name: pr73-formation-cure-lost-progress-mutant
+
+on:
+  push:
+    branches:
+      - "proof/pr73-formation-cure-progress-20261007"
+
+permissions:
+  contents: read
+
+env:
+  AGGREGATE_SHA: 3bd0128bc361ce459ca74392c43c6dd913bc2130
+
+jobs:
+  discriminate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout aggregate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.AGGREGATE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Overlay immutable witness
+        env:
+          WITNESS_REF: proof/pr73-formation-cure-progress-20261007
+        run: |
+          set -euo pipefail
+          git fetch origin "$WITNESS_REF"
+          git show FETCH_HEAD:test/rebalancer/formation-cure-reservation-progress-obligation.test.js > test/rebalancer/formation-cure-reservation-progress-obligation.test.js
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Control is green
+        run: node test/rebalancer/formation-cure-reservation-progress-obligation.test.js
+
+      - name: Inject described lost-progress mutation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/rebalancer/rebalance-coordinator-operation-creation.js')
+          s=p.read_text()
+          anchor='''    if (shouldEmitOperationCreated) {\n      this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});\n      await this.armCoordinatorCreatedOperationProgress(\n        operation,\n        context.createdOperationArmContext,\n      );\n    }'''
+          mutant='''    if (shouldEmitOperationCreated) {\n      // TEST-ONLY MUTANT: reproduce the reported regression shape. After\n      // durable operation + reservation, require a fresh authoritative op\n      // read before the canonical progress owner is armed. If authority is\n      // unavailable, the durable PENDING row is stranded.\n      const observedAfterReservation =\n        await this.repository.queryAuthoritativeOperationById(\n          operation.operationId,\n          {authoritativeReadMode: 'owner_rpc_required'},\n        );\n      if (!observedAfterReservation) {\n        throw new Error('post-reservation operation authority unavailable');\n      }\n      this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});\n      await this.armCoordinatorCreatedOperationProgress(\n        operation,\n        context.createdOperationArmContext,\n      );\n    }'''
+          if anchor not in s:
+              raise SystemExit('mutation anchor missing')
+          p.write_text(s.replace(anchor,mutant,1))
+          PY
+          git diff -- src/rebalancer/rebalance-coordinator-operation-creation.js
+
+      - name: Mutant must be red at the progress obligation
+        run: |
+          set -euo pipefail
+          set +e
+          node test/rebalancer/formation-cure-reservation-progress-obligation.test.js > "$RUNNER_TEMP/mutant.tap" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/mutant.tap"
+          if [ "$status" -eq 0 ]; then
+            echo "::error::lost-progress mutant unexpectedly passed"
+            exit 1
+          fi
+          grep -Eq "post-reservation operation authority unavailable|canonical owner progress obligation|post-reservation authority wait" "$RUNNER_TEMP/mutant.tap"
+
+      - name: Historical front-half remains green under control bytes
+        run: |
+          git checkout "$AGGREGATE_SHA" -- src/rebalancer/rebalance-coordinator-operation-creation.js
+          node test/rebalancer/formation-barrier-recovery-mutation-admission.test.js
+          node test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js
