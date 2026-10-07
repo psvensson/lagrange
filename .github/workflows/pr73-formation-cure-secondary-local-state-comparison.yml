@@ -1,0 +1,49 @@
+name: pr73-formation-cure-secondary-local-state-comparison
+
+on:
+  push:
+    branches:
+      - "proof/pr73-formation-cure-secondary-arms-20261007"
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: replay
+            target: 0bfe6e7087334eb0d71a9efc6b6e1a73d1f2673d
+          - label: group-retirement
+            target: a2ed3de7b8eb8f0d8da149b270331242f5cd77e8
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout target product
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ matrix.target }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Overlay immutable qualification witness
+        env:
+          WITNESS_REF: proof/pr73-formation-cure-progress-20261007
+        run: |
+          set -euo pipefail
+          git fetch origin "$WITNESS_REF"
+          git show FETCH_HEAD:test/rebalancer/formation-cure-reservation-progress-obligation.test.js             > test/rebalancer/formation-cure-reservation-progress-obligation.test.js
+          echo "target=${{ matrix.label }} ${{ matrix.target }}"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - run: npm ci
+
+      - name: Formation cure reservation-to-progress witness
+        run: node test/rebalancer/formation-cure-reservation-progress-obligation.test.js
