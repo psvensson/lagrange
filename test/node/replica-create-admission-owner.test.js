@@ -175,14 +175,329 @@ describe('ReplicaCreateAdmissionOwner', () => {
     const firstEvidence = await first.claim(f.request);
     const secondEvidence = await second.claim(f.request);
     assert.equal(first, second);
-    assert.equal(await first.claimPhysicalWorker(firstEvidence), true);
+    const firstClaim = await first.claimPhysicalWorker(firstEvidence);
+    assert.ok(firstClaim);
     assert.equal(await second.claimPhysicalWorker(secondEvidence), false);
     const materialized = await first.markMaterialized(firstEvidence);
     assert.equal(materialized.admissionState, CREATE_ADMISSION_STATE.MATERIALIZED);
-    first.releasePhysicalWorker(firstEvidence.operationId);
+    first.releasePhysicalWorker(firstClaim);
     ReplicaCreateAdmissionOwner.release(first);
     ReplicaCreateAdmissionOwner.release(second);
   });
+
+  it('keeps lifecycle cleanup outside an active exact physical worker',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+        nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+      const evidence = await owner.claim(f.request);
+      const physicalClaim = await owner.claimPhysicalWorker(evidence);
+      assert.ok(physicalClaim);
+      assert.equal(await owner.closeForLifecycle({
+        serviceId: evidence.replicaId,
+        createdAt: evidence.replicaCreatedAt,
+        createAttemptToken: evidence.attemptToken,
+      }), false, 'cleanup cannot close the generation during physical work');
+      assert.equal(f.row.create_admission_state,
+        CREATE_ADMISSION_STATE.ADMITTED);
+      owner.releasePhysicalWorker(physicalClaim);
+      assert.equal(await owner.closeForLifecycle({
+        serviceId: evidence.replicaId,
+        createdAt: evidence.replicaCreatedAt,
+        createAttemptToken: evidence.attemptToken,
+      }), true, 'cleanup may close after the physical claim is released');
+    });
+
+  it('cannot commit after release wins during authoritative revalidation',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+        nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+      const evidence = await owner.claim(f.request);
+      const physicalClaim = await owner.claimPhysicalWorker(evidence);
+      assert.ok(physicalClaim);
+      const originalRead = owner.readOperation.bind(owner);
+      let releaseRead;
+      const readStarted = new Promise((resolve) => {
+        releaseRead = resolve;
+      });
+      let resumeRead;
+      const readBarrier = new Promise((resolve) => {
+        resumeRead = resolve;
+      });
+      owner.readOperation = async (operationId) => {
+        const row = await originalRead(operationId);
+        releaseRead();
+        await readBarrier;
+        return row;
+      };
+      let mutated = false;
+      const committing = owner.commitSnapshotInstall(physicalClaim, () => {
+        mutated = true;
+        return true;
+      });
+      await readStarted;
+      assert.equal(owner.releasePhysicalWorker(physicalClaim), true);
+      resumeRead();
+      assert.equal(await committing, false);
+      assert.equal(mutated, false,
+        'released physical authority reaches no filesystem mutation');
+    });
+
+  it('cannot substitute a reclaimed worker for a delayed commit claim',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+        nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+      const evidence = await owner.claim(f.request);
+      const oldClaim = await owner.claimPhysicalWorker(evidence);
+      assert.ok(oldClaim);
+      const originalRead = owner.readOperation.bind(owner);
+      let announceRead;
+      const readStarted = new Promise((resolve) => {
+        announceRead = resolve;
+      });
+      let resumeRead;
+      const readBarrier = new Promise((resolve) => {
+        resumeRead = resolve;
+      });
+      owner.readOperation = async (operationId) => {
+        const row = await originalRead(operationId);
+        announceRead();
+        await readBarrier;
+        return row;
+      };
+      let mutated = false;
+      const committing = owner.commitSnapshotInstall(oldClaim, () => {
+        mutated = true;
+        return true;
+      });
+      await readStarted;
+      assert.equal(owner.releasePhysicalWorker(oldClaim), true);
+      owner.readOperation = originalRead;
+      const replacementClaim = await owner.claimPhysicalWorker(evidence);
+      assert.ok(replacementClaim);
+      assert.notEqual(replacementClaim, oldClaim);
+      resumeRead();
+      assert.equal(await committing, false);
+      assert.equal(mutated, false,
+        'a new claim for the same operation cannot revive old work');
+    });
+
+  it('grants one claim when same-operation acquisitions overlap', async () => {
+    const f = fixture();
+    const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+      nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+    const evidence = await owner.claim(f.request);
+    const [first, second] = await Promise.all([
+      owner.claimPhysicalWorker(evidence),
+      owner.claimPhysicalWorker(evidence),
+    ]);
+    assert.equal([first, second].filter(Boolean).length, 1);
+  });
+
+  it('refuses unsealed physical-worker evidence', async () => {
+    const f = fixture();
+    const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+      nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+    const evidence = await owner.claim(f.request);
+    assert.equal(await owner.claimPhysicalWorker({...evidence}), false,
+      'matching fields cannot forge the CREATE owner evidence capability');
+    assert.equal(owner.activePhysicalWorkerOperationIds.size, 0);
+  });
+
+  it('rechecks current boot after the durable physical-claim read', async () => {
+    const f = fixture();
+    const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+      nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+    const evidence = await owner.claim(f.request);
+    const originalRead = owner.readOperation.bind(owner);
+    owner.readOperation = async (operationId) => {
+      const row = await originalRead(operationId);
+      f.setBootIncarnation(102);
+      return row;
+    };
+    await assert.rejects(owner.claimPhysicalWorker(evidence),
+      {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED});
+    assert.equal(owner.activePhysicalWorkerOperationIds.size, 0,
+      'a boot lost during the row read grants no physical claim');
+  });
+
+  it('holds exact physical ownership across the durable-row await', async () => {
+    const f = fixture();
+    const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+      nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+    const admitted = await owner.claim(f.request);
+    const materialized = await owner.markMaterialized(admitted);
+    const failed = await owner.markProgress(
+      materialized, CREATE_ADMISSION_STATE.FAILED);
+    const originalRead = owner.readOperation.bind(owner);
+    let announceRead;
+    const rowRead = new Promise((resolve) => {
+      announceRead = resolve;
+    });
+    let resumeRead;
+    const rowBarrier = new Promise((resolve) => {
+      resumeRead = resolve;
+    });
+    let held = false;
+    owner.readOperation = async (operationId) => {
+      if (!held) {
+        held = true;
+        announceRead();
+        await rowBarrier;
+      }
+      return originalRead(operationId);
+    };
+    const acquisition = owner.claimPhysicalWorker(failed);
+    await rowRead;
+    await assert.rejects(owner.beginFailedAttemptRotation(failed),
+      {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED});
+    resumeRead();
+    const physicalClaim = await acquisition;
+    assert.ok(physicalClaim,
+      'the pending exact claim survives its authoritative row await');
+    assert.equal(f.row.create_admission_attempt_token, failed.attemptToken,
+      'attempt rotation cannot cross the durable-row await');
+  });
+
+  it('does not lend a rotated physical claim to stale attempt evidence',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+        nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+      const admitted = await owner.claim(f.request);
+      const materialized = await owner.markMaterialized(admitted);
+      const failed = await owner.markProgress(
+        materialized, CREATE_ADMISSION_STATE.FAILED);
+      const physicalClaim = await owner.claimPhysicalWorker(failed);
+      assert.ok(physicalClaim);
+      const rotating = await owner.beginFailedAttemptRotation(
+        failed, physicalClaim);
+      const restarted = await owner.finishFailedAttemptRotation(
+        rotating, physicalClaim);
+      assert.equal(restarted.attemptSeq, failed.attemptSeq + 1);
+      assert.equal(await owner.revalidatePhysicalWorker(
+        physicalClaim, failed), false,
+      'the same opaque claim cannot authorize its superseded attempt');
+      assert.equal(owner.snapshotInstallAuthority(physicalClaim, failed), false,
+        'stale evidence cannot borrow the claim current attempt');
+    });
+
+  it('notices attempt rotation while physical revalidation awaits boot',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+        nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+      const admitted = await owner.claim(f.request);
+      const materialized = await owner.markMaterialized(admitted);
+      const failed = await owner.markProgress(
+        materialized, CREATE_ADMISSION_STATE.FAILED);
+      const physicalClaim = await owner.claimPhysicalWorker(failed);
+      assert.ok(physicalClaim);
+      const originalRequire = owner.requireCurrentBootIncarnation.bind(owner);
+      let announceBootRead;
+      const bootRead = new Promise((resolve) => {
+        announceBootRead = resolve;
+      });
+      let resumeBootRead;
+      const bootBarrier = new Promise((resolve) => {
+        resumeBootRead = resolve;
+      });
+      let held = false;
+      owner.requireCurrentBootIncarnation = async () => {
+        if (!held) {
+          held = true;
+          announceBootRead();
+          await bootBarrier;
+        }
+        return originalRequire();
+      };
+      const revalidation = owner.revalidatePhysicalWorker(
+        physicalClaim, failed);
+      await bootRead;
+      const rotating = await owner.beginFailedAttemptRotation(
+        failed, physicalClaim);
+      resumeBootRead();
+      assert.equal(await revalidation, false,
+        'an await cannot convert old-attempt validation into new authority');
+      assert.equal(rotating.attemptSeq, failed.attemptSeq + 1);
+    });
+
+  it('refuses an async install mutation before it can run', async () => {
+    const f = fixture();
+    const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+      nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+    const evidence = await owner.claim(f.request);
+    const physicalClaim = await owner.claimPhysicalWorker(evidence);
+    assert.ok(physicalClaim);
+    let mutated = false;
+    assert.equal(await owner.commitSnapshotInstall(physicalClaim, async () => {
+      mutated = true;
+      return true;
+    }), false);
+    assert.equal(mutated, false,
+      'async callback shape is rejected before any filesystem effect');
+  });
+
+  it('holds the exact claim through the synchronous install effect',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+        nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+      const evidence = await owner.claim(f.request);
+      const physicalClaim = await owner.claimPhysicalWorker(evidence);
+      assert.ok(physicalClaim);
+      assert.equal(await owner.commitSnapshotInstall(physicalClaim, () => {
+        assert.equal(owner.releasePhysicalWorker(physicalClaim), false,
+          'the executing effect retains its claim');
+        return true;
+      }), true);
+      assert.equal(owner.releasePhysicalWorker(physicalClaim), true);
+    });
+
+  it('blocks failed-attempt rotation until physical ownership releases',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+        nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+      const admitted = await owner.claim(f.request);
+      const physicalClaim = await owner.claimPhysicalWorker(admitted);
+      const materialized = await owner.markMaterialized(admitted);
+      const failed = await owner.markProgress(
+        materialized, CREATE_ADMISSION_STATE.FAILED);
+      await assert.rejects(owner.beginFailedAttemptRotation(failed),
+        {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED});
+      assert.equal(owner.releasePhysicalWorker(physicalClaim), true);
+      const rotating = await owner.beginFailedAttemptRotation(failed);
+      assert.equal(rotating.admissionState, CREATE_ADMISSION_STATE.ROTATING);
+    });
+
+  it('cannot commit after boot ownership changes during durable reread',
+    async () => {
+      const f = fixture();
+      const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+        nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+      const evidence = await owner.claim(f.request);
+      const physicalClaim = await owner.claimPhysicalWorker(evidence);
+      assert.ok(physicalClaim);
+      const originalRead = owner.readOperation.bind(owner);
+      owner.readOperation = async (operationId) => {
+        const row = await originalRead(operationId);
+        f.setBootIncarnation(102);
+        return row;
+      };
+      let mutated = false;
+      await assert.rejects(
+        owner.commitSnapshotInstall(physicalClaim, () => {
+          mutated = true;
+          return true;
+        }),
+        {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED},
+      );
+      assert.equal(mutated, false,
+        'old boot performs no filesystem effect after the durable reread');
+    });
 
   it('fences a claimed old boot before physical grant and durable progress',
     async () => {
@@ -218,10 +533,11 @@ describe('ReplicaCreateAdmissionOwner', () => {
         now: () => 20,
       });
       const evidence = await owner.claim(f.request);
-      assert.equal(await owner.claimPhysicalWorker(evidence), true);
+      const physicalClaim = await owner.claimPhysicalWorker(evidence);
+      assert.ok(physicalClaim);
       f.setBootIncarnation(102);
       await assert.rejects(
-        owner.revalidatePhysicalWorker(evidence),
+        owner.revalidatePhysicalWorker(physicalClaim),
         {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED},
       );
       await assert.rejects(

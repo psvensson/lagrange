@@ -182,13 +182,15 @@ test('fresh message-group learner installs a transferred raft-rs image and ' +
 
     const admission = createAdmission();
     const evidence = await admission.owner.claim(admission.request);
-    assert.equal(await admission.owner.claimPhysicalWorker(evidence), true);
+    const physicalClaim = await admission.owner.claimPhysicalWorker(evidence);
+    assert.ok(physicalClaim);
     const installed = await requestSnapshotInstall({
       replicaDbPath: host.dbPath(TARGET), checkpointsRoot: receiverRoot,
       generationIndex: created.descriptor.lastIncludedIndex,
       expectedIdentity: identity, expectedReplicaIdentity: TARGET,
       expectedPeerId: targetPeer, createAdmissionOwner: admission.owner,
-      createAdmissionEvidence: evidence});
+      createAdmissionEvidence: evidence,
+      createPhysicalWorkerClaim: physicalClaim});
     assert.equal(installed.outcome, 'installed', JSON.stringify(installed));
 
     const reopened = [];

@@ -15,6 +15,8 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import Database from 'better-sqlite3';
+import {writeAtomicDurable} from
+  '../../src/runtime/oci-host-agent-durable-files.js';
 import {SeedPartitionsPhase} from
   '../../src/bootstrap/phases/seed-partitions-phase.js';
 import {readDurableServicesIdentitySnapshot} from
@@ -47,6 +49,14 @@ import {
   REPLICA_STORAGE_ARTIFACT_OUTCOME,
   removeReplicaStorageArtifacts,
 } from '../../src/node/replica-storage-artifacts.js';
+import {
+  RAFT_SNAPSHOT_INSTALL_DIRNAME,
+  RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
+  RAFT_SNAPSHOT_INSTALL_MARKER_KIND,
+  RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
+  RAFT_SNAPSHOT_INSTALL_STAGING_FILE,
+  RAFT_SNAPSHOT_INSTALL_STATE,
+} from '../../src/raft/snapshot-install-constants.js';
 import {
   DATA_DIRECTORY_OWNER_ERROR_CODE,
   acquireDataDirectoryProcessOwner,
@@ -1013,6 +1023,11 @@ test('cleanup tombstone and live creation share one authoritative insert key',
     );
     t.equal(resumed.ownerToken, acquired.authority.ownerToken,
       'only the frozen pre-admission startup path may resume persisted debt');
+    t.equal(resumed.replicaCreatedAt, acquired.authority.replicaCreatedAt,
+      'startup hydration preserves the exact cleanup lifecycle generation');
+    t.equal(resumed.createAttemptToken,
+      acquired.authority.createAttemptToken,
+      'startup hydration preserves the exact create attempt binding');
     t.equal(await secondOwner.resumePersistedAtStartup(
       startupSnapshot,
       {replicaId, partitionId: 'partition-1', nodeId: 'wrong-node'},
@@ -1158,6 +1173,81 @@ test('lost unlink outcome is observed and stale cleanup cannot touch recreation'
     );
     t.ok(fs.existsSync(dbPath),
       'delayed old-token cleanup cannot unlink recreated storage');
+  });
+
+test('snapshot generation mismatch preserves the successor database',
+  async (t) => {
+    initializeEnvironment();
+    const replicaId = 'replica-successor-install';
+    const store = createLifecycleRowStore();
+    const owner = new ReplicaCleanupTombstoneOwner({
+      gateway: store.gateway,
+      now: () => 600,
+      randomUUID: () => 'cleanup-old-generation',
+    });
+    const acquired = await owner.acquire({replicaId,
+      partitionId: 'partition-1', nodeId: NODE_ID});
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cleanup-install-'));
+    t.teardown(() => fs.rmSync(dataDir, {recursive: true, force: true}));
+    const dbDir = path.join(dataDir, 'partitions', 'partition-1');
+    const dbPath = path.join(dbDir, `${replicaId}.db`);
+    fs.mkdirSync(dbDir, {recursive: true});
+    fs.writeFileSync(dbPath, 'successor-database');
+    const successorDbArtifacts = [dbPath, `${dbPath}-wal`, `${dbPath}-shm`,
+      `${dbPath}-journal`];
+    for (const [index, artifactPath] of successorDbArtifacts.entries()) {
+      fs.writeFileSync(artifactPath, `successor-database-${index}`);
+    }
+    const installDir = path.join(dbDir, 'checkpoints', replicaId,
+      RAFT_SNAPSHOT_INSTALL_DIRNAME);
+    fs.mkdirSync(installDir, {recursive: true});
+    writeAtomicDurable(path.join(installDir,
+      RAFT_SNAPSHOT_INSTALL_MARKER_FILE), {
+      state: RAFT_SNAPSHOT_INSTALL_STATE.STAGED,
+      installId: 'successor-install',
+      generationIndex: 12,
+      rejectionReason: RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
+      kind: RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FRESH_CREATE,
+      createAuthority: {
+        operationId: 'successor-operation',
+        operationType: 'ADD',
+        entityType: 'partition',
+        entityId: 'partition-1',
+        partitionId: 'partition-1',
+        replicaId,
+        targetNodeId: NODE_ID,
+        admissionToken: 'successor-admission',
+        attemptToken: 'successor-attempt',
+        attemptSeq: 2,
+        workflowUpdatedAt: 700,
+        replicaCreatedAt: 700,
+      },
+      preInstallDigest: 'absent',
+    });
+    const successorInstallArtifacts = [
+      path.join(installDir, RAFT_SNAPSHOT_INSTALL_MARKER_FILE),
+      path.join(installDir, RAFT_SNAPSHOT_INSTALL_STAGING_FILE),
+      path.join(installDir, `${RAFT_SNAPSHOT_INSTALL_STAGING_FILE}-wal`),
+      path.join(installDir, `${RAFT_SNAPSHOT_INSTALL_STAGING_FILE}-shm`),
+    ];
+    for (const [index, artifactPath] of
+      successorInstallArtifacts.slice(1).entries()) {
+      fs.writeFileSync(artifactPath, `successor-install-${index}`);
+    }
+    const beforeCleanup = new Map([
+      ...successorDbArtifacts, ...successorInstallArtifacts,
+    ].map((artifactPath) => [artifactPath, fs.readFileSync(artifactPath)]));
+    const handler = createHandler(store, createStateMachine(store));
+    handler.dataDir = dataDir;
+    handler.replicaCleanupTombstoneOwner = owner;
+    handler.assertGroupRetiredTombstoneBeforeDelete = () => {};
+    await t.rejects(handler.cleanupReplicaResources(
+      'partition-1', replicaId, acquired.authority,
+    ), /cleanup incomplete/iu);
+    t.equal([...beforeCleanup].every(([artifactPath, bytes]) =>
+      fs.readFileSync(artifactPath).equals(bytes)), true,
+    'install-generation preflight preserves successor database, sidecars, ' +
+      'marker, and staged artifacts before any unlink');
   });
 
 test('cleanup markers are excluded and destructive paths share one classifier',

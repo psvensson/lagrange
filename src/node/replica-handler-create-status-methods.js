@@ -121,12 +121,12 @@ function shouldRethrowCreateStatusError(error) {
     isRetryableControlPlaneError(error) !== true;
 }
 
-async function rotateFailedCreateEvidence(handler, evidence) {
+async function rotateFailedCreateEvidence(handler, evidence, physicalClaim) {
   if (!evidence) return null;
   let rotating = evidence;
   if (evidence.admissionState === CREATE_ADMISSION_STATE.FAILED) {
     rotating = await handler.getReplicaCreateAdmissionOwner()
-      .beginFailedAttemptRotation(evidence);
+      .beginFailedAttemptRotation(evidence, physicalClaim);
   }
   return rotating?.admissionState === CREATE_ADMISSION_STATE.ROTATING ?
     rotating : null;
@@ -385,6 +385,7 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       const rotatingEvidence = await rotateFailedCreateEvidence(
         this,
         createAdmissionEvidence,
+        options.createPhysicalWorkerClaim,
       );
       if (createAdmissionEvidence && !rotatingEvidence) return false;
       const restarted = await Promise.resolve(
@@ -405,7 +406,8 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       if (rotatingEvidence) {
         options.createAdmissionEvidence =
           await this.getReplicaCreateAdmissionOwner()
-            .finishFailedAttemptRotation(rotatingEvidence);
+            .finishFailedAttemptRotation(
+              rotatingEvidence, options.createPhysicalWorkerClaim);
         options.createAttemptToken = options.createAdmissionEvidence
           ?.attemptToken;
         if (!options.createAdmissionEvidence) return false;

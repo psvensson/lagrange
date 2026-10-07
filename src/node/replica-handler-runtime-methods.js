@@ -8,10 +8,11 @@ import {removeReplicaStorageArtifacts} from
   './replica-storage-artifacts.js';
 import {isCleanupTombstoneRow} from
   './replica-cleanup-tombstone-owner.js';
-
+import {inspectSnapshotInstallArtifactsForGeneration,
+  removeSnapshotInstallArtifactsForGeneration,
+  resolveReplicaCheckpointsRoot} from '../raft/snapshot-install.js';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CLEANUP_STORAGE_AUTHORITY_KIND = 'cleanup_owned';
-
 function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
   assignReplicaHandlerRuntimeMetadataMethods(ReplicaHandler, options);
   const {
@@ -202,6 +203,27 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         }
         this.assertGroupRetiredTombstoneBeforeDelete(partitionId,
           replicaId);
+        const installGeneration = {
+          checkpointsRoot: resolveReplicaCheckpointsRoot(dbPath),
+          replicaId,
+          replicaCreatedAt: storageAuthority.replicaCreatedAt,
+          attemptToken: storageAuthority.createAttemptToken,
+        };
+        const installPreflight =
+          inspectSnapshotInstallArtifactsForGeneration(installGeneration);
+        if (!installPreflight.allAbsent && installPreflight.owned !== true) {
+          const error = new Error(
+            `Replica storage cleanup incomplete for ${replicaId}`,
+          );
+          error.artifactOutcomes = installPreflight.outcomes;
+          throw error;
+        }
+        if (!await this.getReplicaCleanupTombstoneOwner()
+          .requireCurrent(storageAuthority)) {
+          throw new Error(
+            `Replica cleanup ownership changed for ${replicaId}`,
+          );
+        }
         const removal = await removeReplicaStorageArtifacts(
           fs,
           dbPath,
@@ -214,11 +236,24 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
             }
           },
         );
-        if (!removal.allAbsent) {
+        const installRemoval =
+          await removeSnapshotInstallArtifactsForGeneration({
+            ...installGeneration,
+            beforeRemove: async () => {
+              if (!await this.getReplicaCleanupTombstoneOwner()
+                .requireCurrent(storageAuthority)) {
+                throw new Error(
+                  `Replica cleanup ownership changed for ${replicaId}`,
+                );
+              }
+            },
+          });
+        if (!removal.allAbsent || !installRemoval.allAbsent) {
           const error = new Error(
             `Replica storage cleanup incomplete for ${replicaId}`,
           );
-          error.artifactOutcomes = removal.outcomes;
+          error.artifactOutcomes = [...removal.outcomes,
+            ...installRemoval.outcomes];
           throw error;
         }
         const partitionDir = path.dirname(dbPath);
