@@ -26,10 +26,20 @@ const FAILED_CREATE_CLEANUP_RELEASE_RECOVERY_OWNER =
   'failed_create_cleanup_release';
 
 function startFailedCreateCleanupReleaseRecovery(coordinator) {
-  void coordinator.workflowOwner?.recoverFailedCreateCleanupReleaseDebt?.()
-    .catch((error) => coordinator.logQueryOperationsFailure(error, {
-      recoveryOwner: FAILED_CREATE_CLEANUP_RELEASE_RECOVERY_OWNER,
-    }));
+  const recovery = coordinator.workflowOwner
+    ?.recoverFailedCreateCleanupReleaseDebt?.({
+      onQueryFailure(error) {
+        coordinator.logQueryOperationsFailure(error, {
+          recoveryOwner: FAILED_CREATE_CLEANUP_RELEASE_RECOVERY_OWNER,
+        });
+      },
+    });
+  // The authoritative query error is logged while the joined/fenced recovery
+  // lane is still held. This catch only consumes that already-owned rejection;
+  // it must never perform teardown-visible logging or schedule another owner.
+  if (recovery && typeof recovery.catch === LOCAL_STR_FUNCTION) {
+    void recovery.catch(() => {});
+  }
 }
 
 // Option keys whose sync is a plain same-named property assignment, split

@@ -110,21 +110,73 @@ function armFailedCreateCleanupRelease(owner, operation) {
   return true;
 }
 
-async function recoverFailedCreateCleanupReleaseDebt(owner) {
+function isFailedCreateCleanupRecoveryOwnerCurrent(
+  owner,
+  ownershipFenceEpoch,
+) {
+  return owner.isInitialized && !owner.isShuttingDown &&
+    Number.isInteger(ownershipFenceEpoch) &&
+    typeof owner.getOperationOwnershipFenceEpoch === 'function' &&
+    owner.getOperationOwnershipFenceEpoch() === ownershipFenceEpoch;
+}
+
+function reportFailedCreateCleanupRecoveryQueryFailure(options, error) {
+  if (typeof options.onQueryFailure === 'function') {
+    options.onQueryFailure(error);
+  }
+}
+
+async function runFailedCreateCleanupReleaseRecoveryScan(
+  owner,
+  ownershipFenceEpoch,
+  options,
+) {
+  if (!isFailedCreateCleanupRecoveryOwnerCurrent(
+    owner,
+    ownershipFenceEpoch,
+  )) return 0;
   let operations;
   try {
     operations = await owner.repository
       .queryTerminalFailedCreateCleanupOperations();
   } catch (error) {
-    scheduleFailedCreateCleanupRecoveryScan(owner);
+    if (!isFailedCreateCleanupRecoveryOwnerCurrent(
+      owner,
+      ownershipFenceEpoch,
+    )) return 0;
+    scheduleFailedCreateCleanupRecoveryScan(owner, ownershipFenceEpoch);
+    reportFailedCreateCleanupRecoveryQueryFailure(options, error);
     throw error;
   }
+  if (!isFailedCreateCleanupRecoveryOwnerCurrent(
+    owner,
+    ownershipFenceEpoch,
+  )) return 0;
   clearFailedCreateCleanupRecoveryScan(owner);
   let armed = 0;
   for (const operation of operations) {
     if (armFailedCreateCleanupRelease(owner, operation)) armed += 1;
   }
   return armed;
+}
+
+function recoverFailedCreateCleanupReleaseDebt(owner, options = {}) {
+  const ownershipFenceEpoch = Number.isInteger(
+    options.operationOwnershipFenceEpoch,
+  ) ?
+    options.operationOwnershipFenceEpoch :
+    owner.getOperationOwnershipFenceEpoch();
+  const ownerKey = owner.getOperationOwnerSingleFlightKey(
+    FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+  );
+  return owner.operationWorkflowRunExclusive(
+    ownerKey,
+    () => runFailedCreateCleanupReleaseRecoveryScan(
+      owner,
+      ownershipFenceEpoch,
+      options,
+    ),
+  );
 }
 
 function clearFailedCreateCleanupRecoveryScan(owner) {
@@ -147,28 +199,39 @@ function unrefNativeRetryTimer(owner, timer) {
   }
 }
 
-function scheduleFailedCreateCleanupRecoveryScan(owner) {
-  if (owner.isShuttingDown || owner.terminalTransitionRepairTimerByOperationId
-    .has(FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY)) return;
+function scheduleFailedCreateCleanupRecoveryScan(
+  owner,
+  ownershipFenceEpoch,
+) {
+  if (!isFailedCreateCleanupRecoveryOwnerCurrent(owner, ownershipFenceEpoch) ||
+      owner.terminalTransitionRepairTimerByOperationId
+        .has(FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY)) return;
   const previous = owner.terminalTransitionRepairStateByOperationId.get(
     FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
   );
   const attempt = previous ? previous.attempt + 1 : 0;
   owner.terminalTransitionRepairStateByOperationId.set(
     FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
-    {recoveryScan: true, attempt},
+    {
+      recoveryScan: true,
+      attempt,
+      operationOwnershipFenceEpoch: ownershipFenceEpoch,
+    },
   );
   const timer = owner.setTimeoutFn(() => {
     owner.terminalTransitionRepairTimerByOperationId.delete(
       FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
     );
-    return recoverFailedCreateCleanupReleaseDebt(owner).catch((error) => {
-      owner.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_UNCONFIRMED,
-        {operationId: FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
-          error: error?.message || String(error)},
-      );
-    });
+    return recoverFailedCreateCleanupReleaseDebt(owner, {
+      operationOwnershipFenceEpoch: ownershipFenceEpoch,
+      onQueryFailure(error) {
+        owner.logger.warn(
+          REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_UNCONFIRMED,
+          {operationId: FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+            error: error?.message || String(error)},
+        );
+      },
+    }).catch(() => {});
   }, resolveTerminalTransitionRepairDelayMs(attempt));
   // The startup debt scan remains level-triggered, but production's native
   // background timer must not become the sole reason an otherwise idle

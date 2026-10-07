@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2021,
+    "unit": 2022,
     "integration": 80,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2310,
-  "digest": "fnv1a32-79e13c7b",
+  "censusSize": 2311,
+  "digest": "fnv1a32-68de82ca",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1636,6 +1636,7 @@
     "test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js": "unit",
     "test/rebalancer/existing-group-add-topology-guard.test.js": "unit",
     "test/rebalancer/failed-authoritative-read-admission-verdict.test.js": "unit",
+    "test/rebalancer/failed-create-cleanup-recovery-owner-lifetime.test.js": "unit",
     "test/rebalancer/formation-barrier-recovery-mutation-admission.test.js": "unit",
     "test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js": "unit",
     "test/rebalancer/formation-cure-reservation-progress-obligation.test.js": "unit",

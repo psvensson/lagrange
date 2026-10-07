@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2293,
+    "ordinary": 2294,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2310,
-  "digest": "fnv1a32-a528dca5",
+  "censusSize": 2311,
+  "digest": "fnv1a32-5b39a1d8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1635,6 +1635,7 @@
     "test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js": "ordinary",
     "test/rebalancer/existing-group-add-topology-guard.test.js": "ordinary",
     "test/rebalancer/failed-authoritative-read-admission-verdict.test.js": "ordinary",
+    "test/rebalancer/failed-create-cleanup-recovery-owner-lifetime.test.js": "ordinary",
     "test/rebalancer/formation-barrier-recovery-mutation-admission.test.js": "ordinary",
     "test/rebalancer/formation-barrier-spread-cure-lane-discrimination.test.js": "ordinary",
     "test/rebalancer/formation-cure-reservation-progress-obligation.test.js": "ordinary",

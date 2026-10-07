@@ -110,8 +110,8 @@ async function observeConcurrentCreateAdmissionWinner(
 
 class OperationWorkflowTransitionPersistence
   extends OperationWorkflowTransitionOrchestration {
-  recoverFailedCreateCleanupReleaseDebt() {
-    return recoverFailedCreateCleanupReleaseDebt(this);
+  recoverFailedCreateCleanupReleaseDebt(options = {}) {
+    return recoverFailedCreateCleanupReleaseDebt(this, options);
   }
   /**
    * Claim one priority control-plane operation for dispatch without relying on

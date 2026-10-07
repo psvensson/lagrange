@@ -83,6 +83,7 @@ function terminalCleanupRepairOwner(
   return {
     isShuttingDown: false,
     isInitialized: true,
+    operationOwnershipFenceEpoch: 0,
     terminalTransitionRepairStateByOperationId: new Map(),
     terminalTransitionRepairTimerByOperationId: new Map(),
     repository: {
@@ -111,7 +112,10 @@ function terminalCleanupRepairOwner(
       return handle;
     },
     clearTimeoutFn() {},
-    getOperationOwnerSingleFlightKey: (operationId) => operationId,
+    getOperationOwnerSingleFlightKey: (operationId) => `operation:${operationId}`,
+    getOperationOwnershipFenceEpoch() {
+      return this.operationOwnershipFenceEpoch;
+    },
     operationWorkflowRunExclusive: async (_key, action) => action(),
     deliverReplicaOperationRequest: async (_operation, _target, request) => {
       deliveries.push(request);
