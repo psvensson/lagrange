@@ -628,28 +628,6 @@ async (t) => {
   const thirdAddress = 'node-c/partition/sql_write_operations-p1-r3';
   const rotationSeedA = 'seed-a';
   const pressureDeferredError = 'query_admission_deferred';
-  const deliveries = [];
-  const messageRouter = {
-    async deliver(address) {
-      deliveries.push(address);
-      if (address === firstAddress) {
-        return {
-          acknowledged: true,
-          success: false,
-          error: pressureDeferredError,
-          errorCode: 'INTERNAL_ERROR',
-          retryAfterMs: 250,
-          deferRetry: true,
-        };
-      }
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [],
-        changes: 1,
-      };
-    },
-  };
   const systemCache = {
     get(tableName, key) {
       if (tableName === TABLES.PARTITIONS && key === partitionId) {
@@ -704,33 +682,78 @@ async (t) => {
     },
   };
 
-  const executor = new QueryExecutor({
-    messageRouter,
-    systemCache,
-  });
-  executor.queryTimeoutMs = 5;
-  executor.leaderRetryDelayMs = 1;
+  async function runPressureScenario(expireBudgetAfterFirstResponse) {
+    let now = 10000;
+    const deliveries = [];
+    const retryDecisions = [];
+    const messageRouter = {
+      async deliver(address) {
+        deliveries.push(address);
+        if (address === firstAddress) {
+          if (expireBudgetAfterFirstResponse) now = 10006;
+          return {
+            acknowledged: true,
+            success: false,
+            error: pressureDeferredError,
+            errorCode: 'INTERNAL_ERROR',
+            retryAfterMs: 250,
+            deferRetry: true,
+          };
+        }
+        return {
+          acknowledged: true,
+          success: true,
+          rows: [],
+          changes: 1,
+        };
+      },
+    };
+    const executor = new QueryExecutor({
+      messageRouter,
+      systemCache,
+      nowFn: () => now,
+    });
+    executor.queryTimeoutMs = 5;
+    executor.leaderRetryDelayMs = 1;
+    const resolveRetryDecision =
+      executor.resolveControlPlaneWriteRetryDecision.bind(executor);
+    executor.resolveControlPlaneWriteRetryDecision = (...args) => {
+      const decision = resolveRetryDecision(...args);
+      retryDecisions.push(decision.state);
+      return decision;
+    };
+    const result = await executor.executeOnPartition(
+      partitionId,
+      'INSERT INTO sql_write_operations (operation_id) VALUES (?)',
+      ['op-1'],
+      false,
+      false,
+      false,
+      {
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+        recoveryCandidateSelectionKey: rotationSeedA,
+      },
+    );
+    return {deliveries, result, retryDecisions};
+  }
 
-  const result = await executor.executeOnPartition(
-    partitionId,
-    'INSERT INTO sql_write_operations (operation_id) VALUES (?)',
-    ['op-1'],
-    false,
-    false,
-    false,
-    {
-      routingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      recoveryCandidateSelectionKey: rotationSeedA,
-    },
-  );
-
-  t.equal(result.success, true);
+  const withinBudget = await runPressureScenario(false);
+  t.equal(withinBudget.result.success, true);
+  t.same(withinBudget.retryDecisions, ['widen_to_recovery_candidate'],
+    'the retry owner should widen after candidate-local deferred pressure');
   t.same(
-    deliveries,
+    withinBudget.deliveries,
     [firstAddress, secondAddress],
     'candidate-local deferred pressure should fall through to the next widened recovery candidate instead of restarting the same hot target',
   );
+
+  const expiredBudget = await runPressureScenario(true);
+  t.equal(expiredBudget.result.success, false);
+  t.same(expiredBudget.retryDecisions, ['widen_to_recovery_candidate'],
+    'the retry owner decision remains widening when the execution budget expires');
+  t.same(expiredBudget.deliveries, [firstAddress],
+    'an expired execution budget should prevent delivery to the widened candidate');
 });
 
 test('QueryExecutor - user-table writes stay fail-closed when canonical ' +
