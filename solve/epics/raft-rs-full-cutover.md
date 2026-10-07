@@ -612,3 +612,176 @@ This epic closes only when:
   replicated `tables` UPDATE naming it, and neither advances nor compares
   the generation - upgrade every node holding a `tables` replica before any
   managed split or merge runs (quiesce split/merge during a rolling upgrade).
+
+<!-- BEGIN identity-open-refusal-native-prevote 2026-10-05 -->
+### 2026-10-05: open-time identity refusal, native pre-vote / check-quorum (owner ruling)
+
+**Closing condition (part a).** pre_vote and check_quorum on for every group the
+port opens is a required closing condition of this epic. It is no longer an
+optional follow-up. `RAFT_RS_GROUP_TUNING` in
+`src/raft/raft-rs-group-constants.js` is the one place, and `tuningOf` builds
+every core config from it. The disruptive-server requirement rests on
+raft-rs's own lease:
+- a replica that heard a leader within its election timeout ignores a
+  higher-term vote or pre-vote request;
+- a pre-vote never moves a term;
+- a leader that hears no quorum for an election timeout steps down.
+
+A transfer's election (MsgTimeoutNow, CAMPAIGN_TRANSFER) bypasses the lease.
+
+**Tick ownership.** Every opened replica is ticked, so no lease freezes.
+- A COMMITTED joiner opens with itself as a **learner** of C_j. O2 still
+  holds: it names itself. The core does not campaign it: raft-rs
+  `tick_election` returns before MsgHup while the replica is not promotable.
+- The applied AddNode that opens the participation gate is the entry that
+  makes it a voter.
+- Configuration entries at or below j are folded into C_j and not applied to
+  the core again. Without the fold, a replay could walk C_j through
+  configurations the group never held, or leave it with no voter.
+- The gate still refuses campaigns, proposals, and a tick of a gated core that
+  is promotable (only a record written before this change).
+- Founder deferrals and the durable-rejoin deferral stay host decisions,
+  bounded by `startElection()` in the same phase. The joiner deferral is
+  removed.
+- B0: `quest-records/identity-open-refusal-native-prevote/b0-gate-ticking-finding-2026-10-05.md`.
+
+**Open-time refusal (primary amnesia detector).** The rule lives in one place,
+the participation gate's opening admission (`openingWithoutRecordRefusal`).
+An opening under any bootstrap source (GENESIS, COMMITTED, DURABLE_RECORD) is
+refused when both hold:
+- the replica holds no durable raft record;
+- the opening host's authoritative row proves the identity existed before.
+
+The refusal is reseed-required and is held durably by the replica's lifecycle
+owner, before the core is entered.
+
+The prior-existence facts:
+- **Seed and message-group founders:** a SERVICES row for this replica on this
+  node in a non-empty startup admission. The seed registers founder rows only
+  after the founders opened, so a first boot has an empty admission.
+- **CREATE_REPLICA targets (provisioning GENESIS retries, stale COMMITTED
+  stamps):** the authoritative SERVICES row read before this create writes any
+  status. It names this node in SYNCING or ACTIVE, statuses the target writes
+  only after its port opened. An unreadable row defers the create.
+
+**The open-to-SYNCING window is closed (verifier N3, follow-up of
+2026-10-05).** raft-rs 0.7 learners grant votes and a GENESIS founder votes
+from birth, so a target that voted between its port open and its SYNCING row,
+then lost its disk, reopened with no fact and could vote again in the same
+term (reproduced on c7a942030 with the real core: two leaders in term 1). Now:
+- The participation gate has an "identity unrecorded" state. A port opened
+  with `IDENTITY_RECORDED` (a promise) drops every delivered envelope
+  unstepped (a lost message to its sender, never a typed refusal), enters the
+  core for a status read only (no tick, campaign, proposal, transfer or
+  probe) and reports `gateOpen` false.
+- `createReplicaAsync` hands that promise whenever its prior-existence read
+  found no SYNCING/ACTIVE row on this node. Only the durable acknowledgement
+  of the SYNCING write releases it (an event, never a timer). The write now
+  runs through the status owner's bounded retry; a write that ends without it
+  logs the spent wait, the create fails, and its failure path closes a port
+  that never stepped anything. A crash before the write means the core never
+  voted, so the reopening (no fact) is safe; a crash after it carries the
+  fact and is refused reseed-required.
+- The row-driven peer admission no longer admits PENDING/CREATING rows as
+  voters. A target becomes a voter on the row change that records its fact,
+  so no group counts a voter that cannot answer, and the services
+  partition's own SYNCING write never waits on the replica it records (the
+  formation-order deadlock the gate would otherwise create at services RF
+  1->2 and at a REPLACE into {a, b, c-dead}).
+- Seed founders take their fact from the seed phase, not this path: every
+  founder of a system partition is on the seed node, rows are registered
+  after the founders opened, and a partial first boot defers every founder
+  without a row (`assertBootstrapPartitionStorageAdmission`), so no founder
+  re-founds empty while a sibling remembers its vote.
+
+**Property 2, exactly.** Vote and pre-vote requests from a never-member or a
+removed ex-member never move a healthy leader's term: measured with the real
+core at term+5, single or looped every 5/15/30 ticks to the leader and to the
+followers, the term stays unchanged, the leader holds 100% of rounds and every
+proposal commits; a removed ex-member kept running for 1500 rounds moves no
+term. What it does NOT cover: FABRICATED higher-term leader traffic (a
+heartbeat or append from a non-member: Byzantine, or a transport bug) deposes
+its receiver exactly as in plain raft-rs (`become_follower` on a higher-term
+append/heartbeat/snapshot, independent of pre_vote and check_quorum). Looped
+at one election timeout to every member it keeps the group leaderless
+indefinitely. Refusing it host-side would lock out a legitimate new leader the
+receiver has not applied yet; Raft does not defend against it. It is a
+residual, not covered.
+
+**O2 (DECIDED 2026-10-05).** B1 represents the joiner in its own opening
+configuration as a LEARNER of C_j. The owner confirmed that "self as learner
+of C_j" satisfies O2: it is role establishment, which O2 allows ("fix the
+gate / role establishment, not the bootstrap membership convention").
+
+**Latent conditions and limits, stated plainly:**
+- The raft-rs runtime does no log compaction, so no snapshot can carry a
+  joiner past its AddNode. If compaction is added, the gate must also open
+  from the snapshot's ConfState; otherwise a promotable gated core has its
+  ticks refused (the old lock-out).
+- A legacy record with a promotable gated core keeps its ticks refused. That
+  is acceptable only because in-place upgrade is unsupported.
+- A once-opened replica whose row later reads FAILED is not read as having
+  existed (FAILED is also written for creates that never opened). Reaching
+  it needs the replica DB lost without a restart; recorded, not closed.
+- Message-group replicas created outside the seed carry no prior-existence
+  fact at all (the open-time rule covers seed message-group founders only);
+  the message-group create handler opens and starts the replica before its
+  row exists - the same N3 window shape (owner: message-group create
+  handler).
+- One producer still admits a voter without the row filter: the partition
+  init loop (`partition-service-raft-init-base.js`, bootstrap peers proposed
+  when the opening replica already leads, e.g. a restored sole voter).
+  Under check_quorum a not-yet-recorded voter costs the measured leaderless
+  window: RF 1->2 and a REPLACE into {a, b, c-dead} lose their leader while
+  it is closed (94 and 106 of 120 rounds) and elect on its release; RF 2->3
+  and 3->4 with every member live keep their leader.
+- An RF=1 replica created by CREATE_REPLICA no longer campaigns inside
+  `initialize()`: its gate is closed until the SYNCING write, so it elects
+  on its first election timeout after the release.
+
+**Live formations: what the next ones should and must not show** (production
+timing: 20 ms ticks; election timeout 1 s / 3.5 s / 6 s for replica index
+0/1/2, randomized up to 2x). Expect more terms and leader changes during cold
+formation than before; each spurious check_quorum step-down costs about
+3.5-7 s leaderless, because followers holding the lease ignore pre-votes until
+their own timeout. Watch: raft-rs "stepped down to follower since quorum is
+not active"; "ignored ... lease is not expired"; leader changes per group in
+the first 5 minutes; terms above about 10; no-leader deferrals of critical
+system partitions; the new "Replica identity record never became durable"
+warning. Must NEVER show: `reseed-required` at open for a first-boot founder
+or a first create; a gated joiner whose applied index freezes while its group
+advances; a replica that stays `identityRecorded: false` after its SYNCING
+row is durable; two leaders in one term.
+
+**Live-formation watch list after the identity follow-up (verifier
+verify-identity-4, 2026-10-05).** Should show: creates logging SYNCING then
+AddNode within about 1 s (event-driven); create->voter-ready of a few seconds,
+the same as base within noise; an RF1 partition's first leader 1-2 s after its
+SYNCING; no new spent 60 s voter-ready waits attributable to the admission
+filter; a joiner's self-hosted message group electing only after its STOPPED
+services rows are registered. Must NOT show: two leaders in one term;
+`IDENTITY_RECORD_WAIT_SPENT` in a healthy formation (any occurrence is the
+ack-loss wedge or its residue: capture the row and the authority-read
+errors); a replica stuck with `identityRecorded:false` after its SYNCING row
+is visible; `participation-gate-identity-unrecorded` refusals after release;
+reseed-required at open for a first create or a first join; a leaderless group
+whose ConfState names a FAILED or closed target (the FAILED_REPLICA cure must
+REMOVE a terminally failed ADD/REPLACE target); a services group leaderless
+after a seed restart during an ADD (I3-i); a message-group replica of a joiner
+that leads before its services row is durable.
+
+**The heartbeat hold stays as the second net.** P1, the local-log guard's
+commit-beyond-log hold, is unchanged.
+
+**Removed.** The host's non-member vote/pre-vote refusal (C1, 08f2cbb87) is
+removed. Three host-side patches of it each opened a new hole, the last a
+permanent lock-out (verdict round 2, B1). The owner ruled out a fourth patch
+and any host-side lease.
+
+**Residuals, stated plainly:**
+- Fabricated higher-term leader traffic (above): not covered.
+- `from` is unauthenticated, so a forger naming a member id is not covered.
+- A held replica has no recovery path until the fresh-identity ADD exists.
+- With a quorum held or unreachable, the leader now steps down (no leader,
+  term unchanged under pre-vote) instead of leading a group that cannot commit.
+<!-- END identity-open-refusal-native-prevote 2026-10-05 -->

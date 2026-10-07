@@ -8,7 +8,9 @@ import {
   isPartitionReplace,
 } from './operation-workflow-replace-owner.js';
 import {
-  admitReplaceTerminalFailure,
+  admitCreateTerminalFailure,
+  decideFailedCreateTargetCleanup,
+  revalidateCreateTerminalFailure,
 } from './operation-workflow-replace-terminal-admission.js';
 import {
   OperationWorkflowTransitionOrchestration,
@@ -18,7 +20,9 @@ import {
 } from './operation-workflow-terminal-reservation-release.js';
 import {
   TERMINAL_TRANSITION_REPAIR_CAUSE,
+  armFailedCreateCleanupRelease,
   armTerminalTransitionRepair,
+  recoverFailedCreateCleanupReleaseDebt,
 } from './operation-workflow-terminal-transition-repair.js';
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
@@ -26,6 +30,8 @@ import {
 import {
   releaseOperationLedgerSelfMoveHoldAfterTerminal,
 } from './operation-workflow-dispatch-ledger-self-move-gate.js';
+import {operationCarriesReplicaCreateAdmission} from
+  './replica-operation-create-admission-fields.js';
 
 const {
   ControlPlaneReadinessService,
@@ -46,6 +52,7 @@ const {
 
 const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
+const NO_CONCURRENT_CREATE_ADMISSION_WINNER = false;
 
 // completeOperation/failOperation report their typed transition outcome
 // ({committed, disposition}) so level-triggered callers (the recovery
@@ -59,8 +66,8 @@ const ALREADY_TERMINAL_TRANSITION_OUTCOME = Object.freeze({
   disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
 });
 
-// A failure of anything but a partition REPLACE: no D2 admission applies.
-const NON_REPLACE_FAILURE_ADMISSION = Object.freeze({
+// A failure no post-intent boundary applies to: written as it is.
+const UNBOUNDED_FAILURE_ADMISSION = Object.freeze({
   refused: false,
   persistOptions: Object.freeze({}),
 });
@@ -75,8 +82,37 @@ function applyFailureStepMetadata(failedStepEntry, options) {
   }
 }
 
+async function observeConcurrentCreateAdmissionWinner(
+  owner,
+  operation,
+  transitionOutcome,
+  options,
+) {
+  if (
+    options.deferWhenCreateAdmissionWins !== true ||
+    transitionOutcome?.disposition !==
+      REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED
+  ) {
+    return NO_CONCURRENT_CREATE_ADMISSION_WINNER;
+  }
+  const authoritativeOperation =
+    await owner.repository
+      .queryReplicaOperationPersistenceAuthorityOperation(operation);
+  if (
+    !authoritativeOperation ||
+    owner.repository.isOperationTerminal(authoritativeOperation) ||
+    !operationCarriesReplicaCreateAdmission(authoritativeOperation)
+  ) {
+    return NO_CONCURRENT_CREATE_ADMISSION_WINNER;
+  }
+  return authoritativeOperation;
+}
+
 class OperationWorkflowTransitionPersistence
   extends OperationWorkflowTransitionOrchestration {
+  recoverFailedCreateCleanupReleaseDebt() {
+    return recoverFailedCreateCleanupReleaseDebt(this);
+  }
   /**
    * Claim one priority control-plane operation for dispatch without relying on
    * a transition-scoped distributed transaction. The claim remains single-
@@ -357,6 +393,7 @@ class OperationWorkflowTransitionPersistence
       operation.completedAt !== null &&
       operation.completedAt !== undefined
     ) {
+      armFailedCreateCleanupRelease(this, operation);
       return ALREADY_TERMINAL_TRANSITION_OUTCOME;
     }
     // R-1a (quest replace-source-removal-owner): every success edge of a
@@ -470,6 +507,7 @@ class OperationWorkflowTransitionPersistence
     this.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
       operation,
     });
+    armFailedCreateCleanupRelease(this, operation);
 
     try {
       this.logger.info(METRICS_LOG_TAG.REBALANCE_OPERATION, {
@@ -485,36 +523,59 @@ class OperationWorkflowTransitionPersistence
   }
 
   /**
-   * D2: after a partition REPLACE's DURABLE removal intent, only target
-   * death with the source still a voter may end it FAILED; every
-   * elapsed-time or heuristic failure is refused (typed) by failOperation,
-   * and logged here. An admitted REPLACE failure carries the durable step it
-   * was admitted against, for the terminal write's CAS.
+   * The one post-intent no-fail guard of a create (D2; M2): after a
+   * partition REPLACE's DURABLE removal intent only target death with the
+   * source still a voter may end it FAILED; after a partition ADD's target
+   * went live (its authoritative row ACTIVE) nothing may - it is completed
+   * instead. Every elapsed-time or heuristic failure past the intent is
+   * refused (typed) by failOperation, and logged here. An admitted REPLACE
+   * failure carries the durable step it was admitted against, for the
+   * terminal write's CAS.
    * @param {Object} operation
    * @param {string} errorMessage
    * @param {Object} options
-   * @return {Promise<Object>} Frozen {refused, persistOptions}.
+   * @return {Promise<Object>} Frozen {refused, persistOptions,
+   *   completeInstead}.
    */
   async admitOperationFailure(operation, errorMessage, options) {
-    if (!isPartitionReplace(operation)) {
-      return NON_REPLACE_FAILURE_ADMISSION;
-    }
-    const admission = await admitReplaceTerminalFailure(
+    const admission = await admitCreateTerminalFailure(
       this, operation, options);
     if (admission.admitted) {
-      return Object.freeze({refused: false, persistOptions: {
-        expectedWorkflowStep: admission.expectedWorkflowStep}});
+      const terminalAdmission = admission.requiresRevalidation === true ?
+        () => revalidateCreateTerminalFailure(
+          this,
+          operation,
+          admission,
+          options,
+        ) : undefined;
+      return admission.expectedWorkflowStep === null ?
+        Object.freeze({
+          ...UNBOUNDED_FAILURE_ADMISSION,
+          persistOptions: {terminalAdmission},
+          stepMetadata: admission.stepMetadata,
+        }) :
+        Object.freeze({refused: false, persistOptions: {
+          expectedWorkflowStep: admission.expectedWorkflowStep,
+          terminalAdmission},
+        stepMetadata: admission.stepMetadata});
     }
     this.logger.warn(
       REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILURE_REFUSED_AFTER_INTENT,
       {
         operationId: operation.operationId,
+        type: operation.type,
         partitionId: operation.partitionId,
-        workflowStep: admission.expectedWorkflowStep,
+        workflowStep: admission.expectedWorkflowStep ??
+          operation.workflowStep,
         errorMessage: this.normalizeErrorMessage(errorMessage, null),
       },
     );
-    return Object.freeze({refused: true, persistOptions: {}});
+    return Object.freeze({refused: true, persistOptions: {},
+      completeInstead: admission.completeInstead, stepMetadata: null});
+  }
+
+  async decideFailedCreateTargetCleanup(operation) {
+    return decideFailedCreateTargetCleanup(this, operation);
   }
 
   /**
@@ -537,7 +598,8 @@ class OperationWorkflowTransitionPersistence
     const failureAdmission =
       await this.admitOperationFailure(operation, errorMessage, options);
     if (failureAdmission.refused) {
-      return buildReplaceFailureRefusal();
+      return failureAdmission.completeInstead ?
+        this.completeOperation(operation) : buildReplaceFailureRefusal();
     }
     const normalizedError = this.normalizeErrorMessage(
       errorMessage,
@@ -563,7 +625,13 @@ class OperationWorkflowTransitionPersistence
       previousStep,
       now,
     );
-    applyFailureStepMetadata(failedStepEntry, options);
+    applyFailureStepMetadata(failedStepEntry, {
+      ...options,
+      stepMetadata: {
+        ...(options.stepMetadata || {}),
+        ...(failureAdmission.stepMetadata || {}),
+      },
+    });
     const projectedOperation = {
       ...operation,
       workflowStep: WORKFLOW_STEP.FAILED,
@@ -592,12 +660,18 @@ class OperationWorkflowTransitionPersistence
       operation.errorMessage = normalizedError;
     };
 
+    const terminalPersistOptions = {
+      ...failureAdmission.persistOptions,
+      ...(options.requireCreateAdmissionAbsent === true ?
+        {requireCreateAdmissionAbsent: true} :
+        {}),
+    };
     const persistFn = async () => {
       return this.repository.persistOperationUpdate(
         projectedOperation,
         {
           ...this.buildOperationTransitionPersistOptions(),
-          ...failureAdmission.persistOptions,
+          ...terminalPersistOptions,
           terminalTransition: true,
           returnDisposition: true,
         },
@@ -614,13 +688,27 @@ class OperationWorkflowTransitionPersistence
           await this.confirmCommittedTransitionPersistence(
             projectedOperation,
             {terminalTransitionRepair: true,
-              repairPersistOptions: failureAdmission.persistOptions},
+              repairPersistOptions: terminalPersistOptions},
           );
         },
       },
     );
 
     if (!transitionOutcome?.committed) {
+      const createAdmissionWinner =
+        await observeConcurrentCreateAdmissionWinner(
+          this,
+          operation,
+          transitionOutcome,
+          options,
+        );
+      if (createAdmissionWinner) {
+        return Object.freeze({
+          ...transitionOutcome,
+          createAdmissionWon: true,
+          operation: createAdmissionWinner,
+        });
+      }
       // Same fail-closed release gate as completeOperation: never release
       // on the unresolved-divergence arm (audit findings 3+11).
       await this.resolveNotCommittedTerminalTransition(
@@ -628,7 +716,7 @@ class OperationWorkflowTransitionPersistence
         projectedOperation,
         transitionOutcome,
         WORKFLOW_STEP.FAILED,
-        failureAdmission.persistOptions,
+        terminalPersistOptions,
       );
       return transitionOutcome;
     }

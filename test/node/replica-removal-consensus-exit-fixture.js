@@ -162,6 +162,8 @@ function createRemovalSourceHandler({cluster, replicaId, partitionId, nodeId,
     // authority; without it the owner refuses every lifecycle CAS.
     replicaIdentity: initialRow.replica_id,
     groupId: initialRow.group_id,
+    cleanupToken: initialRow.cleanup_token,
+    createAttemptToken: initialRow.create_attempt_token,
     createdAt: initialRow.created_at,
     durableVersionColumn: 'state_entered_at',
     durableVersion: initialRow.state_entered_at,

@@ -207,7 +207,9 @@ test('drain order: a refused transfer is refused on the state after the ' +
 
 // Semantic leg for the role, term and leader input: B's vote request of a
 // higher term demotes A in the request's own turn, and A then knows no
-// leader, so raft-rs would drop the MsgTransferLeader.
+// leader, so raft-rs would drop the MsgTransferLeader. The request is B's
+// transfer election (CAMPAIGN_TRANSFER): under check_quorum the only
+// higher-term vote request a leader in its lease steps.
 test('drain order: a higher-term message pending at the request demotes the ' +
   'leader first, and the request is refused, never accepted', async () => {
   const driver = formedGroup('order-higher-term');
@@ -215,7 +217,8 @@ test('drain order: a higher-term message pending at the request demotes the ' +
     const termBefore = driver.status(A).term;
     // Read before the hand-over: a status read drains delivered messages.
     assert.equal(driver.leads(A), true, 'precondition: A leads');
-    driver.port(B).campaign();
+    await driver.port(A).transferLeadership(namedSuccessor(B));
+    driver.deliverOnly([B]);
     const delivered = driver.stepUndrained(A);
     assert.ok(delivered > 0, 'precondition: the vote request is pending');
     const {answer, entries} = await turn(driver, () =>

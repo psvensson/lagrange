@@ -193,7 +193,7 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
   );
 
   await t.test(
-    'removes terminal failed replace targets that still occupy placement',
+    'does not infer cleanup authority from terminal REPLACE status alone',
     async (t) => {
       const TEST_ENTITY_ID = 'sql_transaction_participants-p1';
       const TEST_TARGET_REPLICA_COUNT = 3;
@@ -246,23 +246,13 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
         degraded: false,
       });
 
-      t.same(
-        moves,
-        [
-          {
-            type: REBALANCER_MOVE_TYPE.REMOVE,
-            replicaId: TEST_STALE_TARGET_REPLICA_ID,
-            nodeId: TEST_STALE_TARGET_NODE_ID,
-            reason: MOVE_REASON.REPLICA_FAILED,
-          },
-        ],
-        'failed replace target cleanup should not require a failed service status',
-      );
+      t.same(moves, [],
+        'terminal operation status alone cannot authorize physical cleanup');
     },
   );
 
   await t.test(
-    'does not duplicate terminal failed target cleanup for active off-target replicas',
+    'keeps active off-target removal under ordinary topology ownership',
     async (t) => {
       const TEST_ENTITY_ID = 'sql_transaction_participants-p1';
       const TEST_TARGET_REPLICA_COUNT = 3;
@@ -322,10 +312,11 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
             type: REBALANCER_MOVE_TYPE.REMOVE,
             replicaId: TEST_STALE_TARGET_REPLICA_ID,
             nodeId: TEST_STALE_TARGET_NODE_ID,
-            reason: MOVE_REASON.REPLICA_FAILED,
+            reason: MOVE_REASON.NODE_NOT_IN_TARGET,
+            standaloneSafe: true,
           },
         ],
-        'active stale replace targets should only produce one canonical failed cleanup remove',
+        'an ACTIVE row may be retired by ordinary topology without borrowing failed-create cleanup authority',
       );
     },
   );

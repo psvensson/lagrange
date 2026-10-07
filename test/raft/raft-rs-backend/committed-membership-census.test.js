@@ -133,6 +133,7 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/rebalancer/replica-operation-repository-row-methods.js',
     'src/node/replica-lifecycle-manager.js',
     // The target: request intake, validation, the partition, the port.
+    'src/node/replica-handler-create-admission-methods.js',
     'src/node/replica-handler-create-methods.js',
     'src/node/replica-handler-committed-membership-methods.js',
     'src/node/replica-handler-runtime-metadata-methods.js',

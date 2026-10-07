@@ -9,6 +9,7 @@ import {
 import {
   SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD,
 } from './spread-cure-transition-authorization.js';
+import {ReplicaOperationField} from './replica-operation-constants.js';
 import {
   CONTROL_PLANE_MUTATION_PRIORITY_RECOVERY_AUTHORITY_FIELD,
   hasPriorityRecoveryOperationCreationAuthority,
@@ -62,6 +63,8 @@ function buildCoordinatorOperationRequest(move, context, operationType) {
     sourceNodeId: move.sourceNodeId,
     moveReason: move.reason,
     enforceConcurrentOperationBudget: true,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+      move[ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION],
   };
 }
 

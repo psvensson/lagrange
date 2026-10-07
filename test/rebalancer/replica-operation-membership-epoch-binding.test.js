@@ -125,6 +125,7 @@ const ENCODE_OR_SCHEMA_PASSTHROUGH = Object.freeze([
   // critical-spread-transition-authority-carry).
   'src/rebalancer/move-planner-move-calculation-methods.js',
   'src/rebalancer/replica-operation-constants.js',
+  'src/rebalancer/replica-operation-repository-constants.js',
   'src/rebalancer/replica-operation-repository.js',
   'src/rebalancer/rebalance-coordinator-shared.js',
   'src/rebalancer/replica-operation-repository-mutation-row-methods.js',
@@ -234,6 +235,14 @@ function insertMalformedDurableRow(db, operationId, partitionId, rawEpoch) {
     MALFORMED_ENTITY_TYPE,
     partitionId,
     rawEpoch,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
   );
 }
 

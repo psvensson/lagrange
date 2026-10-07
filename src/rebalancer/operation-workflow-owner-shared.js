@@ -80,6 +80,7 @@ import {
   ReplicaStatus,
   WORKFLOW_STEP_TO_STATUS,
   OperationType,
+  getOperationMetadataObject,
   getWorkflowSteps,
   isCoordinatorOwnedOperationType,
 } from './replica-status.js';
@@ -254,6 +255,7 @@ const OPERATION_SINGLE_FLIGHT_SCOPE = Object.freeze({
 const OPERATION_OWNER_ACTION = Object.freeze({
   DISPATCH: 'dispatch',
   EXECUTE: 'execute',
+  FAIL: 'fail',
 });
 
 const EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS = Object.freeze({
@@ -573,6 +575,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   TOPOLOGY_OPERATOR_WITNESS_STEP_FIELD,
   OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
+  getOperationMetadataObject,
   PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
   PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
   PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,

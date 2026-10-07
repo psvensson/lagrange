@@ -83,8 +83,10 @@ async () => {
     const joiner = founders.node('g-t').readStatus();
     assert.equal(joiner.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(joiner.gateOpen, false);
-    assert.ok(joiner.confState.voters.includes(joiner.peerId),
-      'O2: the joiner names itself in its bootstrap configuration');
+    assert.ok(joiner.confState.learners.includes(joiner.peerId) &&
+      !joiner.confState.voters.includes(joiner.peerId),
+    'O2: the joiner names itself in its bootstrap configuration, as a ' +
+      'learner until its AddNode is applied');
   } finally {
     founders.dispose();
   }

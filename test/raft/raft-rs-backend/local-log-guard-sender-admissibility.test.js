@@ -14,16 +14,23 @@
 //       beyond its log, is refused and holds nothing;
 //   A3  a member's heartbeat at the current term with a commit inside the
 //       receiver's log is stepped (no refusal);
-//   A4  a vote request at a higher term from a raft id outside the
-//       receiver's configuration does not move the term or the role of a
-//       leader or of a follower that has one (before: the leader stepped
-//       down to the forger's term); a member's is stepped as raft decides;
+//   A4  a vote or pre-vote request at a higher term from a raft id outside
+//       the receiver's configuration is stepped - the host refuses no vote
+//       request - and raft-rs itself, with pre_vote and check_quorum on,
+//       ignores it: neither a leader nor a follower that heard it within its
+//       election timeout moves its term or role, and nothing is recorded
+//       against the sender (the native disruptive-server rule replaced the
+//       host's non-member refusal, owner ruling 2026-10-05); a member's
+//       request in lease is ignored the same way, as raft decides;
 //   A5  the membership-transition race the binding direction requires
 //       (section 6): a voter added while one follower is partitioned, the
 //       old leader then lost; the lagging follower, which does not yet hold
 //       the new voter in its configuration, heals and the group converges -
 //       one leader, the new configuration everywhere, a fresh write
-//       committed on all three survivors.
+//       committed on all three survivors; with the new voter timing out
+//       first, the lagging follower ignores it natively while its lease
+//       from the lost leader runs (no host refusal) and the group converges
+//       once the follower's own ticks expire that lease.
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -35,8 +42,11 @@ import {
   lifecycleRow,
   peerIdsOf,
 } from './identity-reuse-harness.js';
-import {RAFT_OPERATION, RAFT_OPERATION_OUTCOME} from
-  '../../../src/raft/raft-operation-port-constants.js';
+import {
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION,
+  RAFT_OPERATION_OUTCOME,
+} from '../../../src/raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
@@ -95,17 +105,22 @@ function heartbeat(ids, sender, recipient, term, commit) {
     to: ids[recipient], term: String(term), commit: String(commit)};
 }
 
-// A group whose leader is `b` at term 2: `a` led term 1 and was cut off.
+// A group whose leader is `b` at term 2: `a` led term 1 and handed its
+// leadership to `b` (a transfer's election bypasses the followers'
+// check-quorum lease, as raft-rs defines it; an election timed out by `b`
+// alone would be ignored by `c`, which heard `a` and is not ticked here).
 function secondTermCluster(prefix) {
   const cluster = formedCluster(prefix,
     [`${prefix}-a`, `${prefix}-b`, `${prefix}-c`], FORMED_ENTRIES);
-  cluster.isolate(`${prefix}-a`);
+  const transfer = cluster.node(`${prefix}-a`).transferLeadership({
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+    replicaIdentity: `${prefix}-b`});
+  assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    `setup: the transfer was refused: ${JSON.stringify(transfer)}`);
   cluster.tickers = [`${prefix}-b`];
   assert.ok(cluster.settle(() => cluster.node(`${prefix}-b`).readStatus()
-    .role === LEADER, {rounds: SETTLE_ROUNDS}), 'setup: b was not elected');
-  cluster.heal(`${prefix}-a`);
-  assert.ok(cluster.settle(() => cluster.node(`${prefix}-a`).readStatus()
-    .role !== LEADER, {rounds: SETTLE_ROUNDS}), 'setup: a did not step down');
+    .role === LEADER && cluster.node(`${prefix}-a`).readStatus().role !==
+    LEADER, {rounds: SETTLE_ROUNDS}), 'setup: b was not elected');
   return cluster;
 }
 
@@ -178,38 +193,45 @@ test('A3: a member heartbeat at the current term with a commit inside the ' +
   }
 });
 
-function voteRequest(ids, sender, recipient, status) {
-  return {msgType: RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE, from: sender,
+function voteRequest(ids, sender, recipient, status, msgType) {
+  return {msgType, from: sender,
     to: ids[recipient], term: String(status.term + HIGHER),
     logTerm: String(status.term + HIGHER),
     index: String(BigInt(status.commitIndex) + BEYOND)};
 }
 
-test('A4: a higher-term vote request from outside the configuration moves ' +
-  'neither a leader nor a follower that has one; a member is stepped',
-async () => {
+const VOTE_REQUEST_TYPES = Object.freeze([
+  RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE, RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE]);
+
+test('A4: a higher-term vote or pre-vote request from outside the ' +
+  'configuration is stepped and raft-rs ignores it (pre_vote + ' +
+  'check_quorum): neither a leader nor a follower in lease moves; a ' +
+  'member in lease is ignored the same way', async () => {
   const cluster = formedCluster('a4', ['a4-a', 'a4-b', 'a4-c'],
     FORMED_ENTRIES);
   try {
     const ids = peerIdsOf(cluster);
-    for (const recipient of ['a4-a', 'a4-b']) {
-      const before = cluster.node(recipient).readStatus();
-      const steps = await deliverAlone(cluster, recipient, envelopeTo(
-        cluster.partitionId, ids[recipient],
-        voteRequest(ids, UNKNOWN_SENDER, recipient, before)));
-      assertRefusedNotHeld(cluster, recipient, UNKNOWN_SENDER,
-        RAFT_RS_LOCAL_LOG_REFUSAL.VOTE_REQUEST_OUTSIDE_CONFIGURATION, steps);
-      const after = cluster.node(recipient).readStatus();
-      assert.equal(after.term, before.term, `${recipient} term moved`);
-      assert.equal(after.role, before.role, `${recipient} role moved`);
+    for (const msgType of VOTE_REQUEST_TYPES) {
+      for (const [recipient, sender] of [['a4-a', UNKNOWN_SENDER],
+        ['a4-b', UNKNOWN_SENDER], ['a4-a', ids['a4-c']],
+        ['a4-b', ids['a4-c']]]) {
+        const before = cluster.node(recipient).readStatus();
+        const steps = await deliverAlone(cluster, recipient, envelopeTo(
+          cluster.partitionId, ids[recipient],
+          voteRequest(ids, sender, recipient, before, msgType)));
+        assert.equal(steps, 1,
+          `${recipient}: the ${msgType} request was not stepped`);
+        assert.equal(refusalOf(cluster, recipient, sender), null,
+          `${recipient}: the host refused a vote request`);
+        const after = cluster.node(recipient).readStatus();
+        assert.equal(after.term, before.term,
+          `${recipient} term moved on ${msgType} from ${sender}`);
+        assert.equal(after.role, before.role,
+          `${recipient} role moved on ${msgType} from ${sender}`);
+        assert.equal(after.leaderId, before.leaderId,
+          `${recipient} leader moved on ${msgType} from ${sender}`);
+      }
     }
-    const leader = cluster.node('a4-a').readStatus();
-    const steps = await deliverAlone(cluster, 'a4-a', envelopeTo(
-      cluster.partitionId, ids['a4-a'],
-      voteRequest(ids, ids['a4-c'], 'a4-a', leader)));
-    assert.equal(steps, 1, 'a member vote request was not stepped');
-    assert.equal(cluster.node('a4-a').readStatus().term,
-      leader.term + HIGHER, 'raft no longer decides a member vote request');
   } finally {
     cluster.dispose();
   }
@@ -282,14 +304,13 @@ test('A5: a voter added while a follower is partitioned, the old leader ' +
 });
 
 test('A5: the same race with the new voter timing out first - the lagging ' +
-  'follower refuses it while it still follows the lost leader, and the ' +
-  'group converges once the follower\'s own timer clears that leader',
-() => {
+  'follower ignores it natively while its lease from the lost leader runs ' +
+  '(no host refusal), and the group converges once the follower\'s own ' +
+  'ticks expire that lease', () => {
   transitionRace({first: ['a5-d'], firstRounds: SETTLE_ROUNDS,
     firstCheck: (cluster, record) => {
-      assert.equal(record?.reason,
-        RAFT_RS_LOCAL_LOG_REFUSAL.VOTE_REQUEST_OUTSIDE_CONFIGURATION,
-        `the race did not reach the refusal: ${JSON.stringify(record)}`);
+      assert.equal(record, null,
+        `the host refused the new voter: ${JSON.stringify(record)}`);
       assert.equal(cluster.node('a5-c').readStatus().role, 'follower');
     }});
 });

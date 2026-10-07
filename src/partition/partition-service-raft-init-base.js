@@ -9,6 +9,7 @@ import {
 const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
+  isBootstrapPeerAdmissible,
   reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
 } from './partition-service-raft-peer-cache-reconciliation.js';
@@ -429,10 +430,16 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
           this.bootstrapMembership,
       }),
+      [RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED]: this.identityExisted,
+      ...(this.identityRecorded === null ? {} : {
+        [RAFT_OPERATION_PORT_REQUEST.IDENTITY_RECORDED]:
+          this.identityRecorded,
+      }),
       [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: this.db,
       [RAFT_OPERATION_PORT_REQUEST.TIMING]: this.raftTimingConfig,
       [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(this),
-      [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]: this.deferElection,
+      [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]:
+        this.defersElectionScheduling(),
       [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: (peerAddress, packet) =>
         this.transport.deliver(
           peerAddress,
@@ -477,7 +484,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         );
       },
     );
-    if (this.deferElection && this.raft) {
+    if (this.defersElectionScheduling() && this.raft) {
       this.raft.stopScheduling();
       this.logger.debug(
         PARTITION_SERVICE_LOG_MSG.STOPPED_SCHEDULING_FOR_DEFERRED_ELECTION, {
@@ -488,24 +495,16 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     // A demotion the port announces is the core's: a lone leader whose group
     // becomes unusable is announced without a role and must stop leading
     // (its writes are refused, not proposed into a broken group). Only a
-    // joining learner's catch-up keeps its learner role.
+    // joining learner's catch-up keeps its learner role. Its ticks keep
+    // running: the core decides whether it may campaign (a learner never
+    // does), and a replica whose ticks stop keeps a stale leader lease.
     const shouldIgnoreDemotionEvent = (eventName) => {
       const isJoiningLearner =
         this.isJoiningExistingGroup === true &&
         isCatchupLearnerRaftRole(this.role);
-      if (!isJoiningLearner) {
-        return false;
-      }
-      if (
-        eventName !== PARTITION_SERVICE_ROLE.FOLLOWER &&
-        eventName !== PARTITION_SERVICE_ROLE.CANDIDATE
-      ) {
-        return false;
-      }
-      if (this.raft) {
-        this.raft.stopScheduling();
-      }
-      return true;
+      return isJoiningLearner && (
+        eventName === PARTITION_SERVICE_ROLE.FOLLOWER ||
+        eventName === PARTITION_SERVICE_ROLE.CANDIDATE);
     };
     if (this.isJoiningExistingGroup) {
       this.role = RaftRole.LEARNER;
@@ -529,8 +528,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     for (const peerId of this.replicaIds) {
       // A committed member the address book cannot place yet resolves once
       // discovery catches up; the bootstrap membership, not the address
-      // book, names the members (owner decision O1).
-      const peerAddress = peerId === this.replicaId ? null :
+      // book, names the members (owner decision O1). A peer whose row has
+      // not recorded its fact is admitted only on that row change (F2).
+      const peerAddress = peerId === this.replicaId ||
+        !isBootstrapPeerAdmissible(this, peerId) ? null :
         this.resolveKnownPeerAddress(peerId);
       if (peerAddress !== null) {
         if (!this.suppressLifecycleLogs) {
@@ -613,6 +614,18 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
     });
+  }
+  /**
+   * Whether this replica's tick scheduling waits for startElection(): a
+   * founder's or a restored voter's deferred election does; a joiner's does
+   * not - its core is a learner of its own configuration until the AddNode
+   * that admits it is applied, so it cannot campaign, and it is ticked from
+   * its opening so its election timer never freezes.
+   * @return {boolean}
+   * @private
+   */
+  defersElectionScheduling() {
+    return this.deferElection === true && !this.isJoiningExistingGroup;
   }
   /**
    * Refuse initialization when the port opened the group held by its host

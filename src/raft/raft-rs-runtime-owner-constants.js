@@ -177,11 +177,6 @@ const RAFT_RS_LOCAL_LOG_REFUSAL = Object.freeze({
   // is refused and never holds it (M5).
   UNADMITTED_COMMIT_BEYOND_LOCAL_LOG:
     'unadmitted-sender-commit-beyond-local-log',
-  // A higher-term vote or pre-vote request from a raft id outside this
-  // replica's configuration while it leads or follows a leader (Raft's
-  // disruptive-server rule, restricted to non-members).
-  VOTE_REQUEST_OUTSIDE_CONFIGURATION:
-    'vote-request-from-outside-configuration',
   // A forwarded MsgTransferLeader reaching a follower that knows a leader at
   // the message's term (raft.rs send() traps re-forwarding it with its term
   // set).

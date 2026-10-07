@@ -361,6 +361,8 @@ const OPERATION_METADATA_KEY = Object.freeze({
   // Decoded, evaluated and stamped by
   // spread-cure-transition-authorization.js.
   CURE_TRANSITION_AUTHORIZATION: 'cureTransitionAuthorization',
+  FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION:
+    'failedCreateTargetLifecyclePrecondition',
 });
 
 function quoteSqlValue(value) {

@@ -222,8 +222,10 @@ const RATCHET_TARGETS = [
     // on the checker's hint for the merged tree.
     // 2026-10-05: merge of quest/one-spread-authority keeps the lower values,
     // then tightened 708/26738 -> 706/26671 on the checker's hint.
-    baselineCloneGroupCount: 706,
-    baselineDuplicatedLineCount: 26671,
+    // Identity's shared routed-CREATE fixtures tighten the combined test
+    // surface to the measured 697 groups / 26385 lines.
+    baselineCloneGroupCount: 697,
+    baselineDuplicatedLineCount: 26385,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

@@ -74,6 +74,7 @@ function withoutPeer(membership, peerId) {
   return {
     ...membership,
     voters: membership.voters.filter((id) => id !== String(peerId)),
+    learners: membership.learners.filter((id) => id !== String(peerId)),
   };
 }
 
@@ -141,13 +142,15 @@ async () => {
       'setup: the source is a committed voter of the group');
 
     // (a) The target's bootstrap membership is the committed configuration
-    // (plus the target itself, the joiner's own pending admission).
+    // (plus the target itself as a learner, the joiner's own pending
+    // admission: not a voter until its AddNode is applied).
     const {service: replaceTarget} = await buildReplaceTarget(harness, {
       source, target, founders});
     const targetPeerId = statusOf(replaceTarget).peerId;
     const bootstrap = committedMembership(replaceTarget);
-    assert.ok(bootstrap.voters.includes(String(targetPeerId)),
-      'the target names itself, as every joiner does');
+    assert.ok(bootstrap.learners.includes(String(targetPeerId)) &&
+      !bootstrap.voters.includes(String(targetPeerId)),
+    'the target names itself as a learner, as every joiner does');
     assert.deepEqual(withoutPeer(bootstrap, targetPeerId),
       committedAtCreation,
       '(a) the target bootstrap equals the committed configuration');

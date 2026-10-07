@@ -10,21 +10,25 @@ import {classifyControlPlaneMutationResult} from
 import {
   SERVICE_TYPE,
   TABLES,
+  WORKFLOW_STEP,
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
+import {
+  isFailedCreateRemoveToken,
+  parseFailedCreateRemoveOperationId,
+} from '../rebalancer/failed-create-cleanup-token.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {
+  REPLICA_CLEANUP_AUTHORITY_KIND,
+  REPLICA_CLEANUP_ERROR_CODE,
+  REPLICA_CLEANUP_LOG_MSG,
+} from './replica-cleanup-constants.js';
 import {observeAuthoritativeReplicaLifecycle} from
   './replica-state-machine-lifecycle-observation.js';
 
 const REPLICA_CLEANUP_SERVICE_TYPE = SERVICE_TYPE.PARTITION_CLEANUP;
-const REPLICA_CLEANUP_STATUS = 'cleanup_owned';
 const REPLICA_CLEANUP_CRITICAL_WORK = 'critical';
 const REPLICA_CLEANUP_STARTUP_SNAPSHOT_ID = 'startup-snapshot';
-const REPLICA_CLEANUP_ERROR_CODE = Object.freeze({
-  CLEANUP_IN_PROGRESS: 'CLEANUP_IN_PROGRESS',
-  CLEANUP_IDENTITY_CONFLICT: 'CLEANUP_IDENTITY_CONFLICT',
-  CLEANUP_OWNERSHIP_CHANGED: 'CLEANUP_OWNERSHIP_CHANGED',
-  CLEANUP_OWNER_DEFERRED: 'CLEANUP_OWNER_DEFERRED',
-});
 const REPLICA_CLEANUP_ACQUIRE_OUTCOME = Object.freeze({
   ACQUIRED: 'acquired',
   DEFERRED: 'deferred',
@@ -34,7 +38,11 @@ const REPLICA_CLEANUP_ACQUIRE_OUTCOME = Object.freeze({
 
 function isCleanupTombstoneRow(row) {
   return isPartitionCleanupServiceRow(row) &&
-    row?.status === REPLICA_CLEANUP_STATUS;
+    [
+      REPLICA_CLEANUP_AUTHORITY_KIND.OWNED,
+      REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE,
+    ]
+      .includes(row?.status);
 }
 
 function cleanupAuthorityFromRow(row) {
@@ -42,7 +50,7 @@ function cleanupAuthorityFromRow(row) {
       typeof row.cleanup_token !== 'string' ||
       !Number.isFinite(row.updated_at)) return false;
   return Object.freeze({
-    kind: REPLICA_CLEANUP_STATUS,
+    kind: row.status,
     nodeId: row.node_id,
     ownerToken: row.cleanup_token,
     partitionId: row.partition_id,
@@ -51,12 +59,17 @@ function cleanupAuthorityFromRow(row) {
   });
 }
 
-function rowMatchesCleanupAuthority(row, authority) {
-  return isCleanupTombstoneRow(row) &&
-    row.service_id === authority?.replicaId &&
+function rowMatchesCleanupIdentity(row, authority) {
+  return row.service_id === authority?.replicaId &&
     row.partition_id === authority?.partitionId &&
     row.node_id === authority?.nodeId &&
-    row.cleanup_token === authority?.ownerToken &&
+    row.cleanup_token === authority?.ownerToken;
+}
+
+function rowMatchesCleanupAuthority(row, authority) {
+  return isCleanupTombstoneRow(row) &&
+    rowMatchesCleanupIdentity(row, authority) &&
+    row.status === authority?.kind &&
     row.updated_at === authority?.updatedAt;
 }
 
@@ -98,6 +111,7 @@ class ReplicaCleanupTombstoneOwner {
     this.observe = options.observe;
     this.now = typeof options.now === 'function' ? options.now : Date.now;
     this.randomUUID = options.randomUUID || randomUUID;
+    this.logger = options.logger || console;
   }
 
   async observeReplica(replicaId) {
@@ -117,7 +131,7 @@ class ReplicaCleanupTombstoneOwner {
       group_id: null,
       replica_id: null,
       raft_role: null,
-      status: REPLICA_CLEANUP_STATUS,
+      status: REPLICA_CLEANUP_AUTHORITY_KIND.OWNED,
       state_entered_at: null,
       previous_state: null,
       address: null,
@@ -176,8 +190,8 @@ class ReplicaCleanupTombstoneOwner {
       TABLES.SERVICES,
       'SELECT service_id, service_type, node_id, partition_id, status, ' +
         'cleanup_token, updated_at FROM services WHERE service_type = ? ' +
-        'AND status = ? AND node_id = ?',
-      [REPLICA_CLEANUP_SERVICE_TYPE, REPLICA_CLEANUP_STATUS, nodeId],
+        'AND node_id = ?',
+      [REPLICA_CLEANUP_SERVICE_TYPE, nodeId],
       {
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
@@ -213,7 +227,9 @@ class ReplicaCleanupTombstoneOwner {
   }
 
   async takeoverRemoving(removingAuthority, reason) {
-    const ownerToken = this.randomUUID();
+    const removalToken = removingAuthority?.replicaState?.cleanupToken;
+    const ownerToken = isFailedCreateRemoveToken(removalToken) ?
+      removalToken : this.randomUUID();
     const updatedAt = this.now();
     const whereClause = {
       service_id: removingAuthority.replicaState.serviceId,
@@ -226,7 +242,7 @@ class ReplicaCleanupTombstoneOwner {
     };
     const data = {
       service_type: REPLICA_CLEANUP_SERVICE_TYPE,
-      status: REPLICA_CLEANUP_STATUS,
+      status: REPLICA_CLEANUP_AUTHORITY_KIND.OWNED,
       replica_id: null,
       group_id: null,
       raft_role: null,
@@ -277,6 +293,99 @@ class ReplicaCleanupTombstoneOwner {
       rowMatchesCleanupAuthority(observation.row, authority);
   }
 
+  async markComplete(authority, completion = {}) {
+    if (completion.artifactsAbsent !== true ||
+        authority?.kind !== REPLICA_CLEANUP_AUTHORITY_KIND.OWNED ||
+        !isFailedCreateRemoveToken(authority.ownerToken) ||
+        !await this.requireCurrent(authority)) return false;
+    const updatedAt = Math.max(this.now(), authority.updatedAt + 1);
+    try {
+      await this.gateway.submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.SERVICES,
+        whereClause: {
+          service_id: authority.replicaId,
+          service_type: REPLICA_CLEANUP_SERVICE_TYPE,
+          partition_id: authority.partitionId,
+          node_id: authority.nodeId,
+          status: authority.kind,
+          cleanup_token: authority.ownerToken,
+          updated_at: authority.updatedAt,
+        },
+        data: {
+          status: REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE,
+          updated_at: updatedAt,
+        },
+      }, {
+        allowCoalescing: false,
+        coalescingKey: `services:${authority.replicaId}:cleanup-complete:` +
+          authority.ownerToken,
+        deliveryPriority: REPLICA_CLEANUP_CRITICAL_WORK,
+        workClass: REPLICA_CLEANUP_CRITICAL_WORK,
+        skipCacheWait: true,
+      });
+    } catch (error) {
+      this.logger.warn(REPLICA_CLEANUP_LOG_MSG.COMPLETE_ACK_UNCERTAIN, {
+        replicaId: authority.replicaId,
+        error: String(error),
+      });
+    }
+    const observation = await this.observeReplica(authority.replicaId);
+    const completed = observation.available === true ?
+      cleanupAuthorityFromRow(observation.row) : null;
+    return completed?.kind === REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE &&
+      completed.ownerToken === authority.ownerToken ? completed : false;
+  }
+
+  async observeAuthority(replicaId) {
+    const observation = await this.observeReplica(replicaId);
+    return observation.available === true ?
+      cleanupAuthorityFromRow(observation.row) : null;
+  }
+
+  async isReceiptOperationTerminal(authority) {
+    if (authority?.kind !== REPLICA_CLEANUP_AUTHORITY_KIND.COMPLETE) {
+      return false;
+    }
+    const operationId = parseFailedCreateRemoveOperationId(
+      authority.ownerToken,
+    );
+    if (!operationId) return false;
+    return this.isCleanupOperationTerminal(operationId);
+  }
+
+  async isCleanupOperationTerminal(operationId) {
+    if (typeof operationId !== 'string' || operationId.length === 0) {
+      return false;
+    }
+    const result = await readAuthoritativeControlPlaneRows(
+      this.gateway,
+      TABLES.REPLICA_OPERATIONS,
+      'SELECT operation_id, status, workflow_step FROM replica_operations ' +
+        'WHERE operation_id = ?',
+      [operationId],
+      {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+        deliveryPriority: REPLICA_CLEANUP_CRITICAL_WORK,
+        workClass: REPLICA_CLEANUP_CRITICAL_WORK,
+      },
+    );
+    const row = result?.success === true ? result.rows?.[0] : null;
+    return row?.operation_id === operationId &&
+      row.status === ReplicaStatus.REMOVED &&
+      row.workflow_step === WORKFLOW_STEP.REMOVED;
+  }
+
+  async isTerminalCleanupReplicaAbsent(replicaId, operationId) {
+    const before = await this.observeReplica(replicaId);
+    if (before.available !== true || before.row !== null ||
+        !await this.isCleanupOperationTerminal(operationId)) return false;
+    const after = await this.observeReplica(replicaId);
+    return after.available === true && after.row === null;
+  }
+
   async release(authority, completion = {}) {
     if (completion.artifactsAbsent !== true) return false;
     if (!await this.requireCurrent(authority)) return false;
@@ -290,7 +399,7 @@ class ReplicaCleanupTombstoneOwner {
           service_type: REPLICA_CLEANUP_SERVICE_TYPE,
           partition_id: authority.partitionId,
           node_id: authority.nodeId,
-          status: REPLICA_CLEANUP_STATUS,
+          status: authority.kind,
           cleanup_token: authority.ownerToken,
           updated_at: authority.updatedAt,
         },

@@ -373,10 +373,11 @@ test('one authorization travels the real planner, coordinator and row',
 // which main reads no partition row at all. The row is now resolved lazily,
 // once, and only after a cure condition has already held.
 //
-// The totals below were measured by running main's own planner at f2fed102a
-// over these same fixtures (scratch plan-reads.mjs). Three of the four are
-// main's exactly; the fourth - the state that reaches the cure - is main's
-// plus ONE partition-row read.
+// The totals below retain main's planner reads except for the removed
+// per-plan failed-operation scan. Failed-create cleanup authority is now
+// refreshed once by the rebalance owner before planning; the planner consumes
+// that decision without rescanning replica_operations. The fourth state - the
+// state that reaches the cure - is main's plus ONE partition-row read.
 //
 // The boundary is the CURE CONDITION, not the mint. The policy owner calls
 // the resolver once its own condition has held, and it may then still refuse
@@ -389,19 +390,19 @@ test('one authorization travels the real planner, coordinator and row',
 // ---------------------------------------------------------------------------
 
 const MAIN_PLAN_READS = Object.freeze({
-  'message-group': Object.freeze({'filter:replica_operations': 9}),
-  'runtime-service': Object.freeze({'filter:replica_operations': 9}),
+  'message-group': Object.freeze({'filter:replica_operations': 8}),
+  'runtime-service': Object.freeze({'filter:replica_operations': 8}),
   'partition-no-cure': Object.freeze({
     'get:partitions': 24,
     'filter:nodes': 1,
     'get:nodes': 5,
-    'filter:replica_operations': 11,
+    'filter:replica_operations': 10,
   }),
   'partition-over-target-cure': Object.freeze({
     'get:partitions': 113,
     'filter:nodes': 5,
     'get:nodes': 25,
-    'filter:replica_operations': 14,
+    'filter:replica_operations': 13,
   }),
 });
 const PARTITION_ROW_READ = 'get:partitions';

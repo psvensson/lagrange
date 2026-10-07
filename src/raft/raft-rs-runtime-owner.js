@@ -89,13 +89,15 @@ import {
   createdParticipationGate,
   recordAppliedEntry,
   durableRecordIncompatible,
-  durableRecordMissing,
+  identityUnrecorded,
   participationGateClosed,
   participationGateColumns,
   participationObservation,
-  requiresDurableRecord,
+  openingWithoutRecordRefusal,
   restoredParticipationGate,
+  recordIdentity,
   settleParticipationGate,
+  withIdentityRecord,
 } from './raft-rs-participation-gate.js';
 import {answerCommittedMembership} from
   './raft-rs-committed-membership-read.js';
@@ -107,6 +109,7 @@ import {
 } from './raft-rs-persistence-admission.js';
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {PARTICIPATION_GATE} from './raft-committed-membership-constants.js';
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 
@@ -479,17 +482,26 @@ function createNodeArguments(group, {restore, record}) {
 
 // The participation gate an opening establishes (O1 gate): restored from the
 // durable record, or created from the bootstrap; a replica that must restore
-// and holds no record is refused before the core is entered (O4).
+// and holds no record is refused before the core is entered (O4), and one
+// whose identity provably existed before is held for a reseed by its
+// lifecycle owner, durably (the open-time rule): it never opens empty.
 function openingParticipationRefusal(group, opening) {
   if (opening.restore) {
-    group.gate = restoredParticipationGate(opening.record);
+    group.gate = withIdentityRecord(
+      restoredParticipationGate(opening.record), group.identityRecorded);
     group.appliedIndex = BigInt(opening.record.appliedIndex);
     return null;
   }
-  if (requiresDurableRecord(group.bootstrap)) {
-    return durableRecordMissing();
+  const refused = openingWithoutRecordRefusal(group.bootstrap);
+  if (refused !== null) {
+    if (refused.reason === RUNTIME_REASON.RESEED_REQUIRED) {
+      group.holdForReseed();
+    }
+    return refused;
   }
-  group.gate = createdParticipationGate(group.bootstrap, group.peerId);
+  group.gate = withIdentityRecord(
+    createdParticipationGate(group.bootstrap, group.peerId),
+    group.identityRecorded);
   group.appliedIndex = BigInt(RAFT_RS_INITIAL_APPLIED);
   return null;
 }
@@ -808,8 +820,20 @@ function thenMaybe(value, continuation) {
 // call's own shape on every path: {ok: true, value, decoded?} once a
 // conf-change entry is applied (or the configuration of any other entry is
 // read), {ok: false, result} naming the core call that failed.
+// A joiner opens from the committed configuration at its bootstrap index j
+// (C_j, itself a learner in it); the configuration entries at or below j are
+// history C_j already contains, so they are not applied to the core again:
+// replayed onto C_j they would walk it through configurations the group
+// never held (a transient sole voter, or no voter at all - which raft-rs
+// refuses) instead of leaving it at C_j. A founder's bootstrap index is 0.
+function foldedIntoBootstrap(group, entry) {
+  return group.gate !== null && group.gate.bootstrapIndex > 0n &&
+    BigInt(entry.index) <= group.gate.bootstrapIndex;
+}
+
 function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
-  if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) {
+  if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType) &&
+      !foldedIntoBootstrap(group, entry)) {
     const decoded = invokeCoreAt(
       group, expectedGeneration,
       'decode_conf_change_entry', entry.entryType, entry.data);
@@ -1330,9 +1354,41 @@ const COMMAND_OPERATION = Object.freeze({
     transferLeadership(group, generation, command.transfer),
 });
 const PROPOSE_CONF_CHANGE = 'propose-conf-change';
+const TICK_COMMAND = 'tick';
 const PROPOSAL_COMMANDS = new Set(['propose', PROPOSE_CONF_CHANGE]);
 
+// What the closed participation gate refuses (O1: a replica not yet
+// admitted may not campaign or serve): every proposal, and a tick that could
+// campaign. A tick of a core that is not promotable - a gated joiner is a
+// learner of its own configuration until the AddNode that opens its gate is
+// applied - enters the core: raft-rs advances its election timer and never
+// campaigns it (tick_election returns before MsgHup), so its view of time,
+// and the check-quorum lease built on it, never freezes. A gated core that
+// is promotable (a record written before joiners opened as learners) keeps
+// the refusal: ticked, it would campaign.
+function gatedCommandRefusal(group, command, expectedGeneration) {
+  if (command.type !== TICK_COMMAND) {
+    return participationGateClosed();
+  }
+  const status = invokeCoreAt(group, expectedGeneration, 'status');
+  if (!status.ok) {
+    return status.result;
+  }
+  return status.value.promotable === false ? null :
+    participationGateClosed();
+}
+
+// While the opening's prior-existence fact is not durable (verifier N3) the
+// core is entered for a status read only: no tick (a founder would campaign
+// and vote for itself), no proposal, campaign, transfer or probe.
+const COMMANDS_BEFORE_IDENTITY_RECORD = new Set([
+  RUNTIME_COMMAND.READ_STATUS, RUNTIME_COMMAND.DRAIN_INBOUND]);
+
 function performCommand(group, command, expectedGeneration) {
+  if (!group.identityRecorded &&
+      !COMMANDS_BEFORE_IDENTITY_RECORD.has(command.type)) {
+    return identityUnrecorded();
+  }
   if (Object.hasOwn(COMMAND_OPERATION, command.type)) {
     return COMMAND_OPERATION[command.type](group, command, expectedGeneration);
   }
@@ -1342,7 +1398,10 @@ function performCommand(group, command, expectedGeneration) {
     [PROPOSE_CONF_CHANGE]: ['propose_conf_change_v2', [command.change]],
   }[command.type];
   if (primitive && !group.gateOpen) {
-    return participationGateClosed();
+    const refused = gatedCommandRefusal(group, command, expectedGeneration);
+    if (refused !== null) {
+      return refused;
+    }
   }
   if (!primitive) {
     return outcome(CORE_REFUSED, {
@@ -1367,6 +1426,11 @@ function performCommand(group, command, expectedGeneration) {
 }
 
 function drainInbound(group, expectedGeneration, continuation) {
+  if (!group.identityRecorded) {
+    // Nothing delivered before the prior-existence fact is durable is ever
+    // stepped (enqueueStep drops it; this keeps the drain to that rule).
+    group.inbound.length = 0;
+  }
   if (group.inbound.length === 0) {
     return continuation();
   }
@@ -1503,6 +1567,10 @@ function createRuntimeDispatcher(request) {
     replicaIdentity: request.replicaIdentity,
     peerId: request.peerId,
     bootstrap: request.bootstrap,
+    // Whether the opening's prior-existence fact is durable: false only for
+    // an opening whose host writes that fact after the port opened (a
+    // CREATE_REPLICA target), until recordIdentity is asked.
+    identityRecorded: request.identityRecordPending !== true,
     gate: null,
     appliedIndex: null,
     gateOpen: false,
@@ -1580,11 +1648,22 @@ function createRuntimeDispatcher(request) {
       if (group.reseedHold !== null) {
         return recordReseedHold(group);
       }
+      // Before the prior-existence fact is durable a delivery is a lost
+      // message: dropped unstepped, answered as no refusal (its sender sees
+      // an unreachable peer, never a hostile or held one).
+      if (!group.identityRecorded) {
+        return outcome(CORE_OK, {
+          reason: PARTICIPATION_GATE.INBOUND_DROPPED_IDENTITY_UNRECORDED});
+      }
       group.inbound.push(snapshotEnvelope(envelope));
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
     }),
     execute: Object.freeze((command) => executeCommand(group, command)),
+    // The acknowledgement that the opening's prior-existence fact is
+    // durable: taken in the group's turn, so no turn sees it change.
+    recordIdentity: Object.freeze(() =>
+      enqueue(group, () => recordIdentity(group))),
     participationGateOpen: Object.freeze(() => group.gateOpen === true),
     configureTiming: Object.freeze((timing) => {
       group.timing = deepFreeze({...group.timing, ...timing});

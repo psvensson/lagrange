@@ -17,6 +17,8 @@ const REPO_ROOT = path.resolve(
 const SOURCE_ROOT = path.join(REPO_ROOT, 'src');
 const CANONICAL_DISPATCH_PATH =
   'src/rebalancer/operation-workflow-dispatch-response-reconcile.js';
+const CLEANUP_RELEASE_PATH =
+  'src/rebalancer/operation-workflow-terminal-transition-repair.js';
 const OWNER_REGISTRY_PATH =
   'src/rebalancer/operation-workflow-owner-retry-registry.js';
 const OBSERVED_RETENTION_PATH =
@@ -26,6 +28,7 @@ const RECOVERY_STATUS_RECONCILE_PATH =
 const TRANSITION_PERSISTENCE_PATH =
   'src/rebalancer/operation-workflow-transition-persistence.js';
 const CANONICAL_DISPATCH_FUNCTION = 'executeOperationInternal';
+const CLEANUP_RELEASE_FUNCTION = 'deliverFailedCreateCleanupRelease';
 const DELIVERY_CALL = 'deliverReplicaOperationRequest';
 const RETENTION_CALL = 'retainDeliveredCreateProgress';
 const RESPONSE_RECONCILE_CALL = '_handleDispatchResponse';
@@ -51,6 +54,19 @@ const REQUIRED_TERMINAL_CLEAR_FUNCTIONS = Object.freeze(
 // precondition of attempting one.
 const TERMINAL_CLEAR_HELPER_FUNCTION = 'clearTerminalOperationRetryState';
 const STRONG_TERMINAL_CLEAR_CALL = 'clearObservedProgressRetry';
+const CLEANUP_RELEASE_REMOVE_LITERAL =
+  'ReplicaOperationMessageType.REMOVE_REPLICA';
+const CLEANUP_RELEASE_PRECONDITION_LITERAL =
+  'FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION';
+const CLEANUP_RELEASE_ATTEMPT_LITERAL =
+  'typeof precondition?.create_attempt_token === \'string\'';
+const CREATE_DELIVERY_SINK_CENSUS_KIND = 'create_delivery_sink_census';
+const CREATE_DELIVERY_SINK_CENSUS_DETAIL =
+  'expected one canonical operation delivery and one typed cleanup release';
+const CLEANUP_RELEASE_SHAPE_KIND = 'cleanup_release_delivery_shape';
+const CLEANUP_RELEASE_SHAPE_DETAIL =
+  'cleanup release must be REMOVE-only and carry an exact cleanup plus ' +
+  'create-attempt precondition';
 
 /**
  * Record one terminal-retention cleanup census site.
@@ -277,6 +293,10 @@ function collectOperationDispatchCompletionViolations(sourceByPath) {
     site.filePath === CANONICAL_DISPATCH_PATH &&
     site.functionName === CANONICAL_DISPATCH_FUNCTION,
   );
+  const cleanupReleaseDelivery = deliveryCalls.find((site) =>
+    site.filePath === CLEANUP_RELEASE_PATH &&
+    site.functionName === CLEANUP_RELEASE_FUNCTION,
+  );
   const canonicalRetention = retentionCalls.find((site) =>
     site.filePath === CANONICAL_DISPATCH_PATH &&
     site.functionName === CANONICAL_DISPATCH_FUNCTION,
@@ -286,10 +306,30 @@ function collectOperationDispatchCompletionViolations(sourceByPath) {
     site.functionName === CANONICAL_DISPATCH_FUNCTION,
   );
 
-  if (deliveryCalls.length !== 1 || !canonicalDelivery) {
+  if (deliveryCalls.length !== 2 || !canonicalDelivery ||
+      !cleanupReleaseDelivery) {
     violations.push({
-      kind: 'create_delivery_sink_census',
-      detail: `expected one canonical delivery call, found ${deliveryCalls.length}`,
+      kind: CREATE_DELIVERY_SINK_CENSUS_KIND,
+      detail: `${CREATE_DELIVERY_SINK_CENSUS_DETAIL}, found ` +
+        deliveryCalls.length,
+    });
+  }
+  const cleanupReleaseSource = sourceByPath.get(CLEANUP_RELEASE_PATH) || '';
+  if (
+    !cleanupReleaseDelivery ||
+    !cleanupReleaseSource.includes(
+      CLEANUP_RELEASE_REMOVE_LITERAL,
+    ) ||
+    !cleanupReleaseSource.includes(
+      CLEANUP_RELEASE_PRECONDITION_LITERAL,
+    ) ||
+    !cleanupReleaseSource.includes(
+      CLEANUP_RELEASE_ATTEMPT_LITERAL,
+    )
+  ) {
+    violations.push({
+      kind: CLEANUP_RELEASE_SHAPE_KIND,
+      detail: CLEANUP_RELEASE_SHAPE_DETAIL,
     });
   }
   if (retentionCalls.length !== 1 || !canonicalRetention) {

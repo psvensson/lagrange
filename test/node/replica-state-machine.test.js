@@ -600,6 +600,8 @@ test('ReplicaStateMachine uses injected clock for create and update persistence'
       group_id: null,
       created_at: persisted[0].data.created_at,
       status: ReplicaState.PENDING,
+      cleanup_token: null,
+      create_attempt_token: null,
       state_entered_at: 1234,
     }, 'update should target the exact existing lifecycle generation');
     t.equal(persisted[1].data.state_entered_at, 2345,

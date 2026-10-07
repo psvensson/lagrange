@@ -299,8 +299,11 @@ test('T3: learners in the committed configuration reach the target, and a ' +
       'the COMMITTED stamp makes the target a joiner');
     const created = durableAppliedState(harness.dbPathOf(TARGET),
       PARTITION_ID);
-    assert.deepEqual(created.learners, [...stamp.learners].sort(),
-      'the learners pass through to the target configuration');
+    const targetPeerId = statusOf(service).peerId;
+    assert.deepEqual([...created.learners].sort(),
+      [...stamp.learners, String(targetPeerId)].sort(),
+      'the learners pass through to the target configuration, beside the ' +
+        'target itself (a learner until its AddNode is applied)');
     assert.equal(statusOf(service).gateOpen, false,
       'the joiner is below its participation gate');
   } finally {

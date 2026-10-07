@@ -4,6 +4,8 @@ import {
 import {
   resolveOperationOwnerLeaseExpiryForPersist,
 } from './replica-operation-owner-lease.js';
+import {operationCarriesReplicaCreateAdmission} from
+  './replica-operation-create-admission-fields.js';
 
 // A terminal write that is also a step CAS (a REPLACE FAILED admitted
 // against its durable step, quest replace-source-removal-owner): both guards,
@@ -12,11 +14,22 @@ const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL = `UPDATE replica_operations 
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
     WHERE operation_id = ? AND workflow_step = ? AND completed_at IS NULL`;
+const UPDATE_OPERATION_TERMINAL_WITHOUT_CREATE_ADMISSION_SQL =
+  `UPDATE replica_operations SET
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+    error_message = ?, steps_history = ?, replica_id = ?
+    WHERE operation_id = ? AND completed_at IS NULL
+      AND create_admission_state IS NULL`;
+const UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_WITHOUT_CREATE_ADMISSION_SQL =
+  `UPDATE replica_operations SET
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+    error_message = ?, steps_history = ?, replica_id = ?
+    WHERE operation_id = ? AND workflow_step = ? AND completed_at IS NULL
+      AND create_admission_state IS NULL`;
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const PERSIST_PHASE_DIVERGENCE_REINSERT = 'divergence_reinsert';
 const OWNER_LEASE_TOUCH_LOG_CONTEXT = 'owner_lease_touch';
-
 function buildOperationUpdatePersistResult(options, persisted, disposition, operation) {
   if (options?.returnDisposition !== true) {
     return persisted;
@@ -35,6 +48,12 @@ function adoptWinningTerminalOperationOutcome(operation, winningTerminal) {
   operation.workflowStep = winningTerminal.workflowStep;
   operation.completedAt = winningTerminal.completedAt;
   operation.errorMessage = winningTerminal.errorMessage;
+}
+
+function hasWinningTerminalOperation(repository, terminalTransition,
+  authoritativeOperation) {
+  if (!terminalTransition || !authoritativeOperation) return false;
+  return repository.isAuthoritativeOperationTerminal(authoritativeOperation);
 }
 
 function assignReplicaOperationRepositoryMutationUpdateMethods(
@@ -133,7 +152,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           whereClause: this.buildReplicaOperationUpdateWhereClause(
             operation,
             expectedWorkflowStep,
-            {terminalTransition},
+            {
+              terminalTransition,
+              requireCreateAdmissionAbsent:
+                options.requireCreateAdmissionAbsent === true,
+            },
           ),
           data: this.buildReplicaOperationUpdateData(operation),
           owner: REPLICA_OPERATION_OWNER_NAME,
@@ -157,6 +180,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           sql: this.resolveOperationUpdateSql(
             expectedWorkflowStep,
             terminalTransition,
+            options.requireCreateAdmissionAbsent === true,
           ),
           params: this.buildReplicaOperationUpdateParams(
             operation,
@@ -210,11 +234,18 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     // An expected-step CAS write pins the step in the WHERE clause; a
     // terminal write guards on completed_at IS NULL; a terminal write that
     // is also a step CAS carries both; the plain update carries neither.
-    resolveOperationUpdateSql(expectedWorkflowStep, terminalTransition) {
+    resolveOperationUpdateSql(expectedWorkflowStep, terminalTransition,
+      requireCreateAdmissionAbsent = false) {
       if (expectedWorkflowStep) {
+        if (terminalTransition && requireCreateAdmissionAbsent) {
+          return UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_WITHOUT_CREATE_ADMISSION_SQL;
+        }
         return terminalTransition ?
           UPDATE_OPERATION_TERMINAL_EXPECTING_STEP_SQL :
           SQL.UPDATE_OPERATION_EXPECTING_STEP;
+      }
+      if (terminalTransition && requireCreateAdmissionAbsent) {
+        return UPDATE_OPERATION_TERMINAL_WITHOUT_CREATE_ADMISSION_SQL;
       }
       return terminalTransition ?
         SQL.UPDATE_OPERATION_TERMINAL :
@@ -355,11 +386,11 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
           authoritativeOperation,
         );
       }
-      if (
-        terminalTransition &&
-        authoritativeOperation &&
-        this.isAuthoritativeOperationTerminal(authoritativeOperation)
-      ) {
+      if (hasWinningTerminalOperation(
+        this,
+        terminalTransition,
+        authoritativeOperation,
+      )) {
         // Lost the terminal CAS: the authority row is a DIFFERENT terminal
         // state that already won. Adopt the winner into the writer's
         // projection and report the typed adoption so callers stand the
@@ -390,6 +421,20 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             expectedWorkflowStep,
           },
         );
+        // A vanished row also destroys the durable linearization record for
+        // an admitted physical CREATE. Re-inserting an in-memory admission
+        // tuple could resurrect CLOSED work or a generation removed after
+        // the snapshot was taken. Only admission-free operation rows retain
+        // the older divergence-repair authority; admitted work must defer to
+        // startup/operation recovery without recreating its authority.
+        if (operationCarriesReplicaCreateAdmission(operation)) {
+          return buildOperationUpdatePersistResult(
+            resultOptions,
+            false,
+            REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+            null,
+          );
+        }
         try {
           const reinserted = await this.persistNewOperationUnlocked(operation);
           if (reinserted) {

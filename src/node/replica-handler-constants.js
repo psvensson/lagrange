@@ -27,6 +27,7 @@ const REPLICA_HANDLER_DEFAULT = Object.freeze({
   // (wait_bound_spent ERROR).
   // ends-on: the applied configuration no longer names the retiring replica, or its group is unavailable
   REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS: TIME_MS.SECOND * NUM.THIRTY,
+  CREATE_ADMISSION_RECOVERY_RETRY_MS: TIME_MS.SECOND,
 });
 
 const REPLICA_HANDLER_ADDRESS = Object.freeze({
@@ -62,6 +63,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_MISSING_FIELDS: 'REMOVE_REPLICA missing required fields',
   REMOVE_NOT_FOUND: 'Replica not found for removal',
   REMOVE_PARTITION_MISMATCH: 'Replica partition identity mismatch on removal',
+  REMOVE_CLEANUP_PRECONDITION_REFUSED:
+    'Failed-create target cleanup precondition was refused',
   REMOVE_IN_PROGRESS: 'Replica removal already in progress',
   REMOVE_ALREADY_REMOVED: 'Replica already removed',
   STEP_DOWN_REQUEST: 'Handling STEP_DOWN_REPLICA request',
@@ -99,6 +102,13 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_FAILED_STATUS_WRITE_DEFERRED:
     'Replica failed-status write deferred after retryable control-plane failure',
   UPDATE_STATUS: 'Updating replica status',
+  // The wait for the CREATE target's prior-existence fact (its durable
+  // SYNCING row) ended without it: the port never participated and the
+  // create fails (verifier N3).
+  IDENTITY_RECORD_WAIT_SPENT:
+    'Replica identity record never became durable; the replica never participated',
+  CREATE_SYNCING_DEFERRAL_SPENT:
+    'Replica SYNCING write outcome stayed unresolved: the authoritative row was unreadable through the retry bound',
   UPDATE_STATUS_RETRY:
     'Retrying replica status persistence after retryable control-plane failure',
   CDC_UNAVAILABLE: 'CDC integration service not available',
@@ -123,6 +133,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
     'partitions directory unreadable',
   REMOVED_CLEANUP_SWEEP_RESULT:
     'Startup removed-replica cleanup-debt sweep result',
+  CREATE_ADMISSION_RECOVERY_FAILED:
+    'Startup replica create-admission recovery deferred',
 });
 
 const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
@@ -130,6 +142,8 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   CREATE_PARTITION_SERVICE_REQUIRED: 'ReplicaHandler requires createPartitionService',
   CREATE_REQUIRED_FIELDS:
     'CREATE_REPLICA requires operationId, partitionId, and replicaId',
+  CREATE_OPERATION_TYPE_REQUIRED:
+    'CREATE_REPLICA requires ADD or REPLACE operationType',
   CDC_REQUIRED: 'ReplicaHandler requires cdcIntegrationService',
   REMOVE_REQUIRED_FIELDS:
     'REMOVE_REPLICA requires operationId, partitionId, and replicaId',
@@ -148,6 +162,9 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   REMOVE_PARTITION_MISMATCH: (replicaId, localPartitionId, requestPartitionId) =>
     `Replica ${replicaId} belongs to partition ${localPartitionId}, ` +
     `not requested partition ${requestPartitionId}`,
+  REMOVE_CLEANUP_PRECONDITION_REFUSED:
+    'Failed-create target cleanup no longer matches the authoritative ' +
+    'replica lifecycle generation',
   TABLE_METADATA_MISSING: (tableId) =>
     `Table metadata not found for ${tableId}`,
   SCHEMA_PARSE_FAILED: (message) =>
@@ -177,6 +194,11 @@ const REPLICA_HANDLER_SERVICE = Object.freeze({
   TYPE: SERVICE_TYPE.PARTITION,
 });
 
+const REPLICA_HANDLER_CREATE_DECISION = Object.freeze({
+  REPORT_IN_PROGRESS: 'report_in_progress',
+  RESTART_CREATE: 'restart_create',
+});
+
 const REPLICA_HANDLER_ERRNO = Object.freeze({
   ENOENT: ERRNO.ENOENT,
 });
@@ -193,6 +215,7 @@ const REPLICA_HANDLER_NUM = Object.freeze({
 
 export {
   REPLICA_HANDLER_ADDRESS,
+  REPLICA_HANDLER_CREATE_DECISION,
   REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_ERRNO,

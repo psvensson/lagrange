@@ -3,6 +3,8 @@ import {
 } from './runtime-service-replica-identity.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
+import {REPLICA_OPERATION_REPOSITORY_ERROR_MSG} from
+  './replica-operation-repository-constants.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -13,6 +15,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
   const {
     ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE,
     OperationType,
+    ReplicaStatus,
+    ReplicaOperationField,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
     REPLICA_OPERATION_VISIBILITY_READ_MODE,
@@ -20,11 +24,29 @@ function assignReplicaOperationRepositoryEntityReadMethods(
     SQL,
     SYSTEM_TABLE_NAME,
     UNIFIED_SERVICE_TYPE,
+    WORKFLOW_STEP,
     buildReplicaOperationVisibilityReadOptions,
     resolveReplicaOperationVisibilityReadMode,
   } = options;
 
   class ReplicaOperationRepositoryEntityReadMethods {
+    async queryTerminalFailedCreateCleanupOperations() {
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_ALL_OPERATIONS,
+        [],
+      );
+      if (!result.success || !Array.isArray(result.rows)) {
+        throw new Error(result?.error || REPLICA_OPERATION_REPOSITORY_ERROR_MSG
+          .TERMINAL_FAILED_CREATE_CLEANUP_RECOVERY_READ_UNAVAILABLE);
+      }
+      return result.rows.map((row) => this.rowToOperation(row))
+        .filter((operation) => operation?.type === OperationType.REMOVE &&
+          operation.workflowStep === WORKFLOW_STEP.REMOVED &&
+          operation.status === ReplicaStatus.REMOVED &&
+          operation[
+            ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+          ]);
+    }
     /**
    * Get in-flight replica IDs for an entity.
    * @param {object} params

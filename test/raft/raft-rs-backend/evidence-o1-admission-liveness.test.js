@@ -3,12 +3,14 @@
 //
 // A target caught up past j whose own AddNode it holds but has not learned
 // is committed (a commit-knowledge lag: the core's own campaign guard sees
-// nothing pending) has its ticks suppressed - no timer, every tick refused
-// typed - between j and a_self; the drain that applies its AddNode emits
-// GATE_OPENED with the oracle's (j, a_self), re-arms the scheduling it was
-// refused in that same emission (I3: within one drain, < 1 s), and once
-// leadership is transferred to it every member hears from it within
-// HEARTBEAT_TICK ticks (60 ms at the production tick).
+// nothing pending) is a learner of its own configuration between j and
+// a_self: its scheduling, asked for while gated, arms its tick timer at once
+// and its ticks enter the core (its election timer runs, so no lease of the
+// core freezes) without ever campaigning; the drain that applies its AddNode
+// emits GATE_OPENED with the oracle's (j, a_self) and the timer armed while
+// gated keeps running (never re-armed), and once leadership is transferred
+// to it every member hears from it within HEARTBEAT_TICK ticks (60 ms at the
+// production tick).
 //
 // Oracles: a_self and j from the leader's durable log and applied index
 // (O-a); the target's durable term and vote (O-d); the members' durable
@@ -68,13 +70,13 @@ import {RAFT_OPERATION_PORT_REQUEST} from
 const PARTITION_ID = 'evidence-o1-m3';
 const HISTORY_KEY = 'H3';
 const TARGET = identityOf(HISTORY_KEY, 't');
-const REARM_BOUND_MS = 1000;
 const HEARD = new Set([WIRE.messageType.MsgHeartbeat,
   WIRE.messageType.MsgAppend]);
 
-test('M3: ticks are suppressed between j and a_self under a commit lag, ' +
-  'GATE_OPENED carries the oracle (j, a_self) and re-arms the scheduling in ' +
-  'the same drain, and the admitted leader heartbeats within HEARTBEAT_TICK',
+test('M3: between j and a_self under a commit lag the gated learner core is ' +
+  'ticked and never campaigns, GATE_OPENED carries the oracle (j, a_self) ' +
+  'with the timer armed once, and the admitted leader heartbeats within ' +
+  'HEARTBEAT_TICK',
 () => {
   const founders = ['a', 'b', 'c'].map((letter) =>
     identityOf(HISTORY_KEY, letter));
@@ -110,9 +112,9 @@ test('M3: ticks are suppressed between j and a_self under a commit lag, ' +
         opened.push({event, at: Date.now()});
       });
     const asked = cluster.node(TARGET).startScheduling();
-    assert.equal(asked.reason, PARTICIPATION_GATE.GATE_CLOSED,
-      'scheduling asked for below the gate is refused typed');
-    assert.equal(intervals.length, 0, 'no timer was armed');
+    assert.equal(asked.reason, 'scheduling-started',
+      'scheduling asked for below the gate arms the timer at once');
+    assert.equal(intervals.length, 1, 'one timer was armed while gated');
 
     // Hold the target's commit knowledge at the leader's last index before
     // the AddNode is proposed: it will hold its AddNode without learning it
@@ -140,8 +142,9 @@ test('M3: ticks are suppressed between j and a_self under a commit lag, ' +
     const samples = electionStorm(cluster, TARGET, members, () => {
       assert.notEqual(roleOf(cluster, TARGET), LEADER_ROLE,
         'the caught-up unadmitted target never leads');
-      assert.equal(cluster.node(TARGET).tick().reason,
-        PARTICIPATION_GATE.GATE_CLOSED, 'every tick is refused typed');
+      assert.equal(cluster.node(TARGET).tick().outcome,
+        RAFT_OPERATION_OUTCOME.CORE_OK,
+        'every tick enters the gated learner core (its time runs)');
     });
     assert.deepEqual(termAndVote(durableOf(cluster, TARGET).hard), before,
       'O-d: term and vote unchanged between j and a_self');
@@ -153,21 +156,18 @@ test('M3: ticks are suppressed between j and a_self under a commit lag, ' +
       }
     }
     assert.equal(opened.length, 0, 'the gate is still closed');
-    assert.equal(intervals.length, 0, 'no timer while closed');
+    assert.equal(intervals.length, 1, 'the one timer armed while closed');
 
     cap.value = UNBOUNDED;
     assert.ok(settle(cluster, () => opened.length > 0, [leader]),
       'the gate opens once the target applies its AddNode');
-    const [{event, at}] = opened;
+    const [{event}] = opened;
     assert.equal(event.admissionIndex, aSelf, 'a_self from the durable log');
     assert.equal(event.bootstrapIndex, j, 'j from the leader applied index');
     assert.ok(event.appliedIndex >= aSelf);
     assert.equal(intervalsAtEvent, 1,
-      'the refused scheduling was re-armed before GATE_OPENED reached its ' +
-        'listeners (the same drain)');
-    assert.equal(intervals.length, 1, 'armed exactly once');
-    assert.ok(intervals[0].at - at <= REARM_BOUND_MS,
-      'I3: re-armed within one drain (< 1 s)');
+      'the timer armed while gated is the one running at GATE_OPENED');
+    assert.equal(intervals.length, 1, 'armed exactly once, never re-armed');
     assert.equal(durableOf(cluster, TARGET).applied.admissionIndex, aSelf,
       'a_self is durable');
     assert.equal(opened.length, 1, 'GATE_OPENED once');
@@ -274,8 +274,9 @@ test('F-2 (REMOVING target below its gate): removed before it applied its ' +
     const below = await readPartitionReplicaMembership(
       serviceOf(cluster, target), target);
     assert.equal(below.gateOpen, false, 'the target is below its gate');
-    assert.equal(below.state, PARTITION_REPLICA_MEMBERSHIP_STATE.VOTER,
-      'below the gate its own view still names it (its bootstrap)');
+    assert.equal(below.state, PARTITION_REPLICA_MEMBERSHIP_STATE.ABSENT,
+      'below the gate its own view names it only as a learner (its ' +
+        'bootstrap): an absence the gate clause does not count');
     assert.equal(exit, null, 'the exit waits');
 
     assert.ok(await driveUntil(cluster, [leader], () =>
@@ -284,9 +285,12 @@ test('F-2 (REMOVING target below its gate): removed before it applied its ' +
     assert.ok(await driveUntil(cluster, [leader], () => exit !== null),
       'the exit ends once the target applied its admission and its removal');
     assert.equal(exit.reason, REPLICA_CONSENSUS_EXIT_REASON.REMOVAL_APPLIED);
+    // The applied AddNode moves the target from learner to voter (one
+    // MEMBERSHIP_CHANGED, announced with the gate's opening), then its
+    // applied removal (the second) ends the wait.
     assert.deepEqual(events, [RAFT_EVENT.GATE_OPENED,
-      RAFT_EVENT.MEMBERSHIP_CHANGED, 'exit'],
-    'GATE_OPENED, then the applied removal, then the exit');
+      RAFT_EVENT.MEMBERSHIP_CHANGED, RAFT_EVENT.MEMBERSHIP_CHANGED, 'exit'],
+    'GATE_OPENED with its promotion, then the applied removal, then the exit');
     assert.equal(durableOf(cluster, target).applied.voters
       .includes(targetPeerId), false, 'the target applied its own removal');
     assert.equal(durableOf(cluster, target).applied.admissionIndex, aSelf,

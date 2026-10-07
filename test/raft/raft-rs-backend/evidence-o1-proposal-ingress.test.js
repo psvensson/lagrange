@@ -125,8 +125,10 @@ const PENDING_KINDS = Object.freeze({
     return leader;
   },
   // B holds an entry it does not know committed (its deliveries carry a
-  // capped commit index); A is isolated; B is elected: its conservative
-  // pending index is its last index, above what it applied.
+  // capped commit index); A hands its leadership to B (under check_quorum
+  // the followers ignore any other election while A's lease runs) and is
+  // isolated: B's conservative pending index is its last index, above what
+  // it applied.
   'post-election conservative index': ({cluster, leader, cap}) => {
     cap.value = durableOf(cluster, B).applied.appliedIndex;
     assert.equal(cluster.node(leader).propose('before-the-election').outcome,
@@ -135,12 +137,13 @@ const PENDING_KINDS = Object.freeze({
       PARTITION_ID).at(-1).index;
     assert.ok(settle(cluster, () => lastOf(B) === lastOf(leader), [leader],
       60), 'setup: B holds the leader\'s last entry');
-    cluster.isolate(leader);
-    cap.value = UNBOUNDED;
-    assert.equal(cluster.node(B).campaign().outcome,
-      RAFT_OPERATION_OUTCOME.CORE_OK);
+    assert.equal(cluster.node(leader).transferLeadership({
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+      replicaIdentity: B}).outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.ok(settle(cluster, () => roleOf(cluster, B) === LEADER_ROLE, [],
       40), 'setup: B is elected');
+    cluster.isolate(leader);
+    cap.value = UNBOUNDED;
     return B;
   },
 });

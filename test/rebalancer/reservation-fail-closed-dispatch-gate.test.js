@@ -46,6 +46,8 @@ import {
 } from '../../src/rebalancer/storage-capacity-accounting-service.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
+import {repairOperationRowForGateRepairedReservation} from
+  '../../src/rebalancer/operation-workflow-gate-operation-row-repair.js';
 import {
   createMockCache,
   createMockCdcService,
@@ -385,6 +387,28 @@ async (t) => {
 });
 
 // --- dispatch-gate-repairs-via-ensure ---
+
+test('gate row repair refuses a cached operation carrying CREATE admission',
+  async (t) => {
+    const persisted = [];
+    const operation = {
+      ...buildStorageIncreasingOperation(),
+      createAdmissionState: 'ADMITTED',
+      createAdmissionToken: 'stale-admission',
+    };
+    const attempted = await repairOperationRowForGateRepairedReservation({
+      repository: {
+        async persistNewOperation(candidate) {
+          persisted.push(candidate);
+        },
+      },
+    }, operation);
+
+    t.equal(attempted, false,
+      'row absence cannot resurrect admission-bearing cached state');
+    t.equal(persisted.length, 0,
+      'the alternate reservation repair performs no INSERT');
+  });
 
 test('dispatch-gate-repairs-via-ensure: dispatch of an ADD operation with ' +
   'no ACTIVE reservation repairs through ensureReservationForOperation',

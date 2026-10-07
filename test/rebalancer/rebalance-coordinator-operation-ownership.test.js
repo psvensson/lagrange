@@ -8,8 +8,17 @@ import {fixtureCommittedReadCoordinator} from
 
 // Joins are stamped from the committed-membership read, answered here by
 // the fixture world (owner decision O1).
-const RebalanceCoordinator =
+const CommittedReadRebalanceCoordinator =
   fixtureCommittedReadCoordinator(ProductionRebalanceCoordinator);
+class RebalanceCoordinator extends CommittedReadRebalanceCoordinator {
+  constructor(options) {
+    super(options);
+    // Operation-ownership assertions count only the read under test. Startup
+    // cleanup-release recovery is covered by its dedicated owner witnesses.
+    this.workflowOwner.repository
+      .queryTerminalFailedCreateCleanupOperations = async () => [];
+  }
+}
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {DurableWorkflowCoordinator} from

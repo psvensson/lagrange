@@ -6,8 +6,8 @@
 // destination replica and the operation id AFTER the canonical replica id is
 // allocated, stamps it on the operation's existing first steps-history
 // metadata record, and the row decode exposes it. A move that carries no
-// authorization produces a row byte-identical to main's: the digests below
-// were captured by running this same creation path on main at f2fed102a
+// authorization preserves the pre-admission payload byte-identical to main's:
+// the digests below were captured by running this creation path at f2fed102a
 // BEFORE any src file of this quest was edited
 // (scratch capture-row-digest.mjs; each digest is stable across runs).
 //
@@ -47,12 +47,14 @@ const SEED_NODE_ID = 'seed-node';
 const PUBLISHED_EPOCH = 4;
 const FROZEN_TIME = 0;
 const STEPS_HISTORY_PARAM_INDEX = 13;
+const PRE_CREATE_ADMISSION_PARAM_COUNT = 17;
 const TIMESTAMP_PARAM_INDEXES = new Set([9, 10, 11]);
 const AUTHORIZATION_KEY = OPERATION_METADATA_KEY.CURE_TRANSITION_AUTHORIZATION;
 const MOVE_FIELD = SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD;
 const INSERT_STATEMENT_FRAGMENT = 'INSERT INTO replica_operations';
 
-// Main's canonical INSERT payload digests for moves carrying NO authorization,
+// Main's canonical pre-admission INSERT payload digests for moves carrying no
+// authorization,
 // captured at f2fed102a before this quest edited src. Timestamps (created_at,
 // updated_at, completed_at and each steps-history entry's own timestamp) are
 // the only values normalised; every other byte is main's.
@@ -62,8 +64,9 @@ const INSERT_STATEMENT_FRAGMENT = 'INSERT INTO replica_operations';
 // steps_history[0] and its address hints in ascending raft peer id order, so
 // the three join digests were recaptured on the O1 branch (e1 scratch
 // capture over this file's own fixtures); the REMOVE row, which carries no
-// stamp, is main's byte for byte. The claim is unchanged: a move without an
-// authorization writes no authorization field.
+// stamp, preserves main's pre-admission payload. The claim is unchanged: a
+// move without an authorization writes no authorization field. This Quest's
+// appended admission columns are separately required to begin nullable.
 const MAIN_ROW_DIGEST = Object.freeze({
   'critical-add':
     '07cf06efba2b52eddd3c645ff62d6e55b39cdb9d5cef067b695211f7600f4745',
@@ -131,15 +134,16 @@ function canonicalizeStepsHistory(text) {
 }
 
 function canonicalInsert(params) {
-  return JSON.stringify(params.map((value, index) => {
-    if (index === STEPS_HISTORY_PARAM_INDEX && typeof value === 'string') {
-      return canonicalizeStepsHistory(value);
-    }
-    if (TIMESTAMP_PARAM_INDEXES.has(index) && typeof value === 'number') {
-      return FROZEN_TIME;
-    }
-    return value;
-  }));
+  return JSON.stringify(params.slice(0, PRE_CREATE_ADMISSION_PARAM_COUNT)
+    .map((value, index) => {
+      if (index === STEPS_HISTORY_PARAM_INDEX && typeof value === 'string') {
+        return canonicalizeStepsHistory(value);
+      }
+      if (TIMESTAMP_PARAM_INDEXES.has(index) && typeof value === 'number') {
+        return FROZEN_TIME;
+      }
+      return value;
+    }));
 }
 
 async function createOperationCapturingInserts(move) {
@@ -174,16 +178,22 @@ async function createOperationCapturingInserts(move) {
   }
 }
 
-test('the authorization rides the operation row and rows without it stay ' +
-  'byte-identical to main', async () => {
-  // 1. Every move shape that carries no authorization writes main's row.
+test('the authorization rides the operation row and rows without it preserve ' +
+  'the pre-admission payload', async () => {
+  // 1. Every move shape that carries no authorization preserves main's row
+  // payload before this Quest's additive nullable admission columns.
   for (const [name, move] of UNAUTHORIZED_MOVES) {
     const {inserts} = await createOperationCapturingInserts(move);
     assert.equal(inserts.length, 1, `${name} wrote exactly one row`);
     const digest = createHash('sha256')
       .update(inserts[0].canonical).digest('hex');
     assert.equal(digest, MAIN_ROW_DIGEST[name],
-      `${name}: the row is byte-identical to main's`);
+      `${name}: the pre-admission row payload is byte-identical to main's`);
+    assert.ok(
+      inserts[0].params.slice(PRE_CREATE_ADMISSION_PARAM_COUNT)
+        .every((value) => value === null),
+      `${name}: additive CREATE admission columns begin unclaimed`,
+    );
     assert.equal(inserts[0].canonical.includes(AUTHORIZATION_KEY), false,
       `${name}: a field absent from the move stays absent on the row`);
   }

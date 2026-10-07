@@ -22,6 +22,15 @@ const LOCAL_STR_CDCGROUPPROPAGATIONSERVICE = 'cdcGroupPropagationService';
 const LOCAL_STR_BOOTSTRAPREADINESSSTATE = 'bootstrapReadinessState';
 const LOCAL_STR_STARTUPRECOVERYCOORDINATOR = 'startupRecoveryCoordinator';
 const LOCAL_STR_CONTROLPLANEREADINESSSERVICE = 'controlPlaneReadinessService';
+const FAILED_CREATE_CLEANUP_RELEASE_RECOVERY_OWNER =
+  'failed_create_cleanup_release';
+
+function startFailedCreateCleanupReleaseRecovery(coordinator) {
+  void coordinator.workflowOwner?.recoverFailedCreateCleanupReleaseDebt?.()
+    .catch((error) => coordinator.logQueryOperationsFailure(error, {
+      recoveryOwner: FAILED_CREATE_CLEANUP_RELEASE_RECOVERY_OWNER,
+    }));
+}
 
 // Option keys whose sync is a plain same-named property assignment, split
 // around the bootstrapReadinessState branch to preserve assignment order:
@@ -603,6 +612,7 @@ class RebalanceCoordinatorLifecycle {
     }
 
     this.initialized = true;
+    startFailedCreateCleanupReleaseRecovery(this);
   }
 
   /**

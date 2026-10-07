@@ -264,6 +264,15 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
     // The O1 committed-membership stamp (absent: the replicas are founders).
     this.bootstrapMembership = options.bootstrapMembership ?? null;
+    // The opening host's authoritative row proves this replica identity
+    // existed before (the open-time rule): opened without its durable record
+    // it is refused reseed-required.
+    this.identityExisted = options.identityExisted === true;
+    // The acknowledgement that this opening's prior-existence fact (its
+    // SYNCING services row, written after the port opens) is durable: until
+    // it resolves the port steps nothing (verifier N3). Absent: no such
+    // pending fact.
+    this.identityRecorded = options.identityRecorded ?? null;
     this.roleMutationHelper = this.createRoleMutationHelper();
     this.pendingRoleUpdate = this.role;
     this.persistedRole = null;

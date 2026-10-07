@@ -500,4 +500,4 @@ class PartitionNodeCluster {
   }
 }
 
-export {PartitionNodeCluster};
+export {PARTITION_TIMING, PartitionNodeCluster};

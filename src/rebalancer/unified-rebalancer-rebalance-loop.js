@@ -273,6 +273,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     );
     const planningMembershipPublicationEpoch =
       this.resolvePublishedMembershipPlanningEpoch();
+    await this.refreshFailedCreateTargetCleanupDecisions();
     const calculatedMoves = this.movePlanner.calculateMoves(
       currentReplicas,
       targetState,

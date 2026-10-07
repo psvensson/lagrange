@@ -200,9 +200,11 @@ test('M2 (differential): the persisted stamp is the fold of the leader ' +
     assert.equal(opened.appliedIndex, 0);
     assert.equal(opened.bootstrapIndex, stamp.appliedIndex);
     assert.equal(opened.admissionIndex, null);
-    assert.deepEqual(opened.voters, [...fold.voters, targetPeerId].sort(),
-      'the index-0 configuration is the fold plus self: the omitted voter ' +
-        'is held before the target participates');
+    assert.deepEqual(opened.voters, fold.voters,
+      'the index-0 configuration is the fold: the omitted voter is held ' +
+        'before the target participates');
+    assert.ok(opened.learners.includes(targetPeerId),
+      'the target names itself as a learner until its AddNode applies');
     assert.equal(statusOf(service).gateOpen, false);
 
     // Admission by the group; the target converges.

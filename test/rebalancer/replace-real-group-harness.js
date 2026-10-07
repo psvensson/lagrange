@@ -159,6 +159,8 @@ function serviceRow(partitionId, replicaId, nodeId, raftRole,
     status,
     raft_role: raftRole,
     address: `${nodeId}/partition/${replicaId}`,
+    cleanup_token: null,
+    create_attempt_token: null,
   };
 }
 
@@ -230,6 +232,9 @@ function createReadiness(world, nodeIds) {
   };
 }
 
+// A hold of every message type.
+const ALL_MESSAGE_TYPES = Symbol('all-message-types');
+
 /**
  * The real group: founders (the source first), then the target created from
  * the oracle stamp and admitted by a real AddNode.
@@ -264,17 +269,23 @@ class RealGroup {
     this.cluster = cluster;
     this.cluster.tickers = [this.founders[0]];
     // Inboxes a test holds: envelopes queue but are not delivered until the
-    // hold is released (a node that has not drained its inbox).
-    this.heldInboxes = new Set();
+    // hold is released (a node that has not drained its inbox). A hold may
+    // name the message types it holds; the rest are delivered.
+    this.heldInboxes = new Map();
     // The cluster's own delivery, replica by replica, skipping a held one
     // (envelopes it is sent, including those produced in this same pass,
     // stay queued).
     cluster.deliverAll = () => {
       for (const [replicaId, replica] of cluster.replicas) {
-        if (this.heldInboxes.has(replicaId)) {
+        const held = this.heldInboxes.get(replicaId);
+        if (held === ALL_MESSAGE_TYPES) {
           continue;
         }
-        const pending = replica.inbox.splice(0, replica.inbox.length);
+        const queued = replica.inbox.splice(0, replica.inbox.length);
+        const pending = held === undefined ? queued : queued.filter(
+          (envelope) => !held.has(envelope?.message?.msgType));
+        replica.inbox.push(...queued.filter((envelope) =>
+          !pending.includes(envelope)));
         for (const envelope of pending) {
           replica.node.step(envelope);
         }
@@ -499,9 +510,15 @@ class RealGroup {
     return answer;
   }
 
-  /** Hold a replica's inbox: nothing it is sent is delivered. */
-  holdInbox(replicaId) {
-    this.heldInboxes.add(replicaId);
+  /**
+   * Hold a replica's inbox: nothing it is sent is delivered, or only the
+   * named message types are held.
+   * @param {string} replicaId - The replica.
+   * @param {Array<number>} [msgTypes] - The held raft message types.
+   */
+  holdInbox(replicaId, msgTypes = null) {
+    this.heldInboxes.set(replicaId,
+      msgTypes === null ? ALL_MESSAGE_TYPES : new Set(msgTypes));
   }
 
   releaseInbox(replicaId) {

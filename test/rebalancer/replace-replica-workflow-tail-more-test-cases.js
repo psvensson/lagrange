@@ -225,6 +225,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
 
         const progressed =
           await coordinator.reconcileOperationProgress(operation);
+        const persistedAfterReconcile =
+          await coordinator.getOperation(operation.operationId);
 
         t.equal(
           progressed,
@@ -257,9 +259,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           'source removal should still target the retiring replica',
         );
         t.equal(
-          operation.workflowStep,
+          persistedAfterReconcile.workflowStep,
           WORKFLOW_STEP.STOPPING,
-          'replayed create completion should leave REPLACE in STOPPING',
+          'replayed create completion should durably leave REPLACE in STOPPING',
         );
       } finally {
         await coordinator.shutdown();

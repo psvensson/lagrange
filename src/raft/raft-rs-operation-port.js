@@ -18,7 +18,6 @@ import {
 import {bootstrapOfRequest} from './raft-rs-bootstrap-membership.js';
 import {committedMembershipRefusal} from
   './raft-rs-committed-membership-read.js';
-import {participationGateClosed} from './raft-rs-participation-gate.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   './raft-operation-port-request.js';
@@ -172,6 +171,7 @@ function createRaftRsOperationPort(request) {
     peerId,
     joiningExistingGroup:
       request[RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP],
+    identityExisted: request[RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED],
   });
   const lifecycle = new RaftRsReplicaLifecycleOwner({
     db: database, groupId, peerId, replicaIdentity,
@@ -183,13 +183,14 @@ function createRaftRsOperationPort(request) {
       registry.registerReplica(joiningReplicaIdentity),
   });
   const listeners = new Map();
-  let schedulingRequested = false;
   const emit = (eventName, ...args) => {
-    rearmOnGateOpened(eventName);
     for (const listener of listeners.get(eventName) || []) {
       listener(...args.map((value) => deepFreeze(value)));
     }
   };
+  const identityRecorded =
+    request[RAFT_OPERATION_PORT_REQUEST.IDENTITY_RECORDED];
+  const identityRecordPending = typeof identityRecorded?.then === 'function';
   const timers = resolveTimeSource(
     request[RAFT_OPERATION_PORT_REQUEST.SUBSTRATE] || {});
   let tickIntervalMs = tickIntervalOf(timing);
@@ -201,6 +202,7 @@ function createRaftRsOperationPort(request) {
     replicaIdentity,
     peerId,
     bootstrap,
+    identityRecordPending,
     timing,
     timers,
     sendToPeer: required(
@@ -255,19 +257,21 @@ function createRaftRsOperationPort(request) {
     protocolTurn(() => dispatcher.execute(command));
   const enqueueStep = (envelope) =>
     protocolTurn(() => dispatcher.enqueueStep(envelope));
-  const stopScheduling = () => {
-    schedulingRequested = false;
+  function clearTickTimer() {
     if (timer !== null) {
       timers.clearInterval(timer);
       timer = null;
     }
+  }
+  const stopScheduling = () => {
+    clearTickTimer();
     return coreOk('scheduling-stopped');
   };
-  // A group whose own history the local-log guard proved lost is held for a
-  // reseed by its lifecycle owner (durable, survives a restart) and its
-  // ticks stop.
+  // A group whose own history was proven lost - by the local-log guard, or
+  // at its opening by the open-time rule - is held for a reseed by its
+  // lifecycle owner (durable, survives a restart) and its ticks stop.
   function holdForReseed() {
-    stopScheduling();
+    clearTickTimer();
     return lifecycle.holdForReseed();
   }
   // The scheduled tick is a contained port operation: it answers typed and
@@ -278,25 +282,16 @@ function createRaftRsOperationPort(request) {
       tickIntervalMs);
     timer.unref?.();
   };
-  // Scheduling starts only while the participation gate is open (O1 gate):
-  // asked while it is closed, the start is refused typed and remembered, and
-  // the runtime owner's GATE_OPENED re-arms it in the drain that opened the
-  // gate.
+  // Scheduling ticks the group from the moment it is asked for, whether or
+  // not the participation gate is open: the gate (O1) is enforced where a
+  // tick could campaign - the runtime owner enters the core with a gated
+  // group's tick only while its core is not promotable (a learner), which
+  // raft-rs never campaigns - so a gated replica's election timer, and the
+  // check-quorum lease it bounds, keeps running instead of freezing.
   const startScheduling = () => dispatch(() => {
-    if (!dispatcher.participationGateOpen()) {
-      schedulingRequested = true;
-      return participationGateClosed();
-    }
     scheduleTicks();
     return coreOk('scheduling-started');
   });
-  function rearmOnGateOpened(eventName) {
-    if (eventName === RAFT_EVENT.GATE_OPENED && schedulingRequested &&
-        !closed) {
-      schedulingRequested = false;
-      scheduleTicks();
-    }
-  }
   const subscribe = (eventName, listener) => {
     const normalizedEventName = EVENT_ALIAS[eventName] || eventName;
     if (!EVENTS.has(normalizedEventName)) {
@@ -390,6 +385,14 @@ function createRaftRsOperationPort(request) {
     },
   });
   registerRuntimeLifecycle(port, lifecycle);
+  // The release of a pending identity record is its acknowledgement alone:
+  // resolved, the gate may open; rejected (the fact never became durable),
+  // nothing is released and the host closes the port.
+  if (identityRecordPending && dispatcher !== null) {
+    Promise.resolve(identityRecorded).then(
+      () => dispatch(() => dispatcher.recordIdentity()),
+      () => undefined).catch(() => undefined);
+  }
   if (request[RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION] !== true &&
       lifecycle.active) {
     startScheduling();

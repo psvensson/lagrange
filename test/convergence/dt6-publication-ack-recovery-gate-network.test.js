@@ -252,6 +252,9 @@ function gateForEpoch(pub, epoch) {
   return null;
 }
 
+const PHASE_B_DEADLINE_MS = 5000;
+const HEAL_WINDOW_MS = 1000;
+
 async function runAckFailback(seed) {
   const required = {version: 1};
   const ledger = new Map(); // per-run: committed publication_id -> Set of acking nodeIds
@@ -278,7 +281,12 @@ async function runAckFailback(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await host.runUntil(1600);
+  // Under check_quorum each follower ignores pre-votes for its own election
+  // timeout after A's last heartbeat (its leader lease): the fail-back is
+  // awaited as an event (a new leader whose v2 ack cycle closed).
+  await host.runUntilTrue(() => followers.some((id) => host.isLeader(id) &&
+    gateForEpoch(pubs.get(id), 2)?.ready === true),
+  {deadlineMs: PHASE_B_DEADLINE_MS});
   const leaderB = followers.find((id) => host.isLeader(id)) || null;
   const afterFailback = {
     leaderBGateV2: leaderB ? gateForEpoch(pubs.get(leaderB), 2) : null,
@@ -291,7 +299,7 @@ async function runAckFailback(seed) {
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await host.runUntil(2600);
+  await host.runUntil(net.now() + HEAL_WINDOW_MS);
   const afterHeal = Object.fromEntries(
     IDS.map((id) => [id, gateForEpoch(pubs.get(id), 2)]),
   );
@@ -355,14 +363,20 @@ t.test('the real ack -> recovery-gate fail-back is deterministic and holds acros
   async (t) => {
     const a = await runAckFailback(5);
     const b = await runAckFailback(5);
+    // The failover winner is drawn by raft-rs's own randomness under check_quorum (owner
+    // 2026-10-05: narrow the tests, no crate fork): its identity is not compared, only that it
+    // is one of the first leader's followers.
     const reduce = (m) => ({
       leaderA: m.leaderA,
-      leaderB: m.leaderB,
       v1Ready: IDS.map((id) => m.afterAckV1[id]?.ready),
       v2Ready: IDS.map((id) => m.afterHeal[id]?.ready),
     });
     t.same(reduce(a), reduce(b),
       'same seed -> identical election, ack-cycle convergence, and fail-back');
+    for (const [name, m] of [['run a', a], ['run b', b]]) {
+      t.ok(IDS.filter((id) => id !== m.leaderA).includes(m.leaderB),
+        `${name}: the failover leader is one of the first leader's followers`);
+    }
 
     const survivors = new Set();
     for (let seed = 0; seed < 10; seed += 1) {
