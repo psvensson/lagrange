@@ -204,6 +204,49 @@ function commitDurably(db, work) {
   }
 }
 
+function readDurableRecordIn(db, groupId) {
+  const hardStateRow = readRecordTable(RAFT_RS_TABLE.HARD_STATE, () =>
+    db.prepare(RAFT_RS_SQL.SELECT_HARD_STATE).safeIntegers(true).get(groupId));
+  const appliedRow = readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
+    db.prepare(RAFT_RS_SQL.SELECT_APPLIED_STATE).safeIntegers(true).get(groupId));
+  const snapshotRow = readRecordTable(RAFT_RS_TABLE.SNAPSHOT, () =>
+    db.prepare(RAFT_RS_SQL.SELECT_SNAPSHOT).safeIntegers(true).get(groupId));
+  const entryRows = readRecordTable(RAFT_RS_TABLE.LOG, () =>
+    db.prepare(RAFT_RS_SQL.SELECT_LOG_ENTRIES)
+      .safeIntegers(true).all(groupId));
+  return {
+    hardState: hardStateRow ? {
+      term: fromExactInteger(hardStateRow.term),
+      vote: fromExactInteger(hardStateRow.vote),
+      commit: fromExactInteger(hardStateRow.commit_index),
+    } : null,
+    appliedIndex: appliedRow ? fromExactInteger(appliedRow.applied_index) :
+      RAFT_RS_ZERO_INDEX,
+    confState: appliedRow ? confStateFromRow(appliedRow) : emptyConfState(),
+    bootstrapIndex: nullableExactInteger(appliedRow?.bootstrap_index),
+    admissionIndex: nullableExactInteger(appliedRow?.admission_index),
+    membershipGenerationIndex: appliedRow ?
+      fromExactInteger(appliedRow.membership_generation_index) :
+      RAFT_RS_ZERO_INDEX,
+    entries: entryRows.map((row) => ({
+      index: fromExactInteger(row.log_index),
+      term: fromExactInteger(row.term),
+      entryType: Number(row.entry_type),
+      ...(row.data === null ? {} : {data: row.data}),
+    })),
+    snapshot: snapshotRow ? {
+      ...(snapshotRow.data === null ? {} : {data: snapshotRow.data}),
+      metadata: {
+        index: fromExactInteger(snapshotRow.snapshot_index),
+        term: fromExactInteger(snapshotRow.snapshot_term),
+        confState: confStateFromRow(snapshotRow),
+        membershipGenerationIndex:
+          nullableExactInteger(snapshotRow.membership_generation_index),
+      },
+    } : null,
+  };
+}
+
 /**
  * How durably one Ready must commit: raft-rs's own `Ready::must_sync`, which
  * the binding reports as `mustSync`. A Ready that does not say is synced.
@@ -537,45 +580,11 @@ class RaftRsDurableStore {
    *   strings, or null when the record holds none.
    */
   readDurableRecord(groupId) {
-    const {hardStateRow, appliedRow} = this.readProgressRows(groupId);
-    const snapshotRow = readRecordTable(RAFT_RS_TABLE.SNAPSHOT, () =>
-      this.db.prepare(RAFT_RS_SQL.SELECT_SNAPSHOT)
-        .safeIntegers(true).get(groupId));
-    const entryRows = readRecordTable(RAFT_RS_TABLE.LOG, () =>
-      this.db.prepare(RAFT_RS_SQL.SELECT_LOG_ENTRIES)
-        .safeIntegers(true).all(groupId));
-    return {
-      hardState: hardStateRow ? {
-        term: fromExactInteger(hardStateRow.term),
-        vote: fromExactInteger(hardStateRow.vote),
-        commit: fromExactInteger(hardStateRow.commit_index),
-      } : null,
-      appliedIndex: appliedRow ?
-        fromExactInteger(appliedRow.applied_index) :
-        RAFT_RS_ZERO_INDEX,
-      confState: appliedRow ? confStateFromRow(appliedRow) : emptyConfState(),
-      bootstrapIndex: nullableExactInteger(appliedRow?.bootstrap_index),
-      admissionIndex: nullableExactInteger(appliedRow?.admission_index),
-      membershipGenerationIndex: appliedRow ?
-        fromExactInteger(appliedRow.membership_generation_index) :
-        RAFT_RS_ZERO_INDEX,
-      entries: entryRows.map((row) => ({
-        index: fromExactInteger(row.log_index),
-        term: fromExactInteger(row.term),
-        entryType: Number(row.entry_type),
-        ...(row.data === null ? {} : {data: row.data}),
-      })),
-      snapshot: snapshotRow ? {
-        ...(snapshotRow.data === null ? {} : {data: snapshotRow.data}),
-        metadata: {
-          index: fromExactInteger(snapshotRow.snapshot_index),
-          term: fromExactInteger(snapshotRow.snapshot_term),
-          confState: confStateFromRow(snapshotRow),
-          membershipGenerationIndex:
-            nullableExactInteger(snapshotRow.membership_generation_index),
-        },
-      } : null,
-    };
+    return readDurableRecordIn(this.db, groupId);
+  }
+
+  static readDurableRecordIn(db, groupId) {
+    return readDurableRecordIn(db, groupId);
   }
 
   /**

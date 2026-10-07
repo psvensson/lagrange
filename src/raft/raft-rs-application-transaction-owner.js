@@ -4,6 +4,9 @@ const ASYNC_APPLICATION_CALLBACK_ERROR =
   'a committed-entry callback must complete inside its SQLite transaction';
 const MEMBERSHIP_CONTEXT_APPLIER_REQUIRED =
   'committed membership context requires a registry applier';
+const ASYNC_MEMBERSHIP_CONTEXT_APPLIER_ERROR =
+  'a committed membership context applier must complete inside its SQLite ' +
+  'transaction';
 
 // Only a NORMAL entry that carries a payload is a proposed command. A
 // configuration change stays with the runtime, and the empty entry a new
@@ -64,7 +67,11 @@ function applyCommittedEntryTransaction({store, groupId, entry, confState,
       }
     }
     if (committedMembershipContext !== null) {
-      applyCommittedMembershipContext(committedMembershipContext);
+      const appliedMembership =
+        applyCommittedMembershipContext(committedMembershipContext);
+      if (appliedMembership && typeof appliedMembership.then === 'function') {
+        throw new TypeError(ASYNC_MEMBERSHIP_CONTEXT_APPLIER_ERROR);
+      }
     }
     store.putAppliedState(groupId, entry.index, confState, undefined,
       membershipGenerationIndex);

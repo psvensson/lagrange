@@ -29,9 +29,17 @@ import {SQLITE_RAFT_STATE_KEY} from './sqlite-raft-state-constants.js';
 import {
   RAFT_CHECKPOINT_APPLIED_STATE_KEY,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
+  RAFT_CHECKPOINT_PAYLOAD_KIND,
   RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
 } from './snapshot-checkpoint-constants.js';
+import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';
+import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
+import {RaftRsReplicaLifecycleOwner} from
+  './raft-rs-replica-lifecycle-owner.js';
+import {readRaftRsPeerIdentityReservations} from
+  './raft-rs-peer-identity.js';
 import {readCheckpoint} from './snapshot-checkpoint-store.js';
 import {
   RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
@@ -186,6 +194,44 @@ function reconstructStagedRaftState(stagingDb, facts) {
   })();
 }
 
+function reconstructStagedRaftRsState(stagingDb, descriptor, receiver) {
+  const {raftRs} = descriptor;
+  // This row is receiver-local and is minted only in the throwaway staging
+  // file. The lifecycle owner must run before the durable Raft record exists;
+  // seeing a record without a lifecycle row is intentionally a hard refusal.
+  new RaftRsReplicaLifecycleOwner({db: stagingDb, groupId: raftRs.groupId,
+    peerId: String(receiver.peerId),
+    replicaIdentity: receiver.replicaIdentity});
+  const store = new RaftRsDurableStore(stagingDb);
+  store.transaction(() => {
+    store.putAppliedState(raftRs.groupId, raftRs.appliedIndex,
+      raftRs.confState, undefined, raftRs.membershipGenerationIndex);
+    store.putHardState(raftRs.groupId, {
+      term: raftRs.appliedTerm, vote: RAFT_RS_ZERO_INDEX,
+      commit: raftRs.appliedIndex,
+    });
+    store.putSnapshot(raftRs.groupId, {
+      metadata: {index: raftRs.appliedIndex, term: raftRs.appliedTerm,
+        confState: raftRs.confState},
+    }, raftRs.membershipGenerationIndex);
+  });
+}
+
+async function admitsRaftRsInstall(options, descriptor) {
+  const owner = options.createAdmissionOwner;
+  const evidence = options.createAdmissionEvidence;
+  if (!owner || typeof owner.revalidatePhysicalWorker !== 'function' ||
+      !evidence || evidence.replicaId !== options.expectedReplicaIdentity ||
+      evidence.entityType !== descriptor.entity.kind ||
+      evidence.entityId !== descriptor.raftGroupId ||
+      evidence.partitionId !== descriptor.raftGroupId) return false;
+  if (await owner.revalidatePhysicalWorker(evidence) !== true) return false;
+  const reservation = descriptor.raftRs.peerReservations.find(
+    ({replicaIdentity}) => replicaIdentity === options.expectedReplicaIdentity);
+  return reservation?.peerId === String(options.expectedPeerId) &&
+    descriptor.raftRs.confState.learners.includes(reservation.peerId);
+}
+
 /**
  * R3's explicit durable term/votedFor rule (scoped to durable `_raft_state`
  * rows; the live raft's term boot-seeding gap is a recorded pre-existing
@@ -220,6 +266,35 @@ function readInstallIdFromDb(dbPath) {
   const value = readDurableStateValue(
     dbPath, RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.INSTALL_ID);
   return value || null;
+}
+
+function raftRsInstalledImageMatches(checkpointsRoot, replicaDbPath, marker) {
+  if (!fs.existsSync(replicaDbPath)) return false;
+  const checkpointDir = path.join(checkpointsRoot, String(marker.generationIndex));
+  const checkpoint = readCheckpoint({checkpointDir});
+  if (checkpoint.outcome !== RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID ||
+      checkpoint.descriptor.payloadKind !==
+        RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE) return false;
+  const db = new Database(replicaDbPath, {readonly: true});
+  try {
+    const record = RaftRsDurableStore.readDurableRecordIn(
+      db, checkpoint.descriptor.raftRs.groupId);
+    const reservations = readRaftRsPeerIdentityReservations(db);
+    const expected = checkpoint.descriptor.raftRs;
+    return record.appliedIndex === expected.appliedIndex &&
+      record.membershipGenerationIndex === expected.membershipGenerationIndex &&
+      raftRsConfStateKey(record.confState) ===
+        raftRsConfStateKey(expected.confState) &&
+      reservations.length === expected.peerReservations.length &&
+      reservations.every((reservation, index) =>
+        reservation.replicaIdentity ===
+          expected.peerReservations[index].replicaIdentity &&
+        reservation.peerId === expected.peerReservations[index].peerId);
+  } catch {
+    return false;
+  } finally {
+    db.close();
+  }
 }
 
 function rejectInstall(checkpointsRoot, marker, reason) {
@@ -275,6 +350,13 @@ async function requestSnapshotInstall(options) {
       validationOutcome: validation.outcome,
     });
   }
+  const raftRsImage = validation.descriptor.payloadKind ===
+    RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE;
+  if (raftRsImage && !await admitsRaftRsInstall(options, validation.descriptor)) {
+    return installResult(OUTCOME.REJECTED, {
+      reason: REJECTION.CREATE_ADMISSION_REQUIRED,
+    });
+  }
   writeMarker(checkpointsRoot, marker);
   const localElection = readLocalDurableElectionState(replicaDbPath);
   removeStaging(checkpointsRoot);
@@ -289,13 +371,20 @@ async function requestSnapshotInstall(options) {
   }
   const stagingDb = new Database(stagingPath(checkpointsRoot));
   try {
-    reconstructStagedRaftState(stagingDb, {
-      lastIncludedIndex: validation.descriptor.lastIncludedIndex,
-      lastIncludedTerm: validation.descriptor.lastIncludedTerm,
-      maxCommittedHlc: validation.descriptor.maxCommittedHlc,
-      installId,
-      localElection,
-    });
+    if (raftRsImage) {
+      reconstructStagedRaftRsState(stagingDb, validation.descriptor, {
+        peerId: options.expectedPeerId,
+        replicaIdentity: options.expectedReplicaIdentity,
+      });
+    } else {
+      reconstructStagedRaftState(stagingDb, {
+        lastIncludedIndex: validation.descriptor.lastIncludedIndex,
+        lastIncludedTerm: validation.descriptor.lastIncludedTerm,
+        maxCommittedHlc: validation.descriptor.maxCommittedHlc,
+        installId,
+        localElection,
+      });
+    }
   } finally {
     stagingDb.close();
   }
@@ -326,6 +415,13 @@ function resolveStagedMarker(checkpointsRoot, replicaDbPath, marker) {
     });
   }
   if (!stagingPresent) {
+    if (raftRsInstalledImageMatches(checkpointsRoot, replicaDbPath, marker)) {
+      clearMarker(checkpointsRoot);
+      return installResult(OUTCOME.INSTALLED, {
+        installId: marker.installId,
+        generationIndex: marker.generationIndex,
+      });
+    }
     return rejectInstall(checkpointsRoot, marker, REJECTION.STAGING_LOST);
   }
   swapStagingIntoReplica(checkpointsRoot, replicaDbPath);
@@ -366,7 +462,8 @@ function resolvePendingSnapshotInstall(options) {
     return resolveStagedMarker(checkpointsRoot, replicaDbPath, marker);
   }
   if (marker.state === STATE.INSTALLED) {
-    if (readInstallIdFromDb(replicaDbPath) === marker.installId) {
+    if (readInstallIdFromDb(replicaDbPath) === marker.installId ||
+        raftRsInstalledImageMatches(checkpointsRoot, replicaDbPath, marker)) {
       clearMarker(checkpointsRoot);
       return installResult(OUTCOME.INSTALLED, {
         installId: marker.installId,

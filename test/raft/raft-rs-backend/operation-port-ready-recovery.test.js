@@ -249,6 +249,26 @@ test('application effects and durable applied progress commit atomically',
     }
   });
 
+test('an async committed membership applier cannot advance durable progress',
+  () => {
+    const db = new Database(':memory:');
+    try {
+      const store = new RaftRsDurableStore(db);
+      assert.throws(() => applyCommittedEntryTransaction({store,
+        groupId: 'async-membership-applier', entry: {index: '1', term: '1',
+          entryType: RAFT_RS_ENTRY_TYPE.CONF_CHANGE, data: ''},
+        confState: {voters: ['1'], learners: [], votersOutgoing: [],
+          learnersNext: [], autoLeave: false}, membershipGenerationIndex: '1',
+        committedMembershipContext: {replicaIdentity: 'learner', peerId: '2'},
+        applyCommittedMembershipContext: async () => undefined,
+      }), /must complete inside its SQLite transaction/u);
+      assert.equal(store.readDurableRecord('async-membership-applier')
+        .appliedIndex, '0');
+    } finally {
+      db.close();
+    }
+  });
+
 test('runtime replacement cannot re-enter a Ready generation suspended in host delivery',
   async () => {
     let releaseDelivery = null;

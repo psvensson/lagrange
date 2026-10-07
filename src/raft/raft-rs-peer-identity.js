@@ -50,6 +50,38 @@ const LOWEST_USABLE_IDENTITY = 1n;
 const EMPTY = 0;
 const TYPE_STRING = 'string';
 
+function validatedRaftRsPeerIdentityReservations(reservations) {
+  if (!Array.isArray(reservations)) {
+    throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.RESERVATIONS_NOT_ARRAY);
+  }
+  const identities = new Set();
+  const peerIds = new Set();
+  return Object.freeze(reservations.map((reservation) => {
+    const replicaIdentity = reservation?.replicaIdentity;
+    const peerId = reservation?.peerId;
+    const expectedPeerId = deriveRaftRsPeerId(replicaIdentity);
+    if (typeof peerId !== TYPE_STRING || peerId !== expectedPeerId) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.bindingMismatch(
+        replicaIdentity, peerId, expectedPeerId));
+    }
+    if (identities.has(replicaIdentity) || peerIds.has(peerId)) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.duplicateReservation(
+        replicaIdentity, peerId));
+    }
+    identities.add(replicaIdentity);
+    peerIds.add(peerId);
+    return Object.freeze({replicaIdentity, peerId});
+  }));
+}
+
+function readRaftRsPeerIdentityReservations(db) {
+  return validatedRaftRsPeerIdentityReservations(
+    db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all().map((row) => ({
+      replicaIdentity: row.replica_identity,
+      peerId: row.raft_peer_id,
+    })));
+}
+
 /**
  * The raft-rs peer identity a logical Lagrange replica has, by derivation.
  * @param {string} replicaIdentity - The replica's own logical name.
@@ -165,6 +197,11 @@ class RaftRsPeerIdentityRegistry {
     return reservation === undefined ? null : reservation.replica_identity;
   }
 
+  /** All permanent reservations, in deterministic logical-identity order. */
+  reservations() {
+    return readRaftRsPeerIdentityReservations(this.db);
+  }
+
   /**
    * What this registry holds for a raft peer identity, as a named state: a
    * peer the committed configuration names may have been reserved only on
@@ -185,4 +222,9 @@ class RaftRsPeerIdentityRegistry {
   }
 }
 
-export {RaftRsPeerIdentityRegistry, deriveRaftRsPeerId};
+export {
+  RaftRsPeerIdentityRegistry,
+  deriveRaftRsPeerId,
+  readRaftRsPeerIdentityReservations,
+  validatedRaftRsPeerIdentityReservations,
+};

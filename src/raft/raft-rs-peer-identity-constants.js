@@ -22,6 +22,11 @@ const RAFT_RS_PEER_IDENTITY_SQL = Object.freeze({
     FROM ${RAFT_RS_PEER_IDENTITY_TABLE}
     WHERE raft_peer_id = ?
   `,
+  SELECT_ALL: `
+    SELECT replica_identity, raft_peer_id
+    FROM ${RAFT_RS_PEER_IDENTITY_TABLE}
+    ORDER BY replica_identity
+  `,
   INSERT_RESERVATION: `
     INSERT INTO ${RAFT_RS_PEER_IDENTITY_TABLE}
       (replica_identity, raft_peer_id)
@@ -38,6 +43,11 @@ const RAFT_RS_PEER_IDENTITY_RESOLUTION = Object.freeze({
 });
 
 const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
+  RESERVATIONS_NOT_ARRAY:
+    'raft-rs peer identity reservations must be an array',
+  duplicateReservation: (replicaIdentity, peerId) =>
+    'duplicate raft-rs peer identity reservation for ' +
+    `${replicaIdentity}/${peerId}`,
   invalidIdentity: (value) =>
     'a Lagrange replica identity must be a non-empty string, got ' +
     `${JSON.stringify(value)}`,

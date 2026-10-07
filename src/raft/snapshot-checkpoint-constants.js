@@ -28,10 +28,30 @@ const RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES = Object.freeze(['-wal', '-shm'])
 // message-group worker) are typed UNSUPPORTED_ADAPTER at creation.
 const RAFT_CHECKPOINT_PAYLOAD_KIND = Object.freeze({
   SQLITE_STATE_MACHINE_IMAGE: 'sqlite_state_machine_image',
+  RAFT_RS_REPLICA_IMAGE: 'raft_rs_replica_image',
 });
 
 const RAFT_CHECKPOINT_PAYLOAD_VERSION = Object.freeze({
   [RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE]: 1,
+  [RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE]: 1,
+});
+
+const RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS = Object.freeze([
+  'groupId', 'appliedIndex', 'appliedTerm', 'membershipGenerationIndex',
+  'confState', 'peerReservations',
+]);
+const RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS = Object.freeze([
+  'voters', 'learners', 'votersOutgoing', 'learnersNext', 'autoLeave',
+]);
+const RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS = Object.freeze([
+  'replicaIdentity', 'peerId',
+]);
+const RAFT_RS_CHECKPOINT_REASON = Object.freeze({
+  DESCRIPTOR: 'raftRs',
+  BOUNDARY: 'raft_rs_boundary',
+  PAYLOAD_KIND_REQUIRED: 'raft_rs_payload_kind_required',
+  PEER_RESERVATIONS: 'peer_reservations',
+  PAYLOAD_TABLES: 'raft_rs_payload_tables',
 });
 
 // Follower-local consensus tables that never cross replicas inside a payload.
@@ -97,6 +117,9 @@ const RAFT_CHECKPOINT_DESCRIPTOR_FIELDS = Object.freeze([
   'payloadByteLength',
   'payloadDigest',
 ]);
+const RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS = Object.freeze([
+  ...RAFT_CHECKPOINT_DESCRIPTOR_FIELDS, 'raftRs',
+]);
 
 const RAFT_CHECKPOINT_ENTITY_FIELDS = Object.freeze(['kind', 'id']);
 
@@ -115,4 +138,9 @@ export {
   RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES,
   RAFT_CHECKPOINT_PAYLOAD_VERSION,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
+  RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS,
+  RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS,
+  RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS,
+  RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS,
+  RAFT_RS_CHECKPOINT_REASON,
 };

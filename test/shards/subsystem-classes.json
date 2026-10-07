@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 167,
-    "storage-raft": 116,
+    "storage-raft": 117,
     "test-infrastructure": 142,
     "transactions": 16,
-    "transport-messaging": 90,
+    "transport-messaging": 91,
     "wasm-toolchain": 57
   },
-  "censusSize": 2315,
-  "digest": "fnv1a32-f9b7015b",
+  "censusSize": 2317,
+  "digest": "fnv1a32-156493f9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-88eb2167",
+  "observationDigest": "fnv1a32-34b486a1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1084,6 +1084,7 @@
     "test/message-group/maximum-retry-limiting.property.test.js": "transport-messaging",
     "test/message-group/message-delivery-reliability.property.test.js": "transport-messaging",
     "test/message-group/message-group-failover-cdc-continuity.test.js": "transport-messaging",
+    "test/message-group/message-group-fresh-learner-snapshot.test.js": "transport-messaging",
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "transport-messaging",
     "test/message-group/message-group-replica-distribution.property.test.js": "transport-messaging",
@@ -1570,6 +1571,7 @@
     "test/raft/raft-rs-backend/persistence-admission.test.js": "storage-raft",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "storage-raft",
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
@@ -7529,6 +7531,18 @@
         "test/test-helpers/controllable-consensus-port.js"
       ]
     },
+    "test/message-group/message-group-fresh-learner-snapshot.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/message-group/message-group-service.js",
+        "src/node/replica-create-admission-owner.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/snapshot-checkpoint-store.js",
+        "src/raft/snapshot-transfer.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": {
       "files": [
         "src/logging/wait-bound-spent.js",
@@ -9877,6 +9891,18 @@
         "src/raft/raft-rs-proposal-codec.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": {
+      "files": [
+        "src/node/replica-create-admission-owner.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/snapshot-checkpoint-constants.js",
+        "src/raft/snapshot-checkpoint-store.js",
+        "src/raft/snapshot-install-constants.js",
+        "src/raft/snapshot-install.js",
+        "src/runtime/oci-host-agent-durable-files.js"
       ]
     },
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": {
