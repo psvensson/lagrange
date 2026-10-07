@@ -1,50 +1,65 @@
 {
   "schema": "test-receipt/1",
   "quest": "failed-create-cleanup-settlement-separation",
-  "status": "fail",
-  "generatedAt": "2026-10-06T14:05:00+02:00",
+  "status": "pass",
+  "testFileDigests": {
+    "test/rebalancer/terminal-failed-add-target-cleanup.test.js": "838499e297bb3367f313ae94e783116fe1d79a0b7ad99fb5493ecd57037beddb",
+    "test/node/replica-failed-create-cleanup-generation.test.js": "f57b1e7b7265c6a2494f630aa7bf1d8b94e94a31af3974d3ed44e4621bee8a1e",
+    "test/rebalancer/replace-real-group-d2.test.js": "5de0d5d23b557176399f0a533edd57a0ad56ad654b530272c0f4b0e163529fa4",
+    "test/node/replica-create-admission-recovery.test.js": "26984a73d2377b4759747b20cf2fafe47a5ea6e0f785c064aee0eb5f9079fc23",
+    "test/node/replica-create-admission-owner.test.js": "247b37e7d2e0ce2558ec676ca1f877235d176dba1b1a7f19d8fcc8bd114f2d16",
+    "test/scripts/check-operation-dispatch-completion-owner.test.js": "45019d2bc22c2884dac73803a30b2cdac08814f1f0a16f46a3373e428d09039c"
+  },
+  "generatedAt": "2026-10-07T05:55:43.623Z",
   "receipts": [
     {
       "id": "ordinary-settlement-independent-of-cleanup",
-      "passed": false,
-      "command": "pending",
-      "detail": "Red seal: ordinary terminal settlement is still coupled to positive failed-create cleanup evidence."
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+      "detail": "Pre-intent and absent-target ADD/REPLACE terminal outcomes settle without manufacturing or waiting for destructive cleanup authority.",
+      "testFile": "test/rebalancer/terminal-failed-add-target-cleanup.test.js"
     },
     {
       "id": "failed-create-cleanup-exact-generation",
-      "passed": false,
-      "command": "pending",
-      "detail": "Red seal: exact-generation cleanup evidence exists but is not yet separated from settlement."
+      "passed": true,
+      "command": "npm run test:file -- test/node/replica-failed-create-cleanup-generation.test.js test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+      "detail": "Only the exact operation-bound token, create attempt and current lifecycle generation authorize FAILED-to-REMOVING cleanup.",
+      "testFile": "test/node/replica-failed-create-cleanup-generation.test.js"
     },
     {
       "id": "d2-source-retention-and-generic-repair",
-      "passed": false,
-      "command": "pending",
-      "detail": "Red seal: D2 target-dead/source-retained settlement is refused without a failed-create token."
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/replace-real-group-d2.test.js test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+      "detail": "D2 keeps the source voter while the dead target settles, and a later formerly-live FAILED generation remains owned by generic repair.",
+      "testFile": "test/rebalancer/replace-real-group-d2.test.js"
     },
     {
       "id": "late-create-durable-admission-linearization",
-      "passed": false,
-      "command": "pending",
-      "detail": "Red seal: terminal-first and admission-first CREATE orderings have not been proved at one durable admission boundary."
+      "passed": true,
+      "command": "npm run test:file -- test/node/replica-create-admission-owner.test.js test/node/replica-create-admission-recovery.test.js test/rebalancer/coordinator-created-operation-admission.test.js test/rebalancer/replica-operation-terminal-cas.test.js",
+      "detail": "The durable operation-row CAS orders terminal-first and admission-first CREATE, lost answers, concurrent handlers and boot loss.",
+      "testFile": "test/node/replica-create-admission-recovery.test.js"
     },
     {
       "id": "stale-retry-and-restart-reconstruction",
-      "passed": false,
-      "command": "pending",
-      "detail": "Red seal: successor reconstruction exclusions and stale-generation proof are not complete."
+      "passed": true,
+      "command": "npm run test:file -- test/node/replica-create-admission-owner.test.js test/node/replica-create-admission-recovery.test.js test/rebalancer/replica-operation-repository.test.js test/partition/replica-operations-schema-migration.test.js",
+      "detail": "Restart and rotation reconstruct only the exact retained attempt; legacy rows, row loss, successor attempts and stale boots cannot revive it.",
+      "testFile": "test/node/replica-create-admission-owner.test.js"
     },
     {
       "id": "cleanup-release-delivery-and-retry-lifetime",
-      "passed": false,
-      "command": "pending",
-      "detail": "Red seal: the REMOVE-only delivery edge and native recovery-scan timer lifetime are not registered and proved."
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/terminal-failed-add-target-cleanup.test.js test/node/replica-failed-create-cleanup-generation.test.js test/bootstrap/shared/control-plane-setup.test.js",
+      "detail": "The REMOVE-only release edge retains one retry through lost ACK, reconstructs after restart, unrefs only native timers and stops on shutdown.",
+      "testFile": "test/rebalancer/terminal-failed-add-target-cleanup.test.js"
     },
     {
       "id": "owner-censuses-and-widened-regression",
-      "passed": false,
-      "command": "pending",
-      "detail": "Red seal: owner censuses and the widened candidate-caused regression set are not green."
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/check-operation-dispatch-completion-owner.test.js test/node/replica-handler-owner-path-bypass.test.js test/rebalancer/rebalance-coordinator-operation-ownership.test.js test/rebalancer/coordinator-created-operation-admission.test.js test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js test/rebalancer/replica-operation-terminal-cas.test.js test/rebalancer/replace-replica-workflow.test.js test/bootstrap/shared/control-plane-setup.test.js",
+      "detail": "The ordinary and cleanup delivery edges, facade failure route and sole terminal sink pass their source censuses with the widened corrected cone.",
+      "testFile": "test/scripts/check-operation-dispatch-completion-owner.test.js"
     }
   ]
 }
