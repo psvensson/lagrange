@@ -3,7 +3,6 @@
 from pathlib import Path
 import hashlib
 import json
-import os
 import subprocess
 import sys
 import time
@@ -12,7 +11,8 @@ root = Path(sys.argv[1]).resolve()
 expected = sys.argv[2]
 out = Path(sys.argv[3]).resolve()
 out.mkdir(parents=True, exist_ok=False)
-path = root / 'test/query/partition-write-answer-consumers.test.js'
+relative = 'test/query/partition-write-answer-consumers.test.js'
+path = root / relative
 original = path.read_bytes()
 text = original.decode()
 assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root).decode().strip() == expected
@@ -76,30 +76,42 @@ text=text.rstrip()[:-len(ending)]+'''  });
 '''
 assert 'const EXECUTOR_BUDGET_MS = 8000;' in text
 assert 'const TEST_TIMEOUT_MS = 30000;' in text
-# Diagnostics must preserve all original assertion calls and refusal expectations.
 assert text.count('assert.') == original.decode().count('assert.')
-path.write_text(text)
-(out/'instrumentation.patch').write_bytes(subprocess.check_output(['git','diff','--',str(path.relative_to(root))],cwd=root))
-(out/'binding.json').write_text(json.dumps({'sourceSha':expected,
-    'originalTestSha256':hashlib.sha256(original).hexdigest(),
-    'instrumentedTestSha256':hashlib.sha256(text.encode()).hexdigest(),
-    'assertionsUnchanged':True,'timeoutBudgetMs':8000,'runtimeChanged':False,
-    'limits':'observation-only instrumented test; not uninstrumented pass rate or causal proof'},indent=2)+'\n')
+tap = root / '.tap/test-results' / (relative + '.tap')
+assert not tap.exists(), 'new checkout must not contain a stale trace'
 start=time.monotonic()
 try:
+    path.write_text(text)
+    subprocess.run(['node','--check',str(path)],cwd=root,check=True)
+    (out/'instrumentation.patch').write_bytes(subprocess.check_output(
+        ['git','diff','--',relative],cwd=root))
+    (out/'binding.json').write_text(json.dumps({'sourceSha':expected,
+        'originalTestSha256':hashlib.sha256(original).hexdigest(),
+        'instrumentedTestSha256':hashlib.sha256(text.encode()).hexdigest(),
+        'assertionsUnchanged':True,'timeoutBudgetMs':8000,'runtimeChanged':False,
+        'limits':'observation-only instrumented test; not uninstrumented pass rate or causal proof'},indent=2)+'\n')
     with (out/'stdout.txt').open('wb') as output, (out/'stderr.txt').open('wb') as error:
-        code=subprocess.run(['npm','run','test:file','--',str(path.relative_to(root))],
+        code=subprocess.run(['npm','run','test:file','--',relative],
             cwd=root,stdout=output,stderr=error,check=False).returncode
     (out/'exit.txt').write_text(str(code)+'\n')
+    # The classified runner suppresses successful-file diagnostics from stdout.
+    # Its complete per-file TAP is the observation owner, not the summary line.
+    assert tap.is_file(), 'canonical full TAP required, not a fabricated trace'
+    raw=tap.read_bytes()
+    (out/'full-test.tap').write_bytes(raw)
+    ledger=root/'test-output/reports/test-results.ndjson'
+    if ledger.exists(): (out/'test-results.ndjson').write_bytes(ledger.read_bytes())
     traces=[]
-    for line in (out/'stdout.txt').read_text().splitlines():
+    for line in raw.decode().splitlines():
         if 'FAJ_TRACE ' in line:
-            try: traces.append(json.loads(line.split('FAJ_TRACE ',1)[1]))
-            except json.JSONDecodeError: pass
+            traces.append(json.loads(line.split('FAJ_TRACE ',1)[1]))
     assert len(traces)==1, 'one complete trace required; failed setup is not a retry diagnosis'
+    assert code in (0,1), 'runner infrastructure failure is not product attribution'
     (out/'trace.json').write_text(json.dumps({'exitCode':code,
-        'durationSeconds':round(time.monotonic()-start,3),**traces[0]},indent=2)+'\n')
+        'durationSeconds':round(time.monotonic()-start,3),
+        'tapSha256':hashlib.sha256(raw).hexdigest(),**traces[0]},indent=2)+'\n')
 finally:
     path.write_bytes(original)
-    subprocess.run(['git','diff','--exit-code','--','src',str(path.relative_to(root))],cwd=root,check=True)
-print(json.dumps({'sha':expected,'exitCode':code,'tracePhases':[x['phase'] for x in traces[0]['trace']]}))
+    subprocess.run(['git','diff','--exit-code','--','src',relative],cwd=root,check=True)
+print(json.dumps({'sha':expected,'exitCode':code,
+    'tracePhases':[x['phase'] for x in traces[0]['trace']]}))
