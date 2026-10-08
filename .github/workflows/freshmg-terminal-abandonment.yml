@@ -2,210 +2,161 @@ name: freshmg-terminal-abandonment
 on:
   push:
     branches: [ops/freshmg-terminal-abandonment-20261008]
-    paths:
-      - .github/workflows/freshmg-terminal-abandonment.yml
-      - scripts/quest-evidence/prepare-failed-only-abandonment.py
+    paths: [.github/workflows/freshmg-terminal-abandonment.yml]
 permissions:
   contents: read
 concurrency:
   group: freshmg-terminal-abandonment-20261008
   cancel-in-progress: false
 env:
-  BASE: ee4ddd5ca11eb5edec2b947554419914f8b8d778
+  EXPECTED: ee4ddd5ca11eb5edec2b947554419914f8b8d778
+  CANDIDATE: b4aabb36641a15269e0425e1ba3336be106094ac
   WORK_BRANCH: work/freshmg-terminal-abandonment-20261008
   QUEST: message-group-fresh-identity-membership
-  SOURCE: src/rebalancer/replica-operation-message-group-membership-authorization.js
-  UNIT: test/rebalancer/message-group-membership-branch-authorization.test.js
-  CACHE: test/integration/message-group-membership-claim-cache.integration.test.js
 jobs:
-  wake:
+  preserve-and-review:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-        with:
-          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
-          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
-      - name: Start only the existing proof runner
-        run: |
-          set -euo pipefail
-          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
-          if [ "$status" != RUNNING ]; then
-            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
-          fi
-  correct-and-prove:
-    needs: wake
-    runs-on: [self-hosted, gcp]
-    timeout-minutes: 30
+    timeout-minutes: 20
     permissions:
       contents: write
       actions: read
       pull-requests: write
-    defaults:
-      run:
-        shell: bash
-        working-directory: t1-failed-${{ github.run_id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.sha }}
-          path: carrier-${{ github.run_id }}
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ env.BASE }}
-          path: t1-failed-${{ github.run_id }}
-          persist-credentials: false
+          ref: ${{ env.EXPECTED }}
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Test-first red, bounded repair, green and mutation proof
+      - name: Verify original archives and recover the exact measured commit
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$BASE"
-          test -z "$(git status --porcelain)"
-          out=test-output/t1-failed-only
-          mkdir -p "$out"
-          printf 'base=%s\ncarrier=%s\nrunner=%s\nrun=%s\n' "$BASE" "$GITHUB_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > "$out/provenance.txt"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          npm ci
-          exec 9>/tmp/lagrange-contract-first-measurement.lock
-          flock -w 120 9
-          prepare="../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/prepare-failed-only-abandonment.py"
-          python3 "$prepare" . tests > "$out/preparation.txt"
-          node --check "$UNIT"
-          node --check "$CACHE"
-          git diff --exit-code "$BASE" -- src
-          git add -- "$UNIT" "$CACHE"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: successful replacements cannot authorize target abandonment'
-          git rev-parse HEAD > "$out/red-sha.txt"
-          capture() {
-            local name="$1" expected="$2"; shift 2
-            set +e
-            "$@" > "$out/$name.txt" 2>&1
-            local code=$?
-            set -e
-            echo "$code" > "$out/$name-exit.txt"
-            tail -25 "$out/$name.txt"
-            test "$code" -eq "$expected"
-          }
-          capture red-unit 1 npm run test:file -- "$UNIT"
-          grep -q 'successful replacement must never authorize target abandonment' "$out/red-unit.txt"
-          capture red-cache 1 timeout 100s npm run test:file -- "$CACHE"
-          grep -q 'live successful replacement must never authorize target abandonment' "$out/red-cache.txt"
-          grep -q ERR_ASSERTION "$out/red-cache.txt"
-          python3 "$prepare" . fix > "$out/correction.txt"
-          capture lint 0 npm exec --no -- eslint "$SOURCE" "$UNIT" "$CACHE"
-          capture metadata 0 npm run test:metadata:refresh
-          capture shards 0 npm run audit:shards
-          capture source-metrics 0 npm run test:metrics:scoped -- "$SOURCE"
-          capture test-metrics 0 npm run test:metrics:scoped:strict -- "$UNIT" "$CACHE"
-          git diff --check
-          test "$(git diff --name-only "$BASE" -- src)" = "$SOURCE"
-          capture green-unit 0 npm run test:file -- "$UNIT" test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js
-          capture green-cache 0 timeout 100s npm run test:file -- "$CACHE"
-          saved="$RUNNER_TEMP/t1-failed-source-$GITHUB_RUN_ID.js"
-          cp "$SOURCE" "$saved"
-          trap 'cp "$saved" "$SOURCE"' EXIT
-          for kind in status step sql; do
-            cp "$saved" "$SOURCE"
-            python3 "$prepare" . "mutant-$kind"
-            capture "mutant-$kind" 1 npm run test:file -- "$UNIT"
-            grep -q ERR_ASSERTION "$out/mutant-$kind.txt"
-            if [ "$kind" = sql ]; then
-              grep -q 'changed ordinary state defeats the stale abandonment CAS' "$out/mutant-$kind.txt"
-            else
-              grep -q 'inconsistent terminal facts are not failed-learner authority' "$out/mutant-$kind.txt"
-            fi
-          done
-          cp "$saved" "$SOURCE"
-          cmp "$saved" "$SOURCE"
-          echo all-required-checks-passed > "$out/measurement-complete.txt"
-      - name: Canonically retain the failed attempt and exact source proof, then push
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          out=test-output/t1-failed-only
-          test -f "$out/measurement-complete.txt"
-          gh auth setup-git
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
-          gh api repos/psvensson/lagrange/pulls/107/reviews > "$out/reviews.json"
-          old="$RUNNER_TEMP/failed-only-lint-37780206718.zip"
-          gh api repos/psvensson/lagrange/actions/artifacts/11550939645/zip > "$old"
-          echo "994dc27feae95b0853820c835d49daa969d459a37cb7ea3652b67c0c8569bf65  $old" | sha256sum -c -
-          node scripts/solve.js evidence add "$old" --id "$QUEST" --text 'Original 37780206718: intended unit/live-cache red reproduced; next step stopped on one 101-character fixture line. Retained failure, not product green. Subsequent preparation only wraps that configuration field.' --json > "$out/prior-failed-evidence.json"
-          node scripts/solve.js note --id "$QUEST" --finding 'Review 5456700481 / 4219025228: successful REMOVED and mixed terminal facts must not select target abandonment from a retained learner hint. Reuse the existing ordinary status/step owner and same-row CAS; require exact FAILED/FAILED for newly selected terminal abandonment. No new subsystem, broader terminal classification change or dispatch permission. Physical activation remains blocked.' --kind altitude-check --json > "$out/reflection.json"
-          node scripts/solve.js note --id "$QUEST" --attempt "Addressed 4219025228 on $BASE: exact failed status/step gate. Test-first unit and live SQL/Raft/CDC/cache red; unchanged tests green; failed-learner positive retained; all three predicate mutations caught. First run's formatting failure retained. GCP $GITHUB_RUN_ID. No independent approval or membership activation." --json > "$out/attempt.json"
-          git add -- "$SOURCE" test/shards/ "solve/quests/$QUEST/log.ndjson"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'fix: only failed replacements may select terminal learner abandonment'
-          git rev-parse HEAD > "$out/source-sha.txt"
-          test -z "$(git status --porcelain --untracked-files=no)"
-          git diff --binary "$BASE" > "$out/change.patch"
+          mkdir -p test-output/failed-only-retention
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
           python3 - <<'PY'
-          import hashlib,json,os
+          import hashlib,json,os,subprocess,urllib.request,zipfile
           from pathlib import Path
-          p=Path('test-output/t1-failed-only')
-          outputs={f.name:f.read_text() for f in p.iterdir() if f.is_file()}
-          record={'schema':'freshmg-failed-only-abandonment/1','runId':int(os.environ['GITHUB_RUN_ID']),
-            'baseSha':os.environ['BASE'],'carrierSha':os.environ['GITHUB_SHA'],
-            'sourceSha':(p/'source-sha.txt').read_text().strip(),'runner':os.environ['RUNNER_NAME'],
-            'reviewId':5456700481,'commentId':4219025228,'independentApproval':False,
-            'distributedAcceptance':False,'runtimeActivation':False,
-            'sourceSha256':hashlib.sha256(Path(os.environ['SOURCE']).read_bytes()).hexdigest(),
-            'proofCeiling':'actual repository and supplied learner row; file-backed unit gateway; live single-seed SQL/Raft/CDC/cache with quiesced coordinator; no physical membership or multi-host proof',
-            'outputs':outputs,'sha256':{k:hashlib.sha256(v.encode()).hexdigest() for k,v in outputs.items()}}
-          (p/'measurement.json').write_text(json.dumps(record,indent=2)+'\n')
+          out=Path('test-output/failed-only-retention')
+          specs=[(37781772537,11552577293,'836a6f1072d0af7630312262e09a38d646d3be139974eeae668da6c0444ca72f','measurement-passed-publication-failed'),
+            (37780990679,11552945556,'99d84007a01c3fd4af90ddc003a65375baad0dfaddd9a40b8b6a1ab597535c09','test-fixture-strict-metrics-failed')]
+          records=[]
+          for run,aid,digest,verdict in specs:
+              file=out/f'original-{run}.zip'
+              with file.open('wb') as dest:
+                  subprocess.run(['gh','api',f'repos/psvensson/lagrange/actions/artifacts/{aid}/zip'],stdout=dest,check=True)
+              assert hashlib.sha256(file.read_bytes()).hexdigest()==digest
+              with zipfile.ZipFile(file) as z:
+                  names=z.namelist()
+                  assert len(names)==len(set(names))
+                  assert all('/' not in n and '\\' not in n for n in names)
+                  checked=0
+                  for line in z.read('FINAL_SHA256SUMS').decode().splitlines():
+                      expected,path=line.split(None,1)
+                      member=Path(path.strip()).name
+                      assert hashlib.sha256(z.read(member)).hexdigest()==expected,member
+                      checked+=1
+                  if run==37781772537:
+                      assert z.read('source-sha.txt').decode().strip()==os.environ['CANDIDATE']
+                      assert z.read('final-status.txt')==b'' and z.read('uncommitted.patch')==b''
+                      measurement=json.loads(z.read('measurement.json'))
+                      for name,code in [('red-unit',1),('red-cache',1),('green-unit',0),('green-cache',0),('mutant-status',1),('mutant-step',1),('mutant-sql',1),('lint',0),('shards',0),('test-metrics',0)]:
+                          assert int(z.read(name+'-exit.txt'))==code,name
+                      (out/'candidate.bundle').write_bytes(z.read('candidate.bundle'))
+                      (out/'measurement.json').write_bytes(z.read('measurement.json'))
+                  records.append({'runId':run,'artifactId':aid,'archiveSha256':digest,
+                      'verifiedManifestMembers':checked,'verdict':verdict})
+          (out/'verified-archives.json').write_text(json.dumps(records,indent=2)+'\n')
           PY
-          archive="$RUNNER_TEMP/failed-only-$GITHUB_RUN_ID.zip"
-          (cd "$out" && sha256sum * > SHA256SUMS && zip -q "$archive" *)
-          node scripts/solve.js evidence add "$archive" --id "$QUEST" --text "Failed-only T1 correction: both test-first negatives, same tests green and three mutation kills. Exact source/review and limits retained. Actions/GCP $GITHUB_RUN_ID; no full-cutover proof." --json > "$out/canonical-evidence.json"
+          git bundle verify test-output/failed-only-retention/candidate.bundle
+          git fetch test-output/failed-only-retention/candidate.bundle HEAD
+          test "$(git rev-parse FETCH_HEAD)" = "$CANDIDATE"
+          git merge-base --is-ancestor "$EXPECTED" "$CANDIDATE"
+          test "$(git rev-list --count "$EXPECTED..$CANDIDATE")" -eq 2
+          git checkout --detach "$CANDIDATE"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          test "$(git diff --name-only "$EXPECTED" -- src)" = src/rebalancer/replica-operation-message-group-membership-authorization.js
+          echo 'd01217f68be1e6f817207750bcf6f389869a2f4016585cc6a2c78802c4fb55f0  src/rebalancer/replica-operation-message-group-membership-authorization.js' | sha256sum -c -
+          git diff --name-status "$EXPECTED" > test-output/failed-only-retention/recovered-paths.txt
+      - name: Persist original evidence and record the bounded review response
+        run: |
+          set -euo pipefail
+          npm ci
+          out=test-output/failed-only-retention
+          for run in 37781772537 37780990679; do
+            node scripts/solve.js evidence add "$out/original-$run.zip" --id "$QUEST" --text "Original failed-only T1 attempt $run: preserve exact red/green, guardrail and publication results without changing the outer verdict. Measurement 37781772537 passed; packaging failed because zip was absent. No repeated product measurement." --json > "$out/canonical-$run.json"
+          done
           python3 - <<'PY'
           import json,os
           from pathlib import Path
-          p=Path('test-output/t1-failed-only')
-          record=json.loads((p/'measurement.json').read_text())
-          record['canonicalEvidence']=json.loads((p/'canonical-evidence.json').read_text())
-          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('failed-only-'+os.environ['GITHUB_RUN_ID']+'.json')
-          dest.write_text(json.dumps(record,indent=2)+'\n')
+          out=Path('test-output/failed-only-retention')
+          record=json.loads((out/'measurement.json').read_text())
+          record['retentionRun']=int(os.environ['GITHUB_RUN_ID'])
+          record['originalWorkflowConclusion']='failure'
+          record['publicationFailure']='zip command absent after all required measurements passed; exact committed source recovered from verified bundle'
+          archives=json.loads((out/'verified-archives.json').read_text())
+          for a in archives:
+              a['canonicalEvidence']=json.loads((out/f"canonical-{a['runId']}.json").read_text())
+          record['retainedAttempts']=archives
+          q=Path('solve/quests')/os.environ['QUEST']
+          (q/'evidence/failed-only-37781772537.json').write_text(json.dumps(record,indent=2)+'\n')
+          (q/'t1-failed-only-review-response.md').write_text('''# T1 failed-only correction
+
+Review: 5456700481 / 4219025228, based on ee4ddd5c. The finding is accepted:
+ordinary terminality includes successful REMOVED replacements and is not
+failed-target cleanup authority. The existing branch selector now requires
+exact FAILED status AND FAILED workflow step for newly selecting terminal
+learner abandonment. Successful and mixed terminal facts refuse, even when
+an old learner hint remains. Exact ordinary status/step/completion stay in
+the same conditional UPDATE; a delayed failed-row command loses after success.
+The historical action-observation/replay path is not a new dispatch grant.
+
+Measured unchanged tests red then green on b4aabb36641a15269e0425e1ba3336be106094ac:
+4 files / 149 reported assertions, plus two live SQL/Raft/CDC/cache cases.
+Failed-learner recovery remains positive. Independent status, step and SQL
+predicate deletion mutants each fail. Lint, current metadata and strict test
+complexity pass. One source function retains its inherited complexity 44;
+this is not full static/corpus acceptance. The unit fixture supplies learner
+state; cache tests quiesce reconciliation and supply synthetic operation rows.
+No physical membership, CREATE, full driver or multi-host proof is claimed.
+
+37780206718 stopped on test formatting; 37780990679 stopped on inherited test
+fixture complexity. The latter was reduced by extracting only the existing
+lost-answer result transformation, retaining all fault controls. 37781772537
+completed every required measurement but failed at packaging because the
+runner lacked zip. The exact committed candidate and raw evidence were
+recovered, not rerun or relabeled. Original outer failures remain failures.
+
+This is a source correction under the existing FreshMG Quest, not independent
+approval, C0 closure, source landing or activation. Next initial admission
+work must retain T0 terminal-first exclusion, current holder/boot, immutable
+source/target identities and unknown-answer recovery. A recorded operation-row
+intent alone is never physical execution permission.
+''')
           PY
-          git add -- "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/failed-only-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain failed-only abandonment red green and mutation proof'
+          node scripts/solve.js note --id "$QUEST" --finding 'Recovered exact b4aabb366 from hash-verified 37781772537 bundle after zip executable absence stopped packaging. All required unit/live-cache red-green and three mutation controls had passed; no remeasurement or new runtime edit. Retained 37780990679 strict-fixture failure as well as the previously canonical lint failure. T1 newly selected terminal abandonment is now FAILED/FAILED only. Independent review, activation and whole-cutover remain open.' --kind evidence --json > "$out/recovery-note.json"
+          git add -- "solve/quests/$QUEST/evidence/failed-only-37781772537.json" "solve/quests/$QUEST/t1-failed-only-review-response.md" "solve/quests/$QUEST/log.ndjson"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain exact failed-only source proof and publication recovery'
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
           git rev-parse HEAD > "$out/published-sha.txt"
-      - name: Request independent review of the actual published head
-        env:
-          GH_TOKEN: ${{ github.token }}
+          git status --porcelain > "$out/final-status.txt"
+      - name: Request independent review at published head
         run: |
           set -euo pipefail
           exact="$(git rev-parse HEAD)"
-          gh pr comment 107 --repo psvensson/lagrange --body "Addressed 4219025228 at exact $exact: only FAILED/FAILED may newly select target abandonment. Successful REMOVED and mixed rows refuse; same-row CAS defeats stale failed-row writes after success. Unit/live SQL/Raft/CDC/cache red then green; three predicate mutants killed. Canonical proof: evidence/failed-only-$GITHUB_RUN_ID.json. Request category-complete exact-head review, not source approval or activation inferred from green counts."
+          gh pr comment 107 --repo psvensson/lagrange --body "Review 4219025228 corrected at exact $exact. Newly selected terminal abandonment requires exact FAILED/FAILED; successful REMOVED and mixed terminal states refuse. Same-row CAS defeats stale failed-row writes after success. GCP 37781772537: same tests red then green, 149 regression assertions, two live-cache cases, and three mutation kills; original packaging failure remains documented. Exact committed source recovered from verified bundle, not rerun. See t1-failed-only-review-response.md and evidence/failed-only-37781772537.json. Request exact-head category-complete review; no activation or full-cutover claim."
           gh pr edit 107 --repo psvensson/lagrange --add-reviewer @copilot
-      - name: Preserve every outcome and recoverable source
-        if: always()
-        run: |
-          set -euo pipefail
-          mkdir -p test-output/t1-failed-only
-          git diff --binary "$BASE" > test-output/t1-failed-only/full-work.patch
-          git diff --binary > test-output/t1-failed-only/uncommitted.patch
-          git status --porcelain > test-output/t1-failed-only/final-status.txt
-          git archive --format=tar.gz -o test-output/t1-failed-only/source.tar.gz HEAD
-          if [ "$(git rev-parse HEAD)" != "$BASE" ]; then
-            git bundle create test-output/t1-failed-only/candidate.bundle HEAD "^$BASE"
-          fi
-          find test-output/t1-failed-only -type f ! -name FINAL_SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/t1-failed-only/FINAL_SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-failed-only-${{ github.run_id }}-${{ github.run_attempt }}
-          path: t1-failed-${{ github.run_id }}/test-output/t1-failed-only/
+          name: failed-only-retention-${{ github.run_id }}
+          path: test-output/failed-only-retention/
           retention-days: 14
           if-no-files-found: error
