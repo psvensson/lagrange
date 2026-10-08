@@ -39,7 +39,6 @@ jobs:
     timeout-minutes: 35
     permissions:
       contents: write
-      pull-requests: write
     defaults:
       run:
         shell: bash
@@ -60,168 +59,17 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Bind source, correct history by addition, and add the real-owner test first
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$BASE"
-          test -z "$(git status --porcelain)"
-          mkdir -p test-output/learner-runtime
-          printf 'base=%s\ncarrier=%s\nrunner=%s\nrun=%s\n' "$BASE" "$GITHUB_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/learner-runtime/provenance.txt
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          npm ci
-          node scripts/solve.js note --id "$QUEST" --finding 'Review 5458017769 correction applies to BOTH the historical log and embedded canonical reply: 37787377904 stopped on lint after test-first red and never ran positive unit/cache checks. 37788383916 passed behavior but failed timing; only 37789951368 completed budgets and mutation controls. Original bytes and erroneous descriptions remain historical, overridden by evidence/initial-learner-run-correction-5458017769.md. This is not new source approval.' --kind evidence --json > test-output/learner-runtime/correction-note.json
-          cp ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/learner-runtime-consumer.test.js "$TEST"
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-          p=Path(os.environ['TEST']); s=p.read_text()
-          old='...JSON.parse(f.request.permit), leaderTerm: 100'
-          assert s.count(old)==1
-          s=s.replace(old,"...JSON.parse(f.request.permit), workflowOwnerFence: 'not-the-issued-fence'")
-          anchor="      const count = f.proposalCount();\n      assert.equal((await f.run()).reason,\n        portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.MISMATCH);"
-          assert s.count(anchor)==1
-          s=s.replace(anchor,"""      const count = f.proposalCount();
-          assert.equal((await admission.proposeAuthorizedGroupLearner(f.port, f.receiver,
-            f.request, {outcome: 'observed'})).reason,
-          portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
-          assertNoProposal(f, count);
-          assert.equal((await f.run()).reason,
-            portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.MISMATCH);""")
-          p.write_text(s)
-          PY
-          npm exec --no -- eslint "$TEST" --fix > test-output/learner-runtime/test-lint.txt 2>&1
-          npm run test:metadata:refresh > test-output/learner-runtime/red-metadata.txt 2>&1
-          git diff --exit-code "$BASE" -- src
-          git add "$TEST" test/shards/ "solve/quests/$QUEST/log.ndjson"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: bind initial learner intent to actual repository and native Raft consumers'
-          git rev-parse HEAD > test-output/learner-runtime/red-sha.txt
-          set +e
-          timeout 60s npm run test:file -- "$TEST" > test-output/learner-runtime/red.txt 2>&1
-          status=$?
-          set -e
-          echo "$status" > test-output/learner-runtime/red-exit.txt
-          test "$status" -eq 1
-          grep -q 'existing group admission owner must consume authoritative learner intent' test-output/learner-runtime/red.txt
-          grep -q ERR_ASSERTION test-output/learner-runtime/red.txt
-      - name: Connect the existing admission owner to exact repository observation
-        run: |
-          set -euo pipefail
-          python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/prepare-learner-runtime.py .
-          git add -N src/rebalancer/replica-operation-message-group-learner-observation.js
-          git diff --name-only -- src > test-output/learner-runtime/source-paths.txt
-          npm exec --no -- eslint $(cat test-output/learner-runtime/source-paths.txt) --fix > test-output/learner-runtime/source-lint.txt 2>&1
-          npm run test:metadata:refresh > test-output/learner-runtime/metadata.txt 2>&1
-          node scripts/solve.js note --id "$QUEST" --attempt 'Connect an exact recipient-side repository observation to the existing group-admission owner and native semantic port. Host-composed bindings and immutable encoded intent are required; the runtime still owns same-turn term/configuration/lifecycle/generation checks. Test crosses real repository and three real Raft ports with in-process transport. No registered network ingress, physical target, CREATE, full driver, or distributed acceptance is enabled.' --json > test-output/learner-runtime/attempt.json
-          git diff --check
-          git add -- src "$TEST" test/shards/ "solve/quests/$QUEST/log.ndjson"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'feat: consume durable learner intent at the existing group admission boundary'
-          git rev-parse HEAD > test-output/learner-runtime/source-sha.txt
-      - name: Measure native committed effects, refusals, and existing repository regressions
-        run: |
-          set -uo pipefail
-          exec 9>/tmp/lagrange-contract-first-measurement.lock
-          flock -w 120 9 || exit 2
-          timeout 60s npm run test:file -- "$TEST" > test-output/learner-runtime/green.txt 2>&1
-          status=$?
-          echo "$status" > test-output/learner-runtime/green-exit.txt
-          tail -90 test-output/learner-runtime/green.txt
-          test "$status" -eq 0 || exit "$status"
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/learner-runtime/regressions.txt 2>&1
-          status=$?
-          echo "$status" > test-output/learner-runtime/regressions-exit.txt
-          test "$status" -eq 0 || exit "$status"
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
-          out=Path('test-output/learner-runtime')
-          for name,limit in [('green.txt',30000),('regressions.txt',2000)]:
-              rows=re.findall(r'ok ([^\n]+?) \([^\n]*?, (\d+)ms\)',(out/name).read_text())
-              assert rows, (name,'runner timing not measured')
-              assert all(int(ms)<=limit for _,ms in rows),(name,rows,limit)
-          PY
-          npm run audit:shards > test-output/learner-runtime/shards.txt 2>&1 || exit $?
-          npm run test:metrics:scoped:strict -- "$TEST" > test-output/learner-runtime/test-metrics.txt 2>&1 || exit $?
-          set +e
-          npm run test:metrics:scoped -- $(cat test-output/learner-runtime/source-paths.txt) > test-output/learner-runtime/source-metrics.txt 2>&1
-          echo "$?" > test-output/learner-runtime/source-metrics-exit.txt
-          set -e
-      - name: Mutation controls must catch missing durable intent, holder and native fences
-        run: |
-          set -euo pipefail
-          exec 9>/tmp/lagrange-contract-first-measurement.lock
-          flock -w 120 9
-          for mutant in permit holder native; do
-            python3 - "$mutant" <<'PY'
-          import sys
-          from pathlib import Path
-          kind=sys.argv[1]
-          p=Path('src/rebalancer/replica-operation-message-group-learner-observation.js')
-          if kind=='permit': old='row.messageGroupMembershipPermit !== input.permit ||'; new='false ||'
-          elif kind=='holder': old='row.messageGroupMembershipOwnerClaim !== input.executionClaim ||'; new='false ||'
-          else:
-              p=Path('src/raft/raft-rs-group-membership-admission.js')
-              old='return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](observed.transition);'
-              new='return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]({...observed.transition, leaderTerm: status.term, runtimeGeneration: status.runtimeGeneration, replicaLifecycleIncarnation: status.lifecycleIncarnation, leaderConfigurationStamp: {configurationKey: status.configurationKey, membershipGenerationIndex: status.membershipGenerationIndex}});'
-          s=p.read_text(); assert s.count(old)==1,(p,old); p.write_text(s.replace(old,new))
-          PY
-            set +e
-            timeout 60s npm run test:file -- "$TEST" > "test-output/learner-runtime/mutant-$mutant.txt" 2>&1
-            status=$?
-            set -e
-            echo "$status" > "test-output/learner-runtime/mutant-$mutant-exit.txt"
-            # Restore only our two deliberately modified files from this exact candidate.
-            git show HEAD:src/rebalancer/replica-operation-message-group-learner-observation.js > src/rebalancer/replica-operation-message-group-learner-observation.js
-            git show HEAD:src/raft/raft-rs-group-membership-admission.js > src/raft/raft-rs-group-membership-admission.js
-            test "$status" -eq 1
-            grep -q ERR_ASSERTION "test-output/learner-runtime/mutant-$mutant.txt"
-            case "$mutant" in
-              permit) grep -q 'wrong group, recipient boot, sender and changed payload' "test-output/learner-runtime/mutant-$mutant.txt" ;;
-              holder) grep -q 'current canonical boot and exact renewed holder' "test-output/learner-runtime/mutant-$mutant.txt" ;;
-              native) grep -q 'native same-turn fencing must remain in force' "test-output/learner-runtime/mutant-$mutant.txt" ;;
-            esac
-          done
-          git diff --exit-code -- src
-      - name: Retain measured source and evidence; push only the authorized WIP branch
+      - name: Test first, then connect only the existing owner boundary
+        run: bash ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/run-learner-runtime.sh prepare
+      - name: Measure native committed identity and refusal controls
+        run: bash ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/run-learner-runtime.sh measure
+      - name: Deliberate predicate and native-fence mutations must fail
+        run: bash ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/run-learner-runtime.sh mutations
+      - name: Canonically retain failed and passing evidence and push WIP
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh auth setup-git
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
-          git diff --binary "$BASE" > test-output/learner-runtime/change.patch
-          git status --porcelain > test-output/learner-runtime/measured-status.txt
-          test ! -s test-output/learner-runtime/measured-status.txt
-          python3 - <<'PY'
-          import hashlib,json,os,subprocess,zipfile
-          from pathlib import Path
-          out=Path('test-output/learner-runtime')
-          files={p.name:p.read_bytes() for p in out.iterdir() if p.is_file()}
-          hashes={n:hashlib.sha256(b).hexdigest() for n,b in files.items()}
-          files['SHA256SUMS']=(''.join(h+'  '+n+'\n' for n,h in sorted(hashes.items()))).encode()
-          archive=out/f"learner-runtime-{os.environ['GITHUB_RUN_ID']}.zip"
-          with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
-              for name,content in files.items():z.writestr(name,content)
-          with (out/'canonical.json').open('w') as f:
-              subprocess.run(['node','scripts/solve.js','evidence','add',str(archive),'--id',os.environ['QUEST'],
-                '--text','Repository-to-native learner consumer: exact runtime effects and negative controls, no transport authentication, physical CREATE, multi-host or full-cutover claim.','--json'],stdout=f,check=True)
-          record={'schema':'freshmg-learner-runtime-proof/1','runId':int(os.environ['GITHUB_RUN_ID']),
-            'sourceSha':(out/'source-sha.txt').read_text().strip(),'baseSha':os.environ['BASE'],
-            'carrierSha':os.environ['GITHUB_SHA'],'runner':os.environ['RUNNER_NAME'],
-            'independentApproval':False,'distributedAcceptance':False,
-            'proofCeiling':'real repository with file-backed substitute SQL gateway, three real raft-rs ports and in-process transport; host sender/recipient bindings are fixtures; no physical target, CREATE, driver or network-authentication proof',
-            'canonicalEvidence':json.loads((out/'canonical.json').read_text()),
-            'outputs':{n:b.decode() for n,b in files.items()},'sha256':hashes}
-          p=Path('solve/quests')/os.environ['QUEST']/'evidence'/f"learner-runtime-{os.environ['GITHUB_RUN_ID']}.json"
-          p.write_text(json.dumps(record,indent=2)+'\n')
-          PY
-          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/learner-runtime-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain repository-to-native learner consumer proof and its limits'
-          git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          exact="$(git rev-parse HEAD)"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$exact"
-          echo "$exact" > test-output/learner-runtime/published-sha.txt
-      - name: Archive every outcome, including failed candidates
+        run: bash ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/run-learner-runtime.sh publish
+      - name: Archive all outcomes and recoverable candidate
         if: always()
         run: |
           set -euo pipefail
@@ -230,6 +78,7 @@ jobs:
           git diff --binary > test-output/learner-runtime/uncommitted.patch
           git status --porcelain > test-output/learner-runtime/final-status.txt
           git diff --name-status "$BASE" > test-output/learner-runtime/changed-paths.txt
+          if [ -f "$TEST" ]; then cp "$TEST" test-output/learner-runtime/measured-test.js; fi
           if [ "$(git rev-parse HEAD)" != "$BASE" ]; then
             git bundle create test-output/learner-runtime/candidate.bundle HEAD "^$BASE"
           fi
