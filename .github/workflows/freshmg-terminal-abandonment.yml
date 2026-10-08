@@ -38,7 +38,7 @@ jobs:
           mkdir -p test-output/failed-only-retention
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
           python3 - <<'PY'
-          import hashlib,json,os,subprocess,urllib.request,zipfile
+          import hashlib,json,os,subprocess,zipfile
           from pathlib import Path
           out=Path('test-output/failed-only-retention')
           specs=[(37781772537,11552577293,'836a6f1072d0af7630312262e09a38d646d3be139974eeae668da6c0444ca72f','measurement-passed-publication-failed'),
@@ -62,7 +62,6 @@ jobs:
                   if run==37781772537:
                       assert z.read('source-sha.txt').decode().strip()==os.environ['CANDIDATE']
                       assert z.read('final-status.txt')==b'' and z.read('uncommitted.patch')==b''
-                      measurement=json.loads(z.read('measurement.json'))
                       for name,code in [('red-unit',1),('red-cache',1),('green-unit',0),('green-cache',0),('mutant-status',1),('mutant-step',1),('mutant-sql',1),('lint',0),('shards',0),('test-metrics',0)]:
                           assert int(z.read(name+'-exit.txt'))==code,name
                       (out/'candidate.bundle').write_bytes(z.read('candidate.bundle'))
@@ -81,13 +80,13 @@ jobs:
           test "$(git diff --name-only "$EXPECTED" -- src)" = src/rebalancer/replica-operation-message-group-membership-authorization.js
           echo 'd01217f68be1e6f817207750bcf6f389869a2f4016585cc6a2c78802c4fb55f0  src/rebalancer/replica-operation-message-group-membership-authorization.js' | sha256sum -c -
           git diff --name-status "$EXPECTED" > test-output/failed-only-retention/recovered-paths.txt
-      - name: Persist original evidence and record the bounded review response
+      - name: Persist original evidence and publish without repeating measurements
         run: |
           set -euo pipefail
           npm ci
           out=test-output/failed-only-retention
           for run in 37781772537 37780990679; do
-            node scripts/solve.js evidence add "$out/original-$run.zip" --id "$QUEST" --text "Original failed-only T1 attempt $run: preserve exact red/green, guardrail and publication results without changing the outer verdict. Measurement 37781772537 passed; packaging failed because zip was absent. No repeated product measurement." --json > "$out/canonical-$run.json"
+            node scripts/solve.js evidence add "$out/original-$run.zip" --id "$QUEST" --text "Original failed-only T1 attempt $run: exact red/green, guardrail and publication results retained. Measurement 37781772537 passed; packaging failed because zip was absent. No repeated product measurement or changed outer verdict." --json > "$out/canonical-$run.json"
           done
           python3 - <<'PY'
           import json,os
@@ -103,42 +102,9 @@ jobs:
           record['retainedAttempts']=archives
           q=Path('solve/quests')/os.environ['QUEST']
           (q/'evidence/failed-only-37781772537.json').write_text(json.dumps(record,indent=2)+'\n')
-          (q/'t1-failed-only-review-response.md').write_text('''# T1 failed-only correction
-
-Review: 5456700481 / 4219025228, based on ee4ddd5c. The finding is accepted:
-ordinary terminality includes successful REMOVED replacements and is not
-failed-target cleanup authority. The existing branch selector now requires
-exact FAILED status AND FAILED workflow step for newly selecting terminal
-learner abandonment. Successful and mixed terminal facts refuse, even when
-an old learner hint remains. Exact ordinary status/step/completion stay in
-the same conditional UPDATE; a delayed failed-row command loses after success.
-The historical action-observation/replay path is not a new dispatch grant.
-
-Measured unchanged tests red then green on b4aabb36641a15269e0425e1ba3336be106094ac:
-4 files / 149 reported assertions, plus two live SQL/Raft/CDC/cache cases.
-Failed-learner recovery remains positive. Independent status, step and SQL
-predicate deletion mutants each fail. Lint, current metadata and strict test
-complexity pass. One source function retains its inherited complexity 44;
-this is not full static/corpus acceptance. The unit fixture supplies learner
-state; cache tests quiesce reconciliation and supply synthetic operation rows.
-No physical membership, CREATE, full driver or multi-host proof is claimed.
-
-37780206718 stopped on test formatting; 37780990679 stopped on inherited test
-fixture complexity. The latter was reduced by extracting only the existing
-lost-answer result transformation, retaining all fault controls. 37781772537
-completed every required measurement but failed at packaging because the
-runner lacked zip. The exact committed candidate and raw evidence were
-recovered, not rerun or relabeled. Original outer failures remain failures.
-
-This is a source correction under the existing FreshMG Quest, not independent
-approval, C0 closure, source landing or activation. Next initial admission
-work must retain T0 terminal-first exclusion, current holder/boot, immutable
-source/target identities and unknown-answer recovery. A recorded operation-row
-intent alone is never physical execution permission.
-''')
           PY
-          node scripts/solve.js note --id "$QUEST" --finding 'Recovered exact b4aabb366 from hash-verified 37781772537 bundle after zip executable absence stopped packaging. All required unit/live-cache red-green and three mutation controls had passed; no remeasurement or new runtime edit. Retained 37780990679 strict-fixture failure as well as the previously canonical lint failure. T1 newly selected terminal abandonment is now FAILED/FAILED only. Independent review, activation and whole-cutover remain open.' --kind evidence --json > "$out/recovery-note.json"
-          git add -- "solve/quests/$QUEST/evidence/failed-only-37781772537.json" "solve/quests/$QUEST/t1-failed-only-review-response.md" "solve/quests/$QUEST/log.ndjson"
+          node scripts/solve.js note --id "$QUEST" --finding 'Recovered exact b4aabb366 from hash-verified 37781772537 bundle after zip executable absence stopped packaging. All required unit/live-cache red-green and three mutation controls passed; no remeasurement or runtime edit. Retained 37780990679 strict-fixture failure as well as previously canonical lint failure. T1 newly selected terminal abandonment is FAILED/FAILED only; successful REMOVED and mixed rows refuse even with stale learner hints. Existing exact SQL status/step predicates defeat delayed failed-row commands after success. Review, runtime activation and full cutover remain open.' --kind evidence --json > "$out/recovery-note.json"
+          git add -- "solve/quests/$QUEST/evidence/failed-only-37781772537.json" "solve/quests/$QUEST/log.ndjson"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain exact failed-only source proof and publication recovery'
@@ -151,7 +117,7 @@ intent alone is never physical execution permission.
         run: |
           set -euo pipefail
           exact="$(git rev-parse HEAD)"
-          gh pr comment 107 --repo psvensson/lagrange --body "Review 4219025228 corrected at exact $exact. Newly selected terminal abandonment requires exact FAILED/FAILED; successful REMOVED and mixed terminal states refuse. Same-row CAS defeats stale failed-row writes after success. GCP 37781772537: same tests red then green, 149 regression assertions, two live-cache cases, and three mutation kills; original packaging failure remains documented. Exact committed source recovered from verified bundle, not rerun. See t1-failed-only-review-response.md and evidence/failed-only-37781772537.json. Request exact-head category-complete review; no activation or full-cutover claim."
+          gh pr comment 107 --repo psvensson/lagrange --body "Review 4219025228 corrected at exact $exact. Newly selected terminal abandonment requires FAILED/FAILED; successful REMOVED and mixed terminal states refuse. Same-row CAS defeats stale failed-row writes after success. GCP 37781772537: same tests red then green, 149 regression assertions, two live-cache cases, and three mutation kills. Original packaging failure remains documented; exact measured commit recovered from a verified bundle, not rerun. See evidence/failed-only-37781772537.json. Request category-complete exact-head review, not activation or full-cutover approval."
           gh pr edit 107 --repo psvensson/lagrange --add-reviewer @copilot
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
