@@ -123,6 +123,10 @@ test('T1 a delayed failed-row abandonment cannot apply after success is observed
       }
 """
     body = once(body, anchor, negative + anchor)
+    body = once(body,
+        '        leaderTerm: 3, leaderConfigurationStamp: {configurationKey: raftRsConfStateKey(sourceOnly),',
+        '        leaderTerm: 3, leaderConfigurationStamp: {\n'
+        '          configurationKey: raftRsConfStateKey(sourceOnly),')
     # Two ordinary tests, not a runtime flag; each fully boots and tears down.
     cases = """for (const settlement of [
   {status: ReplicaStatus.FAILED, step: WORKFLOW_STEP.FAILED},
