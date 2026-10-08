@@ -62,7 +62,9 @@ jobs:
           mkdir -p test-output/terminal
           npm ci
           python3 "../terminal-carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/freshmg-terminal-nonadmission-increment.py" . tests
-          node --check test/rebalancer/message-group-membership-branch-authorization.test.js
+          # Previous attempt's only lint findings: two missing for-of blocks.
+          # Format the test before either red or green measurement; no src fix.
+          npx eslint test/rebalancer/message-group-membership-branch-authorization.test.js --fix
           git add test/rebalancer/message-group-membership-branch-authorization.test.js
           LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: measure terminal-first non-admission and exact obligation fences'
           git rev-parse HEAD > test-output/terminal/red-sha.txt
@@ -116,8 +118,10 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p test-output/terminal
+          set +e
           npx eslint src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/terminal/lint.stdout.txt 2> test-output/terminal/lint.stderr.txt
           status=$?
+          set -e
           echo "$status" > test-output/terminal/lint-exit.txt
           git status --porcelain > test-output/terminal/final-status.txt
           git diff --stat "$BASE" HEAD > test-output/terminal/diff-stat.txt
@@ -181,18 +185,22 @@ jobs:
           assert changed <= allowed, changed
           PY
           npm ci
+          mkdir -p test-output/terminal-retention
+          gh api repos/psvensson/lagrange/actions/artifacts/11544945422/zip > test-output/terminal-retention/failed-37766536144.zip
+          echo '5231add95464d4e1ab95b2902f0b89a727d3aa543caafd39a79f18d90343be9d  test-output/terminal-retention/failed-37766536144.zip' | sha256sum --check
+          node scripts/solve.js evidence add test-output/terminal-retention/failed-37766536144.zip --quest message-group-fresh-identity-membership --json > test-output/terminal-retention/prior-evidence.json
           evidence="solve/quests/message-group-fresh-identity-membership/evidence/terminal-nonadmission-$GITHUB_RUN_ID.json"
           python3 - <<'PY'
           import os,json
           from pathlib import Path
           d=Path(os.environ['PACKET'])
-          r={'schema':'freshmg-terminal-nonadmission-attempt/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'baseSha':os.environ['BASE'],'measurementResult':os.environ['MEASURE_RESULT'],'sourceApproval':False,'proofCeiling':'actual repository/file-backed SQLite with gateway substitution; no driver activation or physical membership proof','outputs':{p.name:p.read_text() for p in d.iterdir() if p.suffix in {'.txt','.sha256'}}}
+          r={'schema':'freshmg-terminal-nonadmission-attempt/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'baseSha':os.environ['BASE'],'measurementResult':os.environ['MEASURE_RESULT'],'sourceApproval':False,'proofCeiling':'actual repository/file-backed SQLite with gateway substitution; no driver activation or physical membership proof','priorFailedRun':37766536144,'priorFailure':'tests and mutant passed; two missing test-loop braces failed lint and shell errexit prevented complete bundle creation','priorRetainedEvidence':json.loads(Path('test-output/terminal-retention/prior-evidence.json').read_text()),'outputs':{p.name:p.read_text() for p in d.iterdir() if p.suffix in {'.txt','.sha256'}}}
           p=Path('solve/quests/message-group-fresh-identity-membership/evidence')/('terminal-nonadmission-'+os.environ['GITHUB_RUN_ID']+'.json')
           p.write_text(json.dumps(r,indent=2)+'\n')
           PY
-          node scripts/solve.js note --id message-group-fresh-identity-membership --attempt "Terminal-first non-admission row resolution at $CANDIDATE: current repository/boot, exact terminal/no-issued-action basis and monotonic lane release; current holder required when present. GCP run $GITHUB_RUN_ID result=$MEASURE_RESULT. Test-first red, identical controls, holder-predicate mutant and all outputs retained. No physical action, ordinary workflow resurrection, T1 learner-abort selection, C0 closure or independent approval."
+          node scripts/solve.js note --id message-group-fresh-identity-membership --attempt "Terminal-first non-admission row resolution at $CANDIDATE: current repository/boot, exact terminal/no-issued-action basis and monotonic lane release; current holder required when present. GCP run $GITHUB_RUN_ID result=$MEASURE_RESULT. Test-first red, identical controls, holder-predicate mutant and prior failed lint attempt retained. No physical action, ordinary workflow resurrection, T1 learner-abort selection, C0 closure or independent approval."
           git add "$evidence" solve/quests/message-group-fresh-identity-membership/log.ndjson
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain terminal non-admission attempt and proof limits'
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain terminal non-admission attempt and prior failure'
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
