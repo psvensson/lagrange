@@ -1,0 +1,78 @@
+{
+  "status": "measured",
+  "output": "/mnt/data/c0-review/base/test-output/c0-self-review/3bf986a85ad843349da6a84f09baafb4",
+  "results": [
+    {
+      "version": "original",
+      "mutation": "none",
+      "exit": 0,
+      "status": "measured",
+      "cases": 9,
+      "harnessSha256": "a9f7b676047ea6f3f77e2ca7ef1f093228b4b7181b807e3160cbce901cd38e24",
+      "error": null
+    },
+    {
+      "version": "original",
+      "mutation": "inside-cut-with-no-sql",
+      "exit": 0,
+      "status": "measured",
+      "cases": 9,
+      "harnessSha256": "5a4b61aeda4ae5bc61f5c2bac64b54ac51b4728fb2062eba722644a961ad765a",
+      "error": null
+    },
+    {
+      "version": "original",
+      "mutation": "after-mark-with-no-mark",
+      "exit": 0,
+      "status": "measured",
+      "cases": 9,
+      "harnessSha256": "51d6d98ba52e386c786933de44a789b5e1634fdd1ce223a4089ac817e6ff208c",
+      "error": null
+    },
+    {
+      "version": "original",
+      "mutation": "wrong-refusal-kind",
+      "exit": 0,
+      "status": "measured",
+      "cases": 9,
+      "harnessSha256": "29528a795e5091e5024cc98b7562ca2a5b14a07e9f4cfa19c75bc74c301475c2",
+      "error": null
+    },
+    {
+      "version": "strengthened",
+      "mutation": "none",
+      "exit": 0,
+      "status": "measured",
+      "cases": 9,
+      "harnessSha256": "0e2a8d1ed5074757bfaa09d34d2bbbe6dfb990885cffbc2c4dc91839aa9499c1",
+      "error": null
+    },
+    {
+      "version": "strengthened",
+      "mutation": "inside-cut-with-no-sql",
+      "exit": 1,
+      "status": "failed",
+      "cases": 2,
+      "harnessSha256": "15e1a8ab44885c21b162f88ffda746872379251d85966e61c592f34d3780812b",
+      "error": "named transaction cut must be real\n\nfalse !== true\n"
+    },
+    {
+      "version": "strengthened",
+      "mutation": "after-mark-with-no-mark",
+      "exit": 1,
+      "status": "failed",
+      "cases": 4,
+      "harnessSha256": "629d6ab9a3d6817c41f205d661d53fb1c86dddac0f8804a8c84c78c4c5726723",
+      "error": "local committed marker must match the selected cut\n\nfalse !== true\n"
+    },
+    {
+      "version": "strengthened",
+      "mutation": "wrong-refusal-kind",
+      "exit": 1,
+      "status": "failed",
+      "cases": 6,
+      "harnessSha256": "7996fc816ac011f1576874b7177f090d784df73a06fc0dd4660470f54b644f00",
+      "error": "the refusal control must be SQLITE_READONLY, not an arbitrary error\n\nnull !== 8\n"
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+[
+  {
+    "version": "original",
+    "mutation": "inside-cut-with-no-sql",
+    "exit": 0,
+    "status": "measured",
+    "casesPassedBeforeStop": 9,
+    "error": null,
+    "mutatedHarnessSha256": "5a4b61aeda4ae5bc61f5c2bac64b54ac51b4728fb2062eba722644a961ad765a"
+  },
+  {
+    "version": "original",
+    "mutation": "after-mark-with-no-mark",
+    "exit": 0,
+    "status": "measured",
+    "casesPassedBeforeStop": 9,
+    "error": null,
+    "mutatedHarnessSha256": "51d6d98ba52e386c786933de44a789b5e1634fdd1ce223a4089ac817e6ff208c"
+  },
+  {
+    "version": "original",
+    "mutation": "wrong-refusal-kind",
+    "exit": 0,
+    "status": "measured",
+    "casesPassedBeforeStop": 9,
+    "error": null,
+    "mutatedHarnessSha256": "74c0120e424d0b48f72ed53b0ef54700391cec1412aeb1101cdb22f7b4b894ee"
+  },
+  {
+    "version": "strengthened",
+    "mutation": "inside-cut-with-no-sql",
+    "exit": 1,
+    "status": "failed",
+    "casesPassedBeforeStop": 2,
+    "error": "named transaction cut must be real\n\nfalse !== true\n",
+    "mutatedHarnessSha256": "15e1a8ab44885c21b162f88ffda746872379251d85966e61c592f34d3780812b"
+  },
+  {
+    "version": "strengthened",
+    "mutation": "after-mark-with-no-mark",
+    "exit": 1,
+    "status": "failed",
+    "casesPassedBeforeStop": 4,
+    "error": "local committed marker must match the selected cut\n\nfalse !== true\n",
+    "mutatedHarnessSha256": "629d6ab9a3d6817c41f205d661d53fb1c86dddac0f8804a8c84c78c4c5726723"
+  },
+  {
+    "version": "strengthened",
+    "mutation": "wrong-refusal-kind",
+    "exit": 1,
+    "status": "failed",
+    "casesPassedBeforeStop": 6,
+    "error": "the refusal control must be SQLITE_READONLY, not an arbitrary error\n\nnull !== 8\n",
+    "mutatedHarnessSha256": "114f4a98d9ccc9c8c8eae9db87336701cd6b8ee3e85de85aab516036eb459346"
+  }
+]

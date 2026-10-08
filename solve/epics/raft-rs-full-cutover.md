@@ -10,6 +10,8 @@ doneWhen:
     file: solve/oracle/raft-rs-full-cutover.json
 quests:
   - public-binding-two-partition-harness
+  - cutover-transition-authority-review
+  - message-group-fresh-identity-membership
 authorizes:
   - architecture
   - docs
@@ -24,6 +26,16 @@ authorizes:
 ---
 
 # Raft-rs full cutover
+
+## Contract-first continuation (2026-10-08)
+
+The user approved a bounded contract-first correction and cloud takeover of
+this remaining cutover work. Follow [the active continuation plan](raft-rs-full-cutover/contract-first-2026-10-08.md) before further production changes.
+The first Quest is cutover-transition-authority-review; existing FreshMG
+acceptance is preserved, broader core convergence remains gated, and no
+intermediate SHA certifies A1-v13 compatibility. Distributed runs use GitHub
+Actions/GCP, with deterministic evidence first. Preserved salvage refs and
+PR #73 are not modified by this continuation.
 
 ## Owner decision
 

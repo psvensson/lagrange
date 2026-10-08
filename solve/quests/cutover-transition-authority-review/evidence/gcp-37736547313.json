@@ -1,0 +1,79 @@
+{
+  "schema": "cutover-gcp-attempt/1",
+  "quest": "cutover-transition-authority-review",
+  "runId": 37736547313,
+  "runAttempt": 1,
+  "runUrl": "https://github.com/psvensson/lagrange/actions/runs/37736547313",
+  "workflowSha": "8a6f5b95d61b6fb1ef8ea4da0338a420af13f077",
+  "candidateSha": "4cdeac1c43ccc470ee5816a7439197d1d6c21bf4",
+  "inheritedProductSha": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
+  "runner": "lagrange-gcp-runner",
+  "artifactId": 11532072986,
+  "artifactName": "cutover-contract-gcp-37736547313-1",
+  "artifactSha256": "065881a0023c065d268da19a01f4854fc214c005c2de883d541feb1156225cbf",
+  "downloadedArchiveHashVerified": true,
+  "allMemberHashesVerified": true,
+  "baselineExitCode": 1,
+  "focusedExitCode": 0,
+  "workflowConclusion": "failure",
+  "failingStep": "Preserve RED baseline verdict",
+  "independentReview": false,
+  "distributedAcceptance": false,
+  "releaseCertification": false,
+  "runtimeDiffFromInheritedProduct": "",
+  "finalGitStatusPorcelain": "",
+  "harnessSha256": "363e258e16c14151d44a98ff3a33f4d5136b068c51536cf0a419f11e95bafef9",
+  "baseline": {
+    "schema": "cutover-authority-boundary-baseline/1",
+    "sourceSha": "4cdeac1c43ccc470ee5816a7439197d1d6c21bf4",
+    "sourceDigests": {
+      "src/rebalancer/operation-workflow-owner-adapter.js": "8303923e022f77d869c6c4d855627c1bea45754bdf5a2b85067c165528db81de",
+      "src/rebalancer/operation-progress-store.js": "9c966a44e748df31e60c8a6817cf4168e42090b075e9ae9726da7e3b9a87508f",
+      "src/rebalancer/operation-workflow-persistence.js": "8172b8912d186e807e1f0e6afc518916e97866e7bca2f11416f4c06eb3717391",
+      "src/rebalancer/operation-workflow-transition-orchestration.js": "47e9233fa395895512f7979e9f8558f52d37529b3af8097c70884f78e4c3c733",
+      "src/rebalancer/rebalance-coordinator-lifecycle.js": "53c073a9a67a81eea7eced6509d7b4f066163e5bfee51577d5ef00586cf8e011"
+    },
+    "measurementStatus": "measured",
+    "proofCeiling": "direct adapter/store and persistence callback only",
+    "productionRaceProven": false,
+    "sourceChanges": false,
+    "positiveControl": {
+      "dispatchCalls": 1,
+      "progressWriteApplied": true,
+      "noAppendRefused": true
+    },
+    "conflictWitness": {
+      "acceptedProgressWrites": 1,
+      "rejectedProgressWrites": 1,
+      "dispatchCalls": 2,
+      "appendedEvents": 2,
+      "effectAfterLosingCas": true,
+      "nextOwner": "OperationWorkflowOwner serialization and adapter interaction"
+    },
+    "historyWitness": {
+      "conflictingPrefixAccepted": true,
+      "nextOwner": "DurableWorkflowCoordinator/repository transition boundary"
+    },
+    "interpretation": [
+      "Volatile progress acceptance is not durable operation permission.",
+      "Trace enclosing serialization and downstream guards before claiming a production race.",
+      "The callback is not itself the SQL write; trace actual repository commit and restart."
+    ]
+  },
+  "focusedStdout": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/operation-progress-store-persistence.test.js\n\n# test-files planned=3\nclassified lane ordinary: 3 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nok test/rebalancer/operation-progress-store.test.js (19 assertions, 565ms)\nok test/rebalancer/operation-workflow-owner-adapter.test.js (62 assertions, 1074ms)\nok test/rebalancer/operation-progress-store-persistence.test.js (24 assertions, 1597ms)\n# test-files total=3 pass=3 fail=0 assertions=105\n",
+  "focusedStderr": "",
+  "baselineStderr": "",
+  "originalMemberSha256": {
+    "baseline-exit.txt": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "baseline.json": "4f6d46fdf2983149c6ca64e1df607f5e8925d3ccf07df594edf99540900620e7",
+    "baseline.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline.stdout.txt": "4f6d46fdf2983149c6ca64e1df607f5e8925d3ccf07df594edf99540900620e7",
+    "final-status.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "focused-exit.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "focused.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "focused.stdout.txt": "f4972bd732e1eb6545a6f82f895aa6d4e6e6e3ddc19d1c5abb04d54a9decc687",
+    "provenance.txt": "ad2ffca3cf767604cc0de3b96da169c804e9bd6a15a5760b0b06c4f015003a2e",
+    "runtime-source-diff.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "reconstruction": "baseline.json and baseline.stdout.txt are JSON.stringify(baseline, null, 2) followed by one newline; raw focused output is retained verbatim. Empty members are retained as empty strings. This aggregation preserves measurements and is not a source approval."
+}

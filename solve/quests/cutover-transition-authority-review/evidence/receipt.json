@@ -1,0 +1,51 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cutover-transition-authority-review",
+  "status": "fail",
+  "sourceSha": "ae20b6601ca27bcab7758840bc4830945558b524",
+  "evidence": "solve/quests/cutover-transition-authority-review/evidence/classification-gcp-20261008.json",
+  "additionalEvidence": [
+    "solve/quests/cutover-transition-authority-review/evidence/owner-entry-2026-10-08.json",
+    "solve/quests/cutover-transition-authority-review/evidence/gcp-37740082892.json",
+    "solve/quests/cutover-transition-authority-review/transition-contract-review.md",
+    "solve/quests/cutover-transition-authority-review/evidence/gcp-37743852151.json",
+    "solve/quests/cutover-transition-authority-review/evidence/review-5452918820.json",
+    "solve/quests/cutover-transition-authority-review/process-loss-conclusions.md",
+    "solve/quests/cutover-transition-authority-review/recovery-policy-proposal.md"
+  ],
+  "testFileDigests": {
+    "scripts/quest-evidence/cutover-transition-authority-baseline.js": "363e258e16c14151d44a98ff3a33f4d5136b068c51536cf0a419f11e95bafef9",
+    "scripts/quest-evidence/cutover-owner-entry-baseline.js": "4b2a613ce9bd724cd4a1cb9956262d1099f805482aedc62d3b506aa4018b9efb",
+    "scripts/quest-evidence/cutover-workflow-crash-baseline.js": "c0fa2fa1dd3369d41f435b902a80a8464a3049ad83244afcae16cc58c884313b",
+    "scripts/quest-evidence/cutover-terminal-obligation-baseline.js": "c4be04d577c445f799516e0ec4f629c567bc2992c76867913691de26f1cfc3b5"
+  },
+  "receipts": [
+    {
+      "id": "replacement-source-target-and-obligations-classified",
+      "passed": false,
+      "detail": "Reopened after independent review 5454259637 / 4217048455: the operator has selected J1, but the exact durable promotion authorization carrier, conditional write/commit point and unknown-result recovery must be explicit before this classification is accepted. Earlier policy approval is not implementation of that boundary."
+    },
+    {
+      "id": "workflow-commit-projection-and-restart-classified",
+      "passed": true,
+      "detail": "Actual repository commit and volatile mirror/progress relation classified. Corrected ordinary terminal entries retain exact SQL membership debt and reject a competing group operation with no physical work. Six strengthened process-loss cases pass on ae20b660. Missing membership recovery driver is a named FreshMG implementation obligation."
+    },
+    {
+      "id": "snapshot-local-open-wipe-and-install-classified",
+      "passed": false,
+      "detail": "Reopened after independent review 5454259637 / 4217048521: four named gates are insufficient. Each current or missing transition needs its concrete owner method, durable carrier/commit point and restart/lost-answer/wake interaction. Existing component/refusal proofs remain valid only within their measured ceiling."
+    },
+    {
+      "id": "source-bound-deterministic-discriminators-measured",
+      "passed": true,
+      "command": "node scripts/quest-evidence/cutover-transition-authority-baseline.js test-output/contract-first/baseline.json 4cdeac1c43ccc470ee5816a7439197d1d6c21bf4",
+      "testFile": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "detail": "Original red and failed-harness artifacts preserved alongside corrected GCP proofs through canonical hash-verified evidence uploads. Proof ceilings and positive controls retained."
+    },
+    {
+      "id": "independent-category-complete-contract-review",
+      "passed": false,
+      "detail": "Review 5454259637 supports prior corrections but raises two new substantive classification findings. No approving verdict exists. Earlier rejections and author self-review remain unchanged."
+    }
+  ]
+}

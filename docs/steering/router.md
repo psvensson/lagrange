@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-09-13
+last_reviewed: 2026-10-08
 ---
 
 # Owner router
@@ -40,6 +40,8 @@ is owned by `npm run audit:doc-audience`, not by this table.
 | writing or changing tests | [`test/guidelines/`](../../test/guidelines/INDEX.md) |
 | verifying someone else's change | [`verification-templates/`](../development/verification-templates/INDEX.md) |
 | runtime, control-plane or partition behaviour | [`runtime-contracts.md`](../../architecture/runtime-contracts.md) |
+| workflow authority, permits, recovery or a new state store | [`authority-and-recovery.md`](../../architecture/contracts/authority-and-recovery.md) |
+| current contract-first cutover continuation | [`contract-first-2026-10-08.md`](../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md) |
 | code style, file size, naming | [`code-style.md`](../development/code-style.md) |
 | recording, closing or auditing a quest's artifacts | [`quest-artifacts.md`](../development/quest-artifacts.md), [`quest-lifecycle.md`](../development/quest-lifecycle.md), [`quest-closure.md`](../development/quest-closure.md), [`quest-validators.md`](../development/quest-validators.md), [`quest-subagents.md`](../development/quest-subagents.md) |
 | proposing or changing roadmap policy | [`roadmap-policy.md`](../development/roadmap-policy.md) |

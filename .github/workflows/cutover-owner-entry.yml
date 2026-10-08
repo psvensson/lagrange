@@ -1,0 +1,135 @@
+name: cutover-owner-entry
+on:
+  push:
+    branches: [integrate/rs-raft-contract-first-20261008]
+    paths:
+      - .github/workflows/cutover-owner-entry.yml
+      - scripts/quest-evidence/cutover-owner-entry-baseline.js
+      - scripts/quest-evidence/cutover-terminal-obligation-baseline.js
+permissions:
+  contents: read
+concurrency:
+  group: cutover-owner-entry-20261008
+  cancel-in-progress: false
+jobs:
+  wake-runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - name: Start only existing proof runner
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
+          if [ "$STATUS" != RUNNING ]; then
+            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
+          fi
+  owner-entry:
+    needs: wake-runner
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 25
+    env:
+      BASE: 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af
+    defaults:
+      run:
+        shell: bash
+        working-directory: c0-owner-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          path: c0-owner-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Bind source and install locked dependencies
+        id: install
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          git diff --exit-code "$BASE" -- src
+          mkdir -p test-output/c0-owner
+          printf 'candidate=%s\nrunner=%s\nrun=%s\n' "$GITHUB_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/c0-owner/provenance.txt
+          npm ci
+          node --check scripts/quest-evidence/cutover-owner-entry-baseline.js
+          node --check scripts/quest-evidence/cutover-terminal-obligation-baseline.js
+      - name: Measure scheduler and owner-entry interleaving
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          set +e
+          timeout 90s node scripts/quest-evidence/cutover-owner-entry-baseline.js test-output/c0-owner/owner-entry.json "$GITHUB_SHA" > test-output/c0-owner/owner-entry.stdout.txt 2> test-output/c0-owner/owner-entry.stderr.txt
+          STATUS=$?
+          set -e
+          printf '%s\n' "$STATUS" > test-output/c0-owner/owner-entry-exit.txt
+          cat test-output/c0-owner/owner-entry.stdout.txt
+          cat test-output/c0-owner/owner-entry.stderr.txt >&2
+          test "$STATUS" -eq 0
+          node -e 'const r=JSON.parse(require("fs").readFileSync("test-output/c0-owner/owner-entry.json")); if(r.sourceSha!==process.env.GITHUB_SHA||r.measurementStatus!=="measured")process.exit(2)'
+      - name: Measure terminal operation with retained exact membership lane
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          set +e
+          timeout 90s node scripts/quest-evidence/cutover-terminal-obligation-baseline.js test-output/c0-owner/terminal-obligation.json "$GITHUB_SHA" > test-output/c0-owner/terminal.stdout.txt 2> test-output/c0-owner/terminal.stderr.txt
+          STATUS=$?
+          set -e
+          printf '%s\n' "$STATUS" > test-output/c0-owner/terminal-exit.txt
+          tail -100 test-output/c0-owner/terminal.stdout.txt
+          cat test-output/c0-owner/terminal.stderr.txt >&2
+          test "$STATUS" -eq 0
+          node -e 'const r=JSON.parse(require("fs").readFileSync("test-output/c0-owner/terminal-obligation.json")); if(r.sourceSha!==process.env.GITHUB_SHA||r.measurementStatus!=="measured")process.exit(2)'
+      - name: Existing progress, retry and membership-lane regressions
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          set -uo pipefail
+          npm run test:file -- test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/operation-workflow-owner-handoff-retry-backoff.test.js test/rebalancer/message-group-membership-operation-lane.test.js > test-output/c0-owner/focused.stdout.txt 2> test-output/c0-owner/focused.stderr.txt
+          STATUS=$?
+          printf '%s\n' "$STATUS" > test-output/c0-owner/focused-exit.txt
+          tail -50 test-output/c0-owner/focused.stdout.txt
+          exit "$STATUS"
+      - name: Existing snapshot positive and refusal boundaries (not intact catch-up certification)
+        if: always() && steps.install.outcome == 'success'
+        timeout-minutes: 10
+        run: |
+          set -uo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9 || exit "$?"
+          sha256sum test/raft/snapshot-catchup-end-to-end.test.js test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js test/message-group/message-group-fresh-learner-snapshot.test.js src/bootstrap/shared/snapshot-catchup-wiring.js src/raft/snapshot-catchup.js src/raft/snapshot-install.js src/raft/snapshot-checkpoint-store.js src/raft/raft-rs-runtime-owner.js src/raft/raft-rs-durable-store.js src/raft/raft-operation-port-request.js src/partition/partition-service-raft-init-base.js > test-output/c0-owner/snapshot-sources.sha256
+          npm run test:file -- test/raft/snapshot-catchup-end-to-end.test.js test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js test/message-group/message-group-fresh-learner-snapshot.test.js > test-output/c0-owner/snapshot.stdout.txt 2> test-output/c0-owner/snapshot.stderr.txt
+          STATUS=$?
+          printf '%s\n' "$STATUS" > test-output/c0-owner/snapshot-exit.txt
+          tail -80 test-output/c0-owner/snapshot.stdout.txt
+          cat test-output/c0-owner/snapshot.stderr.txt >&2
+          exit "$STATUS"
+      - name: Bind final unchanged source and artifact hashes
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p test-output/c0-owner
+          git diff --exit-code "$BASE" -- src > test-output/c0-owner/runtime-source-diff.txt
+          git status --porcelain > test-output/c0-owner/final-status.txt
+          sha256sum scripts/quest-evidence/cutover-owner-entry-baseline.js scripts/quest-evidence/cutover-terminal-obligation-baseline.js > test-output/c0-owner/harness.sha256
+          find test-output/c0-owner -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/c0-owner/SHA256SUMS
+      - name: Retain all results, including failed controls
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: c0-owner-entry-${{ github.run_id }}-${{ github.run_attempt }}
+          path: c0-owner-${{ github.run_id }}-${{ github.run_attempt }}/test-output/c0-owner/
+          if-no-files-found: error
+          retention-days: 14

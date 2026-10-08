@@ -1,0 +1,231 @@
+name: cutover-contract-first
+
+on:
+  push:
+    branches:
+      - integrate/rs-raft-contract-first-20261008
+    paths:
+      - .github/workflows/cutover-contract-first.yml
+      - scripts/quest-evidence/cutover-transition-authority-baseline.js
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cutover-contract-first-20261008
+  cancel-in-progress: false
+
+env:
+  INHERITED_PRODUCT: 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af
+  WORK_BRANCH: integrate/rs-raft-contract-first-20261008
+  QUEST: cutover-transition-authority-review
+
+jobs:
+  record-plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    outputs:
+      candidate: ${{ steps.record.outputs.candidate }}
+    steps:
+      - name: Checkout exact authorized work branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked Solver dependencies
+        run: |
+          set -euo pipefail
+          npm install --global npm@11.7.0
+          npm ci
+      - name: Link existing epics and initialize review obligations
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code "$INHERITED_PRODUCT" -- src
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          epic = Path('solve/epics/raft-rs-full-cutover.md')
+          text = epic.read_text()
+          marker = '## Contract-first continuation (2026-10-08)'
+          if marker not in text:
+              anchor = '  - public-binding-two-partition-harness\nauthorizes:'
+              assert text.count(anchor) == 1, 'epic quest-list anchor changed'
+              text = text.replace(anchor, '  - public-binding-two-partition-harness\n  - cutover-transition-authority-review\n  - message-group-fresh-identity-membership\nauthorizes:', 1)
+              heading = '# Raft-rs full cutover\n'
+              assert text.count(heading) == 1
+              addition = '\n' + marker + '\n\nThe user approved a bounded contract-first correction and cloud takeover of\nthis remaining cutover work. Follow [the active continuation plan](raft-rs-full-cutover/contract-first-2026-10-08.md) before further production changes.\nThe first Quest is cutover-transition-authority-review; existing FreshMG\nacceptance is preserved, broader core convergence remains gated, and no\nintermediate SHA certifies A1-v13 compatibility. Distributed runs use GitHub\nActions/GCP, with deterministic evidence first. Preserved salvage refs and\nPR #73 are not modified by this continuation.\n'
+              text = text.replace(heading, heading + addition, 1)
+              epic.write_text(text)
+          convergence = Path('solve/epics/core-architecture-convergence.md')
+          text = convergence.read_text()
+          marker = '### 2026-10-08 cutover interaction clarification'
+          if marker not in text:
+              anchor = '## Status and activation\n'
+              assert text.count(anchor) == 1
+              addition = '\n' + marker + '\n\nThe approved [contract-first cutover plan](raft-rs-full-cutover/contract-first-2026-10-08.md) belongs to raft-rs-full-cutover, not a bypass of this epic.\nIts first read-only transition review and necessary narrowly scoped cutover\nrepairs may proceed before certification. Broad Q1+ behavior-changing\nconvergence remains blocked until cutover closes and Q0 remeasures READY.\nNo old historical backend statement below is new runtime authority.\n'
+              text = text.replace(anchor, anchor + addition, 1)
+              convergence.write_text(text)
+          quest = Path('solve/quests') / os.environ['QUEST']
+          spec = json.loads((quest / 'quest.json').read_text())
+          receipt = quest / 'evidence/receipt.json'
+          if not receipt.exists():
+              receipt.parent.mkdir(parents=True, exist_ok=True)
+              data = {'schema': 'test-receipt/1', 'quest': spec['id'], 'status': 'fail',
+                  'testFileDigests': {}, 'receipts': [
+                  {'id': key, 'passed': False, 'detail': 'Outstanding contract-review obligation; not yet independently measured and accepted.'}
+                  for key in spec['doneWhen']['args']['requiredReceipts']]}
+              receipt.write_text(json.dumps(data, indent=2) + '\n')
+          PY
+      - name: Check steering and seal the measured-red first Quest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-output/contract-first
+          npm run -s audit:steering-diet > test-output/contract-first/steering-diet.json
+          npm run -s audit:rule-set > test-output/contract-first/rule-set.json
+          node --check scripts/quest-evidence/cutover-transition-authority-baseline.js
+          if ! node -e 'const q=JSON.parse(require("fs").readFileSync("solve/quests/"+process.env.QUEST+"/quest.json"));process.exit(q.sealedAt?0:1)'; then
+            node scripts/solve.js start --id "$QUEST" --json > test-output/contract-first/seal.json
+          fi
+          node scripts/solve.js note --id "$QUEST" --finding '2026-10-08 operator decision: cloud continuation now owns this bounded contract-first cutover work on the new integration branch; the earlier local-only assignment is superseded for this scope. All salvage refs, PR #73, sealed FreshMG acceptance, final compatibility gate and local worktrees remain protected. Distributed acceptance uses Actions/GCP.' --kind decision --json > test-output/contract-first/takeover-note.json
+          node scripts/solve.js note --id "$QUEST" --attempt 'Persisted approved principles and linked the existing cutover/convergence epics. Declared and sealed only the first read-only transition review. Added real adapter/store and persistence-callback boundary discriminators; no runtime source changes or certification.' --json > test-output/contract-first/attempt.json
+          node scripts/solve.js probe --id "$QUEST" --json > test-output/contract-first/probe.json
+          git diff --check
+          git diff --exit-code "$INHERITED_PRODUCT" -- src
+      - name: Preserve only planning and seal records on the authorized branch
+        id: record
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE="$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)"
+          test "$REMOTE" = "$GITHUB_SHA"
+          git add -- solve/epics/raft-rs-full-cutover.md solve/epics/core-architecture-convergence.md "solve/quests/$QUEST"
+          # This is WIP branch preservation, never Solver-land or source approval.
+          # Steering and rule-set audits ran above; no runtime source is staged.
+          if ! git diff --cached --quiet; then
+            LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'planning: link contract-first cutover and seal read-only C0 (not certification)'
+            git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          fi
+          CANDIDATE="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$CANDIDATE"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          echo "candidate=$CANDIDATE" >> "$GITHUB_OUTPUT"
+          echo "$CANDIDATE" > test-output/contract-first/candidate-sha.txt
+      - name: Preserve planning and seal outputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cutover-contract-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/contract-first/
+          retention-days: 14
+          if-no-files-found: warn
+
+  wake-runner:
+    needs: record-plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to existing GCP project (keyless)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - name: Start only the existing proof runner
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
+          if [ "$STATUS" != RUNNING ]; then
+            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
+          fi
+
+  deterministic-baseline:
+    needs: [record-plan, wake-runner]
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    env:
+      CANDIDATE_SHA: ${{ needs.record-plan.outputs.candidate }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: cutover-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout isolated exact candidate (no write credential)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          path: cutover-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Measure boundary baseline before any source repair
+        id: baseline
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain)"
+          git diff --exit-code "$INHERITED_PRODUCT" -- src
+          mkdir -p test-output/contract-first
+          printf 'candidate=%s\nrunner=%s\nrun=%s\n' "$CANDIDATE_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/contract-first/provenance.txt
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          set +e
+          node scripts/quest-evidence/cutover-transition-authority-baseline.js test-output/contract-first/baseline.json "$CANDIDATE_SHA" > test-output/contract-first/baseline.stdout.txt 2> test-output/contract-first/baseline.stderr.txt
+          STATUS=$?
+          set -e
+          echo "$STATUS" > test-output/contract-first/baseline-exit.txt
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          node -e 'const r=JSON.parse(require("fs").readFileSync("test-output/contract-first/baseline.json"));if(r.measurementStatus!=="measured"||r.sourceSha!==process.env.CANDIDATE_SHA)process.exit(2);console.log(JSON.stringify(r,null,2))'
+          test "$STATUS" -le 1
+      - name: Install locked dependencies for existing focused regressions
+        run: npm ci
+      - name: Run existing progress and workflow persistence tests
+        id: focused
+        run: |
+          set -uo pipefail
+          npm run test:file -- test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/operation-progress-store-persistence.test.js > test-output/contract-first/focused.stdout.txt 2> test-output/contract-first/focused.stderr.txt
+          STATUS=$?
+          echo "$STATUS" > test-output/contract-first/focused-exit.txt
+          tail -60 test-output/contract-first/focused.stdout.txt
+          exit "$STATUS"
+      - name: Preserve unchanged source and all evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p test-output/contract-first
+          git diff --exit-code "$INHERITED_PRODUCT" -- src > test-output/contract-first/runtime-source-diff.txt
+          git status --porcelain > test-output/contract-first/final-status.txt
+          find test-output/contract-first -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/contract-first/SHA256SUMS
+      - name: Upload GCP evidence (not a distributed or release proof)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cutover-contract-gcp-${{ github.run_id }}-${{ github.run_attempt }}
+          path: cutover-${{ github.run_id }}-${{ github.run_attempt }}/test-output/contract-first/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Preserve RED baseline verdict
+        if: always() && steps.baseline.outputs.status != ''
+        run: |
+          echo 'This baseline is not independent review, distributed acceptance or release certification.'
+          exit '${{ steps.baseline.outputs.status }}'

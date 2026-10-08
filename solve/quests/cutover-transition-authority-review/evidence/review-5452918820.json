@@ -1,0 +1,15 @@
+{
+  "schema": "cutover-independent-review/1",
+  "quest": "cutover-transition-authority-review",
+  "reviewId": 5452918820,
+  "reviewNodeId": "PRR_kwDOThZ5hs8AAAABRQTwJA",
+  "reviewer": "copilot-pull-request-reviewer[bot]",
+  "submittedAt": "2026-10-08T07:05:06Z",
+  "reviewedSha": "0219a7fee95bdd744e52b8fa2eb5c5978e661964",
+  "url": "https://github.com/psvensson/lagrange/pull/104#pullrequestreview-5452918820",
+  "githubState": "COMMENTED",
+  "semanticVerdict": "REJECT_C0_CLOSURE",
+  "exactVerdictText": "Verdict: REJECT C0 closure at `0219a7fee95bdd744e52b8fa2eb5c5978e661964`. The packet’s narrow conclusions are supported, but J1 recovery policy, workflow crash/replay behavior, intact snapshot catch-up, and production FreshMG replacement remain unresolved.",
+  "response": "Retain the rejection and four open obligations. Address the actual crash/replay boundary with file-backed process-interruption evidence, propose a precise J1 policy without claiming a human ruling, and clarify which identified runtime gaps remain owned by later cutover implementation. No source approval, production repair or C0 terminal entry follows from the supported narrow conclusions.",
+  "independentApproval": false
+}

@@ -1,0 +1,112 @@
+{
+  "schema": "cutover-owner-entry-attempts/1",
+  "quest": "cutover-transition-authority-review",
+  "inheritedRuntimeSha": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
+  "independentReview": false,
+  "distributedAcceptance": false,
+  "releaseCertification": false,
+  "failedFixtureAttempt": {
+    "runId": 37738789039,
+    "candidateSha": "eabbc16a82801667b5cd1bb67685b905dace9c2a",
+    "artifactId": 11532534132,
+    "artifactSha256": "43a2ba38f8017ca36f93e35e059500cc47cfd4b03069a096653758f0e3869857",
+    "archiveAndMembersRehashed": true,
+    "measurementStatus": "harness_failed",
+    "exitCode": 2,
+    "error": "owner.repository.isReplaceRemoveDispatchPhase is not a function",
+    "firstFailure": "operation-workflow-dispatch-rearm-evidence.js:169 through buildPriorityRecoveryDispatchPendingReentryEvidence",
+    "loads": [],
+    "writes": [],
+    "effectCommands": [],
+    "classification": "test double omitted repository policy; target not measured; not a runtime regression",
+    "focusedFilesPassed": 4,
+    "focusedAssertionsPassed": 132,
+    "correction": "Use actual ReplicaOperationRepository phase/owner/terminal policies, override only query I/O. No production source change."
+  },
+  "measuredAttempt": {
+    "runId": 37739512267,
+    "runUrl": "https://github.com/psvensson/lagrange/actions/runs/37739512267",
+    "candidateSha": "458b5d2fa0dc2a3774ce15c5dcbee6b787692563",
+    "runner": "lagrange-gcp-runner",
+    "workflowConclusion": "success",
+    "artifactId": 11532903534,
+    "artifactName": "c0-owner-entry-37739512267-1",
+    "artifactSha256": "d680a0e9c634fe6ed48a2e72c6b506cb0a455c0b6c935933a3077f1c1607fa90",
+    "archiveAndAllMembersRehashed": true,
+    "harnessSha256": "4b2a613ce9bd724cd4a1cb9956262d1099f805482aedc62d3b506aa4018b9efb",
+    "measurementStatus": "measured",
+    "runtimeDiffFromInherited": "",
+    "finalGitStatus": "",
+    "proofCeiling": "Real owner entries, repository policies and decision/effect ports with supplied repository rows; no actual SQL, Raft, physical CREATE or cluster. A promise barrier delays actual progress loads at an existing awaited port; it is an injected interleaving, not a demonstrated production latency schedule.",
+    "substitutions": [
+      "repository query I/O supplies fixed read-only rows; repository phase/owner/terminal policies are actual production methods",
+      "transport and physical observation are fail-fast tripwires",
+      "two-party barrier after actual progress load at existing awaited port"
+    ],
+    "cases": {
+      "singleRemoteRetry": {
+        "canonicalOwnerNodeId": "c0-target",
+        "loads": [0],
+        "writes": [{"applied": true, "state": "operation_progress_write_applied"}],
+        "eventTypes": ["retry_requested"],
+        "effectCommands": ["no_operation_effect"],
+        "physicalCalls": [],
+        "errors": []
+      },
+      "ownerLaneFirst": {
+        "canonicalOwnerNodeId": "c0-target",
+        "loads": [], "writes": [], "eventTypes": [], "effectCommands": [], "physicalCalls": [], "errors": []
+      },
+      "remoteRetryFirst": {
+        "canonicalOwnerNodeId": "c0-target",
+        "loads": [0, 0],
+        "writes": [
+          {"applied": true, "state": "operation_progress_write_applied"},
+          {"applied": false, "state": "operation_progress_write_version_conflict"}
+        ],
+        "eventTypes": ["retry_requested", "retry_requested"],
+        "effectCommands": ["no_operation_effect", "no_operation_effect"],
+        "physicalCalls": [],
+        "errors": []
+      },
+      "historyFence": {
+        "lengthCallbackAcceptsDivergent": true,
+        "goodFence": "publication_fence_current",
+        "divergentFence": "publication_fence_stale",
+        "proofCeiling": "Existing callback plus real downstream fence; not a disk-crash proof"
+      }
+    },
+    "sourceDigests": {
+      "src/rebalancer/operation-workflow-owner.js": "7847284c2045a73cfe617c6c9307788f187aaed04b826efc752415a3d9ce58c8",
+      "src/rebalancer/operation-workflow-owner-ports.js": "012ae452eb0d0303d969940f1c64cd36d3f60969b0c3e7068566998097d227cf",
+      "src/rebalancer/operation-workflow-owner-adapter.js": "8303923e022f77d869c6c4d855627c1bea45754bdf5a2b85067c165528db81de",
+      "src/rebalancer/operation-workflow-recovery-reconcile.js": "672b8f2e37629378746ffda120d60a800b779e097080eb4a80a32c8367b106e1",
+      "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js": "944cf6ddac2d1a882eadccc041708091e4c0257f15df89f4c01f877b5bce05dd",
+      "src/rebalancer/operation-workflow-owner-retry-registry.js": "fd289df689dd6714b306ee9278ca37edcfdb88de84a6a3c9018359ec612e2ba3",
+      "src/rebalancer/replica-operation-repository.js": "f2ba97abfe89e11b845453498484b726c84c655cc39dd15ecc1b3405f15df350",
+      "src/rebalancer/replica-operation-repository-row-methods.js": "b6599d09da4b6c85c0325935c2560b4dafbb6a07c9704ff9686ec9d14412f0f9",
+      "src/rebalancer/operation-progress-store.js": "9c966a44e748df31e60c8a6817cf4168e42090b075e9ae9726da7e3b9a87508f",
+      "src/rebalancer/operation-lifecycle-event-resolution.js": "caf7ed99da60cf89d77294874e681a48c20685c2839203fcdad17726fbd9a28c",
+      "src/rebalancer/operation-lifecycle.js": "54e421d463aeed2752da56b63e2b7057673709fac03103f236d846c7902f23dc",
+      "src/rebalancer/operation-workflow-persistence.js": "8172b8912d186e807e1f0e6afc518916e97866e7bca2f11416f4c06eb3717391",
+      "src/rebalancer/operation-workflow-port-freshness.js": "2cafa2a0004e358e4f7a9b31e74c1b7eeb6a4af447d0cd49d84985b195064f61",
+      "src/workflow/operation-lane.js": "c869bf262cd25990cd7addaad4f2bc205e42efbbdb858ad45d8acf5b765e2b26",
+      "src/workflow/durable-workflow-coordinator.js": "c3ca87ca5f08451f73980ebd35fc675d762846ccf279f2ed033bd01701140116"
+    },
+    "focusedStdout": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/operation-workflow-owner-handoff-retry-backoff.test.js\n\n# test-files planned=4\nclassified lane ordinary: 4 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nok test/rebalancer/operation-progress-store.test.js (19 assertions, 591ms)\nok test/rebalancer/operation-workflow-owner-adapter.test.js (62 assertions, 1169ms)\nok test/rebalancer/operation-workflow-owner-handoff-retry-backoff.test.js (27 assertions, 1164ms)\nok test/rebalancer/operation-progress-store-persistence.test.js (24 assertions, 1663ms)\n# test-files total=4 pass=4 fail=0 assertions=132\n",
+    "focusedExitCode": 0,
+    "ownerEntryExitCode": 0
+  },
+  "disposition": {
+    "originalRawAdapterBaseline": "retained unchanged; valid only at its direct-adapter proof ceiling",
+    "duplicatePhysicalDispatchTheory": "not supported by the measured active remote-retry owner-entry case",
+    "missingHistoryGuardTheory": "overbroad; existing publication fence detects the divergent prefix",
+    "productionRepairAuthorized": false,
+    "stillOpen": [
+      "effects of changing real repository/lease/timer outcomes, not fixed observation inputs",
+      "consumers of duplicate volatile progress events",
+      "disk failure/restart between local workflow mirror and actual durable operation commit",
+      "independent category-complete review"
+    ]
+  }
+}
