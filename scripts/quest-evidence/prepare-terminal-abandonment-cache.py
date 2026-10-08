@@ -19,13 +19,30 @@ imports = """import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../../src/raft/raft
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from '../../src/raft/raft-committed-membership-constants.js';
 import {committedStampOfAnswer} from '../../src/raft/raft-committed-membership-stamp.js';
 import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
+import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 """
 text = text.replace(anchor, imports + anchor, 1)
 text = text.replace('repository NULL-lease claim becomes visible through real SystemTableCache',
     'repository claim and T1 terminal abandonment reach real SystemTableCache', 1)
 anchor = "      assert.equal(cache.getAll(TABLE).filter((row) => row.operation_id === id).length, 1);"
 assert text.count(anchor) == 1
-text = text.replace(anchor, Path(__file__).with_name('t1-cache-extension.js').read_text() + anchor, 1)
+extension = Path(__file__).with_name('t1-cache-extension.js').read_text()
+# 37776477963 reached the actual T1/cache effect and failed only because the
+# original oracle treated updated_at_hlc as an ordinary immutable column.
+# PartitionCDCGenerator.stampOriginHlc owns this cache-only write version;
+# SystemTableCache uses HLCTimestamp.compare. Assert advancement explicitly.
+anchor_hlc = '      for (const row of [terminalBefore, terminalAfter]) {\n'
+assert extension.count(anchor_hlc) == 1
+extension = extension.replace(anchor_hlc, """      const beforeHlc = HLCTimestamp.fromString(terminalBefore.updated_at_hlc);
+      const afterHlc = HLCTimestamp.fromString(terminalAfter.updated_at_hlc);
+      assert.equal(beforeHlc.toString(), terminalBefore.updated_at_hlc);
+      assert.equal(afterHlc.toString(), terminalAfter.updated_at_hlc);
+      assert.ok(afterHlc.compare(beforeHlc) > 0,
+        'CDC must carry a newer origin HLC for the committed membership intent');
+      for (const row of [terminalBefore, terminalAfter]) {
+        delete row.updated_at_hlc;
+""", 1)
+text = text.replace(anchor, extension + anchor, 1)
 text = text.replace(' * Actual SQL/Raft/CDC/SystemTableCache integration for the repository claim.',
     ' * Actual SQL/Raft/CDC/SystemTableCache integration for claim and terminal abandonment.')
 (root / relative).write_text(text)
@@ -41,4 +58,4 @@ text = text.replace(anchor, anchor + """  'test/integration/message-group-member
   },
 """, 1)
 registry.write_text(text)
-print('Reused exact cache fixture ' + upstream + ' / ' + blob + '; added T1 only.')
+print('Reused exact cache fixture ' + upstream + ' / ' + blob + '; added T1 and asserted CDC HLC advancement.')
