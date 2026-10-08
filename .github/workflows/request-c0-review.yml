@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Tighten the fixture budget and run canonical artifact producers
+      - name: Correct fixture and taxonomy, then regenerate rather than hand-edit artifacts
         working-directory: work
         run: |
           set -euo pipefail
@@ -44,30 +44,29 @@ jobs:
           mkdir -p test-output/cache-budget-prepare
           npm ci
           python3 ../carrier/scripts/quest-evidence/freshmg-cache-budget-correction.py .
-          npx eslint test/integration/message-group-membership-claim-cache.integration.test.js
-          npm run test:metadata:refresh > test-output/cache-budget-prepare/metadata.txt
-          npm run audit:shards > test-output/cache-budget-prepare/shards.txt
+          npx eslint test/integration/message-group-membership-claim-cache.integration.test.js scripts/checks/test-subsystem-classification-constants.js
+          npm run test:metadata:refresh > test-output/cache-budget-prepare/metadata.txt 2> test-output/cache-budget-prepare/metadata.stderr.txt
+          npm run audit:shards > test-output/cache-budget-prepare/shards.txt 2> test-output/cache-budget-prepare/shards.stderr.txt
           git diff --check
           git diff --exit-code "$BASE" -- src
-      - name: Publish only the explicit test and producer output
+      - name: Publish scoped WIP to existing feature branch only
         id: publish
         working-directory: work
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import subprocess
-          paths=set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())
-          allowed={'test/integration/message-group-membership-claim-cache.integration.test.js','test/shards/primary-classes.json','test/shards/resource-classes.json','test/shards/subsystem-classes.json','test/shards/impact-graph-seal.json'}
-          assert paths <= allowed, paths
+          allowed={'test/integration/message-group-membership-claim-cache.integration.test.js','scripts/checks/test-subsystem-classification-constants.js','test/shards/primary-classes.json','test/shards/resource-classes.json','test/shards/subsystem-classes.json','test/shards/impact-graph-seal.json'}
+          assert set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())<=allowed
           PY
-          git add test/integration/message-group-membership-claim-cache.integration.test.js test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: enforce cache integration budget and refresh generated shard identities'
+          git add test/integration/message-group-membership-claim-cache.integration.test.js scripts/checks/test-subsystem-classification-constants.js test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: enforce cache budget and classify the actual metadata visibility proof'
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           candidate="$(git rev-parse HEAD)"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$candidate"
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$candidate" > test-output/cache-budget-prepare/candidate.txt
+          echo "$candidate" > test-output/cache-budget-prepare/candidate.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -114,7 +113,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Two predeclared clean executions, both under the existing file budget
+      - name: Two predeclared executions must each meet the hard file budget
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE"
@@ -136,23 +135,23 @@ jobs:
           from pathlib import Path
           text=(Path('test-output/cache-budget')/(sys.argv[1]+'.stdout.txt')).read_text()
           times=re.findall(r'^ok test/integration/message-group-membership-claim-cache.integration.test.js \([^\n]*?, ([0-9]+)ms\)',text,re.M)
-          assert len(times)==1 and int(times[0])<30000, text
+          assert len(times)==1 and int(times[0])<30000,text
           PY
           done
-      - name: Retain budget outcome, lint, metadata and phase timings on any failure
+      - name: Retain original outcome, lint and classification on any failure
         if: always()
         run: |
           set -euo pipefail
           mkdir -p test-output/cache-budget
           set +e
-          npx eslint test/integration/message-group-membership-claim-cache.integration.test.js > test-output/cache-budget/lint.txt 2>&1
+          npx eslint test/integration/message-group-membership-claim-cache.integration.test.js scripts/checks/test-subsystem-classification-constants.js > test-output/cache-budget/lint.txt 2>&1
           echo "$?" > test-output/cache-budget/lint.exit.txt
           npm run audit:shards > test-output/cache-budget/shards.txt 2>&1
           echo "$?" > test-output/cache-budget/shards.exit.txt
           set -e
           git status --porcelain > test-output/cache-budget/final-status.txt
           git diff --exit-code "$BASE" -- src > test-output/cache-budget/runtime-diff.txt
-          sha256sum test/integration/message-group-membership-claim-cache.integration.test.js test/shards/*.json > test-output/cache-budget/source.sha256
+          sha256sum test/integration/message-group-membership-claim-cache.integration.test.js scripts/checks/test-subsystem-classification-constants.js test/shards/*.json > test-output/cache-budget/source.sha256
           find test-output/cache-budget -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/cache-budget/SHA256SUMS
           test "$(cat test-output/cache-budget/lint.exit.txt)" = 0
           test "$(cat test-output/cache-budget/shards.exit.txt)" = 0
@@ -185,7 +184,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Preserve precise verdict; earlier over-budget pass is not accepted
+      - name: Canonically retain exact verdict and failed predecessor
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -204,21 +203,21 @@ jobs:
           PY
           tar -C "$PACKET" -czf "test-output/cache-budget-retention/cache-budget-$GITHUB_RUN_ID.tar.gz" .
           node scripts/solve.js evidence add "test-output/cache-budget-retention/cache-budget-$GITHUB_RUN_ID.tar.gz" --id "$QUEST" --json > test-output/cache-budget-retention/store.json
+          gh api repos/psvensson/lagrange/actions/jobs/113292582439/logs > test-output/cache-budget-retention/failed-prepare-37771694878.log
+          node scripts/solve.js evidence add test-output/cache-budget-retention/failed-prepare-37771694878.log --id "$QUEST" --json > test-output/cache-budget-retention/prior-store.json
           python3 - <<'PY'
           import os,json
           from pathlib import Path
-          d=Path(os.environ['PACKET'])
-          r={'schema':'freshmg-cache-budget/1','sourceSha':os.environ['CANDIDATE'],'runId':int(os.environ['GITHUB_RUN_ID']),'result':os.environ['RESULT'],'independentApproval':False,'fileBudgetMs':30000,'declaredExecutions':2,'fixtureChange':'use existing replicaStaggerDelayMs=0 test pacing option; election safety/timings unchanged; Node test timeout restored to 30000; phase markers retained','metadata':'canonical refresh plus audit:shards','scope':'quiesced ordinary coordinator, real SQL/Raft/CDC/cache, synthetic row; no live reconciliation or physical admission','previousFunctionalOnlyRun':37770527496,'previousLimit':'30241ms file duration and 120000ms test timeout violated budget; not accepted as budget-conforming proof','retainedEvidence':json.loads(Path('test-output/cache-budget-retention/store.json').read_text()),'outputs':{p.name:p.read_text() for p in d.iterdir()}}
+          d=Path(os.environ['PACKET']);e=Path('test-output/cache-budget-retention')
+          r={'schema':'freshmg-cache-budget/1','sourceSha':os.environ['CANDIDATE'],'runId':int(os.environ['GITHUB_RUN_ID']),'result':os.environ['RESULT'],'independentApproval':False,'fileBudgetMs':30000,'declaredExecutions':2,'fixtureChange':'existing replicaStaggerDelayMs=0 removes optional fixture pacing; election requirements unchanged; timeout restored to 30000','classification':'exact override in existing taxonomy to cdc-metadata: assertion is metadata visibility, not bootstrap or transport','scope':'ordinary coordinator quiesced; actual SQL/Raft/CDC/cache; synthetic row; no physical membership proof','previousFunctionalOnlyRun':37770527496,'previousLimit':'30241ms file duration and 120000ms timeout violated budget; not accepted as budget-conforming','failedPrepare':{'runId':37771694878,'reason':'test name matched two subsystem rules; no source published or GCP measurement started','retainedEvidence':json.loads((e/'prior-store.json').read_text())},'retainedEvidence':json.loads((e/'store.json').read_text()),'outputs':{p.name:p.read_text() for p in d.iterdir()}}
           p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('cache-budget-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
           PY
-          node scripts/solve.js note --id "$QUEST" --attempt "PR105 findings 4218403605/4218403662: canonical metadata refreshed and cache test timeout restored to 30 seconds; remove fixture's optional 20ms replica staggering via existing config, retain phase timings. Two predeclared executions must each pass and classifier file time must be below 30 seconds. Run $GITHUB_RUN_ID on $CANDIDATE result=$RESULT. Prior functional 30241ms result retained but not accepted against hard budget. No runtime/election-safety settings changed, no independent approval."
+          node scripts/solve.js note --id "$QUEST" --attempt "PR105 budget/metadata correction: canonical CDC classification declaration and regenerated artifacts; 30-second budget restored, optional fixture pacing removed, two predeclared executions required. GCP $GITHUB_RUN_ID exact $CANDIDATE result=$RESULT. Prior functional-overbudget 37770527496 and ambiguous-taxonomy prepare failure 37771694878 retained. No runtime behavior change or independent approval."
           git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/cache-budget-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain cache budget result and explicit prior limit'
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain bounded cache integration and prior classification failure'
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$CANDIDATE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           published="$(git rev-parse HEAD)"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$published"
-          gh pr comment 105 --repo psvensson/lagrange --body "Budget/metadata response on exact $CANDIDATE, GCP $GITHUB_RUN_ID: $RESULT. Canonical test artifacts refreshed, 30-second timeout restored, optional test fixture staggering removed without changing runtime election requirements. Two predeclared runs must both be below the hard file budget. All outcomes retained at $published; previous functional-but-overbudget run is not approved."
-          if [ "$RESULT" = success ]; then
-            gh pr edit 105 --repo psvensson/lagrange --add-reviewer @copilot
-          fi
+          gh pr comment 105 --repo psvensson/lagrange --body "Exact budget/metadata response $CANDIDATE, GCP $GITHUB_RUN_ID: $RESULT, published $published. Reasoned exact CDC taxonomy declaration, canonical artifact producers and hard 30-second file limit retained. Two predeclared runs must each pass. Ordinary coordinator is quiesced; this is cache visibility, not full reconciliation or physical admission. All earlier failures retained."
+          if [ "$RESULT" = success ]; then gh pr edit 105 --repo psvensson/lagrange --add-reviewer @copilot; fi
