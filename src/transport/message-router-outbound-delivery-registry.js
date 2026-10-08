@@ -222,6 +222,7 @@ class OutboundDeliveryRegistryOwner {
     this.router = router;
   }
   getOutboundQueue(nodeId) {
+    this.router.transportLifetime.assertOpen();
     if (!this.router.outboundQueues.has(nodeId)) {
       this.router.outboundQueues.set(nodeId, {
         nodeId,
@@ -474,6 +475,8 @@ class OutboundDeliveryRegistryOwner {
     });
   }
   process(nodeId) {
+    const lifetime = this.router.transportLifetime;
+    if (lifetime.signal.aborted) return;
     const queue = this.router.outboundQueues.get(nodeId);
     if (!queue) {
       return;
@@ -519,7 +522,10 @@ class OutboundDeliveryRegistryOwner {
       );
       recordQueueWaitDuration(queue, queueWaitMs);
       Promise.resolve()
-        .then(() => item.deliverFn())
+        .then(() => {
+          lifetime.assertOpen();
+          return item.deliverFn();
+        })
         .then((result) => {
           queue.inFlight -= TRANSPORT_NUM.ONE;
           adjustInFlightPriorityCount(
@@ -547,7 +553,7 @@ class OutboundDeliveryRegistryOwner {
             result,
             queueWaitMs,
           });
-          this.process(nodeId);
+          if (!lifetime.signal.aborted) this.process(nodeId);
         })
         .catch((error) => {
           queue.inFlight -= TRANSPORT_NUM.ONE;
@@ -573,7 +579,7 @@ class OutboundDeliveryRegistryOwner {
             adjustInFlightReadinessReserveCount(queue, -TRANSPORT_NUM.ONE);
           }
           item.reject(error);
-          this.process(nodeId);
+          if (!lifetime.signal.aborted) this.process(nodeId);
         });
     }
   }

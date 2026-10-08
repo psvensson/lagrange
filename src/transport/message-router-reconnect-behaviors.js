@@ -7,6 +7,7 @@ const {
   MESSAGE_ROUTER_LITERAL,
   ROUTER_LOG_MSG,
   ROUTER_NO_CONNECTION_ERROR_CODE,
+  TRANSPORT_EVENT,
   TRANSPORT_NUM,
   TRANSPORT_PRESSURE_SUMMARY_FIELD,
   TRANSPORT_TYPEOF,
@@ -164,6 +165,7 @@ export function ensureReconnectOwnerConnection(
   targetNodeId,
   preferredAddress = null,
 ) {
+  router.transportLifetime.assertOpen();
   const existing = router.nodeConnections.get(targetNodeId) || null;
   if (existing) {
     router.refreshReconnectAuthority(existing, preferredAddress);
@@ -299,6 +301,8 @@ export function buildColdReconnectBudgetFailure(
 }
 
 export async function ensureNodeConnection(router, targetNodeId, address) {
+  const lifetime = router.transportLifetime;
+  lifetime.assertOpen();
   const existing = router.nodeConnections.get(targetNodeId);
   if (existing && existing.state === ConnectionState.CONNECTED) {
     return existing;
@@ -330,7 +334,8 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
   ) {
     return null;
   }
-  const connectionPromise = (async () => {
+  const connectionPromise = Promise.resolve().then(async () => {
+    lifetime.assertOpen();
     const reconnectCandidates = router.resolveReconnectAddressCandidates(
       targetNodeId,
       address,
@@ -372,6 +377,7 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
         lastReconnectAddress = reconnectAddress;
         try {
           await router.connectToNode(targetNodeId, reconnectAddress);
+          lifetime.assertOpen();
           router.clearReconnectAddressSuppression(
             targetNodeId,
             reconnectAddress,
@@ -379,6 +385,7 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
           lastError = null;
           break;
         } catch (error) {
+          lifetime.assertOpen();
           lastError = error;
           if (router.shouldSuppressReconnectAddress(error)) {
             router.suppressReconnectAddress(targetNodeId, reconnectAddress);
@@ -403,8 +410,11 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
         }
       }
     } finally {
-      router.pendingNodeConnections.delete(targetNodeId);
-      router.recordPendingNodeConnectionSnapshot();
+      if (!lifetime.signal.aborted &&
+          router.pendingNodeConnections.get(targetNodeId) === connectionPromise) {
+        router.pendingNodeConnections.delete(targetNodeId);
+        router.recordPendingNodeConnectionSnapshot();
+      }
     }
     router.armReconnectAfterConnectFailure(
       targetNodeId,
@@ -427,7 +437,7 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
     return connection && connection.state === ConnectionState.CONNECTED ?
       connection :
       null;
-  })();
+  });
   router.pendingNodeConnections.set(targetNodeId, connectionPromise);
   router.recordPendingNodeConnectionSnapshot();
   return connectionPromise;
@@ -443,6 +453,8 @@ export async function tryDeliverAfterReconnect(
   correlationId,
   timeoutMs = null,
 ) {
+  const lifetime = router.transportLifetime;
+  lifetime.assertOpen();
   if (router.shouldDeferColdReconnectForDeliveryBudget(timeoutMs)) {
     const reconnectBudgetFailure = router.buildColdReconnectBudgetFailure(
       targetNodeId,
@@ -458,6 +470,7 @@ export async function tryDeliverAfterReconnect(
     targetNodeId,
     reconnectAddress,
   );
+  lifetime.assertOpen();
   if (!connection || connection.state !== ConnectionState.CONNECTED) {
     const reconnectInProgress = router.buildReconnectInProgressFailure(
       targetNodeId,
@@ -500,6 +513,8 @@ export async function tryDeliverAfterReconnect(
 }
 
 export function scheduleRetiredSocketTermination(router, staleWs) {
+  const lifetime = router.transportLifetime;
+  lifetime.assertOpen();
   if (
     !staleWs ||
     (typeof staleWs.terminate !== TRANSPORT_TYPEOF.FUNCTION &&
@@ -512,6 +527,7 @@ export function scheduleRetiredSocketTermination(router, staleWs) {
     router.messageTimeoutMs,
   );
   const timeout = setTimeout(() => {
+    lifetime.signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
     try {
       if (typeof staleWs.terminate === TRANSPORT_TYPEOF.FUNCTION) {
         staleWs.terminate();
@@ -522,6 +538,10 @@ export function scheduleRetiredSocketTermination(router, staleWs) {
       void _closeErr;
     }
   }, graceMs);
+  function onAbort() {
+    clearTimeout(timeout);
+  }
+  lifetime.signal.addEventListener(TRANSPORT_EVENT.ABORT, onAbort, {once: true});
   if (typeof timeout?.unref === TRANSPORT_TYPEOF.FUNCTION) {
     timeout.unref();
   }

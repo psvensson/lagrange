@@ -212,6 +212,8 @@ class MessageRouterConnectionLifecycleMethods {
    * @return {Promise<void>}
    */
   async connectToNode(nodeId, address, options = {}) {
+    const lifetime = this.transportLifetime;
+    lifetime.assertOpen();
     if (this.nodeConnections.has(nodeId)) {
       const existing2 = this.nodeConnections.get(nodeId);
       if (existing2.state === ConnectionState.CONNECTED) {
@@ -258,7 +260,9 @@ class MessageRouterConnectionLifecycleMethods {
     this.nodeConnections.set(nodeId, connectionInfo);
     try {
       await this.establishConnection(connectionInfo);
+      lifetime.assertOpen();
     } catch (error) {
+      lifetime.assertOpen();
       if (options.autoReconnect !== false) {
         this.handleConnectionClose(nodeId, connectionInfo.connectionId);
       }
@@ -272,6 +276,8 @@ class MessageRouterConnectionLifecycleMethods {
    * @private
    */
   async establishConnection(connectionInfo) {
+    const lifetime = this.transportLifetime;
+    lifetime.assertOpen();
     if (this.inProcessTransport) {
       return this.establishInProcessConnection(connectionInfo);
     }
@@ -279,9 +285,12 @@ class MessageRouterConnectionLifecycleMethods {
       let settled = false;
       try {
         const ws = new WebSocket(connectionInfo.address);
+        connectionInfo.ws = ws;
+        lifetime.ownSocket(ws);
         let connectionEstablished = false;
         let connectTimeout = null;
         const clearConnectTimeout = () => {
+          lifetime.signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
           if (connectTimeout) {
             clearTimeout(connectTimeout);
             connectTimeout = null;
@@ -297,6 +306,10 @@ class MessageRouterConnectionLifecycleMethods {
           connectionInfo.ws = null;
           reject(error);
         };
+        function onAbort() {
+          rejectPendingConnection(lifetime.signal.reason);
+        }
+        lifetime.signal.addEventListener(TRANSPORT_EVENT.ABORT, onAbort, {once: true});
         const attempts = connectionInfo.reconnectAttempts || TRANSPORT_NUM.ZERO;
         const currentConnectTimeoutMs = Math.min(
           30000,
@@ -388,9 +401,11 @@ class MessageRouterConnectionLifecycleMethods {
           resolve();
         });
         ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+          if (lifetime.signal.aborted) return;
           this.handleMessage(connectionInfo.nodeId, ws, data);
         });
         ws.on(TRANSPORT_EVENT.CLOSE, () => {
+          if (lifetime.signal.aborted) return;
           if (!connectionEstablished) {
             if (!settled) {
               rejectPendingConnection(
@@ -432,6 +447,8 @@ class MessageRouterConnectionLifecycleMethods {
    * @private
    */
   async establishInProcessConnection(connectionInfo) {
+    const lifetime = this.transportLifetime;
+    lifetime.assertOpen();
     const url = new URL(connectionInfo.address);
     const portKey = Number(url.port);
     const target = INPROC.serversByPort.get(portKey);
@@ -441,14 +458,17 @@ class MessageRouterConnectionLifecycleMethods {
       throw err;
     }
     const {a: clientWs, b: serverWs} = createInProcWebSocketPair();
+    lifetime.ownSocket(clientWs);
     if (this.server?.clients) {
       this.server.clients.add(serverWs);
     }
     target.router.handleIncomingConnection(serverWs, null);
     clientWs.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+      if (lifetime.signal.aborted) return;
       this.handleMessage(connectionInfo.nodeId, clientWs, data);
     });
     clientWs.on(TRANSPORT_EVENT.CLOSE, () => {
+      if (lifetime.signal.aborted) return;
       this.handleConnectionClose(
         connectionInfo.nodeId,
         connectionInfo.connectionId,

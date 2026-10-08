@@ -131,6 +131,7 @@ class MessageRouterConnectionCloseReconnect {
    * @private
    */
   scheduleReconnect(connectionInfo) {
+    const lifetime = this.transportLifetime;
     if (this.isShuttingDown) {
       return;
     }
@@ -169,6 +170,7 @@ class MessageRouterConnectionCloseReconnect {
       delayMs: delay,
     });
     connectionInfo.reconnectTimeout = setTimeout(() => {
+      if (lifetime.signal.aborted) return;
       connectionInfo.reconnectTimeout = null;
       connectionInfo.reconnectDueAt = null;
       if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
@@ -176,8 +178,9 @@ class MessageRouterConnectionCloseReconnect {
         connectionInfo.state = ConnectionState.CLOSED;
         return;
       }
-      const connectionPromise = (async () => {
+      const connectionPromise = Promise.resolve().then(async () => {
         try {
+          lifetime.assertOpen();
           this.refreshReconnectAuthority(
             connectionInfo,
             connectionInfo.address || connectionInfo.configuredAddress,
@@ -188,8 +191,10 @@ class MessageRouterConnectionCloseReconnect {
             connectionInfo.address = connectionInfo.configuredAddress;
           }
           await this.establishConnection(connectionInfo);
+          lifetime.assertOpen();
           return connectionInfo.state === ConnectionState.CONNECTED ? connectionInfo : null;
         } catch (error) {
+          if (lifetime.signal.aborted) return null;
           this.logger.error(ROUTER_LOG_MSG.RECONNECT_FAILED, {
             nodeId: connectionInfo.nodeId,
             error: error.message,
@@ -200,10 +205,13 @@ class MessageRouterConnectionCloseReconnect {
           this.scheduleReconnect(connectionInfo);
           return null;
         } finally {
-          this.pendingNodeConnections.delete(connectionInfo.nodeId);
-          this.recordPendingNodeConnectionSnapshot();
+          if (!lifetime.signal.aborted &&
+              this.pendingNodeConnections.get(connectionInfo.nodeId) === connectionPromise) {
+            this.pendingNodeConnections.delete(connectionInfo.nodeId);
+            this.recordPendingNodeConnectionSnapshot();
+          }
         }
-      })();
+      });
       this.pendingNodeConnections.set(connectionInfo.nodeId, connectionPromise);
       this.recordPendingNodeConnectionSnapshot();
     }, delay);
@@ -238,12 +246,15 @@ class MessageRouterConnectionCloseReconnect {
    * @private
    */
   startPingInterval(connectionInfo) {
+    const lifetime = this.transportLifetime;
+    lifetime.assertOpen();
     // Idempotent: an adopted inbound connection may be armed here and the same
     // record can be re-armed after a reconnect; never leak a prior interval.
     this.clearPingInterval(connectionInfo);
     connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
     connectionInfo.pingInterval = setInterval(() => {
       if (
+        lifetime.signal.aborted ||
         !connectionInfo.ws ||
         connectionInfo.ws.readyState !== WebSocket.OPEN
       ) {
@@ -256,6 +267,7 @@ class MessageRouterConnectionCloseReconnect {
       // pinned forever (the peer may have restarted on a new address).
       const pingId = uuidv4();
       const timeout = setTimeout(() => {
+        if (lifetime.signal.aborted) return;
         this.pendingPings.delete(pingId);
         this.recordMissedKeepalivePing(connectionInfo);
       }, this.pingTimeoutMs);
