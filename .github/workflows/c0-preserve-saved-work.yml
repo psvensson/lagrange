@@ -9,7 +9,7 @@ concurrency:
   group: freshmg-claim-branch-increment
   cancel-in-progress: false
 env:
-  BASE: 91ed3358f620e1dc8779f99f0b507880bbc1a0ec
+  BASE: 57a102d933c118220f20f651fa333fa7a3df6d9e
   WORK_BRANCH: work/freshmg-branch-authorization-20261008
 jobs:
   publish-correction:
@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Commit only the four reviewed implementation corrections
+      - name: Publish only two formatting corrections, not approval
         id: push
         working-directory: work
         shell: bash
@@ -42,14 +42,13 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$BASE"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
-          git apply --check ../carrier/scripts/quest-evidence/freshmg-explicit-repository.patch
-          git apply ../carrier/scripts/quest-evidence/freshmg-explicit-repository.patch
-          node --check src/rebalancer/replica-operation-message-group-membership-authorization.js
+          git apply --check ../carrier/scripts/quest-evidence/freshmg-final-style.patch
+          git apply ../carrier/scripts/quest-evidence/freshmg-final-style.patch
           node --check src/rebalancer/replica-operation-message-group-membership-owner-claim.js
           node --check test/rebalancer/message-group-membership-branch-authorization.test.js
-          git add -- src/rebalancer/replica-operation-message-group-membership-authorization.js src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js test/rebalancer/message-group-membership-branch-authorization.test.js
+          git add -- src/rebalancer/replica-operation-message-group-membership-owner-claim.js test/rebalancer/message-group-membership-branch-authorization.test.js
           git diff --cached --check
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'WIP FreshMG: explicit repository dependency, preserve claim/branch semantics'
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'style: finish membership owner and fixture line lengths'
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           candidate="$(git rev-parse HEAD)"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$candidate"
@@ -119,13 +118,13 @@ jobs:
           printf '%s\n' "$status" > test-output/freshmg-exact/lint.exit.txt
           cat test-output/freshmg-exact/lint.txt
           exit "$status"
-      - name: Exact candidate and existing related repository regressions
+      - name: Exact candidate and existing repository/schema regressions
         if: always() && steps.install.outcome == 'success'
         run: |
           set -uo pipefail
           exec 9>/tmp/lagrange-contract-first-measurement.lock
           flock -w 120 9 || exit "$?"
-          timeout 240s npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/freshmg-exact/tests.txt 2> test-output/freshmg-exact/tests.stderr.txt
+          timeout 240s npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js test/partition/replica-operations-schema-migration.test.js > test-output/freshmg-exact/tests.txt 2> test-output/freshmg-exact/tests.stderr.txt
           status=$?
           printf '%s\n' "$status" > test-output/freshmg-exact/tests.exit.txt
           tail -80 test-output/freshmg-exact/tests.txt
