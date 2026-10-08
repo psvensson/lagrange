@@ -16,14 +16,14 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Bind independent review to the already pushed source and evidence
+      - name: Bind independent review to the exact runtime-consumer source and evidence
         shell: bash
         run: |
           set -euo pipefail
-          expected=05a9883ae3ec0e556258bda73d99078ed2faab19
-          actual="$(gh pr view 108 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          expected=ff8c95ee3546458db0154e7eb8920bcd1978b9c4
+          actual="$(gh pr view 109 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
           printf 'expected=%s\nactual=%s\n' "$expected" "$actual"
           test "$actual" = "$expected"
-          gh pr edit 108 --repo psvensson/lagrange --add-reviewer @copilot
-          gh pr view 108 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
-          echo 'Requested category-complete independent review of dormant initial learner intent, exact holder/terminal/target predicates, unknown results and fixture fidelity. No source landing or full cutover approval.' >> "$GITHUB_STEP_SUMMARY"
+          gh pr edit 109 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 109 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
+          echo 'Requested category-complete owner-interaction, recovery, concurrency and harness-fidelity review. Known lab FAIL, complexity/census obligations and incomplete production driver remain explicit. No main merge, source approval, C0/FreshMG closure or release certification.' >> "$GITHUB_STEP_SUMMARY"
