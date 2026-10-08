@@ -1,0 +1,111 @@
+{
+  "schema": "freshmg-self-review-r3/1",
+  "baseSha": "5c1595e7ea46be54f7114657b2117571f14a5c16",
+  "before": [
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+      "reportedAssertions": 16,
+      "durationMs": 6959
+    }
+  ],
+  "after": [
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+      "reportedAssertions": 16,
+      "durationMs": 3501
+    }
+  ],
+  "restartBudgetMs": 2000,
+  "restartBudgetSatisfied": false,
+  "neighborResults": [
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js",
+      "reportedAssertions": 3,
+      "durationMs": 1249
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js",
+      "reportedAssertions": 6,
+      "durationMs": 2583
+    },
+    {
+      "path": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+      "reportedAssertions": 20,
+      "durationMs": 5879
+    }
+  ],
+  "all16CasesPreserved": true,
+  "productionSourceChanged": false,
+  "journalChange": "fixture DELETE/FULL -> WAL/explicit FULL on every open",
+  "mutationControls": [
+    "missing-wal",
+    "weakened-sync"
+  ],
+  "bootWindow": {
+    "measured": true,
+    "resolved": false,
+    "result": {
+      "exit": 1,
+      "wallSeconds": 1.967427452999999
+    },
+    "ceiling": "supplied boot row and real native port; sender/recipient share one node fixture; no independent cross-group or physical proof"
+  },
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL",
+  "distributedAcceptance": false,
+  "runId": 37822317153,
+  "exactHead": {
+    "sourceSha": "310cb0209d92ecc38cc82bda5dd3d398e8dc4ebd",
+    "files": [
+      {
+        "path": "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "reportedAssertions": 16,
+        "durationMs": 3494,
+        "budgetMs": 2000,
+        "withinBudget": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js",
+        "reportedAssertions": 6,
+        "durationMs": 2516,
+        "budgetMs": 2000,
+        "withinBudget": false
+      },
+      {
+        "path": "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js",
+        "reportedAssertions": 3,
+        "durationMs": 1211,
+        "budgetMs": 2000,
+        "withinBudget": true
+      },
+      {
+        "path": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "reportedAssertions": 20,
+        "durationMs": 1584,
+        "budgetMs": 30000,
+        "withinBudget": true
+      }
+    ],
+    "allBudgetsSatisfied": false
+  },
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "9d2b578c0b7c62624ac62907f5c26a8e607dcf4ac275ce7a50c9d21a72dfb2aa",
+      "bytes": 177648,
+      "asset": "message-group-fresh-identity-membership--runtime-r3-37822317153-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--runtime-r3-37822317153-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T18:12:56.740Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Author adversarial R3: final-read boot counterexample unresolved. Paired DELETE/FULL vs WAL/explicit FULL fixture measurement preserves all restart cells and oracles; exact-head run and two mutations retain original gates. First failed WAL-default assumption is nested. Correct attribution prose from machine record. No production mutation, independent approval, physical acceptance or cutover closure.",
+      "evidence": "sha256:9d2b578c0b7c62624ac62907f5c26a8e607dcf4ac275ce7a50c9d21a72dfb2aa",
+      "asset": "message-group-fresh-identity-membership--runtime-r3-37822317153-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--runtime-r3-37822317153-1.zip",
+      "bytes": 177648
+    }
+  },
+  "archiveSha256": "9d2b578c0b7c62624ac62907f5c26a8e607dcf4ac275ce7a50c9d21a72dfb2aa"
+}
