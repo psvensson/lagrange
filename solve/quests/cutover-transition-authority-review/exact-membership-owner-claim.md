@@ -1,130 +1,132 @@
-# Membership owner claim - response to 4217392058
+# Exact membership owner claim
 
-Status: proposed bounded completion of the C0 owner contract. No new runtime
-permission or independent approval. This document supersedes the use of the
-ordinary structural owner/lease as a membership successor fence in
-exact-promotion-authorization-contract.md. Its branch CAS and J1 decision
-otherwise remain unchanged. The existing expiry-only orphan sweep is NOT a
-single-winner membership takeover protocol and must not be used as one.
+Status: C0 contract response to 4217392058 and 4217554373, awaiting independent
+acceptance. This defines the proposed repository interaction, not permission
+to activate an incomplete runtime path. Ordinary structural ownership and the
+expiry-only orphan sweep are not membership successor authority.
 
-## One fact in the existing operation row
+## Durable fact and existing owner
 
-ReplicaOperationRepository owns a nullable JSON field
-`message_group_membership_owner_claim` in replica_operations, registered by
-the existing membership schema constants and upgrade loop. It carries exactly:
+ReplicaOperationRepository owns nullable JSON
+`message_group_membership_owner_claim` in the existing replica_operations row.
+The existing membership schema/upgrade loop registers it. Exact fields are:
 version, operationId, transitionIdentity, ownerNodeId, ownerBootIncarnation,
-generation, expiresAt. All identity strings are nonempty; boot, generation and
-expiry are positive safe integers. The generation cannot wrap or decrease.
-This is the holder/fence of the existing membership obligation, not another
-ledger, queue, coordinator, or general operation lease. It remains with the
-same row/lane until the membership obligation resolves, including after
-ordinary terminal settlement. Generic updates cannot overwrite this field.
+generation, expiresAt. Version is 1; boot/generation/expiry are positive safe
+integers; identity strings are nonempty. Generation must increase without
+wrapping. This is the holder of the existing membership obligation, not a new
+ledger, queue, coordinator or generic operation lease.
 
-The action permit and holder claim express DIFFERENT facts. The permit records
-which irreversible action was authorized under which identity/context. The
-claim names who may next advance that operation. Taking over a claim NEVER
-erases, cancels, rewrites, or fabricates a pending action permit. The immutable
-O/group/S/T/source-generation tuple remains in the existing membership fields.
+The immutable operation O/group/source S/target T/source lifecycle tuple stays
+in its existing fields. The action permit records an irreversible authorization;
+the holder claim records who may next advance it. Renewal/takeover changes the
+holder only. It never erases, cancels or rewrites a pending action permit.
+Generic operation updates preserve both fields, including terminal settlement.
 
-## Initial claim
+## Initial null claim, including loss of the structural owner
 
-The current admitted operation's structural owner may initialize a null claim
-only before membership authorization: exact nonterminal REPLACE, lane, full
-identity, source lifecycle claim, intent_recorded/learner_requested state,
-null permit and no committed membership stamps. The repository uses its own
-node identity, bound boot incarnation and clock, and reads the canonical nodes
-boot row through the authoritative gateway. It does not trust a requested
-claimant node, boot, expiry or generation from the command payload.
+A null claim may be initialized only from an exact nonterminal REPLACE with
+retained group lane, full immutable identity and source lifecycle claim,
+learner_requested/intent_recorded phase, null permit and all membership stamps
+null. The repository uses its own bound node/boot and timeSource, and checks
+its canonical nodes boot row through the existing authoritative gateway.
+It does not accept a claimant node, clock, generation or expiry from a payload.
 
-One conditional UPDATE changes only null owner_claim to the first encoded
-claim. Its predicate includes the exact O/group/S/T/source claim, lane,
-ordinary nonterminal status/step/completed_at, and exact pre-admission state.
-The same existing repository/gateway SQL commit is the linearization point.
-A winner observation must match the exact requested encoded claim. A null
-claim on an operation that already has a permit/stamp is inconsistent, not
-permission to adopt historical work. Such state fails closed for explicit
-reconciliation; no invented owner is recovered from an expiry alone.
+Two cases may compete for that initial claim:
 
-## Renewal and successor takeover
+1. The canonical structural operation owner may initialize it while the
+   ordinary operation lease is live.
+2. If that owner disappears before claiming, another current eligible owner
+   instance may initialize it when the existing owner-lease policy reports
+   ADOPT_AS_FENCED_SUCCESSOR (expired or absent ordinary lease).
 
-Renewal and takeover use the same existing repository operation and field.
-Read the full row authoritatively. Require exact immutable identity, retained
-membership lane/debt, valid old claim and current claimant boot evidence.
+Neither case obtains authority from that eligibility check. ONE conditional
+UPDATE from exact NULL claim to the repository-generated generation-1 claim
+is the linearization point. Its WHERE matches the full identity/source claim,
+lane, phase/obligation, null permit/stamps, exact nonterminal status/step and
+completed_at, plus the observed ordinary lease (including IS NULL, not a
+wildcard). If the original owner claims first, or an ordinary renewal changes
+that lease before this UPDATE, the orphan attempt loses. Two successors with
+the same deadline still have distinct node/boot claims and cannot both win.
+The late structural owner cannot overwrite a winning successor's claim.
 
-- Renewal requires the still-live old claim's owner and boot to equal the
-  executing repository binding.
-- Takeover requires the old claim to be expired at the repository's observation
-  time. A current eligible operation-owner instance on another live node may
-  compete; structural source ownership is NOT required for a successor.
-- Both set generation=old+1 and expiry=repository-now+the existing membership
-  ownership window. Reject non-increasing or overflowing values. The action
-  phase, permit, stamps, terminal state and cleanup debt are not rewritten.
+The membership recovery entry must attempt this claim BEFORE any generic
+fail-soft orphan lease touch; such a touch is not a claimant grant and must
+not manufacture a fresh structural-owner lease that blocks its own recovery.
+After a membership claim exists, ordinary lease touches are irrelevant to
+membership ownership. This ordering remains a required driver-integration
+witness; the row-only increment does not implement that driver.
 
-The UPDATE predicate contains the EXACT old encoded claim, immutable identity,
-lane, phase, obligation, permit, source claim and membership stamps. Null is
-compared as null, not a wildcard. If a phase or action changes between read and
-write, renewal/takeover loses and rereads. Competing successors with the same
-expiry still have different node/boot identities; only one exact prior-claim
-CAS can win. Re-reading another winner does not grant ownership to the loser.
-Generic orphan-sweep lease touches cannot match or alter this claim.
+Null claim with an existing permit/stamp is inconsistent, not initial work.
+It fails closed for explicit reconciliation. A terminal row with a null claim
+cannot issue new admission: terminal-first non-admission settlement belongs
+to its existing membership owner and must be proved separately.
 
-The canonical nodes row is checked before and after the claim commit by the
-existing authoritative gateway. These are separate replicated reads, not a
-fictional atomic cross-table/cross-group transaction. A changed or unreadable
-boot after the CAS returns no actionable claim. A later runtime/CREATE action
-must also validate current source/destination boot and exact claim identity;
-a retained claim record alone is not permission for a stale process to act.
+## Renewal and successor takeover after a claim exists
 
-## Binding branch selection and previously issued commands
+Read the complete row authoritatively. Require exact immutable identity,
+retained unresolved membership lane/debt, valid old claim and current claimant
+boot. Renewal requires that the old live claim belongs to this node and boot.
+Takeover permits another current eligible owner only after old claim expiry.
+The new claim uses generation=old+1 and now+the existing ownership window;
+reject overflow, non-increasing generation or non-increasing expiry.
 
-The promotion/abort selection CAS must match the exact CURRENT owner claim,
-not `lease_expires_at` or a source/target-derived owner. The executing node/boot
-must own that claim and its lease must be live when the request is considered.
-It also matches the existing exact learner-committed phase, permit and stamp.
-The one selected branch is monotonic under J1. A successor keeps pending action
-permits, proposal anchors and original authorizing context intact and resolves
-those exact effects before issuing a next-stage permit under its new claim.
+The UPDATE matches the exact old encoded claim and exact identity, lane,
+phase, obligation, permit, all membership stamps, source lifecycle claim and
+ordinary status/step/completed_at observed. It changes only the claim. A phase
+change or competing holder wins by making the stale predicate false. Existing
+pending actions, terminal status, cleanup and reservation obligations survive.
+Terminal membership debt may be claimed; resolved/released work may not revive.
 
-A lost old owner's already-authorized action may still arrive. Claim takeover
-is NOT cancellation of that authorization. The same durable operation/branch,
-permanent peer identity and native term/configuration/lifecycle fence constrain
-its result. A successor cannot choose the opposite branch while an old action
-can still commit. Its pending-outcome reconciliation is an existing membership
-runtime interaction, not inferred from lease expiration or current absence.
-The request wrapper carries current execution-claim context separately from
-the immutable action context. Never repurpose the effect subject as claimant.
+Canonical claimant boot is checked before and after the commit. These are
+separate authoritative reads, not an atomic cross-group transaction. Changed
+or unreadable boot means no actionable result. Every later runtime/CREATE
+request must also validate its current boots, exact claim and action context.
+No claim/read-back alone guarantees that a process is still current when a
+subsequent external effect executes.
 
-## Lost result, restart and refusal
+## Promotion, abort and already issued actions
 
-| Observation after uncertain claim CAS | Meaning and next owner action |
+The promotion/abort selection CAS matches the exact CURRENT membership claim,
+owned by the executing node/boot and live at consideration time. It does NOT
+require a structural source owner or the ordinary lease_expires_at. It also
+matches the exact committed learner basis/permit/stamp described in
+[the branch contract](exact-promotion-authorization-contract.md).
+
+Promotion and pre-promotion target-abandonment compete on the same prior row.
+J1 makes promotion authorization and its successors a one-way forward branch.
+A new holder preserves old permits/anchors and resolves their exact effects
+before issuing the next stage. Holder expiry/takeover is not cancellation:
+an already-authorized old request may still arrive. Native configuration,
+term, lifecycle and permanent-peer fences, plus the durable branch, constrain
+its result. A successor cannot choose the opposite branch while it can commit.
+Current execution-claim context stays separate from original action context.
+
+## Unknown result and reconstruction
+
+| Authoritative observation | Owner response |
 | --- | --- |
-| Exact requested claim, still current boot | Candidate owns that recorded claim; revalidate live claim and immutable action before any progression |
-| A different valid claim | This candidate lost; adopt observations only, never permission; current winner retains work |
-| Exact old claim | Outcome is unresolved; repeat the same exact CAS or let a competing exact CAS settle it; an old read does not cancel delayed SQL |
-| Unavailable or inconsistent row/boot | No grant; preserve lane and action, schedule authoritative reread through the existing owner |
-| Ordinary terminal row with unresolved membership obligation | Claim takeover remains possible on expired exact claim; only membership recovery, never new ordinary CREATE/admission |
-| Released lane/resolved obligation | No claimant may revive it; late requests remain fenced by exact operation/action context |
+| Exact requested claim and current boot | Recognize the recorded holder; revalidate live claim/action before progression |
+| Another valid claim | Losing candidate may observe but not act as winner |
+| Exact old claim or NULL | Unresolved write; retry the same conditional basis or let competition settle it; a read is not cancellation |
+| Unavailable/inconsistent row or boot | No grant; retain lane/action and schedule the existing owner's reread |
+| Terminal row with unresolved claimed membership work | Expired-holder competition may resume membership work only |
+| Released lane or resolved obligation | No claimant or old request may resurrect admission |
 
-Expiry permits competition; CAS identity provides single-winner authority.
-Clock skew may cause an earlier competing attempt but cannot make two prior-
-claim updates win. No claim proves that an external effect executed once.
-Reconstruction reads the committed claim and immutable action from the same
-operation row; process-local maps and old scheduling ownership do not survive
-as grants.
+Expiry only permits competition; exact committed CAS identifies the winner.
+Clock skew cannot make two updates against the same old claim both win, but
+no lease argument establishes exactly-once external effects. Restart derives
+holder and action from this row, not a process-local queue or projection.
 
-## Required tests and increment boundary
+## Proof scope
 
-Prove two competing successor nodes (including equal expiry), same-node new
-boot, live remote-claim refusal, exact old-claim mismatch, lost answer before/
-after commit, delayed losing SQL, generation overflow, terminal debt retention,
-phase mutation racing takeover, and old claimant branch CAS losing after a
-successor claim commit. Boot unreadability/change and released lane must
-produce zero authorized effects.
+Required tests include equal-deadline successors, same-node new boot, live
+remote claim, generation overflow, stale prior claim, delayed losing SQL,
+phase change racing takeover, lost answers and terminal debt. Initial-null
+controls include owner loss before claiming, successor/structural competition,
+and an ordinary lease renewal defeating an already-read orphan attempt.
 
-The first source increment may establish and test these row operations without
-activating planner, handler, transport or physical effects. It is not complete
-FreshMG. The driver must obtain actual prior learner authority and the existing
-CREATE/worker claim; only then can those parks be lifted. Independent review
-of the code, original eight FreshMG receipts, lost-action reconciliation and
-physical off-seed proof remain required. No current C0 receipt is promoted by
-writing this contract.
+The first source increment may test these repository operations in isolation.
+It must keep planner, handler and physical effects parked. The actual admission
+producer, runtime authorization/settlement, boot composition, CREATE worker,
+orphan driver ordering and eight original FreshMG receipts remain product
+obligations. No C0 receipt or source approval follows from this document alone.
