@@ -9,9 +9,25 @@ concurrency:
   group: freshmg-cache-visibility
   cancel-in-progress: false
 env:
-  CANDIDATE: 29280b016f464c08204549c89648d74485c97a39
+  CANDIDATE: b435d6b4cbda9ef37bb54cf1d3835f433c6697d8
   WORK_BRANCH: work/freshmg-null-claim-20261008
+  QUEST: message-group-fresh-identity-membership
 jobs:
+  request-terminal-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Request independent review of isolated terminal settlement
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh pr view 106 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)" = 4b31e90765d80528bbb5506d325ab1e284fbb56e
+          gh pr comment 106 --repo psvensson/lagrange --body 'Review exact 4b31e90765d80528bbb5506d325ab1e284fbb56e for T0 terminal-first non-admission: current boot; exact immutable row/holder/status/phase/no-action basis; monotonic lane release only; current holder when present; unknown-result/replay; no ordinary resurrection or physical grant. GCP 37767400569 proves same-case red/green plus holder-fence deletion mutant and lint. Return category-complete ACCEPT/REJECT; this is not a request to merge or activate the missing membership driver. Parent NULL-lease increment still has its separate cache integration review.'
+          gh pr edit 106 --repo psvensson/lagrange --add-reviewer @copilot
   wake:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -49,7 +65,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Check exact source and test syntax
+      - name: Bind exact source and integration fixture
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE"
@@ -58,8 +74,7 @@ jobs:
           npm ci
           node --check test/integration/message-group-membership-claim-cache.integration.test.js
           printf 'candidate=%s\nrun=%s\nrunner=%s\n' "$CANDIDATE" "$GITHUB_RUN_ID" "$RUNNER_NAME" > test-output/claim-cache/provenance.txt
-      - name: Run real bootstrap, SQL/Raft and SystemTableCache integration
-        id: run
+      - name: Run actual seed SQL/Raft and SystemTableCache with non-executing row fixture
         run: |
           set -euo pipefail
           exec 9>/tmp/lagrange-contract-first-measurement.lock
@@ -72,10 +87,10 @@ jobs:
           tail -120 test-output/claim-cache/stdout.txt
           tail -80 test-output/claim-cache/stderr.txt >&2
           exit "$status"
-      - name: Always retain lint, provenance and the original failure
+      - name: Always retain exact outcome, lint and hashes
         if: always()
         run: |
-          set -uo pipefail
+          set -euo pipefail
           mkdir -p test-output/claim-cache
           set +e
           npx eslint test/integration/message-group-membership-claim-cache.integration.test.js > test-output/claim-cache/lint.txt 2> test-output/claim-cache/lint.stderr.txt
@@ -111,7 +126,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Canonically retain proof, append actual outcome and push without force
+      - name: Retain previous and current results, publish without approval
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.cache.result }}
@@ -123,30 +138,41 @@ jobs:
           gh api "repos/psvensson/lagrange/actions/runs/$GITHUB_RUN_ID/artifacts" > test-output/cache-retention/artifacts.json
           export ARTIFACT_ID="$(python3 -c 'import json,os; a=[x for x in json.load(open("test-output/cache-retention/artifacts.json"))["artifacts"] if x["name"]==os.environ["ARCHIVE_NAME"]];assert len(a)==1;print(a[0]["id"])')"
           gh api "repos/psvensson/lagrange/actions/artifacts/$ARTIFACT_ID/zip" > test-output/cache-retention/cache.zip
+          gh api repos/psvensson/lagrange/actions/artifacts/11545881533/zip > test-output/cache-retention/founder-37767526592.zip
           python3 - <<'PY'
           import json,os,hashlib,zipfile
           from pathlib import Path
           d=Path('test-output/cache-retention')
           a=next(x for x in json.loads((d/'artifacts.json').read_text())['artifacts'] if x['id']==int(os.environ['ARTIFACT_ID']))
-          assert hashlib.sha256((d/'cache.zip').read_bytes()).hexdigest()==a['digest'].split(':')[1]
-          with zipfile.ZipFile(d/'cache.zip') as z:
-              for line in z.read('SHA256SUMS').decode().splitlines():
-                  h,n=line.split(None,1)
-                  assert hashlib.sha256(z.read(Path(n).name)).hexdigest()==h, n
-              (d/'observations.json').write_text(json.dumps({n:z.read(n).decode() for n in z.namelist()},indent=2)+'\n')
+          expected={'cache.zip':a['digest'].split(':')[1],'founder-37767526592.zip':'11c73245adbf9ae5ec9ffcfe0ea754f332277ecc189e2a23e3c4c55b84f7181b'}
+          for name,sha in expected.items():
+              assert hashlib.sha256((d/name).read_bytes()).hexdigest()==sha
+              with zipfile.ZipFile(d/name) as z:
+                  for line in z.read('SHA256SUMS').decode().splitlines():
+                      h,n=line.split(None,1)
+                      assert hashlib.sha256(z.read(Path(n).name)).hexdigest()==h, n
+                  (d/(name+'.json')).write_text(json.dumps({n:z.read(n).decode() for n in z.namelist()},indent=2)+'\n')
           PY
-          node scripts/solve.js evidence add test-output/cache-retention/cache.zip --quest message-group-fresh-identity-membership --json > test-output/cache-retention/store.json
+          node scripts/solve.js evidence add test-output/cache-retention/cache.zip --id "$QUEST" --json > test-output/cache-retention/store.json
+          node scripts/solve.js evidence add test-output/cache-retention/founder-37767526592.zip --id "$QUEST" --json > test-output/cache-retention/prior-store.json
           python3 - <<'PY'
           import json,os
           from pathlib import Path
-          d=Path('test-output/cache-retention'); outputs=json.loads((d/'observations.json').read_text())
-          r={'schema':'freshmg-cache-integration/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'result':os.environ['RESULT'],'independentApproval':False,'multiHostAcceptance':False,'retainedEvidence':json.loads((d/'store.json').read_text()),'outputs':outputs}
-          p=Path('solve/quests/message-group-fresh-identity-membership/evidence')/('cache-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
+          d=Path('test-output/cache-retention')
+          r={'schema':'freshmg-cache-integration/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'result':os.environ['RESULT'],'independentApproval':False,'multiHostAcceptance':False,'fixtureBoundary':'synthetic non-executing operation-row tuple inserted through actual repository; real seed boot/gateway/SQL/Raft/CDC/cache; no physical CREATE grant','retainedEvidence':json.loads((d/'store.json').read_text()),'outputs':json.loads((d/'cache.zip.json').read_text()),'priorFailure':{'runId':37767526592,'candidate':'29280b016f464c08204549c89648d74485c97a39','result':'failure','firstDivergence':'booted founder service did not supply nonempty CREATE-attempt token expected by new identity format; assertion before operation insertion','interpretation':'founder source-generation admission remains unresolved product work; not hidden by the isolated cache test','retainedEvidence':json.loads((d/'prior-store.json').read_text()),'outputs':json.loads((d/'founder-37767526592.zip.json').read_text())}}
+          p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('cache-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
           PY
-          node scripts/solve.js note --id message-group-fresh-identity-membership --attempt "PR105 cache-visibility review response: exact integration test $CANDIDATE uses real bootstrap, gateway, SQL/Raft and SystemTableCache; run $GITHUB_RUN_ID result=$RESULT. Original output and first failure retained. No cache injection, fake distributed gateway or physical replacement acceptance; no source approval inferred."
-          git add solve/quests/message-group-fresh-identity-membership/log.ndjson "solve/quests/message-group-fresh-identity-membership/evidence/cache-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain actual membership-claim cache integration result'
+          node scripts/solve.js note --id "$QUEST" --attempt "PR105 cache integration $CANDIDATE: actual seed, gateway, SQL/Raft, CDC and SystemTableCache with explicitly non-executing operation fixture; run $GITHUB_RUN_ID result=$RESULT. Previous founder-token assertion in 37767526592 retained as source-generation admission gap, not passed. No founder row edited or physical token fabricated, no full replacement proof. Current evidence CLI --id corrected after previous publisher failed using --quest."
+          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/cache-$GITHUB_RUN_ID.json"
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain real cache visibility result and founder admission blocker'
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$CANDIDATE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-          gh pr comment 105 --repo psvensson/lagrange --body "Cache visibility integration at $CANDIDATE ran in Actions/GCP $GITHUB_RUN_ID: $RESULT. Exact retained evidence is committed at $(git rev-parse HEAD). No acceptance or physical distributed proof is implied; a failed result remains a blocker."
+          gh pr comment 105 --repo psvensson/lagrange --body "Cache integration on exact $CANDIDATE in GCP run $GITHUB_RUN_ID: $RESULT. Evidence retained at $(git rev-parse HEAD), including prior founder-generation failure. Real SQL/Raft/CDC/cache, synthetic non-executing operation tuple; not planner admission or physical replacement. Review predicate/evidence scope independently; no approval inferred."
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: freshmg-cache-retention-${{ github.run_id }}
+          path: test-output/cache-retention/
+          retention-days: 14
+          if-no-files-found: error
