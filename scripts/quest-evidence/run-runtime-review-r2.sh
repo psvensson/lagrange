@@ -27,20 +27,8 @@ measure)
   measure decisions-before node scripts/check-guideline-decision-boundaries.js --json "$source_file"
   measure grammar-before node scripts/check-runtime-grammar-contracts.js --json "$source_file"
   measure literals-before node scripts/check-guideline-literals.js --json "$source_file"
-  node scripts/solve.js note --id "$QUEST" --finding 'R2 review 5460477132 / 4222118121: exact operation observation precedes a separate awaited boot read. Bound this correction to re-observing the operation through the same repository after that await and checking claim liveness after all reads. It does not create cross-group atomicity or revoke an already-issued action; failed terminal settlement retaining the same issued learner remains admissible. Tests must prove actual renewal/success during the paused read blocks proposal, retained failure remains allowed, and unavailable final evidence refuses.' --kind decision --json > "$out/scope.json"
+  node scripts/solve.js note --id "$QUEST" --finding 'R2 review 5460477132 / 4222118121: exact operation observation precedes a separate awaited boot read. Bound this correction to re-observing the operation through the same repository after that await and checking claim liveness after all reads. It does not create cross-group atomicity or revoke an already-issued action; failed terminal settlement retaining the same issued learner remains admissible. Tests must prove actual renewal/success during the paused read blocks proposal, retained failure remains allowed, and unavailable final evidence refuses. Attempt 37817790691 stopped at test lint before behavioral measurement: unnecessary broad description reformatting introduced a 101-character line. That preparation rewrite is removed, not the lint rule.' --kind decision --json > "$out/scope.json"
   python3 "$carrier/scripts/quest-evidence/prepare-runtime-review-r2.py" . tests
-  python3 - <<'PY'
-from pathlib import Path
-p=Path('test/integration/message-group-learner-runtime-authorization.integration.test.js')
-lines=p.read_text().splitlines()
-result=[]
-for line in lines:
-    if len(line)>100 and "await t.test(" in line and ", async (t) => {" in line:
-        a,b=line.split(", async (t) => {",1)
-        result.extend([a+",", "      async (t) => {"+b])
-    else: result.append(line)
-p.write_text('\n'.join(result)+'\n')
-PY
   measure test-lint npm exec --no -- eslint "$test_file" --fix
   measure test-metrics npm run test:metrics:scoped:strict -- "$test_file"
   measure red-metadata npm run test:metadata:refresh
@@ -116,7 +104,7 @@ with zipfile.ZipFile(archive) as z:
     for name,digest in manifest.items():assert hashlib.sha256(z.read(name)).hexdigest()==digest
 (out/'archive-sha256.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'\n')
 PY
-  node scripts/solve.js evidence add "$out.zip" --id "$QUEST" --text 'PR109 R2 paused-boot-read correction: real repository renewal and success must refuse old observations; terminal failure after issue preserves its admitted action; final unreadable operation remains typed unavailable. Red/green/source-revert on the real native-consumer witness. No cross-group atomicity, physical CREATE, full driver or distributed proof.' --json > "$out/canonical.json"
+  node scripts/solve.js evidence add "$out.zip" --id "$QUEST" --text 'PR109 R2 paused-boot-read correction: real repository renewal and success must refuse old observations; terminal failure after issue preserves its admitted action; final unreadable operation remains typed unavailable. Red/green/source-revert on the real native-consumer witness. No cross-group atomicity, physical CREATE, full driver or distributed proof. Original lint-stopped attempt 37817790691 retained inside.' --json > "$out/canonical.json"
   python3 - <<'PY'
 from pathlib import Path
 import json,os
