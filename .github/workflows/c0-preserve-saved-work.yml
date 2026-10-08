@@ -1,4 +1,4 @@
-name: freshmg-terminal-review-correction
+name: freshmg-terminal-doc-review
 on:
   push:
     branches: [ops/c0-preservation-20261008]
@@ -9,137 +9,15 @@ concurrency:
   group: freshmg-claim-branch-increment
   cancel-in-progress: false
 env:
-  BASE: 4b31e90765d80528bbb5506d325ab1e284fbb56e
+  BASE: 9ab6470f8728b0322a864bdaec917701f39d707b
   WORK_BRANCH: work/freshmg-terminal-nonadmission-20261008
   QUEST: message-group-fresh-identity-membership
 jobs:
-  wake:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-        with:
-          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
-          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
-      - run: |
-          set -euo pipefail
-          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
-          if [ "$status" != RUNNING ]; then
-            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
-          fi
-  measure:
-    needs: wake
-    runs-on: [self-hosted, gcp]
-    timeout-minutes: 25
-    defaults:
-      run:
-        shell: bash
-        working-directory: read-proof-${{ github.run_id }}-${{ github.run_attempt }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.sha }}
-          path: read-carrier-${{ github.run_id }}-${{ github.run_attempt }}
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ env.BASE }}
-          path: read-proof-${{ github.run_id }}-${{ github.run_attempt }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - name: Test-first failure must retain the existing typed read distinction
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$BASE"
-          test -z "$(git status --porcelain)"
-          mkdir -p test-output/read-proof
-          npm ci
-          python3 "../read-carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/freshmg-read-availability-correction.py" . tests
-          npx eslint test/rebalancer/message-group-membership-branch-authorization.test.js
-          git add test/rebalancer/message-group-membership-branch-authorization.test.js
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: distinguish returned authoritative-read failure from confirmed absence'
-          git rev-parse HEAD > test-output/read-proof/red-sha.txt
-          set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/read-proof/red.stdout.txt 2> test-output/read-proof/red.stderr.txt
-          result=$?
-          set -e
-          echo "$result" > test-output/read-proof/red-exit.txt
-          test "$result" -eq 1
-          grep -q 'no row observed is not a row conflict' test-output/read-proof/red.stdout.txt
-      - name: Use existing visibility owner, regenerate artifacts, prove identical cases
-        run: |
-          set -euo pipefail
-          python3 "../read-carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/freshmg-read-availability-correction.py" . source
-          npx eslint src/rebalancer/replica-operation-message-group-membership-owner-claim.js test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/read-proof/lint.txt
-          npm run test:metadata:refresh > test-output/read-proof/metadata-refresh.txt 2> test-output/read-proof/metadata-refresh.stderr.txt
-          npm run audit:shards > test-output/read-proof/shards.txt 2> test-output/read-proof/shards.stderr.txt
-          git diff --check
-          git add src/rebalancer/replica-operation-message-group-membership-owner-claim.js test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'WIP FreshMG: preserve deferred authoritative visibility and regenerate shard identities'
-          git rev-parse HEAD > test-output/read-proof/green-sha.txt
-          set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/read-proof/green.stdout.txt 2> test-output/read-proof/green.stderr.txt
-          result=$?
-          set -e
-          echo "$result" > test-output/read-proof/green-exit.txt
-          tail -80 test-output/read-proof/green.stdout.txt
-          test "$result" -eq 0
-      - name: Mutation control must reject loss of absence-confirmation semantics
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('src/rebalancer/replica-operation-message-group-membership-owner-claim.js')
-          s=p.read_text(); old='requireAbsenceConfirmation: true'
-          assert s.count(old)==1
-          Path('test-output/read-proof/owner-original.txt').write_text(s)
-          p.write_text(s.replace(old,'requireAbsenceConfirmation: false',1))
-          PY
-          set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/read-proof/mutant.stdout.txt 2> test-output/read-proof/mutant.stderr.txt
-          result=$?
-          set -e
-          cp test-output/read-proof/owner-original.txt src/rebalancer/replica-operation-message-group-membership-owner-claim.js
-          echo "$result" > test-output/read-proof/mutant-exit.txt
-          git diff --exit-code
-          test "$result" -eq 1
-          grep -q 'no row observed is not a row conflict' test-output/read-proof/mutant.stdout.txt
-      - name: Preserve exact source, generated identities and all failures
-        if: always()
-        run: |
-          set -euo pipefail
-          mkdir -p test-output/read-proof
-          git status --porcelain > test-output/read-proof/final-status.txt
-          git diff --name-only "$BASE" HEAD > test-output/read-proof/changed-paths.txt
-          git diff "$BASE" HEAD > test-output/read-proof/change.patch
-          git branch read-candidate HEAD
-          git bundle create test-output/read-proof/candidate.bundle read-candidate "^$BASE"
-          printf 'base=%s\nsource=%s\nrun=%s\nrunner=%s\n' "$BASE" "$(git rev-parse HEAD)" "$GITHUB_RUN_ID" "$RUNNER_NAME" > test-output/read-proof/provenance.txt
-          sha256sum src/rebalancer/replica-operation-message-group-membership-owner-claim.js test/rebalancer/message-group-membership-branch-authorization.test.js test/shards/*.json > test-output/read-proof/source.sha256
-          find test-output/read-proof -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/read-proof/SHA256SUMS
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: freshmg-read-${{ github.run_id }}
-          path: read-proof-${{ github.run_id }}-${{ github.run_attempt }}/test-output/read-proof/
-          retention-days: 14
-          if-no-files-found: error
-  preserve:
-    needs: measure
-    if: always()
+  document-and-check:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
-      actions: read
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -150,59 +28,74 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Publish exact source attempt and retain actual independent findings
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RESULT: ${{ needs.measure.result }}
+      - name: Correct only misleading JSDoc and regenerate its derived identities
         run: |
           set -euo pipefail
-          export PACKET="$RUNNER_TEMP/read-packet"
-          mkdir -p "$PACKET"
-          gh run download "$GITHUB_RUN_ID" --repo psvensson/lagrange --name "freshmg-read-$GITHUB_RUN_ID" --dir "$PACKET"
-          python3 - <<'PY'
-          import os,hashlib
-          from pathlib import Path
-          d=Path(os.environ['PACKET'])
-          for line in (d/'SHA256SUMS').read_text().splitlines():
-              h,n=line.split(None,1)
-              assert hashlib.sha256((d/Path(n).name).read_bytes()).hexdigest()==h, n
-          PY
-          git bundle verify "$PACKET/candidate.bundle"
-          git fetch "$PACKET/candidate.bundle" read-candidate
-          export SOURCE="$(git rev-parse FETCH_HEAD)"
-          git merge-base --is-ancestor "$BASE" "$SOURCE"
-          git switch --detach "$SOURCE"
-          python3 - <<'PY'
-          import os,subprocess
-          allowed={'src/rebalancer/replica-operation-message-group-membership-owner-claim.js','test/rebalancer/message-group-membership-branch-authorization.test.js','test/shards/primary-classes.json','test/shards/resource-classes.json','test/shards/subsystem-classes.json','test/shards/impact-graph-seal.json'}
-          changed=set(subprocess.check_output(['git','diff','--name-only',os.environ['BASE'],os.environ['SOURCE']],text=True).splitlines())
-          assert changed <= allowed, changed
-          PY
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
-          git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$SOURCE"
+          test "$(git rev-parse HEAD)" = "$BASE"
+          test -z "$(git status --porcelain)"
+          mkdir -p test-output/terminal-doc
           npm ci
-          mkdir -p test-output/read-retention
-          tar -C "$PACKET" -czf "test-output/read-retention/read-$GITHUB_RUN_ID.tar.gz" .
-          node scripts/solve.js evidence add "test-output/read-retention/read-$GITHUB_RUN_ID.tar.gz" --id "$QUEST" --json > test-output/read-retention/store.json
-          gh api repos/psvensson/lagrange/pulls/106/reviews > test-output/read-retention/reviews.json
-          gh api repos/psvensson/lagrange/pulls/comments/4218254688 > test-output/read-retention/read-finding.json
-          gh api repos/psvensson/lagrange/pulls/comments/4218254620 > test-output/read-retention/shard-finding.json
           python3 - <<'PY'
-          import os,json
           from pathlib import Path
-          d=Path(os.environ['PACKET']); e=Path('test-output/read-retention')
-          r={'schema':'freshmg-read-availability-correction/1','runId':int(os.environ['GITHUB_RUN_ID']),'sourceSha':os.environ['SOURCE'],'baseSha':os.environ['BASE'],'result':os.environ['RESULT'],'independentApproval':False,'proofCeiling':'real repository/file-backed SQLite with gateway failure injection; no full membership or multi-host claim','retainedEvidence':json.loads((e/'store.json').read_text()),'reviews':json.loads((e/'reviews.json').read_text()),'findings':[json.loads((e/'read-finding.json').read_text()),json.loads((e/'shard-finding.json').read_text())],'outputs':{p.name:p.read_text() for p in d.iterdir() if p.suffix in {'.txt','.sha256'} or p.name=='SHA256SUMS'}}
-          p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('read-correction-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
+          p=Path('src/rebalancer/replica-operation-repository.js')
+          s=p.read_text()
+          old='  /** Claim membership recovery ownership; no action authorization is created. */\n  settleMessageGroupMembershipNonAdmission(request) {'
+          new='  /** Settle never-authorized terminal intent; no execution claim is acquired. */\n  settleMessageGroupMembershipNonAdmission(request) {'
+          assert s.count(old)==1
+          s=s.replace(old,new,1)
+          anchor='  claimMessageGroupMembershipOwner(request) {'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,'  /** Claim membership recovery ownership; no action authorization is created. */\n'+anchor,1)
+          p.write_text(s)
           PY
-          node scripts/solve.js note --id "$QUEST" --attempt "PR106 independent findings 4218254688/4218254620: shared observer now consumes the existing visibility observation with confirmed-absence requirement; returned failure is UNAVAILABLE, confirmed empty remains CONFLICT, postwrite unreadable remains UNKNOWN. Exact test-first red/green/mutant and canonical metadata generation on $SOURCE, GCP $GITHUB_RUN_ID result=$RESULT. Source review remains required; no driver/physical activation."
-          git add "solve/quests/$QUEST/evidence/read-correction-$GITHUB_RUN_ID.json" "solve/quests/$QUEST/log.ndjson"
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain read-availability correction and actual review findings'
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$SOURCE"
+          npx eslint src/rebalancer/replica-operation-repository.js > test-output/terminal-doc/lint.txt
+          npm run test:metadata:refresh > test-output/terminal-doc/metadata.txt
+          npm run audit:shards > test-output/terminal-doc/shards.txt
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          allowed={'src/rebalancer/replica-operation-repository.js','test/shards/primary-classes.json','test/shards/resource-classes.json','test/shards/subsystem-classes.json','test/shards/impact-graph-seal.json'}
+          paths=set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())
+          assert paths<=allowed,paths
+          PY
+          git add src/rebalancer/replica-operation-repository.js test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'docs: distinguish terminal non-admission settlement from holder acquisition'
+          git rev-parse HEAD > test-output/terminal-doc/subject.txt
+      - name: Verify exact documented tree and ordinary regressions
+        run: |
+          set -euo pipefail
+          npm run audit:shards > test-output/terminal-doc/shards-exact.txt
+          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/terminal-doc/regressions.txt 2> test-output/terminal-doc/regressions.stderr.txt
+          git diff --exit-code
+          git status --porcelain > test-output/terminal-doc/final-status.txt
+          test ! -s test-output/terminal-doc/final-status.txt
+      - name: Publish documentation correction and actual proof summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export SUBJECT="$(cat test-output/terminal-doc/subject.txt)"
+          gh api repos/psvensson/lagrange/pulls/comments/4218392251 > test-output/terminal-doc/finding.json
+          python3 - <<'PY'
+          import os,json,hashlib
+          from pathlib import Path
+          d=Path('test-output/terminal-doc')
+          files={p.name:p.read_text() for p in d.iterdir()}
+          r={'schema':'freshmg-terminal-doc-review/1','runId':int(os.environ['GITHUB_RUN_ID']),'sourceSha':os.environ['SUBJECT'],'baseSha':os.environ['BASE'],'runner':'GitHub-hosted ubuntu-24.04; no distributed run','semanticRuntimeChange':False,'independentApproval':False,'result':'pass','outputs':files,'sha256':{n:hashlib.sha256(t.encode()).hexdigest() for n,t in files.items()}}
+          p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('doc-review-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
+          PY
+          node scripts/solve.js note --id "$QUEST" --attempt "PR106 finding 4218392251: settlement JSDoc describes non-admission resolution, claim JSDoc restored to claim method. No runtime behavior change. Canonical metadata freshly regenerated and audit:shards plus four ordinary regression files pass on $SUBJECT in hosted Actions $GITHUB_RUN_ID; no distributed/physical or independent approval claimed."
+          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/doc-review-$GITHUB_RUN_ID.json"
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain terminal/claim documentation correction and exact metadata proof'
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           published="$(git rev-parse HEAD)"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$published"
-          gh pr comment 106 --repo psvensson/lagrange --body "Review response at $published, measured source $SOURCE: Actions/GCP $GITHUB_RUN_ID $RESULT. Existing typed visibility owner preserves failed-read vs confirmed-absence distinction; producers refresh shard metadata. Original independent findings and exact red/green/mutant outputs retained. No independent approval or runtime activation inferred."
-          if [ "$RESULT" = success ]; then
-            gh pr edit 106 --repo psvensson/lagrange --add-reviewer @copilot
-          fi
+          gh pr comment 106 --repo psvensson/lagrange --body "Exact documentation response at $published, tested subject $SUBJECT: settlement and holder-acquisition descriptions no longer conflated. Canonical generated artifacts refreshed again; audit:shards and four regressions pass on that exact tree in run $GITHUB_RUN_ID. No semantic runtime change or independent approval. The separate full membership authorization/runtime interaction remains an explicit later proof obligation."
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: freshmg-terminal-doc-${{ github.run_id }}
+          path: test-output/terminal-doc/
+          retention-days: 14
+          if-no-files-found: error
