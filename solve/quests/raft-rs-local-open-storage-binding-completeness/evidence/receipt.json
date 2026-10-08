@@ -1,0 +1,41 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "raft-rs-local-open-storage-binding-completeness",
+  "status": "pass",
+  "testFileDigests": {
+    "test/raft/raft-rs-backend/snapshot-owner-r4-local-open-future-acceptance.test.js": "417540425d319dc027f40a314ac93a59e032e6baba9ad6e32bc58070aedb2fe0",
+    "test/raft/raft-rs-backend/snapshot-owner-r4-supported-fault-boundary.test.js": "147b54b5b9748ba5cb6b5e0ce3be67cfca91f799ea5f932458956f5235da8122",
+    "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "32b76814e192abbd9871facf56602d84dcf0ea7e76d685c2491b3b298eade3ca"
+  },
+  "generatedAt": "2026-10-08T02:08:50.948Z",
+  "receipts": [
+    {
+      "id": "local-open-per-fact-storage-binding",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R4 future acceptance: incomplete or contradictory LOCAL_OPEN facts refuse before core while legal vote zero and native-record lag restore$\" test/raft/raft-rs-backend/snapshot-owner-r4-local-open-future-acceptance.test.js",
+      "detail": "future R4 per-fact matrix reaches the current local-open owner red while retaining legal vote0 and native-record lag positives",
+      "testFile": "test/raft/raft-rs-backend/snapshot-owner-r4-local-open-future-acceptance.test.js"
+    },
+    {
+      "id": "known-wipe-current-db-hold-replays",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R4 supported fault boundary - a real prior open then DB wipe drives ReplicaHandler into PartitionService reseed hold before native core$\" test/raft/raft-rs-backend/snapshot-owner-r4-supported-fault-boundary.test.js",
+      "detail": "real prior open, current DB wipe, durable SERVICES prior-existence, same-byte HOLD replay and zero create_node for the refused reopen",
+      "testFile": "test/raft/raft-rs-backend/snapshot-owner-r4-supported-fault-boundary.test.js"
+    },
+    {
+      "id": "read-unavailable-does-not-fabricate-absence",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^T5: a rejoin with a durable record restores its own configuration, not the planted rows; an unreadable record is a retryable host failure at the same phase$\" test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+      "detail": "applied-state unreadability in the durable rejoin record is retryable at DURABLE_RECORD_READ and is distinct from missing/non-retryable absence; broader per-fact unreadability remains with the local-open matrix red",
+      "testFile": "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js"
+    },
+    {
+      "id": "three-voter-intact-cold-restart",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R4 ordinary cold restart - three intact voters elect and commit with no preexisting live leader$\" test/raft/raft-rs-backend/snapshot-owner-r4-supported-fault-boundary.test.js",
+      "detail": "three intact file-backed voters close, reopen, elect without a live old leader and commit an ordinary entry",
+      "testFile": "test/raft/raft-rs-backend/snapshot-owner-r4-supported-fault-boundary.test.js"
+    }
+  ]
+}

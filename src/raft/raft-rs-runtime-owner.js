@@ -16,7 +16,12 @@ import {
   RAFT_RS_FORBIDDEN_CONVENIENCE,
   RAFT_RS_WASM_FILE,
 } from './raft-rs-core-constants.js';
-import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {
+  LOCAL_OPEN_RECORD_CLASSIFICATION,
+  RaftRsDurableStore,
+  classifyDurableRecordForLocalOpen,
+  resolveDurableRecordRestoreConfState,
+} from './raft-rs-durable-store.js';
 import {
   RAFT_RS_RECORD_COMPATIBILITY,
 } from './raft-rs-durable-store-constants.js';
@@ -118,6 +123,20 @@ import {proposeMembershipTransition} from
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const ENTRY_APPLY_DURABLE_OK = Object.freeze({ok: true});
+const LOCAL_OPEN_RECORD_RESTORABLE = Symbol('local-open-record-restorable');
+
+function localOpenRecordResult(classification) {
+  if (classification.kind === LOCAL_OPEN_RECORD_CLASSIFICATION.RESTORABLE) {
+    return LOCAL_OPEN_RECORD_RESTORABLE;
+  }
+  return outcome(CORE_REFUSED, {
+    reason: classification.reason,
+    phase: RUNTIME_PHASE.DURABLE_RECORD_READ,
+    retryable: false,
+    recoveryRequired: classification.recoveryRequired === true,
+    ...(classification.detail === undefined ? {} : {detail: classification.detail}),
+  });
+}
 
 // Resolved when the core is first needed, never at module load: the resolver
 // owns where source, the dist bundle and the SEA executable keep the binding.
@@ -345,8 +364,16 @@ function readOpeningRecord(group) {
       return {ok: false, result: durableRecordIncompatible()};
     }
     const restore = group.store.hasDurableRecord(group.groupId);
-    return {ok: true, restore,
-      record: restore ? group.store.readDurableRecord(group.groupId) : null};
+    const record = restore ? group.store.readDurableRecord(group.groupId) :
+      null;
+    if (restore) {
+      const refusal = localOpenRecordResult(
+        classifyDurableRecordForLocalOpen(record));
+      if (refusal !== LOCAL_OPEN_RECORD_RESTORABLE) {
+        return {ok: false, result: refusal};
+      }
+    }
+    return {ok: true, restore, record};
   } catch (error) {
     return {ok: false, result: groupHostFailure(group,
       RUNTIME_PHASE.DURABLE_RECORD_READ, durableRecordReadFailure(error))};
@@ -478,7 +505,7 @@ function createNodeArguments(group, {restore, record}) {
   return {
     ...base,
     bootstrap: {
-      confState: record.confState,
+      confState: resolveDurableRecordRestoreConfState(record),
       entries: record.entries,
       ...(record.hardState === null ? {} : {hardState: record.hardState}),
       ...(record.snapshot === null ? {} : {snapshot: record.snapshot}),

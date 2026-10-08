@@ -50,6 +50,43 @@ const LOWEST_USABLE_IDENTITY = 1n;
 const EMPTY = 0;
 const TYPE_STRING = 'string';
 
+
+const PEER_IDENTITY_TABLE = 'raft_rs_peer_identity';
+const PEER_IDENTITY_READ_STATE = Object.freeze({
+  PRESENT: 'present',
+  MISSING: 'missing',
+  UNREADABLE: 'unreadable',
+});
+const SQLITE_MASTER_TABLE_SQL =
+  'SELECT 1 FROM sqlite_master WHERE type = \'table\' AND name = ?';
+
+function tableExists(db, table) {
+  return db.prepare(SQLITE_MASTER_TABLE_SQL).get(table) !== undefined;
+}
+
+function inspectRaftRsPeerIdentityReservationIn(db, replicaIdentity) {
+  if (!tableExists(db, PEER_IDENTITY_TABLE)) {
+    return Object.freeze({
+      state: PEER_IDENTITY_READ_STATE.MISSING,
+      reservation: null,
+    });
+  }
+  try {
+    const reservation = db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_BY_IDENTITY)
+      .get(replicaIdentity) ?? null;
+    return Object.freeze({
+      state: PEER_IDENTITY_READ_STATE.PRESENT,
+      reservation,
+    });
+  } catch (error) {
+    return Object.freeze({
+      state: PEER_IDENTITY_READ_STATE.UNREADABLE,
+      reservation: null,
+      error,
+    });
+  }
+}
+
 function validatedRaftRsPeerIdentityReservations(reservations) {
   if (!Array.isArray(reservations)) {
     throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.RESERVATIONS_NOT_ARRAY);
@@ -223,8 +260,10 @@ class RaftRsPeerIdentityRegistry {
 }
 
 export {
+  PEER_IDENTITY_READ_STATE,
   RaftRsPeerIdentityRegistry,
   deriveRaftRsPeerId,
+  inspectRaftRsPeerIdentityReservationIn,
   readRaftRsPeerIdentityReservations,
   validatedRaftRsPeerIdentityReservations,
 };

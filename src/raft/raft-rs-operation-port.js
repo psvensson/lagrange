@@ -9,6 +9,7 @@ import {
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION,
+  RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
 import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
@@ -21,7 +22,12 @@ import {committedMembershipRefusal} from
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   './raft-operation-port-request.js';
-import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
+import {
+  PEER_IDENTITY_READ_STATE,
+  RaftRsPeerIdentityRegistry,
+  deriveRaftRsPeerId,
+  inspectRaftRsPeerIdentityReservationIn,
+} from './raft-rs-peer-identity.js';
 import {
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
@@ -38,12 +44,15 @@ import {normalizedTransferRequest} from './raft-rs-leadership-transfer.js';
 import {normalizeMembershipTransition} from
   './raft-rs-membership-transition.js';
 import {
+  LIFECYCLE_LOCAL_OPEN_BINDING,
   RaftRsReplicaLifecycleOwner,
+  classifyReplicaLifecycleLocalOpenBindingIn,
   registerRuntimeLifecycle,
   unregisterRuntimeLifecycle,
 } from './raft-rs-replica-lifecycle-owner.js';
 import {registerPeerIdentityReservationOwner} from
   './raft-rs-membership-administration.js';
+import {readDurableRaftRecordGroupsIn} from './raft-rs-durable-store.js';
 import {reportRaftRsRuntimeFault} from './raft-rs-runtime-fault-log.js';
 import {
   CORE_OK,
@@ -68,6 +77,190 @@ const EVENT_ALIAS = Object.freeze({
   'leader-change': RAFT_EVENT.LEADER_CHANGE,
 });
 const HEARTBEAT_TICK_DIVISOR = 3;
+const LOCAL_OPEN_KNOWN_WIPE_HOLD = 'known-wipe-hold';
+const LOCAL_OPEN_CLOSED_WITHOUT_RUNTIME = 'closed-without-runtime';
+
+const LOCAL_OPEN_PHASE = 'local-open';
+const LOCAL_OPEN_REASON = Object.freeze({
+  PEER_IDENTITY_UNREADABLE: 'peer-identity-table-unreadable',
+  PEER_IDENTITY_MISSING: 'peer-identity-record-missing',
+  PEER_IDENTITY_TABLE_MISSING: 'peer-identity-table-missing',
+  PEER_IDENTITY_MISMATCH: 'peer-identity-record-mismatch',
+  PEER_IDENTITY_ORPHANED: 'peer-identity-without-raft-record',
+  LIFECYCLE_UNREADABLE: 'lifecycle-table-unreadable',
+  LIFECYCLE_MISSING: 'lifecycle-record-missing',
+  LIFECYCLE_IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
+  LIFECYCLE_INCARNATION_MISSING: 'lifecycle-incarnation-missing',
+  DURABLE_GROUP_MISMATCH: 'durable-record-group-mismatch',
+});
+
+function consensusRefusal(outcomeName, reason, detail = undefined) {
+  return deepFreeze({outcome: outcomeName, reason,
+    phase: LOCAL_OPEN_PHASE, retryable: outcomeName ===
+      RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+    recoveryRequired: outcomeName === RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+    ...(detail === undefined ? {} : {detail})});
+}
+
+function throwConsensus(answer) {
+  throw Object.assign(new Error(answer.reason), {consensus: answer});
+}
+
+
+function peerIdentityReadFailure(error) {
+  return {message: String(error?.message || error), code: error?.code};
+}
+
+function lifecycleReadFailure(error) {
+  return {message: String(error?.message || error), code: error?.code};
+}
+
+function inspectPeerIdentity(db, replicaIdentity) {
+  const read = inspectRaftRsPeerIdentityReservationIn(db, replicaIdentity);
+  if (read.state === PEER_IDENTITY_READ_STATE.UNREADABLE) {
+    throwConsensus(consensusRefusal(
+      RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      LOCAL_OPEN_REASON.PEER_IDENTITY_UNREADABLE,
+      peerIdentityReadFailure(read.error)));
+  }
+  return read;
+}
+
+function classifyLifecycle({db, groupId, peerId, replicaIdentity}) {
+  const classification = classifyReplicaLifecycleLocalOpenBindingIn(
+    db, {groupId, peerId, replicaIdentity});
+  if (classification.kind === LIFECYCLE_LOCAL_OPEN_BINDING.UNREADABLE) {
+    throwConsensus(consensusRefusal(
+      RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      LOCAL_OPEN_REASON.LIFECYCLE_UNREADABLE,
+      lifecycleReadFailure(classification.error)));
+  }
+  return classification;
+}
+
+function refuseLifecycleBindingMismatch(bindings) {
+  throwConsensus(consensusRefusal(
+    RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    LOCAL_OPEN_REASON.LIFECYCLE_IDENTITY_MISMATCH,
+    {bindings}));
+}
+
+function refuseLifecycleIncarnationMissing(binding) {
+  throwConsensus(consensusRefusal(
+    RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    LOCAL_OPEN_REASON.LIFECYCLE_INCARNATION_MISSING,
+    {binding}));
+}
+
+function refuseRetiredLifecycle(binding, reason) {
+  throwConsensus(consensusRefusal(
+    RAFT_OPERATION_OUTCOME.CORE_REFUSED, reason, {binding}));
+}
+
+function refuseFromLifecycleClassification(classification, missingReason) {
+  if (classification.kind === LIFECYCLE_LOCAL_OPEN_BINDING.EXACT_ACTIVE) {
+    return classification.binding;
+  }
+  if (classification.kind === LIFECYCLE_LOCAL_OPEN_BINDING.EXACT_RETIRED) {
+    refuseRetiredLifecycle(classification.binding, classification.reason);
+  }
+  if (classification.kind === LIFECYCLE_LOCAL_OPEN_BINDING.INCARNATION_MISSING) {
+    refuseLifecycleIncarnationMissing(classification.binding);
+  }
+  if (classification.kind === LIFECYCLE_LOCAL_OPEN_BINDING.IDENTITY_MISMATCH) {
+    refuseLifecycleBindingMismatch(classification.bindings);
+  }
+  if (classification.kind === LIFECYCLE_LOCAL_OPEN_BINDING.MISSING) {
+    throwConsensus(consensusRefusal(
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED, missingReason));
+  }
+  throw new Error(
+    `unexpected lifecycle classification ${classification.kind}`);
+}
+
+function preflightPeerIdentity({db, replicaIdentity}) {
+  const read = inspectPeerIdentity(db, replicaIdentity);
+  if (read.state === PEER_IDENTITY_READ_STATE.MISSING) {
+    throwConsensus(consensusRefusal(
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      LOCAL_OPEN_REASON.PEER_IDENTITY_TABLE_MISSING));
+  }
+  const row = read.reservation;
+  if (row === null) {
+    throwConsensus(consensusRefusal(
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      LOCAL_OPEN_REASON.PEER_IDENTITY_MISSING));
+  }
+  const expected = deriveRaftRsPeerId(replicaIdentity);
+  if (row.raft_peer_id !== expected) {
+    throwConsensus(consensusRefusal(
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      LOCAL_OPEN_REASON.PEER_IDENTITY_MISMATCH,
+      {expected, actual: row.raft_peer_id}));
+  }
+}
+
+function knownWipeHoldAnswer(binding) {
+  return Object.freeze({
+    type: LOCAL_OPEN_KNOWN_WIPE_HOLD,
+    answer: consensusRefusal(
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      RUNTIME_REASON.RESEED_REQUIRED,
+      {binding, cause: RUNTIME_REASON.DURABLE_RECORD_MISSING}),
+  });
+}
+
+function preflightExistingBindings({db, groupId, peerId, replicaIdentity}) {
+  const lifecycle = classifyLifecycle({db, groupId, peerId, replicaIdentity});
+  if (lifecycle.kind !== LIFECYCLE_LOCAL_OPEN_BINDING.MISSING) {
+    const exact = refuseFromLifecycleClassification(
+      lifecycle, LOCAL_OPEN_REASON.LIFECYCLE_MISSING);
+    return knownWipeHoldAnswer(exact);
+  }
+  const peerIdentity = inspectPeerIdentity(db, replicaIdentity);
+  if (peerIdentity.reservation !== null) {
+    throwConsensus(consensusRefusal(
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      LOCAL_OPEN_REASON.PEER_IDENTITY_ORPHANED,
+      {binding: peerIdentity.reservation}));
+  }
+  return null;
+}
+
+function preflightLifecycle({db, groupId, peerId, replicaIdentity}) {
+  const lifecycle = classifyLifecycle({db, groupId, peerId, replicaIdentity});
+  refuseFromLifecycleClassification(
+    lifecycle, LOCAL_OPEN_REASON.LIFECYCLE_MISSING);
+}
+
+function preflightLocalOpen({db, groupId, replicaIdentity}) {
+  let recordGroups;
+  try {
+    recordGroups = readDurableRaftRecordGroupsIn(db);
+  } catch (error) {
+    throwConsensus(consensusRefusal(
+      RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      LOCAL_OPEN_REASON.DURABLE_GROUP_MISMATCH,
+      {message: String(error?.message || error), code: error?.code}));
+  }
+  const peerId = deriveRaftRsPeerId(replicaIdentity);
+  if (recordGroups.size === 0) {
+    return preflightExistingBindings({db, groupId, peerId, replicaIdentity});
+  }
+  if (!recordGroups.has(String(groupId))) {
+    return preflightExistingBindings({db, groupId, peerId, replicaIdentity});
+  }
+  preflightPeerIdentity({db, replicaIdentity});
+  preflightLifecycle({db, groupId, peerId, replicaIdentity});
+  return null;
+}
+
+function holdKnownWipeLifecycle({db, groupId, peerId, replicaIdentity}) {
+  const lifecycle = new RaftRsReplicaLifecycleOwner({
+    db, groupId, peerId, replicaIdentity,
+  });
+  return lifecycle.holdForReseed();
+}
 
 function required(request, field) {
   const value = request?.[field];
@@ -79,6 +272,28 @@ function required(request, field) {
 
 function coreOk(reason, fields = {}) {
   return deepFreeze({outcome: CORE_OK, reason, ...fields});
+}
+
+function createRefusedOperationPort(answer) {
+  const refused = () => answer;
+  return createRaftOperationPort({
+    subscribe: () => Object.freeze(() => undefined),
+    step: refused,
+    propose: refused,
+    proposeConfChange: refused,
+    transferLeadership: refused,
+    probePeerProgress: refused,
+    tick: refused,
+    campaign: refused,
+    readStatus: refused,
+    [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: () =>
+      committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD),
+    [RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]: refused,
+    configureTick: refused,
+    startScheduling: refused,
+    stopScheduling: refused,
+    close: () => coreOk(LOCAL_OPEN_CLOSED_WITHOUT_RUNTIME),
+  });
 }
 
 // The partition's application receives one frozen committed record: the
@@ -157,8 +372,34 @@ function createRaftRsOperationPort(request) {
   const timing = required(request, RAFT_OPERATION_PORT_REQUEST.TIMING);
   const resolvePeerAddress = required(
     request, RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS);
+  let preflight = null;
+  try {
+    preflight = preflightLocalOpen({db: database, groupId, replicaIdentity});
+  } catch (error) {
+    if (error?.consensus?.outcome === RAFT_OPERATION_OUTCOME.CORE_REFUSED ||
+        error?.consensus?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE) {
+      return createRefusedOperationPort(error.consensus);
+    }
+    throw error;
+  }
+  if (preflight?.type === LOCAL_OPEN_KNOWN_WIPE_HOLD) {
+    const peerId = deriveRaftRsPeerId(replicaIdentity);
+    const held = holdKnownWipeLifecycle({
+      db: database, groupId, peerId, replicaIdentity,
+    });
+    return createRefusedOperationPort(
+      held.outcome === RAFT_OPERATION_OUTCOME.CORE_OK ?
+        preflight.answer : held);
+  }
   const registry = new RaftRsPeerIdentityRegistry(database);
-  const peerId = registry.registerReplica(replicaIdentity);
+  let peerId;
+  try {
+    peerId = registry.registerReplica(replicaIdentity);
+  } catch (error) {
+    return createRefusedOperationPort(consensusRefusal(
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      String(error?.message || error)));
+  }
   // The bootstrap peer ids are address hints: each is reserved so the
   // replica can name and reach it. The configuration the group opens from is
   // the bootstrap membership's alone (an absent one is refused typed).

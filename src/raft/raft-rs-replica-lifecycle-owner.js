@@ -37,6 +37,106 @@ const LIFECYCLE_STATE = Object.freeze({
 // only the old entry, and removing an entry removes only that runtime's own.
 // Nothing here is durable: the durable lifecycle row recreates the right
 // runtime through the existing recovery owner after a restart.
+
+const LIFECYCLE_BINDING_READ_STATE = Object.freeze({
+  PRESENT: 'present',
+  MISSING: 'missing',
+  UNREADABLE: 'unreadable',
+});
+
+const LIFECYCLE_LOCAL_OPEN_BINDING = Object.freeze({
+  EXACT_ACTIVE: 'exact-active',
+  EXACT_RETIRED: 'exact-retired',
+  INCARNATION_MISSING: 'incarnation-missing',
+  IDENTITY_MISMATCH: 'identity-mismatch',
+  MISSING: 'missing',
+  UNREADABLE: 'unreadable',
+});
+const SQLITE_MASTER_TABLE_SQL =
+  'SELECT 1 FROM sqlite_master WHERE type = \'table\' AND name = ?';
+
+function tableExists(db, table) {
+  return db.prepare(SQLITE_MASTER_TABLE_SQL).get(table) !== undefined;
+}
+
+function inspectReplicaLifecycleBindingsIn(db, {peerId, replicaIdentity}) {
+  if (!tableExists(db, LIFECYCLE_TABLE)) {
+    return Object.freeze({
+      state: LIFECYCLE_BINDING_READ_STATE.MISSING,
+      bindings: Object.freeze([]),
+    });
+  }
+  try {
+    const bindings = db.prepare(`
+      SELECT group_id, peer_id, replica_identity, state, reason, incarnation
+      FROM ${LIFECYCLE_TABLE}
+      WHERE peer_id = ? OR replica_identity = ?
+      ORDER BY group_id, peer_id, replica_identity
+    `).all(peerId, replicaIdentity).map((row) => Object.freeze(row));
+    return Object.freeze({
+      state: LIFECYCLE_BINDING_READ_STATE.PRESENT,
+      bindings: Object.freeze(bindings),
+    });
+  } catch (error) {
+    return Object.freeze({
+      state: LIFECYCLE_BINDING_READ_STATE.UNREADABLE,
+      bindings: Object.freeze([]),
+      error,
+    });
+  }
+}
+
+function exactLifecycleBinding(bindings, {groupId, peerId, replicaIdentity}) {
+  return bindings.find((row) =>
+    String(row.group_id) === String(groupId) &&
+    String(row.peer_id) === String(peerId) &&
+    String(row.replica_identity) === String(replicaIdentity));
+}
+
+function localOpenLifecycleClassification(kind, detail = {}) {
+  return Object.freeze({kind, ...detail});
+}
+
+function classifyReplicaLifecycleLocalOpenBindingIn(
+  db, {groupId, peerId, replicaIdentity}) {
+  const read = inspectReplicaLifecycleBindingsIn(db, {peerId, replicaIdentity});
+  if (read.state === LIFECYCLE_BINDING_READ_STATE.UNREADABLE) {
+    return localOpenLifecycleClassification(
+      LIFECYCLE_LOCAL_OPEN_BINDING.UNREADABLE, {error: read.error});
+  }
+  if (read.state === LIFECYCLE_BINDING_READ_STATE.MISSING) {
+    return localOpenLifecycleClassification(
+      LIFECYCLE_LOCAL_OPEN_BINDING.MISSING);
+  }
+  const exact = exactLifecycleBinding(read.bindings, {
+    groupId, peerId, replicaIdentity,
+  });
+  if (exact === undefined) {
+    if (read.bindings.length > 0) {
+      return localOpenLifecycleClassification(
+        LIFECYCLE_LOCAL_OPEN_BINDING.IDENTITY_MISMATCH,
+        {bindings: read.bindings});
+    }
+    return localOpenLifecycleClassification(
+      LIFECYCLE_LOCAL_OPEN_BINDING.MISSING);
+  }
+  if (exact.incarnation === null) {
+    return localOpenLifecycleClassification(
+      LIFECYCLE_LOCAL_OPEN_BINDING.INCARNATION_MISSING, {binding: exact});
+  }
+  if (exact.state === LIFECYCLE_STATE.ACTIVE) {
+    return localOpenLifecycleClassification(
+      LIFECYCLE_LOCAL_OPEN_BINDING.EXACT_ACTIVE, {binding: exact});
+  }
+  if (exact.state === LIFECYCLE_STATE.RETIRED) {
+    return localOpenLifecycleClassification(
+      LIFECYCLE_LOCAL_OPEN_BINDING.EXACT_RETIRED,
+      {binding: exact, reason: retiredRefusalReason(exact.reason)});
+  }
+  return localOpenLifecycleClassification(
+    LIFECYCLE_LOCAL_OPEN_BINDING.IDENTITY_MISMATCH, {bindings: read.bindings});
+}
+
 const RUNTIME_LIFECYCLE_OWNERS = new WeakMap();
 const LIFECYCLE_ADMIN_OUTCOME = Object.freeze({NOT_MANAGED: 'NOT_MANAGED'});
 const LIFECYCLE_REASON = Object.freeze({
@@ -405,8 +505,12 @@ function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
 
 export {
   DURABLE_LIFECYCLE_READ,
+  LIFECYCLE_BINDING_READ_STATE,
+  LIFECYCLE_LOCAL_OPEN_BINDING,
   LIFECYCLE_STATE,
   RaftRsReplicaLifecycleOwner,
+  classifyReplicaLifecycleLocalOpenBindingIn,
+  inspectReplicaLifecycleBindingsIn,
   readDurableReplicaLifecycle,
   registerRuntimeLifecycle,
   retireReplicaLifecycle,

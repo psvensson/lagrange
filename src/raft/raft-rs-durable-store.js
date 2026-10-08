@@ -45,6 +45,182 @@ import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 
+
+const RAFT_RS_LOCAL_OPEN_RECORD_REASON = Object.freeze({
+  HARD_STATE_MISSING: 'durable-hard-state-missing',
+  HARD_STATE_INVALID: 'durable-hard-state-invalid',
+  LOG_GAP: 'durable-log-gap',
+  SNAPSHOT_INVALID: 'durable-snapshot-invalid',
+  APPLIED_STATE_MISSING: 'durable-applied-state-missing',
+  APPLIED_BEYOND_AVAILABLE: 'durable-applied-beyond-available',
+  COMMIT_BEYOND_AVAILABLE: 'durable-commit-beyond-available',
+  CONF_STATE_EMPTY: 'durable-conf-state-empty',
+  MEMBERSHIP_GENERATION_INVALID: 'durable-membership-generation-invalid',
+  PENDING_SNAPSHOT_APPLICATION: 'durable-snapshot-application-pending',
+});
+
+const LOCAL_OPEN_RECORD_CLASSIFICATION = Object.freeze({
+  RESTORABLE: 'restorable',
+  REFUSED: 'refused',
+  HOLD: 'hold',
+});
+
+const CANONICAL_DECIMAL_STRING = /^(0|[1-9]\d*)$/u;
+
+function decimalRecordIndex(value) {
+  return typeof value === 'string' && CANONICAL_DECIMAL_STRING.test(value) ?
+    BigInt(value) : null;
+}
+
+function confStateMemberIds(confState) {
+  return [
+    ...(confState?.voters || []),
+    ...(confState?.learners || []),
+    ...(confState?.votersOutgoing || []),
+    ...(confState?.learnersNext || []),
+  ].map(String);
+}
+
+function hasConfigurationMembers(confState) {
+  return confStateMemberIds(confState).length > 0;
+}
+
+function maxRecordEntryIndex(entries) {
+  return entries.reduce((max, entry) => {
+    const index = decimalRecordIndex(entry.index);
+    return index !== null && index > max ? index : max;
+  }, 0n);
+}
+
+function durableRecordLogIsContinuous(record) {
+  const snapshotIndex = record.snapshot === null ? 0n :
+    decimalRecordIndex(record.snapshot.metadata.index);
+  if (snapshotIndex === null) {
+    return false;
+  }
+  const entries = [];
+  for (const entry of record.entries) {
+    const indexValue = decimalRecordIndex(entry.index);
+    const termValue = decimalRecordIndex(entry.term);
+    if (indexValue === null || termValue === null || termValue < 0n) {
+      return false;
+    }
+    if (indexValue > snapshotIndex) {
+      entries.push({...entry, indexValue, termValue});
+    }
+  }
+  const sorted = entries.sort((a, b) => a.indexValue < b.indexValue ? -1 :
+    a.indexValue > b.indexValue ? 1 : 0);
+  let expected = snapshotIndex + 1n;
+  for (const entry of sorted) {
+    if (entry.indexValue !== expected) {
+      return false;
+    }
+    expected += 1n;
+  }
+  return true;
+}
+
+function resolveDurableRecordRestoreConfState(record) {
+  if (hasConfigurationMembers(record.confState)) {
+    return record.confState;
+  }
+  return record.snapshot !== null &&
+    hasConfigurationMembers(record.snapshot.metadata.confState) ?
+    record.snapshot.metadata.confState : record.confState;
+}
+
+function durableRecordClassification(kind, reason = null, detail = undefined) {
+  return Object.freeze({
+    kind,
+    reason,
+    recoveryRequired: kind === LOCAL_OPEN_RECORD_CLASSIFICATION.HOLD,
+    ...(detail === undefined ? {} : {detail}),
+  });
+}
+
+function durableRecordRefusal(reason, detail = undefined) {
+  return durableRecordClassification(
+    LOCAL_OPEN_RECORD_CLASSIFICATION.REFUSED, reason, detail);
+}
+
+function durableRecordHold(reason, detail = undefined) {
+  return durableRecordClassification(
+    LOCAL_OPEN_RECORD_CLASSIFICATION.HOLD, reason, detail);
+}
+
+function classifyDurableRecordForLocalOpen(record) {
+  const applied = decimalRecordIndex(record.appliedIndex);
+  const snapshotIndex = record.snapshot === null ? 0n :
+    decimalRecordIndex(record.snapshot.metadata.index);
+  const snapshotTerm = record.snapshot === null ? 0n :
+    decimalRecordIndex(record.snapshot.metadata.term);
+  const snapshotHasConfiguration = record.snapshot === null ? true :
+    hasConfigurationMembers(record.snapshot.metadata.confState);
+  const restoredConfState = resolveDurableRecordRestoreConfState(record);
+  const permitsMissingHardState = record.hardState === null &&
+    applied === 0n && record.entries.length === 0 && record.snapshot === null;
+  if (record.hardState === null && !permitsMissingHardState) {
+    return durableRecordRefusal(
+      RAFT_RS_LOCAL_OPEN_RECORD_REASON.HARD_STATE_MISSING);
+  }
+  const term = permitsMissingHardState ? 0n :
+    decimalRecordIndex(record.hardState.term);
+  const vote = permitsMissingHardState ? 0n :
+    decimalRecordIndex(record.hardState.vote);
+  const commit = permitsMissingHardState ? 0n :
+    decimalRecordIndex(record.hardState.commit);
+  if (term === null || vote === null || commit === null) {
+    return durableRecordRefusal(
+      RAFT_RS_LOCAL_OPEN_RECORD_REASON.HARD_STATE_INVALID,
+      {hardState: record.hardState});
+  }
+  if (applied === null) {
+    return durableRecordRefusal(
+      RAFT_RS_LOCAL_OPEN_RECORD_REASON.APPLIED_STATE_MISSING,
+      {appliedIndex: record.appliedIndex});
+  }
+  const generation = decimalRecordIndex(record.membershipGenerationIndex);
+  if (generation === null || generation > applied) {
+    return durableRecordRefusal(
+      RAFT_RS_LOCAL_OPEN_RECORD_REASON.MEMBERSHIP_GENERATION_INVALID,
+      {membershipGenerationIndex: record.membershipGenerationIndex,
+        appliedIndex: record.appliedIndex});
+  }
+  if (snapshotIndex === null || snapshotTerm === null || snapshotTerm > term ||
+      !snapshotHasConfiguration) {
+    return durableRecordRefusal(
+      RAFT_RS_LOCAL_OPEN_RECORD_REASON.SNAPSHOT_INVALID,
+      {snapshot: record.snapshot});
+  }
+  if (!durableRecordLogIsContinuous(record)) {
+    return durableRecordRefusal(RAFT_RS_LOCAL_OPEN_RECORD_REASON.LOG_GAP);
+  }
+  const available = maxRecordEntryIndex(record.entries) > snapshotIndex ?
+    maxRecordEntryIndex(record.entries) : snapshotIndex;
+  if (commit > available) {
+    return durableRecordRefusal(
+      RAFT_RS_LOCAL_OPEN_RECORD_REASON.COMMIT_BEYOND_AVAILABLE,
+      {commit: String(commit), available: String(available)});
+  }
+  if (applied > available || applied > commit) {
+    return durableRecordRefusal(
+      RAFT_RS_LOCAL_OPEN_RECORD_REASON.APPLIED_BEYOND_AVAILABLE,
+      {appliedIndex: record.appliedIndex, commit: String(commit),
+        available: String(available)});
+  }
+  if (record.snapshot !== null && snapshotIndex > applied) {
+    return durableRecordHold(
+      RAFT_RS_LOCAL_OPEN_RECORD_REASON.PENDING_SNAPSHOT_APPLICATION,
+      {snapshotIndex: String(snapshotIndex), appliedIndex: record.appliedIndex});
+  }
+  if (!hasConfigurationMembers(restoredConfState)) {
+    return durableRecordRefusal(RAFT_RS_LOCAL_OPEN_RECORD_REASON.CONF_STATE_EMPTY);
+  }
+  return durableRecordClassification(
+    LOCAL_OPEN_RECORD_CLASSIFICATION.RESTORABLE);
+}
+
 const DECIMAL_DIGITS = /^\d+$/u;
 const PAYLOAD_ENCODING = 'base64';
 // The log table and the applied-state table.
@@ -202,6 +378,30 @@ function commitDurably(db, work) {
   } finally {
     db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.setLevel(level));
   }
+}
+
+
+function tableExists(db, table) {
+  return db.prepare(RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT)
+    .get(table) !== undefined;
+}
+
+function distinctDurableRecordGroupsIn(db, table) {
+  if (!tableExists(db, table)) {
+    return [];
+  }
+  return db.prepare(`SELECT DISTINCT group_id FROM ${table}`)
+    .all().map((row) => String(row.group_id));
+}
+
+function readDurableRaftRecordGroupsIn(db) {
+  const groups = new Set();
+  for (const table of RAFT_RS_RECORD_TABLES) {
+    for (const groupId of distinctDurableRecordGroupsIn(db, table)) {
+      groups.add(groupId);
+    }
+  }
+  return groups;
 }
 
 function readDurableRecordIn(db, groupId) {
@@ -712,9 +912,7 @@ class RaftRsDurableStore {
    * @return {boolean} Whether a record exists.
    */
   static hasDurableRecordIn(db, groupId) {
-    const tablePresent = db.prepare(RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT);
-    if (!RAFT_RS_RECORD_TABLES.every((table) =>
-      tablePresent.get(table) !== undefined)) {
+    if (!RAFT_RS_RECORD_TABLES.every((table) => tableExists(db, table))) {
       return false;
     }
     const readView = Object.create(RaftRsDurableStore.prototype, {
@@ -724,4 +922,12 @@ class RaftRsDurableStore {
   }
 }
 
-export {RaftRsDurableStore, commitDurably};
+export {
+  LOCAL_OPEN_RECORD_CLASSIFICATION,
+  RAFT_RS_LOCAL_OPEN_RECORD_REASON,
+  RaftRsDurableStore,
+  classifyDurableRecordForLocalOpen,
+  commitDurably,
+  readDurableRaftRecordGroupsIn,
+  resolveDurableRecordRestoreConfState,
+};

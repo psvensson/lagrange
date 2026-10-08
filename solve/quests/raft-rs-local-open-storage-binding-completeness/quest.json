@@ -1,0 +1,60 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-rs-local-open-storage-binding-completeness",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Dependency B for the raft-rs partition snapshot ownership work repairs only the existing per-replica lifecycle, durable-record and local-open storage interaction. Starting from exact clean 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af or its reviewed successor at seal time, opening a local raft-rs partition replica consumes target-local durable facts from their owners: peer identity and reservations, lifecycle/incarnation, durable record, HardState term/vote, log, snapshot/applied state, ConfState and membership generation. Virgin storage can initialize through the ordinary owner path; intact coherent storage opens without needing a fresh majority proof; legal vote 0 and coherent local lag are valid. Missing, unreadable, corrupt, noncanonical or internally contradictory local facts refuse before unsafe participation, or return a typed owner failure, without fabricating absence, HOLD, install authority, campaign, vote or a second ACTIVE lifecycle row. A readable current database with authoritative prior existence but absent durable raft record is KNOWN_WIPE and produces the existing reseed-required HOLD before native core entry; same-byte restart repeats the refusal and preserves the exact HOLD identity. Read-unavailable is distinct from missing/corrupt facts and blocks only the transition whose fact owner is unavailable. Three intact voters can cold restart from their own durable files without a pre-existing live leader, elect and commit an ordinary entry. This Quest does not create snapshot images, publish native snapshots, stage or install an accepted image, assert any accepted-image transaction, add a majority token, reconstruct a wiped voter as the same identity, use a late pre-create_node observer mutation as a CAS oracle, change FreshMG, or claim the final R1-R7 catch-up interaction.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/raft-rs-local-open-storage-binding-completeness/evidence/receipt.json",
+      "requiredReceipts": [
+        "local-open-per-fact-storage-binding",
+        "known-wipe-current-db-hold-replays",
+        "read-unavailable-does-not-fabricate-absence",
+        "three-voter-intact-cold-restart"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "dependency-b-only",
+      "statement": "Scope is limited to LOCAL_OPEN, KNOWN_WIPE, READ_UNAVAILABLE and intact cold restart for existing local storage. Sender publication, transfer, receiver Ready admission, application image import, atomic accepted-image transaction, report_snapshot feedback, cleanup/deletion and FreshMG remain outside this Quest."
+    },
+    {
+      "id": "local-fact-owner-binding",
+      "statement": "Opening consumes exact target-local owners for peer identity/reservations, lifecycle/incarnation, durable record, HardState, log, snapshot/applied, ConfState and generation. Wrong group, peer, replica or incarnation cannot mint a second ACTIVE row or enter native core as if it were the original replica."
+    },
+    {
+      "id": "safe-refusal-matrix",
+      "statement": "Absent, unreadable, corrupt, noncanonical or contradictory local facts refuse before unsafe core participation or return a typed owner failure. Each refusal proves no unsafe install, campaign, vote, same-identity participation, second ACTIVE lifecycle row or fabricated HOLD. Read-unavailable remains retryable/typed and never becomes absence."
+    },
+    {
+      "id": "positive-matrix",
+      "statement": "Virgin creation, intact coherent reopen, legal vote0, coherent lag and three-voter cold restart remain lawful positives. A repair cannot make safe ordinary restart depend on current majority proof or current applied equality."
+    },
+    {
+      "id": "known-wipe-boundary",
+      "statement": "Known wipe requires readable current storage, authoritative prior existence and absent durable raft record. It persists current-DB reseed-required HOLD before native core entry, and same-byte restart repeats the refusal with the same logical identity. Manual old-image rollback or restoring a previous whole replica DB is unsupported and excluded."
+    },
+    {
+      "id": "no-late-observer-cas-oracle",
+      "statement": "The late pre-create_node observer mutation schedule is diagnostic only and cannot serve as lawful pre-open CAS proof. Candidate proof must use existing owner yield points or approved transaction-boundary/local-open owner checks."
+    },
+    {
+      "id": "binary-receipt",
+      "statement": "The Quest uses the existing scripts/quest-evidence/harness-runtime.js runner to produce a test-receipt artifact. Baseline red must be a genuine owner red with runner output preserved; skip/todo/zero-selected/setup-only false greens are rejected."
+    },
+    {
+      "id": "final-coupled-quest-preserved",
+      "statement": "Dependency B green receipts do not satisfy the final coupled seven-scenario partition snapshot Quest. The final Quest must rerun this dependency evidence on its exact head and still prove R1-R7 source/receiver interaction, crash/lost response, physical atomicity and cleanup boundaries."
+    }
+  ],
+  "verificationTemplates": [
+    "recovery-replay",
+    "owner-interaction",
+    "harness-fidelity",
+    "admission-gating"
+  ],
+  "sealedAt": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af"
+}

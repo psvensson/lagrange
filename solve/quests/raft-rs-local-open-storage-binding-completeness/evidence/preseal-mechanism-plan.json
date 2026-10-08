@@ -1,0 +1,68 @@
+{
+  "schema": "snapshot-local-open-dependency-plan/1",
+  "quest": "raft-rs-local-open-storage-binding-completeness",
+  "status": "UNSEALED_FALSE",
+  "sourceHead": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
+  "authority": {
+    "decompositionJudgment": "/tmp/raft-rs-takeover-20261008/snapshot-quest-decomposition-owner-judgment-astra.txt",
+    "decompositionJudgmentSha256": "b68ad5cbcd270d015915eef2ccf5a60f2508a9e2784b9c4ef770676101f0cd21",
+    "r4FutureWitness": "/tmp/raft-rs-takeover-20261008/snapshot-r4-local-open-future-acceptance-gpt56-report.txt",
+    "r4FutureWitnessSha256": "980f63864812b55571cd786922c78119eb6e3c3441dfdaf14328827b9b886c5c",
+    "r4FactMatrix": "/tmp/raft-rs-takeover-20261008/snapshot-r4-local-open-fact-matrix-gpt56.txt",
+    "r4FactMatrixSha256": "b5c75e54f0a8f2315993c545cc69460fceb66fad2450d4cc0826110e7cba0243",
+    "r4KnownWipeMatrix": "/tmp/raft-rs-takeover-20261008/snapshot-r4-local-open-known-wipe-matrix-gpt56.txt",
+    "r4KnownWipeMatrixSha256": "bc5c7bf7d86f2d9cb22f067cefe63dd0ec55ffaf6531e1b120194c9e39b52dc8",
+    "gpt55R4V32aReport": "/tmp/raft-rs-takeover-20261008/r4-local-open-v32a-gpt55-report.txt",
+    "gpt55R4V32aReportSha256": "91db221f489458c227c2b8f12feed01b102b82304a0ad4ba3957c91bbf61057a",
+    "lateObserverCasRuling": "/tmp/raft-rs-takeover-20261008/snapshot-r4-local-open-cas-interposition-astra-ruling.txt",
+    "lateObserverCasRulingSha256": "bbe59d6caca2051d088ccd9bc5f9b6ad1de17b857d9229fc09a8072944ef7c14"
+  },
+  "receiptRunner": {
+    "runner": "scripts/quest-evidence/harness-runtime.js",
+    "receiptFile": "solve/quests/raft-rs-local-open-storage-binding-completeness/evidence/receipt.json",
+    "requiredReceipts": [
+      "local-open-per-fact-storage-binding",
+      "known-wipe-current-db-hold-replays",
+      "read-unavailable-does-not-fabricate-absence",
+      "three-voter-intact-cold-restart"
+    ],
+    "baselineRedPolicy": "runner output is preserved even when failing; a sealable red must enter the production local-open owner and fail at the missing transition, not during setup/import or by skip/todo/zero-selected selection"
+  },
+  "receipts": [
+    {
+      "id": "local-open-per-fact-storage-binding",
+      "currentRed": "Existing R4 matrices show some local durable fact defects reach native core, become CORE_FATAL instead of pre-core LOCAL_OPEN refusal, or return untyped owner paths; changed request group over the same stopped file can enter a new group.",
+      "futureGreen": "Table-driven stopped-replica clones mutate exactly one durable fact each and open only through production local-open/operation-port owner. Wrong group/peer/replica/incarnation, absent/noncanonical HardState, missing/corrupt log/snapshot/applied/ConfState/generation and identity/reservation conflicts refuse before unsafe participation or return typed owner failure, with zero second ACTIVE and zero unsafe core participation where pre-core refusal is required."
+    },
+    {
+      "id": "known-wipe-current-db-hold-replays",
+      "currentRed": "Supplemental evidence proves HOLD behavior only through bounded components; final dependency must bind authoritative prior-existence to the production local-open owner and same-byte restart, without old clone restore.",
+      "futureGreen": "Readable current DB plus authoritative prior existence and absent durable raft record returns reseed-required before core, persists exact lifecycle HOLD, and same-byte restart repeats the same refusal and HOLD identity with zero create_node/core entry."
+    },
+    {
+      "id": "read-unavailable-does-not-fabricate-absence",
+      "currentRed": "R4 reports distinguish missing-row from unreadable-table only partially; per-fact unreadability and lifecycle/identity read failures remain incomplete.",
+      "futureGreen": "Unreadable HardState/log/snapshot/applied/ConfState/generation/lifecycle/identity fact owners yield typed HOST_FAILURE or retryable READ_UNAVAILABLE for that transition and never fabricate virgin, absence, corrupt, HOLD or install authority."
+    },
+    {
+      "id": "three-voter-intact-cold-restart",
+      "currentRed": "Component positives show useful cold restart and legal vote0/coherent lag controls, but final dependency requires them in the same scoped receipt cone as the per-fact refusal matrix.",
+      "futureGreen": "Three real file-backed voters close fully, reopen from their own durable bytes without a pre-existing live leader, preserve/nonregress term and ConfState, elect and commit an ordinary entry; legal vote0 and coherent local lag remain accepted positives."
+    }
+  ],
+  "excludedClaims": [
+    "accepted image transaction or application import",
+    "sender native publication, compaction, transfer, report_snapshot feedback or receiver Ready admission",
+    "FreshMG, fresh learner CREATE or wiped-voter replacement",
+    "manual old-image rollback/restore safety",
+    "late pre-create_node observer mutation as CAS proof",
+    "automatic lag triggering or final seven-scenario closure"
+  ],
+  "preSealRequirements": [
+    "independent approval of this exact unsealed Quest draft and receipt plan",
+    "concrete future-green test files for all four receipts",
+    "harness-runtime declaration using these receipt IDs",
+    "genuine baseline owner red and positive controls with raw logs and hashes",
+    "normal Quest seal before source implementation"
+  ]
+}
