@@ -10,6 +10,44 @@ const OBSERVED_REPLICA_ROW_FIELD = Object.freeze({
   SERVICE_TYPE_CAMEL: 'serviceType',
   STATUS: 'status',
 });
+const LIFECYCLE_PRECONDITION_STRING_FIELDS = Object.freeze([
+  'service_id',
+  'replica_id',
+  'partition_id',
+  'node_id',
+  'service_type',
+  'status',
+]);
+const LIFECYCLE_PRECONDITION_NUMBER_FIELDS = Object.freeze([
+  'created_at',
+  'state_entered_at',
+]);
+const NO_REPLICA_LIFECYCLE_PRECONDITION = Object.freeze({});
+
+function buildObservedReplicaLifecyclePrecondition(row) {
+  const stringsValid = LIFECYCLE_PRECONDITION_STRING_FIELDS.every(
+    (field) => typeof row?.[field] === 'string',
+  );
+  const numbersValid = LIFECYCLE_PRECONDITION_NUMBER_FIELDS.every(
+    (field) => Number.isFinite(row?.[field]),
+  );
+  if (!stringsValid || !numbersValid) {
+    return NO_REPLICA_LIFECYCLE_PRECONDITION;
+  }
+  return Object.freeze({
+    service_id: row.service_id,
+    replica_id: row.replica_id,
+    group_id: row.group_id ?? null,
+    partition_id: row.partition_id,
+    node_id: row.node_id,
+    service_type: row.service_type,
+    status: row.status,
+    cleanup_token: typeof row.cleanup_token === 'string' ?
+      row.cleanup_token : null,
+    created_at: row.created_at,
+    state_entered_at: row.state_entered_at,
+  });
+}
 
 function assignReplicaOperationRepositoryObservationMethods(
   ReplicaOperationRepository,
@@ -495,6 +533,8 @@ function assignReplicaOperationRepositoryObservationMethods(
           state: REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED,
           source: REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE,
           lifecycleStatus: this.normalizeObservedReplicaLifecycle(observedRow),
+          lifecyclePrecondition:
+            buildObservedReplicaLifecyclePrecondition(observedRow),
         });
       }
       if (

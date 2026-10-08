@@ -58,6 +58,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_MISSING_FIELDS: 'REMOVE_REPLICA missing required fields',
   REMOVE_NOT_FOUND: 'Replica not found for removal',
   REMOVE_PARTITION_MISMATCH: 'Replica partition identity mismatch on removal',
+  REMOVE_CLEANUP_PRECONDITION_REFUSED:
+    'Failed-create target cleanup precondition was refused',
   REMOVE_IN_PROGRESS: 'Replica removal already in progress',
   REMOVE_ALREADY_REMOVED: 'Replica already removed',
   STEP_DOWN_REQUEST: 'Handling STEP_DOWN_REPLICA request',
@@ -136,6 +138,9 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   REMOVE_PARTITION_MISMATCH: (replicaId, localPartitionId, requestPartitionId) =>
     `Replica ${replicaId} belongs to partition ${localPartitionId}, ` +
     `not requested partition ${requestPartitionId}`,
+  REMOVE_CLEANUP_PRECONDITION_REFUSED:
+    'Failed-create target cleanup no longer matches the authoritative ' +
+    'replica lifecycle generation',
   TABLE_METADATA_MISSING: (tableId) =>
     `Table metadata not found for ${tableId}`,
   SCHEMA_PARSE_FAILED: (message) =>

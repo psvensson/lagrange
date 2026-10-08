@@ -732,17 +732,14 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         if (error?.deferRetry === true) {
           failedOutcomeOptions.deferRetry = true;
         }
-        // Emit failed outcome - coordinator will transition workflow.
-        this.emitExecutorOutcome(
-          EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
-          operationId,
-          WORKFLOW_STEP.FAILED,
-          failedOutcomeOptions,
-        );
         try {
-          await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
+          // Confirm exact FAILED authority before publishing terminal outcome.
+          await this.persistOrConfirmReplicaCreateFailed({
+            operationId,
+            replicaId,
             partitionId,
             errorMessage: error.message,
+            claimCleanup: error?.deferRetry !== true,
           });
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -758,6 +755,12 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               ReplicaStatus.FAILED,
             );
           }
+          this.emitExecutorOutcome(
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+            operationId,
+            WORKFLOW_STEP.FAILED,
+            failedOutcomeOptions,
+          );
         } finally {
           // Clean up in-progress tracking even when FAILED status persistence is deferred.
           if (operationId) {

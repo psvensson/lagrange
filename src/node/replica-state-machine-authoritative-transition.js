@@ -42,7 +42,8 @@ function rowMatchesLifecycleEvidence(row, evidence) {
     rowMatchesReplicaLifecyclePredicate(row, predicate);
 }
 
-function expectedLifecycleDestination(sourceRow, newState, timestamp) {
+function expectedLifecycleDestination(sourceRow, newState, timestamp,
+  context = {}) {
   const sourceVersion = durableRowVersion(sourceRow);
   if (!sourceVersion) {
     throw authoritativeLifecycleTransitionError(
@@ -65,6 +66,7 @@ function expectedLifecycleDestination(sourceRow, newState, timestamp) {
     created_at: sourceRow.created_at,
     status: newState,
     previous_state: sourceRow.status,
+    cleanup_token: context.cleanupToken ?? sourceRow.cleanup_token ?? null,
     state_entered_at: destinationVersion,
   });
 }
@@ -90,6 +92,7 @@ async function installObservedLifecycle(stateMachine, observation) {
       serviceAddress: row.address,
       replicaIdentity: row.replica_id,
       groupId: row.group_id,
+      cleanupToken: row.cleanup_token,
       createdAt: row.created_at,
       durableVersionColumn: version.column,
       durableVersion: version.value,
@@ -141,7 +144,7 @@ async function attemptAuthoritativeLifecycleTransition(
   timestamp,
 ) {
   try {
-    const applied = await Promise.resolve(stateMachine.transition(
+    const applied = await Promise.resolve(stateMachine._applyTransition(
       admissionRow.service_id,
       newState,
       {
@@ -152,6 +155,11 @@ async function attemptAuthoritativeLifecycleTransition(
         serviceType: admissionRow.service_type,
         serviceAddress: admissionRow.address,
         timestamp,
+      },
+      {
+        persist: true,
+        validate: true,
+        expectedSourceEvidence: admissionRow,
       },
     ));
     return Object.freeze({applied: applied === true, error: null});
@@ -233,6 +241,7 @@ async function transitionAuthoritativeReplicaGeneration(
     admissionObservation.row,
     newState,
     timestamp,
+    context,
   );
   const attempt = await attemptAuthoritativeLifecycleTransition(
     stateMachine,

@@ -266,6 +266,13 @@ class OperationWorkflowOwnerExecutionLane
     if (action === OPERATION_OWNER_ACTION.EXECUTE) {
       return this.executeOperationInternal(operationInput);
     }
+    if (action === OPERATION_OWNER_ACTION.FAIL) {
+      return this.failOperation(
+        operationInput,
+        options.errorMessage,
+        options.failureOptions,
+      );
+    }
     throw new Error(`Unknown operation owner action: ${action}`);
   }
 

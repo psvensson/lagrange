@@ -12,8 +12,9 @@ import {
 import {
   UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
 } from './unified-rebalancer-topology-drain-methods.js';
+import {UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS} from
+  './unified-rebalancer-failed-create-cleanup.js';
 import {readGlobalTopologyBlockingInFlightOperations} from './global-topology-blocking-operation-view.js';
-import {isLiveCreateTargetStatus} from './replica-status.js';
 const {
   COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -616,47 +617,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
-   * Failed REPLACE and ADD rows can still leave the target replica in raft
-   * placement - and, once the leader admitted it on its SYNCING row, in the
-   * group's configuration as a voter whose port the failed create closed (the
-   * ack-loss wedge: its FAILED write may never land). Surface those target
-   * replica IDs to the planner as cleanup removals (the FAILED_REPLICA cure:
-   * REMOVE -> REMOVING -> the row-driven RemoveNode). A live target (its row
-   * ACTIVE, M2) is never one: removing it would undo a healthy voter.
-   * @return {Set<string>}
-   * @private
-   */
-  getTerminalFailedReplaceTargetReplicaIds() {
-    const failedTargetReplicaIds = new Set();
-    const operations = this.systemTableCache.filter(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      (operation) => {
-        if (!this.isOperationForEntity(operation)) {
-          return false;
-        }
-        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
-          nowMs: this.nowFn(),
-        });
-        return (
-          (normalizedOperation.type === OperationType.REPLACE ||
-            normalizedOperation.type === OperationType.ADD) &&
-          (normalizedOperation.status === ReplicaStatus.FAILED ||
-            normalizedOperation.workflowStep === WORKFLOW_STEP.FAILED)
-        );
-      },
-    );
-    for (const operation of operations) {
-      const targetReplicaId = this.getReplicaIdFromOperationRow(operation);
-      if (targetReplicaId.length > 0 && !isLiveCreateTargetStatus(this
-        .systemTableCache.get?.(SYSTEM_TABLE_NAME.SERVICES, targetReplicaId)
-        ?.status)) {
-        failedTargetReplicaIds.add(targetReplicaId);
-      }
-    }
-    return failedTargetReplicaIds;
-  }
-
-  /**
    * @param {Array<Object>} replicas
    * @return {Array<Object>}
    * @private
@@ -794,6 +754,7 @@ Object.assign(
   UnifiedRebalancerReplicaState.prototype,
   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,
   UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
+  UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS,
 );
 
 export {UnifiedRebalancerReplicaState};

@@ -479,6 +479,18 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       request[ReplicaOperationField.REASON] = requestReason;
     }
     if (
+      messageType === ReplicaOperationMessageType.REMOVE_REPLICA &&
+      operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ]
+    ) {
+      request[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ];
+    }
+    if (
       Array.isArray(operation[ReplicaOperationField.REPLICA_IDS]) &&
       operation[ReplicaOperationField.REPLICA_IDS].length > 0
     ) {

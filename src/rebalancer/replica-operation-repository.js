@@ -71,8 +71,7 @@ import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OPERATION_METADATA_KEY,
   REPLICA_OPERATION_SEMANTIC_PHASE,
-  OperationType,
-  ReplicaStatus,
+  OperationType, ReplicaStatus,
   buildReplicaOperationSemanticWitnesses,
   getOperationMetadataObject,
   getOperationMetadataString,
@@ -212,11 +211,12 @@ const SQL = Object.freeze({
   UPDATE_OPERATION_OWNER_LEASE: `UPDATE replica_operations SET
     lease_expires_at = ?
     WHERE operation_id = ? AND completed_at IS NULL`,
-  SELECT_REPLICA_STATUS: `SELECT service_id, replica_id, partition_id, node_id,
-      service_type, status, raft_role, address
-    FROM services WHERE service_id = ?`,
+  SELECT_REPLICA_STATUS: `SELECT service_id, replica_id, group_id, partition_id,
+      node_id, service_type, status, raft_role, address, cleanup_token, created_at,
+      state_entered_at FROM services WHERE service_id = ?`,
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT service_id, replica_id,
-      partition_id, node_id, service_type, status, raft_role, address
+      group_id, partition_id, node_id, service_type, status, raft_role, address,
+      cleanup_token, created_at, state_entered_at
     FROM services 
     WHERE partition_id = ? AND node_id = ?`,
 });
@@ -681,6 +681,7 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE,
   NUM,
   OperationType,
+  ReplicaStatus,
   REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS,
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS,

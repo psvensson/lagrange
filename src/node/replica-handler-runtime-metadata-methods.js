@@ -493,6 +493,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       }
       this.replicaCleanupTombstoneOwner = new ReplicaCleanupTombstoneOwner({
         gateway: this.getControlPlaneSystemTableGateway(),
+        logger: this.logger,
       });
       return this.replicaCleanupTombstoneOwner;
     }

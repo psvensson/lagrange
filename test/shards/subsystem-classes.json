@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 113,
     "architecture-governance": 19,
-    "bootstrap-membership": 283,
+    "bootstrap-membership": 284,
     "cdc-metadata": 58,
     "cli-tooling": 96,
     "control-plane": 205,
@@ -25,10 +25,10 @@
     "transport-messaging": 86,
     "wasm-toolchain": 57
   },
-  "censusSize": 2211,
-  "digest": "fnv1a32-de29ee90",
+  "censusSize": 2212,
+  "digest": "fnv1a32-642592df",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-adda398b",
+  "observationDigest": "fnv1a32-d6eaf4e1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1112,6 +1112,7 @@
     "test/node/replica-cleanup-token-authority.test.js": "bootstrap-membership",
     "test/node/replica-creation-idempotency.property.test.js": "bootstrap-membership",
     "test/node/replica-executor-activation-handler-boundary.test.js": "bootstrap-membership",
+    "test/node/replica-failed-create-cleanup-generation.test.js": "bootstrap-membership",
     "test/node/replica-handler-cache-state.test.js": "bootstrap-membership",
     "test/node/replica-handler-idempotency.property.test.js": "bootstrap-membership",
     "test/node/replica-handler-leadership-transfer.test.js": "bootstrap-membership",
@@ -7181,6 +7182,11 @@
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
+    "test/node/replica-failed-create-cleanup-generation.test.js": {
+      "files": [
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
     "test/node/replica-handler-cache-state.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -9947,9 +9953,11 @@
     "test/rebalancer/terminal-failed-add-target-cleanup.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-replace-owner.js",
         "src/rebalancer/rebalancer-constants.js",
-        "src/rebalancer/replica-status.js",
-        "src/rebalancer/unified-rebalancer-replica-state.js"
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js"
       ]
     },
     "test/rebalancer/timeout-triggers-failure.property.test.js": {

@@ -45,6 +45,21 @@ function assignReplicaOperationRepositoryRowMethods(
     resolveReplicaOperationSemanticPhase,
   } = options;
 
+  function attachFailedCreateTargetCleanupPrecondition(
+    operation,
+    stepsHistory,
+  ) {
+    const precondition = getOperationMetadataObject(
+      stepsHistory,
+      OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION,
+    );
+    if (precondition) {
+      operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = precondition;
+    }
+  }
+
   class ReplicaOperationRepositoryRowMethods {
   /**
    * Translate a raw SQL/cache row into a normalized operation object.
@@ -158,6 +173,7 @@ function assignReplicaOperationRepositoryRowMethods(
       if (bootstrapMembership) {
         operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] = bootstrapMembership;
       }
+      attachFailedCreateTargetCleanupPrecondition(operation, stepsHistory);
       return operation;
     }
     /**

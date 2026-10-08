@@ -61,6 +61,11 @@ const ReplicaOperationField = Object.freeze({
   ENTITY_ID: FIELD.ENTITY_ID,
   REASON: FIELD.REASON,
   SOURCE_REPLICA_ID: 'sourceReplicaId',
+  // Exact authoritative FAILED lifecycle generation which authorized a
+  // failed-create target cleanup. It is a precondition carried to the
+  // lifecycle owner; the value never authorizes a mutation by itself.
+  FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION:
+    'failedCreateTargetLifecyclePrecondition',
   // A REPLACE handoff attempt's sequence, echoed by the handler so a late
   // answer of an earlier attempt is dropped.
   ATTEMPT_SEQ: 'attemptSeq',

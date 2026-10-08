@@ -16,9 +16,11 @@ import {
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {buildFailedCreateCleanupToken} from
+  '../rebalancer/failed-create-cleanup-token.js';
 import {durableRowVersion} from './replica-state-machine-recovery.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from
-  './replica-cleanup-tombstone-owner.js';
+  './replica-cleanup-constants.js';
 import {
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_SERVICE,
@@ -62,6 +64,7 @@ function registerAuthoritativeCreateSnapshot(
     serviceAddress: service.address,
     replicaIdentity: service.replica_id,
     groupId: service.group_id,
+    cleanupToken: service.cleanup_token,
     createdAt: service.created_at,
     durableVersionColumn: durableVersion?.column,
     durableVersion: durableVersion?.value,
@@ -128,6 +131,53 @@ function buildFailedCreateReplayContext(
 
 function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
   class ReplicaHandlerCreateStatusMethods {
+    async persistOrConfirmReplicaCreateFailed(options = {}) {
+      const {
+        operationId,
+        replicaId,
+        partitionId,
+        errorMessage,
+        claimCleanup = true,
+      } = options;
+      const cleanupToken = claimCleanup ?
+        buildFailedCreateCleanupToken(operationId) : null;
+      let replay = await resolveCreateReplay(
+        this,
+        replicaId,
+        partitionId,
+        ReplicaStatus.FAILED,
+      );
+      if (!replay) {
+        await this.persistReplicaStatusWithRetry(
+          replicaId,
+          ReplicaStatus.FAILED,
+          {partitionId, errorMessage, cleanupToken},
+        );
+        replay = await resolveCreateReplay(
+          this,
+          replicaId,
+          partitionId,
+          ReplicaStatus.FAILED,
+        );
+      }
+      if (!claimCleanup) return replay !== null;
+      if (!cleanupToken || !replay ||
+          await this.replicaStateMachine.claimFailedCreateCleanup(
+            replay.service,
+            cleanupToken,
+          ) !== true) {
+        const error = new Error(
+          `Failed create cleanup claim was not durable for ${replicaId}`,
+        );
+        error.code =
+          REPLICA_CLEANUP_ERROR_CODE.FAILED_CREATE_CLAIM_DEFERRED;
+        error.errorCode = error.code;
+        error.deferRetry = true;
+        throw error;
+      }
+      return true;
+    }
+
     /**
      * @param {Object} options
      * @param {string} options.operationId
@@ -224,6 +274,10 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
       const replay = await resolveCreateReplay(
         this, replicaId, partitionId, ReplicaStatus.FAILED);
       if (!replay) {
+        return false;
+      }
+      if (replay.service.cleanup_token !== null &&
+          replay.service.cleanup_token !== undefined) {
         return false;
       }
       const staleRuntime = this.getTrackedService(replicaId);

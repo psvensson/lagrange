@@ -29,6 +29,7 @@ const {
   REBALANCER_RUNTIME_REASON,
   REBALANCER_SKIP_REASON,
   REBALANCER_TARGET_READINESS_MODE,
+  ReplicaOperationField,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
@@ -62,6 +63,8 @@ function buildCoordinatorOperationRequest(move, context, operationType) {
     sourceNodeId: move.sourceNodeId,
     moveReason: move.reason,
     enforceConcurrentOperationBudget: true,
+    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+      move[ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION],
   };
 }
 

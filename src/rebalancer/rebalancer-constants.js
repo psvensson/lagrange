@@ -303,6 +303,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
     'and repair armed',
   TERMINAL_TRANSITION_REPAIR_SUCCEEDED:
     'Terminal transition repair confirmed authoritative visibility',
+  FAILED_CREATE_CLEANUP_RELEASE_SUCCEEDED:
+    'Failed-create cleanup release confirmed by the target lifecycle owner',
   TERMINAL_TRANSITION_REPAIR_UNCONFIRMED:
     'Terminal transition repair attempt still unconfirmed; rescheduling',
   TERMINAL_TRANSITION_REPAIR_ABANDONED:

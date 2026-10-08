@@ -69,6 +69,8 @@ import {
 } from './replica-state-machine-recovery.js';
 import {transitionAuthoritativeReplicaGeneration} from
   './replica-state-machine-authoritative-transition.js';
+import {claimFailedCreateCleanup} from
+  './replica-state-machine-failed-create-claim.js';
 import {
   observeAuthoritativeReplicaLifecycle,
   rowMatchesReplicaLifecycle,
@@ -329,6 +331,10 @@ class ReplicaStateMachine extends EventEmitter {
     );
   }
 
+  claimFailedCreateCleanup(evidence, cleanupToken) {
+    return claimFailedCreateCleanup(this, evidence, cleanupToken);
+  }
+
   /**
    * Re-enter CREATE after the durable operation owner explicitly re-dispatches
    * a replica whose previous participant attempt reached FAILED.
@@ -344,7 +350,9 @@ class ReplicaStateMachine extends EventEmitter {
    */
   restartFailedCreate(replicaId, context = {}, options = {}) {
     const existingState = this.replicas.get(replicaId);
-    if (existingState?.state !== ReplicaState.FAILED) {
+    if (existingState?.state !== ReplicaState.FAILED ||
+        existingState.cleanupToken !== null &&
+        existingState.cleanupToken !== undefined) {
       return false;
     }
     return this._applyTransition(
