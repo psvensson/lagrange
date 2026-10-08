@@ -94,7 +94,8 @@ async function proposeAuthorizedGroupLearner(port, group, request, observeAuthor
     return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
   }
   if (!learnerPortAvailable(port)) {
-    return refusedLearnerAuthorization({outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE});
+    return refusedLearnerAuthorization({
+      outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE});
   }
   const receiver = learnerReceiver(group);
   let observed;
