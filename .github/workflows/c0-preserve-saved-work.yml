@@ -1,4 +1,4 @@
-name: freshmg-terminal-nonadmission-proof
+name: freshmg-terminal-preserve-exact
 on:
   push:
     branches: [ops/c0-preservation-20261008]
@@ -10,138 +10,11 @@ concurrency:
   cancel-in-progress: false
 env:
   BASE: 75977928ec0f8d8f17804e06b08e3ee0965b3f73
+  SOURCE: 8d57e4093d297953f2cf563c634147cea0b79487
   WORK_BRANCH: work/freshmg-terminal-nonadmission-20261008
+  QUEST: message-group-fresh-identity-membership
 jobs:
-  wake:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-        with:
-          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
-          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
-      - run: |
-          set -euo pipefail
-          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
-          if [ "$status" != RUNNING ]; then
-            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
-          fi
-  measure:
-    needs: wake
-    runs-on: [self-hosted, gcp]
-    timeout-minutes: 25
-    defaults:
-      run:
-        shell: bash
-        working-directory: terminal-proof-${{ github.run_id }}-${{ github.run_attempt }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.sha }}
-          path: terminal-carrier-${{ github.run_id }}-${{ github.run_attempt }}
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ env.BASE }}
-          path: terminal-proof-${{ github.run_id }}-${{ github.run_attempt }}
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - name: Measure missing resolution on unchanged source
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$BASE"
-          test -z "$(git status --porcelain)"
-          mkdir -p test-output/terminal
-          npm ci
-          python3 "../terminal-carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/freshmg-terminal-nonadmission-increment.py" . tests
-          # Previous attempt's only lint findings: two missing for-of blocks.
-          # Format the test before either red or green measurement; no src fix.
-          npx eslint test/rebalancer/message-group-membership-branch-authorization.test.js --fix
-          git add test/rebalancer/message-group-membership-branch-authorization.test.js
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: measure terminal-first non-admission and exact obligation fences'
-          git rev-parse HEAD > test-output/terminal/red-sha.txt
-          set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/terminal/red.stdout.txt 2> test-output/terminal/red.stderr.txt
-          status=$?
-          set -e
-          echo "$status" > test-output/terminal/red-exit.txt
-          test "$status" -eq 1
-          grep -q 'existing repository must own terminal-first membership resolution' test-output/terminal/red.stdout.txt
-      - name: Implement subordinate settlement and test identical cases
-        run: |
-          set -euo pipefail
-          python3 "../terminal-carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/freshmg-terminal-nonadmission-increment.py" . source
-          node --check src/rebalancer/replica-operation-message-group-membership-owner-claim.js
-          node --check src/rebalancer/replica-operation-repository.js
-          git diff --check
-          git add src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'WIP FreshMG: resolve never-authorized terminal intent by exact row CAS'
-          git rev-parse HEAD > test-output/terminal/green-sha.txt
-          set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/terminal/green.stdout.txt 2> test-output/terminal/green.stderr.txt
-          status=$?
-          set -e
-          echo "$status" > test-output/terminal/green-exit.txt
-          tail -100 test-output/terminal/green.stdout.txt
-          test "$status" -eq 0
-      - name: Prove the exact holder predicate is necessary
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('src/rebalancer/replica-operation-message-group-membership-owner-claim.js')
-          s=p.read_text()
-          Path('test-output/terminal/owner-before-mutation.txt').write_text(s)
-          target="  ['message_group_membership_owner_claim', 'messageGroupMembershipOwnerClaim'],\n"
-          assert s.count(target)==1
-          p.write_text(s.replace(target,'',1))
-          PY
-          set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/terminal/mutant.stdout.txt 2> test-output/terminal/mutant.stderr.txt
-          status=$?
-          set -e
-          cp test-output/terminal/owner-before-mutation.txt src/rebalancer/replica-operation-message-group-membership-owner-claim.js
-          echo "$status" > test-output/terminal/mutant-exit.txt
-          git diff --exit-code
-          test "$status" -eq 1
-          grep -q 'not ok .*terminal-first held-claim renewal' test-output/terminal/mutant.stdout.txt
-      - name: Lint and preserve every measured commit and output
-        if: always()
-        run: |
-          set -uo pipefail
-          mkdir -p test-output/terminal
-          set +e
-          npx eslint src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/terminal/lint.stdout.txt 2> test-output/terminal/lint.stderr.txt
-          status=$?
-          set -e
-          echo "$status" > test-output/terminal/lint-exit.txt
-          git status --porcelain > test-output/terminal/final-status.txt
-          git diff --stat "$BASE" HEAD > test-output/terminal/diff-stat.txt
-          git diff "$BASE" HEAD > test-output/terminal/change.patch
-          git branch terminal-candidate HEAD
-          git bundle create test-output/terminal/candidate.bundle terminal-candidate "^$BASE"
-          printf 'base=%s\nrun=%s\nrunner=%s\n' "$BASE" "$GITHUB_RUN_ID" "$RUNNER_NAME" > test-output/terminal/provenance.txt
-          sha256sum src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/terminal/source.sha256
-          find test-output/terminal -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/terminal/SHA256SUMS
-          exit "$status"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: freshmg-terminal-${{ github.run_id }}
-          path: terminal-proof-${{ github.run_id }}-${{ github.run_attempt }}/test-output/terminal/
-          retention-days: 14
-          if-no-files-found: error
-  preserve:
-    needs: measure
-    if: always()
+  retain:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -156,52 +29,77 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Publish measured WIP and retain complete evidence without approval
+      - name: Verify exact passing bundle and failed predecessor archive
         env:
           GH_TOKEN: ${{ github.token }}
-          MEASURE_RESULT: ${{ needs.measure.result }}
         run: |
           set -euo pipefail
-          export PACKET="$RUNNER_TEMP/terminal-packet"
-          mkdir -p "$PACKET"
-          gh run download "$GITHUB_RUN_ID" --repo psvensson/lagrange --name "freshmg-terminal-$GITHUB_RUN_ID" --dir "$PACKET"
+          mkdir -p test-output/terminal-retention
+          gh api repos/psvensson/lagrange/actions/artifacts/11545780498/zip > test-output/terminal-retention/passed-37767400569.zip
+          gh api repos/psvensson/lagrange/actions/artifacts/11544945422/zip > test-output/terminal-retention/failed-37766536144.zip
           python3 - <<'PY'
-          import os,hashlib
+          import hashlib, zipfile
           from pathlib import Path
-          d=Path(os.environ['PACKET'])
-          for line in (d/'SHA256SUMS').read_text().splitlines():
-              h,n=line.split(None,1)
-              assert hashlib.sha256((d/Path(n).name).read_bytes()).hexdigest()==h, n
+          d=Path('test-output/terminal-retention')
+          expected={'passed-37767400569.zip':'bf9cc08d11aabfa24a33174654b8e8143f724a085f1f8ab179be0fba57b1cc04','failed-37766536144.zip':'5231add95464d4e1ab95b2902f0b89a727d3aa543caafd39a79f18d90343be9d'}
+          for name,sha in expected.items():
+              assert hashlib.sha256((d/name).read_bytes()).hexdigest()==sha, name
+          with zipfile.ZipFile(d/'passed-37767400569.zip') as z:
+              names=z.namelist()
+              assert len(names)==len(set(names)) and all('/' not in n for n in names)
+              for line in z.read('SHA256SUMS').decode().splitlines():
+                  sha,filename=line.split(None,1)
+                  assert hashlib.sha256(z.read(Path(filename).name)).hexdigest()==sha, filename
+              for name,value in {'red-exit.txt':'1','green-exit.txt':'0','mutant-exit.txt':'1','lint-exit.txt':'0','final-status.txt':''}.items():
+                  assert z.read(name).decode().strip()==value, name
+              assert z.read('green-sha.txt').decode().strip()=='8d57e4093d297953f2cf563c634147cea0b79487'
+              (d/'candidate.bundle').write_bytes(z.read('candidate.bundle'))
           PY
-          git bundle verify "$PACKET/candidate.bundle"
-          git fetch "$PACKET/candidate.bundle" terminal-candidate
-          export CANDIDATE="$(git rev-parse FETCH_HEAD)"
-          git merge-base --is-ancestor "$BASE" "$CANDIDATE"
-          git switch --detach "$CANDIDATE"
+          git bundle verify test-output/terminal-retention/candidate.bundle
+          git fetch test-output/terminal-retention/candidate.bundle terminal-candidate
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE"
+          git merge-base --is-ancestor "$BASE" "$SOURCE"
+          git switch --detach "$SOURCE"
           python3 - <<'PY'
           import os,subprocess
           allowed={'src/rebalancer/replica-operation-message-group-membership-owner-claim.js','src/rebalancer/replica-operation-repository.js','test/rebalancer/message-group-membership-branch-authorization.test.js'}
-          changed=set(subprocess.check_output(['git','diff','--name-only',os.environ['BASE'],os.environ['CANDIDATE']],text=True).splitlines())
-          assert changed <= allowed, changed
+          changed=set(subprocess.check_output(['git','diff','--name-only',os.environ['BASE'],os.environ['SOURCE']],text=True).splitlines())
+          assert changed==allowed, changed
           PY
-          npm ci
-          mkdir -p test-output/terminal-retention
-          gh api repos/psvensson/lagrange/actions/artifacts/11544945422/zip > test-output/terminal-retention/failed-37766536144.zip
-          echo '5231add95464d4e1ab95b2902f0b89a727d3aa543caafd39a79f18d90343be9d  test-output/terminal-retention/failed-37766536144.zip' | sha256sum --check
-          node scripts/solve.js evidence add test-output/terminal-retention/failed-37766536144.zip --quest message-group-fresh-identity-membership --json > test-output/terminal-retention/prior-evidence.json
-          evidence="solve/quests/message-group-fresh-identity-membership/evidence/terminal-nonadmission-$GITHUB_RUN_ID.json"
-          python3 - <<'PY'
-          import os,json
-          from pathlib import Path
-          d=Path(os.environ['PACKET'])
-          r={'schema':'freshmg-terminal-nonadmission-attempt/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'baseSha':os.environ['BASE'],'measurementResult':os.environ['MEASURE_RESULT'],'sourceApproval':False,'proofCeiling':'actual repository/file-backed SQLite with gateway substitution; no driver activation or physical membership proof','priorFailedRun':37766536144,'priorFailure':'tests and mutant passed; two missing test-loop braces failed lint and shell errexit prevented complete bundle creation','priorRetainedEvidence':json.loads(Path('test-output/terminal-retention/prior-evidence.json').read_text()),'outputs':{p.name:p.read_text() for p in d.iterdir() if p.suffix in {'.txt','.sha256'}}}
-          p=Path('solve/quests/message-group-fresh-identity-membership/evidence')/('terminal-nonadmission-'+os.environ['GITHUB_RUN_ID']+'.json')
-          p.write_text(json.dumps(r,indent=2)+'\n')
-          PY
-          node scripts/solve.js note --id message-group-fresh-identity-membership --attempt "Terminal-first non-admission row resolution at $CANDIDATE: current repository/boot, exact terminal/no-issued-action basis and monotonic lane release; current holder required when present. GCP run $GITHUB_RUN_ID result=$MEASURE_RESULT. Test-first red, identical controls, holder-predicate mutant and prior failed lint attempt retained. No physical action, ordinary workflow resurrection, T1 learner-abort selection, C0 closure or independent approval."
-          git add "$evidence" solve/quests/message-group-fresh-identity-membership/log.ndjson
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain terminal non-admission attempt and prior failure'
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$SOURCE"
+      - name: Canonically retain evidence and append actual attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          npm ci
+          # Current CLI implementation consumes --id, not the obsolete --quest.
+          node scripts/solve.js evidence add test-output/terminal-retention/failed-37766536144.zip --id "$QUEST" --json > test-output/terminal-retention/failed-store.json
+          node scripts/solve.js evidence add test-output/terminal-retention/passed-37767400569.zip --id "$QUEST" --json > test-output/terminal-retention/passed-store.json
+          python3 - <<'PY'
+          import os,json,zipfile,hashlib
+          from pathlib import Path
+          d=Path('test-output/terminal-retention')
+          with zipfile.ZipFile(d/'passed-37767400569.zip') as z:
+              outputs={n:z.read(n).decode() for n in z.namelist() if n.endswith(('.txt','.sha256')) or n=='SHA256SUMS'}
+          report={'schema':'freshmg-terminal-nonadmission-attempt/1','runId':37767400569,'candidateSha':os.environ['SOURCE'],'baseSha':os.environ['BASE'],'measurementResult':'success','originalWorkflowConclusion':'failure','publicationFailure':'original preservation invocation used obsolete --quest; current CLI requires --id','retentionRunId':int(os.environ['GITHUB_RUN_ID']),'sourceApproval':False,'proofCeiling':'actual repository and file-backed SQLite with distributed gateway substitution; no driver activation, physical membership or multi-host acceptance','passedArchiveSha256':hashlib.sha256((d/'passed-37767400569.zip').read_bytes()).hexdigest(),'passedArchiveAndMembersVerified':True,'priorFailure':{'runId':37766536144,'reason':'missing braces in test loops failed lint; inherited shell errexit prevented bundle/manifest creation after useful tests and mutant passed','archiveHashVerified':True,'memberManifestAvailable':False},'retainedEvidence':{'passed':json.loads((d/'passed-store.json').read_text()),'failed':json.loads((d/'failed-store.json').read_text())},'outputs':outputs}
+          p=Path('solve/quests')/os.environ['QUEST']/'evidence/terminal-nonadmission-37767400569.json'
+          p.write_text(json.dumps(report,indent=2)+'\n')
+          PY
+          node scripts/solve.js note --id "$QUEST" --attempt "T0 implemented and measured on exact $SOURCE in GCP run 37767400569: test-first RED, four focused files/120 reported assertions GREEN, exact-holder-predicate deletion mutant RED, targeted lint GREEN, clean final checkout. Source commit and all evidence recovered without rerunning successful measurements. Earlier 37766536144 lint failure retained. Hosted publisher used obsolete --quest and failed; canonical --id used in run $GITHUB_RUN_ID. Existing repository settlement only; no driver, T1 branch, runtime delivery, CREATE activation or independent source approval."
+          git add "solve/quests/$QUEST/evidence/terminal-nonadmission-37767400569.json" "solve/quests/$QUEST/log.ndjson"
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain exact successful terminal resolution and failed predecessors'
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$SOURCE"
+          git push origin "HEAD:refs/heads/$WORK_BRANCH"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-          echo "Published $(git rev-parse HEAD); source $CANDIDATE; measurement=$MEASURE_RESULT; no source approval" >> "$GITHUB_STEP_SUMMARY"
+          printf 'source=%s\npublished=%s\n' "$SOURCE" "$(git rev-parse HEAD)" > test-output/terminal-retention/publication.txt
+          cat test-output/terminal-retention/publication.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: freshmg-terminal-retention-${{ github.run_id }}
+          path: test-output/terminal-retention/
+          if-no-files-found: error
+          retention-days: 14
