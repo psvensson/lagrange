@@ -166,6 +166,10 @@ export const SUBSYSTEM_RULES = Object.freeze([
 // semantic home differs from what their path implies. Each must name exactly
 // one live test and carry a reason, so a stale override fails like a dead rule.
 export const SUBSYSTEM_OVERRIDES = Object.freeze({
+  'test/integration/message-group-membership-claim-cache.integration.test.js': {
+    subsystem: SUBSYSTEM_CDC_METADATA,
+    reason: 'proves repository mutation visibility in SystemTableCache; seed and message group supply the fixture, not the asserted responsibility',
+  },
   'test/integration/benchmark-system-table-read-path.integration.test.js': {
     subsystem: SUBSYSTEM_QUERY_SQL,
     reason: 'benchmarks a read path; the area under proof is the query engine, not convergence behaviour',

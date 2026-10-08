@@ -131,7 +131,12 @@ function claimUpdate(row, next) {
   const fields = row.messageGroupMembershipOwnerClaim === null ?
     [...CLAIM_FIELDS, ['lease_expires_at', 'ownerLeaseExpiresAt']] : CLAIM_FIELDS;
   const predicates = fields.map(([column, field]) => {
-    if (row[field] === null) return `${column} IS NULL`;
+    // rowToOperation omits an absent ordinary lease; its SQL identity is NULL.
+    // Other fields retain their exact decoded representation.
+    if (row[field] === null ||
+      (column === 'lease_expires_at' && row[field] === undefined)) {
+      return `${column} IS NULL`;
+    }
     params.push(row[field]);
     return `${column} = ?`;
   });
