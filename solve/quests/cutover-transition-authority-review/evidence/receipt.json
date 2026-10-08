@@ -4,36 +4,42 @@
   "status": "fail",
   "sourceSha": "4cdeac1c43ccc470ee5816a7439197d1d6c21bf4",
   "evidence": "solve/quests/cutover-transition-authority-review/evidence/gcp-37736547313.json",
+  "additionalEvidence": [
+    "solve/quests/cutover-transition-authority-review/evidence/owner-entry-2026-10-08.json",
+    "solve/quests/cutover-transition-authority-review/evidence/gcp-37740082892.json",
+    "solve/quests/cutover-transition-authority-review/transition-contract-review.md"
+  ],
   "testFileDigests": {
-    "scripts/quest-evidence/cutover-transition-authority-baseline.js": "363e258e16c14151d44a98ff3a33f4d5136b068c51536cf0a419f11e95bafef9"
+    "scripts/quest-evidence/cutover-transition-authority-baseline.js": "363e258e16c14151d44a98ff3a33f4d5136b068c51536cf0a419f11e95bafef9",
+    "scripts/quest-evidence/cutover-owner-entry-baseline.js": "4b2a613ce9bd724cd4a1cb9956262d1099f805482aedc62d3b506aa4018b9efb"
   },
   "receipts": [
     {
       "id": "replacement-source-target-and-obligations-classified",
       "passed": false,
-      "detail": "Working census records the source/target conflict; complete phase-specific success/failure table and independent review remain outstanding. No WIP permit accepted."
+      "detail": "Complete-operation success/failure subject table and proposed existing-owner resolution are recorded in transition-contract-review.md. J1 promoted-target recovery policy and transition-identity review remain open; existing acceptance unchanged and no WIP permit accepted."
     },
     {
       "id": "workflow-commit-projection-and-restart-classified",
       "passed": false,
-      "detail": "Actual repository persist versus volatile mirror/progress is traced. Production reachability of the separately locked remote-retry route and full failed-write/restart proof remain open."
+      "detail": "Real owner-entry overlap under controlled await is measured: active remote retry selects NO_OPERATION_EFFECT on both calls despite one local CAS conflict. Existing publication fence detects divergent prefix. Neither duplicate physical dispatch nor missing whole-path history guard is proved. Real durable failure/restart and changing observation/lease schedules remain unclosed."
     },
     {
       "id": "snapshot-local-open-wipe-and-install-classified",
       "passed": false,
-      "detail": "Draft gate distinctions are recorded; current accepted snapshot/CREATE bytes and the registered durable install chain still require source-bound reconciliation."
+      "detail": "Current registered path versus preserved draft is reconciled in the review packet; source identifies missing runtime catch-up trigger/application-image interaction. Existing three snapshot files pass 72 reported assertions on GCP, but include legacy-image refusal and component CREATE/install, not successful intact partition catch-up. Independent classification review remains open."
     },
     {
       "id": "source-bound-deterministic-discriminators-measured",
       "passed": true,
       "command": "node scripts/quest-evidence/cutover-transition-authority-baseline.js test-output/contract-first/baseline.json 4cdeac1c43ccc470ee5816a7439197d1d6c21bf4",
       "testFile": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
-      "detail": "Measured on lagrange-gcp-runner in Actions run 37736547313: positive dispatch/non-extension controls engage; real store produces 1 CAS winner and 1 conflict while adapter issues 2 dispatches; longer conflicting prefix is accepted by callback. Baseline exits 1 and the Action stays RED. Existing 3 focused files pass 105 assertions. Archive and member hashes verified. This receipt means the bounded discriminator was measured, not that the runtime is corrected, the production race is proved, or certification passed."
+      "detail": "Original direct-adapter baseline remains RED and retained. Follow-up Actions/GCP runs 37739512267 and 37740082892 use actual owner and repository policy, qualify its interpretation, and preserve their positive controls. Latest unchanged-runtime run passes four workflow/retry files (132 reported assertions), three snapshot files (72), and the owner-entry/fence witness. All downloaded archives and member hashes verified. Measurement completion is not runtime correction, independent acceptance, production race proof or distributed certification. The initial new fixture failure in run 37738789039 is retained as non-measuring."
     },
     {
       "id": "independent-category-complete-contract-review",
       "passed": false,
-      "detail": "No independent approval has been issued. Owner-interaction, recovery/replay, concurrency/serialization and harness-fidelity review remains mandatory before a runtime repair."
+      "detail": "No independent approval is recorded. Review the frozen PR #104 packet for owner interaction, recovery/replay, concurrency/serialization, harness fidelity and precise proof ceilings before any runtime repair."
     }
   ]
 }
