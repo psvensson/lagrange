@@ -130,7 +130,7 @@ test('T1 a delayed failed-row abandonment cannot apply after success is observed
 ]) {
 """
     cache.write_text(head + cases + ''.join('  '+line if line.strip() else line
-        for line in body.splitlines(keependsends=True)) + '}\n')
+        for line in body.splitlines(keepends=True)) + '}\n')
     print('Test-first: exact successful/failed terminal decision, mixed states and delayed CAS.')
 elif mode == 'fix':
     text = read_exact(source, '26887591ac88517db655262b21a1e348bc342483')
