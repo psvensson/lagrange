@@ -52,10 +52,11 @@ import {SQLITE_STORE_PRAGMA} from '../../../src/storage/sqlite-store-constants.j
 import {RAFT_RS_SYNCHRONOUS_PRAGMA} from
   '../../../src/raft/raft-rs-durable-store-constants.js';""")
     text = replace_once(text, '    const openedDatabase = new Database(dbFile);', """    const openedDatabase = new Database(dbFile);
-    // Use the partition's WAL journal, but retain the stricter default FULL
-    // synchronization for ALL fixture commits. Native Ready durability and
-    // independent disk oracles remain unchanged, including on every reopen.
+    // Use the partition's WAL journal, retaining FULL synchronization for ALL
+    // fixture commits, including every reopen. WAL's connection default can
+    // be NORMAL, so select FULL explicitly rather than relying on that default.
     openedDatabase.pragma(SQLITE_STORE_PRAGMA.JOURNAL_MODE_WAL);
+    openedDatabase.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.SET_FULL);
     assert.equal(openedDatabase.pragma('journal_mode', {simple: true}), 'wal',
       'partition fixture must use the production WAL journal');
     assert.equal(openedDatabase.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.READ,
@@ -190,8 +191,8 @@ def main():
         for name, old, new, marker in [
             ('missing-wal', '    openedDatabase.pragma(SQLITE_STORE_PRAGMA.JOURNAL_MODE_WAL);', '',
              'partition fixture must use the production WAL journal'),
-            ('weakened-sync', '    openedDatabase.pragma(SQLITE_STORE_PRAGMA.JOURNAL_MODE_WAL);',
-             "    openedDatabase.pragma(SQLITE_STORE_PRAGMA.JOURNAL_MODE_WAL);\n    openedDatabase.pragma('synchronous = NORMAL');",
+            ('weakened-sync', '    openedDatabase.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.SET_FULL);',
+             "    openedDatabase.pragma('synchronous = NORMAL');",
              'partition fixture must retain FULL synchronization')]:
             try:
                 HELPER.write_text(replace_once(changed, old, new))
@@ -205,7 +206,7 @@ def main():
                   'restartBudgetSatisfied': after[0]['durationMs'] <= 2000,
                   'neighborResults': rows('consumer-and-neighbor'),
                   'all16CasesPreserved': True, 'productionSourceChanged': False,
-                  'journalChange': 'fixture DELETE/FULL -> WAL/FULL',
+                  'journalChange': 'fixture DELETE/FULL -> WAL/explicit FULL on every open',
                   'mutationControls': ['missing-wal', 'weakened-sync'], 'bootWindow': window,
                   'independentApproval': False, 'fullLabVerdict': 'FAIL', 'distributedAcceptance': False}
         (OUT / 'review-r3.json').write_text(json.dumps(report, indent=2) + '\n')
