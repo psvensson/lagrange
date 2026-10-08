@@ -2,6 +2,8 @@
  * This is a repository operation, not another workflow or runtime authority.
  * RECORDED means an exact durable intent exists; it is not a dispatch grant.
  */
+import {WORKFLOW_STEP} from '../constants/workflow.js';
+import {ReplicaStatus} from './replica-status.js';
 import {committedStampOfAnswer} from '../raft/raft-committed-membership-stamp.js';
 import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../raft/raft-operation-port-constants.js';
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
@@ -43,13 +45,14 @@ function permitsMatch(prior, next, identity, spec) {
     next.proposalIndex === null;
 }
 // An existing membership obligation can outlive ordinary operation settlement.
-// Only pre-promotion target abandonment may be newly selected after settlement;
+// Only exact failed settlement may newly select pre-promotion target abandonment;
 // the exact completion timestamp joins the same operation-row CAS, never a new lane.
 function branchSettlementGuard(repository, row, spec) {
   if (!repository.isOperationTerminal(row)) {
     return row.completedAt === null ? {sql: 'completed_at IS NULL', params: []} : null;
   }
-  if (spec.phase !== PHASE.TARGET_REMOVAL_IN_FLIGHT ||
+  if (row.status !== ReplicaStatus.FAILED || row.workflowStep !== WORKFLOW_STEP.FAILED ||
+    spec.phase !== PHASE.TARGET_REMOVAL_IN_FLIGHT ||
     !Number.isSafeInteger(row.completedAt) || row.completedAt <= 0) return null;
   return {sql: 'completed_at = ?', params: [row.completedAt]};
 }
