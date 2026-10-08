@@ -12,7 +12,7 @@
     "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 21,
-    "placement-rebalance": 267,
+    "placement-rebalance": 268,
     "query-sql": 172,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,8 +25,8 @@
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2320,
-  "digest": "fnv1a32-67a8a185",
+  "censusSize": 2321,
+  "digest": "fnv1a32-8168ceb9",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-14a7c8ab",
   "classes": {
@@ -1677,6 +1677,7 @@
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "placement-rebalance",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "placement-rebalance",
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "placement-rebalance",
+    "test/rebalancer/message-group-membership-branch-authorization.test.js": "placement-rebalance",
     "test/rebalancer/message-group-membership-change-parked.test.js": "placement-rebalance",
     "test/rebalancer/message-group-membership-operation-lane.test.js": "placement-rebalance",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "placement-rebalance",

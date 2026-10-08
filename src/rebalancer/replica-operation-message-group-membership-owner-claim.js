@@ -46,8 +46,10 @@ function membershipRowIdentityMatches(row, identity, encodedIdentity,
 
 async function observeMembershipOperation(repository, operationId) {
   try {
-    const row = await repository.queryAuthoritativeOperationById(operationId, READ);
-    return {available: true, row};
+    const observation = await repository.queryAuthoritativeOperationVisibilityObservation(
+      operationId, {...READ, requireAbsenceConfirmation: true});
+    return {available: observation.deferredOutcome === null,
+      row: observation.operation};
   } catch {
     return {available: false, row: null};
   }
