@@ -266,6 +266,42 @@ function takeGroupAdmissionsInFlight(port) {
   return taken;
 }
 
+// Host-composed bindings are read once before asking the repository. They
+// are not filled in from a caller's request or from a later port observation.
+function learnerReceiver(group) {
+  return Object.freeze({groupId: group?.groupId, nodeId: group?.nodeId,
+    bootIncarnation: group?.bootIncarnation, localReplicaIdentity: group?.localReplicaIdentity,
+    senderNodeId: group?.senderNodeId, senderBootIncarnation: group?.senderBootIncarnation});
+}
+
+function learnerPortAvailable(port) {
+  return typeof port?.readStatus === 'function' &&
+    typeof port?.[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION] === 'function';
+}
+
+function refusedLearnerAuthorization(observed) {
+  const missing = observed?.outcome === RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE;
+  return deepFreeze({...membershipTransitionRefusal(missing ?
+    RAFT_MEMBERSHIP_AUTHORIZATION_REASON.UNAVAILABLE :
+    observed?.reason ?? RAFT_MEMBERSHIP_AUTHORIZATION_REASON.MISMATCH), retryable: missing});
+}
+
+function learnerRecipientMatches(status, receiver, transition) {
+  return status?.groupId === receiver.groupId &&
+    status.replicaIdentity === receiver.localReplicaIdentity &&
+    transition?.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER;
+}
+
+function reserveAndProposeAuthorizedLearner(port, receiver, transition) {
+  const reserved = reserveGroupPeerIdentity(receiver, transition.replicaIdentity);
+  if (reserved.outcome !== RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED) {
+    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
+  }
+  // Same-turn native fences remain authoritative. Do not refresh an issued
+  // transition from status here: that would turn stale permission into a grant.
+  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](transition);
+}
+
 // Host-composed recipient boundary. The resolver is the existing operation
 // repository's bound observation, never a boolean or caller-supplied permit
 // validator. Transport authentication/registration and the workflow driver
@@ -274,14 +310,11 @@ async function proposeAuthorizedGroupLearner(port, group, request, observeAuthor
   if (typeof observeAuthorization !== 'function') {
     return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
   }
-  if (typeof port?.readStatus !== 'function' ||
-    typeof port?.[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION] !== 'function') {
-    return deepFreeze({...membershipTransitionRefusal(
-      RAFT_MEMBERSHIP_AUTHORIZATION_REASON.UNAVAILABLE), retryable: true});
+  if (!learnerPortAvailable(port)) {
+    return refusedLearnerAuthorization({
+      outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE});
   }
-  const receiver = Object.freeze({groupId: group?.groupId, nodeId: group?.nodeId,
-    bootIncarnation: group?.bootIncarnation, localReplicaIdentity: group?.localReplicaIdentity,
-    senderNodeId: group?.senderNodeId, senderBootIncarnation: group?.senderBootIncarnation});
+  const receiver = learnerReceiver(group);
   let observed;
   try {
     observed = await observeAuthorization(request, receiver);
@@ -289,25 +322,12 @@ async function proposeAuthorizedGroupLearner(port, group, request, observeAuthor
     observed = {outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE};
   }
   if (observed?.outcome !== RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.OBSERVED) {
-    const missing = observed?.outcome === RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE;
-    return deepFreeze({...membershipTransitionRefusal(missing ?
-      RAFT_MEMBERSHIP_AUTHORIZATION_REASON.UNAVAILABLE :
-      observed?.reason ?? RAFT_MEMBERSHIP_AUTHORIZATION_REASON.MISMATCH), retryable: missing});
+    return refusedLearnerAuthorization(observed);
   }
-  const status = port.readStatus();
-  if (status?.groupId !== receiver.groupId ||
-    status.replicaIdentity !== receiver.localReplicaIdentity ||
-    observed.transition?.stage !== RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
+  if (!learnerRecipientMatches(port.readStatus(), receiver, observed.transition)) {
     return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
   }
-  const reserved = reserveGroupPeerIdentity(receiver, observed.transition.replicaIdentity);
-  if (reserved.outcome !== RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED) {
-    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
-  }
-  // The existing native turn rechecks term, ConfState generation, address,
-  // lifecycle, runtime generation and in-flight configuration before proposing.
-  // A queued or delayed read never supplies these checks on the runtime's behalf.
-  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](observed.transition);
+  return reserveAndProposeAuthorizedLearner(port, receiver, observed.transition);
 }
 
 export {

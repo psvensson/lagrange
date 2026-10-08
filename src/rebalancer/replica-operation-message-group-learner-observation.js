@@ -24,6 +24,16 @@ const unavailable = () => answer(OUTCOME.UNAVAILABLE, REASON.UNAVAILABLE);
 const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
 const nonempty = (value) => typeof value === 'string' && value.length > 0;
 
+// Decode first, then compare the already-decoded identity and issued action.
+// These are subordinate predicates, not additional authorization owners.
+function matchesInitialLearnerRequest(operationId, identity, permit) {
+  return identity.operationId === operationId &&
+    permit.transitionIdentity === identity.transitionIdentity &&
+    permit.permitStage === STAGE.ADD_LEARNER &&
+    permit.permitState === STATE.IN_FLIGHT && permit.permitSequence === 1 &&
+    permit.replicaIdentity === identity.targetReplicaId &&
+    permit.peerId === identity.targetPeerId;
+}
 function snapshotRequest(request) {
   if (!request || typeof request !== 'object') return null;
   const {operationId, identity, permit, executionClaim} = request;
@@ -31,13 +41,8 @@ function snapshotRequest(request) {
   const decodedIdentity = decodeMembershipIdentity(identity);
   const decodedPermit = decodeMembershipPermit(permit);
   const claim = decodeMembershipOwnerClaim(executionClaim);
-  if (!decodedIdentity || !decodedPermit || !claim ||
-    decodedIdentity.operationId !== operationId ||
-    decodedPermit.transitionIdentity !== decodedIdentity.transitionIdentity ||
-    decodedPermit.permitStage !== STAGE.ADD_LEARNER ||
-    decodedPermit.permitState !== STATE.IN_FLIGHT || decodedPermit.permitSequence !== 1 ||
-    decodedPermit.replicaIdentity !== decodedIdentity.targetReplicaId ||
-    decodedPermit.peerId !== decodedIdentity.targetPeerId) return null;
+  if (!decodedIdentity || !decodedPermit || !claim) return null;
+  if (!matchesInitialLearnerRequest(operationId, decodedIdentity, decodedPermit)) return null;
   return {operationId, identity, permit, executionClaim, decodedIdentity, decodedPermit, claim};
 }
 function snapshotReceiver(repository, receiver, input) {
