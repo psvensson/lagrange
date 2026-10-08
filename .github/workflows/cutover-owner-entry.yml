@@ -52,6 +52,7 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - name: Bind source and install locked dependencies
+        id: install
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -76,13 +77,27 @@ jobs:
           test "$STATUS" -eq 0
           node -e 'const r=JSON.parse(require("fs").readFileSync("test-output/c0-owner/owner-entry.json")); if(r.sourceSha!==process.env.GITHUB_SHA||r.measurementStatus!=="measured")process.exit(2)'
       - name: Existing progress and retry regressions
-        if: always()
+        if: always() && steps.install.outcome == 'success'
         run: |
           set -uo pipefail
           npm run test:file -- test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/operation-workflow-owner-handoff-retry-backoff.test.js > test-output/c0-owner/focused.stdout.txt 2> test-output/c0-owner/focused.stderr.txt
           STATUS=$?
           printf '%s\n' "$STATUS" > test-output/c0-owner/focused-exit.txt
           tail -50 test-output/c0-owner/focused.stdout.txt
+          exit "$STATUS"
+      - name: Existing snapshot positive and refusal boundaries (not intact catch-up certification)
+        if: always() && steps.install.outcome == 'success'
+        timeout-minutes: 10
+        run: |
+          set -uo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9 || exit "$?"
+          sha256sum test/raft/snapshot-catchup-end-to-end.test.js test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js test/message-group/message-group-fresh-learner-snapshot.test.js src/bootstrap/shared/snapshot-catchup-wiring.js src/raft/snapshot-catchup.js src/raft/snapshot-install.js src/raft/snapshot-checkpoint-store.js src/raft/raft-rs-runtime-owner.js src/raft/raft-rs-durable-store.js src/raft/raft-operation-port-request.js src/partition/partition-service-raft-init-base.js > test-output/c0-owner/snapshot-sources.sha256
+          npm run test:file -- test/raft/snapshot-catchup-end-to-end.test.js test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js test/message-group/message-group-fresh-learner-snapshot.test.js > test-output/c0-owner/snapshot.stdout.txt 2> test-output/c0-owner/snapshot.stderr.txt
+          STATUS=$?
+          printf '%s\n' "$STATUS" > test-output/c0-owner/snapshot-exit.txt
+          tail -80 test-output/c0-owner/snapshot.stdout.txt
+          cat test-output/c0-owner/snapshot.stderr.txt >&2
           exit "$STATUS"
       - name: Bind final unchanged source and artifact hashes
         if: always()
