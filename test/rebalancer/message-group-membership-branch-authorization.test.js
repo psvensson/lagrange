@@ -84,6 +84,7 @@ async function setup(t, {initial = false} = {}) {
   let resolutionChanges = 0;
   let fault = null;
   let failReads = false;
+  let returnOperationReadFailure = false;
   const pending = [];
   const run = (sql, params = []) => {
     try {
@@ -123,10 +124,16 @@ async function setup(t, {initial = false} = {}) {
       return run(sql, params);
     },
     async readAuthoritativeRows(_table, sql, params) {
+      if (returnOperationReadFailure && _table === 'replica_operations') {
+        return {success: false, error: 'injected returned operation-read failure'};
+      }
       if (failReads) throw new Error('injected owner read unavailable');
       return run(sql, params);
     },
     async readRows(_table, sql, params) {
+      if (returnOperationReadFailure && _table === 'replica_operations') {
+        return {success: false, error: 'injected returned operation-read failure'};
+      }
       if (failReads) throw new Error('injected owner read unavailable');
       return run(sql, params);
     },
@@ -189,6 +196,9 @@ async function setup(t, {initial = false} = {}) {
   },
   reads: (available) => {
     failReads = !available;
+  },
+  operationReads: (available) => {
+    returnOperationReadFailure = !available;
   },
   flush: () => pending.splice(0).map((apply) => apply()),
   reopen: () => {
@@ -621,4 +631,43 @@ test('terminal-first resolution permits a distinct later operation through the e
   const admitted = await f.repository.queryAuthoritativeOperationById(next.operationId);
   assert.equal(admitted?.replicaId, next.replicaId);
   assert.equal(f.row().workflow_step, WORKFLOW_STEP.FAILED);
+});
+
+
+test('returned operation-read failure is unavailable for claim, selection and settlement', async (t) => {
+  for (const mode of ['claim', 'select', 'settle']) {
+    await t.test(mode, async (t) => {
+      const f = await setup(t, {initial: mode !== 'select'});
+      if (mode === 'settle') await terminal(f);
+      const before = f.row();
+      f.operationReads(false); // nodes/boot still read from actual fixture SQL
+      let answer;
+      if (mode === 'claim') answer = await f.repository.claimMessageGroupMembershipOwner(f.claimRequest());
+      else if (mode === 'select') answer = await f.repository.selectMessageGroupMembershipBranch(request());
+      else answer = await settleInitial(f);
+      assert.equal(answer.outcome, 'unavailable', 'no row observed is not a row conflict');
+      assert.deepEqual(f.row(), before);
+      assert.equal(f.claimWrites + f.writes + f.resolutionWrites, 0);
+    });
+  }
+});
+
+test('confirmed empty operation remains a conflict rather than unavailable', async (t) => {
+  const f = await setup(t, {initial: true});
+  const input = f.claimRequest();
+  assert.equal(f.run('DELETE FROM replica_operations WHERE operation_id = ?', [O]).changes, 1);
+  assert.equal((await f.repository.claimMessageGroupMembershipOwner(input)).outcome, 'conflict');
+  assert.equal((await settleInitial(f)).outcome, 'conflict');
+  assert.equal(f.claimWrites + f.resolutionWrites, 0);
+});
+
+test('returned read failure after terminal resolution stays unknown until exact replay', async (t) => {
+  const f = await setup(t, {initial: true}); await terminal(f);
+  f.fault(() => f.operationReads(false));
+  assert.equal((await settleInitial(f)).outcome, 'unknown');
+  assert.equal(f.row().message_group_membership_obligation_state, 'definitive_non_admission');
+  assert.equal(f.row().message_group_membership_lane_key, null);
+  f.operationReads(true); f.reopen();
+  assert.equal((await settleInitial(f)).outcome, 'recorded');
+  assert.equal(f.resolutionChanges, 1);
 });
