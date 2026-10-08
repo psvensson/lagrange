@@ -16,14 +16,15 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Bind rereview to the exact corrected source and retained evidence
+      - name: Bind rereview to the exact paused-read correction and retained evidence
         shell: bash
         run: |
           set -euo pipefail
-          expected=6d09b134c2ac0f7639b98751f4ed7f535367cb11
+          expected=5c1595e7ea46be54f7114657b2117571f14a5c16
           actual="$(gh pr view 109 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
           printf 'expected=%s\nactual=%s\n' "$expected" "$actual"
           test "$actual" = "$expected"
+          gh pr comment 109 --repo psvensson/lagrange --body 'R2 corrective response on exact head 5c1595e7ea46be54f7114657b2117571f14a5c16: see solve/quests/message-group-fresh-identity-membership/evidence/runtime-review-5460477132-response.md. Finding 4222118121 reproduced with actual repository renewal/success during the boot-read await; original source fails three specific assertions, correction passes, and source-only revert restores them. Failure-after-issue is retained as an explicit native-commit positive. Actions 37818495699: 20 integration plus 161 regression reported assertions within unchanged budgets, strict guards green, no new owner/state/lease/export. The final operation re-observation does NOT claim atomic authorization across independent groups or exclusion of all later changes/native queue races. Review the full issued-action/holder/recipient contract and stated fixture ceiling. The unchanged restart witness still exceeds 2 seconds; its measured history/native/durable cost profile is not a timing fix. Existing full lab FAIL and final cutover gates remain open. Updated PR metadata names this exact current head; no author-issued approval or main merge.'
           gh pr edit 109 --repo psvensson/lagrange --add-reviewer @copilot
           gh pr view 109 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
-          echo 'Rereview requested after review 5459955866: two same-owner complexity corrections, original native/holder/permit mutation controls, no extra await or authority expansion. Restart duration is explicitly unresolved and the complete Action is RED. Proof ran on hosted Linux, not GCP or a distributed cluster. Review the whole source scope and fixture limits; no prior rejection overridden or main/Quest/release approval claimed.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Category-complete independent rereview requested for R2 correction, retained-failure positive, native fences, non-atomic read ceiling and test fidelity. Restart-duration finding remains explicitly unresolved; no main/Quest/release approval.' >> "$GITHUB_STEP_SUMMARY"
