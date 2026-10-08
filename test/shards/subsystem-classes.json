@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 167,
-    "storage-raft": 117,
+    "storage-raft": 118,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2322,
-  "digest": "fnv1a32-3d53a7b2",
+  "censusSize": 2323,
+  "digest": "fnv1a32-a479fde2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-19f2c4bb",
+  "observationDigest": "fnv1a32-f905b61d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1027,6 +1027,7 @@
     "test/integration/managed-split-writes-after-cutover.integration.test.js": "storage-partition",
     "test/integration/membership-consistency.integration.test.js": "bootstrap-membership",
     "test/integration/message-group-fresh-identity-replacement.integration.test.js": "transport-messaging",
+    "test/integration/message-group-learner-runtime-authorization.integration.test.js": "storage-raft",
     "test/integration/message-group-membership-claim-cache.integration.test.js": "cdc-metadata",
     "test/integration/message-group-multi-join-formation.integration.test.js": "transport-messaging",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "services-runtime",
@@ -7233,6 +7234,15 @@
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/replica-dispatch-service.js",
         "src/diagnostics/formation-turn-attribution.js"
+      ]
+    },
+    "test/integration/message-group-learner-runtime-authorization.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
       ]
     },
     "test/integration/message-group-membership-claim-cache.integration.test.js": {
