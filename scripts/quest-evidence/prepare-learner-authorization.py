@@ -10,6 +10,12 @@ if mode == 'tests':
     s = p.read_text()
     assert 'async function authorizeInitial(' not in s
     p.write_text(s + (here / 'learner-authorization-tests.js').read_text())
+    p = root / 'test/integration/message-group-membership-claim-cache.integration.test.js'
+    s = p.read_text()
+    anchor = "  const learnerFields = {message_group_membership_phase: 'learner_committed',"
+    assert s.count(anchor) == 1, 'use corrected shared-seed fixture'
+    s = s.replace(anchor, (here / 'learner-authorization-cache.js').read_text() + anchor, 1)
+    p.write_text(s)
 elif mode == 'source':
     p = root / 'src/rebalancer/replica-operation-message-group-membership-permit.js'
     s = p.read_text()
