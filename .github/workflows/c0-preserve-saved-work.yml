@@ -1,4 +1,4 @@
-name: freshmg-null-claim-proof
+name: freshmg-terminal-nonadmission-proof
 on:
   push:
     branches: [ops/c0-preservation-20261008]
@@ -9,8 +9,8 @@ concurrency:
   group: freshmg-claim-branch-increment
   cancel-in-progress: false
 env:
-  BASE: 01463d0cda429840aeeb31cb17efae4f34a1d11c
-  WORK_BRANCH: work/freshmg-null-claim-20261008
+  BASE: 75977928ec0f8d8f17804e06b08e3ee0965b3f73
+  WORK_BRANCH: work/freshmg-terminal-nonadmission-20261008
 jobs:
   wake:
     runs-on: ubuntu-24.04
@@ -37,183 +37,102 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: null-claim-${{ github.run_id }}-${{ github.run_attempt }}
+        working-directory: terminal-proof-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
+          ref: ${{ github.sha }}
+          path: terminal-carrier-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
           ref: ${{ env.BASE }}
-          path: null-claim-${{ github.run_id }}-${{ github.run_attempt }}
+          path: terminal-proof-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Exact base and real-SQL regression before source correction
+      - name: Measure missing resolution on unchanged source
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$BASE"
           test -z "$(git status --porcelain)"
-          mkdir -p test-output/null-claim
+          mkdir -p test-output/terminal
           npm ci
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('test/rebalancer/message-group-membership-branch-authorization.test.js')
-          s = p.read_text()
-          assert 'NULL ordinary lease permits' not in s
-          s += '''
-
-          test('NULL ordinary lease permits an exact initial successor claim', async (t) => {
-            const f = await setup(t, {initial: true});
-            assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = NULL ' +
-              'WHERE operation_id = ?', [O]).changes, 1);
-            const before = f.row();
-            assert.equal(before.lease_expires_at, null);
-            const observed = await f.repository.queryAuthoritativeOperationById(O);
-            assert.equal(observed.ownerLeaseExpiresAt, undefined,
-              'the canonical row decoder omits a NULL ordinary lease');
-            const acquired = await f.repo(TARGET_NODE)
-              .claimMessageGroupMembershipOwner(f.claimRequest());
-            assert.equal(acquired.outcome, 'recorded');
-            const claim = JSON.parse(f.row().message_group_membership_owner_claim);
-            assert.equal(claim.ownerNodeId, TARGET_NODE);
-            assert.equal(claim.generation, 1);
-            const after = {...f.row()};
-            delete before.message_group_membership_owner_claim;
-            delete after.message_group_membership_owner_claim;
-            assert.deepEqual(after, before, 'claim does not change the operation or action');
-          });
-
-          test('NULL ordinary lease initial competition records exactly one successor', async (t) => {
-            const f = await setup(t, {initial: true});
-            assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = NULL ' +
-              'WHERE operation_id = ?', [O]).changes, 1);
-            const input = f.claimRequest();
-            const answers = await Promise.all([
-              f.repo(TARGET_NODE).claimMessageGroupMembershipOwner(input),
-              f.repo('third-node').claimMessageGroupMembershipOwner(input),
-            ]);
-            assert.equal(answers.filter((r) => r.outcome === 'recorded').length, 1);
-            assert.equal(JSON.parse(f.row().message_group_membership_owner_claim).generation, 1);
-          });
-
-          test('NULL ordinary lease read cannot overwrite a concurrent lease renewal', async (t) => {
-            const f = await setup(t, {initial: true});
-            assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = NULL ' +
-              'WHERE operation_id = ?', [O]).changes, 1);
-            f.fault(() => {
-              assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = ? ' +
-                'WHERE operation_id = ?', [LEASE, O]).changes, 1);
-            });
-            const answer = await f.repo(TARGET_NODE)
-              .claimMessageGroupMembershipOwner(f.claimRequest());
-            assert.notEqual(answer.outcome, 'recorded');
-            assert.equal(f.row().message_group_membership_owner_claim, null);
-            assert.equal(f.row().lease_expires_at, LEASE);
-          });
-
-          test('a non-NULL invalid lease must not match the NULL-lease CAS', async (t) => {
-            for (const lease of [0, -1]) {
-              await t.test(String(lease), async (t) => {
-                const f = await setup(t, {initial: true});
-                assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = ? ' +
-                  'WHERE operation_id = ?', [lease, O]).changes, 1);
-                const answer = await f.repo(TARGET_NODE)
-                  .claimMessageGroupMembershipOwner(f.claimRequest());
-                assert.notEqual(answer.outcome, 'recorded');
-                assert.equal(f.row().message_group_membership_owner_claim, null);
-              });
-            }
-          });
-          '''
-          # Strip only the embedded YAML indentation, preserving JS indentation.
-          lines = s.splitlines()
-          p.write_text('\n'.join(lines) + '\n')
-          PY
+          python3 "../terminal-carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/freshmg-terminal-nonadmission-increment.py" . tests
           node --check test/rebalancer/message-group-membership-branch-authorization.test.js
           git add test/rebalancer/message-group-membership-branch-authorization.test.js
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: reproduce NULL-lease membership claim and preserve renewal fence'
-          git rev-parse HEAD > test-output/null-claim/red-sha.txt
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: measure terminal-first non-admission and exact obligation fences'
+          git rev-parse HEAD > test-output/terminal/red-sha.txt
           set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/null-claim/red.stdout.txt 2> test-output/null-claim/red.stderr.txt
+          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/terminal/red.stdout.txt 2> test-output/terminal/red.stderr.txt
           status=$?
           set -e
-          echo "$status" > test-output/null-claim/red-exit.txt
+          echo "$status" > test-output/terminal/red-exit.txt
           test "$status" -eq 1
-          grep -q 'NULL ordinary lease permits' test-output/null-claim/red.stdout.txt
-          grep -q 'unknown' test-output/null-claim/red.stdout.txt
-      - name: Correct only the nullable lease predicate and prove same tests
+          grep -q 'existing repository must own terminal-first membership resolution' test-output/terminal/red.stdout.txt
+      - name: Implement subordinate settlement and test identical cases
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('src/rebalancer/replica-operation-message-group-membership-owner-claim.js')
-          s = p.read_text()
-          old = '    if (row[field] === null) return `${column} IS NULL`;'
-          new = '''    // rowToOperation omits an absent ordinary lease; its SQL identity is NULL.
-              // Other fields retain their exact decoded representation.
-              if (row[field] === null ||
-                (column === 'lease_expires_at' && row[field] === undefined)) {
-                return `${column} IS NULL`;
-              }'''
-          assert s.count(old) == 1, 'claim predicate changed; do not guess'
-          p.write_text(s.replace(old, new, 1))
-          PY
+          python3 "../terminal-carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/freshmg-terminal-nonadmission-increment.py" . source
           node --check src/rebalancer/replica-operation-message-group-membership-owner-claim.js
+          node --check src/rebalancer/replica-operation-repository.js
           git diff --check
-          git add src/rebalancer/replica-operation-message-group-membership-owner-claim.js
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'WIP FreshMG: match absent ordinary lease as SQL NULL, retain exact CAS fence'
-          git rev-parse HEAD > test-output/null-claim/green-sha.txt
+          git add src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'WIP FreshMG: resolve never-authorized terminal intent by exact row CAS'
+          git rev-parse HEAD > test-output/terminal/green-sha.txt
           set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js > test-output/null-claim/green.stdout.txt 2> test-output/null-claim/green.stderr.txt
+          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/terminal/green.stdout.txt 2> test-output/terminal/green.stderr.txt
           status=$?
           set -e
-          echo "$status" > test-output/null-claim/green-exit.txt
-          cat test-output/null-claim/green.stdout.txt
+          echo "$status" > test-output/terminal/green-exit.txt
+          tail -100 test-output/terminal/green.stdout.txt
           test "$status" -eq 0
-      - name: Controlled mutation proves ordinary lease fence is not weakened
+      - name: Prove the exact holder predicate is necessary
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('src/rebalancer/replica-operation-message-group-membership-owner-claim.js')
-          s = p.read_text()
-          Path('test-output/null-claim/owner-before-mutation.js').write_text(s)
-          old = "[...CLAIM_FIELDS, ['lease_expires_at', 'ownerLeaseExpiresAt']] : CLAIM_FIELDS"
-          assert s.count(old) == 1
-          p.write_text(s.replace(old, 'CLAIM_FIELDS : CLAIM_FIELDS', 1))
+          p=Path('src/rebalancer/replica-operation-message-group-membership-owner-claim.js')
+          s=p.read_text()
+          Path('test-output/terminal/owner-before-mutation.txt').write_text(s)
+          target="  ['message_group_membership_owner_claim', 'messageGroupMembershipOwnerClaim'],\n"
+          assert s.count(target)==1
+          p.write_text(s.replace(target,'',1))
           PY
           set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/null-claim/mutant.stdout.txt 2> test-output/null-claim/mutant.stderr.txt
+          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/terminal/mutant.stdout.txt 2> test-output/terminal/mutant.stderr.txt
           status=$?
           set -e
-          cp test-output/null-claim/owner-before-mutation.js src/rebalancer/replica-operation-message-group-membership-owner-claim.js
-          echo "$status" > test-output/null-claim/mutant-exit.txt
+          cp test-output/terminal/owner-before-mutation.txt src/rebalancer/replica-operation-message-group-membership-owner-claim.js
+          echo "$status" > test-output/terminal/mutant-exit.txt
           git diff --exit-code
           test "$status" -eq 1
-          grep -q 'NULL ordinary lease read cannot overwrite' test-output/null-claim/mutant.stdout.txt
-      - name: Targeted lint, immutable bundle and complete evidence
+          grep -q 'not ok .*terminal-first held-claim renewal' test-output/terminal/mutant.stdout.txt
+      - name: Lint and preserve every measured commit and output
         if: always()
         run: |
           set -uo pipefail
-          mkdir -p test-output/null-claim
-          npx eslint src/rebalancer/replica-operation-message-group-membership-owner-claim.js test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/null-claim/lint.stdout.txt 2> test-output/null-claim/lint.stderr.txt
-          lint=$?
-          echo "$lint" > test-output/null-claim/lint-exit.txt
-          git status --porcelain > test-output/null-claim/final-status.txt
-          git diff --stat "$BASE" HEAD > test-output/null-claim/diff-stat.txt
-          git diff "$BASE" HEAD > test-output/null-claim/change.patch
-          git branch proof-candidate HEAD
-          git bundle create test-output/null-claim/candidate.bundle proof-candidate "^$BASE"
-          printf 'base=%s\nrun=%s\nrunner=%s\n' "$BASE" "$GITHUB_RUN_ID" "$RUNNER_NAME" > test-output/null-claim/provenance.txt
-          sha256sum src/rebalancer/replica-operation-message-group-membership-owner-claim.js test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/null-claim/source.sha256
-          find test-output/null-claim -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/null-claim/SHA256SUMS
-          exit "$lint"
+          mkdir -p test-output/terminal
+          npx eslint src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/terminal/lint.stdout.txt 2> test-output/terminal/lint.stderr.txt
+          status=$?
+          echo "$status" > test-output/terminal/lint-exit.txt
+          git status --porcelain > test-output/terminal/final-status.txt
+          git diff --stat "$BASE" HEAD > test-output/terminal/diff-stat.txt
+          git diff "$BASE" HEAD > test-output/terminal/change.patch
+          git branch terminal-candidate HEAD
+          git bundle create test-output/terminal/candidate.bundle terminal-candidate "^$BASE"
+          printf 'base=%s\nrun=%s\nrunner=%s\n' "$BASE" "$GITHUB_RUN_ID" "$RUNNER_NAME" > test-output/terminal/provenance.txt
+          sha256sum src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/terminal/source.sha256
+          find test-output/terminal -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/terminal/SHA256SUMS
+          exit "$status"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-null-claim-${{ github.run_id }}
-          path: null-claim-${{ github.run_id }}-${{ github.run_attempt }}/test-output/null-claim/
+          name: freshmg-terminal-${{ github.run_id }}
+          path: terminal-proof-${{ github.run_id }}-${{ github.run_attempt }}/test-output/terminal/
           retention-days: 14
           if-no-files-found: error
   preserve:
@@ -233,51 +152,48 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Preserve exact measured commits and evidence, never merge or approve
+      - name: Publish measured WIP and retain complete evidence without approval
         env:
           GH_TOKEN: ${{ github.token }}
           MEASURE_RESULT: ${{ needs.measure.result }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/null-claim"
-          gh run download "$GITHUB_RUN_ID" --repo psvensson/lagrange --name "freshmg-null-claim-$GITHUB_RUN_ID" --dir "$RUNNER_TEMP/null-claim"
-          export PACKET="$RUNNER_TEMP/null-claim"
+          export PACKET="$RUNNER_TEMP/terminal-packet"
+          mkdir -p "$PACKET"
+          gh run download "$GITHUB_RUN_ID" --repo psvensson/lagrange --name "freshmg-terminal-$GITHUB_RUN_ID" --dir "$PACKET"
           python3 - <<'PY'
-          import os, hashlib
+          import os,hashlib
           from pathlib import Path
           d=Path(os.environ['PACKET'])
           for line in (d/'SHA256SUMS').read_text().splitlines():
-              h,name=line.split(None,1)
-              p=d/Path(name).name
-              assert p.is_file() and hashlib.sha256(p.read_bytes()).hexdigest()==h, name
+              h,n=line.split(None,1)
+              assert hashlib.sha256((d/Path(n).name).read_bytes()).hexdigest()==h, n
           PY
           git bundle verify "$PACKET/candidate.bundle"
-          git fetch "$PACKET/candidate.bundle" proof-candidate
-          candidate="$(git rev-parse FETCH_HEAD)"
-          git merge-base --is-ancestor "$BASE" "$candidate"
-          git switch --detach "$candidate"
-          export CANDIDATE="$candidate"
+          git fetch "$PACKET/candidate.bundle" terminal-candidate
+          export CANDIDATE="$(git rev-parse FETCH_HEAD)"
+          git merge-base --is-ancestor "$BASE" "$CANDIDATE"
+          git switch --detach "$CANDIDATE"
           python3 - <<'PY'
-          import os, subprocess
-          allowed={'src/rebalancer/replica-operation-message-group-membership-owner-claim.js','test/rebalancer/message-group-membership-branch-authorization.test.js'}
-          paths=set(subprocess.check_output(['git','diff','--name-only',os.environ['BASE'],os.environ['CANDIDATE']],text=True).splitlines())
-          assert paths <= allowed, paths
+          import os,subprocess
+          allowed={'src/rebalancer/replica-operation-message-group-membership-owner-claim.js','src/rebalancer/replica-operation-repository.js','test/rebalancer/message-group-membership-branch-authorization.test.js'}
+          changed=set(subprocess.check_output(['git','diff','--name-only',os.environ['BASE'],os.environ['CANDIDATE']],text=True).splitlines())
+          assert changed <= allowed, changed
           PY
           npm ci
-          evidence="solve/quests/message-group-fresh-identity-membership/evidence/null-claim-$GITHUB_RUN_ID.json"
+          evidence="solve/quests/message-group-fresh-identity-membership/evidence/terminal-nonadmission-$GITHUB_RUN_ID.json"
           python3 - <<'PY'
-          import os, json, hashlib
+          import os,json
           from pathlib import Path
           d=Path(os.environ['PACKET'])
-          outputs={p.name:p.read_text() for p in d.iterdir() if p.suffix in {'.txt','.sha256'}}
-          report={'schema':'freshmg-null-claim-attempt/1','runId':int(os.environ['GITHUB_RUN_ID']), 'candidateSha':os.environ['CANDIDATE'],'baseSha':os.environ['BASE'],'measurementResult':os.environ['MEASURE_RESULT'],'proofCeiling':'actual repository with file-backed SQLite test gateway; no distributed SQL/Raft or physical effects','sourceApproval':False,'outputs':outputs}
-          p=Path('solve/quests/message-group-fresh-identity-membership/evidence')/('null-claim-'+os.environ['GITHUB_RUN_ID']+'.json')
-          p.write_text(json.dumps(report,indent=2)+'\n')
+          r={'schema':'freshmg-terminal-nonadmission-attempt/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'baseSha':os.environ['BASE'],'measurementResult':os.environ['MEASURE_RESULT'],'sourceApproval':False,'proofCeiling':'actual repository/file-backed SQLite with gateway substitution; no driver activation or physical membership proof','outputs':{p.name:p.read_text() for p in d.iterdir() if p.suffix in {'.txt','.sha256'}}}
+          p=Path('solve/quests/message-group-fresh-identity-membership/evidence')/('terminal-nonadmission-'+os.environ['GITHUB_RUN_ID']+'.json')
+          p.write_text(json.dumps(r,indent=2)+'\n')
           PY
-          node scripts/solve.js note --id message-group-fresh-identity-membership --attempt "Bounded correction of decoded absent ordinary lease in the exact initial membership-claim CAS. Real repository red/green and lease-predicate deletion mutant retained in run $GITHUB_RUN_ID on $CANDIDATE; measurement job=$MEASURE_RESULT. No planner/handler activation, no independent approval or full FreshMG receipt."
+          node scripts/solve.js note --id message-group-fresh-identity-membership --attempt "Terminal-first non-admission row resolution at $CANDIDATE: current repository/boot, exact terminal/no-issued-action basis and monotonic lane release; current holder required when present. GCP run $GITHUB_RUN_ID result=$MEASURE_RESULT. Test-first red, identical controls, holder-predicate mutant and all outputs retained. No physical action, ordinary workflow resurrection, T1 learner-abort selection, C0 closure or independent approval."
           git add "$evidence" solve/quests/message-group-fresh-identity-membership/log.ndjson
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain exact null-claim correction attempt and proof ceiling'
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain terminal non-admission attempt and proof limits'
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-          echo "Published WIP $(git rev-parse HEAD); measured source $CANDIDATE; result=$MEASURE_RESULT" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published $(git rev-parse HEAD); source $CANDIDATE; measurement=$MEASURE_RESULT; no source approval" >> "$GITHUB_STEP_SUMMARY"
