@@ -139,7 +139,13 @@ try {
   report.observations.entries = {armed, observed,
     mirror: coordinator.operationWorkflowCoordinator.getWorkflowById(operationId),
     physicalCalls: [...physicalCalls], progress: owner.operationProgressStore.listOperationProgressRecords()};
-  assert.equal(armed === true || armed?.applied === true, false, 'terminal arm cannot grant new execution');
+  // arm returns applied=true for a valid terminal-record effect too; it is
+  // not a dispatch grant. Measure the existing effect/progress facts instead.
+  const terminalProgress = owner.operationProgressStore.listOperationProgressRecords();
+  assert.equal(terminalProgress.length, 1, 'terminal record effect must engage');
+  assert.equal(terminalProgress[0].terminal, true);
+  assert.equal(terminalProgress[0].dispatched, false);
+  assert.equal(observed, false, 'observed-progress route skips the terminal row');
   assert.equal(physicalCalls.length, 0, 'actual owner entrypoints must suppress physical work');
   assert.equal(row().workflow_step, WORKFLOW_STEP.FAILED);
   assert.deepEqual(obligation(row()), obligation(beforeEntries));

@@ -5,6 +5,13 @@ approval, sealed-acceptance revision or runtime permission. Addresses review
 5452918820 of C0 at 0219a7fee95bdd744e52b8fa2eb5c5978e661964.
 Source target remains 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af.
 
+## Operator decision recorded after this proposal
+
+The user approved the conservative promotion-authorization boundary on
+2026-10-08; see [the explicit decision](operator-decision-20261008-j1.md).
+This historical proposal remains an input to that decision, not independent
+verification or evidence that the implementation is complete.
+
 ## Recommended bounded choice
 
 For the first completed FreshMG replacement implementation, prefer forward
@@ -78,7 +85,7 @@ or assume that a normalizer authenticates its caller. If the exact existing
 identity representation cannot carry this invariant, record the narrowly
 necessary contract change before touching source.
 
-## Three identities must not be conflated
+## Four identity dimensions must not be conflated
 
 The request's `replicaIdentity` is the S/T subject of the membership change.
 The request's `replicaLifecycleIncarnation` is checked by

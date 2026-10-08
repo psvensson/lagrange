@@ -41,6 +41,7 @@ async function worker(dbPath, scenario) {
   let armed = false;
   let mutationAttempts = 0;
   let mutationChanges = 0;
+  let sqliteWriteError = null;
   const row = () => db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
     .get(TEST_OPERATION_ID) || null;
   const observations = () => ({
@@ -52,7 +53,7 @@ async function worker(dbPath, scenario) {
       .getWorkflowById(TEST_OPERATION_ID)?.step ?? null,
     committedMark: coordinator?.operationWorkflowCoordinator
       .isTransitionIdempotent(TEST_OPERATION_ID, targetStep(scenario)) ?? false,
-    mutationAttempts, mutationChanges,
+    mutationAttempts, mutationChanges, sqliteWriteError,
   });
   const pause = async (point) => {
     process.send({kind: 'cut', point, observation: observations()});
@@ -85,6 +86,7 @@ async function worker(dbPath, scenario) {
         return {success: true, affectedRows: result.changes,
           changes: result.changes, lastInsertRowid: Number(result.lastInsertRowid)};
       } catch (error) {
+        if (isStepWrite) sqliteWriteError = {code: error.code, message: error.message};
         return {success: false, error: error.message, errorCode: error.code};
       }
     },
@@ -226,6 +228,27 @@ if (mode === 'worker') {
       const cut = before.messages.find((m) => m.kind === 'cut');
       assert.ok(cut, `child must reach the intended cut: ${JSON.stringify(before)}`);
       assert.equal(before.signal, 'SIGKILL');
+      const expectedPoint = ['committed_answer_lost', 'terminal_committed'].includes(name) ?
+        'committed_answer_lost' : name;
+      assert.equal(cut.point, expectedPoint, 'the named interruption must engage');
+      const cutState = cut.observation;
+      const sqlApplied = !['before_sql', 'readonly_refusal'].includes(name);
+      assert.equal(cutState.mutationAttempts, 1, 'exactly one real SQL transition attempted');
+      assert.equal(cutState.mutationChanges, sqlApplied ? 1 : 0,
+        'cut must not silently bypass the real SQLite update');
+      assert.equal(cutState.inTransaction, name === 'uncommitted_sql',
+        'the uncommitted cut requires an open SQLite transaction');
+      assert.equal(cutState.row.workflow_step,
+        sqlApplied ? targetStep(name) : WORKFLOW_STEP.PENDING);
+      assert.equal(cutState.mirrorStep, targetStep(name), 'local candidate really advanced');
+      assert.equal(cutState.committedMark, name === 'after_mark',
+        'post-mark cut cannot pass while the local mark is absent');
+      if (name === 'readonly_refusal') {
+        assert.equal(cutState.sqliteWriteError?.code, 'SQLITE_READONLY',
+          'an unrelated exception cannot satisfy the read-only fault');
+      } else {
+        assert.equal(cutState.sqliteWriteError, null);
+      }
       const after = await childRun(dbPath, `inspect:${name}`, false);
       entry.after = after;
       assert.equal(after.exitCode, 0, JSON.stringify(after));
