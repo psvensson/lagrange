@@ -1,0 +1,90 @@
+{
+  "schema": "freshmg-t1-retained-proofs/1",
+  "retentionRun": 37777930396,
+  "reviewedWorkSha": "f1487f97b4444f708aa0624ccd75d453714d427c",
+  "independentApproval": false,
+  "distributedAcceptance": false,
+  "artifacts": [
+    {
+      "runId": 37775751002,
+      "artifactId": 11549548269,
+      "sourceSha": "435320302ac976d60abedeffc978e43f0edb76d6",
+      "verdict": "passed",
+      "archiveSha256": "585ad9c0062c7b33c569ee8bbebe65d6ec8185541ac0cfdb249232555235bbda",
+      "verifiedManifestMembers": 36,
+      "canonicalEvidence": {
+        "id": "message-group-fresh-identity-membership",
+        "uploaded": {
+          "sha256": "585ad9c0062c7b33c569ee8bbebe65d6ec8185541ac0cfdb249232555235bbda",
+          "bytes": 30183065,
+          "asset": "message-group-fresh-identity-membership--t1-proof-37775751002-37777930396.zip",
+          "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--t1-proof-37775751002-37777930396.zip"
+        },
+        "entry": {
+          "ts": "2026-10-08T12:35:56.341Z",
+          "type": "finding",
+          "kind": "evidence",
+          "text": "T1 passed original Actions run 37775751002; archive and every member verified before canonical upload. Not full-cutover proof.",
+          "evidence": "sha256:585ad9c0062c7b33c569ee8bbebe65d6ec8185541ac0cfdb249232555235bbda",
+          "asset": "message-group-fresh-identity-membership--t1-proof-37775751002-37777930396.zip",
+          "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--t1-proof-37775751002-37777930396.zip",
+          "bytes": 30183065
+        }
+      }
+    },
+    {
+      "runId": 37776477963,
+      "artifactId": 11550360990,
+      "sourceSha": "2220f2433da11203e897b209232a8df503639912",
+      "verdict": "failed-harness-oracle",
+      "archiveSha256": "d3dd0155d4db51909aa055b401d5359b41e52c47999ab52a83c902ea3fbb3598",
+      "verifiedManifestMembers": 14,
+      "canonicalEvidence": {
+        "id": "message-group-fresh-identity-membership",
+        "uploaded": {
+          "sha256": "d3dd0155d4db51909aa055b401d5359b41e52c47999ab52a83c902ea3fbb3598",
+          "bytes": 30166931,
+          "asset": "message-group-fresh-identity-membership--t1-proof-37776477963-37777930396.zip",
+          "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--t1-proof-37776477963-37777930396.zip"
+        },
+        "entry": {
+          "ts": "2026-10-08T12:36:03.511Z",
+          "type": "finding",
+          "kind": "evidence",
+          "text": "T1 failed-harness-oracle original Actions run 37776477963; archive and every member verified before canonical upload. Not full-cutover proof.",
+          "evidence": "sha256:d3dd0155d4db51909aa055b401d5359b41e52c47999ab52a83c902ea3fbb3598",
+          "asset": "message-group-fresh-identity-membership--t1-proof-37776477963-37777930396.zip",
+          "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--t1-proof-37776477963-37777930396.zip",
+          "bytes": 30166931
+        }
+      }
+    },
+    {
+      "runId": 37777372340,
+      "artifactId": 11550855904,
+      "sourceSha": "4ece9393a9fe475ba6a79be8c76c420c1908f2e3",
+      "verdict": "passed",
+      "archiveSha256": "1ff24efe70af75cda81b7f9a652e8416bbecc7cd0f2936dc267a33538a52a3da",
+      "verifiedManifestMembers": 22,
+      "canonicalEvidence": {
+        "id": "message-group-fresh-identity-membership",
+        "uploaded": {
+          "sha256": "1ff24efe70af75cda81b7f9a652e8416bbecc7cd0f2936dc267a33538a52a3da",
+          "bytes": 30201884,
+          "asset": "message-group-fresh-identity-membership--t1-proof-37777372340-37777930396.zip",
+          "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--t1-proof-37777372340-37777930396.zip"
+        },
+        "entry": {
+          "ts": "2026-10-08T12:36:10.875Z",
+          "type": "finding",
+          "kind": "evidence",
+          "text": "T1 passed original Actions run 37777372340; archive and every member verified before canonical upload. Not full-cutover proof.",
+          "evidence": "sha256:1ff24efe70af75cda81b7f9a652e8416bbecc7cd0f2936dc267a33538a52a3da",
+          "asset": "message-group-fresh-identity-membership--t1-proof-37777372340-37777930396.zip",
+          "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--t1-proof-37777372340-37777930396.zip",
+          "bytes": 30201884
+        }
+      }
+    }
+  ]
+}
