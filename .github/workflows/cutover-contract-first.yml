@@ -1,0 +1,43 @@
+name: cutover-contract-first
+
+on:
+  push:
+    branches:
+      - integrate/rs-raft-contract-first-20261008
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cutover-contract-first-20261008
+  cancel-in-progress: false
+
+jobs:
+  contract-baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact pushed candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Bind review workspace to immutable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          mkdir -p "$RUNNER_TEMP/cutover-review"
+          git rev-parse HEAD > "$RUNNER_TEMP/cutover-review/source-sha.txt"
+          git ls-tree -r HEAD > "$RUNNER_TEMP/cutover-review/tree-manifest.txt"
+          git ls-files -z -- src scripts docs architecture test .github .husky package.json package-lock.json .gitignore .npmrc .nvmrc .eslintrc.cjs eslint.config.js eslint.config.mjs .taprc AGENTS.md README.md solve/epics/raft-rs-full-cutover.md solve/epics/core-architecture-convergence.md solve/epics/core-architecture-convergence solve/quests/message-group-fresh-identity-membership solve/quests/zero-liferaft-active-runtime solve/quests/operation-progress-store-persistence solve/oracle/raft-rs-full-cutover.json solve/oracle/core-architecture-convergence.json | tar --null -T - -czf "$RUNNER_TEMP/cutover-review/review-workspace.tar.gz"
+          sha256sum "$RUNNER_TEMP/cutover-review/review-workspace.tar.gz" > "$RUNNER_TEMP/cutover-review/SHA256SUMS"
+      - name: Upload source review workspace (not certification)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cutover-review-workspace-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/cutover-review/
+          retention-days: 7
+          if-no-files-found: error
