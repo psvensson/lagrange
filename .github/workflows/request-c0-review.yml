@@ -14,27 +14,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Check exact review head and request category-complete verdict
+      - name: Request only the exact frozen contract packet
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          EXPECTED: 868ebc020032f9b8baa949d7f3c7eec8ac217009
+          EXPECTED: 9956c4adb1c6f6f8fd95c5d731ff5a4efa95bb41
         run: |
           set -euo pipefail
-          actual="$(gh pr view 104 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
-          test "$actual" = "$EXPECTED"
+          test "$(gh pr view 104 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)" = "$EXPECTED"
           mkdir -p evidence
-          printf '%s\n' "$actual" > evidence/requested-head.txt
-          cat > evidence/request.md <<EOF
-          Exact-head C0 rereview: $EXPECTED. The PR body and current disposition now agree with this exact pushed packet. No commit is made by this request.
-
-          Review 5454504761 resolved the substantive promotion-boundary and concrete snapshot-owner findings. Its remaining stale disposition and requested-SHA issues are corrected: two measurement/classification receipts remain true, the replacement/snapshot/independent receipts remain false pending actual acceptance. Historical attempts and rejections are untouched and do not stand as exact-head approval.
-
-          Please return explicit ACCEPT or REJECT of the bounded read-only C0 classification with owner-interaction, recovery/replay, concurrency, harness-fidelity and evidence-integrity coverage. Read both exact contracts and the unchanged quest.json. Concrete missing FreshMG/snapshot code remains product work, not a claim of implementation. Do not convert missing product proof into a claim of release approval; do reject any unspecified authority. No runtime source, source approval, merge or cutover certification is requested.
-          EOF
-          gh pr comment 104 --repo psvensson/lagrange --body-file evidence/request.md
+          gh pr view 104 --repo psvensson/lagrange --json headRefOid,body > evidence/exact-request.json
+          gh pr comment 104 --repo psvensson/lagrange --body "Current exact review is $EXPECTED, including exact-membership-owner-claim.md. It addresses 4217392058 through a single-winner claim CAS in the existing operation row; the holder identity is separate from immutable pending action authority. Promotion/abort CAS matches the current claimant, not the ordinary expiry-only orphan sweep. Current PR body and disposition state two true/three false receipts. No previous review is claimed as current acceptance. Please return explicit category-complete ACCEPT/REJECT of C0 classification on this exact head, including takeover, terminal debt, boot reread, delayed old action, snapshot ownership and proof ceilings. No source/release/merge approval is requested."
           gh pr edit 104 --repo psvensson/lagrange --add-reviewer @copilot
-          gh pr view 104 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests > evidence/request-result.json
+          gh pr view 104 --repo psvensson/lagrange --json headRefOid,reviewRequests > evidence/request-result.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
