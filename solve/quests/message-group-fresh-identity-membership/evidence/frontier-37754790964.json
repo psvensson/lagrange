@@ -1,0 +1,73 @@
+{
+  "schema": "freshmg-existing-frontier/1",
+  "sourceSha": "16bc20e7d1f2d71490d915144215e773ca610a56",
+  "runId": 37754790964,
+  "runner": "lagrange-gcp-runner",
+  "runtimeChanges": false,
+  "sourceApproval": false,
+  "distributedAcceptance": false,
+  "proofCeiling": "existing deterministic/component tests and actual planner/handler fixtures; no new runtime implementation or multi-host acceptance",
+  "files": [
+    {
+      "file": "test/rebalancer/message-group-membership-change-parked.test.js",
+      "sha256": "e7d3f578092dbbdb4c2e59ef55e215a0f2da42d93eb85bcd25fd49fd01cafeeb",
+      "exitCode": 1,
+      "stdout": "1.stdout.txt",
+      "stderr": "1.stderr.txt"
+    },
+    {
+      "file": "test/rebalancer/message-group-membership-operation-lane.test.js",
+      "sha256": "82e4cf1d436d2a2f865e7bca88658582db24028413723f63682fd205820990a7",
+      "exitCode": 0,
+      "stdout": "2.stdout.txt",
+      "stderr": "2.stderr.txt"
+    },
+    {
+      "file": "test/node/message-group-service-handler-membership.test.js",
+      "sha256": "6d0a1bb197f153ad2d1b82380c36337bd6f6c2819d9596ab33600c8612bc18c8",
+      "exitCode": 1,
+      "stdout": "3.stdout.txt",
+      "stderr": "3.stderr.txt"
+    },
+    {
+      "file": "test/message-group/message-group-fresh-learner-promotion.test.js",
+      "sha256": "9d80b9ed882be70dd5e3ca7e0fbd76ac743129b9b15375d201155b5a75b3cef9",
+      "exitCode": 0,
+      "stdout": "4.stdout.txt",
+      "stderr": "4.stderr.txt"
+    },
+    {
+      "file": "test/message-group/message-group-fresh-learner-snapshot.test.js",
+      "sha256": "80249b288269ad2a2bca3ea123d0e97ec03b064d15831a69b51478f855b86a3f",
+      "exitCode": 0,
+      "stdout": "5.stdout.txt",
+      "stderr": "5.stderr.txt"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js",
+      "sha256": "5aad4b375a15c9bf8ad35aae17fe012323727bb2b91767c50e0a945068500eee",
+      "exitCode": 0,
+      "stdout": "6.stdout.txt",
+      "stderr": "6.stderr.txt"
+    }
+  ],
+  "allPassed": false,
+  "artifactId": 11539731953,
+  "archiveSha256": "933cc515c879313526ca87f793227832e5dc711585384c5c4fd9fd58cab5a661",
+  "outputs": {
+    "1.stderr.txt": "",
+    "2.stderr.txt": "",
+    "1.stdout.txt": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/rebalancer/message-group-membership-change-parked.test.js\n\n# test-files planned=1\nclassified lane ordinary: 1 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nnot ok test/rebalancer/message-group-membership-change-parked.test.js (4 assertions, 1227ms)\n# TAP assertions failed; test process exited 1\nTAP version 13\n# Subtest: the message-group planner mints no operation with mg-1 on the seed only, over many planning rounds\nok 1 - the message-group planner mints no operation with mg-1 on the seed only, over many planning rounds\n  ---\n  duration_ms: 63.714106\n  type: 'test'\n  ...\n# Subtest: fresh-identity closing condition: seed-only mg-1 enters one REPLACE operation instead of the interim membership park\nnot ok 2 - fresh-identity closing condition: seed-only mg-1 enters one REPLACE operation instead of the interim membership park\n  ---\n  duration_ms: 41.828758\n  type: 'test'\n  location: '/mnt/ciwork/lagrange/lagrange/freshmg-37754790964/test/rebalancer/message-group-membership-change-parked.test.js:132:1'\n  failureType: 'testCodeFailure'\n  error: 'the approved fresh-identity path must cross the planner refusal'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'message_group_membership_change_unsupported'\n  actual: 'message_group_membership_change_unsupported'\n  operator: 'notStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///mnt/ciwork/lagrange/lagrange/freshmg-37754790964/test/rebalancer/message-group-membership-change-parked.test.js:141:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: the message-group periodic check parks: it schedules no further check and mints nothing\nok 3 - the message-group periodic check parks: it schedules no further check and mints nothing\n  ---\n  duration_ms: 39.0282\n  type: 'test'\n  ...\n# Subtest: control: a partition with the same shape still plans its spread\nok 4 - control: a partition with the same shape still plans its spread\n  ---\n  duration_ms: 62.26924\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 3\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 231.980067\n# time=1227ms\n# test-files total=1 pass=0 fail=1 assertions=4\n",
+    "2.stdout.txt": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/rebalancer/message-group-membership-operation-lane.test.js\n\n# test-files planned=1\nclassified lane ordinary: 1 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nok test/rebalancer/message-group-membership-operation-lane.test.js (8 assertions, 1250ms)\n# test-files total=1 pass=1 fail=0 assertions=8\n",
+    "3.stderr.txt": "CREATE_REPLICA refused: message-group membership change unsupported until the fresh-identity ADD path exists {\n  operationId: 'replace-mg-1-r1-with-r4',\n  groupId: 'mg-1',\n  replicaId: 'mg-1-r4',\n  nodeId: 'node-target',\n  reason: 'message_group_membership_change_unsupported'\n}\n",
+    "3.stdout.txt": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/node/message-group-service-handler-membership.test.js\n\n# test-files planned=1\nclassified lane ordinary: 1 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nnot ok test/node/message-group-service-handler-membership.test.js (1 assertions, 873ms)\n# TAP assertions failed; test process exited 1\nInitializing MessageGroupServiceHandler { nodeId: 'node-target' }\nMessageGroupServiceHandler received message {\n  type: 'CREATE_REPLICA',\n  correlationId: 'committed-learner-create',\n  operationId: 'replace-mg-1-r1-with-r4'\n}\nTAP version 13\n# Subtest: a real committed learner plus exact admission package is the only CREATE path\nnot ok 1 - a real committed learner plus exact admission package is the only CREATE path\n  ---\n  duration_ms: 301.683544\n  type: 'test'\n  location: '/mnt/ciwork/lagrange/lagrange/freshmg-37754790964/test/node/message-group-service-handler-membership.test.js:60:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    the handler crosses its refusal only for the exact committed learner and admission CAS\n    + actual - expected\n    \n    + 'error'\n    - 'initiated'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'initiated'\n  actual: 'error'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///mnt/ciwork/lagrange/lagrange/freshmg-37754790964/test/node/message-group-service-handler-membership.test.js:126:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 312.5413\n# time=873ms\n# test-files total=1 pass=0 fail=1 assertions=1\n",
+    "4.stderr.txt": "",
+    "4.stdout.txt": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/message-group/message-group-fresh-learner-promotion.test.js\n\n# test-files planned=1\nclassified lane ordinary: 1 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nok test/message-group/message-group-fresh-learner-promotion.test.js (7 assertions, 1707ms)\n# test-files total=1 pass=1 fail=0 assertions=7\n",
+    "5.stderr.txt": "",
+    "5.stdout.txt": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/message-group/message-group-fresh-learner-snapshot.test.js\n\n# test-files planned=1\nclassified lane ordinary: 1 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nok test/message-group/message-group-fresh-learner-snapshot.test.js (1 assertions, 2005ms)\n# test-files total=1 pass=1 fail=0 assertions=1\n",
+    "6.stderr.txt": "",
+    "6.stdout.txt": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js\n\n# test-files planned=1\nclassified lane ordinary: 1 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nok test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js (15 assertions, 3930ms)\n# test-files total=1 pass=1 fail=0 assertions=15\n",
+    "final-status.txt": "",
+    "runtime-diff.txt": ""
+  }
+}
