@@ -1,4 +1,4 @@
-name: c0-preserve-saved-work
+name: freshmg-existing-frontier
 on:
   push:
     branches: [ops/c0-preservation-20261008]
@@ -9,67 +9,11 @@ concurrency:
   group: c0-preserve-saved-work
   cancel-in-progress: false
 env:
-  WORK_BRANCH: integrate/rs-raft-contract-first-20261008
-  EXPECTED: 490b01962de55cd108be5b59ed0b389141e99dee
-  BASE: 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af
+  CANDIDATE: 16bc20e7d1f2d71490d915144215e773ca610a56
+  WORK_BRANCH: work/freshmg-owner-chain-20261008
+  QUEST: message-group-fresh-identity-membership
 jobs:
-  corrections:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    outputs:
-      candidate: ${{ steps.push.outputs.candidate }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.sha }}
-          path: carrier
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ env.EXPECTED }}
-          path: work
-          fetch-depth: 0
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - name: Apply exact-source review corrections, not runtime changes
-        run: |
-          set -euo pipefail
-          python3 carrier/scripts/quest-evidence/c0-review-corrections.py work work/test-output/c0-corrections/changes.json
-          cd work
-          node --check scripts/quest-evidence/cutover-workflow-crash-baseline.js
-          node --check scripts/quest-evidence/cutover-terminal-obligation-baseline.js
-          git diff --check
-          git diff --exit-code "$BASE" -- src
-          npm ci
-          npm run -s audit:steering-diet > test-output/c0-corrections/steering.json
-          npm run -s audit:rule-set > test-output/c0-corrections/rules.json
-          node scripts/solve.js note --id cutover-transition-authority-review --finding 'Reviewed C0 corrections: select Node22 before prepare Node invocation; name four identity dimensions and link the approved J1 decision; strengthen six-case crash cut engagement; replace the invalid terminal-arm boolean interpretation with actual terminal projection/dispatched=false, observed-progress skip, exact SQL debt and competing-lane evidence. The failed 37751224863 experiment is a harness assertion error, not new execution: armed=true recorded the terminal effect with zero physical calls. No runtime repair or independent acceptance.' --kind evidence --json > test-output/c0-corrections/note.json
-      - name: Commit and git push only bounded corrections
-        id: push
-        working-directory: work
-        run: |
-          set -euo pipefail
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
-          git add -- .github/workflows/cutover-workflow-crash.yml scripts/quest-evidence/cutover-workflow-crash-baseline.js scripts/quest-evidence/cutover-terminal-obligation-baseline.js solve/quests/cutover-transition-authority-review/recovery-policy-proposal.md solve/quests/cutover-transition-authority-review/log.ndjson
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'WIP C0 corrections: precise crash engagement and terminal obligation effects'
-          git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          candidate="$(git rev-parse HEAD)"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$candidate"
-          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$candidate" > test-output/c0-corrections/published-sha.txt
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: c0-review-corrections-${{ github.run_id }}
-          path: work/test-output/c0-corrections/
-          if-no-files-found: error
-          retention-days: 14
   wake:
-    needs: corrections
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -85,84 +29,140 @@ jobs:
           set -euo pipefail
           status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
           if [ "$status" != RUNNING ]; then gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a; fi
-  verify:
-    needs: [corrections, wake]
+  inherited-frontier:
+    needs: wake
     runs-on: [self-hosted, gcp]
-    timeout-minutes: 20
-    env:
-      CANDIDATE: ${{ needs.corrections.outputs.candidate }}
+    timeout-minutes: 25
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+      digest: ${{ steps.upload.outputs.artifact-digest }}
     defaults:
       run:
         shell: bash
-        working-directory: corrections-${{ github.run_id }}
+        working-directory: freshmg-${{ github.run_id }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ env.CANDIDATE }}
-          path: corrections-${{ github.run_id }}
+          path: freshmg-${{ github.run_id }}
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Bind unchanged runtime and install
-        id: install
+      - name: Bind clean inherited product
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE"
-          git diff --exit-code "$BASE" -- src
           test -z "$(git status --porcelain)"
-          mkdir -p test-output/c0-corrected
-          printf 'candidate=%s\nrunner=%s\nrun=%s\n' "$CANDIDATE" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/c0-corrected/provenance.txt
+          git diff --exit-code 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af -- src
+          mkdir -p test-output/freshmg-frontier
           npm ci
-      - name: Terminal debt through actual owner entrypoints
+      - name: Measure existing real planner, handler and membership controls
         run: |
           set -euo pipefail
           exec 9>/tmp/lagrange-contract-first-measurement.lock
           flock -w 120 9
-          set +e
-          timeout 90s node scripts/quest-evidence/cutover-terminal-obligation-baseline.js test-output/c0-corrected/terminal.json "$CANDIDATE" > test-output/c0-corrected/terminal.stdout.txt 2> test-output/c0-corrected/terminal.stderr.txt
-          status=$?
-          set -e
-          echo "$status" > test-output/c0-corrected/terminal-exit.txt
-          tail -70 test-output/c0-corrected/terminal.stdout.txt
-          test "$status" = 0
-      - name: Six real-repository process-loss cases with stronger cut assertions
-        if: always() && steps.install.outcome == 'success'
-        run: |
-          set -euo pipefail
-          exec 9>/tmp/lagrange-contract-first-measurement.lock
-          flock -w 120 9
-          set +e
-          timeout 300s node scripts/quest-evidence/cutover-workflow-crash-baseline.js test-output/c0-corrected/crash.json "$CANDIDATE" > test-output/c0-corrected/crash.stdout.txt 2> test-output/c0-corrected/crash.stderr.txt
-          status=$?
-          set -e
-          echo "$status" > test-output/c0-corrected/crash-exit.txt
-          tail -70 test-output/c0-corrected/crash.stdout.txt
-          test "$status" = 0
-      - name: Existing file-backed and membership regressions
-        if: always() && steps.install.outcome == 'success'
-        run: |
-          set -uo pipefail
-          npm run test:file -- test/rebalancer/reservation-file-backed-restart.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/operation-workflow-owner-handoff-retry-backoff.test.js test/rebalancer/message-group-membership-operation-lane.test.js > test-output/c0-corrected/regressions.txt 2> test-output/c0-corrected/regressions.stderr.txt
-          status=$?
-          echo "$status" > test-output/c0-corrected/regressions-exit.txt
-          tail -60 test-output/c0-corrected/regressions.txt
-          exit "$status"
-      - name: Bind evidence and final unchanged runtime
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          out=Path('test-output/freshmg-frontier')
+          files=[
+            'test/rebalancer/message-group-membership-change-parked.test.js',
+            'test/rebalancer/message-group-membership-operation-lane.test.js',
+            'test/node/message-group-service-handler-membership.test.js',
+            'test/message-group/message-group-fresh-learner-promotion.test.js',
+            'test/message-group/message-group-fresh-learner-snapshot.test.js',
+            'test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js']
+          r={'schema':'freshmg-existing-frontier/1','sourceSha':os.environ['CANDIDATE'],
+             'runId':int(os.environ['GITHUB_RUN_ID']),'runner':os.environ['RUNNER_NAME'],
+             'runtimeChanges':False,'sourceApproval':False,'distributedAcceptance':False,
+             'proofCeiling':'existing deterministic/component tests and actual planner/handler fixtures; no new runtime implementation or multi-host acceptance','files':[]}
+          for i,file in enumerate(files):
+              p=Path(file); assert p.is_file(),file
+              stdout=out/f'{i+1}.stdout.txt';stderr=out/f'{i+1}.stderr.txt'
+              with stdout.open('w') as so,stderr.open('w') as se:
+                  process=subprocess.run(['timeout','240s','npm','run','test:file','--',file],stdout=so,stderr=se)
+              r['files'].append({'file':file,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),
+                  'exitCode':process.returncode,'stdout':stdout.name,'stderr':stderr.name})
+              print(file,process.returncode,flush=True)
+              print(stdout.read_text()[-5000:],flush=True)
+          r['allPassed']=all(f['exitCode']==0 for f in r['files'])
+          (out/'frontier.json').write_text(json.dumps(r,indent=2)+'\n')
+          PY
+          git diff --exit-code 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af -- src > test-output/freshmg-frontier/runtime-diff.txt
+          git status --porcelain > test-output/freshmg-frontier/final-status.txt
+          find test-output/freshmg-frontier -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/freshmg-frontier/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: upload
         if: always()
+        with:
+          name: freshmg-inherited-frontier-${{ github.run_id }}
+          path: freshmg-${{ github.run_id }}/test-output/freshmg-frontier/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain actual product-test verdict
+        run: |
+          node -e 'const r=JSON.parse(require("fs").readFileSync("test-output/freshmg-frontier/frontier.json"));process.exit(r.allPassed?0:1)'
+  preserve-attempt:
+    needs: inherited-frontier
+    if: always() && needs.inherited-frontier.outputs.artifact != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ARTIFACT: ${{ needs.inherited-frontier.outputs.artifact }}
+      DIGEST: ${{ needs.inherited-frontier.outputs.digest }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.CANDIDATE }}
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Preserve exact initial implementation frontier, not success
         run: |
           set -euo pipefail
-          mkdir -p test-output/c0-corrected
-          git diff --exit-code "$BASE" -- src > test-output/c0-corrected/runtime-diff.txt
-          git status --porcelain > test-output/c0-corrected/final-status.txt
-          sha256sum scripts/quest-evidence/cutover-workflow-crash-baseline.js scripts/quest-evidence/cutover-terminal-obligation-baseline.js > test-output/c0-corrected/harnesses.sha256
-          find test-output/c0-corrected -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/c0-corrected/SHA256SUMS
+          npm ci
+          mkdir -p test-output/freshmg
+          gh api "repos/psvensson/lagrange/actions/artifacts/$ARTIFACT/zip" > "test-output/freshmg/frontier-$GITHUB_RUN_ID.zip"
+          python3 - <<'PY'
+          import hashlib,json,os,zipfile
+          from pathlib import Path
+          p=Path('test-output/freshmg')/('frontier-'+os.environ['GITHUB_RUN_ID']+'.zip')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          assert digest==os.environ['DIGEST'].removeprefix('sha256:')
+          z=zipfile.ZipFile(p); members={Path(n).name:z.read(n) for n in z.namelist() if not n.endswith('/')}
+          assert len(members)==len([n for n in z.namelist() if not n.endswith('/')])
+          for line in members['SHA256SUMS'].decode().splitlines():
+              h,n=line.split(None,1);assert hashlib.sha256(members[Path(n).name]).hexdigest()==h
+          r=json.loads(members['frontier.json']);assert r['sourceSha']==os.environ['CANDIDATE']
+          r['artifactId']=int(os.environ['ARTIFACT']);r['archiveSha256']=digest
+          r['outputs']={n:b.decode() for n,b in members.items() if n.endswith('.txt')}
+          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('frontier-'+os.environ['GITHUB_RUN_ID']+'.json')
+          dest.write_text(json.dumps(r,indent=2)+'\n')
+          PY
+          node scripts/solve.js evidence add "test-output/freshmg/frontier-$GITHUB_RUN_ID.zip" --id "$QUEST" --text 'Initial C1 existing production-entry and component frontier on exact inherited source. Original failures remain failures; no source fix, planner unpark or release claim.' --json > test-output/freshmg/upload.json
+          node scripts/solve.js note --id "$QUEST" --finding 'Resume existing FreshMG Quest under user-approved J1: durable promotion authorization selects forward recovery; old source S and fresh target T are immutable. Start at actual planner/handler and repository/runtime admission boundaries. No wholesale adoption of rejected cd366cc0, no unpark before the correct owner chain, no new progress store. C0 classification source review remains separate from this inherited product baseline.' --kind decision --json > test-output/freshmg/decision.json
+          node scripts/solve.js note --id "$QUEST" --attempt 'Measured the six existing planner/handler/membership test files before production changes and retained every exit/stdout/stderr plus source hashes. This first C1 attempt establishes the actual red frontier and existing positive controls; no assertion was removed and no source was changed.' --json > test-output/freshmg/attempt.json
+          git diff --check
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$CANDIDATE"
+          git add -- "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/frontier-$GITHUB_RUN_ID.json"
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'FreshMG: resume admitted owner-chain implementation from measured existing frontier'
+          git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          head="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$head"
+          echo "$head" > test-output/freshmg/pushed-sha.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: c0-corrected-gcp-${{ github.run_id }}
-          path: corrections-${{ github.run_id }}/test-output/c0-corrected/
+          name: freshmg-frontier-publication-${{ github.run_id }}
+          path: test-output/freshmg/
           if-no-files-found: error
           retention-days: 14
