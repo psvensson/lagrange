@@ -124,7 +124,8 @@ async function setup(t, {initial = false} = {}) {
       return run(sql, params);
     },
   };
-  const repo = (nodeId = OWNER, boot = 1) => new ReplicaOperationRepository({nodeId, timeSource: clock,
+  const repo = (nodeId = OWNER, boot = 1) => new ReplicaOperationRepository({
+    nodeId, timeSource: clock,
     membershipOwnerBootIncarnation: boot, controlPlaneSystemTableGateway: gateway,
     systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
     cdcIntegrationService: {waitForCacheUpdate: async () => {}},
@@ -146,7 +147,8 @@ async function setup(t, {initial = false} = {}) {
     workflowStep: WORKFLOW_STEP.PENDING, createdAt: NOW, updatedAt: NOW, completedAt: null,
     errorMessage: null, stepsHistory: [], membershipPublicationEpoch: 1,
     messageGroupMembershipLaneKey: `message-group:${GROUP}`,
-    messageGroupMembershipPhase: 'learner_requested', messageGroupMembershipObligationState: 'intent_recorded',
+    messageGroupMembershipPhase: 'learner_requested',
+    messageGroupMembershipObligationState: 'intent_recorded',
     messageGroupMembershipIdentity: ENCODED_IDENTITY, messageGroupLearnerStamp: null,
     messageGroupVoterStamp: null, messageGroupRemovalStamp: null, messageGroupSourceLifecycleClaim: CLAIM};
   await repository.persistNewOperation(operation);

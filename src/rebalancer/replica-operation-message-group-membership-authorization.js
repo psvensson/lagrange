@@ -54,7 +54,7 @@ const SQL = `UPDATE replica_operations SET message_group_membership_phase = ?,
   AND message_group_membership_obligation_state = ? AND message_group_learner_stamp = ?
   AND message_group_voter_stamp IS NULL AND message_group_removal_stamp IS NULL`;
 
-async function selectMessageGroupMembershipBranch(request) {
+async function selectMessageGroupMembershipBranch(repository, request) {
   // The only accepted representations here are scalar strings and encoded row values.
   if (!request || typeof request !== 'object') return result(OUTCOME.INVALID);
   const {operationId, identity: encodedIdentity, priorPermit, nextPermit, branch} = request;
@@ -64,10 +64,12 @@ async function selectMessageGroupMembershipBranch(request) {
   const spec = membershipBranchSpec(branch);
   if (!identity || identity.operationId !== operationId || !prior || !next || !spec ||
     !permitsMatch(prior, next, identity, spec)) return result(OUTCOME.INVALID);
-  const before = await observeMembershipOperation(this, operationId);
+  const before = await observeMembershipOperation(repository, operationId);
   if (!before.available) return result(OUTCOME.UNAVAILABLE);
   const row = before.row;
-  if (!membershipRowIdentityMatches(row, identity, encodedIdentity)) return result(OUTCOME.CONFLICT, row);
+  if (!membershipRowIdentityMatches(row, identity, encodedIdentity)) {
+    return result(OUTCOME.CONFLICT, row);
+  }
   const learner = priorLearnerStamp(row, identity, prior);
   if (!learner || next.leaderConfigurationStamp.configurationKey !== learner.configurationKey ||
     next.leaderConfigurationStamp.membershipGenerationIndex !== learner.membershipGenerationIndex ||
@@ -77,13 +79,13 @@ async function selectMessageGroupMembershipBranch(request) {
     row.messageGroupMembershipPermit === nextPermit &&
     row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN) {
     const currentClaim = decodeMembershipOwnerClaim(row.messageGroupMembershipOwnerClaim);
-    if (!membershipClaimIsLocalAndLive(this, currentClaim, identity)) {
+    if (!membershipClaimIsLocalAndLive(repository, currentClaim, identity)) {
       return result(OUTCOME.STALE_OWNER, row);
     }
-    if (!await membershipBootIsCurrent(this)) return result(OUTCOME.UNAVAILABLE, row);
+    if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE, row);
     return result(OUTCOME.RECORDED, row);
   }
-  if (this.isOperationTerminal(row) || row.completedAt !== null ||
+  if (repository.isOperationTerminal(row) || row.completedAt !== null ||
     row.messageGroupMembershipPhase !== PHASE.LEARNER_COMMITTED ||
     row.messageGroupMembershipPermit !== priorPermit ||
     row.messageGroupMembershipObligationState !== MEMBERSHIP_OBLIGATION.UNKNOWN ||
@@ -91,15 +93,15 @@ async function selectMessageGroupMembershipBranch(request) {
     return result(OUTCOME.CONFLICT, row);
   }
   const claim = decodeMembershipOwnerClaim(row.messageGroupMembershipOwnerClaim);
-  if (!membershipClaimIsLocalAndLive(this, claim, identity) ||
+  if (!membershipClaimIsLocalAndLive(repository, claim, identity) ||
     next.workflowOwnerNodeId !== claim.ownerNodeId ||
-    next.proposerNodeId !== this.nodeId ||
-    next.proposerBootIncarnation !== this.membershipOwnerBootIncarnation ||
+    next.proposerNodeId !== repository.nodeId ||
+    next.proposerBootIncarnation !== repository.membershipOwnerBootIncarnation ||
     next.workflowOwnerFence !== membershipOwnerClaimFence(claim) ||
     next.membershipLeaseExpiresAt !== claim.expiresAt) {
     return result(OUTCOME.STALE_OWNER, row);
   }
-  if (!await membershipBootIsCurrent(this)) return result(OUTCOME.UNAVAILABLE, row);
+  if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE, row);
   const params = [spec.phase, nextPermit, MEMBERSHIP_OBLIGATION.UNKNOWN,
     operationId, row.type, row.partitionId, row.entityType, row.entityId,
     row.sourceReplicaId, row.replicaId, row.sourceNodeId, row.targetNodeId,
@@ -110,11 +112,11 @@ async function selectMessageGroupMembershipBranch(request) {
   // A false or lost answer is not a cancellation. Re-observe the exact row;
   // retrying this same CAS or its competing branch is safe on the same basis.
   try {
-    await this.executeOperationMutationWithRetry(SQL, params);
+    await repository.executeOperationMutationWithRetry(SQL, params);
   } catch {
     // The exact authoritative read below resolves an uncertain write result.
   }
-  const after = await observeMembershipOperation(this, operationId);
+  const after = await observeMembershipOperation(repository, operationId);
   if (!after.available) return result(OUTCOME.UNKNOWN);
   const observed = after.row;
   if (membershipRowIdentityMatches(observed, identity, encodedIdentity) &&
@@ -124,8 +126,8 @@ async function selectMessageGroupMembershipBranch(request) {
     observed.messageGroupLearnerStamp === row.messageGroupLearnerStamp &&
     observed.messageGroupSourceLifecycleClaim === row.messageGroupSourceLifecycleClaim &&
     observed.messageGroupMembershipOwnerClaim === row.messageGroupMembershipOwnerClaim &&
-    membershipClaimIsLocalAndLive(this, claim, identity) &&
-    await membershipBootIsCurrent(this)) {
+    membershipClaimIsLocalAndLive(repository, claim, identity) &&
+    await membershipBootIsCurrent(repository)) {
     return result(OUTCOME.RECORDED, observed);
   }
   return result(OUTCOME.UNKNOWN, observed);

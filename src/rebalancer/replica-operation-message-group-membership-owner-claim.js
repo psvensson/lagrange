@@ -138,30 +138,31 @@ function claimUpdate(row, next) {
   return {sql: `UPDATE replica_operations SET message_group_membership_owner_claim = ?
     WHERE ${predicates.join(' AND ')}`, params};
 }
-async function claimMessageGroupMembershipOwner(request) {
+async function claimMessageGroupMembershipOwner(repository, request) {
   if (!request || typeof request !== 'object') return answer(OUTCOME.INVALID);
   const {operationId, identity: encodedIdentity, expectedClaim} = request;
   const identity = decodeMembershipIdentity(encodedIdentity);
   if (!identity || identity.operationId !== operationId ||
     (expectedClaim !== null && typeof expectedClaim !== 'string')) return answer(OUTCOME.INVALID);
-  if (!await membershipBootIsCurrent(this)) return answer(OUTCOME.UNAVAILABLE);
-  const before = await observeMembershipOperation(this, operationId);
+  if (!await membershipBootIsCurrent(repository)) return answer(OUTCOME.UNAVAILABLE);
+  const before = await observeMembershipOperation(repository, operationId);
   if (!before.available) return answer(OUTCOME.UNAVAILABLE);
   const row = before.row;
   if (!membershipRowIdentityMatches(row, identity, encodedIdentity) ||
-    ![INITIAL_OBLIGATION, UNRESOLVED_OBLIGATION].includes(row.messageGroupMembershipObligationState)) {
+    ![INITIAL_OBLIGATION, UNRESOLVED_OBLIGATION]
+      .includes(row.messageGroupMembershipObligationState)) {
     return answer(OUTCOME.CONFLICT, row);
   }
-  const next = claimCandidate(this, row, identity, expectedClaim);
+  const next = claimCandidate(repository, row, identity, expectedClaim);
   if (next === null) return answer(OUTCOME.CONFLICT, row);
   const {sql, params} = claimUpdate(row, next);
   try {
-    await this.executeOperationMutationWithRetry(sql, params);
+    await repository.executeOperationMutationWithRetry(sql, params);
   } catch {
     // An uncertain write must be resolved by exact read-back, not assumed lost.
   }
-  const after = await observeMembershipOperation(this, operationId);
-  if (!after.available || !await membershipBootIsCurrent(this)) return answer(OUTCOME.UNKNOWN);
+  const after = await observeMembershipOperation(repository, operationId);
+  if (!after.available || !await membershipBootIsCurrent(repository)) return answer(OUTCOME.UNKNOWN);
   if (membershipRowIdentityMatches(after.row, identity, encodedIdentity) &&
     after.row.messageGroupMembershipOwnerClaim === next) {
     return answer(OUTCOME.RECORDED, after.row, next);

@@ -579,11 +579,11 @@ class ReplicaOperationRepository {
   }
   /** Claim membership recovery ownership; no action authorization is created. */
   claimMessageGroupMembershipOwner(request) {
-    return claimMessageGroupMembershipOwner.call(this, request);
+    return claimMessageGroupMembershipOwner(this, request);
   }
   /** Select a durable membership branch; never directly dispatches Raft. */
   selectMessageGroupMembershipBranch(request) {
-    return selectMessageGroupMembershipBranch.call(this, request);
+    return selectMessageGroupMembershipBranch(this, request);
   }
 
   /**
