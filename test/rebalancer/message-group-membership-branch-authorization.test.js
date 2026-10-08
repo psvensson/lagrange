@@ -70,6 +70,7 @@ function request(branch = 'promote', changes = {}) {
 // owner mutation below still uses its own WAL/FULL database and reopen path.
 let schemaFixtureDirectory = null;
 let schemaFixtureFile = null;
+const operationFixtureFiles = new Map();
 before(() => {
   schemaFixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'mg-schema-fixture-'));
   schemaFixtureFile = path.join(schemaFixtureDirectory, 'schema.sqlite');
@@ -99,8 +100,10 @@ after(() => {
 async function setup(t, {initial = false} = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'mg-branch-proof-'));
   const file = path.join(directory, 'operations.sqlite');
-  // Each case gets an independent file; no tested row or mutation is shared.
-  fs.copyFileSync(schemaFixtureFile, file);
+  // Only a closed, never-exercised initial row is reusable. Each owner action
+  // still receives a distinct WAL/FULL file and independent repository state.
+  const cachedFixture = operationFixtureFiles.get(initial);
+  fs.copyFileSync(cachedFixture ?? schemaFixtureFile, file);
   let db = new Database(file);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = FULL');
@@ -182,27 +185,39 @@ async function setup(t, {initial = false} = {}) {
   assert.equal(typeof repository.selectMessageGroupMembershipBranch, 'function',
     'existing repository must own the durable promotion/abort CAS');
   assert.ok(committedStampOfAnswer(learnerStamp), 'typed committed learner fixture validates');
-  const operation = {operationId: O, type: OperationType.REPLACE, partitionId: GROUP,
-    entityType: SERVICE_TYPE.MESSAGE_GROUP, entityId: GROUP, replicaId: T, sourceReplicaId: S,
-    sourceNodeId: OWNER, targetNodeId: TARGET_NODE, status: ReplicaStatus.PENDING,
-    workflowStep: WORKFLOW_STEP.PENDING, createdAt: NOW, updatedAt: NOW, completedAt: null,
-    errorMessage: null, stepsHistory: [], membershipPublicationEpoch: 1,
-    messageGroupMembershipLaneKey: `message-group:${GROUP}`,
-    messageGroupMembershipPhase: 'learner_requested',
-    messageGroupMembershipObligationState: 'intent_recorded',
-    messageGroupMembershipIdentity: ENCODED_IDENTITY, messageGroupLearnerStamp: null,
-    messageGroupVoterStamp: null, messageGroupRemovalStamp: null,
-    messageGroupSourceLifecycleClaim: CLAIM};
-  await repository.persistNewOperation(operation);
-  // Supply the preceding committed learner basis. This unit does not claim to produce it.
-  if (!initial) {
-    const seeded = run(`UPDATE replica_operations SET message_group_membership_phase = ?,
-    message_group_membership_obligation_state = ?, message_group_membership_permit = ?,
-    message_group_learner_stamp = ?, lease_expires_at = ?,
-    message_group_membership_owner_claim = ? WHERE operation_id = ?`,
-    ['learner_committed', 'unknown', JSON.stringify(prior), JSON.stringify(learnerStamp), LEASE, OWNER_CLAIM, O]);
-    assert.equal(seeded.affectedRows, 1, JSON.stringify(seeded));
+  if (!cachedFixture) {
+    const operation = {operationId: O, type: OperationType.REPLACE, partitionId: GROUP,
+      entityType: SERVICE_TYPE.MESSAGE_GROUP, entityId: GROUP, replicaId: T, sourceReplicaId: S,
+      sourceNodeId: OWNER, targetNodeId: TARGET_NODE, status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING, createdAt: NOW, updatedAt: NOW, completedAt: null,
+      errorMessage: null, stepsHistory: [], membershipPublicationEpoch: 1,
+      messageGroupMembershipLaneKey: `message-group:${GROUP}`,
+      messageGroupMembershipPhase: 'learner_requested',
+      messageGroupMembershipObligationState: 'intent_recorded',
+      messageGroupMembershipIdentity: ENCODED_IDENTITY, messageGroupLearnerStamp: null,
+      messageGroupVoterStamp: null, messageGroupRemovalStamp: null,
+      messageGroupSourceLifecycleClaim: CLAIM};
+    await repository.persistNewOperation(operation);
+    // Supply the preceding committed learner basis. This unit does not claim to produce it.
+    if (!initial) {
+      const seeded = run(`UPDATE replica_operations SET message_group_membership_phase = ?,
+      message_group_membership_obligation_state = ?, message_group_membership_permit = ?,
+      message_group_learner_stamp = ?, lease_expires_at = ?,
+      message_group_membership_owner_claim = ? WHERE operation_id = ?`,
+      ['learner_committed', 'unknown', JSON.stringify(prior), JSON.stringify(learnerStamp), LEASE, OWNER_CLAIM, O]);
+      assert.equal(seeded.affectedRows, 1, JSON.stringify(seeded));
+    }
+    // Last-connection close checkpoints committed setup before copying. No
+    // tested transition or failed-write state is ever copied to another test.
+    db.close();
+    const fixture = path.join(schemaFixtureDirectory, initial ? 'initial.sqlite' : 'learner.sqlite');
+    fs.copyFileSync(file, fixture);
+    operationFixtureFiles.set(initial, fixture);
+    db = new Database(file);
+    db.pragma('synchronous = FULL');
   }
+  assert.equal(db.pragma('journal_mode', {simple: true}), 'wal');
+  assert.equal(db.pragma('synchronous', {simple: true}), 2);
   return {get repository() {
     return repository;
   }, repo, clock, run,
