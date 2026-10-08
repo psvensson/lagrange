@@ -7,11 +7,16 @@
   "additionalEvidence": [
     "solve/quests/cutover-transition-authority-review/evidence/owner-entry-2026-10-08.json",
     "solve/quests/cutover-transition-authority-review/evidence/gcp-37740082892.json",
-    "solve/quests/cutover-transition-authority-review/transition-contract-review.md"
+    "solve/quests/cutover-transition-authority-review/transition-contract-review.md",
+    "solve/quests/cutover-transition-authority-review/evidence/gcp-37743852151.json",
+    "solve/quests/cutover-transition-authority-review/evidence/review-5452918820.json",
+    "solve/quests/cutover-transition-authority-review/process-loss-conclusions.md",
+    "solve/quests/cutover-transition-authority-review/recovery-policy-proposal.md"
   ],
   "testFileDigests": {
     "scripts/quest-evidence/cutover-transition-authority-baseline.js": "363e258e16c14151d44a98ff3a33f4d5136b068c51536cf0a419f11e95bafef9",
-    "scripts/quest-evidence/cutover-owner-entry-baseline.js": "4b2a613ce9bd724cd4a1cb9956262d1099f805482aedc62d3b506aa4018b9efb"
+    "scripts/quest-evidence/cutover-owner-entry-baseline.js": "4b2a613ce9bd724cd4a1cb9956262d1099f805482aedc62d3b506aa4018b9efb",
+    "scripts/quest-evidence/cutover-workflow-crash-baseline.js": "18efc629fc68d43e62687f5e13a4dede3777162db7ee9e6032849976aadf8bcd"
   },
   "receipts": [
     {
@@ -22,7 +27,7 @@
     {
       "id": "workflow-commit-projection-and-restart-classified",
       "passed": false,
-      "detail": "Real owner-entry overlap under controlled await is measured: active remote retry selects NO_OPERATION_EFFECT on both calls despite one local CAS conflict. Existing publication fence detects divergent prefix. Neither duplicate physical dispatch nor missing whole-path history guard is proved. Real durable failure/restart and changing observation/lease schedules remain unclosed."
+      "detail": "Six real repository/SQLite SIGKILL/reopen cases now pass, including failed SQL and committed answer loss. The actual SQL commit point and disposable mirror relationship are measured. Diagnostic terminal filtering is explicit; full distributed recovery, changing owner leases and every terminal caller are not proven. Classification remains under independent review; no new persistence mechanism justified."
     },
     {
       "id": "snapshot-local-open-wipe-and-install-classified",
@@ -39,7 +44,7 @@
     {
       "id": "independent-category-complete-contract-review",
       "passed": false,
-      "detail": "No independent approval is recorded. Review the frozen PR #104 packet for owner interaction, recovery/replay, concurrency/serialization, harness fidelity and precise proof ceilings before any runtime repair."
+      "detail": "Review 5452918820 by copilot-pull-request-reviewer[bot] explicitly REJECTS C0 closure at 0219a7fe while supporting its narrow findings. Rejection retained. New process-loss evidence and proposed J1 forward-recovery policy await follow-up review; no approval or operator policy ruling is fabricated."
     }
   ]
 }

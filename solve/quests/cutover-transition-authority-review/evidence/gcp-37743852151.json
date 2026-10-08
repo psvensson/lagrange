@@ -1,0 +1,164 @@
+{
+  "schema": "cutover-workflow-process-loss-evidence/1",
+  "runId": 37743852151,
+  "artifactId": 11534404586,
+  "candidateSha": "ac8194b2981de59d28726e68ea447d29d596f438",
+  "inheritedRuntimeSha": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
+  "archiveSha256": "91f3c052db86c3da9ca0ab09ada9738787bba259a0669c9be8c18122155f2bb4",
+  "rawReportSha256": "8710119148201ee3d8c4e2cb641424b8d31e4c37c215092bae3b8a6463aa744a",
+  "verifiedMembers": 17,
+  "proofCeiling": "real operation owner/repository/schema and file-backed SQLite across SIGKILL; test gateway replaces SQL/Raft transport; no cluster, power loss or FreshMG membership proof",
+  "substitutions": [
+    "existing reservation-dispatch harness readiness/cache/transport doubles",
+    "canonical repository SQL executes directly against file-backed SQLite",
+    "IPC cut at selected SQL/owner boundary; parent kills only its own child",
+    "terminal row classified before live-workflow recovery"
+  ],
+  "harnessSha256": "18efc629fc68d43e62687f5e13a4dede3777162db7ee9e6032849976aadf8bcd",
+  "sourceDigests": {
+    "src/rebalancer/operation-workflow-transition-orchestration.js": "47e9233fa395895512f7979e9f8558f52d37529b3af8097c70884f78e4c3c733",
+    "src/rebalancer/operation-workflow-owner-execution-lane.js": "bd26aec4a4c2d9417e15e32b7ceef5733cdfac45701b6ac60377d1a0cbe077a0",
+    "src/rebalancer/replica-operation-repository-mutation-update-methods.js": "61510a487c228485ef21d23dcad98c54d90710d42c98d8136d274a86974c057f",
+    "src/rebalancer/operation-workflow-persistence.js": "8172b8912d186e807e1f0e6afc518916e97866e7bca2f11416f4c06eb3717391",
+    "src/workflow/durable-workflow-coordinator.js": "c3ca87ca5f08451f73980ebd35fc675d762846ccf279f2ed033bd01701140116",
+    "test/rebalancer/reservation-dispatch-gate-test-harness.js": "a16bc4e83f7ba77b3d7c10580aeb087ef9b408fbb417a4328aed0087457fabb3"
+  },
+  "cases": [
+    {
+      "name": "before_sql",
+      "passed": true,
+      "writerPid": 2323,
+      "restartPid": 2330,
+      "terminationSignal": "SIGKILL",
+      "writerRowStep": "PENDING",
+      "writerMirrorStep": "SENDING",
+      "writerCommittedMark": false,
+      "writerOpenTransaction": false,
+      "reopenedRowStep": "PENDING",
+      "reconstructedCommittedMark": false,
+      "freshVolatileRecordCount": 0,
+      "terminal": false,
+      "replayOutcome": {
+        "committed": true,
+        "disposition": "updated"
+      },
+      "afterReplayStep": "SENDING",
+      "physicalCalls": []
+    },
+    {
+      "name": "uncommitted_sql",
+      "passed": true,
+      "writerPid": 2338,
+      "restartPid": 2345,
+      "terminationSignal": "SIGKILL",
+      "writerRowStep": "SENDING",
+      "writerMirrorStep": "SENDING",
+      "writerCommittedMark": false,
+      "writerOpenTransaction": true,
+      "reopenedRowStep": "PENDING",
+      "reconstructedCommittedMark": false,
+      "freshVolatileRecordCount": 0,
+      "terminal": false,
+      "replayOutcome": {
+        "committed": true,
+        "disposition": "updated"
+      },
+      "afterReplayStep": "SENDING",
+      "physicalCalls": []
+    },
+    {
+      "name": "committed_answer_lost",
+      "passed": true,
+      "writerPid": 2352,
+      "restartPid": 2359,
+      "terminationSignal": "SIGKILL",
+      "writerRowStep": "SENDING",
+      "writerMirrorStep": "SENDING",
+      "writerCommittedMark": false,
+      "writerOpenTransaction": false,
+      "reopenedRowStep": "SENDING",
+      "reconstructedCommittedMark": true,
+      "freshVolatileRecordCount": 0,
+      "terminal": false,
+      "replayOutcome": {
+        "committed": false,
+        "disposition": null
+      },
+      "afterReplayStep": "SENDING",
+      "physicalCalls": []
+    },
+    {
+      "name": "after_mark",
+      "passed": true,
+      "writerPid": 2366,
+      "restartPid": 2373,
+      "terminationSignal": "SIGKILL",
+      "writerRowStep": "SENDING",
+      "writerMirrorStep": "SENDING",
+      "writerCommittedMark": true,
+      "writerOpenTransaction": false,
+      "reopenedRowStep": "SENDING",
+      "reconstructedCommittedMark": true,
+      "freshVolatileRecordCount": 0,
+      "terminal": false,
+      "replayOutcome": {
+        "committed": false,
+        "disposition": null
+      },
+      "afterReplayStep": "SENDING",
+      "physicalCalls": []
+    },
+    {
+      "name": "readonly_refusal",
+      "passed": true,
+      "writerPid": 2380,
+      "restartPid": 2388,
+      "terminationSignal": "SIGKILL",
+      "writerRowStep": "PENDING",
+      "writerMirrorStep": "SENDING",
+      "writerCommittedMark": false,
+      "writerOpenTransaction": false,
+      "reopenedRowStep": "PENDING",
+      "reconstructedCommittedMark": false,
+      "freshVolatileRecordCount": 0,
+      "terminal": false,
+      "replayOutcome": {
+        "committed": true,
+        "disposition": "updated"
+      },
+      "afterReplayStep": "SENDING",
+      "physicalCalls": []
+    },
+    {
+      "name": "terminal_committed",
+      "passed": true,
+      "writerPid": 2395,
+      "restartPid": 2402,
+      "terminationSignal": "SIGKILL",
+      "writerRowStep": "FAILED",
+      "writerMirrorStep": "FAILED",
+      "writerCommittedMark": false,
+      "writerOpenTransaction": false,
+      "reopenedRowStep": "FAILED",
+      "reconstructedCommittedMark": false,
+      "freshVolatileRecordCount": 0,
+      "terminal": true,
+      "replayOutcome": null,
+      "afterReplayStep": "FAILED",
+      "physicalCalls": []
+    }
+  ],
+  "regressionStdout": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/rebalancer/reservation-file-backed-restart.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/operation-workflow-owner-handoff-retry-backoff.test.js\n\n# test-files planned=3\nclassified lane ordinary: 3 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nok test/rebalancer/operation-workflow-owner-handoff-retry-backoff.test.js (27 assertions, 1027ms)\nok test/rebalancer/reservation-file-backed-restart.test.js (39 assertions, 1415ms)\nok test/rebalancer/operation-progress-store-persistence.test.js (24 assertions, 1527ms)\n# test-files total=3 pass=3 fail=0 assertions=90\n",
+  "regressionExit": 0,
+  "baselineExit": 0,
+  "runtimeDiff": "",
+  "finalGitStatus": "",
+  "independentApproval": false,
+  "distributedAcceptance": false,
+  "retainedArchive": {
+    "sha256": "91f3c052db86c3da9ca0ab09ada9738787bba259a0669c9be8c18122155f2bb4",
+    "bytes": 25389,
+    "asset": "cutover-transition-authority-review--c0-process-loss-37743852151-37744948027-1.zip",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/cutover-transition-authority-review--c0-process-loss-37743852151-37744948027-1.zip"
+  }
+}
