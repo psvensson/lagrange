@@ -96,6 +96,13 @@ async function setup(t, {initial = false} = {}) {
       return {success: false, error: error.message, errorCode: error.code};
     }
   };
+  function faultedMembershipWriteAnswer(action, answer) {
+    if (action === 'lost-and-unreadable') failReads = true;
+    if (action === 'lost' || action === 'lost-and-unreadable') {
+      return {success: false, error: 'authorization result lost'};
+    }
+    return answer;
+  }
   const gateway = {
     async executeQuery(sql, params = []) {
       if (sql.includes('SET message_group_membership_phase') ||
@@ -115,11 +122,7 @@ async function setup(t, {initial = false} = {}) {
         if (sql.includes('SET message_group_membership_lane_key')) {
           resolutionChanges += answer.changes ?? 0;
         }
-        if (action === 'lost-and-unreadable') failReads = true;
-        if (action === 'lost' || action === 'lost-and-unreadable') {
-          return {success: false, error: 'authorization result lost'};
-        }
-        return answer;
+        return faultedMembershipWriteAnswer(action, answer);
       }
       return run(sql, params);
     },
@@ -828,4 +831,74 @@ test('T1 source substitution and unavailable operation authority cannot issue re
     .outcome, 'unavailable');
   assert.deepEqual(f.row(), before);
   assert.equal(f.writes, 0);
+});
+
+
+// Review 4219025228: successful source retirement is not failed learner debt.
+// Supply a contradictory retained learner hint deliberately. Never authorize
+// another target REMOVE from successful or mixed ordinary terminal facts.
+async function writeSettlementFixture(f, status, workflowStep) {
+  assert.equal(f.run('UPDATE replica_operations SET status = ?, workflow_step = ?, ' +
+    'completed_at = ? WHERE operation_id = ?', [status, workflowStep, NOW + 1, O]).changes, 1);
+}
+
+test('T1 successful REMOVED replacement refuses target abandonment across reopen', async (t) => {
+  const f = await setup(t);
+  await writeSettlementFixture(f, ReplicaStatus.REMOVED, WORKFLOW_STEP.REMOVED);
+  const before = f.row();
+  for (const reopen of [false, true]) {
+    if (reopen) f.reopen();
+    assert.equal((await f.repository.selectMessageGroupMembershipBranch(request('abort_learner')))
+      .outcome, 'conflict', 'successful replacement must never authorize target abandonment');
+    assert.equal((await f.repository.selectMessageGroupMembershipBranch(request()))
+      .outcome, 'conflict');
+    assert.deepEqual(f.row(), before, 'successful row and retained debt stay unchanged');
+    assert.equal(f.writes, 0, 'refusal precedes every membership mutation');
+  }
+});
+
+test('T1 only exact FAILED status and step may select terminal abandonment', async (t) => {
+  for (const [status, step] of [
+    [ReplicaStatus.REMOVED, WORKFLOW_STEP.FAILED],
+    [ReplicaStatus.FAILED, WORKFLOW_STEP.REMOVED],
+    [ReplicaStatus.PENDING, WORKFLOW_STEP.FAILED],
+    [ReplicaStatus.FAILED, WORKFLOW_STEP.PENDING],
+  ]) {
+    await t.test(`${status}/${step}`, async (t) => {
+      const f = await setup(t);
+      await writeSettlementFixture(f, status, step);
+      const before = f.row();
+      assert.equal((await f.repository.selectMessageGroupMembershipBranch(request('abort_learner')))
+        .outcome, 'conflict', 'inconsistent terminal facts are not failed-learner authority');
+      assert.deepEqual(f.row(), before);
+      assert.equal(f.writes, 0);
+    });
+  }
+});
+
+test('T1 success racing the failed-row CAS cannot receive target removal intent', async (t) => {
+  const f = await setup(t);
+  await terminal(f);
+  f.fault(() => writeSettlementFixture(f, ReplicaStatus.REMOVED, WORKFLOW_STEP.REMOVED));
+  assert.equal((await f.repository.selectMessageGroupMembershipBranch(request('abort_learner')))
+    .outcome, 'unknown', 'changed ordinary state defeats the stale abandonment CAS');
+  assert.equal(f.row().status, ReplicaStatus.REMOVED);
+  assert.equal(f.row().workflow_step, WORKFLOW_STEP.REMOVED);
+  assert.equal(f.row().message_group_membership_phase, 'learner_committed');
+  assert.equal(f.row().message_group_membership_permit, JSON.stringify(prior));
+});
+
+test('T1 a delayed failed-row abandonment cannot apply after success is observed', async (t) => {
+  const f = await setup(t);
+  await terminal(f);
+  f.fault('delayed');
+  assert.equal((await f.repository.selectMessageGroupMembershipBranch(request('abort_learner')))
+    .outcome, 'unknown');
+  await writeSettlementFixture(f, ReplicaStatus.REMOVED, WORKFLOW_STEP.REMOVED);
+  const successful = f.row();
+  assert.deepEqual(f.flush().map((answer) => answer.changes), [0]);
+  f.reopen();
+  assert.equal((await f.repository.selectMessageGroupMembershipBranch(request('abort_learner')))
+    .outcome, 'conflict');
+  assert.deepEqual(f.row(), successful);
 });
