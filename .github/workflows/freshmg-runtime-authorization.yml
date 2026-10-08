@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -39,6 +40,15 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
+      - name: Retain original pre-measurement failure without rewriting its verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/runtime-r2-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          gh api repos/psvensson/lagrange/actions/artifacts/11567931979/zip > "$out/lint-stopped-37817790691.zip"
+          echo "41b60af4288203264de99eb20f1b161a57891e5c3b9eca4019b9cf68699dfcb9  $out/lint-stopped-37817790691.zip" | sha256sum -c -
       - name: Measure original race, correction and source-revert controls
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/run-runtime-review-r2.sh measure
       - name: Preserve exact WIP and evidence through normal Git push
