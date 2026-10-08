@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// C0 read-only evidence: real owner/scheduler/ports/lane/store, explicit I/O doubles.
+// C0 read-only evidence: real owner/repository policies/ports/lane/store; explicit I/O doubles.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
@@ -9,15 +9,17 @@ import {EventEmitter} from 'node:events';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {OperationWorkflowOwner} from '../../src/rebalancer/operation-workflow-owner.js';
+import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {createOperationProgressStore} from '../../src/rebalancer/operation-progress-store.js';
 import {DurableWorkflowCoordinator} from '../../src/workflow/durable-workflow-coordinator.js';
 import {OperationLane} from '../../src/workflow/operation-lane.js';
 import {persistOperationWorkflowTransitionToDurableRow} from '../../src/rebalancer/operation-workflow-persistence.js';
+import {resolveOperationWorkflowPublicationFenceState} from '../../src/rebalancer/operation-workflow-port-freshness.js';
 import {OperationType, ReplicaStatus, createOperation} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import * as P from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {OPERATION_PROGRESS_EVENT_TYPE} from '../../src/rebalancer/operation-progress-events.js';
-import {OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES} from '../../src/rebalancer/operation-workflow-owner-constants.js';
+import {OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES, OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE} from '../../src/rebalancer/operation-workflow-owner-constants.js';
 
 refuseUnderProbe('cutover owner-entry baseline harness');
 const [output, sourceSha] = process.argv.slice(2);
@@ -27,8 +29,8 @@ const report = {
   schema: 'cutover-owner-entry-baseline/1', sourceSha,
   measurementStatus: 'not_measured', runtimeSourceChanged: false,
   independentReview: false, distributedAcceptance: false,
-  proofCeiling: 'real owner entries and decision/effect ports with supplied repository rows; no actual SQL, Raft, physical CREATE or cluster',
-  substitutions: ['read-only repository observations and node identity', 'transport/physical-effect tripwires', 'two-party promise barrier after actual progress load at an existing awaited port'],
+  proofCeiling: 'real owner entries, repository policies and decision/effect ports with supplied repository rows; no actual SQL, Raft, physical CREATE or cluster',
+  substitutions: ['repository query I/O supplies fixed read-only rows; all repository policy methods are real', 'transport/physical-effect tripwires', 'two-party promise barrier after actual progress load at an existing awaited port'],
   cases: {},
 };
 const sourcePaths = [
@@ -38,9 +40,13 @@ const sourcePaths = [
   'src/rebalancer/operation-workflow-recovery-reconcile.js',
   'src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js',
   'src/rebalancer/operation-workflow-owner-retry-registry.js',
+  'src/rebalancer/replica-operation-repository.js',
+  'src/rebalancer/replica-operation-repository-row-methods.js',
   'src/rebalancer/operation-progress-store.js',
   'src/rebalancer/operation-lifecycle-event-resolution.js',
   'src/rebalancer/operation-lifecycle.js',
+  'src/rebalancer/operation-workflow-persistence.js',
+  'src/rebalancer/operation-workflow-port-freshness.js',
   'src/workflow/operation-lane.js',
   'src/workflow/durable-workflow-coordinator.js',
 ];
@@ -62,20 +68,21 @@ function fixture(label, barrier = false) {
     completedAt: null, stepsHistory: [], entityType: 'partition', entityId: 'replica_operations-p1'});
   const stored = structuredClone(operation);
   const store = createOperationProgressStore();
-  const writes = [], loads = [], runs = [], results = [], errors = [], physicalCalls = [];
+  const calls = {writes: [], loads: [], runs: [], results: [], errors: [], physical: []};
+  const logger = {debug() {}, info() {}, warn() {}, error(...args) { calls.errors.push(args); }};
   const first = deferred(), second = deferred(), release = deferred();
   const instrumentedStore = {
     ...store,
     loadOperationProgress(op, ctx) {
       const value = store.loadOperationProgress(op, ctx);
-      loads.push(value);
-      if (loads.length === 1) first.resolve();
-      if (loads.length === 2) second.resolve();
+      calls.loads.push(value);
+      if (calls.loads.length === 1) first.resolve();
+      if (calls.loads.length === 2) second.resolve();
       return barrier ? release.promise.then(() => value) : value;
     },
     compareAndSwapOperationProgress(write) {
       const result = store.compareAndSwapOperationProgress(write);
-      writes.push(result);
+      calls.writes.push(result);
       return result;
     },
   };
@@ -84,28 +91,24 @@ function fixture(label, barrier = false) {
     isTerminalWorkflow: workflow => workflow.terminal === true,
   });
   const lane = new OperationLane({workflowCoordinator: coordinator});
-  const repository = {
-    resolveOperationOwnerNodeId: op => op.sourceNodeId,
-    isOperationLocallyOwned: op => op.sourceNodeId === 'c0-observer',
-    isOperationTerminal: op => op.completedAt != null,
-    queryAuthoritativeOperationById: async () => structuredClone(stored),
-    queryOperationById: async () => structuredClone(stored),
-  };
+  // Real phase/owner/terminal policies, not a hand-built substitute for them.
+  const repository = new ReplicaOperationRepository({nodeId: 'c0-observer', logger});
+  repository.queryAuthoritativeOperationById = async () => structuredClone(stored);
+  repository.queryOperationById = async () => structuredClone(stored);
   const owner = new OperationWorkflowOwner({
     repository, operationLane: lane, operationWorkflowCoordinator: coordinator,
     operationProgressStore: instrumentedStore, nodeId: 'c0-observer',
-    logger: {debug() {}, info() {}, warn() {}, error(...args) { errors.push(args); }},
-    emitter: new EventEmitter(), config: {pendingTimeoutMs: 300000}, stats: {},
+    logger, emitter: new EventEmitter(), config: {pendingTimeoutMs: 300000}, stats: {},
     isShuttingDown: () => false, isInitialized: () => true,
-    getActualReplicaStatus: async () => { physicalCalls.push('replica-status'); throw new Error('unexpected physical observation'); },
-    messageRouter: {deliver: async () => { physicalCalls.push('transport'); throw new Error('unexpected transport effect'); }},
+    getActualReplicaStatus: async () => { calls.physical.push('replica-status'); throw new Error('unexpected physical observation'); },
+    messageRouter: {deliver: async () => { calls.physical.push('transport'); throw new Error('unexpected transport effect'); }},
     setTimeoutFn: (fn, delayMs) => ({fn, delayMs}), clearTimeoutFn() {},
   });
-  // Observe and retain the real returned promises; never replace results or decisions.
+  // Observe the real promises without replacing results or decision/effect ports.
   const run = owner.runOperationWorkflowOwnerAdapter.bind(owner);
   owner.runOperationWorkflowOwnerAdapter = (...args) => {
-    const promise = run(...args).then(result => { results.push(result); return result; });
-    runs.push(promise);
+    const promise = run(...args).then(result => { calls.results.push(result); return result; });
+    calls.runs.push(promise);
     return promise;
   };
   assert.equal(owner.recordOperationDispatchDeferredRetry(operation.operationId,
@@ -122,15 +125,15 @@ function fixture(label, barrier = false) {
       waitMode: P.PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
       workflowProgressPhaseId: P.PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING},
   };
-  const f = {owner, operation, snapshot, coordinator, store, writes, loads, runs, results,
-    errors, physicalCalls, first, second, release,
+  const f = {owner, repository, operation, snapshot, coordinator, store, ...calls, first, second, release,
     evidence: () => owner.buildPriorityRecoveryDispatchPendingReentryEvidence(snapshot, operation),
     schedule: () => owner.schedulePriorityRecoveryDispatchPendingReentry(snapshot, [operation]),
     summary: () => ({
-      loads: loads.map(v => v.version), writes: writes.map(v => ({applied: v.applied, state: v.state})),
+      canonicalOwnerNodeId: repository.resolveOperationOwnerNodeId(operation),
+      loads: calls.loads.map(v => v.version), writes: calls.writes.map(v => ({applied: v.applied, state: v.state})),
       eventTypes: store.listOperationProgressEvents().map(v => v.type),
-      effectCommands: results.flatMap(v => v.commands.map(c => c.effectCommand)),
-      physicalCalls, errors,
+      effectCommands: calls.results.flatMap(v => v.commands.map(c => c.effectCommand)),
+      physicalCalls: calls.physical, errors: calls.errors,
     }),
   };
   fixtures.push(f);
@@ -150,7 +153,7 @@ try {
   assert.deepEqual(single.store.listOperationProgressEvents().map(e => e.type), [OPERATION_PROGRESS_EVENT_TYPE.RETRY_REQUESTED]);
   assert.deepEqual(single.results.flatMap(r => r.commands.map(c => c.effectCommand)),
     [OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT]);
-  assert.equal(single.physicalCalls.length, 0);
+  assert.equal(single.physical.length, 0);
   report.cases.singleRemoteRetry = single.summary();
 
   const held = fixture('held');
@@ -178,13 +181,27 @@ try {
   await Promise.all([arm, ...overlapping.runs]);
   assert.equal(overlapping.writes.filter(w => w.applied).length, 1);
   assert.equal(overlapping.writes.filter(w => !w.applied).length, 1);
-  assert.equal(overlapping.physicalCalls.length, 0);
+  assert.equal(overlapping.physical.length, 0);
   assert.ok(overlapping.results.every(r => r.commands.every(c =>
     c.effectCommand === OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT)),
   'actual remote-retry evidence must not be replaced with local-dispatch evidence');
   report.cases.remoteRetryFirst = overlapping.summary();
+
+  // The earlier length-callback witness is not the complete history fence.
+  const durable = {stepsHistory: [{step: WORKFLOW_STEP.SENDING}]};
+  const good = {workflowId: 'history-control', durableBasisStepCount: 1,
+    transitionHistory: [{nextStep: WORKFLOW_STEP.SENDING}, {nextStep: WORKFLOW_STEP.CREATING}]};
+  const divergent = {...good, transitionHistory: [{nextStep: WORKFLOW_STEP.REMOVED}, {nextStep: WORKFLOW_STEP.CREATING}]};
+  assert.equal(await persistOperationWorkflowTransitionToDurableRow(divergent), divergent);
+  const goodFence = resolveOperationWorkflowPublicationFenceState(durable, good);
+  const divergentFence = resolveOperationWorkflowPublicationFenceState(durable, divergent);
+  assert.equal(goodFence, OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.CURRENT);
+  assert.equal(divergentFence, OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.STALE);
+  report.cases.historyFence = {lengthCallbackAcceptsDivergent: true, goodFence, divergentFence,
+    proofCeiling: 'existing callback plus real downstream fence; not a disk-crash proof'};
+
   report.measurementStatus = 'measured';
-  report.finding = 'Owner-entry overlap reproduces a volatile progress CAS conflict; the active remote-retry case selects NO_OPERATION_EFFECT, not duplicate dispatch.';
+  report.finding = 'Owner-entry overlap reproduces a volatile progress CAS conflict; active remote-retry evidence selects NO_OPERATION_EFFECT, not duplicate dispatch. The existing publication fence rejects a divergent history prefix.';
   report.classification = 'projection-concurrency-under-controlled-await; physical-safety-defect-not-proven';
   report.openQuestions = ['all real repository/lease/timer outcome changes around this interval',
     'whether duplicate local progress events affect any downstream permission',
@@ -195,7 +212,7 @@ try {
   report.partialCases = fixtures.map(f => f.summary());
   process.exitCode = 2;
 } finally {
-  for (const f of fixtures) { f.release.resolve(); f.owner.shutdown(); }
+  for (const f of fixtures) { f.release.resolve(); f.owner.shutdown(); f.repository.markShuttingDown(); }
   fs.mkdirSync(path.dirname(path.resolve(output)), {recursive: true});
   fs.writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
