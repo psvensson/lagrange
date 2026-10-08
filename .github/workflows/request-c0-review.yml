@@ -9,73 +9,60 @@ concurrency:
   group: request-c0-review-20261008
   cancel-in-progress: false
 env:
-  EXPECTED: 9fa3d0b30b5c33d2d4cffb5cfcf986eac6e455b6
+  EXPECTED: 83f6177e479d0abe87c9e0f1aa848a8f9950e449
   WORK_BRANCH: integrate/rs-raft-contract-first-20261008
   QUEST: cutover-transition-authority-review
 jobs:
   record-and-request:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
     permissions:
       contents: write
-      actions: read
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.sha }}
-          path: carrier
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
           ref: ${{ env.EXPECTED }}
-          path: work
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Verify and retain original GCP evidence through Solver
-        working-directory: work
+      - name: Record rejection and concrete response without promoting receipts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
           npm ci
-          python3 ../carrier/scripts/quest-evidence/collect-c0-classification.py
-          node scripts/solve.js note --id "$QUEST" --attempt 'User-selected J1, losslessly restored saved work, corrected review findings, strengthened actual SQL crash cuts and exercised ordinary terminal entries with retained membership debt. Four classification/measurement obligations are supported within their explicit ceilings; independent contract review remains outstanding. Earlier failed terminal assertion stays failed. No runtime source change.' --json > test-output/c0-final-classification/attempt.json
-          node scripts/solve.js probe --id "$QUEST" --json > test-output/c0-final-classification/probe.json
+          mkdir -p test-output/c0-exact-contracts
+          gh api repos/psvensson/lagrange/pulls/104/reviews/5454259637 > "solve/quests/$QUEST/evidence/review-5454259637.json"
+          node scripts/solve.js note --id "$QUEST" --verification 'Independent Copilot review 5454259637 on 16bc20e7 rejects two premature classifications: exact durable promotion authorization carrier/CAS/unknown-result recovery missing; snapshot transitions require concrete owner methods and commit/restart facts. Prior Node22 and four-identity findings resolved. Review is retained verbatim; both affected receipts restored to false.' --verifier subagent:copilot-pull-request-reviewer-5454259637 --verdict reject --json > test-output/c0-exact-contracts/rejection.json
+          node scripts/solve.js note --id "$QUEST" --attempt 'Added exact-promotion-authorization-contract.md binding J1 to the existing operation row phase plus proposed repaired permit CAS, mutually exclusive pre-promotion abort selection, monotonic forward direction and lost-answer resolution. Added exact-snapshot-transition-owners.md naming current owner methods, real durable carriers/commit points and missing accepted-Ready application transaction; no claim that those missing product operations exist. Both affected receipts remain false pending independent review; no runtime source or old acceptance changed.' --json > test-output/c0-exact-contracts/attempt.json
+          node scripts/solve.js probe --id "$QUEST" --json > test-output/c0-exact-contracts/probe.json
           git diff --check
           git diff --exit-code 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af -- src
-      - name: Push evidence only and request exact-head independent review
-        working-directory: work
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
-          git add -- "solve/quests/$QUEST/evidence/classification-gcp-20261008.json" "solve/quests/$QUEST/evidence/receipt.json" "solve/quests/$QUEST/log.ndjson"
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'C0: retain exact GCP evidence and complete bounded authority classifications'
+          git add -- "solve/quests/$QUEST/evidence/review-5454259637.json" "solve/quests/$QUEST/log.ndjson"
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'C0 review: retain rejection and exact durable-boundary response'
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           head="$(git rev-parse HEAD)"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$head"
-          echo "$head" > test-output/c0-final-classification/pushed-sha.txt
-          cat > test-output/c0-final-classification/review-request.md <<EOF
-          Review exact head $head on PR #104. No source changes or preservation-ref merge.
+          echo "$head" > test-output/c0-exact-contracts/head.txt
+          cat > test-output/c0-exact-contracts/request.md <<EOF
+          Independent rereview of exact head $head, addressing review 5454259637 and inline findings 4217048455 / 4217048521. Both affected receipts have been restored to false; the old review and history are retained.
 
-          Read unchanged C0 quest.json, classification-disposition-20261008.md, operator-decision-20261008-j1.md and evidence/classification-gcp-20261008.json. The user selected J1: forward recovery from durable promotion authorization, no automatic target rollback thereafter. Exact S/T subjects and four identity dimensions are explicit. Six real-repository SIGKILL cases assert actual cut engagement. Ordinary terminal entries preserve exact membership debt and reject a second group operation; applied terminal-record effect is not dispatch. The initial faulty boolean assertion remains a failed harness experiment. Node22 prepare and four-identity review findings are corrected.
+          Read exact-promotion-authorization-contract.md: J1 is one committed conditional UPDATE of replica_operations from learner_committed/exact committed learner permit to promotion_proposal_in_flight plus exact PROMOTE permit. Exact owner/lease/O/S/T/basis/ordinary-terminal predicates and unknown-answer recovery are specified. Abort selection competes on the same old row; merely reading the old phase is not cancellation. Subsequent phase/permit paths cannot regress the forward direction. This explicitly identifies the repaired existing repository operation and missing permit column in the preserved WIP, not a claim it is integrated.
 
-          Judge the sealed C0 classification claim, not completed FreshMG/snapshot product code (C0 prohibits those source changes). Reject any remaining UNKNOWN authority or unsupported classification. Known missing callback/Ready/application-image and FreshMG phase-driver work remain named product obligations, not hidden success. Cover harness fidelity, crash/replay limits, subject policy/context, refusal/recovery ownership, and unchanged verification requirements. Return explicit ACCEPT/REJECT for this bounded classification packet and name remaining blockers. No self-review is claimed independent, no old rejection is erased, and C0 has not been landed. Full cutover/A1-v13 acceptance remains blocked.
+          Read exact-snapshot-transition-owners.md: concrete current boot/lifecycle/checkpoint/transfer/fresh-CREATE/runtime-Ready/application-transaction methods and durable tables/markers are mapped per trigger, commit and recovery. Missing intact import is assigned to the existing raft-rs-application-transaction-owner module with exact same-DB transaction/binding semantics, including no nested synced persistReady transaction and no forged CREATE authority. Current missing callback and pre-refusal shutdown remain named product defects, not successful catch-up.
+
+          Judge whether these resolve the two CLASSIFICATION findings against the unchanged C0 Quest. Do not require forbidden C0 runtime implementation, and do not accept a vague future owner or unspecified irreversible point. Check cross-group authorization vs membership commit, late proposals/unknown CAS, terminal retention, snapshot identity/binding/Ready atomicity and current versus proposed code. Return explicit ACCEPT/REJECT of the bounded classification and remaining issues. No release/FreshMG/snapshot certification or source approval is requested. No preservation-ref merge.
           EOF
-          gh pr comment 104 --repo psvensson/lagrange --body-file test-output/c0-final-classification/review-request.md
+          gh pr comment 104 --repo psvensson/lagrange --body-file test-output/c0-exact-contracts/request.md
           gh pr edit 104 --repo psvensson/lagrange --add-reviewer @copilot
-          gh pr view 104 --repo psvensson/lagrange --json headRefOid,reviewRequests,isDraft,url
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: c0-classification-record-${{ github.run_id }}
-          path: work/test-output/c0-final-classification/
+          name: c0-exact-contract-response-${{ github.run_id }}
+          path: test-output/c0-exact-contracts/
           retention-days: 14
           if-no-files-found: error
