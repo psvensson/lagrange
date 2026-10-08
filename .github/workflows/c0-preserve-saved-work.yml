@@ -1,4 +1,4 @@
-name: freshmg-existing-frontier
+name: freshmg-claim-branch-increment
 on:
   push:
     branches: [ops/c0-preservation-20261008]
@@ -6,12 +6,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: c0-preserve-saved-work
+  group: freshmg-claim-branch-increment
   cancel-in-progress: false
 env:
-  CANDIDATE: 16bc20e7d1f2d71490d915144215e773ca610a56
-  WORK_BRANCH: work/freshmg-owner-chain-20261008
-  QUEST: message-group-fresh-identity-membership
+  BASE: 6fa07ca261f1df97c77428ac2660ba091ca13993
+  WORK_BRANCH: work/freshmg-branch-authorization-20261008
+  TEST_FILE: test/rebalancer/message-group-membership-branch-authorization.test.js
 jobs:
   wake:
     runs-on: ubuntu-24.04
@@ -27,142 +27,198 @@ jobs:
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
       - run: |
           set -euo pipefail
-          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
-          if [ "$status" != RUNNING ]; then gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a; fi
-  inherited-frontier:
+          s="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
+          if [ "$s" != RUNNING ]; then
+            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
+          fi
+  baseline-and-candidate:
     needs: wake
     runs-on: [self-hosted, gcp]
-    timeout-minutes: 25
+    timeout-minutes: 20
     outputs:
-      artifact: ${{ steps.upload.outputs.artifact-id }}
-      digest: ${{ steps.upload.outputs.artifact-digest }}
+      snapshot: ${{ steps.snapshot.outputs.ready }}
     defaults:
       run:
         shell: bash
-        working-directory: freshmg-${{ github.run_id }}
+        working-directory: mg-claim-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ env.CANDIDATE }}
-          path: freshmg-${{ github.run_id }}
+          ref: ${{ github.sha }}
+          path: carrier-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.BASE }}
+          path: mg-claim-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Bind clean inherited product
+      - name: Materialize only new test and prove inherited RED for the named reason
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          test "$(git rev-parse HEAD)" = "$BASE"
           test -z "$(git status --porcelain)"
-          git diff --exit-code 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af -- src
-          mkdir -p test-output/freshmg-frontier
+          python3 ../carrier-${{ github.run_id }}-${{ github.run_attempt }}/scripts/quest-evidence/apply-freshmg-branch-increment.py . test
           npm ci
-      - name: Measure existing real planner, handler and membership controls
-        run: |
-          set -euo pipefail
           exec 9>/tmp/lagrange-contract-first-measurement.lock
           flock -w 120 9
-          python3 - <<'PY'
-          import hashlib,json,os,subprocess
-          from pathlib import Path
-          out=Path('test-output/freshmg-frontier')
-          files=[
-            'test/rebalancer/message-group-membership-change-parked.test.js',
-            'test/rebalancer/message-group-membership-operation-lane.test.js',
-            'test/node/message-group-service-handler-membership.test.js',
-            'test/message-group/message-group-fresh-learner-promotion.test.js',
-            'test/message-group/message-group-fresh-learner-snapshot.test.js',
-            'test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js']
-          r={'schema':'freshmg-existing-frontier/1','sourceSha':os.environ['CANDIDATE'],
-             'runId':int(os.environ['GITHUB_RUN_ID']),'runner':os.environ['RUNNER_NAME'],
-             'runtimeChanges':False,'sourceApproval':False,'distributedAcceptance':False,
-             'proofCeiling':'existing deterministic/component tests and actual planner/handler fixtures; no new runtime implementation or multi-host acceptance','files':[]}
-          for i,file in enumerate(files):
-              p=Path(file); assert p.is_file(),file
-              stdout=out/f'{i+1}.stdout.txt';stderr=out/f'{i+1}.stderr.txt'
-              with stdout.open('w') as so,stderr.open('w') as se:
-                  process=subprocess.run(['timeout','240s','npm','run','test:file','--',file],stdout=so,stderr=se)
-              r['files'].append({'file':file,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),
-                  'exitCode':process.returncode,'stdout':stdout.name,'stderr':stderr.name})
-              print(file,process.returncode,flush=True)
-              print(stdout.read_text()[-5000:],flush=True)
-          r['allPassed']=all(f['exitCode']==0 for f in r['files'])
-          (out/'frontier.json').write_text(json.dumps(r,indent=2)+'\n')
-          PY
-          git diff --exit-code 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af -- src > test-output/freshmg-frontier/runtime-diff.txt
-          git status --porcelain > test-output/freshmg-frontier/final-status.txt
-          find test-output/freshmg-frontier -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/freshmg-frontier/SHA256SUMS
+          set +e
+          timeout 120s npm run test:file -- "$TEST_FILE" > test-output/freshmg-increment/red.stdout.txt 2> test-output/freshmg-increment/red.stderr.txt
+          status=$?
+          set -e
+          echo "$status" > test-output/freshmg-increment/red.exit.txt
+          test "$status" -eq 1
+          grep -q 'existing repository must own the durable promotion/abort CAS' test-output/freshmg-increment/red.stdout.txt
+          git diff --exit-code -- src
+      - name: Materialize unactivated source candidate; record formatting and tests without hiding failures
+        id: candidate
+        run: |
+          set -euo pipefail
+          python3 ../carrier-${{ github.run_id }}-${{ github.run_attempt }}/scripts/quest-evidence/apply-freshmg-branch-increment.py . source
+          files=(src/rebalancer/replica-operation-message-group-membership-permit.js src/rebalancer/replica-operation-message-group-membership-authorization.js src/rebalancer/replica-operation-message-group-membership-owner-claim.js "$TEST_FILE")
+          for f in "${files[@]}"; do node --check "$f"; done
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          set +e
+          npx eslint --fix "${files[@]}" > test-output/freshmg-increment/lint.txt 2>&1
+          echo "$?" > test-output/freshmg-increment/lint.exit.txt
+          timeout 180s npm run test:file -- "$TEST_FILE" > test-output/freshmg-increment/candidate.stdout.txt 2> test-output/freshmg-increment/candidate.stderr.txt
+          echo "$?" > test-output/freshmg-increment/candidate.exit.txt
+          set -e
+          tail -80 test-output/freshmg-increment/candidate.stdout.txt
+          cat test-output/freshmg-increment/candidate.stderr.txt >&2
+      - name: Snapshot only intended source/test paths for WIP publication
+        id: snapshot
+        run: |
+          set -euo pipefail
+          git add -- "$TEST_FILE" src/rebalancer/replica-operation-message-group-membership-permit.js src/rebalancer/replica-operation-message-group-membership-authorization.js src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/bootstrap/replica-operation-message-group-membership-schema-constants.js src/rebalancer/replica-operation-message-group-membership-fields.js src/rebalancer/replica-operation-repository-row-methods.js src/rebalancer/replica-operation-repository.js
+          git diff --cached --check
+          git diff --cached --binary > test-output/freshmg-increment/candidate.patch
+          git diff --cached --name-only > test-output/freshmg-increment/paths.txt
+          printf 'base=%s\ncarrier=%s\nrunner=%s\nrun=%s\n' "$BASE" "$GITHUB_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/freshmg-increment/provenance.txt
+          while IFS= read -r file; do sha256sum "$file"; done < test-output/freshmg-increment/paths.txt > test-output/freshmg-increment/source.sha256
+          find test-output/freshmg-increment -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/freshmg-increment/SHA256SUMS
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        id: upload
         if: always()
         with:
-          name: freshmg-inherited-frontier-${{ github.run_id }}
-          path: freshmg-${{ github.run_id }}/test-output/freshmg-frontier/
-          if-no-files-found: error
+          name: freshmg-increment-${{ github.run_id }}-${{ github.run_attempt }}
+          path: mg-claim-${{ github.run_id }}-${{ github.run_attempt }}/test-output/freshmg-increment/
           retention-days: 14
-      - name: Retain actual product-test verdict
+          if-no-files-found: error
+      - name: Preserve actual candidate test and static verdict
+        if: always() && steps.snapshot.outputs.ready == 'true'
         run: |
-          node -e 'const r=JSON.parse(require("fs").readFileSync("test-output/freshmg-frontier/frontier.json"));process.exit(r.allPassed?0:1)'
-  preserve-attempt:
-    needs: inherited-frontier
-    if: always() && needs.inherited-frontier.outputs.artifact != ''
+          test "$(cat test-output/freshmg-increment/candidate.exit.txt)" = 0
+          test "$(cat test-output/freshmg-increment/lint.exit.txt)" = 0
+  preserve-candidate:
+    needs: baseline-and-candidate
+    if: always() && needs.baseline-and-candidate.outputs.snapshot == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
-      actions: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      ARTIFACT: ${{ needs.inherited-frontier.outputs.artifact }}
-      DIGEST: ${{ needs.inherited-frontier.outputs.digest }}
+    outputs:
+      candidate: ${{ steps.push.outputs.candidate }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ env.CANDIDATE }}
+          ref: ${{ env.BASE }}
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Preserve exact initial implementation frontier, not success
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: freshmg-increment-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/freshmg-increment/
+      - name: Verify and push unactivated WIP without claiming source approval
+        id: push
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          sha256sum --check test-output/freshmg-increment/SHA256SUMS
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
+          git apply --check test-output/freshmg-increment/candidate.patch
+          git apply test-output/freshmg-increment/candidate.patch
+          sha256sum --check test-output/freshmg-increment/source.sha256
           npm ci
-          mkdir -p test-output/freshmg
-          gh api "repos/psvensson/lagrange/actions/artifacts/$ARTIFACT/zip" > "test-output/freshmg/frontier-$GITHUB_RUN_ID.zip"
+          node scripts/solve.js note --id message-group-fresh-identity-membership --attempt 'Bounded unactivated repository increment: exact membership holder claim and competing promotion/learner-abandonment operation-row CAS. Prior learner state is a supplied fixture; no runtime dispatch, planner/handler unpark, C0 closure, independent source approval or full replacement proof. Baseline/candidate/static exits and exact source hashes retained for this attempt; WIP publication is not landing.' --json > test-output/freshmg-increment/quest-attempt.json
+          mkdir -p solve/quests/message-group-fresh-identity-membership/evidence
           python3 - <<'PY'
-          import hashlib,json,os,zipfile
+          import json, os
           from pathlib import Path
-          p=Path('test-output/freshmg')/('frontier-'+os.environ['GITHUB_RUN_ID']+'.zip')
-          digest=hashlib.sha256(p.read_bytes()).hexdigest()
-          assert digest==os.environ['DIGEST'].removeprefix('sha256:')
-          z=zipfile.ZipFile(p); members={Path(n).name:z.read(n) for n in z.namelist() if not n.endswith('/')}
-          assert len(members)==len([n for n in z.namelist() if not n.endswith('/')])
-          for line in members['SHA256SUMS'].decode().splitlines():
-              h,n=line.split(None,1);assert hashlib.sha256(members[Path(n).name]).hexdigest()==h
-          r=json.loads(members['frontier.json']);assert r['sourceSha']==os.environ['CANDIDATE']
-          r['artifactId']=int(os.environ['ARTIFACT']);r['archiveSha256']=digest
-          r['outputs']={n:b.decode() for n,b in members.items() if n.endswith('.txt')}
-          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('frontier-'+os.environ['GITHUB_RUN_ID']+'.json')
-          dest.write_text(json.dumps(r,indent=2)+'\n')
+          p=Path('test-output/freshmg-increment')
+          record={'schema':'freshmg-branch-attempt/1','base':os.environ['BASE'],'runId':int(os.environ['GITHUB_RUN_ID']),
+            'sourceApproval':False,'runtimeActivation':False,'C0Closed':False,
+            'files':{f.name:f.read_text() for f in p.iterdir() if f.is_file() and f.suffix in ('.txt','.json','.sha256')},
+            'limits':'real repository SQL to file-backed SQLite; prior learner fixture and node rows supplied; no distributed SQL/Raft, actual promotion, CREATE, or full recovery driver'}
+          Path('solve/quests/message-group-fresh-identity-membership/evidence/branch-attempt-'+os.environ['GITHUB_RUN_ID']+'.json').write_text(json.dumps(record,indent=2)+'\n')
           PY
-          node scripts/solve.js evidence add "test-output/freshmg/frontier-$GITHUB_RUN_ID.zip" --id "$QUEST" --text 'Initial C1 existing production-entry and component frontier on exact inherited source. Original failures remain failures; no source fix, planner unpark or release claim.' --json > test-output/freshmg/upload.json
-          node scripts/solve.js note --id "$QUEST" --finding 'Resume existing FreshMG Quest under user-approved J1: durable promotion authorization selects forward recovery; old source S and fresh target T are immutable. Start at actual planner/handler and repository/runtime admission boundaries. No wholesale adoption of rejected cd366cc0, no unpark before the correct owner chain, no new progress store. C0 classification source review remains separate from this inherited product baseline.' --kind decision --json > test-output/freshmg/decision.json
-          node scripts/solve.js note --id "$QUEST" --attempt 'Measured the six existing planner/handler/membership test files before production changes and retained every exit/stdout/stderr plus source hashes. This first C1 attempt establishes the actual red frontier and existing positive controls; no assertion was removed and no source was changed.' --json > test-output/freshmg/attempt.json
-          git diff --check
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$CANDIDATE"
-          git add -- "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/frontier-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'FreshMG: resume admitted owner-chain implementation from measured existing frontier'
+          while IFS= read -r file; do git add -- "$file"; done < test-output/freshmg-increment/paths.txt
+          git add -- solve/quests/message-group-fresh-identity-membership/log.ndjson "solve/quests/message-group-fresh-identity-membership/evidence/branch-attempt-$GITHUB_RUN_ID.json"
+          git diff --cached --check
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'WIP FreshMG: exact membership holder and monotonic branch selection (not activated)'
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          head="$(git rev-parse HEAD)"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$head"
-          echo "$head" > test-output/freshmg/pushed-sha.txt
+          candidate="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$candidate"
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+          echo "$candidate" > test-output/freshmg-increment/published-sha.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-frontier-publication-${{ github.run_id }}
-          path: test-output/freshmg/
+          name: freshmg-increment-publication-${{ github.run_id }}
+          path: test-output/freshmg-increment/
+          if-no-files-found: error
+          retention-days: 14
+  exact-candidate:
+    needs: preserve-candidate
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: mg-exact-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ needs.preserve-candidate.outputs.candidate }}
+          path: mg-exact-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact-head focused tests and related existing owners
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '${{ needs.preserve-candidate.outputs.candidate }}'
+          test -z "$(git status --porcelain)"
+          mkdir -p test-output/mg-exact
+          npm ci
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          set +e
+          timeout 180s npm run test:file -- "$TEST_FILE" test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/mg-exact/tests.txt 2> test-output/mg-exact/tests.stderr.txt
+          code=$?
+          echo "$code" > test-output/mg-exact/tests.exit.txt
+          set -e
+          git rev-parse HEAD > test-output/mg-exact/source-sha.txt
+          git status --porcelain > test-output/mg-exact/final-status.txt
+          tail -80 test-output/mg-exact/tests.txt
+          exit "$code"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: freshmg-exact-${{ github.run_id }}-${{ github.run_attempt }}
+          path: mg-exact-${{ github.run_id }}-${{ github.run_attempt }}/test-output/mg-exact/
           if-no-files-found: error
           retention-days: 14
