@@ -12,6 +12,7 @@ env:
   EXPECTED: ff8c95ee3546458db0154e7eb8920bcd1978b9c4
   WORK_BRANCH: work/freshmg-runtime-authorization-20261008
   QUEST: message-group-fresh-identity-membership
+  LAGRANGE_LANE_JOBS_CAP: '1'
 jobs:
   review-r1:
     runs-on: ubuntu-24.04
@@ -24,7 +25,7 @@ jobs:
         shell: bash
         working-directory: candidate-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Retain original lint failure and queued-GCP cancellation evidence
+      - name: Retain original failures and record bounded worker-cap experiment
         working-directory: ${{ github.workspace }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -32,9 +33,12 @@ jobs:
           set -euo pipefail
           out="$GITHUB_WORKSPACE/runtime-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
+          gh api repos/psvensson/lagrange/actions/artifacts/11566547325/zip > "$out/grouped-budget-failure-37814349071.zip"
+          echo "f5a0aec899fb3aed85609dd4494c66b0648d8e4efa3ea438287dd9bf706811e6  $out/grouped-budget-failure-37814349071.zip" | sha256sum -c -
           gh api repos/psvensson/lagrange/actions/artifacts/11565997590/zip > "$out/lint-stopped-37813798876.zip"
           echo "9b03f4560a416dc16d5bd153ada7b5c6bb3a823ae3eb8aafdb38bd6ccb595aae  $out/lint-stopped-37813798876.zip" | sha256sum -c -
-          echo 'GitHub-hosted Linux, not GCP. Prior GCP VM was running but its worker never accepted the measurement; only that queued job was cancelled. Original static RED and restart timing measured, then lint found one 101-character line. No runtime-consumer or post-refactor result belongs to that failed attempt. No distributed acceptance substitution.' > "$out/execution-substrate.txt"
+          { printf 'cap=%s\n' "$LAGRANGE_LANE_JOBS_CAP"; nproc; free -b; cat /proc/loadavg; lscpu; } > "$out/runner-resources.txt"
+          echo 'GitHub-hosted Linux, not GCP. The previous corrected-source run passed 177 focused assertions but all four concurrent unit files exceeded 2 seconds. This measurement changes only the classified runner existing LAGRANGE_LANE_JOBS_CAP to 1; source/tests/budgets remain identical. It tests resource-concurrency sensitivity, not an assumed saturation diagnosis. The cancelled GCP job never started. No distributed acceptance substitution.' > "$out/execution-substrate.txt"
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.sha }}
