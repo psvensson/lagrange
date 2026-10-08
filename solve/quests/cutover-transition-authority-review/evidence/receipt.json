@@ -2,8 +2,8 @@
   "schema": "test-receipt/1",
   "quest": "cutover-transition-authority-review",
   "status": "fail",
-  "sourceSha": "4cdeac1c43ccc470ee5816a7439197d1d6c21bf4",
-  "evidence": "solve/quests/cutover-transition-authority-review/evidence/gcp-37736547313.json",
+  "sourceSha": "ae20b6601ca27bcab7758840bc4830945558b524",
+  "evidence": "solve/quests/cutover-transition-authority-review/evidence/classification-gcp-20261008.json",
   "additionalEvidence": [
     "solve/quests/cutover-transition-authority-review/evidence/owner-entry-2026-10-08.json",
     "solve/quests/cutover-transition-authority-review/evidence/gcp-37740082892.json",
@@ -16,35 +16,36 @@
   "testFileDigests": {
     "scripts/quest-evidence/cutover-transition-authority-baseline.js": "363e258e16c14151d44a98ff3a33f4d5136b068c51536cf0a419f11e95bafef9",
     "scripts/quest-evidence/cutover-owner-entry-baseline.js": "4b2a613ce9bd724cd4a1cb9956262d1099f805482aedc62d3b506aa4018b9efb",
-    "scripts/quest-evidence/cutover-workflow-crash-baseline.js": "18efc629fc68d43e62687f5e13a4dede3777162db7ee9e6032849976aadf8bcd"
+    "scripts/quest-evidence/cutover-workflow-crash-baseline.js": "c0fa2fa1dd3369d41f435b902a80a8464a3049ad83244afcae16cc58c884313b",
+    "scripts/quest-evidence/cutover-terminal-obligation-baseline.js": "c4be04d577c445f799516e0ec4f629c567bc2992c76867913691de26f1cfc3b5"
   },
   "receipts": [
     {
       "id": "replacement-source-target-and-obligations-classified",
-      "passed": false,
-      "detail": "Complete-operation success/failure subject table and proposed existing-owner resolution are recorded in transition-contract-review.md. J1 promoted-target recovery policy and transition-identity review remain open; existing acceptance unchanged and no WIP permit accepted."
+      "passed": true,
+      "detail": "J1 is selected by the operator in operator-decision-20261008-j1.md. Exact O/S/T subjects and durable promotion-authorization boundary are classified; no WIP permit or full replacement acceptance is claimed."
     },
     {
       "id": "workflow-commit-projection-and-restart-classified",
-      "passed": false,
-      "detail": "Six real repository/SQLite SIGKILL/reopen cases now pass, including failed SQL and committed answer loss. The actual SQL commit point and disposable mirror relationship are measured. Diagnostic terminal filtering is explicit; full distributed recovery, changing owner leases and every terminal caller are not proven. Classification remains under independent review; no new persistence mechanism justified."
+      "passed": true,
+      "detail": "Actual repository commit and volatile mirror/progress relation classified. Corrected ordinary terminal entries retain exact SQL membership debt and reject a competing group operation with no physical work. Six strengthened process-loss cases pass on ae20b660. Missing membership recovery driver is a named FreshMG implementation obligation."
     },
     {
       "id": "snapshot-local-open-wipe-and-install-classified",
-      "passed": false,
-      "detail": "Current registered path versus preserved draft is reconciled in the review packet; source identifies missing runtime catch-up trigger/application-image interaction. Existing three snapshot files pass 72 reported assertions on GCP, but include legacy-image refusal and component CREATE/install, not successful intact partition catch-up. Independent classification review remains open."
+      "passed": true,
+      "detail": "Four gates and existing owners classified in classification-disposition-20261008.md. Missing callback/Ready/application-image integration belongs to the existing snapshot product frontier. No successful intact catch-up or multi-host claim."
     },
     {
       "id": "source-bound-deterministic-discriminators-measured",
       "passed": true,
       "command": "node scripts/quest-evidence/cutover-transition-authority-baseline.js test-output/contract-first/baseline.json 4cdeac1c43ccc470ee5816a7439197d1d6c21bf4",
       "testFile": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
-      "detail": "Original direct-adapter baseline remains RED and retained. Follow-up Actions/GCP runs 37739512267 and 37740082892 use actual owner and repository policy, qualify its interpretation, and preserve their positive controls. Latest unchanged-runtime run passes four workflow/retry files (132 reported assertions), three snapshot files (72), and the owner-entry/fence witness. All downloaded archives and member hashes verified. Measurement completion is not runtime correction, independent acceptance, production race proof or distributed certification. The initial new fixture failure in run 37738789039 is retained as non-measuring."
+      "detail": "Original red and failed-harness artifacts preserved alongside corrected GCP proofs through canonical hash-verified evidence uploads. Proof ceilings and positive controls retained."
     },
     {
       "id": "independent-category-complete-contract-review",
       "passed": false,
-      "detail": "Review 5452918820 by copilot-pull-request-reviewer[bot] explicitly REJECTS C0 closure at 0219a7fe while supporting its narrow findings. Rejection retained. New process-loss evidence and proposed J1 forward-recovery policy await follow-up review; no approval or operator policy ruling is fabricated."
+      "detail": "Outstanding actual independent review of the new classification packet. Earlier rejections and author self-review remain unchanged."
     }
   ]
 }
