@@ -5,154 +5,28 @@ on:
     paths: [.github/workflows/request-c0-review.yml]
 permissions:
   contents: read
+  pull-requests: write
 concurrency:
   group: request-c0-review-20261008
   cancel-in-progress: false
 jobs:
-  retain-and-request:
+  request:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: write
-      actions: read
-      pull-requests: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      EXPECTED: fa5a8f3330208d277cb66570c58b690167d00722
-      BRANCH: integrate/rs-raft-contract-first-20261008
-      QUEST: cutover-transition-authority-review
-      ARCHIVE_HASH: 91f3c052db86c3da9ca0ab09ada9738787bba259a0669c9be8c18122155f2bb4
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ env.EXPECTED }}
-          fetch-depth: 0
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - name: Verify source and existing evidence store
+      - name: Request independent review of the confirmed evidence head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED"
-          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$EXPECTED"
-          test -z "$(git status --porcelain)"
-          gh release view solve-evidence --repo psvensson/lagrange --json tagName,isPrerelease
-          npm ci
-      - name: Download and validate the already-completed measurement
-        run: |
-          set -euo pipefail
-          mkdir -p test-output/c0-retain
-          gh api repos/psvensson/lagrange/actions/artifacts/11534404586/zip > "$RUNNER_TEMP/c0-process-loss-37743852151-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.zip"
-          python3 - <<'PY'
-          import hashlib, json, os, pathlib, zipfile
-          archive = pathlib.Path(os.environ['RUNNER_TEMP']) / ('c0-process-loss-37743852151-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '.zip')
-          assert hashlib.sha256(archive.read_bytes()).hexdigest() == os.environ['ARCHIVE_HASH']
-          with zipfile.ZipFile(archive) as z:
-              manifest = z.read('SHA256SUMS').decode().splitlines()
-              assert len(manifest) == 17
-              for line in manifest:
-                  digest, name = line.split(None, 1)
-                  name = name.removeprefix('test-output/c0-crash/')
-                  assert hashlib.sha256(z.read(name)).hexdigest() == digest, name
-              raw = z.read('process-loss.json')
-              assert hashlib.sha256(raw).hexdigest() == '8710119148201ee3d8c4e2cb641424b8d31e4c37c215092bae3b8a6463aa744a'
-              report = json.loads(raw)
-              assert report['sourceSha'] == 'ac8194b2981de59d28726e68ea447d29d596f438'
-              assert report['measurementStatus'] == 'measured'
-              assert len(report['cases']) == 6 and all(c['passed'] for c in report['cases'])
-              assert z.read('runtime-source-diff.txt') == b'' and z.read('final-status.txt') == b''
-              for p, digest in report['sourceDigests'].items():
-                  assert hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() == digest, p
-              harness = pathlib.Path('scripts/quest-evidence/cutover-workflow-crash-baseline.js')
-              assert hashlib.sha256(harness.read_bytes()).hexdigest() == '18efc629fc68d43e62687f5e13a4dede3777162db7ee9e6032849976aadf8bcd'
-              summaries = []
-              for c in report['cases']:
-                  before = next(m for m in c['before']['messages'] if m['kind'] == 'cut')['observation']
-                  after = next(m for m in c['after']['messages'] if m['kind'] == 'result')
-                  summaries.append({'name': c['name'], 'passed': c['passed'],
-                      'writerPid': before['pid'], 'restartPid': after['pid'],
-                      'terminationSignal': c['before']['signal'],
-                      'writerRowStep': before['row']['workflow_step'],
-                      'writerMirrorStep': before['mirrorStep'],
-                      'writerCommittedMark': before['committedMark'],
-                      'writerOpenTransaction': before['inTransaction'],
-                      'reopenedRowStep': after['beforeRetry']['row']['workflow_step'],
-                      'reconstructedCommittedMark': after['beforeRetry']['nextMarkedCommitted'],
-                      'freshVolatileRecordCount': after['beforeRetry']['progressRecords'],
-                      'terminal': after['beforeRetry']['terminal'],
-                      'replayOutcome': after['replay'], 'afterReplayStep': after['afterRetry']['workflow_step'],
-                      'physicalCalls': after['physicalCalls']})
-              summary = {'schema': 'cutover-workflow-process-loss-evidence/1',
-                  'runId': 37743852151, 'artifactId': 11534404586,
-                  'candidateSha': report['sourceSha'], 'inheritedRuntimeSha': '82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af',
-                  'archiveSha256': os.environ['ARCHIVE_HASH'],
-                  'rawReportSha256': hashlib.sha256(raw).hexdigest(),
-                  'verifiedMembers': len(manifest), 'proofCeiling': report['proofCeiling'],
-                  'substitutions': report['substitutions'],
-                  'harnessSha256': hashlib.sha256(harness.read_bytes()).hexdigest(),
-                  'sourceDigests': report['sourceDigests'], 'cases': summaries,
-                  'regressionStdout': z.read('regressions.txt').decode(),
-                  'regressionExit': int(z.read('regressions-exit.txt')),
-                  'baselineExit': int(z.read('exit.txt')),
-                  'runtimeDiff': '', 'finalGitStatus': '',
-                  'independentApproval': False, 'distributedAcceptance': False}
-              pathlib.Path('test-output/c0-retain/summary.json').write_text(json.dumps(summary, indent=2) + '\n')
-          PY
-      - name: Retain original archive through canonical Solver evidence owner
-        run: |
-          set -euo pipefail
-          node scripts/solve.js evidence add "$RUNNER_TEMP/c0-process-loss-37743852151-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.zip" --id "$QUEST" --text 'Original Actions/GCP run 37743852151 archive: six real owner/repository/SQLite SIGKILL cases and three focused files (90 assertions). Archive and 17 members hash-verified; process-loss proof only, not power loss, full recovery driver, membership or distributed acceptance.' --json > test-output/c0-retain/evidence-add.json
-          python3 - <<'PY'
-          import json, os, pathlib
-          p = pathlib.Path('solve/quests') / os.environ['QUEST'] / 'evidence'
-          data = json.loads(pathlib.Path('test-output/c0-retain/summary.json').read_text())
-          uploaded = json.loads(pathlib.Path('test-output/c0-retain/evidence-add.json').read_text())['uploaded']
-          assert uploaded['sha256'] == os.environ['ARCHIVE_HASH']
-          data['retainedArchive'] = uploaded
-          (p / 'gcp-37743852151.json').write_text(json.dumps(data, indent=2) + '\n')
-          receipt = p / 'receipt.json'
-          r = json.loads(receipt.read_text())
-          r['additionalEvidence'] = list(dict.fromkeys(r.get('additionalEvidence', []) + [
-              str(p / 'gcp-37743852151.json'), str(p / 'review-5452918820.json'),
-              str(p.parent / 'process-loss-conclusions.md'), str(p.parent / 'recovery-policy-proposal.md')]))
-          r['testFileDigests']['scripts/quest-evidence/cutover-workflow-crash-baseline.js'] = data['harnessSha256']
-          for cell in r['receipts']:
-              if cell['id'] == 'workflow-commit-projection-and-restart-classified':
-                  cell['detail'] = 'Six real repository/SQLite SIGKILL/reopen cases now pass, including failed SQL and committed answer loss. The actual SQL commit point and disposable mirror relationship are measured. Diagnostic terminal filtering is explicit; full distributed recovery, changing owner leases and every terminal caller are not proven. Classification remains under independent review; no new persistence mechanism justified.'
-              if cell['id'] == 'independent-category-complete-contract-review':
-                  cell['detail'] = 'Review 5452918820 by copilot-pull-request-reviewer[bot] explicitly REJECTS C0 closure at 0219a7fe while supporting its narrow findings. Rejection retained. New process-loss evidence and proposed J1 forward-recovery policy await follow-up review; no approval or operator policy ruling is fabricated.'
-          assert r['status'] == 'fail' and sum(not c['passed'] for c in r['receipts']) == 4
-          receipt.write_text(json.dumps(r, indent=2) + '\n')
-          PY
-      - name: Append actual verdict and measured continuation (no terminal entry)
-        run: |
-          set -euo pipefail
-          node scripts/solve.js note --id "$QUEST" --finding 'External independent review 5452918820 (copilot-pull-request-reviewer[bot], exact 0219a7fe, 2026-10-08T07:05:06Z) REJECTS C0 closure while supporting the narrow findings. Preserved verbatim verdict and attribution in evidence/review-5452918820.json. This is not an approval or a locally invented subagent verdict.' --kind evidence --json > test-output/c0-retain/rejection-note.json
-          node scripts/solve.js note --id "$QUEST" --attempt 'Addressed the workflow process-loss evidence gap with actual repository-generated SQL on canonical file-backed SQLite schemas and separate SIGKILL/restart processes. Six cuts pass on exact ac8194b2 in GCP run 37743852151; existing three files pass 90 assertions. Proposed precise J1 forward recovery, keeping policy approval and source implementation explicitly outstanding. No runtime source change.' --json > test-output/c0-retain/attempt.json
-          node scripts/solve.js probe --id "$QUEST" --json > test-output/c0-retain/probe.json
-          git diff --check
-          git diff --exit-code 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af -- src
-          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$EXPECTED"
-          git add "solve/quests/$QUEST/evidence/gcp-37743852151.json" "solve/quests/$QUEST/evidence/receipt.json" "solve/quests/$QUEST/log.ndjson"
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain actual C0 crash proof and independent rejection (not closure)'
-          git push origin "HEAD:refs/heads/$BRANCH"
-          ACTUAL="$(git rev-parse HEAD)"
-          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$ACTUAL"
-          printf '%s\n' "$ACTUAL" > test-output/c0-retain/review-sha.txt
-      - name: Request scoped review of exact new evidence
-        run: |
-          set -euo pipefail
-          SHA="$(cat test-output/c0-retain/review-sha.txt)"
-          test "$(gh pr view 104 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)" = "$SHA"
-          gh pr comment 104 --repo psvensson/lagrange --body "Follow-up exact head $SHA: review-5452918820.json retains your REJECT. process-loss-conclusions.md and evidence/gcp-37743852151.json now contain six real repository/SQLite process-kill and reopen cases, with raw archive retained via Solver. Review that bounded workflow classification, especially the explicitly diagnostic terminal filter and fake distributed gateway. recovery-policy-proposal.md proposes J1 forward recovery after promotion authorization; it is NOT a fabricated operator ruling or new sealed contract. Please judge compatibility and specify any necessary human policy decision. C0 remains OPEN; successful physical FreshMG/snapshot implementation is not claimed. Do not merge the preservation-ref base. Return findings and explicit qualified verdict on these new materials at $SHA; do not infer closure from test counts."
+          expected=41a8cdfb33ddc4acddafa192f7f5141a6ae38119
+          actual="$(gh pr view 104 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          printf 'expected=%s\nactual=%s\n' "$expected" "$actual"
+          test "$actual" = "$expected"
+          # The previous run retained and published evidence successfully, then
+          # stopped at its immediate post-push PR identity check. Do not repeat
+          # that upload or overwrite its evidence. This job only requests review.
           gh pr edit 104 --repo psvensson/lagrange --add-reviewer @copilot
           gh pr view 104 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
-      - name: Preserve recorder outputs
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: c0-proof-retention-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-output/c0-retain/
-          retention-days: 14
-          if-no-files-found: warn
+          echo 'Requested scoped follow-up review of process-loss evidence and J1 proposal. No closure, policy ruling or source approval implied.' >> "$GITHUB_STEP_SUMMARY"
