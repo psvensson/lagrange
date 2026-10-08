@@ -1,0 +1,30 @@
+name: request-c0-review
+on:
+  push:
+    branches: [ops/c0-review-20261008]
+    paths: [.github/workflows/request-c0-review.yml]
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: request-c0-review-20261008
+  cancel-in-progress: false
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Request review of exact frozen C0 packet
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected=0219a7fee95bdd744e52b8fa2eb5c5978e661964
+          actual="$(gh pr view 104 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          test "$actual" = "$expected"
+          # Reuse the existing request-copilot-pr83 workflow's supported CLI path.
+          # Request only: never issue approval, merge, or alter the reviewed head.
+          gh pr edit 104 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 104 --repo psvensson/lagrange --json number,state,isDraft,headRefOid,url,reviewRequests
+          echo 'Requested independent contract/harness review; no acceptance is implied.' >> "$GITHUB_STEP_SUMMARY"
