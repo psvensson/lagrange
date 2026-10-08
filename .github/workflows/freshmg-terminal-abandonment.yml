@@ -1,0 +1,205 @@
+name: freshmg-terminal-abandonment
+on:
+  push:
+    branches: [ops/freshmg-terminal-abandonment-20261008]
+    paths: [.github/workflows/freshmg-terminal-abandonment.yml]
+permissions:
+  contents: read
+concurrency:
+  group: freshmg-terminal-abandonment-20261008
+  cancel-in-progress: false
+env:
+  BASE: 76c3a6175142a88cb79f332409d95587216c06ba
+  WORK_BRANCH: work/freshmg-terminal-abandonment-20261008
+  QUEST: message-group-fresh-identity-membership
+jobs:
+  wake:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - name: Start only the existing proof runner
+        run: |
+          set -euo pipefail
+          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
+          if [ "$status" != RUNNING ]; then
+            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
+          fi
+  measure:
+    needs: wake
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+        working-directory: t1-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          path: carrier-${{ github.run_id }}
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.BASE }}
+          path: t1-${{ github.run_id }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Bind current source and install locked dependencies
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE"
+          test -z "$(git status --porcelain)"
+          mkdir -p test-output/t1
+          printf 'base=%s\ncarrier=%s\nrunner=%s\nrun=%s\n' "$BASE" "$GITHUB_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/t1/provenance.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          npm ci
+          node scripts/solve.js probe --id "$QUEST" --json > test-output/t1/inherited-quest.json
+          set +e
+          npm run test:metrics:scoped -- src/rebalancer/replica-operation-message-group-membership-authorization.js > test-output/t1/metrics-before.txt 2>&1
+          echo "$?" > test-output/t1/metrics-before-exit.txt
+          set -e
+      - name: Add tests first and measure the missing T1 behavior
+        id: red
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/prepare-terminal-abandonment.py test . > test-output/t1/test-preparation.json
+          node --check test/rebalancer/message-group-membership-branch-authorization.test.js
+          git add test/rebalancer/message-group-membership-branch-authorization.test.js
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: terminal learner abandonment must preserve exact settled operation'
+          git rev-parse HEAD > test-output/t1/red-sha.txt
+          set +e
+          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/t1/red.txt 2>&1
+          status=$?
+          set -e
+          echo "$status" > test-output/t1/red-exit.txt
+          tail -65 test-output/t1/red.txt
+          test "$status" -eq 1
+          grep -q 'not ok.*T1 terminal learner selects exact target abandonment' test-output/t1/red.txt
+          grep -q ERR_ASSERTION test-output/t1/red.txt
+      - name: Implement the existing branch selector and refresh derived metadata
+        id: source
+        run: |
+          set -euo pipefail
+          python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/prepare-terminal-abandonment.py source . > test-output/t1/source-preparation.json
+          node --check src/rebalancer/replica-operation-message-group-membership-authorization.js
+          npm exec --no -- eslint src/rebalancer/replica-operation-message-group-membership-authorization.js test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/t1/lint.txt 2>&1
+          npm run test:metadata:refresh > test-output/t1/metadata.txt 2>&1
+          git diff --name-only > test-output/t1/precommit-paths.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          paths=Path('test-output/t1/precommit-paths.txt').read_text().splitlines()
+          assert all(p=='src/rebalancer/replica-operation-message-group-membership-authorization.js' or p.startswith('test/shards/') for p in paths), paths
+          PY
+          git add src/rebalancer/replica-operation-message-group-membership-authorization.js test/shards/
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP FreshMG: select terminal learner abandonment through the existing exact row CAS'
+          git rev-parse HEAD > test-output/t1/source-sha.txt
+          git diff --check "$BASE" HEAD
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - name: Prove the same tests green and retain narrow guardrail results
+        id: green
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/t1/green.txt 2>&1
+          echo 0 > test-output/t1/green-exit.txt
+          tail -40 test-output/t1/green.txt
+          npm run audit:shards > test-output/t1/shards.txt 2>&1
+          set +e
+          npm run test:metrics:scoped -- src/rebalancer/replica-operation-message-group-membership-authorization.js > test-output/t1/metrics-after.txt 2>&1
+          echo "$?" > test-output/t1/metrics-after-exit.txt
+          node scripts/check-guideline-decision-boundaries.js src/rebalancer/replica-operation-message-group-membership-authorization.js > test-output/t1/decisions.txt 2>&1
+          echo "$?" > test-output/t1/decisions-exit.txt
+          set -e
+      - name: Mutation controls must detect each weakened predicate
+        id: mutants
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          source=src/rebalancer/replica-operation-message-group-membership-authorization.js
+          cp "$source" "$RUNNER_TEMP/t1-original-$GITHUB_RUN_ID.js"
+          trap 'cp "$RUNNER_TEMP/t1-original-$GITHUB_RUN_ID.js" "$source"' EXIT
+          for mutant in completion promotion holder; do
+            cp "$RUNNER_TEMP/t1-original-$GITHUB_RUN_ID.js" "$source"
+            python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/prepare-terminal-abandonment.py "mutant-$mutant" . > "test-output/t1/mutant-$mutant-preparation.json"
+            set +e
+            npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js > "test-output/t1/mutant-$mutant.txt" 2>&1
+            status=$?
+            set -e
+            echo "$status" > "test-output/t1/mutant-$mutant-exit.txt"
+            test "$status" -eq 1
+            grep -q ERR_ASSERTION "test-output/t1/mutant-$mutant.txt"
+            case "$mutant" in
+              completion) grep -q 'not ok.*T1 exact terminal timestamp' "test-output/t1/mutant-$mutant.txt";;
+              promotion) grep -q 'not ok.*T1 terminal state rejects promotion' "test-output/t1/mutant-$mutant.txt";;
+              holder) grep -q 'not ok.*T1 holder renewal' "test-output/t1/mutant-$mutant.txt";;
+            esac
+          done
+          cp "$RUNNER_TEMP/t1-original-$GITHUB_RUN_ID.js" "$source"
+          git diff --exit-code -- "$source"
+      - name: Record and push the bounded WIP increment without force
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
+          node scripts/solve.js note --id "$QUEST" --attempt "T1 terminal-after-learner branch implemented through the existing selector: exact terminal completion CAS, target-only abandonment, current holder and immutable learner/identity fences retained. GCP run $GITHUB_RUN_ID measured test-first red, unchanged tests green, and three predicate mutants red. Runtime/CREATE/transport remain inactive; row fixture substitutes distributed gateway; independent source review and full acceptance remain pending." --json > test-output/t1/attempt.json
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          p=Path('test-output/t1')
+          files={f.name:f.read_text() for f in p.iterdir() if f.is_file()}
+          record={'schema':'freshmg-terminal-abandonment-attempt/1','runId':int(os.environ['GITHUB_RUN_ID']),
+            'baseSha':os.environ['BASE'],'carrierSha':os.environ['GITHUB_SHA'],
+            'sourceSha':(p/'source-sha.txt').read_text().strip(),'testFirstSha':(p/'red-sha.txt').read_text().strip(),
+            'runner':os.environ['RUNNER_NAME'],'independentApproval':False,'distributedAcceptance':False,
+            'proofCeiling':'real repository/canonical schemas/file-backed SQLite; substituted distributed gateway and supplied committed learner fixture; no runtime REMOVE or physical cleanup',
+            'outputs':files,'sha256':{k:hashlib.sha256(v.encode()).hexdigest() for k,v in files.items()}}
+          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('terminal-abandonment-'+os.environ['GITHUB_RUN_ID']+'.json')
+          dest.write_text(json.dumps(record,indent=2)+'\n')
+          PY
+          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/terminal-abandonment-$GITHUB_RUN_ID.json"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain T1 red green and mutation results without claiming closure'
+          git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > test-output/t1/published-sha.txt
+      - name: Preserve exact source, diffs, and every result
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p test-output/t1
+          git status --porcelain > test-output/t1/final-status.txt
+          git diff --binary "$BASE" > test-output/t1/full-work.patch
+          git diff --binary > test-output/t1/uncommitted.patch
+          git archive --format=tar.gz -o test-output/t1/source.tar.gz HEAD
+          if [ "$(git rev-parse HEAD)" != "$BASE" ]; then
+            git bundle create test-output/t1/candidate.bundle HEAD "^$BASE"
+          fi
+          find test-output/t1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/t1/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: freshmg-t1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: t1-${{ github.run_id }}/test-output/t1/
+          retention-days: 14
+          if-no-files-found: error
