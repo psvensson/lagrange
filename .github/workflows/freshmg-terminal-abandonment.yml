@@ -5,227 +5,25 @@ on:
     paths: [.github/workflows/freshmg-terminal-abandonment.yml]
 permissions:
   contents: read
+  pull-requests: write
 concurrency:
   group: freshmg-terminal-abandonment-20261008
   cancel-in-progress: false
-env:
-  BASE: ddff5a2c8b16635d287126e6a6b09f53951214b0
-  SOURCE: e56e3950fb822756bd1c82394a0e96729ea96471
-  WORK_BRANCH: work/freshmg-learner-authorization-20261008
-  QUEST: message-group-fresh-identity-membership
 jobs:
-  wake:
+  request-exact-review:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-        with:
-          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
-          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
-      - name: Start only existing proof runner
-        run: |
-          set -euo pipefail
-          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
-          if [ "$status" != RUNNING ]; then
-            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
-          fi
-  learner-intent:
-    needs: wake
-    runs-on: [self-hosted, gcp]
-    timeout-minutes: 25
-    permissions:
-      contents: write
-      actions: read
-    defaults:
-      run:
+      - name: Bind independent review to the already pushed source and evidence
         shell: bash
-        working-directory: learner-${{ github.run_id }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.sha }}
-          path: carrier-${{ github.run_id }}
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ env.BASE }}
-          path: learner-${{ github.run_id }}
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - name: Recover unchanged source and original passed behavior with failed timing
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p test-output/learner
-          test "$(git rev-parse HEAD)" = "$BASE"
-          test -z "$(git status --porcelain)"
-          gh api repos/psvensson/lagrange/actions/artifacts/11555346703/zip > test-output/learner/original-37788383916.zip
-          python3 - <<'PY'
-          import hashlib,json,os,zipfile
-          from pathlib import Path
-          p=Path('test-output/learner'); raw=(p/'original-37788383916.zip').read_bytes()
-          assert hashlib.sha256(raw).hexdigest()=='119252fca0bff5915f22e0b79d6753d40f700c329ebb90ce6e0118c5a4f5d7e6'
-          with zipfile.ZipFile(p/'original-37788383916.zip') as z:
-              assert all('/' not in n and '\\' not in n for n in z.namelist())
-              assert len(z.namelist())==len(set(z.namelist()))
-              for line in z.read('SHA256SUMS').decode().splitlines():
-                  h,f=line.split(None,1);n=Path(f.strip()).name
-                  assert hashlib.sha256(z.read(n)).hexdigest()==h,n
-              assert z.read('source-sha.txt').decode().strip()==os.environ['SOURCE']
-              assert z.read('green-unit-exit.txt').strip()==b'0'
-              assert z.read('green-cache-exit.txt').strip()==b'0'
-              assert z.read('uncommitted.patch')==b'' and z.read('final-status.txt')==b''
-              (p/'original.bundle').write_bytes(z.read('recovery.bundle'))
-              for n in ['red-sha.txt','red-unit.txt','red-cache.txt','red-unit-exit.txt','red-cache-exit.txt','green-unit.txt','green-cache.txt']:
-                  (p/('original-'+n)).write_bytes(z.read(n))
-          PY
-          git bundle verify test-output/learner/original.bundle
-          git fetch test-output/learner/original.bundle HEAD
-          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE"
-          git merge-base --is-ancestor "$BASE" "$SOURCE"
-          git checkout --detach "$SOURCE"
-          npm ci
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          printf 'base=%s\nsource=%s\ncarrier=%s\nrunner=%s\nrun=%s\n' "$BASE" "$SOURCE" "$GITHUB_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/learner/provenance.txt
-      - name: Remove repeated untouched fixture writes without altering production or durability
-        run: |
-          set -euo pipefail
-          python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/cache-membership-row-fixtures.py . > test-output/learner/fixture-preparation.txt
-          npm exec --no -- eslint test/rebalancer/message-group-membership-branch-authorization.test.js > test-output/learner/lint.txt 2>&1
-          npm run test:metrics:scoped:strict -- test/rebalancer/message-group-membership-branch-authorization.test.js test/integration/message-group-membership-claim-cache.integration.test.js > test-output/learner/test-metrics.txt 2>&1
-          npm run test:metadata:refresh > test-output/learner/metadata.txt 2>&1
-          npm run audit:shards > test-output/learner/shards.txt 2>&1
-          git diff --check
-          git diff --exit-code "$SOURCE" -- src
-          git add test/rebalancer/message-group-membership-branch-authorization.test.js test/shards/
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: copy only closed unexercised operation fixtures; retain isolated WAL FULL writes'
-          git rev-parse HEAD > test-output/learner/source-sha.txt
-      - name: Same behavior and original file budgets must pass
-        run: |
-          set -euo pipefail
-          exec 9>/tmp/lagrange-contract-first-measurement.lock
-          flock -w 120 9
-          set +e
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/learner/green-unit.txt 2>&1
-          unit=$?
-          timeout 90s npm run test:file -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/learner/green-cache.txt 2>&1
-          cache=$?
-          set -e
-          echo "$unit" > test-output/learner/green-unit-exit.txt
-          echo "$cache" > test-output/learner/green-cache-exit.txt
-          tail -50 test-output/learner/green-unit.txt
-          tail -50 test-output/learner/green-cache.txt
-          test "$unit" -eq 0
-          test "$cache" -eq 0
-          python3 - <<'PY'
-          import json,re
-          from pathlib import Path
-          p=Path('test-output/learner');results={}
-          for file,budget in [('green-unit.txt',2000),('green-cache.txt',30000)]:
-              matches=re.findall(r'^ok (test/[^\n]+) \((\d+) assertions, (\d+)ms\)',(p/file).read_text(),re.M)
-              assert len(matches)==(4 if budget==2000 else 1),matches
-              results[file]={'budgetMs':budget,'files':[{'file':f,'reportedAssertions':int(a),'elapsedMs':int(ms)} for f,a,ms in matches]}
-              assert all(int(ms)<budget for _,_,ms in matches),(file,matches)
-          (p/'timings.json').write_text(json.dumps(results,indent=2)+'\n')
-          PY
-      - name: Mutations must detect terminal exclusion, exact holder and target binding
-        run: |
-          set -euo pipefail
-          exec 9>/tmp/lagrange-contract-first-measurement.lock
-          flock -w 120 9
-          python3 - <<'PY'
-          import subprocess
-          from pathlib import Path
-          claim=Path('src/rebalancer/replica-operation-message-group-membership-owner-claim.js')
-          auth=Path('src/rebalancer/replica-operation-message-group-membership-authorization.js')
-          cases=[('terminal',claim,"  ['status', 'status'], ['workflow_step', 'workflowStep'], ['completed_at', 'completedAt'],\n",'',
-            'ordinary terminal settlement racing initial authorization'),
-            ('holder',claim,"  ['message_group_membership_owner_claim', 'messageGroupMembershipOwnerClaim'],\n",'',
-            'holder renewal during initial authorization'),
-            ('target',auth,'    permit.replicaIdentity === identity.targetReplicaId && permit.peerId === identity.targetPeerId;','    true;',
-            'initial learner permit cannot substitute the source')]
-          for key,p,old,new,witness in cases:
-              original=p.read_bytes();text=original.decode();assert text.count(old)==1,(key,text.count(old))
-              try:
-                  p.write_text(text.replace(old,new,1))
-                  subprocess.run(['node','--check',str(p)],check=True)
-                  result=subprocess.run(['npm','run','test:file','--','test/rebalancer/message-group-membership-branch-authorization.test.js'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-                  out=Path('test-output/learner');(out/f'mutant-{key}.txt').write_bytes(result.stdout)
-                  (out/f'mutant-{key}-exit.txt').write_text(str(result.returncode)+'\n')
-                  assert result.returncode==1,(key,result.returncode)
-                  assert any('not ok' in line and witness in line for line in result.stdout.decode().splitlines()),(key,'wrong failure')
-              finally:
-                  p.write_bytes(original)
-          PY
-          git diff --exit-code -- src test
-      - name: Canonically retain every prior failure and push exact measured source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh auth setup-git
-          out=test-output/learner
-          gh api repos/psvensson/lagrange/actions/artifacts/11554857284/zip > "$out/original-37787377904.zip"
-          echo 'f800881e390978eb96ca8e0d50858e844ec6126aa28f3a9cb203ab73462731a3  test-output/learner/original-37787377904.zip' | sha256sum -c -
-          for run in 37787377904 37788383916; do
-            node scripts/solve.js evidence add "$out/original-$run.zip" --id "$QUEST" --text "Original learner attempt $run retained unchanged. First failed lint; second passed 161 unit assertions and live cache but its 2,187ms unit file exceeded the hard 2s limit. No false green or altered outer verdict." --json > "$out/canonical-$run.json"
-          done
-          git diff --binary "$BASE" > "$out/change.patch"
-          git bundle create "$out/candidate.bundle" HEAD "^$BASE"
-          python3 - <<'PY'
-          import hashlib,json,os,zipfile
-          from pathlib import Path
-          p=Path('test-output/learner');files={f.name:f.read_bytes() for f in p.iterdir() if f.is_file() and f.suffix!='.zip'}
-          with zipfile.ZipFile(p/f'learner-proof-{os.environ["GITHUB_RUN_ID"]}.zip','w',zipfile.ZIP_DEFLATED) as z:
-              for n,v in files.items():z.writestr(n,v)
-              z.writestr('manifest.json',json.dumps({n:hashlib.sha256(v).hexdigest() for n,v in files.items()},indent=2)+'\n')
-          PY
-          node scripts/solve.js evidence add "$out/learner-proof-$GITHUB_RUN_ID.zip" --id "$QUEST" --text "Initial learner intent: exact source recovered without rewrite; all owner writes remain isolated WAL/FULL. Both original file budgets, unit/live SQL Raft CDC cache cases and three mutation controls measured. Runtime consumers/CREATE/driver remain dormant." --json > "$out/canonical.json"
-          node scripts/solve.js note --id "$QUEST" --attempt "GCP $GITHUB_RUN_ID: initial learner authorization on existing repository with shared claim/T0 row predicate and current holder. Recovered source e56e3950 unchanged; reused only completely closed pre-test row fixtures to remove repeated setup cost. Original red, lint failure, semantic pass with timing failure, and corrected file-budget/mutation proof retained. No runtime dispatch or physical CREATE activation, no independent approval or terminal landing." --json > "$out/attempt.json"
-          python3 - <<'PY'
-          import hashlib,json,os
-          from pathlib import Path
-          p=Path('test-output/learner');files={f.name:f.read_text() for f in p.iterdir() if f.is_file() and f.suffix not in ['.zip','.bundle']}
-          record={'schema':'freshmg-initial-learner-proof/1','runId':int(os.environ['GITHUB_RUN_ID']),
-            'baseSha':os.environ['BASE'],'runtimeSourceSha':os.environ['SOURCE'],'carrierSha':os.environ['GITHUB_SHA'],
-            'sourceSha':(p/'source-sha.txt').read_text().strip(),'runner':os.environ['RUNNER_NAME'],
-            'independentApproval':False,'distributedAcceptance':False,
-            'proofCeiling':'real repository and canonical isolated WAL FULL row races; real single-seed SQL/Raft/CDC/cache with quiesced reconciliation and supplied runtime observations; no actual learner proposal or physical CREATE',
-            'outputs':files,'sha256':{k:hashlib.sha256(v.encode()).hexdigest() for k,v in files.items()}}
-          (Path('solve/quests')/os.environ['QUEST']/'evidence'/f'initial-learner-{os.environ["GITHUB_RUN_ID"]}.json').write_text(json.dumps(record,indent=2)+'\n')
-          PY
-          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/initial-learner-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain initial learner authorization, timing correction and mutation proofs'
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
-          git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-          git rev-parse HEAD > "$out/published-sha.txt"
-      - name: Archive every outcome and recoverable candidate
-        if: always()
-        run: |
-          set -euo pipefail
-          mkdir -p test-output/learner
-          git status --porcelain > test-output/learner/final-status.txt
-          git diff --binary > test-output/learner/uncommitted.patch
-          git diff --binary "$BASE" > test-output/learner/full-work.patch
-          if [ "$(git rev-parse HEAD)" != "$BASE" ]; then
-            git bundle create test-output/learner/recovery.bundle HEAD "^$BASE"
-          fi
-          find test-output/learner -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/learner/SHA256SUMS
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: freshmg-initial-learner-${{ github.run_id }}-${{ github.run_attempt }}
-          path: learner-${{ github.run_id }}/test-output/learner/
-          retention-days: 14
-          if-no-files-found: error
+          expected=05a9883ae3ec0e556258bda73d99078ed2faab19
+          actual="$(gh pr view 108 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          printf 'expected=%s\nactual=%s\n' "$expected" "$actual"
+          test "$actual" = "$expected"
+          gh pr edit 108 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 108 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
+          echo 'Requested category-complete independent review of dormant initial learner intent, exact holder/terminal/target predicates, unknown results and fixture fidelity. No source landing or full cutover approval.' >> "$GITHUB_STEP_SUMMARY"
