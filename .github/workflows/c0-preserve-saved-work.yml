@@ -1,0 +1,136 @@
+name: c0-preserve-saved-work
+on:
+  push:
+    branches: [ops/c0-preservation-20261008]
+    paths: [.github/workflows/c0-preserve-saved-work.yml]
+permissions:
+  contents: read
+concurrency:
+  group: c0-preserve-saved-work
+  cancel-in-progress: false
+env:
+  WORK_BRANCH: integrate/rs-raft-contract-first-20261008
+  EXPECTED: 0ecb522003dd6f7a3cb60c7f9906a3e7aefcf83f
+  BASE: 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af
+jobs:
+  preserve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    outputs:
+      candidate: ${{ steps.push.outputs.candidate }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          path: carrier
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.EXPECTED }}
+          path: work
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Restore exact saved bytes and record evidence (no runtime repair)
+        run: |
+          set -euo pipefail
+          python3 carrier/scripts/quest-evidence/restore-c0-saved-packet.py work work/test-output/c0-preservation/restored.json
+          cd work
+          git diff --exit-code "$BASE" -- src
+          npm ci
+          node --check scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js
+          python3 -m py_compile solve/quests/cutover-transition-authority-review/evidence/self-review-20261008/reproduce.py
+          npm run -s audit:steering-diet > test-output/c0-preservation/steering.json
+          npm run -s audit:rule-set > test-output/c0-preservation/rules.json
+          node scripts/solve.js note --id cutover-transition-authority-review --finding 'Restored 19 saved self-review/supplemental files losslessly from the user-provided packet; every content hash and the original ZIP hash b0236d31651f8b4abee45c90e8d8e2afb75bb5eaad04489586f98714c02d3071 match. Original conflicting patch is retained inert, not applied over the newer six-case GCP diagnostic. User approved J1 forward recovery from durable promotion authorization and bounded continuation in operator-decision-20261008-j1.md. Author self-review is not independent approval; old verdicts and C0 acceptance remain unchanged.' --kind evidence --json > test-output/c0-preservation/note.json
+          git diff --check
+      - name: Commit only restored paths and append-only note; push without force
+        id: push
+        working-directory: work
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
+          python3 - <<'PY'
+          import json, subprocess
+          r=json.load(open('test-output/c0-preservation/restored.json'))
+          paths=list(r['files'])+['solve/quests/cutover-transition-authority-review/log.ndjson']
+          subprocess.run(['git','add','--',*paths],check=True)
+          PY
+          git diff --cached --stat
+          # Documented non-main preservation, never Solver source landing.
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'WIP preservation: restore saved C0 self-review and mutation-killing witnesses'
+          git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          candidate="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$candidate"
+          git diff --exit-code "$BASE" -- src
+          printf '%s\n' "$candidate" > test-output/c0-preservation/published-sha.txt
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: c0-preservation-${{ github.run_id }}
+          path: work/test-output/c0-preservation/
+          if-no-files-found: error
+          retention-days: 14
+  wake:
+    needs: preserve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - run: |
+          set -euo pipefail
+          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
+          if [ "$status" != RUNNING ]; then gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a; fi
+  reproduce:
+    needs: [preserve, wake]
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 15
+    env:
+      CANDIDATE: ${{ needs.preserve.outputs.candidate }}
+    defaults:
+      run:
+        working-directory: preserve-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.CANDIDATE }}
+          path: preserve-${{ github.run_id }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Reproduce saved nine-case fixture and three controlled harness mutations
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          git diff --exit-code "$BASE" -- src
+          npm ci
+          mkdir -p test-output/c0-self-review
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          printf 'candidate=%s\nrunner=%s\nrun=%s\n' "$CANDIDATE" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/c0-self-review/provenance.txt
+          python3 solve/quests/cutover-transition-authority-review/evidence/self-review-20261008/reproduce.py > test-output/c0-self-review/reproducer.json 2> test-output/c0-self-review/reproducer.stderr.txt
+          git diff --exit-code "$BASE" -- src
+          git status --porcelain > test-output/c0-self-review/final-status.txt
+          find test-output/c0-self-review -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/c0-self-review/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: c0-self-review-gcp-${{ github.run_id }}
+          path: preserve-${{ github.run_id }}/test-output/c0-self-review/
+          if-no-files-found: error
+          retention-days: 14
