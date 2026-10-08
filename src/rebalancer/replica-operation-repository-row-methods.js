@@ -120,6 +120,10 @@ function assignReplicaOperationRepositoryRowMethods(
           nullableValue(row.message_group_membership_obligation_state),
         messageGroupMembershipIdentity:
           nullableValue(row.message_group_membership_identity),
+        messageGroupMembershipOwnerClaim:
+          nullableValue(row.message_group_membership_owner_claim),
+        messageGroupMembershipPermit:
+          nullableValue(row.message_group_membership_permit),
         messageGroupLearnerStamp:
           nullableValue(row.message_group_learner_stamp),
         messageGroupVoterStamp:

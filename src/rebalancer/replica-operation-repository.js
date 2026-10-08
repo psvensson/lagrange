@@ -13,7 +13,11 @@
  * - replica status observation (cache + authoritative)
  * - entity service row lookups
  */
+import {claimMessageGroupMembershipOwner} from
+  './replica-operation-message-group-membership-owner-claim.js';
 import {v4 as uuidv4} from 'uuid';
+import {selectMessageGroupMembershipBranch} from
+  './replica-operation-message-group-membership-authorization.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
   INITIAL_PARTITION_IDS,
@@ -534,6 +538,8 @@ class ReplicaOperationRepository {
    */
   constructor(options) {
     this.nodeId = options.nodeId;
+    // Bound by the node composition owner, never read from an operation command.
+    this.membershipOwnerBootIncarnation = options.membershipOwnerBootIncarnation ?? null;
     this.systemTableCache = options.systemTableCache;
     this.cdcIntegrationService = options.cdcIntegrationService;
     this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
@@ -571,6 +577,15 @@ class ReplicaOperationRepository {
         REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS;
     this._shuttingDown = false;
   }
+  /** Claim membership recovery ownership; no action authorization is created. */
+  claimMessageGroupMembershipOwner(request) {
+    return claimMessageGroupMembershipOwner.call(this, request);
+  }
+  /** Select a durable membership branch; never directly dispatches Raft. */
+  selectMessageGroupMembershipBranch(request) {
+    return selectMessageGroupMembershipBranch.call(this, request);
+  }
+
   /**
    * Signal that the owning rebalance coordinator is shutting down. The
    * authoritative read-retry and operation-persist-retry loops check this and
