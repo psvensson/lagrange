@@ -10,9 +10,10 @@ concurrency:
   cancel-in-progress: false
 env:
   BASE: 97a030da287160e5597f0dd5ce5d60541caaf5e8
+  CANDIDATE: 605789e86aaf7dcca8fa4406235388b998460eb0
+  EXPECTED_PUBLICATION_HEAD: 68697465b4e35e6f47aaf89a661197d60d4dbfd5
   WORK_BRANCH: work/freshmg-runtime-authorization-20261008
   QUEST: message-group-fresh-identity-membership
-  TEST: test/integration/message-group-learner-runtime-authorization.integration.test.js
 jobs:
   wake:
     runs-on: ubuntu-24.04
@@ -33,16 +34,12 @@ jobs:
           if [ "$status" != RUNNING ]; then
             gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
           fi
-  measure:
+  attribute:
     needs: wake
     runs-on: [self-hosted, gcp]
-    timeout-minutes: 35
+    timeout-minutes: 25
     permissions:
       contents: write
-    defaults:
-      run:
-        shell: bash
-        working-directory: learner-runtime-${{ github.run_id }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -52,41 +49,111 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ env.BASE }}
-          path: learner-runtime-${{ github.run_id }}
-          fetch-depth: 0
+          path: base-${{ github.run_id }}
           persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.CANDIDATE }}
+          path: candidate-${{ github.run_id }}
+          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Test first, then connect only the existing owner boundary
-        run: bash ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/run-learner-runtime.sh prepare
-      - name: Measure native committed identity and refusal controls
-        run: bash ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/run-learner-runtime.sh measure
-      - name: Deliberate predicate and native-fence mutations must fail
-        run: bash ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/run-learner-runtime.sh mutations
-      - name: Canonically retain failed and passing evidence and push WIP
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/run-learner-runtime.sh publish
-      - name: Archive all outcomes and recoverable candidate
-        if: always()
+      - name: Install each exact lockfile without changing the source
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p test-output/learner-runtime
-          git diff --binary "$BASE" > test-output/learner-runtime/full-work.patch
-          git diff --binary > test-output/learner-runtime/uncommitted.patch
-          git status --porcelain > test-output/learner-runtime/final-status.txt
-          git diff --name-status "$BASE" > test-output/learner-runtime/changed-paths.txt
-          if [ -f "$TEST" ]; then cp "$TEST" test-output/learner-runtime/measured-test.js; fi
-          if [ "$(git rev-parse HEAD)" != "$BASE" ]; then
-            git bundle create test-output/learner-runtime/candidate.bundle HEAD "^$BASE"
-          fi
-          find test-output/learner-runtime -type f ! -name FINAL_SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/learner-runtime/FINAL_SHA256SUMS
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+          mkdir -p "lab-attribution-$GITHUB_RUN_ID"
+          for lane in base candidate; do
+            (cd "$lane-$GITHUB_RUN_ID" && npm ci) > "lab-attribution-$GITHUB_RUN_ID/$lane-install.txt" 2>&1
+          done
+      - name: Measure the same 17 files at both exact commits
+        id: measurement
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          script="$GITHUB_WORKSPACE/carrier-$GITHUB_RUN_ID/scripts/quest-evidence/freshmg-lab-attribution.py"
+          out="$GITHUB_WORKSPACE/lab-attribution-$GITHUB_RUN_ID"
+          python3 "$script" measure "$GITHUB_WORKSPACE/base-$GITHUB_RUN_ID" "$BASE" "$out/base"
+          python3 "$script" measure "$GITHUB_WORKSPACE/candidate-$GITHUB_RUN_ID" "$CANDIDATE" "$out/candidate"
+          python3 "$script" compare "$out" | tee "$out/comparison.txt"
+          git -C "candidate-$GITHUB_RUN_ID" diff --name-status "$BASE" "$CANDIDATE" > "$out/changed-paths.txt"
+          printf 'runner=%s\nrun=%s\nbase=%s\ncandidate=%s\n' "$RUNNER_NAME" "$GITHUB_RUN_ID" "$BASE" "$CANDIDATE" > "$out/provenance.txt"
+          echo measured=true >> "$GITHUB_OUTPUT"
+      - name: Retain evidence and push only the evidence-bearing WIP branch
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/lab-attribution-$GITHUB_RUN_ID"
+          cd "candidate-$GITHUB_RUN_ID"
+          gh auth setup-git
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED_PUBLICATION_HEAD"
+          git fetch origin "refs/heads/$WORK_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_PUBLICATION_HEAD"
+          git checkout --detach "$EXPECTED_PUBLICATION_HEAD"
+          git diff --exit-code "$CANDIDATE" -- src test
+          export PROOF_OUT="$out"
+          python3 - <<'PY'
+          import hashlib,json,os,zipfile
+          from pathlib import Path
+          out=Path(os.environ['PROOF_OUT'])
+          files=[p for p in out.rglob('*') if p.is_file()]
+          manifest={str(p.relative_to(out)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(files)}
+          (out/'member-sha256.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          archive=out.parent/('lab-attribution-'+os.environ['GITHUB_RUN_ID']+'.zip')
+          with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
+              for p in sorted(out.rglob('*')):
+                  if p.is_file(): z.write(p,str(p.relative_to(out)))
+          with zipfile.ZipFile(archive) as z:
+              for name,digest in manifest.items(): assert hashlib.sha256(z.read(name)).hexdigest()==digest
+          (out/'archive-sha256.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'\n')
+          PY
+          node scripts/solve.js evidence add "$GITHUB_WORKSPACE/lab-attribution-$GITHUB_RUN_ID.zip" --id "$QUEST" --text "Exact base/candidate attribution of 17 assertion/fixture failures from user lab run freshmg-lab-20261008T150005Z. Original lab remains FAIL, six slow failures remain open, no physical cluster, source changes or release approval. This archive contains new GCP diagnostic results, not the original user tar.gz." --json > "$out/canonical.json"
+          node scripts/solve.js note --id "$QUEST" --finding "Retained original five-host lab FAIL at 605789e86aaf (941 selected, 918 pass, 23 fail); verified user archive SHA256 6fbaf0e6af0b5cc799d0e32da034922de7de979c0f3a5980c504f6272e4265f4. Physical baseline was correctly not run. Actions $GITHUB_RUN_ID compares the same 17 assertion files at 97a030da and 605789e8 without runtime changes. Full results distinguish inherited/new/nonreproduced failures; six slow failures remain blocked. No green receipt, independent approval, or A1-v13/cutover certification." --kind evidence --json > "$out/note.json"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          out=Path(os.environ['PROOF_OUT'])
+          record=json.loads((out/'comparison.json').read_text())
+          record['canonicalEvidence']=json.loads((out/'canonical.json').read_text())
+          record['archiveSha256']=(out/'archive-sha256.txt').read_text().strip()
+          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('lab-attribution-'+os.environ['GITHUB_RUN_ID']+'.json')
+          dest.write_text(json.dumps(record,indent=2)+'\n')
+          PY
+          git add -- "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/lab-attribution-$GITHUB_RUN_ID.json"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain base-candidate lab failure attribution, not acceptance'
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED_PUBLICATION_HEAD"
+          git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$out/published-sha.txt"
+          git status --porcelain > "$out/publication-status.txt"
+      - name: Archive every diagnostic outcome
         if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: freshmg-runtime-${{ github.run_id }}-${{ github.run_attempt }}
-          path: learner-runtime-${{ github.run_id }}/test-output/learner-runtime/
+          name: freshmg-lab-attribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: lab-attribution-${{ github.run_id }}/
           retention-days: 14
           if-no-files-found: error
+      - name: Preserve the actual candidate failure verdict
+        if: always() && steps.measurement.outputs.measured == 'true'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          p=Path('lab-attribution-'+os.environ['GITHUB_RUN_ID'])/'candidate/summary.json'
+          r=json.loads(p.read_text())
+          print('Diagnostic attribution only; original lab and full cutover gates remain unchanged.')
+          sys.exit(r['exitCode'])
+          PY
