@@ -402,3 +402,67 @@ test('renewed ordinary lease defeats an orphan initial-claim read before it can 
   assert.equal((await f.repo(TARGET_NODE).claimMessageGroupMembershipOwner(f.claimRequest())).outcome, 'unknown');
   assert.equal(f.row().message_group_membership_owner_claim, null);
 });
+
+
+test('NULL ordinary lease permits an exact initial successor claim', async (t) => {
+  const f = await setup(t, {initial: true});
+  assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = NULL ' +
+    'WHERE operation_id = ?', [O]).changes, 1);
+  const before = f.row();
+  assert.equal(before.lease_expires_at, null);
+  const observed = await f.repository.queryAuthoritativeOperationById(O);
+  assert.equal(observed.ownerLeaseExpiresAt, undefined,
+    'the canonical row decoder omits a NULL ordinary lease');
+  const acquired = await f.repo(TARGET_NODE)
+    .claimMessageGroupMembershipOwner(f.claimRequest());
+  assert.equal(acquired.outcome, 'recorded');
+  const claim = JSON.parse(f.row().message_group_membership_owner_claim);
+  assert.equal(claim.ownerNodeId, TARGET_NODE);
+  assert.equal(claim.generation, 1);
+  const after = {...f.row()};
+  delete before.message_group_membership_owner_claim;
+  delete after.message_group_membership_owner_claim;
+  assert.deepEqual(after, before, 'claim does not change the operation or action');
+});
+
+test('NULL ordinary lease initial competition records exactly one successor', async (t) => {
+  const f = await setup(t, {initial: true});
+  assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = NULL ' +
+    'WHERE operation_id = ?', [O]).changes, 1);
+  const input = f.claimRequest();
+  const answers = await Promise.all([
+    f.repo(TARGET_NODE).claimMessageGroupMembershipOwner(input),
+    f.repo('third-node').claimMessageGroupMembershipOwner(input),
+  ]);
+  assert.equal(answers.filter((r) => r.outcome === 'recorded').length, 1);
+  assert.equal(JSON.parse(f.row().message_group_membership_owner_claim).generation, 1);
+});
+
+test('NULL ordinary lease read cannot overwrite a concurrent lease renewal', async (t) => {
+  const f = await setup(t, {initial: true});
+  assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = NULL ' +
+    'WHERE operation_id = ?', [O]).changes, 1);
+  f.fault(() => {
+    assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = ? ' +
+      'WHERE operation_id = ?', [LEASE, O]).changes, 1);
+  });
+  const answer = await f.repo(TARGET_NODE)
+    .claimMessageGroupMembershipOwner(f.claimRequest());
+  assert.notEqual(answer.outcome, 'recorded');
+  assert.equal(f.row().message_group_membership_owner_claim, null);
+  assert.equal(f.row().lease_expires_at, LEASE);
+});
+
+test('a non-NULL invalid lease must not match the NULL-lease CAS', async (t) => {
+  for (const lease of [0, -1]) {
+    await t.test(String(lease), async (t) => {
+      const f = await setup(t, {initial: true});
+      assert.equal(f.run('UPDATE replica_operations SET lease_expires_at = ? ' +
+        'WHERE operation_id = ?', [lease, O]).changes, 1);
+      const answer = await f.repo(TARGET_NODE)
+        .claimMessageGroupMembershipOwner(f.claimRequest());
+      assert.notEqual(answer.outcome, 'recorded');
+      assert.equal(f.row().message_group_membership_owner_claim, null);
+    });
+  }
+});
