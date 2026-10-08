@@ -31,6 +31,10 @@ import {ERRORS} from '../../src/constants/errors.js';
 import * as writeKernel from '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
+import {
   NODE_REGISTRATION_OUTCOME,
   writeNodeRegistrationAtIncarnation,
 } from '../../src/control-plane/owners/node-registration-incarnation-write.js';
@@ -559,7 +563,7 @@ test('W2: an INSERT whose proposer loses leadership mid-write commits ' +
   await withGroupSurface({partitionId: 'uo-lc', table: USER_TABLE,
     tempPrefix: TEMP_PREFIX}, async ({engine, services, members, peers,
     blocked, sent, dbFileOf}) => {
-    const [, r2] = services;
+    const [r1, r2] = services;
     const served = await engine.executeQuery(SURFACE_INSERT, ['row-0', 's']);
     assert.equal(served.success, true, 'setup: the group serves a write ' +
       `(${JSON.stringify(served.error ?? null)} ` +
@@ -577,7 +581,12 @@ test('W2: an INSERT whose proposer loses leadership mid-write commits ' +
       lastLogIndexOf(dbFileOf(members[0])) &&
       sent.some((d) => d.entryId && logEntriesOf(dbFileOf(members[1]),
         d.entryId).length === 1)), true, 'setup: the entry reached r2');
-    await r2.raft.campaign();
+    const transfer = await r1.raft.transferLeadership({
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+      replicaIdentity: r2.replicaId,
+    });
+    assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      `setup: the live leader transfers to r2 (${JSON.stringify(transfer)})`);
     assert.equal(await waitFor(() => r2.raft.readStatus().role ===
       RAFT_ROLE.LEADER), true, 'setup: r2 leads');
     assert.equal(await waitFor(() => rowsOf(dbFileOf(members[1]), USER_TABLE,
@@ -586,7 +595,7 @@ test('W2: an INSERT whose proposer loses leadership mid-write commits ' +
     blocked.clear();
     const answered = await write;
     assert.equal(answered.success, true, 'the caller is told it applied ' +
-      `(${JSON.stringify(answered.error ?? null)})`);
+      `(${JSON.stringify(answered)})`);
     assert.equal(answered.affectedRows, 1, 'with its original result');
     assert.ok(sent.length >= 2, `re-delivered (${JSON.stringify(sent)})`);
     assert.equal(new Set(sent.map((d) => d.entryId)).size, 1,

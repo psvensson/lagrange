@@ -43,6 +43,10 @@ import {
 import * as outcomeConstants from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {decodeCommittedProposal} from
   '../../src/raft/raft-rs-proposal-codec.js';
@@ -496,7 +500,12 @@ test('W3: on a three-replica group a retry answered by another replica, a ' +
         params: ['u', 'a', 'b'], entryId: 'w3-update'}}});
     assertRetainedReplay(forwarded, update, 'a follower\'s forwarded retry');
 
-    await follower.raft.campaign();
+    const transfer = await leader.raft.transferLeadership({
+      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+      replicaIdentity: follower.replicaId,
+    });
+    assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      `setup: the live leader transfers to the follower (${JSON.stringify(transfer)})`);
     assert.equal(await waitFor(() => follower.raft.readStatus().role ===
       RAFT_ROLE.LEADER, GROUP_BUDGET_MS), true, 'setup: the follower leads');
     assertRetainedReplay(await write(follower, UPDATE_SQL, ['u', 'a', 'b'],
