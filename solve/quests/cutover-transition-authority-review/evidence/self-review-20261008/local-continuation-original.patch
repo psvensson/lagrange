@@ -1,0 +1,1419 @@
+diff --git a/.github/workflows/cutover-owner-entry.yml b/.github/workflows/cutover-owner-entry.yml
+index 3e8826c61448c3fcbe1e9bfa7ea390d3f2691879..2e30caa2c1a1979ee452d3725cdd510da2522d63 100644
+--- a/.github/workflows/cutover-owner-entry.yml
++++ b/.github/workflows/cutover-owner-entry.yml
+@@ -5,6 +5,7 @@ on:
+     paths:
+       - .github/workflows/cutover-owner-entry.yml
+       - scripts/quest-evidence/cutover-owner-entry-baseline.js
++      - scripts/quest-evidence/cutover-workflow-crash-baseline.js
+ permissions:
+   contents: read
+ concurrency:
+@@ -85,6 +86,23 @@ jobs:
+           printf '%s\n' "$STATUS" > test-output/c0-owner/focused-exit.txt
+           tail -50 test-output/c0-owner/focused.stdout.txt
+           exit "$STATUS"
++      - name: Process-crash reconstruction controls (fixture persistence, not Raft proof)
++        if: always() && steps.install.outcome == 'success'
++        timeout-minutes: 5
++        run: |
++          set -euo pipefail
++          exec 9>/tmp/lagrange-contract-first-measurement.lock
++          flock -w 120 9
++          node --check scripts/quest-evidence/cutover-workflow-crash-baseline.js
++          set +e
++          timeout 120s node scripts/quest-evidence/cutover-workflow-crash-baseline.js test-output/c0-owner/workflow-crash.json "$GITHUB_SHA" > test-output/c0-owner/workflow-crash.stdout.txt 2> test-output/c0-owner/workflow-crash.stderr.txt
++          STATUS=$?
++          set -e
++          printf '%s\n' "$STATUS" > test-output/c0-owner/workflow-crash-exit.txt
++          cat test-output/c0-owner/workflow-crash.stdout.txt
++          cat test-output/c0-owner/workflow-crash.stderr.txt >&2
++          test "$STATUS" -eq 0
++          node -e 'const r=JSON.parse(require("fs").readFileSync("test-output/c0-owner/workflow-crash.json")); if(r.sourceLabel!==process.env.GITHUB_SHA||r.measurementStatus!=="measured"||r.cases.length!==9||r.cases.some(c=>c.passed!==true))process.exit(2)'
+       - name: Existing snapshot positive and refusal boundaries (not intact catch-up certification)
+         if: always() && steps.install.outcome == 'success'
+         timeout-minutes: 10
+@@ -107,6 +125,7 @@ jobs:
+           git diff --exit-code "$BASE" -- src > test-output/c0-owner/runtime-source-diff.txt
+           git status --porcelain > test-output/c0-owner/final-status.txt
+           sha256sum scripts/quest-evidence/cutover-owner-entry-baseline.js > test-output/c0-owner/harness.sha256
++          sha256sum scripts/quest-evidence/cutover-workflow-crash-baseline.js > test-output/c0-owner/crash-harness.sha256
+           find test-output/c0-owner -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/c0-owner/SHA256SUMS
+       - name: Retain all results, including failed controls
+         if: always()
+diff --git a/scripts/quest-evidence/cutover-workflow-crash-baseline.js b/scripts/quest-evidence/cutover-workflow-crash-baseline.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..cfab72ed5a3a1fe6e314e577db9b7dca20915366
+--- /dev/null
++++ b/scripts/quest-evidence/cutover-workflow-crash-baseline.js
+@@ -0,0 +1,260 @@
++#!/usr/bin/env node
++// C0 diagnostic only: unchanged coordinator/recovery code plus a DISK FIXTURE.
++// Not the ReplicaOperationRepository, Raft, distributed failover or power loss.
++import assert from 'node:assert/strict';
++import {fork, spawnSync} from 'node:child_process';
++import {createHash} from 'node:crypto';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {DatabaseSync} from 'node:sqlite';
++import {fileURLToPath} from 'node:url';
++import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
++import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
++import {DurableWorkflowCoordinator} from '../../src/workflow/durable-workflow-coordinator.js';
++import {
++  isOperationWorkflowTerminalForPersistence,
++  persistOperationWorkflowTransitionToDurableRow,
++  recoverOperationWorkflowsFromDurableRows,
++} from '../../src/rebalancer/operation-workflow-persistence.js';
++import {createOperationProgressStore} from '../../src/rebalancer/operation-progress-store.js';
++
++refuseUnderProbe('the C0 process-crash diagnostic');
++const self = fileURLToPath(import.meta.url);
++const root = path.resolve(path.dirname(self), '../..');
++const ID = 'c0-crash-operation';
++const NOW = 40000;
++const WAIT_MS = 10000; // ends on this child exiting or reaching its named IPC cut.
++const CASES = Object.freeze([
++  'acknowledged', 'before-commit', 'inside-transaction',
++  'commit-before-local-mark', 'after-local-mark', 'cas-refused',
++  'write-unavailable', 'different-durable-winner',
++]);
++const FILES = Object.freeze([
++  'src/constants/workflow.js', 'src/workflow/workflow-constants.js',
++  'src/workflow/durable-workflow-coordinator.js',
++  'src/workflow/durable-workflow-storage-ownership.js',
++  'src/rebalancer/operation-workflow-persistence.js',
++  'src/rebalancer/operation-progress-store.js',
++  'src/rebalancer/operation-workflow-transition-orchestration.js',
++  'src/rebalancer/operation-workflow-owner-execution-lane.js',
++]);
++
++// This fixture's schema and CAS are not a claimed production row/lease owner.
++function connect(file) {
++  const db = new DatabaseSync(file);
++  db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
++  return db;
++}
++function initialOperation() {
++  return {operationId: ID, workflowStep: WORKFLOW_STEP.PENDING,
++    completedAt: null, stepsHistory: [{step: WORKFLOW_STEP.PENDING,
++      previousStep: null, timestamp: NOW, reason: 'fixture-admission'}],
++    // Opaque obligations are retained, not acted on, by these real loaders.
++    messageGroupMembershipLaneKey: 'c0-group',
++    messageGroupMembershipObligationState: 'fixture-unresolved',
++    messageGroupMembershipIdentity: 'c0-fixed-source-target-pair'};
++}
++function readRow(db) {
++  const row = db.prepare('SELECT revision, body FROM c0_fixture WHERE id=?').get(ID);
++  assert.ok(row, 'fixture operation row must exist');
++  return {revision: row.revision, operation: JSON.parse(row.body)};
++}
++function seed(file, terminal = false) {
++  const db = connect(file);
++  db.exec('CREATE TABLE c0_fixture(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, body TEXT NOT NULL)');
++  const op = initialOperation();
++  if (terminal) {
++    op.completedAt = NOW + 1;
++    op.workflowStep = WORKFLOW_STEP.FAILED;
++    op.stepsHistory.push({step: WORKFLOW_STEP.FAILED,
++      previousStep: WORKFLOW_STEP.PENDING, timestamp: NOW + 1,
++      reason: 'fixture-terminal-with-outstanding-membership'});
++  }
++  db.prepare('INSERT INTO c0_fixture VALUES (?, ?, ?)').run(ID, 1, JSON.stringify(op));
++  db.close();
++}
++function rebuild(operation) {
++  const coordinator = new DurableWorkflowCoordinator({now: () => NOW + 2,
++    persistWorkflow: persistOperationWorkflowTransitionToDurableRow,
++    isTerminalWorkflow: isOperationWorkflowTerminalForPersistence});
++  const result = recoverOperationWorkflowsFromDurableRows(coordinator, [operation]);
++  return {coordinator, restored: result.restoredWorkflowIds.has(ID)};
++}
++function view(coordinator) {
++  const workflow = coordinator.getWorkflowById(ID);
++  return {step: workflow?.step ?? null,
++    historyLength: workflow?.transitionHistory.length ?? 0,
++    sendingMarked: coordinator.isTransitionIdempotent(ID, WORKFLOW_STEP.SENDING),
++    retainedObligation: workflow?.durableOperation?.messageGroupMembershipObligationState ?? null};
++}
++function notify(message) {
++  return new Promise((resolve, reject) => {
++    process.send(message, (error) => error ? reject(error) : resolve());
++  });
++}
++async function worker(kind, file) {
++  assert.ok(CASES.includes(kind));
++  const db = connect(file);
++  const row = readRow(db);
++  const {coordinator} = rebuild(row.operation);
++  let persistCallbackCalls = 0;
++  // Observation wrapper only; the source callback remains unchanged.
++  coordinator.persistWorkflow = async (candidate) => {
++    persistCallbackCalls += 1;
++    return persistOperationWorkflowTransitionToDurableRow(candidate);
++  };
++  await coordinator.transitionStep(ID, {nextStep: WORKFLOW_STEP.SENDING,
++    reason: 'fixture-dispatch'}, {}, {markCommitted: false});
++  const projected = {...row.operation, workflowStep: WORKFLOW_STEP.SENDING,
++    stepsHistory: [...row.operation.stepsHistory, {step: WORKFLOW_STEP.SENDING,
++      previousStep: WORKFLOW_STEP.PENDING, timestamp: NOW + 2,
++      reason: 'fixture-dispatch'}]};
++  const observations = {kind, beforePersistence: view(coordinator),
++    durableBefore: readRow(db), persistCallbackCalls, rowsChanged: null,
++    sqlError: null, acknowledged: false};
++  if (kind === 'cas-refused' || kind === 'different-durable-winner') {
++    const winner = kind === 'different-durable-winner' ? projected : row.operation;
++    db.prepare('UPDATE c0_fixture SET revision=2, body=? WHERE id=?')
++      .run(JSON.stringify(winner), ID);
++  }
++  if (kind !== 'before-commit') {
++    if (kind === 'write-unavailable') db.exec('PRAGMA query_only=ON');
++    try {
++      db.exec('BEGIN IMMEDIATE');
++      const answer = db.prepare('UPDATE c0_fixture SET revision=revision+1, body=? WHERE id=? AND revision=?')
++        .run(JSON.stringify(projected), ID, row.revision);
++      observations.rowsChanged = Number(answer.changes);
++      if (kind !== 'inside-transaction') db.exec('COMMIT');
++    } catch (error) {
++      observations.sqlError = {code: error.code, message: error.message};
++    }
++  }
++  if (kind === 'after-local-mark' || kind === 'acknowledged') {
++    assert.equal(observations.rowsChanged, 1);
++    coordinator.markTransitionCommitted(ID, WORKFLOW_STEP.SENDING);
++  }
++  observations.atCut = view(coordinator);
++  observations.acknowledged = kind === 'acknowledged';
++  // Keep ONLY this child alive until the parent kills its own process.
++  process.on('message', () => {});
++  await notify(observations);
++  if (kind === 'acknowledged') {
++    db.close(); process.disconnect();
++  }
++}
++async function recovered(file) {
++  const db = connect(file);
++  const row = readRow(db);
++  const {coordinator, restored} = rebuild(row.operation);
++  const beforeReplay = view(coordinator);
++  let replayCallbackCalls = 0;
++  if (restored && beforeReplay.sendingMarked) {
++    coordinator.persistWorkflow = async (candidate) => {
++      replayCallbackCalls += 1;
++      return persistOperationWorkflowTransitionToDurableRow(candidate);
++    };
++    await coordinator.transitionStep(ID, {nextStep: WORKFLOW_STEP.SENDING,
++      reason: 'fixture-replay'}, {}, {markCommitted: false});
++    assert.equal(replayCallbackCalls, 0);
++    assert.deepEqual(view(coordinator), beforeReplay);
++  }
++  const result = {row, restored, workflow: view(coordinator),
++    replay: {attempted: restored && beforeReplay.sendingMarked, replayCallbackCalls},
++    volatileProgressRecords: createOperationProgressStore().listOperationProgressRecords().length};
++  db.close();
++  return result;
++}
++async function interrupt(kind, file) {
++  return new Promise((resolve, reject) => {
++    const child = fork(self, ['--worker', kind, file],
++      {stdio: ['ignore', 'pipe', 'pipe', 'ipc']});
++    let cut = null; let stdout = ''; let stderr = ''; let problem = null;
++    child.stdout.on('data', (bytes) => { stdout += bytes; });
++    child.stderr.on('data', (bytes) => { stderr += bytes; });
++    child.on('error', (error) => { problem = error; });
++    const deadline = setTimeout(() => {
++      problem = new Error(`child failed to reach or exit named cut: ${kind}`);
++      child.kill('SIGKILL');
++    }, WAIT_MS);
++    child.on('message', (message) => {
++      if (cut !== null) { problem = new Error('duplicate cut'); child.kill('SIGKILL'); return; }
++      cut = message;
++      if (kind !== 'acknowledged') child.kill('SIGKILL');
++    });
++    child.on('close', (code, signal) => {
++      clearTimeout(deadline);
++      if (problem || cut === null) { reject(problem || new Error(`child failed before cut: ${stderr}`)); return; }
++      try {
++        if (kind === 'acknowledged') assert.equal(code, 0);
++        else assert.equal(signal, 'SIGKILL');
++        resolve({cut, exit: {code, signal}, stdout, stderr});
++      } catch (error) { reject(error); }
++    });
++  });
++}
++function freshReader(file) {
++  const child = spawnSync(process.execPath, [self, '--read', file],
++    {encoding: 'utf8', timeout: WAIT_MS});
++  assert.equal(child.status, 0, child.stderr || String(child.error));
++  return {result: JSON.parse(child.stdout), stderr: child.stderr};
++}
++async function main(output, label) {
++  assert.ok(output && /^[a-f0-9]{40}$/u.test(label || ''), 'output and source label SHA required');
++  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'c0-workflow-crash-'));
++  const report = {schema: 'c0-workflow-process-crash/1', sourceLabel: label,
++    sourceLabelIsCheckoutProof: false, nodeVersion: process.version,
++    measurementStatus: 'not_measured', sourceChanges: false,
++    proofCeiling: 'real coordinator, transition callback and row-recovery loader; real SQLite fixture and SIGKILL; NOT production repository/Raft/CREATE/cleanup/lease or power-loss proof',
++    substitutions: ['node:sqlite fixture instead of production better-sqlite3 and ReplicaOperationRepository',
++      'fixture manually invokes the measured mirror/persist/mark order; production orchestration is NOT executed',
++      'fixed row and clock; memberships are opaque retained data, not live quorum observations'],
++    sourceDigests: Object.fromEntries(FILES.map((file) => [file,
++      createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex')])),
++    cases: []};
++  try {
++    for (const kind of CASES) {
++      const file = path.join(temp, `${kind}.sqlite`);
++      seed(file);
++      const interrupted = await interrupt(kind, file);
++      const restarted = freshReader(file);
++      const wasCommitted = ['acknowledged', 'commit-before-local-mark',
++        'after-local-mark', 'different-durable-winner'].includes(kind);
++      const expectation = wasCommitted ? WORKFLOW_STEP.SENDING : WORKFLOW_STEP.PENDING;
++      assert.equal(interrupted.cut.beforePersistence.step, WORKFLOW_STEP.SENDING);
++      assert.equal(interrupted.cut.beforePersistence.sendingMarked, false);
++      assert.equal(interrupted.cut.durableBefore.operation.workflowStep, WORKFLOW_STEP.PENDING);
++      if (['cas-refused', 'different-durable-winner'].includes(kind)) assert.equal(interrupted.cut.rowsChanged, 0);
++      if (kind === 'write-unavailable') assert.ok(interrupted.cut.sqlError);
++      assert.equal(restarted.result.workflow.step, expectation);
++      assert.equal(restarted.result.workflow.sendingMarked, wasCommitted);
++      assert.equal(restarted.result.row.operation.messageGroupMembershipObligationState, 'fixture-unresolved');
++      assert.equal(restarted.result.volatileProgressRecords, 0);
++      report.cases.push({kind, passed: true, interrupted, restarted});
++    }
++    const terminal = path.join(temp, 'terminal.sqlite');
++    seed(terminal, true);
++    const answer = freshReader(terminal);
++    assert.equal(answer.result.restored, false);
++    assert.equal(answer.result.workflow.step, null);
++    assert.equal(answer.result.row.operation.messageGroupMembershipObligationState, 'fixture-unresolved');
++    report.cases.push({kind: 'terminal-row-loader', passed: true, restarted: answer,
++      limit: 'ensureOperationWorkflow fallback and downstream terminal guards are not executed'});
++    report.measurementStatus = 'measured';
++  } catch (error) {
++    report.measurementStatus = 'failed';
++    report.error = {name: error.name, message: error.message, stack: error.stack};
++    process.exitCode = 1;
++  } finally {
++    // Only fixture files minted by this harness; never repository/lab data.
++    fs.rmSync(temp, {recursive: true, force: true});
++    fs.mkdirSync(path.dirname(path.resolve(output)), {recursive: true});
++    fs.writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
++    console.log(JSON.stringify({measurementStatus: report.measurementStatus,
++      cases: report.cases.map(({kind, passed}) => ({kind, passed})),
++      proofCeiling: report.proofCeiling, error: report.error}, null, 2));
++  }
++}
++if (process.argv[2] === '--worker') await worker(process.argv[3], process.argv[4]);
++else if (process.argv[2] === '--read') console.log(JSON.stringify(await recovered(process.argv[3])));
++else await main(process.argv[2], process.argv[3]);
+diff --git a/solve/quests/cutover-transition-authority-review/evidence/crash.stderr.txt b/solve/quests/cutover-transition-authority-review/evidence/crash.stderr.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..fcedd9ada91b5c504a58ae8e6a19f8d62201c811
+--- /dev/null
++++ b/solve/quests/cutover-transition-authority-review/evidence/crash.stderr.txt
+@@ -0,0 +1,2 @@
++(node:924) ExperimentalWarning: SQLite is an experimental feature and might change at any time
++(Use `node --trace-warnings ...` to show where the warning was created)
+diff --git a/solve/quests/cutover-transition-authority-review/evidence/crash.stdout.txt b/solve/quests/cutover-transition-authority-review/evidence/crash.stdout.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..c31ec0c61149487f14f2d86d8b453c0bbdb2dcbd
+--- /dev/null
++++ b/solve/quests/cutover-transition-authority-review/evidence/crash.stdout.txt
+@@ -0,0 +1,42 @@
++{
++  "measurementStatus": "measured",
++  "cases": [
++    {
++      "kind": "acknowledged",
++      "passed": true
++    },
++    {
++      "kind": "before-commit",
++      "passed": true
++    },
++    {
++      "kind": "inside-transaction",
++      "passed": true
++    },
++    {
++      "kind": "commit-before-local-mark",
++      "passed": true
++    },
++    {
++      "kind": "after-local-mark",
++      "passed": true
++    },
++    {
++      "kind": "cas-refused",
++      "passed": true
++    },
++    {
++      "kind": "write-unavailable",
++      "passed": true
++    },
++    {
++      "kind": "different-durable-winner",
++      "passed": true
++    },
++    {
++      "kind": "terminal-row-loader",
++      "passed": true
++    }
++  ],
++  "proofCeiling": "real coordinator, transition callback and row-recovery loader; real SQLite fixture and SIGKILL; NOT production repository/Raft/CREATE/cleanup/lease or power-loss proof"
++}
+diff --git a/solve/quests/cutover-transition-authority-review/evidence/local-source-provenance.json b/solve/quests/cutover-transition-authority-review/evidence/local-source-provenance.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..8238187bf12c1a4910bd2ff7c8383c6326dc1257
+--- /dev/null
++++ b/solve/quests/cutover-transition-authority-review/evidence/local-source-provenance.json
+@@ -0,0 +1,12 @@
++{
++  "schema": "c0-local-source-provenance/1",
++  "sourceArchive": "cutover-review-workspace.zip",
++  "archiveSha256": "e3e7ddcae4191ba236a54f6eec492fed4f635bc6f3eb41d3e86c3928fff255d4",
++  "archiveCommit": "6dc42084ba65a75fa2900535efaa74f7d89357fd",
++  "inheritedRuntimeCommit": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
++  "reviewedHead": "0219a7fee95bdd744e52b8fa2eb5c5978e661964",
++  "runtimeBlobVerificationCount": 1851,
++  "runtimeEquivalenceBasis": "GitHub compare base 82b54ef9 to 0219a7fe shows no src changes; archive manifest independently matches each extracted src blob.",
++  "executionEnvironment": "chat-container, not GitHub Actions or GCP",
++  "remotePublication": false
++}
+diff --git a/solve/quests/cutover-transition-authority-review/evidence/local-validation.json b/solve/quests/cutover-transition-authority-review/evidence/local-validation.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a39e4f7070cd1835fea667c2738809c825fb928
+--- /dev/null
++++ b/solve/quests/cutover-transition-authority-review/evidence/local-validation.json
+@@ -0,0 +1,18 @@
++{
++  "schema": "c0-local-validation/1",
++  "runtimeSourceChanged": false,
++  "remotePublished": false,
++  "gcpExecuted": false,
++  "syntaxCheckExitCode": 0,
++  "processCrashHarnessExitCode": 0,
++  "casesPassed": 9,
++  "writerProcessesKilled": 7,
++  "probeRefusalExitCode": 1,
++  "probeCreatedOutput": false,
++  "workflowYamlParsed": true,
++  "workflowWakeRunnerUnchanged": true,
++  "workflowPermissionsUnchanged": true,
++  "harnessSha256": "a9f7b676047ea6f3f77e2ca7ef1f093228b4b7181b807e3160cbce901cd38e24",
++  "nodeVersion": "v22.16.0",
++  "proofCeiling": "real coordinator, transition callback and row-recovery loader; real SQLite fixture and SIGKILL; NOT production repository/Raft/CREATE/cleanup/lease or power-loss proof"
++}
+diff --git a/solve/quests/cutover-transition-authority-review/evidence/local-workflow-crash-matrix.json b/solve/quests/cutover-transition-authority-review/evidence/local-workflow-crash-matrix.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..89c93d3b022acb76c9231bec22537c067741ce40
+--- /dev/null
++++ b/solve/quests/cutover-transition-authority-review/evidence/local-workflow-crash-matrix.json
+@@ -0,0 +1,788 @@
++{
++  "schema": "c0-workflow-process-crash/1",
++  "sourceLabel": "6dc42084ba65a75fa2900535efaa74f7d89357fd",
++  "sourceLabelIsCheckoutProof": false,
++  "nodeVersion": "v22.16.0",
++  "measurementStatus": "measured",
++  "sourceChanges": false,
++  "proofCeiling": "real coordinator, transition callback and row-recovery loader; real SQLite fixture and SIGKILL; NOT production repository/Raft/CREATE/cleanup/lease or power-loss proof",
++  "substitutions": [
++    "node:sqlite fixture instead of production better-sqlite3 and ReplicaOperationRepository",
++    "fixture manually invokes the measured mirror/persist/mark order; production orchestration is NOT executed",
++    "fixed row and clock; memberships are opaque retained data, not live quorum observations"
++  ],
++  "sourceDigests": {
++    "src/constants/workflow.js": "25f24ecb8c4b57a507d2e415355bbcf1d379303297d02f53309763879732c915",
++    "src/workflow/workflow-constants.js": "1bc5b8b8c98da2ae013742d9b3b5746640e209fc031704b80f1d341fba434752",
++    "src/workflow/durable-workflow-coordinator.js": "c3ca87ca5f08451f73980ebd35fc675d762846ccf279f2ed033bd01701140116",
++    "src/workflow/durable-workflow-storage-ownership.js": "567b219e772c859aef536ad1a3d86528cfa764f72e60f80d0d5d636c092e37ac",
++    "src/rebalancer/operation-workflow-persistence.js": "8172b8912d186e807e1f0e6afc518916e97866e7bca2f11416f4c06eb3717391",
++    "src/rebalancer/operation-progress-store.js": "9c966a44e748df31e60c8a6817cf4168e42090b075e9ae9726da7e3b9a87508f",
++    "src/rebalancer/operation-workflow-transition-orchestration.js": "47e9233fa395895512f7979e9f8558f52d37529b3af8097c70884f78e4c3c733",
++    "src/rebalancer/operation-workflow-owner-execution-lane.js": "bd26aec4a4c2d9417e15e32b7ceef5733cdfac45701b6ac60377d1a0cbe077a0"
++  },
++  "cases": [
++    {
++      "kind": "acknowledged",
++      "passed": true,
++      "interrupted": {
++        "cut": {
++          "kind": "acknowledged",
++          "beforePersistence": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "durableBefore": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "persistCallbackCalls": 1,
++          "rowsChanged": 1,
++          "sqlError": null,
++          "acknowledged": true,
++          "atCut": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": true,
++            "retainedObligation": "fixture-unresolved"
++          }
++        },
++        "exit": {
++          "code": 0,
++          "signal": null
++        },
++        "stdout": "",
++        "stderr": "(node:935) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      },
++      "restarted": {
++        "result": {
++          "row": {
++            "revision": 2,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "SENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                },
++                {
++                  "step": "SENDING",
++                  "previousStep": "PENDING",
++                  "timestamp": 40002,
++                  "reason": "fixture-dispatch"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "restored": true,
++          "workflow": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": true,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "replay": {
++            "attempted": true,
++            "replayCallbackCalls": 0
++          },
++          "volatileProgressRecords": 0
++        },
++        "stderr": "(node:946) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      }
++    },
++    {
++      "kind": "before-commit",
++      "passed": true,
++      "interrupted": {
++        "cut": {
++          "kind": "before-commit",
++          "beforePersistence": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "durableBefore": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "persistCallbackCalls": 1,
++          "rowsChanged": null,
++          "sqlError": null,
++          "acknowledged": false,
++          "atCut": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          }
++        },
++        "exit": {
++          "code": null,
++          "signal": "SIGKILL"
++        },
++        "stdout": "",
++        "stderr": "(node:957) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      },
++      "restarted": {
++        "result": {
++          "row": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "restored": true,
++          "workflow": {
++            "step": "PENDING",
++            "historyLength": 1,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "replay": {
++            "attempted": false,
++            "replayCallbackCalls": 0
++          },
++          "volatileProgressRecords": 0
++        },
++        "stderr": "(node:968) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      }
++    },
++    {
++      "kind": "inside-transaction",
++      "passed": true,
++      "interrupted": {
++        "cut": {
++          "kind": "inside-transaction",
++          "beforePersistence": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "durableBefore": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "persistCallbackCalls": 1,
++          "rowsChanged": 1,
++          "sqlError": null,
++          "acknowledged": false,
++          "atCut": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          }
++        },
++        "exit": {
++          "code": null,
++          "signal": "SIGKILL"
++        },
++        "stdout": "",
++        "stderr": "(node:979) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      },
++      "restarted": {
++        "result": {
++          "row": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "restored": true,
++          "workflow": {
++            "step": "PENDING",
++            "historyLength": 1,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "replay": {
++            "attempted": false,
++            "replayCallbackCalls": 0
++          },
++          "volatileProgressRecords": 0
++        },
++        "stderr": "(node:990) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      }
++    },
++    {
++      "kind": "commit-before-local-mark",
++      "passed": true,
++      "interrupted": {
++        "cut": {
++          "kind": "commit-before-local-mark",
++          "beforePersistence": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "durableBefore": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "persistCallbackCalls": 1,
++          "rowsChanged": 1,
++          "sqlError": null,
++          "acknowledged": false,
++          "atCut": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          }
++        },
++        "exit": {
++          "code": null,
++          "signal": "SIGKILL"
++        },
++        "stdout": "",
++        "stderr": "(node:1001) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      },
++      "restarted": {
++        "result": {
++          "row": {
++            "revision": 2,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "SENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                },
++                {
++                  "step": "SENDING",
++                  "previousStep": "PENDING",
++                  "timestamp": 40002,
++                  "reason": "fixture-dispatch"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "restored": true,
++          "workflow": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": true,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "replay": {
++            "attempted": true,
++            "replayCallbackCalls": 0
++          },
++          "volatileProgressRecords": 0
++        },
++        "stderr": "(node:1012) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      }
++    },
++    {
++      "kind": "after-local-mark",
++      "passed": true,
++      "interrupted": {
++        "cut": {
++          "kind": "after-local-mark",
++          "beforePersistence": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "durableBefore": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "persistCallbackCalls": 1,
++          "rowsChanged": 1,
++          "sqlError": null,
++          "acknowledged": false,
++          "atCut": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": true,
++            "retainedObligation": "fixture-unresolved"
++          }
++        },
++        "exit": {
++          "code": null,
++          "signal": "SIGKILL"
++        },
++        "stdout": "",
++        "stderr": "(node:1023) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      },
++      "restarted": {
++        "result": {
++          "row": {
++            "revision": 2,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "SENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                },
++                {
++                  "step": "SENDING",
++                  "previousStep": "PENDING",
++                  "timestamp": 40002,
++                  "reason": "fixture-dispatch"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "restored": true,
++          "workflow": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": true,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "replay": {
++            "attempted": true,
++            "replayCallbackCalls": 0
++          },
++          "volatileProgressRecords": 0
++        },
++        "stderr": "(node:1034) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      }
++    },
++    {
++      "kind": "cas-refused",
++      "passed": true,
++      "interrupted": {
++        "cut": {
++          "kind": "cas-refused",
++          "beforePersistence": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "durableBefore": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "persistCallbackCalls": 1,
++          "rowsChanged": 0,
++          "sqlError": null,
++          "acknowledged": false,
++          "atCut": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          }
++        },
++        "exit": {
++          "code": null,
++          "signal": "SIGKILL"
++        },
++        "stdout": "",
++        "stderr": "(node:1045) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      },
++      "restarted": {
++        "result": {
++          "row": {
++            "revision": 2,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "restored": true,
++          "workflow": {
++            "step": "PENDING",
++            "historyLength": 1,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "replay": {
++            "attempted": false,
++            "replayCallbackCalls": 0
++          },
++          "volatileProgressRecords": 0
++        },
++        "stderr": "(node:1056) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      }
++    },
++    {
++      "kind": "write-unavailable",
++      "passed": true,
++      "interrupted": {
++        "cut": {
++          "kind": "write-unavailable",
++          "beforePersistence": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "durableBefore": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "persistCallbackCalls": 1,
++          "rowsChanged": null,
++          "sqlError": {
++            "code": "ERR_SQLITE_ERROR",
++            "message": "attempt to write a readonly database"
++          },
++          "acknowledged": false,
++          "atCut": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          }
++        },
++        "exit": {
++          "code": null,
++          "signal": "SIGKILL"
++        },
++        "stdout": "",
++        "stderr": "(node:1067) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      },
++      "restarted": {
++        "result": {
++          "row": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "restored": true,
++          "workflow": {
++            "step": "PENDING",
++            "historyLength": 1,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "replay": {
++            "attempted": false,
++            "replayCallbackCalls": 0
++          },
++          "volatileProgressRecords": 0
++        },
++        "stderr": "(node:1078) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      }
++    },
++    {
++      "kind": "different-durable-winner",
++      "passed": true,
++      "interrupted": {
++        "cut": {
++          "kind": "different-durable-winner",
++          "beforePersistence": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "durableBefore": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "PENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "persistCallbackCalls": 1,
++          "rowsChanged": 0,
++          "sqlError": null,
++          "acknowledged": false,
++          "atCut": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": false,
++            "retainedObligation": "fixture-unresolved"
++          }
++        },
++        "exit": {
++          "code": null,
++          "signal": "SIGKILL"
++        },
++        "stdout": "",
++        "stderr": "(node:1089) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      },
++      "restarted": {
++        "result": {
++          "row": {
++            "revision": 2,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "SENDING",
++              "completedAt": null,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                },
++                {
++                  "step": "SENDING",
++                  "previousStep": "PENDING",
++                  "timestamp": 40002,
++                  "reason": "fixture-dispatch"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "restored": true,
++          "workflow": {
++            "step": "SENDING",
++            "historyLength": 2,
++            "sendingMarked": true,
++            "retainedObligation": "fixture-unresolved"
++          },
++          "replay": {
++            "attempted": true,
++            "replayCallbackCalls": 0
++          },
++          "volatileProgressRecords": 0
++        },
++        "stderr": "(node:1100) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      }
++    },
++    {
++      "kind": "terminal-row-loader",
++      "passed": true,
++      "restarted": {
++        "result": {
++          "row": {
++            "revision": 1,
++            "operation": {
++              "operationId": "c0-crash-operation",
++              "workflowStep": "FAILED",
++              "completedAt": 40001,
++              "stepsHistory": [
++                {
++                  "step": "PENDING",
++                  "previousStep": null,
++                  "timestamp": 40000,
++                  "reason": "fixture-admission"
++                },
++                {
++                  "step": "FAILED",
++                  "previousStep": "PENDING",
++                  "timestamp": 40001,
++                  "reason": "fixture-terminal-with-outstanding-membership"
++                }
++              ],
++              "messageGroupMembershipLaneKey": "c0-group",
++              "messageGroupMembershipObligationState": "fixture-unresolved",
++              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
++            }
++          },
++          "restored": false,
++          "workflow": {
++            "step": null,
++            "historyLength": 0,
++            "sendingMarked": false,
++            "retainedObligation": null
++          },
++          "replay": {
++            "attempted": false,
++            "replayCallbackCalls": 0
++          },
++          "volatileProgressRecords": 0
++        },
++        "stderr": "(node:1111) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++      },
++      "limit": "ensureOperationWorkflow fallback and downstream terminal guards are not executed"
++    }
++  ]
++}
+diff --git a/solve/quests/cutover-transition-authority-review/evidence/probe.stderr.txt b/solve/quests/cutover-transition-authority-review/evidence/probe.stderr.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..c0a275fec8319eb46bd7edc5260748fcb0a53bc5
+--- /dev/null
++++ b/solve/quests/cutover-transition-authority-review/evidence/probe.stderr.txt
+@@ -0,0 +1,14 @@
++(node:1123) ExperimentalWarning: SQLite is an experimental feature and might change at any time
++(Use `node --trace-warnings ...` to show where the warning was created)
++file:///mnt/data/cutover-source/tree/src/test-helpers/probe-guard.js:26
++  if (isProbing(env)) throw new Error(`${REFUSAL_PREFIX}${what}`);
++                            ^
++
++Error: refused under LAGRANGE_PROBE=1: a probe never starts the C0 process-crash diagnostic
++    at refuseUnderProbe (file:///mnt/data/cutover-source/tree/src/test-helpers/probe-guard.js:26:29)
++    at file:///mnt/data/cutover-source/tree/scripts/quest-evidence/cutover-workflow-crash-baseline.js:22:1
++    at ModuleJob.run (node:internal/modules/esm/module_job:274:25)
++    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)
++    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
++
++Node.js v22.16.0
+diff --git a/solve/quests/cutover-transition-authority-review/evidence/probe.stdout.txt b/solve/quests/cutover-transition-authority-review/evidence/probe.stdout.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/solve/quests/cutover-transition-authority-review/evidence/review-5452918820-reference.json b/solve/quests/cutover-transition-authority-review/evidence/review-5452918820-reference.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..85d01e2645ceb4ccad9678719674793821ca2ad0
+--- /dev/null
++++ b/solve/quests/cutover-transition-authority-review/evidence/review-5452918820-reference.json
+@@ -0,0 +1,15 @@
++{
++  "schema": "c0-independent-review-reference/1",
++  "source": "GitHub REST pull request review (fetched in this continuation)",
++  "reviewId": 5452918820,
++  "nodeId": "PRR_kwDOThZ5hs8AAAABRQTwJA",
++  "author": "copilot-pull-request-reviewer[bot]",
++  "submittedAt": "2026-10-08T07:05:06Z",
++  "reviewedCommit": "0219a7fee95bdd744e52b8fa2eb5c5978e661964",
++  "reviewUrl": "https://github.com/psvensson/lagrange/pull/104#pullrequestreview-5452918820",
++  "state": "COMMENTED",
++  "explicitVerdict": "REJECT C0 closure",
++  "exactVerdictParagraph": "**Verdict: REJECT C0 closure at `0219a7fee95bdd744e52b8fa2eb5c5978e661964`.** The packet\u2019s narrow conclusions are supported, but J1 recovery policy, workflow crash/replay behavior, intact snapshot catch-up, and production FreshMG replacement remain unresolved.",
++  "localResponseIsIndependentApproval": false,
++  "published": false
++}
+diff --git a/solve/quests/cutover-transition-authority-review/review-response-2026-10-08.md b/solve/quests/cutover-transition-authority-review/review-response-2026-10-08.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..86310b9cf6d5d807978ea4ee2a130a7d0d9e0e0b
+--- /dev/null
++++ b/solve/quests/cutover-transition-authority-review/review-response-2026-10-08.md
+@@ -0,0 +1,167 @@
++# C0 review response: recovery direction and crash reconstruction
++
++Status: LOCAL DRAFT, NOT PUBLISHED OR INDEPENDENTLY APPROVED.
++Base review: PR #104 at `0219a7fee95bdd744e52b8fa2eb5c5978e661964`.
++Runtime: unchanged `82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af`.
++No C0 receipt is promoted, no sealed statement is edited and no source-repair
++Quest is declared by this packet. The review's REJECT remains in force.
++
++## 1. Review received and its consequence
++
++Independent review `5452918820` / `PRR_kwDOThZ5hs8AAAABRQTwJA`, submitted by
++`copilot-pull-request-reviewer[bot]` at 2026-10-08T07:05:06Z, explicitly rejects
++C0 closure. It supports the earlier narrow conclusions while leaving J1,
++workflow crash/replay, intact snapshot catch-up and production FreshMG work
++unresolved. This is NOT acceptance hidden behind the review's zero inline
++findings. Source review:
++https://github.com/psvensson/lagrange/pull/104#pullrequestreview-5452918820
++
++## 2. J1 recommendation: choose and fence the removal direction once
++
++This is a proposed protocol-owner decision for independent review, not an
++implemented rule or unilateral change to FreshMG acceptance.
++
++Keep operation O's admitted old source S and fresh target T immutable. After T
++is promoted but S is still retained, neither “always remove the target on
++failure” nor “promotion always makes rollback safe” is a valid default.
++The decisive boundary is whether retiring S has been durably authorized or
++may already be in flight, not merely whether S appears in one configuration.
++
++| Durable owner state | Proposed behavior | Required refusal |
++| --- | --- | --- |
++| No removal direction selected; S-retirement authorization definitively never issued; exact S retained and existing safety policy permits abandoning T | Existing operation owner may select target abandonment and bind REMOVE T before issuing it | No consumer-selected recovery mode; no selection from stale cache or timeout alone |
++| No direction selected; target voter, handoff and existing source-retention prerequisites satisfied | Existing operation owner may select successful source retirement and bind REMOVE S before issuing it | Never infer permission from “promoted” alone |
++| REMOVE S selected, submitted, or submission outcome uncertain | Preserve T and reconcile S removal; continue forward under the same obligation | Do not issue REMOVE T as compensation even if a fresh read still lists S |
++| REMOVE T selected for abandonment | Retain S and reconcile exact T removal; do not later switch this O into successful source retirement | No source-removal permit under the abandoned direction |
++| S is committed absent | Preserve T and finish S's exact cleanup/recovery | Ordinary failure cannot authorize removal of the surviving replacement |
++| Required authority is unavailable or target cannot currently recover | Hold the existing obligation/lane; name its retry trigger or operator-recovery requirement; preserve useful surviving replicas | Do not fabricate an admission, count a timeout as absence, or declare terminal membership success |
++
++The choice must be durable and exclusive BEFORE the first subject-specific
++removal request, including under cancellation, lease takeover and lost CAS
++answers. This is a semantic fact to encode through the existing repository's
++operation/permit state, not a new journal, coordinator or observer-owned flag.
++C0 does not choose a column layout or modify the immutable membership identity.
++If the current fields cannot carry this fact, the next owner-reviewed scope
++must say so explicitly before changing them.
++
++### Late commands are part of the choice
++
++Selecting abandonment must also prove that earlier admission/promotion work
++cannot later authorize source retirement. Releasing either branch requires
++resolving outstanding proposals, not just sampling absence. A conflicting or
++unknown CAS result grants neither direction; adopt the exact durable winner
++or retain the unresolved obligation. Old source and fresh target identities,
++physical generations, group identity and command subject must agree in the
++request, native configuration context and the returned proof.
++
++Do not mint a new transitionIdentity merely to escape an older fence. Current
++`transitionFenceKey` keys by operationId plus transitionIdentity;
++`staleTransitionFence` retains one same-key/current-generation high-water
++observation. This local runtime check is NOT a durable cancellation or branch
++selection authority. Prefer the current operation-level transition lineage;
++make the exact subject and branch consistent through the existing permit.
++Prove same-sequence/different-subject and old-owner reentry refusal at the
++actual operation admission/runtime interaction before accepting any encoding.
++
++### Safety and availability tradeoff
++
++Target abandonment before source-retirement authorization can restore the
++original group when a promoted T fails, instead of leaving an otherwise useful
++S indefinitely blocked. Once S retirement may be in flight, preserving T avoids
++a delayed REMOVE S racing a compensating REMOVE T. The cost is that unrecoverable
++post-retirement target failure needs an explicit existing-owner repair policy;
++it cannot be solved by weakening absence or identity proofs. No unbounded
++silent retry is accepted as recovery.
++
++### Existing independent lifetimes remain independent
++
++Ordinary terminal settlement, the per-group membership obligation, reservation
++accounting and physical cleanup keep their sealed owners. Leader/quorum absence
++resolves the applicable membership obligation; source-own applied absence
++continues to gate stopping S. Failed-target cleanup must use its existing
++lifecycle/CREATE authority and exact-generation rules, not an invented source
++proof or blanket terminal-row permission. This proposal does not pick a new
++universal storage-reservation release point.
++
++## 3. New process-crash measurements
++
++Harness: `scripts/quest-evidence/cutover-workflow-crash-baseline.js`.
++Evidence: [local matrix](evidence/local-workflow-crash-matrix.json) and
++[source provenance](evidence/local-source-provenance.json).
++
++The original Actions source archive was hash-verified; all 1,851 extracted src
++blobs match its git-tree manifest. GitHub's base-to-review comparison contains
++no src changes. The diagnostic was executed LOCALLY in this chat environment,
++not on Actions/GCP. It imports unchanged DurableWorkflowCoordinator, transition
++callback and operation-row recovery code. Its storage port is an explicitly
++separate node:sqlite file-backed fixture; it does not instantiate the production
++ReplicaOperationRepository, better-sqlite3 binding, Raft group or physical CREATE.
++
++| Cut / control | Fresh-process result |
++| --- | --- |
++| Acknowledged fixture commit | Committed SENDING state and replay idempotency reconstructed |
++| SIGKILL after mirror transition, before SQL | Old PENDING row recovered; SENDING not marked committed |
++| SIGKILL after UPDATE, before COMMIT | Transaction rolls back on reopen; old row and permission boundary retained |
++| SIGKILL after COMMIT, before local committed mark | Committed row recovered; SENDING replay rejected without invoking persistence again |
++| SIGKILL after local committed mark | Same committed reconstruction; local mark is not needed for restart truth |
++| Real fixture CAS affected zero rows | Durable winner retained; losing mirror cannot become recovered permission |
++| SQLite write refused by query-only mode | Durable old row retained; uncommitted mark not reconstructed |
++| Different durable writer already advanced the row | Actual committed winner recovered despite this worker's failed CAS |
++| Durable terminal row with opaque membership obligation | Loader skips active workflow recreation; row retains its obligation bytes |
++
++All nine cases passed. Seven writer processes were actually SIGKILLed at named
++IPC cuts; every case used a fresh reader process. The test also refused execution
++under LAGRANGE_PROBE=1 before creating an output file. No timer-based race fishing
++was used. Its timeout only bounds a missing cut/exit, and only this harness's
++own child processes and temporary directory are touched.
++
++### What is still NOT proved
++
++The harness manually drives mirror -> fixture persistence -> local mark in the
++order found in the current orchestration; that orchestration is not executed.
++It therefore does not establish production CAS predicates, lease takeover,
++uncertain network-write settlement, target/source effects, cleanup, raft-rs
++apply ordering, power-loss safety or multi-host recovery. Its opaque obligation
++retention is not proof that the actual membership/cleanup owners recover work.
++
++`ensureOperationWorkflow` also contains a fallback after the row loader declines
++a terminal record. The full caller/terminal guard chain must still be tested;
++the isolated terminal-loader result must not become a no-resurrection claim for
++that whole chain. This packet does not authorize a speculative fallback repair.
++
++The useful conclusion is narrower: these existing reconstruction components can
++recover committed row truth without durable storage for the volatile progress
++Map. No new progress store is justified by the measured restart cuts.
++
++## 4. Review scope must not create a circular implementation gate
++
++C0's sealed work is classification and independent contract review; it expressly
++forbids runtime repairs. The subsequent FreshMG/snapshot Quests own implementation
++and physical acceptance. Request separate judgments: whether a transition is
++classified precisely enough to open its next bounded repair, and whether that
++repair has been implemented/certified. Do not call either judgment the other.
++
++This is not a request to waive C0's rejection. It requires resolving J1 and the
++remaining production commit/recovery classification, then requesting a newer
++review. Known missing runtime wiring may remain a named red predecessor for a
++product Quest, but an UNKNOWN authority may not be hidden as a mere TODO.
++
++## 5. Next bounded proof and publication status
++
++Next production-level evidence must cover the actual repository's refused and
++unknown durable-write outcomes, fresh-owner adoption and terminal guards. Reuse
++its current harness/ports with real persistence where possible; do not graft a
++second workflow engine onto this test. Snapshot classification still requires
++the native Ready/application-image interaction; no CREATE grant may be forged
++for an intact existing member.
++
++The patch extends the EXISTING cutover-owner-entry Action with one diagnostic
++step and path trigger. It retains existing keyless GCP startup, permissions,
++source check, lock, archive and failure behavior. This was YAML/shell checked
++locally but has NOT been uploaded or executed on GCP. A future GCP invocation
++of this component test is still not a distributed acceptance run.
++
++Current session exposes GitHub reads only; write/dispatch actions were not
++available and the CLI network route could not resolve github.com. Therefore
++this packet is unpublished, the remote head remains 0219a7fe, and no source
++changes, release approval, C0 closure or A1-v13 certification is claimed.

@@ -1,0 +1,42 @@
+{
+  "measurementStatus": "measured",
+  "cases": [
+    {
+      "kind": "acknowledged",
+      "passed": true
+    },
+    {
+      "kind": "before-commit",
+      "passed": true
+    },
+    {
+      "kind": "inside-transaction",
+      "passed": true
+    },
+    {
+      "kind": "commit-before-local-mark",
+      "passed": true
+    },
+    {
+      "kind": "after-local-mark",
+      "passed": true
+    },
+    {
+      "kind": "cas-refused",
+      "passed": true
+    },
+    {
+      "kind": "write-unavailable",
+      "passed": true
+    },
+    {
+      "kind": "different-durable-winner",
+      "passed": true
+    },
+    {
+      "kind": "terminal-row-loader",
+      "passed": true
+    }
+  ],
+  "proofCeiling": "real coordinator, transition callback and row-recovery loader; real SQLite fixture and SIGKILL; NOT production repository/Raft/CREATE/cleanup/lease or power-loss proof"
+}

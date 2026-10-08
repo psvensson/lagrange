@@ -1,0 +1,1012 @@
+{
+  "schema": "c0-workflow-process-crash/1",
+  "sourceLabel": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
+  "sourceLabelIsCheckoutProof": false,
+  "nodeVersion": "v22.16.0",
+  "measurementStatus": "measured",
+  "sourceChanges": false,
+  "proofCeiling": "real coordinator, transition callback and row-recovery loader; real SQLite fixture and SIGKILL; NOT production repository/Raft/CREATE/cleanup/lease or power-loss proof",
+  "substitutions": [
+    "node:sqlite fixture instead of production better-sqlite3 and ReplicaOperationRepository",
+    "fixture manually invokes the measured mirror/persist/mark order; production orchestration is NOT executed",
+    "fixed row and clock; memberships are opaque retained data, not live quorum observations"
+  ],
+  "sourceDigests": {
+    "src/constants/workflow.js": "25f24ecb8c4b57a507d2e415355bbcf1d379303297d02f53309763879732c915",
+    "src/workflow/workflow-constants.js": "1bc5b8b8c98da2ae013742d9b3b5746640e209fc031704b80f1d341fba434752",
+    "src/workflow/durable-workflow-coordinator.js": "c3ca87ca5f08451f73980ebd35fc675d762846ccf279f2ed033bd01701140116",
+    "src/workflow/durable-workflow-storage-ownership.js": "567b219e772c859aef536ad1a3d86528cfa764f72e60f80d0d5d636c092e37ac",
+    "src/rebalancer/operation-workflow-persistence.js": "8172b8912d186e807e1f0e6afc518916e97866e7bca2f11416f4c06eb3717391",
+    "src/rebalancer/operation-progress-store.js": "9c966a44e748df31e60c8a6817cf4168e42090b075e9ae9726da7e3b9a87508f",
+    "src/rebalancer/operation-workflow-transition-orchestration.js": "47e9233fa395895512f7979e9f8558f52d37529b3af8097c70884f78e4c3c733",
+    "src/rebalancer/operation-workflow-owner-execution-lane.js": "bd26aec4a4c2d9417e15e32b7ceef5733cdfac45701b6ac60377d1a0cbe077a0"
+  },
+  "cases": [
+    {
+      "kind": "acknowledged",
+      "passed": true,
+      "interrupted": {
+        "writerPid": 1240,
+        "cut": {
+          "kind": "acknowledged",
+          "beforePersistence": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "durableBefore": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "persistCallbackCalls": 1,
+          "rowsChanged": 1,
+          "sqlError": null,
+          "acknowledged": true,
+          "atCut": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": true,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "sqlAtCut": {
+            "inTransaction": false,
+            "row": {
+              "revision": 2,
+              "operation": {
+                "operationId": "c0-crash-operation",
+                "workflowStep": "SENDING",
+                "completedAt": null,
+                "stepsHistory": [
+                  {
+                    "step": "PENDING",
+                    "previousStep": null,
+                    "timestamp": 40000,
+                    "reason": "fixture-admission"
+                  },
+                  {
+                    "step": "SENDING",
+                    "previousStep": "PENDING",
+                    "timestamp": 40002,
+                    "reason": "fixture-dispatch"
+                  }
+                ],
+                "messageGroupMembershipLaneKey": "c0-group",
+                "messageGroupMembershipObligationState": "fixture-unresolved",
+                "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+              }
+            }
+          }
+        },
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "stdout": "",
+        "stderr": "(node:1240) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "restarted": {
+        "result": {
+          "pid": 1251,
+          "row": {
+            "revision": 2,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "SENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                },
+                {
+                  "step": "SENDING",
+                  "previousStep": "PENDING",
+                  "timestamp": 40002,
+                  "reason": "fixture-dispatch"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "restored": true,
+          "workflow": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": true,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "replay": {
+            "attempted": true,
+            "replayCallbackCalls": 0
+          },
+          "volatileProgressRecords": 0
+        },
+        "stderr": "(node:1251) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      }
+    },
+    {
+      "kind": "before-commit",
+      "passed": true,
+      "interrupted": {
+        "writerPid": 1262,
+        "cut": {
+          "kind": "before-commit",
+          "beforePersistence": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "durableBefore": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "persistCallbackCalls": 1,
+          "rowsChanged": null,
+          "sqlError": null,
+          "acknowledged": false,
+          "atCut": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "sqlAtCut": {
+            "inTransaction": false,
+            "row": {
+              "revision": 1,
+              "operation": {
+                "operationId": "c0-crash-operation",
+                "workflowStep": "PENDING",
+                "completedAt": null,
+                "stepsHistory": [
+                  {
+                    "step": "PENDING",
+                    "previousStep": null,
+                    "timestamp": 40000,
+                    "reason": "fixture-admission"
+                  }
+                ],
+                "messageGroupMembershipLaneKey": "c0-group",
+                "messageGroupMembershipObligationState": "fixture-unresolved",
+                "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+              }
+            }
+          }
+        },
+        "exit": {
+          "code": null,
+          "signal": "SIGKILL"
+        },
+        "stdout": "",
+        "stderr": "(node:1262) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "restarted": {
+        "result": {
+          "pid": 1273,
+          "row": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "restored": true,
+          "workflow": {
+            "step": "PENDING",
+            "historyLength": 1,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "replay": {
+            "attempted": false,
+            "replayCallbackCalls": 0
+          },
+          "volatileProgressRecords": 0
+        },
+        "stderr": "(node:1273) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      }
+    },
+    {
+      "kind": "inside-transaction",
+      "passed": true,
+      "interrupted": {
+        "writerPid": 1284,
+        "cut": {
+          "kind": "inside-transaction",
+          "beforePersistence": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "durableBefore": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "persistCallbackCalls": 1,
+          "rowsChanged": 1,
+          "sqlError": null,
+          "acknowledged": false,
+          "atCut": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "sqlAtCut": {
+            "inTransaction": true,
+            "row": {
+              "revision": 2,
+              "operation": {
+                "operationId": "c0-crash-operation",
+                "workflowStep": "SENDING",
+                "completedAt": null,
+                "stepsHistory": [
+                  {
+                    "step": "PENDING",
+                    "previousStep": null,
+                    "timestamp": 40000,
+                    "reason": "fixture-admission"
+                  },
+                  {
+                    "step": "SENDING",
+                    "previousStep": "PENDING",
+                    "timestamp": 40002,
+                    "reason": "fixture-dispatch"
+                  }
+                ],
+                "messageGroupMembershipLaneKey": "c0-group",
+                "messageGroupMembershipObligationState": "fixture-unresolved",
+                "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+              }
+            }
+          }
+        },
+        "exit": {
+          "code": null,
+          "signal": "SIGKILL"
+        },
+        "stdout": "",
+        "stderr": "(node:1284) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "restarted": {
+        "result": {
+          "pid": 1295,
+          "row": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "restored": true,
+          "workflow": {
+            "step": "PENDING",
+            "historyLength": 1,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "replay": {
+            "attempted": false,
+            "replayCallbackCalls": 0
+          },
+          "volatileProgressRecords": 0
+        },
+        "stderr": "(node:1295) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      }
+    },
+    {
+      "kind": "commit-before-local-mark",
+      "passed": true,
+      "interrupted": {
+        "writerPid": 1311,
+        "cut": {
+          "kind": "commit-before-local-mark",
+          "beforePersistence": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "durableBefore": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "persistCallbackCalls": 1,
+          "rowsChanged": 1,
+          "sqlError": null,
+          "acknowledged": false,
+          "atCut": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "sqlAtCut": {
+            "inTransaction": false,
+            "row": {
+              "revision": 2,
+              "operation": {
+                "operationId": "c0-crash-operation",
+                "workflowStep": "SENDING",
+                "completedAt": null,
+                "stepsHistory": [
+                  {
+                    "step": "PENDING",
+                    "previousStep": null,
+                    "timestamp": 40000,
+                    "reason": "fixture-admission"
+                  },
+                  {
+                    "step": "SENDING",
+                    "previousStep": "PENDING",
+                    "timestamp": 40002,
+                    "reason": "fixture-dispatch"
+                  }
+                ],
+                "messageGroupMembershipLaneKey": "c0-group",
+                "messageGroupMembershipObligationState": "fixture-unresolved",
+                "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+              }
+            }
+          }
+        },
+        "exit": {
+          "code": null,
+          "signal": "SIGKILL"
+        },
+        "stdout": "",
+        "stderr": "(node:1311) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "restarted": {
+        "result": {
+          "pid": 1322,
+          "row": {
+            "revision": 2,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "SENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                },
+                {
+                  "step": "SENDING",
+                  "previousStep": "PENDING",
+                  "timestamp": 40002,
+                  "reason": "fixture-dispatch"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "restored": true,
+          "workflow": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": true,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "replay": {
+            "attempted": true,
+            "replayCallbackCalls": 0
+          },
+          "volatileProgressRecords": 0
+        },
+        "stderr": "(node:1322) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      }
+    },
+    {
+      "kind": "after-local-mark",
+      "passed": true,
+      "interrupted": {
+        "writerPid": 1333,
+        "cut": {
+          "kind": "after-local-mark",
+          "beforePersistence": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "durableBefore": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "persistCallbackCalls": 1,
+          "rowsChanged": 1,
+          "sqlError": null,
+          "acknowledged": false,
+          "atCut": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": true,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "sqlAtCut": {
+            "inTransaction": false,
+            "row": {
+              "revision": 2,
+              "operation": {
+                "operationId": "c0-crash-operation",
+                "workflowStep": "SENDING",
+                "completedAt": null,
+                "stepsHistory": [
+                  {
+                    "step": "PENDING",
+                    "previousStep": null,
+                    "timestamp": 40000,
+                    "reason": "fixture-admission"
+                  },
+                  {
+                    "step": "SENDING",
+                    "previousStep": "PENDING",
+                    "timestamp": 40002,
+                    "reason": "fixture-dispatch"
+                  }
+                ],
+                "messageGroupMembershipLaneKey": "c0-group",
+                "messageGroupMembershipObligationState": "fixture-unresolved",
+                "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+              }
+            }
+          }
+        },
+        "exit": {
+          "code": null,
+          "signal": "SIGKILL"
+        },
+        "stdout": "",
+        "stderr": "(node:1333) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "restarted": {
+        "result": {
+          "pid": 1344,
+          "row": {
+            "revision": 2,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "SENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                },
+                {
+                  "step": "SENDING",
+                  "previousStep": "PENDING",
+                  "timestamp": 40002,
+                  "reason": "fixture-dispatch"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "restored": true,
+          "workflow": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": true,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "replay": {
+            "attempted": true,
+            "replayCallbackCalls": 0
+          },
+          "volatileProgressRecords": 0
+        },
+        "stderr": "(node:1344) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      }
+    },
+    {
+      "kind": "cas-refused",
+      "passed": true,
+      "interrupted": {
+        "writerPid": 1355,
+        "cut": {
+          "kind": "cas-refused",
+          "beforePersistence": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "durableBefore": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "persistCallbackCalls": 1,
+          "rowsChanged": 0,
+          "sqlError": null,
+          "acknowledged": false,
+          "atCut": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "sqlAtCut": {
+            "inTransaction": false,
+            "row": {
+              "revision": 2,
+              "operation": {
+                "operationId": "c0-crash-operation",
+                "workflowStep": "PENDING",
+                "completedAt": null,
+                "stepsHistory": [
+                  {
+                    "step": "PENDING",
+                    "previousStep": null,
+                    "timestamp": 40000,
+                    "reason": "fixture-admission"
+                  }
+                ],
+                "messageGroupMembershipLaneKey": "c0-group",
+                "messageGroupMembershipObligationState": "fixture-unresolved",
+                "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+              }
+            }
+          }
+        },
+        "exit": {
+          "code": null,
+          "signal": "SIGKILL"
+        },
+        "stdout": "",
+        "stderr": "(node:1355) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "restarted": {
+        "result": {
+          "pid": 1366,
+          "row": {
+            "revision": 2,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "restored": true,
+          "workflow": {
+            "step": "PENDING",
+            "historyLength": 1,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "replay": {
+            "attempted": false,
+            "replayCallbackCalls": 0
+          },
+          "volatileProgressRecords": 0
+        },
+        "stderr": "(node:1366) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      }
+    },
+    {
+      "kind": "write-unavailable",
+      "passed": true,
+      "interrupted": {
+        "writerPid": 1377,
+        "cut": {
+          "kind": "write-unavailable",
+          "beforePersistence": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "durableBefore": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "persistCallbackCalls": 1,
+          "rowsChanged": null,
+          "sqlError": {
+            "code": "ERR_SQLITE_ERROR",
+            "sqliteCode": 8,
+            "message": "attempt to write a readonly database"
+          },
+          "acknowledged": false,
+          "atCut": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "sqlAtCut": {
+            "inTransaction": false,
+            "row": {
+              "revision": 1,
+              "operation": {
+                "operationId": "c0-crash-operation",
+                "workflowStep": "PENDING",
+                "completedAt": null,
+                "stepsHistory": [
+                  {
+                    "step": "PENDING",
+                    "previousStep": null,
+                    "timestamp": 40000,
+                    "reason": "fixture-admission"
+                  }
+                ],
+                "messageGroupMembershipLaneKey": "c0-group",
+                "messageGroupMembershipObligationState": "fixture-unresolved",
+                "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+              }
+            }
+          }
+        },
+        "exit": {
+          "code": null,
+          "signal": "SIGKILL"
+        },
+        "stdout": "",
+        "stderr": "(node:1377) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "restarted": {
+        "result": {
+          "pid": 1388,
+          "row": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "restored": true,
+          "workflow": {
+            "step": "PENDING",
+            "historyLength": 1,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "replay": {
+            "attempted": false,
+            "replayCallbackCalls": 0
+          },
+          "volatileProgressRecords": 0
+        },
+        "stderr": "(node:1388) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      }
+    },
+    {
+      "kind": "different-durable-winner",
+      "passed": true,
+      "interrupted": {
+        "writerPid": 1399,
+        "cut": {
+          "kind": "different-durable-winner",
+          "beforePersistence": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "durableBefore": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "PENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "persistCallbackCalls": 1,
+          "rowsChanged": 0,
+          "sqlError": null,
+          "acknowledged": false,
+          "atCut": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": false,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "sqlAtCut": {
+            "inTransaction": false,
+            "row": {
+              "revision": 2,
+              "operation": {
+                "operationId": "c0-crash-operation",
+                "workflowStep": "SENDING",
+                "completedAt": null,
+                "stepsHistory": [
+                  {
+                    "step": "PENDING",
+                    "previousStep": null,
+                    "timestamp": 40000,
+                    "reason": "fixture-admission"
+                  },
+                  {
+                    "step": "SENDING",
+                    "previousStep": "PENDING",
+                    "timestamp": 40002,
+                    "reason": "fixture-dispatch"
+                  }
+                ],
+                "messageGroupMembershipLaneKey": "c0-group",
+                "messageGroupMembershipObligationState": "fixture-unresolved",
+                "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+              }
+            }
+          }
+        },
+        "exit": {
+          "code": null,
+          "signal": "SIGKILL"
+        },
+        "stdout": "",
+        "stderr": "(node:1399) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "restarted": {
+        "result": {
+          "pid": 1410,
+          "row": {
+            "revision": 2,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "SENDING",
+              "completedAt": null,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                },
+                {
+                  "step": "SENDING",
+                  "previousStep": "PENDING",
+                  "timestamp": 40002,
+                  "reason": "fixture-dispatch"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "restored": true,
+          "workflow": {
+            "step": "SENDING",
+            "historyLength": 2,
+            "sendingMarked": true,
+            "retainedObligation": "fixture-unresolved"
+          },
+          "replay": {
+            "attempted": true,
+            "replayCallbackCalls": 0
+          },
+          "volatileProgressRecords": 0
+        },
+        "stderr": "(node:1410) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      }
+    },
+    {
+      "kind": "terminal-row-loader",
+      "passed": true,
+      "restarted": {
+        "result": {
+          "pid": 1421,
+          "row": {
+            "revision": 1,
+            "operation": {
+              "operationId": "c0-crash-operation",
+              "workflowStep": "FAILED",
+              "completedAt": 40001,
+              "stepsHistory": [
+                {
+                  "step": "PENDING",
+                  "previousStep": null,
+                  "timestamp": 40000,
+                  "reason": "fixture-admission"
+                },
+                {
+                  "step": "FAILED",
+                  "previousStep": "PENDING",
+                  "timestamp": 40001,
+                  "reason": "fixture-terminal-with-outstanding-membership"
+                }
+              ],
+              "messageGroupMembershipLaneKey": "c0-group",
+              "messageGroupMembershipObligationState": "fixture-unresolved",
+              "messageGroupMembershipIdentity": "c0-fixed-source-target-pair"
+            }
+          },
+          "restored": false,
+          "workflow": {
+            "step": null,
+            "historyLength": 0,
+            "sendingMarked": false,
+            "retainedObligation": null
+          },
+          "replay": {
+            "attempted": false,
+            "replayCallbackCalls": 0
+          },
+          "volatileProgressRecords": 0
+        },
+        "stderr": "(node:1421) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+      },
+      "limit": "ensureOperationWorkflow fallback and downstream terminal guards are not executed"
+    }
+  ]
+}

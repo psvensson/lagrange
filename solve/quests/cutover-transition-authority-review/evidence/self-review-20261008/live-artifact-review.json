@@ -1,0 +1,31 @@
+{
+  "archiveSha256": "91f3c052db86c3da9ca0ab09ada9738787bba259a0669c9be8c18122155f2bb4",
+  "memberHashesVerified": 17,
+  "runId": 37743852151,
+  "cases": [
+    {
+      "name": "before_sql",
+      "passed": true
+    },
+    {
+      "name": "uncommitted_sql",
+      "passed": true
+    },
+    {
+      "name": "committed_answer_lost",
+      "passed": true
+    },
+    {
+      "name": "after_mark",
+      "passed": true
+    },
+    {
+      "name": "readonly_refusal",
+      "passed": true
+    },
+    {
+      "name": "terminal_committed",
+      "passed": true
+    }
+  ]
+}
