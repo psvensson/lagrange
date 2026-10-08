@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-09-06
+last_reviewed: 2026-10-08
 ---
 
 # Quest workflow
@@ -16,6 +16,25 @@ the CLI offers, and nothing here restates it.
 Work likely to need more than one measured attempt, or that changes an owner
 boundary, is a quest (R15). A single-sitting change with an obvious proof is
 committed directly, and its commit message names the witness.
+
+## Contract-first owner work
+
+Before adding or repairing a workflow, permit, recovery path or state store,
+apply the approved [authority and recovery principles](../../../architecture/contracts/authority-and-recovery.md):
+one owner per authoritative fact; disposable projections; no circular recovery
+prerequisite; one decision algorithm with multiple legitimate triggers; an
+owned consequence for refusal; and abstractions that reduce reasoning.
+
+Record the complete transition before implementing its parts: trigger,
+authoritative facts, permitted action, actual durable commit point,
+restart/lost-answer behavior and every remaining obligation's owner. Use
+existing owners first. Distinguish boundary-only tests from reachable
+production failures. A green primitive does not certify a complete operation.
+
+This is an application of existing rules, not a new fixed subsystem count or
+permission to rewrite sealed acceptance. The current bounded cutover work is
+routed through the existing epic's [contract-first plan](../../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md);
+broader convergence retains its own activation gate.
 
 ## What a quest is
 
