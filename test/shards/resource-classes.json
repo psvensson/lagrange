@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2303,
+    "ordinary": 2305,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2320,
-  "digest": "fnv1a32-2491e909",
+  "censusSize": 2322,
+  "digest": "fnv1a32-08a97bcb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1007,6 +1007,7 @@
     "test/integration/managed-split-writes-after-cutover.integration.test.js": "ordinary",
     "test/integration/membership-consistency.integration.test.js": "ordinary",
     "test/integration/message-group-fresh-identity-replacement.integration.test.js": "ordinary",
+    "test/integration/message-group-membership-claim-cache.integration.test.js": "ordinary",
     "test/integration/message-group-multi-join-formation.integration.test.js": "ordinary",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "ordinary",
     "test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js": "ordinary",
@@ -1657,6 +1658,7 @@
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "ordinary",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "ordinary",
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "ordinary",
+    "test/rebalancer/message-group-membership-branch-authorization.test.js": "ordinary",
     "test/rebalancer/message-group-membership-change-parked.test.js": "ordinary",
     "test/rebalancer/message-group-membership-operation-lane.test.js": "ordinary",
     "test/rebalancer/message-group-operation-routing.integration.test.js": "ordinary",

@@ -9,6 +9,7 @@
  */
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {performance} from 'node:perf_hooks';
 import {NodeService} from '../../src/node/node-service.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
@@ -23,7 +24,11 @@ const NODE = 'membership-claim-cache-seed';
 const TABLE = 'replica_operations';
 
 test('repository NULL-lease claim becomes visible through real SystemTableCache',
-  {timeout: 120000}, async () => {
+  {timeout: 30000}, async () => {
+    const started = performance.now();
+    const timings = [];
+    const mark = (phase) => timings.push({phase,
+      elapsedMs: Math.round(performance.now() - started)});
     initializeTestEnvironment({nodeId: NODE});
     let bootstrap;
     let booted;
@@ -32,8 +37,10 @@ test('repository NULL-lease claim becomes visible through real SystemTableCache'
       const port = getUniquePort();
       bootstrap = await createVirginSeedBootstrapService({nodeId: NODE,
         nodeAddress: `ws://127.0.0.1:${port}`, wsPort: port,
-        config: TEST_CONFIG.bootstrap});
+        // Eliminate fixture per-replica pacing, not runtime election safety.
+        config: {...TEST_CONFIG.bootstrap, replicaStaggerDelayMs: 0}});
       booted = await bootstrap.bootstrap();
+      mark('bootstrap');
       assert.equal(booted?.success, true, JSON.stringify(booted?.error));
       assert.ok(await waitForPartitionLeaderElection(booted, bootstrap,
         'replica_operations-p1', 5000), 'real operation-table leader must exist');
@@ -47,6 +54,7 @@ test('repository NULL-lease claim becomes visible through real SystemTableCache'
       // existing reconciliation lifecycle, rather than patching its decisions.
       // All SQL/Raft/CDC/cache observations below still use the live data path.
       await coordinator.shutdown();
+      mark('coordinator-quiesced');
       assert.equal(coordinator.isShuttingDown, true);
       assert.equal(coordinator.initialized, false);
       const now = Date.now();
@@ -84,6 +92,7 @@ test('repository NULL-lease claim becomes visible through real SystemTableCache'
         messageGroupMembershipOwnerClaim: null, messageGroupMembershipPermit: null,
         messageGroupLearnerStamp: null, messageGroupVoterStamp: null,
         messageGroupRemovalStamp: null});
+      mark('operation-inserted');
       const nulled = await cdc.updateSystemTableRow(TABLE, {operation_id: id},
         {lease_expires_at: null});
       assert.equal(nulled.success, true, JSON.stringify(nulled));
@@ -91,6 +100,7 @@ test('repository NULL-lease claim becomes visible through real SystemTableCache'
         {expectedFields: {operation_id: id, lease_expires_at: null,
           message_group_membership_identity: identity,
           message_group_membership_owner_claim: null}});
+      mark('null-lease-visible');
       const before = cache.get(TABLE, id);
       assert.ok(before, 'the inserted operation must actually become visible');
       assert.equal(before.workflow_step, WORKFLOW_STEP.PENDING);
@@ -106,12 +116,14 @@ test('repository NULL-lease claim becomes visible through real SystemTableCache'
       };
       const claimed = await repository.claimMessageGroupMembershipOwner({operationId: id,
         identity, expectedClaim: null});
+      mark('claim-returned');
       assert.equal(claimed.outcome, 'recorded', JSON.stringify(claimed));
       assert.equal(typeof claimed.claim, 'string');
       assert.ok(writes.some(({sql}) => sql.includes('lease_expires_at IS NULL')),
         'the actual NULL-lease mutation must engage');
       await cdc.waitForCacheUpdate(TABLE, id, true,
         {expectedFields: {message_group_membership_owner_claim: claimed.claim}});
+      mark('claim-cache-visible');
       const visible = cache.get(TABLE, id);
       assert.equal(visible.message_group_membership_owner_claim, claimed.claim);
       for (const field of ['operation_id', 'replica_id', 'source_replica_id',
@@ -126,7 +138,12 @@ test('repository NULL-lease claim becomes visible through real SystemTableCache'
         'this visibility witness must not instantiate a physical source or target');
     } finally {
       repository?.markShuttingDown();
+      mark('teardown-start');
       await gracefulShutdown(bootstrap, booted, null);
+      mark('bootstrap-stopped');
       await cleanupTestEnvironment();
+      mark('cleanup-complete');
+      console.log(JSON.stringify({schema: 'membership-cache-timing/1',
+        budgetMs: 30000, fixtureReplicaStaggerDelayMs: 0, timings}));
     }
   });
