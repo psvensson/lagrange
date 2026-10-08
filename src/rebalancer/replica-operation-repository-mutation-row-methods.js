@@ -63,6 +63,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
             operation.messageGroupMembershipObligationState),
         message_group_membership_identity:
           nullableOperationValue(operation.messageGroupMembershipIdentity),
+        message_group_membership_permit:
+          nullableOperationValue(operation.messageGroupMembershipPermit),
         message_group_learner_stamp:
           nullableOperationValue(operation.messageGroupLearnerStamp),
         message_group_voter_stamp:

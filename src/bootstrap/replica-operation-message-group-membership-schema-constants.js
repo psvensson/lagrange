@@ -6,6 +6,7 @@ const REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN = Object.freeze({
   PHASE: 'message_group_membership_phase',
   OBLIGATION_STATE: 'message_group_membership_obligation_state',
   IDENTITY: 'message_group_membership_identity',
+  PERMIT: 'message_group_membership_permit',
   LEARNER_STAMP: 'message_group_learner_stamp',
   VOTER_STAMP: 'message_group_voter_stamp',
   REMOVAL_STAMP: 'message_group_removal_stamp',
@@ -31,6 +32,10 @@ const REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS = Object.freeze([
   },
   {
     name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.IDENTITY,
+    type: COLUMN_TYPE.TEXT,
+  },
+  {
+    name: REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMN.PERMIT,
     type: COLUMN_TYPE.TEXT,
   },
   {

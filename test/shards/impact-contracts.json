@@ -352,7 +352,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -363,7 +363,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -374,7 +374,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -776,6 +776,23 @@
         "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
         "test/rebalancer/reservation-expiry-operation-aware.test.js",
         "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+      ]
+    },
+    "message-group-membership-permit-ledger": {
+      "description": "The canonical replica-operation row retains one exact message-group membership permit and lane while the membership CAS owner advances committed stages independently of ordinary terminal settlement.",
+      "owners": [
+        "src/bootstrap/replica-operation-message-group-membership-schema-constants.js",
+        "src/rebalancer/replica-operation-message-group-membership-fields.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit-owner.js",
+        "src/rebalancer/replica-operation-repository-constants.js",
+        "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
+        "src/rebalancer/replica-operation-repository-row-methods.js",
+        "src/rebalancer/rebalance-coordinator-shared.js"
+      ],
+      "tests": [
+        "test/rebalancer/message-group-membership-operation-lane.test.js"
       ]
     }
   },
@@ -1466,6 +1483,31 @@
         "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
         "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
         "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+      ]
+    },
+    "message-group-permit-operation-settlement": {
+      "description": "The membership permit owner retains and advances the exact durable lane after L1 while generic operation settlement remains independently terminal; pre-L1 terminal settlement releases only through the dedicated exact CAS.",
+      "endpoints": [
+        {
+          "id": "membership-permit-owner",
+          "owners": [
+            "src/rebalancer/replica-operation-message-group-membership-permit.js",
+            "src/rebalancer/replica-operation-message-group-membership-permit-owner.js"
+          ]
+        },
+        {
+          "id": "replica-operation-ledger",
+          "owners": [
+            "src/bootstrap/replica-operation-message-group-membership-schema-constants.js",
+            "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
+            "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
+            "src/rebalancer/replica-operation-repository-row-methods.js"
+          ]
+        }
+      ],
+      "contract": "message-group-membership-permit-ledger",
+      "witnessTests": [
+        "test/rebalancer/message-group-membership-operation-lane.test.js"
       ]
     }
   }

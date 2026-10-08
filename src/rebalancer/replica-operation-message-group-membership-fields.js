@@ -3,6 +3,7 @@ const REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS = Object.freeze([
   'messageGroupMembershipPhase',
   'messageGroupMembershipObligationState',
   'messageGroupMembershipIdentity',
+  'messageGroupMembershipPermit',
   'messageGroupLearnerStamp',
   'messageGroupVoterStamp',
   'messageGroupRemovalStamp',

@@ -28,7 +28,7 @@
   "censusSize": 2317,
   "digest": "fnv1a32-156493f9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-34b486a1",
+  "observationDigest": "fnv1a32-fabf7e71",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -10433,8 +10433,12 @@
     "test/rebalancer/message-group-membership-operation-lane.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-rs-peer-identity.js",
         "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
         "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit-owner.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit.js",
         "src/rebalancer/replica-status.js"
       ]
     },

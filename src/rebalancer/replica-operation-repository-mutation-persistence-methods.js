@@ -108,6 +108,7 @@ function buildReplicaOperationInsertParams(operation) {
     nullableOperationValue(operation.messageGroupMembershipPhase),
     nullableOperationValue(operation.messageGroupMembershipObligationState),
     nullableOperationValue(operation.messageGroupMembershipIdentity),
+    nullableOperationValue(operation.messageGroupMembershipPermit),
     nullableOperationValue(operation.messageGroupLearnerStamp),
     nullableOperationValue(operation.messageGroupVoterStamp),
     nullableOperationValue(operation.messageGroupRemovalStamp),
