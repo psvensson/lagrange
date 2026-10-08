@@ -1,0 +1,109 @@
+--- a/test/rebalancer/message-group-membership-branch-authorization.test.js
++++ b/test/rebalancer/message-group-membership-branch-authorization.test.js
+@@ -366,3 +366,20 @@
+   assert.equal((await f.repo(TARGET_NODE).claimMessageGroupMembershipOwner(f.claimRequest())).outcome, 'unknown');
+   assert.equal(f.row().message_group_membership_owner_claim, OWNER_CLAIM);
+ });
++
++test('owner loss before initial claim allows one expired-lease successor, not an unfenced late owner', async (t) => {
++  const f = await setup(t, {initial: true}); f.clock.advance(30000);
++  const input = f.claimRequest();
++  const result = await f.repo(TARGET_NODE).claimMessageGroupMembershipOwner(input);
++  assert.equal(result.outcome, 'recorded');
++  assert.equal(JSON.parse(result.claim).ownerNodeId, TARGET_NODE);
++  assert.equal((await f.repository.claimMessageGroupMembershipOwner(input)).outcome, 'conflict');
++  assert.equal(f.row().message_group_membership_permit, null);
++});
++test('renewed ordinary lease defeats an orphan initial-claim read before it can win', async (t) => {
++  const f = await setup(t, {initial: true}); f.clock.advance(30000);
++  f.fault(() => f.run('UPDATE replica_operations SET lease_expires_at = ? WHERE operation_id = ?',
++    [LEASE + 30000, O]));
++  assert.equal((await f.repo(TARGET_NODE).claimMessageGroupMembershipOwner(f.claimRequest())).outcome, 'unknown');
++  assert.equal(f.row().message_group_membership_owner_claim, null);
++});
+--- a/src/rebalancer/replica-operation-message-group-membership-owner-claim.js
++++ b/src/rebalancer/replica-operation-message-group-membership-owner-claim.js
+@@ -7,7 +7,8 @@
+   from '../control-plane/control-plane-system-table-gateway-constants.js';
+ import {SERVICE_TYPE} from '../constants/service.js';
+ import {OperationType} from './replica-status.js';
+-import {REPLICA_OPERATION_OWNER_LEASE_TTL_MS} from './replica-operation-owner-lease.js';
++import {REPLICA_OPERATION_OWNER_LEASE_TTL_MS,
++  REPLICA_OPERATION_OWNER_LEASE_ADOPTION, resolveOperationOwnerLeaseAdoption} from './replica-operation-owner-lease.js';
+ import {decodeMembershipIdentity, decodeMembershipOwnerClaim,
+   MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME} from
+   './replica-operation-message-group-membership-permit.js';
+@@ -69,7 +70,9 @@
+ }
+ function initialClaimAllowed(repository, row) {
+   return !repository.isOperationTerminal(row) && row.completedAt === null &&
+-    repository.resolveOperationOwnerNodeId(row) === repository.nodeId &&
++    (repository.resolveOperationOwnerNodeId(row) === repository.nodeId ||
++      resolveOperationOwnerLeaseAdoption(row, repository.nodeId, repository.timeSource.now())
++        .adoption === REPLICA_OPERATION_OWNER_LEASE_ADOPTION.ADOPT_AS_FENCED_SUCCESSOR) &&
+     row.messageGroupMembershipPhase === INITIAL_PHASE &&
+     row.messageGroupMembershipObligationState === INITIAL_OBLIGATION &&
+     row.messageGroupMembershipPermit === null &&
+@@ -100,16 +103,35 @@
+     ownerBootIncarnation: repository.membershipOwnerBootIncarnation,
+     generation, expiresAt: expiry});
+ }
+-const CLAIM_SQL = `UPDATE replica_operations SET message_group_membership_owner_claim = ?
+-  WHERE operation_id = ? AND type = ? AND partition_id = ? AND entity_type = ?
+-  AND entity_id = ? AND source_replica_id = ? AND replica_id = ?
+-  AND source_node_id = ? AND target_node_id = ?
+-  AND message_group_membership_identity = ? AND message_group_membership_lane_key = ?
+-  AND message_group_source_lifecycle_claim = ? AND message_group_membership_owner_claim IS ?
+-  AND message_group_membership_phase IS ? AND message_group_membership_obligation_state IS ?
+-  AND message_group_membership_permit IS ? AND message_group_learner_stamp IS ?
+-  AND message_group_voter_stamp IS ? AND message_group_removal_stamp IS ?
+-  AND status = ? AND workflow_step = ? AND completed_at IS ?`;
++const CLAIM_FIELDS = Object.freeze([
++  ['operation_id', 'operationId'], ['type', 'type'], ['partition_id', 'partitionId'],
++  ['entity_type', 'entityType'], ['entity_id', 'entityId'],
++  ['source_replica_id', 'sourceReplicaId'], ['replica_id', 'replicaId'],
++  ['source_node_id', 'sourceNodeId'], ['target_node_id', 'targetNodeId'],
++  ['message_group_membership_identity', 'messageGroupMembershipIdentity'],
++  ['message_group_membership_lane_key', 'messageGroupMembershipLaneKey'],
++  ['message_group_source_lifecycle_claim', 'messageGroupSourceLifecycleClaim'],
++  ['message_group_membership_owner_claim', 'messageGroupMembershipOwnerClaim'],
++  ['message_group_membership_phase', 'messageGroupMembershipPhase'],
++  ['message_group_membership_obligation_state', 'messageGroupMembershipObligationState'],
++  ['message_group_membership_permit', 'messageGroupMembershipPermit'],
++  ['message_group_learner_stamp', 'messageGroupLearnerStamp'],
++  ['message_group_voter_stamp', 'messageGroupVoterStamp'],
++  ['message_group_removal_stamp', 'messageGroupRemovalStamp'],
++  ['status', 'status'], ['workflow_step', 'workflowStep'], ['completed_at', 'completedAt'],
++]);
++function claimUpdate(row, next) {
++  const params = [next];
++  const fields = row.messageGroupMembershipOwnerClaim === null ?
++    [...CLAIM_FIELDS, ['lease_expires_at', 'ownerLeaseExpiresAt']] : CLAIM_FIELDS;
++  const predicates = fields.map(([column, field]) => {
++    if (row[field] === null) return `${column} IS NULL`;
++    params.push(row[field]);
++    return `${column} = ?`;
++  });
++  return {sql: `UPDATE replica_operations SET message_group_membership_owner_claim = ?
++    WHERE ${predicates.join(' AND ')}`, params};
++}
+ async function claimMessageGroupMembershipOwner(request) {
+   if (!request || typeof request !== 'object') return answer(OUTCOME.INVALID);
+   const {operationId, identity: encodedIdentity, expectedClaim} = request;
+@@ -126,14 +148,9 @@
+   }
+   const next = claimCandidate(this, row, identity, expectedClaim);
+   if (next === null) return answer(OUTCOME.CONFLICT, row);
+-  const params = [next, operationId, row.type, row.partitionId, row.entityType,
+-    row.entityId, row.sourceReplicaId, row.replicaId, row.sourceNodeId, row.targetNodeId,
+-    encodedIdentity, row.messageGroupMembershipLaneKey, row.messageGroupSourceLifecycleClaim,
+-    expectedClaim, row.messageGroupMembershipPhase, row.messageGroupMembershipObligationState,
+-    row.messageGroupMembershipPermit, row.messageGroupLearnerStamp, row.messageGroupVoterStamp,
+-    row.messageGroupRemovalStamp, row.status, row.workflowStep, row.completedAt];
++  const {sql, params} = claimUpdate(row, next);
+   try {
+-    await this.executeOperationMutationWithRetry(CLAIM_SQL, params);
++    await this.executeOperationMutationWithRetry(sql, params);
+   } catch {
+     // An uncertain write must be resolved by exact read-back, not assumed lost.
+   }
