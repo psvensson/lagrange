@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cutover-transition-authority-review",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "On the exact preserved 82b54ef9 integrated product, classify the complete fresh-message-group replacement, workflow progression and snapshot/local-restart transitions by trigger, authoritative facts, authorized action, actual durable commit point, lost-answer/restart behavior and remaining obligation owner. Distinguish source retirement from target recovery, durable operation truth from disposable progress, and intact local open from known wipe, native snapshot acceptance and unavailable evidence. Produce source-bound deterministic boundary discriminators with positive controls and explicit production-reachability limits, identify the smallest next existing-owner repair, and obtain category-complete independent review without changing runtime behavior, weakening sealed acceptance or introducing another owner or store.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cutover-transition-authority-review/evidence/receipt.json",
+      "requiredReceipts": [
+        "replacement-source-target-and-obligations-classified",
+        "workflow-commit-projection-and-restart-classified",
+        "snapshot-local-open-wipe-and-install-classified",
+        "source-bound-deterministic-discriminators-measured",
+        "independent-category-complete-contract-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "read-only-runtime",
+      "statement": "No src, production configuration, package dependency, runtime schema or existing source-test contract changes. The current attempt produces only planning, steering routes, source-bound evidence, narrow diagnostic witnesses and Actions execution. Production corrections require their own measured-red scope under the existing cutover epic."
+    },
+    {
+      "id": "preserved-product-and-history",
+      "statement": "The source target is 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af. Keep every salvage ref, PR #73, protected local worktree and existing append-only Quest history unchanged. Record the 2026-10-08 user-authorized cloud takeover explicitly; earlier local-only assignment is superseded for this bounded work, not silently ignored."
+    },
+    {
+      "id": "different-facts-retain-different-owners",
+      "statement": "Placement intent, durable operation obligation, committed ConfState, CREATE/physical generation, reservation and cleanup remain distinct existing-owner facts. An in-memory progress CAS is not durable permission. Ordinary terminal settlement is neither membership-lane release nor cleanup permission. No new generic framework, state store, lease or second consensus/lifecycle owner."
+    },
+    {
+      "id": "boundary-versus-production-proof",
+      "statement": "Use real adapter/store/callback code for deterministic first-divergence measurements. Explicitly report fixture substitutions, positive controls, exact source hashes, observed exits and whether enclosing production serialization was exercised. A direct concurrent adapter call is not proof of a production race until the real owner-entry path is demonstrated."
+    },
+    {
+      "id": "sealed-contracts-remain-sealed",
+      "statement": "The existing message-group-fresh-identity-membership acceptance remains immutable. Resolve successful source retirement and phase-dependent failed-target recovery before adopting cd366cc0 permits. Any actual acceptance change requires an explicit owner judgment and supersession, never a reinterpretation hidden in this review."
+    },
+    {
+      "id": "bounded-proof-ladder",
+      "statement": "A Solver probe only reads retained receipts. Deterministic witnesses precede distributed certification. Physical distributed work uses GitHub Actions/GCP with exact SHA, host/storage provenance, bounded concurrency, archive-before-cleanup and existing cloud action authority. The current review starts no distributed cluster and claims no cutover or A1-v13 compatibility certification."
+    },
+    {
+      "id": "independent-review-before-repair",
+      "statement": "Independent review covers owner interaction, recovery/replay, concurrency/serialization and harness fidelity together. Do not issue a fictitious verifier identity or treat self-review as independent. Unknown commit points, unresolved protocol subjects and unavailable verification remain explicit blockers, not green receipts."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "recovery-replay",
+    "concurrency-serialization",
+    "harness-fidelity"
+  ]
+}
