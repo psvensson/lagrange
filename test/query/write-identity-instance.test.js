@@ -37,11 +37,12 @@ import {wireRuntimeEndpointPublication} from
   '../../src/runtime/runtime-endpoint-publication-wiring.js';
 import {runRetryableControlPlaneWrite} from
   '../../src/bootstrap/shared/retryable-control-plane-write.js';
-import {RebalanceCoordinator} from
-  '../../src/rebalancer/rebalance-coordinator.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
-import {ReplicaOperationRepository} from
-  '../../src/rebalancer/replica-operation-repository.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  OperationType,
+  createOperation,
+} from '../../src/rebalancer/replica-status.js';
 import {
   COUNTER_TABLE,
   JOINER_ID,
@@ -54,6 +55,8 @@ import {
   authoritativeLeaderReads,
   nodeRow,
   rowsOf,
+  releaseTrapOnAuthoritativeRead,
+  reservationCoordinator,
   selectRows,
   spendFirstAttempt,
   spendOneBudget,
@@ -405,36 +408,23 @@ test('endpoint refresh: a new port while the previous refresh is unknown ' +
 // ---------------------------------------------------------------------------
 // B1, the reservation owner: a re-ensure after the reservation was released.
 
-function reservationCoordinator(gateway) {
-  const coordinator = Object.create(RebalanceCoordinator.prototype);
-  Object.assign(coordinator, {
-    storageAccountingService: {estimateReplicaBytes: () => 1},
-    resolveEntitySizeBytes: () => 1,
-    config: {reservationTtlMs: 60000},
-    stats: {reservationsCreated: 0, reservationsReleased: 0},
-    logger: {warn: () => undefined, info: () => undefined,
-      debug: () => undefined, error: () => undefined},
-    emit: () => undefined,
-    repository: Object.create(ReplicaOperationRepository.prototype),
-    controlPlaneSystemTableGateway: gateway,
-    executeOperationMutationWithRetry: (sql, params, options) =>
-      gateway.executeQuery(sql, params, {...options, skipCacheWait: true}),
-  });
-  return coordinator;
-}
-
 for (const [label, pinClock] of [['new timestamps', false],
   ['identical content', true]]) {
   test(`reservation (${label}): a birth ensured again after the reservation ` +
     'was released is answered truthfully - never "created" over a released ' +
     'row', {timeout: TEST_TIMEOUT_MS}, async () => {
-    await withSurface([TABLES.STORAGE_RESERVATIONS], async ({engine, gateway,
-      of}) => {
+    await withSurface([TABLES.REPLICA_OPERATIONS,
+      TABLES.STORAGE_RESERVATIONS], async ({engine, gateway, messageRouter,
+      cdcIntegrationService, of}) => {
       const surface = of(TABLES.STORAGE_RESERVATIONS);
-      const coordinator = reservationCoordinator(gateway);
-      const operation = {operationId: 'op-rel', type: OperationType.ADD,
-        entityType: 'partition', entityId: 'p-rel', partitionId: 'p-rel',
-        targetNodeId: 'n-rel'};
+      const coordinator = reservationCoordinator({engine, gateway,
+        messageRouter, cdcIntegrationService});
+      const operation = Object.assign(createOperation({operationId: 'op-rel',
+        type: OperationType.ADD, partitionId: 'p-rel', sourceNodeId: NODE_ID,
+        targetNodeId: 'n-rel'}),
+      {entityType: 'partition', entityId: 'p-rel'});
+      await coordinator.persistNewOperation(operation);
+      const authorityReads = releaseTrapOnAuthoritativeRead(gateway);
       const clock = pinnedStamps();
       const stamp = () => (pinClock ? clock.stamp() : undefined);
       {
@@ -450,6 +440,7 @@ for (const [label, pinClock] of [['new timestamps', false],
         const released = await coordinator.transitionActiveReservationById(
           'res-op-rel', 'released', Date.now());
         assert.equal(released.changed, true, 'setup: released');
+        authorityReads.length = 0;
         stamp();
         const again = await coordinator.createReservationForOperation(
           operation);
@@ -458,8 +449,15 @@ for (const [label, pinClock] of [['new timestamps', false],
         assert.equal(row.status, 'released', 'setup: the row stays released');
         assert.notEqual(again.outcome, 'created', 'never "created" while ' +
           `the reservation is released (${JSON.stringify(again)})`);
+        assert.equal(authorityReads.some((read) =>
+          read.tableName === TABLES.REPLICA_OPERATIONS &&
+          read.options?.authoritativeReadMode ===
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED &&
+          read.result?.success === true), true,
+        'the released-row answer consumes the strict durable operation owner');
       }
-    });
+      await coordinator.shutdown();
+    }, {cdc: true});
   });
 }
 

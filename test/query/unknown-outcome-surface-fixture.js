@@ -31,6 +31,8 @@ import {CONTROL_PLANE_PHASE_SCOPE} from
 import {getSchemaByTableName} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {RebalanceCoordinator} from
+  '../../src/rebalancer/rebalance-coordinator.js';
 
 const TEMP_PREFIX = 'unknown-outcome-surface-';
 const NODE_ID = 'uo-node';
@@ -260,7 +262,7 @@ async function withSurface(tables, body, {cdc = false} = {}) {
         const surface = surfaces.get(address);
         const answer = await surface.partition.handleRemoteQuery(message);
         deliveries.push({table: surface.table, entryId: message.entryId,
-          answer});
+          sql: message.sql, answer});
         return answer;
       },
     };
@@ -278,7 +280,8 @@ async function withSurface(tables, body, {cdc = false} = {}) {
     }).controlPlaneSystemTableGateway;
     const of = (table) => [...surfaces.values()].find((surface) =>
       surface.table === table);
-    await body({engine, gateway, deliveries, of});
+    await body({engine, gateway, deliveries, messageRouter,
+      cdcIntegrationService, of});
   } finally {
     setCoreFaultInjector(null);
     cdcIntegrationService?.shutdown?.();
@@ -394,6 +397,45 @@ function authoritativeLeaderReads(gateway, surface) {
   };
 }
 
+// Reservation witnesses use the real coordinator/repository owner over the
+// same production gateway and table surfaces as the unknown-outcome write.
+// Unrelated coordinator dependencies are inert; the operation and reservation
+// authorities both remain durable partition rows reached through the gateway.
+function reservationCoordinator({engine, gateway, messageRouter,
+  cdcIntegrationService}) {
+  return new RebalanceCoordinator({
+    nodeId: NODE_ID,
+    systemTableCache: engine.systemCache,
+    cdcIntegrationService,
+    controlPlaneSystemTableGateway: gateway,
+    tablePolicyService: {getPolicy: () => null},
+    messageRouter,
+    sqlQueryEngine: engine,
+    controlPlaneReadinessService: {shutdown: () => undefined},
+    storageAccountingService: {estimateReplicaBytes: () => 1},
+    storageAdmissionService: {
+      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+    },
+    enableTimeouts: false,
+  });
+}
+
+// End the fault only when the owner reaches its authoritative readback, while
+// preserving the gateway's real table routing, read mode and timeout budget.
+function releaseTrapOnAuthoritativeRead(gateway) {
+  const readAuthoritativeRows = gateway.readAuthoritativeRows.bind(gateway);
+  const observations = [];
+  gateway.readAuthoritativeRows = async (tableName, sql, params, options) => {
+    releaseActiveTrap();
+    const result = await readAuthoritativeRows(
+      tableName, sql, params, options);
+    observations.push({tableName, options, result});
+    return result;
+  };
+  return observations;
+}
+
 // A three-replica rs-raft group of `table` behind the production engine; the
 // group's network drops the directed peer pairs in `blocked` ("p1>p3") and
 // every Raft packet a predicate in `dropIf` matches.
@@ -481,6 +523,8 @@ export {
   USER_TABLE,
   appliedRow,
   authoritativeLeaderReads,
+  releaseTrapOnAuthoritativeRead,
+  reservationCoordinator,
   lastLogIndexOf,
   logEntriesOf,
   nodeRow,

@@ -4,6 +4,15 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import Database from 'better-sqlite3';
+import {
+  REPLICA_OPERATIONS_SCHEMA,
+  STORAGE_RESERVATIONS_SCHEMA,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  generateCreateIndexSQL,
+  generateCreateTableSQL,
+} from '../../src/bootstrap/system-table-schema-sql.js';
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
@@ -167,6 +176,41 @@ function createTransactionCoordinator() {
       return {success: true};
     },
   };
+}
+
+function createCanonicalOperationStore(t) {
+  const database = new Database(':memory:');
+  const sqlCalls = [];
+  t.teardown(() => database.close());
+  for (const schema of [
+    REPLICA_OPERATIONS_SCHEMA,
+    STORAGE_RESERVATIONS_SCHEMA,
+  ]) {
+    database.exec(generateCreateTableSQL(schema));
+    for (const indexSql of generateCreateIndexSQL(schema)) {
+      database.exec(indexSql);
+    }
+  }
+  const executeQuery = async (sql, params = []) => {
+    sqlCalls.push({sql, params: [...params]});
+    try {
+      const statement = database.prepare(sql);
+      if (statement.reader) {
+        const rows = statement.all(...params);
+        return {success: true, rows, affectedRows: rows.length};
+      }
+      const result = statement.run(...params);
+      return {
+        success: true,
+        rows: [],
+        changes: result.changes,
+        affectedRows: result.changes,
+      };
+    } catch (error) {
+      return {success: false, error: error.message, errorCode: error.code};
+    }
+  };
+  return {executeQuery, sqlCalls};
 }
 
 // --- compactSnapshotSummary ---
@@ -342,53 +386,10 @@ test('coordinator createOperation persists readiness snapshot in initial step',
       },
     };
 
-    let persistedStepsHistory = null;
-    let persistedOperationRow = null;
+    const canonicalStore = createCanonicalOperationStore(t);
+    const executeCanonicalQuery = canonicalStore.executeQuery;
     const controlPlaneSystemTableGateway = {
-      async submitMutation(_mutation) {
-        return {
-          success: true,
-          partitionResult: {affectedRows: 1},
-        };
-      },
-      async executeQuery(_sql, params = []) {
-        if (typeof _sql === 'string' &&
-            _sql.includes('FROM replica_operations') &&
-            Array.isArray(params) &&
-            params.length === 1 &&
-            params[0] === persistedOperationRow?.operation_id) {
-          return {
-            success: true,
-            rows: [persistedOperationRow],
-          };
-        }
-        if (Array.isArray(params) && params.length > NUM.TEN) {
-          persistedOperationRow = {
-            operation_id: params[0],
-            type: params[1],
-            partition_id: params[2],
-            replica_id: params[3],
-            target_claim_key: params[4],
-            source_node_id: params[5],
-            target_node_id: params[6],
-            status: params[7],
-            workflow_step: params[8],
-            created_at: params[9],
-            updated_at: params[10],
-            completed_at: params[11],
-            error_message: params[12],
-            steps_history: params[13],
-            entity_type: params[14],
-            entity_id: params[15],
-          };
-          if (typeof persistedOperationRow.steps_history === 'string') {
-            persistedStepsHistory = JSON.parse(
-              persistedOperationRow.steps_history,
-            );
-          }
-        }
-        return {success: true, rows: [], affectedRows: 1, changes: 1};
-      },
+      executeQuery: executeCanonicalQuery,
       async readAuthoritativeRows(_tableName, _sql, params = []) {
         return controlPlaneSystemTableGateway.executeQuery(_sql, params);
       },
@@ -417,44 +418,7 @@ test('coordinator createOperation persists readiness snapshot in initial step',
         },
       },
       sqlQueryEngine: {
-        async executeQuery(_sql, params) {
-          if (typeof _sql === 'string' &&
-              _sql.includes('FROM replica_operations') &&
-              Array.isArray(params) &&
-              params.length === 1 &&
-              params[0] === persistedOperationRow?.operation_id) {
-            return {
-              success: true,
-              rows: [persistedOperationRow],
-            };
-          }
-          if (params && Array.isArray(params) && params.length > NUM.TEN) {
-            // INSERT_OPERATION — capture stepsHistory (param index 13)
-            const historyJson = params[13];
-            if (typeof historyJson === 'string') {
-              persistedStepsHistory = JSON.parse(historyJson);
-            }
-            persistedOperationRow = {
-              operation_id: params[0],
-              type: params[1],
-              partition_id: params[2],
-              replica_id: params[3],
-              target_claim_key: params[4],
-              source_node_id: params[5],
-              target_node_id: params[6],
-              status: params[7],
-              workflow_step: params[8],
-              created_at: params[9],
-              updated_at: params[10],
-              completed_at: params[11],
-              error_message: params[12],
-              steps_history: params[13],
-              entity_type: params[14],
-              entity_id: params[15],
-            };
-          }
-          return {success: true, rows: [], affectedRows: 1, changes: 1};
-        },
+        executeQuery: executeCanonicalQuery,
       },
       controlPlaneReadinessService: readinessService,
       controlPlaneSystemTableGateway,
@@ -472,6 +436,29 @@ test('coordinator createOperation persists readiness snapshot in initial step',
       });
 
       t.ok(operation, 'operation created');
+      const reservationInsertIndex = canonicalStore.sqlCalls.findIndex(
+        ({sql}) => sql.includes('INSERT OR IGNORE INTO storage_reservations'),
+      );
+      t.ok(reservationInsertIndex >= 0,
+        'the production reservation INSERT executes against the canonical schema');
+      t.ok(canonicalStore.sqlCalls.slice(reservationInsertIndex + 1).some(
+        ({sql, params}) =>
+          sql.includes('FROM replica_operations WHERE operation_id = ?') &&
+          params[0] === operation.operationId,
+      ), 'reservation adoption performs the strict operation-owner read');
+      const persistedOperation = (await executeCanonicalQuery(
+        'SELECT * FROM replica_operations WHERE operation_id = ?',
+        [operation.operationId],
+      )).rows[0];
+      const persistedStepsHistory = JSON.parse(
+        persistedOperation.steps_history,
+      );
+      const persistedReservationCount = (await executeCanonicalQuery(
+        'SELECT COUNT(*) AS count FROM storage_reservations ' +
+        'WHERE operation_id = ?', [operation.operationId],
+      )).rows[0].count;
+      t.equal(persistedReservationCount, 1,
+        'the readiness fixture owns one real reservation row');
       t.ok(persistedStepsHistory, 'stepsHistory was persisted');
       t.ok(
         persistedStepsHistory.length > 0,
