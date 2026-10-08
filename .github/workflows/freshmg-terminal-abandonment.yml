@@ -39,6 +39,7 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -59,7 +60,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Prepare the existing cache fixture and its exact T1 extension
+      - name: Prepare the corrected cache oracle against unchanged T1 source
         id: prepare
         run: |
           set -euo pipefail
@@ -76,7 +77,7 @@ jobs:
           git diff --check
           git diff --exit-code "$BASE" -- src
           git add test/integration/message-group-membership-claim-cache.integration.test.js scripts/checks/test-subsystem-classification-constants.js test/shards/
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: prove terminal learner intent through the existing SQL Raft CDC cache path'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: assert terminal intent visibility and the CDC-owned HLC advance'
           git rev-parse HEAD > test-output/t1-cache/source-sha.txt
           test -z "$(git status --porcelain --untracked-files=no)"
       - name: Source-revert negative must fail at the actual terminal branch
@@ -94,21 +95,25 @@ jobs:
           status=$?
           set -e
           echo "$status" > test-output/t1-cache/red-exit.txt
-          tail -65 test-output/t1-cache/red.txt
+          tail -55 test-output/t1-cache/red.txt
           test "$status" -eq 1
           grep -q 'T1 must record exact terminal abandonment' test-output/t1-cache/red.txt
           grep -q ERR_ASSERTION test-output/t1-cache/red.txt
           cp "$RUNNER_TEMP/t1-cache-source-$GITHUB_RUN_ID.js" "$source"
           git diff --exit-code -- "$source"
-      - name: Exact repaired source must publish the same terminal row through CDC
+      - name: Exact repaired source must publish terminal intent and a newer origin HLC
         id: green
         run: |
           set -euo pipefail
           exec 9>/tmp/lagrange-contract-first-measurement.lock
           flock -w 120 9
+          set +e
           timeout 90s npm run test:file -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/t1-cache/green.txt 2>&1
-          echo 0 > test-output/t1-cache/green-exit.txt
-          tail -60 test-output/t1-cache/green.txt
+          status=$?
+          set -e
+          echo "$status" > test-output/t1-cache/green-exit.txt
+          tail -65 test-output/t1-cache/green.txt
+          test "$status" -eq 0
           npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/t1-cache/regressions.txt 2>&1
           echo 0 > test-output/t1-cache/regressions-exit.txt
           npm run audit:shards > test-output/t1-cache/shards.txt 2>&1
@@ -116,7 +121,7 @@ jobs:
           npm run test:metrics:scoped:strict -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/t1-cache/test-metrics.txt 2>&1
           echo "$?" > test-output/t1-cache/test-metrics-exit.txt
           set -e
-      - name: Preserve exact evidence and push WIP, not source approval
+      - name: Retain the failed oracle and exact new evidence; push WIP only
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -124,7 +129,28 @@ jobs:
           set -euo pipefail
           gh auth setup-git
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
-          node scripts/solve.js note --id "$QUEST" --attempt "T1 SQL/cache integration in GCP $GITHUB_RUN_ID: reused the exact #105 cache fixture (38cd8d4) and classification, extended it with actual repository terminal settlement and abandonment. Source-reverted negative fails at the T1 branch; repaired source records one exact terminal intent visible through real SQL/Raft/CDC/SystemTableCache. Ordinary coordinator is quiesced before a synthetic row is seeded. This is not runtime learner admission/removal or multi-host replacement. Full Quest, prior increments, combined-tree proof and independent source review remain open." --json > test-output/t1-cache/attempt.json
+          gh api repos/psvensson/lagrange/actions/artifacts/11550360990/zip > "$RUNNER_TEMP/t1-prior-failed-$GITHUB_RUN_ID.zip"
+          python3 - <<'PY'
+          import hashlib,json,os,zipfile
+          from pathlib import Path
+          archive=Path(os.environ['RUNNER_TEMP'])/('t1-prior-failed-'+os.environ['GITHUB_RUN_ID']+'.zip')
+          digest=hashlib.sha256(archive.read_bytes()).hexdigest()
+          assert digest=='d3dd0155d4db51909aa055b401d5359b41e52c47999ab52a83c902ea3fbb3598'
+          with zipfile.ZipFile(archive) as z:
+              for line in z.read('SHA256SUMS').decode().splitlines():
+                  expected,name=line.split(None,1)
+                  entry=name.strip().removeprefix('test-output/t1-cache/')
+                  assert hashlib.sha256(z.read(entry)).hexdigest()==expected,entry
+              outputs={n:z.read(n).decode() for n in z.namelist() if n.endswith(('.txt','.patch'))}
+              failed={'schema':'freshmg-terminal-cache-failed-oracle/1','runId':37776477963,
+                'sourceSha':z.read('source-sha.txt').decode().strip(),'artifactId':11550360990,
+                'archiveSha256':digest,'archiveAndMembersVerified':True,'passed':False,
+                'finding':'Real T1/cache action engaged; whole-row equality incorrectly included cache-only updated_at_hlc. PartitionCDCGenerator.stampOriginHlc owns this timestamp; SystemTableCache uses HLCTimestamp.compare. Corrected oracle asserts strict causal advance and retains every ordinary field comparison. No runtime repair or weakened timeout.',
+                'outputs':outputs}
+          q=Path('solve/quests')/os.environ['QUEST']/'evidence'
+          (q/'terminal-abandonment-cache-failed-37776477963.json').write_text(json.dumps(failed,indent=2)+'\n')
+          PY
+          node scripts/solve.js note --id "$QUEST" --attempt "T1 cache proof $GITHUB_RUN_ID uses actual repository terminal settlement and abandonment through live SQL/Raft/CDC/cache. Source-reverted negative fails at T1, repaired positive requires newer CDC origin HLC and all ordinary fields unchanged. Original failed oracle 37776477963 retained with verified raw output: it wrongly compared cache-only updated_at_hlc as immutable. Ordinary coordinator is quiesced before synthetic learner fixture; no physical learner or removal, full reconciler, multihost or independent approval is claimed." --json > test-output/t1-cache/attempt.json
           python3 - <<'PY'
           import hashlib,json,os
           from pathlib import Path
@@ -135,13 +161,13 @@ jobs:
             'sourceSha':(p/'source-sha.txt').read_text().strip(),'runner':os.environ['RUNNER_NAME'],
             'independentApproval':False,'distributedAcceptance':False,
             'fixtureSourceSha':'38cd8d4c913ccc3bd20d1914377cc528d1be8d1c',
-            'proofCeiling':'actual single-seed SQL/Raft/CDC/cache; ordinary coordinator quiesced before synthetic learner operation; no physical membership action, running reconciler, full replacement, or multi-host proof',
+            'proofCeiling':'actual single-seed SQL/Raft/CDC/cache; coordinator quiesced before synthetic committed learner fixture; no physical membership action, live debt driver, full replacement or multi-host proof',
             'outputs':files,'sha256':{k:hashlib.sha256(v.encode()).hexdigest() for k,v in files.items()}}
           dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('terminal-abandonment-cache-'+os.environ['GITHUB_RUN_ID']+'.json')
           dest.write_text(json.dumps(record,indent=2)+'\n')
           PY
-          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/terminal-abandonment-cache-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain T1 live cache source-revert and positive results'
+          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/terminal-abandonment-cache-$GITHUB_RUN_ID.json" "solve/quests/$QUEST/evidence/terminal-abandonment-cache-failed-37776477963.json"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain T1 cache red green and the corrected HLC oracle failure'
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
           git rev-parse HEAD > test-output/t1-cache/published-sha.txt
