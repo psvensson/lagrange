@@ -114,7 +114,14 @@ async function observeMessageGroupLearnerAuthorization(repository, request, reci
   if (!exactIssuedIntent(repository, before.row, input)) return refuse(REASON.MISMATCH);
   const boots = await boundBootsAreCurrent(repository, receiver);
   if (boots === null) return unavailable();
-  if (!boots || !claimedSenderIsLive(repository, input.claim,
+  if (!boots) return refuse(REASON.STALE_OWNER);
+  // The boot read may suspend after the initial operation observation. Re-read
+  // through the same durable owner before deciding; the earlier row cannot
+  // authorize a holder or operation state that changed across that await.
+  const current = await observeMembershipOperation(repository, input.operationId);
+  if (!current.available) return unavailable();
+  if (!exactIssuedIntent(repository, current.row, input)) return refuse(REASON.MISMATCH);
+  if (!claimedSenderIsLive(repository, input.claim,
     input.decodedIdentity, receiver)) return refuse(REASON.STALE_OWNER);
   return answer(OUTCOME.OBSERVED, null, {transition: nativeTransition(input)});
 }
