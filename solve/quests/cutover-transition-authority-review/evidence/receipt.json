@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "cutover-transition-authority-review",
+  "status": "fail",
+  "testFileDigests": {},
+  "receipts": [
+    {
+      "id": "replacement-source-target-and-obligations-classified",
+      "passed": false,
+      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+    },
+    {
+      "id": "workflow-commit-projection-and-restart-classified",
+      "passed": false,
+      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+    },
+    {
+      "id": "snapshot-local-open-wipe-and-install-classified",
+      "passed": false,
+      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+    },
+    {
+      "id": "source-bound-deterministic-discriminators-measured",
+      "passed": false,
+      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+    },
+    {
+      "id": "independent-category-complete-contract-review",
+      "passed": false,
+      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+    }
+  ]
+}

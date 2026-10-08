@@ -74,6 +74,14 @@ authorizes:
 
 ## Status and activation
 
+### 2026-10-08 cutover interaction clarification
+
+The approved [contract-first cutover plan](raft-rs-full-cutover/contract-first-2026-10-08.md) belongs to raft-rs-full-cutover, not a bypass of this epic.
+Its first read-only transition review and necessary narrowly scoped cutover
+repairs may proceed before certification. Broad Q1+ behavior-changing
+convergence remains blocked until cutover closes and Q0 remeasures READY.
+No old historical backend statement below is new runtime authority.
+
 The rs-raft/WASM foundation is merged. Core convergence is now explicitly
 blocked behind the separate `raft-rs-full-cutover` epic: no behavior-changing
 Q1+ convergence work starts until that epic closes and Q0 re-measures READY.
