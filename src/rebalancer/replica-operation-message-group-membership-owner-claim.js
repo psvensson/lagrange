@@ -31,14 +31,15 @@ function sourceClaimMatches(encoded, identity) {
     return false;
   }
 }
-function membershipRowIdentityMatches(row, identity, encodedIdentity) {
+function membershipRowIdentityMatches(row, identity, encodedIdentity,
+  laneKey = identity.membershipLaneKey) {
   return row?.operationId === identity.operationId && row.type === OperationType.REPLACE &&
     row.partitionId === identity.groupId && row.entityId === identity.groupId &&
     row.entityType === SERVICE_TYPE.MESSAGE_GROUP &&
     row.sourceReplicaId === identity.sourceReplicaId &&
     row.replicaId === identity.targetReplicaId &&
     row.sourceNodeId === identity.sourceNodeId && row.targetNodeId === identity.targetNodeId &&
-    row.messageGroupMembershipLaneKey === identity.membershipLaneKey &&
+    row.messageGroupMembershipLaneKey === laneKey &&
     row.messageGroupMembershipIdentity === encodedIdentity &&
     sourceClaimMatches(row.messageGroupSourceLifecycleClaim, identity);
 }
@@ -126,10 +127,8 @@ const CLAIM_FIELDS = Object.freeze([
   ['message_group_removal_stamp', 'messageGroupRemovalStamp'],
   ['status', 'status'], ['workflow_step', 'workflowStep'], ['completed_at', 'completedAt'],
 ]);
-function claimUpdate(row, next) {
-  const params = [next];
-  const fields = row.messageGroupMembershipOwnerClaim === null ?
-    [...CLAIM_FIELDS, ['lease_expires_at', 'ownerLeaseExpiresAt']] : CLAIM_FIELDS;
+function membershipRowWhere(row, fields = CLAIM_FIELDS) {
+  const params = [];
   const predicates = fields.map(([column, field]) => {
     // rowToOperation omits an absent ordinary lease; its SQL identity is NULL.
     // Other fields retain their exact decoded representation.
@@ -140,8 +139,14 @@ function claimUpdate(row, next) {
     params.push(row[field]);
     return `${column} = ?`;
   });
+  return {where: predicates.join(' AND '), params};
+}
+function claimUpdate(row, next) {
+  const fields = row.messageGroupMembershipOwnerClaim === null ?
+    [...CLAIM_FIELDS, ['lease_expires_at', 'ownerLeaseExpiresAt']] : CLAIM_FIELDS;
+  const basis = membershipRowWhere(row, fields);
   return {sql: `UPDATE replica_operations SET message_group_membership_owner_claim = ?
-    WHERE ${predicates.join(' AND ')}`, params};
+    WHERE ${basis.where}`, params: [next, ...basis.params]};
 }
 async function claimMessageGroupMembershipOwner(repository, request) {
   if (!request || typeof request !== 'object') return answer(OUTCOME.INVALID);
@@ -178,3 +183,61 @@ async function claimMessageGroupMembershipOwner(repository, request) {
 }
 export {claimMessageGroupMembershipOwner, observeMembershipOperation,
   membershipRowIdentityMatches, membershipClaimIsLocalAndLive, membershipBootIsCurrent};
+
+
+const DEFINITIVE_NON_ADMISSION = 'definitive_non_admission';
+function neverAuthorized(row) {
+  return row.messageGroupMembershipPhase === INITIAL_PHASE &&
+    row.messageGroupMembershipPermit === null &&
+    row.messageGroupLearnerStamp === null && row.messageGroupVoterStamp === null &&
+    row.messageGroupRemovalStamp === null;
+}
+function exactTerminal(repository, row) {
+  return repository.isOperationTerminal(row) &&
+    Number.isSafeInteger(row.completedAt) && row.completedAt > 0;
+}
+function isDefinitivelySettled(repository, row, identity, encodedIdentity) {
+  return membershipRowIdentityMatches(row, identity, encodedIdentity, null) &&
+    exactTerminal(repository, row) && neverAuthorized(row) &&
+    row.messageGroupMembershipObligationState === DEFINITIVE_NON_ADMISSION;
+}
+/** Resolve never-authorized terminal intent; no new holder or external grant. */
+async function settleMessageGroupMembershipNonAdmission(repository, request) {
+  if (!request || typeof request !== 'object') return answer(OUTCOME.INVALID);
+  const {operationId, identity: encodedIdentity} = request;
+  const identity = decodeMembershipIdentity(encodedIdentity);
+  if (!identity || identity.operationId !== operationId) return answer(OUTCOME.INVALID);
+  if (!await membershipBootIsCurrent(repository)) return answer(OUTCOME.UNAVAILABLE);
+  const before = await observeMembershipOperation(repository, operationId);
+  if (!before.available) return answer(OUTCOME.UNAVAILABLE);
+  const row = before.row;
+  if (isDefinitivelySettled(repository, row, identity, encodedIdentity)) {
+    return answer(OUTCOME.RECORDED, row);
+  }
+  if (!membershipRowIdentityMatches(row, identity, encodedIdentity) ||
+    !exactTerminal(repository, row) || !neverAuthorized(row) ||
+    row.messageGroupMembershipObligationState !== INITIAL_OBLIGATION) {
+    return answer(OUTCOME.CONFLICT, row);
+  }
+  if (row.messageGroupMembershipOwnerClaim !== null &&
+    !membershipClaimIsLocalAndLive(repository,
+      decodeMembershipOwnerClaim(row.messageGroupMembershipOwnerClaim), identity)) {
+    return answer(OUTCOME.STALE_OWNER, row);
+  }
+  const basis = membershipRowWhere(row);
+  try {
+    await repository.executeOperationMutationWithRetry(
+      `UPDATE replica_operations SET message_group_membership_lane_key = NULL,
+        message_group_membership_obligation_state = ? WHERE ${basis.where}`,
+      [DEFINITIVE_NON_ADMISSION, ...basis.params]);
+  } catch {
+    // No reply cannot prove no mutation. Inspect the exact terminal row.
+  }
+  const after = await observeMembershipOperation(repository, operationId);
+  if (!after.available || !await membershipBootIsCurrent(repository)) {
+    return answer(OUTCOME.UNKNOWN);
+  }
+  return isDefinitivelySettled(repository, after.row, identity, encodedIdentity) ?
+    answer(OUTCOME.RECORDED, after.row) : answer(OUTCOME.UNKNOWN, after.row);
+}
+export {settleMessageGroupMembershipNonAdmission};
