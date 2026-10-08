@@ -1,0 +1,25 @@
+--- a/src/rebalancer/replica-operation-message-group-membership-owner-claim.js
++++ b/src/rebalancer/replica-operation-message-group-membership-owner-claim.js
+@@ -162,7 +162,9 @@
+     // An uncertain write must be resolved by exact read-back, not assumed lost.
+   }
+   const after = await observeMembershipOperation(repository, operationId);
+-  if (!after.available || !await membershipBootIsCurrent(repository)) return answer(OUTCOME.UNKNOWN);
++  if (!after.available || !await membershipBootIsCurrent(repository)) {
++    return answer(OUTCOME.UNKNOWN);
++  }
+   if (membershipRowIdentityMatches(after.row, identity, encodedIdentity) &&
+     after.row.messageGroupMembershipOwnerClaim === next) {
+     return answer(OUTCOME.RECORDED, after.row, next);
+--- a/test/rebalancer/message-group-membership-branch-authorization.test.js
++++ b/test/rebalancer/message-group-membership-branch-authorization.test.js
+@@ -150,7 +150,8 @@
+     messageGroupMembershipPhase: 'learner_requested',
+     messageGroupMembershipObligationState: 'intent_recorded',
+     messageGroupMembershipIdentity: ENCODED_IDENTITY, messageGroupLearnerStamp: null,
+-    messageGroupVoterStamp: null, messageGroupRemovalStamp: null, messageGroupSourceLifecycleClaim: CLAIM};
++    messageGroupVoterStamp: null, messageGroupRemovalStamp: null,
++    messageGroupSourceLifecycleClaim: CLAIM};
+   await repository.persistNewOperation(operation);
+   // Supply the preceding committed learner basis. This unit does not claim to produce it.
+   if (!initial) {
