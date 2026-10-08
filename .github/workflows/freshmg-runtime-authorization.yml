@@ -40,6 +40,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -62,17 +63,22 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Bind source and install exact dependencies
+      - name: Bind source, retain collector failure, and install exact dependencies
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p "lab-followup-$GITHUB_RUN_ID"
+          out="$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID"
+          gh api repos/psvensson/lagrange/actions/artifacts/11562830721/zip > "$out/collector-failed-37804470705.zip"
+          echo "d3ad1df41bd6a4419dfd2193ffb5f3fe1296c93e8f4c009e14c3b0a045967075  $out/collector-failed-37804470705.zip" | sha256sum -c -
           for lane in base candidate; do
-            (cd "$lane-$GITHUB_RUN_ID" && npm ci) > "lab-followup-$GITHUB_RUN_ID/$lane-install.txt" 2>&1
+            (cd "$lane-$GITHUB_RUN_ID" && npm ci) > "$out/$lane-install.txt" 2>&1
           done
           git -C "candidate-$GITHUB_RUN_ID" diff --exit-code "$CANDIDATE" -- src test
           python3 -m py_compile "carrier-$GITHUB_RUN_ID/scripts/quest-evidence/trace-lab-write-outcome.py" "carrier-$GITHUB_RUN_ID/scripts/quest-evidence/repair-lab-fixture-and-steering.py"
-      - name: Observe exact retry phases with unchanged assertions and budgets
+      - name: Read full TAP to observe exact retry phases without changing deadlines
         shell: bash
         run: |
           set -euo pipefail
@@ -119,7 +125,7 @@ jobs:
           git diff --exit-code "$CANDIDATE" -- src
           test -z "$(git status --porcelain)"
           cp test-output/reports/test-results.ndjson "$out/repaired-and-trace-results.ndjson"
-      - name: Preserve trace outcomes and exact repair, then push WIP
+      - name: Preserve actual outcomes and exact repair, then push WIP
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -144,8 +150,8 @@ jobs:
               for name,digest in manifest.items(): assert hashlib.sha256(z.read(name)).hexdigest()==digest
           (out/'archive-sha256.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'\n')
           PY
-          node scripts/solve.js evidence add "$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID.zip" --id "$QUEST" --text "Lab followup: observational F-aj phase traces at two exact sources, unchanged assertions/8s execution budget; separately repaired pre-gate fixture column copying and 362-to-360-line steering prose. Runtime unchanged. Trace red or green never overrides original lab FAIL; physical baseline remains not run." --json > "$out/canonical.json"
-          node scripts/solve.js note --id "$QUEST" --finding "Scoped lab followup $GITHUB_RUN_ID: original 941-file lab remains red; paired observation-only query traces preserve deadlines and assertions. Two inherited fixture/document defects repaired without runtime changes: reconstruct every non-gate applied-state field before exercising the typed old-schema refusal; shorten router introduction without removing rules/routes or raising 360-line bound. The same three previously-red files and scoped audits pass. Query attribution, other inherited failures, six slow failures and physical FreshMG acceptance remain open. No independent source or release approval." --kind evidence --json > "$out/note.json"
+          node scripts/solve.js evidence add "$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID.zip" --id "$QUEST" --text "Lab followup: full-TAP observational F-aj phase traces at two exact sources with unchanged assertions/8s execution budget. Separately repaired pre-gate fixture column copying and 362-to-360-line steering prose. Original failed collector 37804470705 preserved inside this archive: it read summarized stdout instead of full TAP after the base test passed. No trace result overrides original lab FAIL; physical baseline remains not run." --json > "$out/canonical.json"
+          node scripts/solve.js note --id "$QUEST" --finding "Scoped lab followup $GITHUB_RUN_ID: original 941-file lab remains red. Full-TAP collector repairs diagnostic-only failure 37804470705 and records paired query phases without changing deadlines or assertions. Two inherited fixture/document defects repaired without runtime changes: reconstruct all non-gate applied-state fields before typed old-schema refusal; shorten router prose without removing rules/routes or raising 360-line bound. Same three previously-red files and scoped audits pass. Query attribution, other inherited failures, six slow failures and physical acceptance remain open. No independent source or release approval." --kind evidence --json > "$out/note.json"
           python3 - <<'PY'
           from pathlib import Path
           import json,os
@@ -159,7 +165,10 @@ jobs:
               'canonicalEvidence':json.loads((out/'canonical.json').read_text()),
               'archiveSha256':(out/'archive-sha256.txt').read_text().strip(),
               'repairedTests':(out/'repaired-tests.txt').read_text(),
-              'steeringAudit':(out/'steering.txt').read_text()}
+              'steeringAudit':(out/'steering.txt').read_text(),
+              'retainedFailedCollector':{'runId':37804470705,
+                  'sha256':'d3ad1df41bd6a4419dfd2193ffb5f3fe1296c93e8f4c009e14c3b0a045967075',
+                  'reason':'passed base file emits trace only in full TAP; old collector incorrectly searched summary stdout'}}
           dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('lab-followup-'+os.environ['GITHUB_RUN_ID']+'.json')
           dest.write_text(json.dumps(record,indent=2)+'\n')
           PY
