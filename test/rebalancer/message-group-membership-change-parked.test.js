@@ -129,6 +129,29 @@ test('the message-group planner mints no operation with mg-1 on the seed ' +
   }
 });
 
+test('fresh-identity closing condition: seed-only mg-1 enters one REPLACE ' +
+  'operation instead of the interim membership park', async () => {
+  const {rebalancer, minted} = seedOnlyPlanner({
+    entityId: GROUP_ID,
+    entityType: EntityType.MESSAGE_GROUP,
+    serviceType: SERVICE_TYPE.MESSAGE_GROUP,
+  });
+  try {
+    const result = await rebalancer.rebalance();
+    assert.notEqual(
+      result.reason,
+      REBALANCER_SKIP_REASON.MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED,
+      'the approved fresh-identity path must cross the planner refusal',
+    );
+    assert.equal(minted.length, 1,
+      'one planning turn submits exactly one operation to the owner lane');
+    assert.match(minted[0], /^REPLACE:/,
+      'the admitted operation is count-neutral REPLACE, never ADD or MOVE');
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
 test('the message-group periodic check parks: it schedules no further ' +
   'check and mints nothing', async () => {
   const {rebalancer, minted, warnings, timers, clock} = seedOnlyPlanner({

@@ -1,0 +1,82 @@
+{
+  "schema": "solve-quest/2",
+  "id": "message-group-fresh-identity-membership",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "OperationWorkflowOwner serializes two message-group REPLACE operations that mint permanently fresh replica and raft peer identities, commit each target as a learner, admit exactly one physical target through the existing durable CREATE fence, install or replay real group state, atomically prove catch-up and propose promotion in the raft runtime owner, confirm the voter, hand leadership off, commit and observe source removal, and perform exact-generation cleanup. Ordinary terminal settlement, durable membership obligations, physical cleanup and storage reservations retain their distinct existing owners. After two serial replacements mg-1 has two voters on distinct off-seed storage and continues authoritative SQL routing, CDC and cache hydration after seed loss, while direct or stale membership traffic, cache-owned admission, identity reuse, overlapping replacement, early cleanup and legacy consensus remain refused.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/message-group-fresh-identity-membership/evidence/receipt.json",
+      "requiredReceipts": [
+        "fresh-identity-permanent-registry-and-membership-lane",
+        "committed-learner-real-state-transfer-and-create-fence",
+        "atomic-leader-proof-and-committed-promotion",
+        "serial-replace-handoff-and-source-retention",
+        "separated-membership-obligation-and-terminal-settlement",
+        "committed-and-source-own-absence-exact-cleanup",
+        "lost-answer-restart-pruning-and-stale-disk-recovery",
+        "distinct-offseed-seedloss-and-owner-censuses"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-existing-owner-chain",
+      "statement": "RebalanceCoordinator and ReplicaOperationRepository own authoritative operation admission and monotonic membership phase; OperationWorkflowOwner is the sole runtime driver; raft-rs group membership admission and the runtime port are the sole configuration/progress owners; identity81 owns CREATE linearization; lifecycle owners own rows and cleanup. No second workflow, progress ledger, local consumer fix or RawNode boundary is introduced."
+    },
+    {
+      "id": "settlement-membership-cleanup-reservation-separation",
+      "statement": "Ordinary terminal settlement never waits for or grants membership removal or artifact deletion. An unresolved exact membership obligation retains the per-group lane until fresh committed absence; an exact terminal cleanup claim may retain the already-terminal row without holding the lane. Approved 44592 storage reservation retain, release, expiry, recovery and physical accounting remain unchanged and exact-generation authoritative."
+    },
+    {
+      "id": "fresh-identity-and-permanent-mapping",
+      "statement": "Every target has a fresh deterministic logical identity and derived raft peer id. Committed configuration context installs the exact identity mapping on surviving replicas and snapshots; it is not pruned with operation history. Address is routing metadata and may be reused only with the distinct committed identity."
+    },
+    {
+      "id": "committed-learner-before-admitted-create",
+      "statement": "A current leader commits ADD_LEARNER and produces a read-only exact join descriptor before physical CREATE. The existing durable CREATE CAS then permits one worker to create files, install a validated real snapshot or replay real log, and open as a learner. Terminal-first and forged requests perform zero physical work; no genesis/voter shortcut is permitted."
+    },
+    {
+      "id": "atomic-current-leader-promotion",
+      "statement": "A single raft runtime-owner turn compares a fresh target-owned applied ConfState generation with the leader's current generation, validates both as known canonical non-negative integer configuration generations, and validates real leader-owned commit and follower-match indexes before calling the existing promotion predicate; missing values cannot normalize to a synthetic 0/0 grant. The turn proposes ADD_PEER before leaving. Replicated identity context must survive the semantic port's normalized conf-change path into actual ready/apply and committed mapping, rather than existing only on the request. A later fresh committed voter observation alone advances lifecycle/workflow."
+    },
+    {
+      "id": "source-retention-and-two-absence-proofs",
+      "statement": "The source remains ACTIVE through target voter proof and named leadership handoff. Current leader/quorum fresh committed absence resolves membership serialization and authorizes the exact cleanup claim; the source's own applied absence separately permits stopping its port. BACKSTOP only redrives or diagnoses and cannot stop or delete."
+    },
+    {
+      "id": "exact-generation-cleanup-and-restart",
+      "statement": "Operation creation binds an authoritative source SERVICES incarnation. Operation-owned lifecycle transitions use exact CAS, a stable cleanup token and advancing state_entered_at. Restart may adopt only allowed forward states with the same created_at, create attempt and cleanup token. Successor generations, stale source disks and unavailable authority remain protected."
+    },
+    {
+      "id": "real-group-state-and-r3-boundary",
+      "statement": "The message-group checkpoint/log path owns the exact raft ConfState and applied boundary plus peer map, and scrubs sender-local lifecycle/runtime facts. It does not make operationLedger, MESSAGE/ACK or cache durable. Canonical SQL stays partition-owned; routing, CDC and cache hydration after seed loss are cross-owner recovery proof, not copied message-group state."
+    },
+    {
+      "id": "serial-offseed-physical-proof",
+      "statement": "R1 fully resolves membership before R2 enters the authoritative lane. B4 and C5 use distinct non-seed nodes and storage roots; after restart and seed storage loss they form quorum 2/3, elect, commit and read a new authoritative SQL mutation, deliver CDC and rebuild routing/cache state. There is no five-voter shortcut."
+    },
+    {
+      "id": "negative-controls-and-exclusions",
+      "statement": "Direct CREATE, ADD, MOVE, identity-keeping replacement, concurrent replacement, cache-owned admission/promotion, wrong identity/role/address binding, stale proof, cleanup before absence, retired_group forgery and legacy consensus remain refused. Founder bootstrap and valid durable own rejoin retain their narrow authority. R7, late leader row, co-located follower, deleted MOVE handoff, unsupported upgrade, cloud, release and generic R8 work are excluded."
+    },
+    {
+      "id": "production-owner-path-census",
+      "statement": "The implementation is scoped to the existing planner/rebalancer operation admission and identity paths, ReplicaOperationRepository and OperationWorkflowOwner membership/REPLACE helpers, MessageGroupServiceHandler setup and CREATE/removal ingress, ReplicaCreateAdmissionOwner and lifecycle row owners, message-group consensus/lifecycle/checkpoint routes, raft-rs-group-membership-admission, learner-promotion-progress, and their owner-interaction metadata. Likely paths are the exact V1 census: src/rebalancer/unified-rebalancer-rebalance-loop.js, rebalance-coordinator-operation-creation*.js, rebalance-coordinator-replica-identity-methods.js, rebalance-replace-intent-identity.js, replica-operation-repository*.js, replica-operation-step-policy.js, operation-workflow-owner*.js, operation-workflow-replace-*.js, unified-rebalancer-replica-state.js, replica-operation-constants.js; src/node/message-group-service-handler*.js, message-group-create-activation.js, replica-create-admission-owner.js, replica-removal-consensus-exit.js; src/bootstrap/shared/message-group-service-handler-setup.js and composition roots; src/message-group/message-group-consensus-port.js, message-group-service-raft-lifecycle.js, message-group-service-row-owner.js and group-neutral checkpoint/log/snapshot routes; src/raft/raft-rs-group-membership-admission.js and learner-promotion-progress.js. Any new helper remains subordinate to one of these owners, and scope changes require a new recorded judgment and review."
+    },
+    {
+      "id": "named-witness-and-negative-control-matrix",
+      "statement": "The sealed proof plan includes test/rebalancer/message-group-membership-operation-lane.test.js, message-group-fresh-identity-two-replace.test.js, and the existing message-group-membership-change-parked.test.js; test/node/message-group-service-handler-membership.test.js, message-group-create-admission-recovery.test.js, the existing message-group-service-handler.test.js, and replica-removal-consensus-exit.test.js; test/message-group/message-group-fresh-learner-promotion.test.js, message-group-replace-removal-fence.test.js, and message-group-fresh-learner-snapshot.test.js; raft peer-identity/bootstrap controls; and test/integration/message-group-fresh-identity-replacement.integration.test.js. Cells cover direct and terminal-first CREATE, same-boot/lost-answer/boot-takeover admission, wrong or reused identity/address/role, ADD_LEARNER and REMOVE answer loss, unavailable/non-numeric configuration generation or leader progress, replicated conf-change context through actual ready/apply, stale proof after term/config drift, concurrent R2, target failure before and after materialization, named handoff, leader/quorum versus source-own absence, BACKSTOP refusal, cleanup before absence, successor generation, pruning, stale source disk, cache-forged voter role, and unrelated deferred-row isolation."
+    },
+    {
+      "id": "sealed-red-and-proof-ladder",
+      "statement": "On the exact clean combined base, archive controls showing planner typed park, direct CREATE refusal, zero production ADD_LEARNER caller, a positive operation-authorized REPLACE red at the planner/admission boundary, an authorized committed-learner CREATE red, and a real distinct-off-seed seed-loss red before B4 exists. The initial eight receipts remain fail. Closure requires every named focused command, impact-contract and applicable registry/metadata/guideline/closure audits, diff-check, one uninterrupted test:static, and exact-byte locked ordinary/bootstrap/exclusive changed lanes against the same combined base. The exclusive lane must select the physical two-replacement seed-storage-loss SQL/CDC/cache witness; focused component green cannot substitute."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Every source attempt requires independent verification newer than the attempt and recorded with verifier subagent:<id> before landing."
+    }
+  ],
+  "sealedAt": "be1a5dbdcad0c38246f93ef534a9de0c5aa082cf"
+}
