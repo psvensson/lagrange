@@ -162,7 +162,9 @@ async function claimMessageGroupMembershipOwner(repository, request) {
     // An uncertain write must be resolved by exact read-back, not assumed lost.
   }
   const after = await observeMembershipOperation(repository, operationId);
-  if (!after.available || !await membershipBootIsCurrent(repository)) return answer(OUTCOME.UNKNOWN);
+  if (!after.available || !await membershipBootIsCurrent(repository)) {
+    return answer(OUTCOME.UNKNOWN);
+  }
   if (membershipRowIdentityMatches(after.row, identity, encodedIdentity) &&
     after.row.messageGroupMembershipOwnerClaim === next) {
     return answer(OUTCOME.RECORDED, after.row, next);

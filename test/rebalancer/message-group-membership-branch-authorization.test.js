@@ -150,7 +150,8 @@ async function setup(t, {initial = false} = {}) {
     messageGroupMembershipPhase: 'learner_requested',
     messageGroupMembershipObligationState: 'intent_recorded',
     messageGroupMembershipIdentity: ENCODED_IDENTITY, messageGroupLearnerStamp: null,
-    messageGroupVoterStamp: null, messageGroupRemovalStamp: null, messageGroupSourceLifecycleClaim: CLAIM};
+    messageGroupVoterStamp: null, messageGroupRemovalStamp: null,
+    messageGroupSourceLifecycleClaim: CLAIM};
   await repository.persistNewOperation(operation);
   // Supply the preceding committed learner basis. This unit does not claim to produce it.
   if (!initial) {
