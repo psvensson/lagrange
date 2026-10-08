@@ -18,36 +18,23 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
-      actions: write
+      actions: read
     defaults:
       run:
         shell: bash
         working-directory: candidate-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Supersede only our still-unstarted GCP measurement
+      - name: Retain original lint failure and queued-GCP cancellation evidence
         working-directory: ${{ github.workspace }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p "runtime-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           out="$GITHUB_WORKSPACE/runtime-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          gh api repos/psvensson/lagrange/actions/runs/37813136467 > "$out/prior-run.json"
-          test "$(jq -r .head_sha "$out/prior-run.json")" = edcdbd6bbc621edae370111f9c2212ccfd2daa04
-          gh api repos/psvensson/lagrange/actions/runs/37813136467/jobs > "$out/prior-jobs.json"
-          state="$(jq -r '.jobs[]|select(.name=="review-r1")|.status' "$out/prior-jobs.json")"
-          # Never interrupt an executing test or race a second publisher.
-          test "$state" = queued
-          gh api --method POST repos/psvensson/lagrange/actions/runs/37813136467/cancel
-          for i in $(seq 1 15); do
-            status="$(gh api repos/psvensson/lagrange/actions/runs/37813136467 --jq .status)"
-            if [ "$status" = completed ]; then break; fi
-            sleep 2
-          done
-          test "$status" = completed
-          gh api repos/psvensson/lagrange/actions/runs/37813136467 > "$out/prior-run-final.json"
-          test "$(jq -r .conclusion "$out/prior-run-final.json")" = cancelled
-          echo 'Only static/component/diagnostic review is moved to GitHub-hosted Linux. GCP VM was running but the measurement worker never started. No distributed acceptance substitution.' > "$out/execution-substrate.txt"
+          mkdir -p "$out"
+          gh api repos/psvensson/lagrange/actions/artifacts/11565997590/zip > "$out/lint-stopped-37813798876.zip"
+          echo "9b03f4560a416dc16d5bd153ada7b5c6bb3a823ae3eb8aafdb38bd6ccb595aae  $out/lint-stopped-37813798876.zip" | sha256sum -c -
+          echo 'GitHub-hosted Linux, not GCP. Prior GCP VM was running but its worker never accepted the measurement; only that queued job was cancelled. Original static RED and restart timing measured, then lint found one 101-character line. No runtime-consumer or post-refactor result belongs to that failed attempt. No distributed acceptance substitution.' > "$out/execution-substrate.txt"
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.sha }}
