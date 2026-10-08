@@ -9,11 +9,11 @@ concurrency:
   group: freshmg-runtime-authorization-20261008
   cancel-in-progress: false
 env:
-  BASE: 97a030da287160e5597f0dd5ce5d60541caaf5e8
-  CANDIDATE: 605789e86aaf7dcca8fa4406235388b998460eb0
-  EXPECTED: 87a200e2c3878bc8e8459e1b96b20bd1571d2e03
+  EXPECTED: 50ef7714d0fb74e9cad61d739eb62d486fe87ac9
+  RUNTIME_BASE: 3fda8406d4c97bfd47231072e8065fb61f3a13f6
   WORK_BRANCH: work/freshmg-runtime-authorization-20261008
   QUEST: message-group-fresh-identity-membership
+  DIAGNOSTIC: scripts/quest-evidence/retry-recovery-window.js
 jobs:
   wake:
     runs-on: ubuntu-24.04
@@ -34,167 +34,166 @@ jobs:
           if [ "$status" != RUNNING ]; then
             gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
           fi
-  trace-and-repair:
+  recovery-window:
     needs: wake
     runs-on: [self-hosted, gcp]
     timeout-minutes: 20
     permissions:
       contents: write
-      actions: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.sha }}
-          path: carrier-${{ github.run_id }}
+          path: carrier-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ env.BASE }}
-          path: base-${{ github.run_id }}
-          persist-credentials: false
-          fetch-depth: 0
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ env.EXPECTED }}
-          path: candidate-${{ github.run_id }}
+          path: candidate-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Bind source, retain collector failure, and install exact dependencies
+      - name: Bind unchanged runtime and install exact dependencies
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p "lab-followup-$GITHUB_RUN_ID"
-          out="$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID"
-          gh api repos/psvensson/lagrange/actions/artifacts/11562830721/zip > "$out/collector-failed-37804470705.zip"
-          echo "d3ad1df41bd6a4419dfd2193ffb5f3fe1296c93e8f4c009e14c3b0a045967075  $out/collector-failed-37804470705.zip" | sha256sum -c -
-          for lane in base candidate; do
-            (cd "$lane-$GITHUB_RUN_ID" && npm ci) > "$out/$lane-install.txt" 2>&1
-          done
-          git -C "candidate-$GITHUB_RUN_ID" diff --exit-code "$CANDIDATE" -- src test
-          python3 -m py_compile "carrier-$GITHUB_RUN_ID/scripts/quest-evidence/trace-lab-write-outcome.py" "carrier-$GITHUB_RUN_ID/scripts/quest-evidence/repair-lab-fixture-and-steering.py"
-      - name: Read full TAP to observe exact retry phases without changing deadlines
+          out="$GITHUB_WORKSPACE/recovery-window-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          cd "candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          test -z "$(git status --porcelain)"
+          git diff --exit-code "$RUNTIME_BASE" -- src test
+          npm ci > "$out/install.txt" 2>&1
+          test ! -e "$DIAGNOSTIC"
+          cp "../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/$DIAGNOSTIC" "$DIAGNOSTIC"
+          cp "$DIAGNOSTIC" "$out/measured-diagnostic.js"
+          node --check "$DIAGNOSTIC"
+          printf 'source=%s\nworkflow=%s\nrunner=%s\n' "$EXPECTED" "$GITHUB_SHA" "$RUNNER_NAME" > "$out/provenance.txt"
+          node --version >> "$out/provenance.txt"
+          npm --version >> "$out/provenance.txt"
+      - name: Measure deterministic response windows and separate native tick control
+        id: measure
         shell: bash
         run: |
           set -euo pipefail
           exec 9>/tmp/lagrange-contract-first-measurement.lock
           flock -w 120 9
-          unset LAGRANGE_RETRY_FAILED_ONCE
-          script="$GITHUB_WORKSPACE/carrier-$GITHUB_RUN_ID/scripts/quest-evidence/trace-lab-write-outcome.py"
-          out="$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID"
-          python3 "$script" "$GITHUB_WORKSPACE/base-$GITHUB_RUN_ID" "$BASE" "$out/base-trace"
-          python3 "$script" "$GITHUB_WORKSPACE/candidate-$GITHUB_RUN_ID" "$EXPECTED" "$out/candidate-trace"
-          git -C "candidate-$GITHUB_RUN_ID" diff --exit-code -- src test
-      - name: Repair only the two already-red fixture and steering defects
-        shell: bash
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID"
-          cd "candidate-$GITHUB_RUN_ID"
-          test -z "$(git status --porcelain)"
-          python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/repair-lab-fixture-and-steering.py . > "$out/repair.txt"
-          npm exec --no -- eslint test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js > "$out/lint.txt" 2>&1
-          npm run test:metadata:refresh > "$out/metadata.txt" 2>&1
-          npm run audit:shards > "$out/shards.txt" 2>&1
-          git diff --check
-          git diff --exit-code "$CANDIDATE" -- src
-          git diff --binary > "$out/repair.patch"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- docs/steering/router.md test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js test/shards/
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: restore pre-gate fixture engagement and bounded steering routes'
-          git rev-parse HEAD > "$out/repair-sha.txt"
-      - name: Same three formerly-red files and unchanged guardrails must pass
+          out="$GITHUB_WORKSPACE/recovery-window-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          cd "candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          started=$(date +%s)
+          set +e
+          node "$DIAGNOSTIC" "$out/measurement.json" "$EXPECTED" > "$out/stdout.txt" 2> "$out/stderr.txt"
+          status=$?
+          set -e
+          echo "$status" > "$out/exit.txt"
+          echo "$(($(date +%s)-started))" > "$out/wall-seconds.txt"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          cat "$out/stdout.txt"
+          if [ "$status" -ne 0 ]; then tail -60 "$out/stderr.txt"; fi
+          exit "$status"
+      - name: Mutations must detect lost identity, false result type and budget overrun
+        id: mutations
         shell: bash
         run: |
           set -euo pipefail
           exec 9>/tmp/lagrange-contract-first-measurement.lock
           flock -w 120 9
-          out="$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID"
-          cd "candidate-$GITHUB_RUN_ID"
-          npm run test:file -- test/scripts/rule-set-revision.test.js test/scripts/steering-diet.test.js test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js > "$out/repaired-tests.txt" 2>&1
-          echo 0 > "$out/repaired-tests-exit.txt"
-          npm run audit:steering-diet > "$out/steering.txt" 2>&1
-          npm run audit:rule-set > "$out/rules.txt" 2>&1
-          npm run test:metrics:scoped:strict -- test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js > "$out/test-metrics.txt" 2>&1
-          git diff --exit-code "$CANDIDATE" -- src
-          test -z "$(git status --porcelain)"
-          cp test-output/reports/test-results.ndjson "$out/repaired-and-trace-results.ndjson"
-      - name: Preserve actual outcomes and exact repair, then push WIP
+          export PROOF_OUT="$GITHUB_WORKSPACE/recovery-window-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          cd "candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,os,subprocess
+          out=Path(os.environ['PROOF_OUT'])
+          cases=[
+            ('lost-entry','src/query/query-executor-unknown-outcome.js',
+             'entryId: spentWait.entryId,', "entryId: 'wrong-entry-identity',", 'unknown outcome preserves its exact write identity'),
+            ('false-failure-type','src/query/query-executor-unknown-outcome.js',
+             'failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,',
+             "failureCode: 'mutated-failure-type',", 'unsettled write must stay typed unknown'),
+            ('overrun-delay','src/query/query-executor-partition-attempt-budget.js',
+             'if (normalizedRetryDelayMs > remainingBudgetMs) {', 'if (false) {',
+             'outlasting.returnedAtMs <= BUDGET_MS')]
+          results=[]
+          for name,file,old,new,marker in cases:
+              target=Path(file); original=target.read_bytes(); text=original.decode()
+              assert text.count(old)==1, (name,'source anchor changed')
+              try:
+                  target.write_text(text.replace(old,new,1))
+                  with (out/(name+'.stdout.txt')).open('wb') as stdout, (out/(name+'.stderr.txt')).open('wb') as stderr:
+                      p=subprocess.run(['node',os.environ['DIAGNOSTIC'],str(out/(name+'.json')),os.environ['EXPECTED'],'query-only'],stdout=stdout,stderr=stderr,timeout=60)
+                  (out/(name+'.exit.txt')).write_text(str(p.returncode)+'\n')
+                  assert p.returncode!=0 and marker in (out/(name+'.stderr.txt')).read_text(), (name,'did not fail at intended assertion')
+                  results.append({'mutation':name,'exit':p.returncode,'expectedAssertion':marker,'caught':True})
+              finally:
+                  target.write_bytes(original)
+          (out/'mutation-results.json').write_text(json.dumps(results,indent=2)+'\n')
+          PY
+          git diff --exit-code -- src test
+      - name: Retain every measured outcome and publish only the authorized WIP branch
+        if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          MEASURE_OUTCOME: ${{ steps.measure.outcome }}
+          MUTATION_OUTCOME: ${{ steps.mutations.outcome }}
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID"
-          export PROOF_OUT="$out"
-          cd "candidate-$GITHUB_RUN_ID"
-          gh auth setup-git
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
+          export PROOF_OUT="$GITHUB_WORKSPACE/recovery-window-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$PROOF_OUT"
+          cd "candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          git diff --exit-code "$RUNTIME_BASE" -- src test
+          git status --porcelain > "$PROOF_OUT/pre-publication-status.txt"
           python3 - <<'PY'
           from pathlib import Path
           import hashlib,json,os,zipfile
           out=Path(os.environ['PROOF_OUT'])
-          manifest={str(p.relative_to(out)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.rglob('*')) if p.is_file()}
-          (out/'member-sha256.json').write_text(json.dumps(manifest,indent=2)+'\n')
-          archive=out.parent/('lab-followup-'+os.environ['GITHUB_RUN_ID']+'.zip')
+          hashes={str(p.relative_to(out)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.rglob('*')) if p.is_file()}
+          (out/'member-sha256.json').write_text(json.dumps(hashes,indent=2)+'\n')
+          archive=out.parent/(out.name+'.zip')
           with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
               for p in sorted(out.rglob('*')):
-                  if p.is_file(): z.write(p,str(p.relative_to(out)))
+                  if p.is_file():z.write(p,str(p.relative_to(out)))
           with zipfile.ZipFile(archive) as z:
-              for name,digest in manifest.items(): assert hashlib.sha256(z.read(name)).hexdigest()==digest
+              for name,digest in hashes.items():assert hashlib.sha256(z.read(name)).hexdigest()==digest
           (out/'archive-sha256.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'\n')
           PY
-          node scripts/solve.js evidence add "$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID.zip" --id "$QUEST" --text "Lab followup: full-TAP observational F-aj phase traces at two exact sources with unchanged assertions/8s execution budget. Separately repaired pre-gate fixture column copying and 362-to-360-line steering prose. Original failed collector 37804470705 preserved inside this archive: it read summarized stdout instead of full TAP after the base test passed. No trace result overrides original lab FAIL; physical baseline remains not run." --json > "$out/canonical.json"
-          node scripts/solve.js note --id "$QUEST" --finding "Scoped lab followup $GITHUB_RUN_ID: original 941-file lab remains red. Full-TAP collector repairs diagnostic-only failure 37804470705 and records paired query phases without changing deadlines or assertions. Two inherited fixture/document defects repaired without runtime changes: reconstruct all non-gate applied-state fields before typed old-schema refusal; shorten router prose without removing rules/routes or raising 360-line bound. Same three previously-red files and scoped audits pass. Query attribution, other inherited failures, six slow failures and physical acceptance remain open. No independent source or release approval." --kind evidence --json > "$out/note.json"
+          node scripts/solve.js evidence add "$PROOF_OUT.zip" --id "$QUEST" --text "Followup to failed lab freshmg-lab-20261008T150005Z: deterministic QueryExecutor response/budget windows and a separate native guarded-port tick schedule, not composed SQL/election acceptance. Original runtime unchanged; preserve raw outcomes and mutation controls. Route policy findings to the existing query delivery-budget owner; no FreshMG receipt is promoted." --json > "$PROOF_OUT/canonical.json"
+          node scripts/solve.js note --id "$QUEST" --finding "Recovery-window diagnostic Actions $GITHUB_RUN_ID source $EXPECTED: measurement=$MEASURE_OUTCOME mutations=$MUTATION_OUTCOME. Uses existing nowFn/delay and native operation-port schedule. Supplied query answers and native election control are separate proof surfaces, never claimed as a composed distributed SQL operation. No runtime edit, deadline increase, repeated full lab run, source approval or release closure. Full 941-file lab remains FAIL. See retained recovery-window evidence and parent remaining-work-2026-10-08.md for integration/release gates." --kind evidence --json > "$PROOF_OUT/note.json"
           python3 - <<'PY'
           from pathlib import Path
           import json,os
           out=Path(os.environ['PROOF_OUT'])
-          record={'schema':'freshmg-lab-followup/1','runId':int(os.environ['GITHUB_RUN_ID']),
-              'baseSha':os.environ['BASE'],'candidateBeforeRepairSha':os.environ['EXPECTED'],
-              'runtimeSourceSha':os.environ['CANDIDATE'],'repairSha':(out/'repair-sha.txt').read_text().strip(),
-              'runtimeChanged':False,'originalLabVerdict':'FAIL','physicalBaseline':'NOT_RUN',
-              'independentApproval':False,'distributedAcceptance':False,
-              'traces':{name:json.loads((out/name/'trace.json').read_text()) for name in ('base-trace','candidate-trace')},
-              'canonicalEvidence':json.loads((out/'canonical.json').read_text()),
-              'archiveSha256':(out/'archive-sha256.txt').read_text().strip(),
-              'repairedTests':(out/'repaired-tests.txt').read_text(),
-              'steeringAudit':(out/'steering.txt').read_text(),
-              'retainedFailedCollector':{'runId':37804470705,
-                  'sha256':'d3ad1df41bd6a4419dfd2193ffb5f3fe1296c93e8f4c009e14c3b0a045967075',
-                  'reason':'passed base file emits trace only in full TAP; old collector incorrectly searched summary stdout'}}
-          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('lab-followup-'+os.environ['GITHUB_RUN_ID']+'.json')
+          def read_json(name):
+              p=out/name
+              return json.loads(p.read_text()) if p.exists() else None
+          record={'schema':'cutover-recovery-window-attempt/1','runId':int(os.environ['GITHUB_RUN_ID']),
+              'sourceSha':os.environ['EXPECTED'],'runtimeBase':os.environ['RUNTIME_BASE'],
+              'measurementStep':os.environ['MEASURE_OUTCOME'],'mutationStep':os.environ['MUTATION_OUTCOME'],
+              'runtimeChanged':False,'originalLabVerdict':'FAIL','distributedAcceptance':False,'independentApproval':False,
+              'measurement':read_json('measurement.json'),'mutationResults':read_json('mutation-results.json'),
+              'canonicalEvidence':read_json('canonical.json'),'archiveSha256':(out/'archive-sha256.txt').read_text().strip()}
+          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('recovery-window-'+os.environ['GITHUB_RUN_ID']+'.json')
           dest.write_text(json.dumps(record,indent=2)+'\n')
           PY
-          git add -- "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/lab-followup-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain query phase traces and bounded lab fixture corrections'
+          gh auth setup-git
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- "$DIAGNOSTIC" "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/recovery-window-$GITHUB_RUN_ID.json"
+          git diff --cached --check
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'diagnostic: retain controlled retry windows without runtime or gate changes'
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-          git rev-parse HEAD > "$out/published-sha.txt"
-          git status --porcelain > "$out/final-status.txt"
-      - name: Preserve every outcome and recoverable source
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/lab-followup-$GITHUB_RUN_ID"
-          mkdir -p "$out"
-          cd "candidate-$GITHUB_RUN_ID"
-          git diff --binary > "$out/uncommitted.patch"
-          git status --porcelain > "$out/archive-status.txt"
-          if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then
-            git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"
-          fi
+          git rev-parse HEAD > "$PROOF_OUT/published-sha.txt"
+          git status --porcelain > "$PROOF_OUT/final-status.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-lab-followup-${{ github.run_id }}-${{ github.run_attempt }}
-          path: lab-followup-${{ github.run_id }}/
+          name: cutover-recovery-window-${{ github.run_id }}-${{ github.run_attempt }}
+          path: recovery-window-${{ github.run_id }}-${{ github.run_attempt }}/
           retention-days: 14
           if-no-files-found: error
