@@ -63,6 +63,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     SQL,
     SYSTEM_TABLE_NAME,
     getControlPlaneRetryAfterMs,
+    getRemainingBudgetMs,
     isCoordinatorOwnedOperationType,
     isRetryableControlPlaneError,
     readAuthoritativeControlPlaneRows,
@@ -133,7 +134,18 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         return executeRead();
       }
 
-      const deadlineAtMs = this.timeSource.now() + REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
+      const startedAtMs = this.timeSource.now();
+      const enclosingRemainingMs = queryOptions.timeoutBudget &&
+        typeof queryOptions.timeoutBudget === 'object' ?
+        getRemainingBudgetMs(queryOptions.timeoutBudget, {
+          now: () => this.timeSource.now(),
+        }) :
+        REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
+      const retryBoundMs = Math.min(
+        REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+        enclosingRemainingMs,
+      );
+      const deadlineAtMs = startedAtMs + retryBoundMs;
       let attempts = 0;
       while (true) {
         const result = await executeRead();
@@ -145,8 +157,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         const remainingMs = deadlineAtMs - this.timeSource.now();
         if (remainingMs <= 0) {
           reportReplicaOperationReadRetrySpent(this, result, {
-            boundMs: REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
-            elapsedMs: REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS - remainingMs,
+            boundMs: retryBoundMs,
+            elapsedMs: this.timeSource.now() - startedAtMs,
             attempts,
             coalescingKey: queryOptions.coalescingKey,
           });
@@ -355,6 +367,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           ...readQueryOptions,
           leaderMode: options?.leaderMode,
           retryOnRetryableFailure: true,
+          timeoutBudget: options?.timeoutBudget,
         },
       );
       const queryDurationMs = this.timeSource.now() - queryStartedAtMs;

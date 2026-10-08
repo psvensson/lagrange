@@ -1,0 +1,285 @@
+{
+  "schema": "storage-reservation-final-broad-evidence/1",
+  "generatedAt": "2026-10-06T19:23:31.540Z",
+  "base": "125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+  "quest": "storage-reservation-lost-outcome-idempotency",
+  "priorEvidence": {
+    "correctedManifest": {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/corrected-manifest.json",
+      "sha256": "9beb1ac4cc3fe3c9f3d8baa8eadb90fa3fcee9832652cd10341ca00dcd02d685",
+      "bytes": 13332
+    },
+    "controlledNegativeManifest": {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/controlled-negative/manifest.json",
+      "sha256": "12549f3fecbd8f100010ab7d35872ccbb8ffbfc8b8745c14b5b666752104dc2a",
+      "bytes": 2099
+    }
+  },
+  "carrier": {
+    "commit": "24dcf2abb16c17bbcb55a4148a83e17d7b14a857",
+    "parent": "49a9ffb986ba670763432de39d6fc7a182153f3e",
+    "normalHooks": true,
+    "clean": true,
+    "pathCount": 36,
+    "pathList": {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/final-broad-source-paths.txt",
+      "sha256": "6a2bd85cb8945f583456dda97b49954c32338ac3fcb1a0f65f82920b6d5f69ca",
+      "bytes": 2036
+    },
+    "fingerprintAlgorithm": "sha256(sorted sha256 SP bytes SP path LF)",
+    "sourceFingerprint": "69557c11d87b3384f72854e10a1714db22862d87160d4c33af5716f00c11a9e6",
+    "sourceFiles": [
+      {
+        "path": "scripts/check-duplication.js",
+        "sha256": "83b27fa6b2eb7538e451fc6862f5f805e56a2d8eab813b3c441a4d9caad3ccb9",
+        "bytes": 18172
+      },
+      {
+        "path": "solve/changes/global-owner-debt-inventory/inventory.json",
+        "sha256": "40e7e19379132226a9ee93982b1aaa01c8b7c27b65d7682e5ff28b3321f60379",
+        "bytes": 132852
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-owner-facade.js",
+        "sha256": "d9e51b69df55785d5d1077892d53121d537706f50e65cc2e4ccd0b2f55a3fa45",
+        "bytes": 13596
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-reservation-adoption.js",
+        "sha256": "6b007d4c4874b5748be8910aab3d0b38501dd39b22cd4cc17ecbfc52476f2d2f",
+        "bytes": 5157
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+        "sha256": "56429e8064244749e1f9ae10cf53e3fd32c2d08e4f0484b47ba0a2cc6890906c",
+        "bytes": 24679
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-shared.js",
+        "sha256": "7038a581635f33f1963a2135899e1d84e3cfccbf3056a3ddb6cefbbc44d3ee17",
+        "bytes": 12511
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "sha256": "26087843a74b22e1a75e02281977c31d764581f27100ce214401f5972c7f83c4",
+        "bytes": 28193
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository-read-methods.js",
+        "sha256": "c0d1a676f65493281dc25a78d0c19a5664251e17991949bfd03b067a9da53ee1",
+        "bytes": 23421
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository.js",
+        "sha256": "b9752bfa033b943950057112f4030ecf5994a9090596acf0c926723fc544ee4d",
+        "bytes": 33606
+      },
+      {
+        "path": "src/rebalancer/storage-reservation-authority.js",
+        "sha256": "70973e27a0744c9ba162ba29e4359122de4ef79d37704742112860c3d9e2632b",
+        "bytes": 4052
+      },
+      {
+        "path": "test/rebalancer/admission-real-size-estimates.test.js",
+        "sha256": "203b42d68ee336ccf475bd272c3870da5e0bf59eed0fc51b9f539aed55e0d8e0",
+        "bytes": 15336
+      },
+      {
+        "path": "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
+        "sha256": "a220f2cf0909df47b9cc95b8e1f1bde41b0fe765d56381e97cd6d3527ec19791",
+        "bytes": 25950
+      },
+      {
+        "path": "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+        "sha256": "8998df8eb05c28d2033308bc6871a9ef06a0270dd058ca63ef87f508f32a43e7",
+        "bytes": 31862
+      },
+      {
+        "path": "test/rebalancer/duplicate-operation-prevention.property.test.js",
+        "sha256": "ae52882589af12c3b27d422eb678a273d51e76efecc7c84941a7a1515111b2ac",
+        "bytes": 31913
+      },
+      {
+        "path": "test/rebalancer/epoch-fence-test-harness.js",
+        "sha256": "d55f1733d021698e3397189991b89ef5641c3506ca533777687de688c2dd4813",
+        "bytes": 8433
+      },
+      {
+        "path": "test/rebalancer/existing-group-add-topology-guard.test.js",
+        "sha256": "9f04fce1ad8e049fa5c463c1fe49eb88bbd26f2f2b1abf27a95b3be2c2e55283",
+        "bytes": 17671
+      },
+      {
+        "path": "test/rebalancer/message-group-operation-routing.integration.test.js",
+        "sha256": "d6cadd54d656e7777ec45a09fdd963a4dd20fbf16ddb012ff16b861b5085e23a",
+        "bytes": 18685
+      },
+      {
+        "path": "test/rebalancer/operation-log-persistence.property.test.js",
+        "sha256": "4985d6aa097cab73f43622562c6af57d4187430fee44781cc6870a0784b3e97c",
+        "bytes": 17374
+      },
+      {
+        "path": "test/rebalancer/rebalance-coordinator-operation-ownership-tail-more-test-cases.js",
+        "sha256": "b7b90b16c7a2d64adfd22061aace1eac625f88e4ab877ff89defd2458a7567f7",
+        "bytes": 39853
+      },
+      {
+        "path": "test/rebalancer/rebalance-coordinator-operation-ownership-tail-test-cases.js",
+        "sha256": "78f0e1a08a5c97a2b09e86fbdf75935b285e4b67396bd7420c3682c97f0ffba8",
+        "bytes": 2056
+      },
+      {
+        "path": "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+        "sha256": "1ec918fe7839860adcbc2a47699886d04e6d681d06bcae38c67857a7f6743e7d",
+        "bytes": 33766
+      },
+      {
+        "path": "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+        "sha256": "d3dce4ec9f685cb1c9a6e963a90f63d705f2be2ed819185f12f73dff1b6e13fc",
+        "bytes": 57033
+      },
+      {
+        "path": "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+        "sha256": "1ddc303ea246ce59a87730a37056e24a6d4a86c0132763e3d4b4c9eb85f82b1c",
+        "bytes": 36395
+      },
+      {
+        "path": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+        "sha256": "a417f70427be91e623ad4d1ae8736eb41c9572d2138023d5f21566ef92a4d302",
+        "bytes": 25559
+      },
+      {
+        "path": "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js",
+        "sha256": "b1527cf20635822c44316ebe5da982c5352a3d75f35336746b94edb0c2d41c04",
+        "bytes": 14044
+      },
+      {
+        "path": "test/rebalancer/replica-operation-repository-tail-more-test-cases.js",
+        "sha256": "1f4073e22468212b0e1474f981ee797606697a2a88bca9d76319d36ee671d06b",
+        "bytes": 42226
+      },
+      {
+        "path": "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+        "sha256": "7d4aa8f81076d05fee86cff75ae2d6db70a666fd56bc9d6fa7f20098a4015051",
+        "bytes": 19878
+      },
+      {
+        "path": "test/rebalancer/runtime-service-target-claim.test.js",
+        "sha256": "5f11a239fee253a6ddf77359601177a7a06c78034978021f4b5463c75138aa04",
+        "bytes": 7911
+      },
+      {
+        "path": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "sha256": "4753b4788ef7de7a074e98fa663b7a7b5caf4664d34e87f5629001fe94fa3bf6",
+        "bytes": 27174
+      },
+      {
+        "path": "test/rebalancer/test-helpers.js",
+        "sha256": "401cdafd1de331579e600c1dfcaf1e52d893366765bbfaa30ac3f53b1edc87dd",
+        "bytes": 46752
+      },
+      {
+        "path": "test/rebalancer/timeout-test-coordinator.js",
+        "sha256": "dd985c79838c5a4931a27243097a0d2b8af6328b7318c3a6fb1e6af51b49579b",
+        "bytes": 14071
+      },
+      {
+        "path": "test/shards/impact-contracts.json",
+        "sha256": "dcbc8376ac62f2f00179d28fc0289e4f21c60aec925ede7ea0764bd4c62f936f",
+        "bytes": 71159
+      },
+      {
+        "path": "test/shards/impact-graph-seal.json",
+        "sha256": "bdbaa5ea06df038f6485018705d6a45460e48834df2651ef37a4b51d6f47f32b",
+        "bytes": 452
+      },
+      {
+        "path": "test/shards/primary-classes.json",
+        "sha256": "76564e7f82cbeeaa3ff040273f6b798535597c727a74acdf1a63ce29a952aa99",
+        "bytes": 166302
+      },
+      {
+        "path": "test/shards/resource-classes.json",
+        "sha256": "6e4840301a890bbac99320d5b19c214c4d334535e1eef0b1c732a871a98004e9",
+        "bytes": 173934
+      },
+      {
+        "path": "test/shards/subsystem-classes.json",
+        "sha256": "fea62747da9cf6dcb2b585727910596b49208e08bc91095fb8dd8ccc39a9c04a",
+        "bytes": 648954
+      }
+    ],
+    "byteMismatchesAgainstReviewTree": 0
+  },
+  "localProofs": [
+    {
+      "kind": "prior-land-red-census-corrected",
+      "result": {
+        "files": 47,
+        "passedFiles": 47,
+        "failedFiles": 0,
+        "assertions": 3671
+      },
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/local/final-prior-red-census-r2.log.txt",
+        "sha256": "9f209ee58aba4246a4e490af573a03aebd63c6feecd1b26bf7fa6d9d82f3c1c1",
+        "bytes": 7396
+      }
+    },
+    {
+      "kind": "final-owner-focused",
+      "result": {
+        "files": 3,
+        "passedFiles": 3,
+        "failedFiles": 0,
+        "assertions": 254
+      },
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/local/final-owner-focused.log.txt",
+        "sha256": "2f305b3a54b8d9fc21daebe89a466a197ced038700455a34449994f3541bb87a",
+        "bytes": 763
+      }
+    },
+    {
+      "kind": "full-static",
+      "command": "npm run test:static",
+      "exitCode": 0,
+      "ratchets": {
+        "complexity": "1757/1757",
+        "cognitive": "152/152",
+        "sourceDuplication": "48/48 groups; 1510/1510 lines",
+        "testDuplication": "706/706 groups; 26655/26655 lines"
+      },
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/local/final-full-static-r4.log.txt",
+        "sha256": "93d688b6578e50b4d9e98ec669fdae9fdafb835cca7544df6fd0f6adffbe6b57",
+        "bytes": 12526
+      }
+    }
+  ],
+  "labProof": {
+    "machine": "adam-laptop",
+    "agent": "codex:durability-closure-reservation-final2",
+    "commit": "24dcf2abb16c17bbcb55a4148a83e17d7b14a857",
+    "testFile": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+    "exitCode": 0,
+    "result": {
+      "files": 1,
+      "passedFiles": 1,
+      "failedFiles": 0,
+      "assertions": 100
+    },
+    "evidence": {
+      "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/adam-final-broad-owner-witness.txt",
+      "sha256": "7da803d454f7dc09663052672c5bcbdf315989469b5ca44e1368de561fbd88bf",
+      "bytes": 835
+    }
+  },
+  "claims": [
+    "The normal-hook carrier is byte-identical to the final review tree across every listed source, test, script, registry, and generated path.",
+    "The broad local census closes all 47 files that were red in the first normal landing attempt.",
+    "The exact final carrier passes the owner witness on the same locked Adam host used for earlier owner evidence.",
+    "The prior corrected manifest retains the separate public Binding SENDING dependency classification and is not promoted to positive reservation certification."
+  ]
+}

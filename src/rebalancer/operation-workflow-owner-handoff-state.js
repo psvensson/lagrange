@@ -178,6 +178,8 @@ function withOwnerHandoffState(Base) {
         boundary:
           OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_OPERATION,
         workflowStep: operation?.workflowStep || null,
+        operationOwnershipFenceEpoch:
+          options.operationOwnershipFenceEpoch,
         partitionId: options.partitionId || operation?.partitionId || null,
         updatedAt: operation?.updatedAt,
         createdAt: operation?.createdAt,

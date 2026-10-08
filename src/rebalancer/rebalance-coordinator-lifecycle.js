@@ -371,8 +371,8 @@ class RebalanceCoordinatorLifecycle {
         isInitialized: () => this.initialized,
         releaseReservationForOperation: (op) =>
           this.releaseReservationForOperation(op),
-        ensureReservationForOperation: (op) =>
-          this.ensureReservationForOperation(op),
+        ensureReservationForOperation: (op, reservationOptions) =>
+          this.ensureReservationForOperation(op, reservationOptions),
         hasStorageReservationSupport: () =>
           this.hasStorageReservationSupport(),
         getCurrentPublishedMembershipEpoch: () =>

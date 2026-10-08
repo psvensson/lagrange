@@ -1,0 +1,1883 @@
+placement-shell=1353285
+placement-head=853599787e4778d415e3e95d05479d51fc40cb84
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry: timeout: lanecap:7
+placement-pid=1353711
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 19C (nvme/Composite)
+not ok test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js (80 assertions, 1933ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Creating operation {
+  operationId: '60cdf4b3-9493-4283-9337-4f2149775f79',
+  type: 'ADD',
+  partitionId: 'partition-lost-reservation-answer',
+  targetNodeId: 'reservation-target-node',
+  entityType: 'partition',
+  entityId: 'partition-lost-reservation-answer',
+  bootstrapTopologyStamped: true,
+  bootstrapReplicaIdCount: 2
+}
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+# Subtest: lost reservation INSERT answer adopts one exact durable capacity hold
+    not ok 1 - Storage reservation creation failed for operation 60cdf4b3-9493-4283-9337-4f2149775f79: UNIQUE constraint failed: storage_reservations.reservation_id
+      ---
+      stack: >
+        RebalanceCoordinator.createOperationRecordInternal
+        (src/rebalancer/rebalance-coordinator-operation-creation.js:858:13)
+      
+        async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate
+        (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:732:14)
+      
+        async Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:364:25)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-creation.js
+        lineNumber: 858
+        columnNumber: 13
+        typeName: RebalanceCoordinator
+        methodName: createOperationRecordInternal
+        functionName: RebalanceCoordinator.createOperationRecordInternal
+      tapCaught: returnedPromiseRejection
+      source: |2
+              OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED
+            ) {
+              throw new Error(
+        ------------^
+                RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX +
+                  `${operation.operationId}: ` +
+      ...
+    
+    1..1
+not ok 1 - lost reservation INSERT answer adopts one exact durable capacity hold # time=94.789ms
+  ---
+  at:
+    fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    lineNumber: 353
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('lost reservation INSERT answer adopts one exact durable capacity hold',
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: exact ACTIVE reservation adoption keeps its durable estimate past TTL
+    ok 1 - the exact live operation adopts its durable ACTIVE hold past TTL
+    ok 2 - adoption retains exactly one capacity hold
+    ok 3 - the admission-time estimate is retained without recomputation
+    ok 4 - an exact authoritative hold does not reissue INSERT
+    ok 5 - adoption does not count as local creation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..5
+ok 2 - exact ACTIVE reservation adoption keeps its durable estimate past TTL # time=37.58ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: concurrent lost-outcome repair callers share one durable capacity hold
+    not ok 1 - both callers converge on the same already-applied hold
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,4 @@
+         Array [
+        -  "already_active",
+        -  "already_active",
+        +  "failed",
+        +  "failed",
+         ]
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 472
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:472:9)
+      source: |2
+              ]);
+      
+              t.same(
+        --------^
+                results.map((result) => result.outcome),
+                [
+      ...
+    
+    ok 2 - concurrent repair leaves one durable capacity hold
+    ok 3 - ambiguous concurrent adoption does not duplicate creation stats
+    ok 4 - ambiguous concurrent adoption does not duplicate creation events
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..4
+not ok 3 - concurrent lost-outcome repair callers share one durable capacity hold # time=36.622ms
+  ---
+  at:
+    fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    lineNumber: 454
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('concurrent lost-outcome repair callers share one durable capacity hold',
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: terminal and absent operation authority cannot adopt a reservation
+    not ok 1 - confirmed absent operation fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 501
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:501:9)
+      source: |2
+              const absent =
+                await absentCoordinator.ensureReservationForOperation(operation);
+              t.equal(absent.outcome, OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+        --------^
+                'confirmed absent operation fails closed');
+              t.equal(absent.error,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 2 - absence is distinguished from reservation conflict
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 503
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:503:9)
+      source: |2
+              t.equal(absent.outcome, OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                'confirmed absent operation fails closed');
+              t.equal(absent.error,
+        --------^
+                STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_ABSENT,
+                'absence is distinguished from reservation conflict');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation is absent for reservation adoption
+        +undefined
+      ...
+    
+    ok 3 - absence cannot drive another capacity mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 4 - terminal operation fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 526
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:526:9)
+      source: |2
+                  terminalOperation,
+                );
+              t.equal(terminal.outcome, OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+        --------^
+                'terminal operation fails closed');
+              t.equal(terminal.error,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 5 - terminal authority is classified explicitly
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 528
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:528:9)
+      source: |2
+              t.equal(terminal.outcome, OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                'terminal operation fails closed');
+              t.equal(terminal.error,
+        --------^
+                STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL,
+                'terminal authority is classified explicitly');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation is terminal for reservation adoption
+        +undefined
+      ...
+    
+    ok 6 - terminal authority cannot drive another capacity mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..6
+not ok 4 - terminal and absent operation authority cannot adopt a reservation # time=40.503ms
+  ---
+  at:
+    fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    lineNumber: 491
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('terminal and absent operation authority cannot adopt a reservation',
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: owner unavailability is distinct from confirmed absence
+    not ok 1 - unavailable operation owner fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 550
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:550:7)
+      source: |2
+            const result = await operationUnavailableCoordinator
+              .ensureReservationForOperation(operation);
+            t.equal(result.outcome, OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+        ------^
+              'unavailable operation owner fails closed');
+            t.equal(result.error,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 2 - operation owner unavailability is named
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 552
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:552:7)
+      source: |2
+            t.equal(result.outcome, OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+              'unavailable operation owner fails closed');
+            t.equal(result.error,
+        ------^
+              STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_AUTHORITY_UNAVAILABLE,
+              'operation owner unavailability is named');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation is unavailable for reservation adoption
+        +undefined
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 3 - unavailable reservation owner fails closed
+    ok 4 - the reservation owner failure remains observable
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..4
+not ok 5 - owner unavailability is distinct from confirmed absence # time=33.683ms
+  ---
+  at:
+    fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    lineNumber: 538
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('owner unavailability is distinct from confirmed absence', async (t) => {
+    ^
+      initializeConfig();
+      const operation = buildOperation();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: terminalization during reservation read cannot authorize adoption
+    not ok 1 - the adoption is refused after concurrent terminalization
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 598
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:598:9)
+      source: >2
+            try {
+              const result = await coordinator.ensureReservationForOperation(operation);
+              t.equal(result.outcome, OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+        --------^
+                'the adoption is refused after concurrent terminalization');
+              t.equal(result.error,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 2 - the final operation observation owns the refusal
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 600
+        columnNumber: 9
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:600:9)
+      source: |2
+              t.equal(result.outcome, OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                'the adoption is refused after concurrent terminalization');
+              t.equal(result.error,
+        --------^
+                STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL,
+                'the final operation observation owns the refusal');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation is terminal for reservation adoption
+        +undefined
+      ...
+    
+    ok 3 - terminalization does not drive another reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..3
+not ok 6 - terminalization during reservation read cannot authorize adoption # time=32.422ms
+  ---
+  at:
+    fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    lineNumber: 577
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('terminalization during reservation read cannot authorize adoption',
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: every immutable operation identity conflict refuses reservation adoption
+    not ok 1 - type conflict is not adopted
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 633
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:633:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(requested);
+                t.equal(
+        ----------^
+                  result.error,
+                  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation identity mismatches reservation request
+        +undefined
+      ...
+    
+    ok 2 - type conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 3 - partitionId conflict is not adopted
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 633
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:633:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(requested);
+                t.equal(
+        ----------^
+                  result.error,
+                  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation identity mismatches reservation request
+        +undefined
+      ...
+    
+    ok 4 - partitionId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 5 - replicaId conflict is not adopted
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 633
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:633:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(requested);
+                t.equal(
+        ----------^
+                  result.error,
+                  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation identity mismatches reservation request
+        +undefined
+      ...
+    
+    ok 6 - replicaId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 7 - targetClaimKey conflict is not adopted
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 633
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:633:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(requested);
+                t.equal(
+        ----------^
+                  result.error,
+                  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation identity mismatches reservation request
+        +undefined
+      ...
+    
+    ok 8 - targetClaimKey conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 9 - sourceNodeId conflict is not adopted
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 633
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:633:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(requested);
+                t.equal(
+        ----------^
+                  result.error,
+                  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation identity mismatches reservation request
+        +undefined
+      ...
+    
+    ok 10 - sourceNodeId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 11 - targetNodeId conflict is not adopted
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 633
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:633:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(requested);
+                t.equal(
+        ----------^
+                  result.error,
+                  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation identity mismatches reservation request
+        +undefined
+      ...
+    
+    ok 12 - targetNodeId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 13 - entityType conflict is not adopted
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 633
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:633:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(requested);
+                t.equal(
+        ----------^
+                  result.error,
+                  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation identity mismatches reservation request
+        +undefined
+      ...
+    
+    ok 14 - entityType conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 15 - entityId conflict is not adopted
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 633
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:633:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(requested);
+                t.equal(
+        ----------^
+                  result.error,
+                  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation identity mismatches reservation request
+        +undefined
+      ...
+    
+    ok 16 - entityId conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 17 - membershipPublicationEpoch conflict is not adopted
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 633
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:633:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(requested);
+                t.equal(
+        ----------^
+                  result.error,
+                  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -Authoritative replica operation identity mismatches reservation request
+        +undefined
+      ...
+    
+    ok 18 - membershipPublicationEpoch conflict issues no reservation mutation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..18
+not ok 7 - every immutable operation identity conflict refuses reservation adoption # time=254.544ms
+  ---
+  at:
+    fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    lineNumber: 610
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('every immutable operation identity conflict refuses reservation
+    adoption',
+  
+    ^
+      async (t) => {
+        const conflicts = [
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: reservation identity, state, estimate, and timestamps all fail closed
+    not ok 1 - reservation_id conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 2 - reservation_id conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 3 - entity_type conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 4 - entity_type conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 5 - entity_id conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 6 - entity_id conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 7 - partition_id conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 8 - partition_id conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 9 - target_node_id conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 10 - target_node_id conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 11 - reason_code conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 12 - reason_code conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 13 - amplification_factor conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 14 - amplification_factor conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 15 - estimated_bytes conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 16 - estimated_bytes conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 17 - released_at conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 18 - released_at conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 19 - created_at conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 20 - created_at conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 21 - updated_at conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 22 - updated_at conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    not ok 23 - expires_at conflict fails closed
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 672
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:672:11)
+      source: |2
+                const result =
+                  await coordinator.ensureReservationForOperation(operation);
+                t.equal(result.outcome,
+        ----------^
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +already_active
+      ...
+    
+    not ok 24 - expires_at conflict returns a reservation authority error
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -/reservation/i
+        +undefined
+      at:
+        fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+        lineNumber: 675
+        columnNumber: 11
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:675:11)
+      source: |2
+                  OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+                  `${field} conflict fails closed`);
+                t.match(result.error, /reservation/i,
+        ----------^
+                  `${field} conflict returns a reservation authority error`);
+              } finally {
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..24
+not ok 8 - reservation identity, state, estimate, and timestamps all fail closed # time=334.345ms
+  ---
+  at:
+    fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    lineNumber: 646
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('reservation identity, state, estimate, and timestamps all fail closed',
+    ^
+      async (t) => {
+        const conflicts = [
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RELEASED and EXPIRED reservation generations never reactivate
+    ok 1 - released generation is refused
+    ok 2 - released generation is never reactivated
+    ok 3 - released keeps one historical row, not a second hold
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 4 - expired generation is refused
+    ok 5 - expired generation is never reactivated
+    ok 6 - expired keeps one historical row, not a second hold
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+    1..6
+ok 9 - RELEASED and EXPIRED reservation generations never reactivate # time=46.064ms
+
+1..9
+# { total: 71, pass: 28, fail: 43 }
+# time=929.458ms
+# test-files total=1 pass=0 fail=1 assertions=80
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: '60cdf4b3-9493-4283-9337-4f2149775f79',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: '60cdf4b3-9493-4283-9337-4f2149775f79',
+    replica_id: 'partition-lost-reservation-answer-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1791305964640,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1791305964646
+}
+Failed to create storage reservation for operation {
+  operationId: '60cdf4b3-9493-4283-9337-4f2149775f79',
+  reservationId: 'res-60cdf4b3-9493-4283-9337-4f2149775f79',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'reservation owner unavailable'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+{"sha":"853599787e4778d415e3e95d05479d51fc40cb84","machine":"adam-laptop","file":"test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js","status":1,"reason":null}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: '60cdf4b3-9493-4283-9337-4f2149775f79',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: '60cdf4b3-9493-4283-9337-4f2149775f79',
+    replica_id: 'partition-lost-reservation-answer-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1791305964640,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1791305964646
+}
+Failed to create storage reservation for operation {
+  operationId: '60cdf4b3-9493-4283-9337-4f2149775f79',
+  reservationId: 'res-60cdf4b3-9493-4283-9337-4f2149775f79',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'reservation owner unavailable'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+Failed to create storage reservation for operation {
+  operationId: 'operation-reservation-authority',
+  reservationId: 'res-operation-reservation-authority',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}

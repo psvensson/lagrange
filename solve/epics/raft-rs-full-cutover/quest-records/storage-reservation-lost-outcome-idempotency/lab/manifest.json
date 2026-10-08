@@ -1,0 +1,124 @@
+{
+  "schema": "storage-reservation-lab-evidence/1",
+  "base": "125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+  "machine": "adam-laptop",
+  "agent": "codex:durability-closure-reservation",
+  "testFile": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+  "carrier": {
+    "baseCommit": "853599787e4778d415e3e95d05479d51fc40cb84",
+    "candidateCommit": "94b89ce7db209865f1dea92c265524d089b7ab8f",
+    "candidateParent": "853599787e4778d415e3e95d05479d51fc40cb84",
+    "candidateProductTestFingerprint": "0f43966af4aab76760c4a3d147f8cabff6ab101dc202dade8b19856f4ef2b918",
+    "candidateProductTestFiles": [
+      {
+        "path": "src/rebalancer/rebalance-coordinator-owner-facade.js",
+        "sha256": "d9e51b69df55785d5d1077892d53121d537706f50e65cc2e4ccd0b2f55a3fa45",
+        "bytes": 13596
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-reservation-adoption.js",
+        "sha256": "0e65981f435f3c7f6963f2711325ea8413ed9fe6c380c098c1855ab3d74db8eb",
+        "bytes": 4850
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+        "sha256": "6f6ba3ea9eaa4817635c68e28d248042cf039cd24a34f3d3715c6e56b7f14f53",
+        "bytes": 22920
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-shared.js",
+        "sha256": "7038a581635f33f1963a2135899e1d84e3cfccbf3056a3ddb6cefbbc44d3ee17",
+        "bytes": 12511
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "sha256": "26087843a74b22e1a75e02281977c31d764581f27100ce214401f5972c7f83c4",
+        "bytes": 28193
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository-read-methods.js",
+        "sha256": "f075cfaf0d8932d6a661e123fb0784805b4caec3dfd75d9e7f245eb53bd16800",
+        "bytes": 23016
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository.js",
+        "sha256": "45df6e315257c5494b091f2fefe51b0bed236ad870d6ac6838c5e2c80106e71a",
+        "bytes": 33582
+      },
+      {
+        "path": "src/rebalancer/storage-reservation-authority.js",
+        "sha256": "38108b2e0a8444838361af3f2a2de7b980927dd2a0b768d7e7854b9c905eae32",
+        "bytes": 2943
+      },
+      {
+        "path": "test/rebalancer/admission-real-size-estimates.test.js",
+        "sha256": "9743f85ef0b21cf03574d41e1a6d7e7f97410c93f8e7a2e9cd80c1c35a128e9c",
+        "bytes": 14895
+      },
+      {
+        "path": "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+        "sha256": "8998df8eb05c28d2033308bc6871a9ef06a0270dd058ca63ef87f508f32a43e7",
+        "bytes": 31862
+      },
+      {
+        "path": "test/rebalancer/operation-log-persistence.property.test.js",
+        "sha256": "cca4e24fb5927e64521a83f18c9cf2b4bc165c7263fef9a6b1ed92647462a634",
+        "bytes": 16312
+      },
+      {
+        "path": "test/rebalancer/replica-operation-repository-tail-more-test-cases.js",
+        "sha256": "1f4073e22468212b0e1474f981ee797606697a2a88bca9d76319d36ee671d06b",
+        "bytes": 42226
+      },
+      {
+        "path": "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+        "sha256": "7d4aa8f81076d05fee86cff75ae2d6db70a666fd56bc9d6fa7f20098a4015051",
+        "bytes": 19878
+      },
+      {
+        "path": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "sha256": "1587e65059d57d6a450e8ce3dab48d6d303c74221a44b47df2132c4ead4d98f3",
+        "bytes": 24559
+      }
+    ]
+  },
+  "runs": [
+    {
+      "kind": "base-controlled-negative",
+      "commit": "853599787e4778d415e3e95d05479d51fc40cb84",
+      "exitCode": 1,
+      "fileAssertions": 80,
+      "tap": {
+        "total": 71,
+        "pass": 28,
+        "fail": 43
+      },
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/adam-base-carrier.txt",
+        "sha256": "ceda29114e829d2d390d5f5de4d3a42ed16114437d161e27a217b7d77bd33394",
+        "bytes": 62076
+      }
+    },
+    {
+      "kind": "candidate-positive",
+      "commit": "94b89ce7db209865f1dea92c265524d089b7ab8f",
+      "exitCode": 0,
+      "fileAssertions": 93,
+      "tap": {
+        "total": 93,
+        "pass": 93,
+        "fail": 0
+      },
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/adam-candidate-carrier.txt",
+        "sha256": "3f4b21d8e40978bb29c3cd5598920c3600e7cf632f2f7d77137c312d49932a54",
+        "bytes": 835
+      }
+    }
+  ],
+  "claims": [
+    "The base carrier reproduces the committed-then-lost INSERT answer followed by UNIQUE storage_reservations.reservation_id.",
+    "The candidate carrier passes the same owner witness on the same locked host with one durable hold and all authority negatives.",
+    "The listed candidate production and test files are byte-identical to the frozen review worktree at manifest creation."
+  ]
+}

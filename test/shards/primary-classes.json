@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1994,
+    "unit": 1995,
     "integration": 80,
     "bootstrap": 198,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2279,
-  "digest": "fnv1a32-ee5e4424",
+  "censusSize": 2280,
+  "digest": "fnv1a32-58e9ab78",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1791,6 +1791,7 @@
     "test/rebalancer/storage-capacity-ownership.test.js": "unit",
     "test/rebalancer/storage-capacity-semantic-projection-owner.test.js": "unit",
     "test/rebalancer/storage-pressure-behavior.test.js": "unit",
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": "unit",
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": "unit",
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": "unit",
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": "unit",

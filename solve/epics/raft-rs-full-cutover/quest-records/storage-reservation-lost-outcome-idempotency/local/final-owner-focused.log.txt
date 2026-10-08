@@ -1,0 +1,11 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js test/rebalancer/replica-operation-repository-owner-clock-waits.test.js test/rebalancer/replica-operation-membership-epoch-binding.test.js
+
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: ok cpu 49C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/rebalancer/replica-operation-repository-owner-clock-waits.test.js (49 assertions, 5179ms)
+ok test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js (100 assertions, 5623ms)
+ok test/rebalancer/replica-operation-membership-epoch-binding.test.js (105 assertions, 5647ms)
+# test-files total=3 pass=3 fail=0 assertions=254

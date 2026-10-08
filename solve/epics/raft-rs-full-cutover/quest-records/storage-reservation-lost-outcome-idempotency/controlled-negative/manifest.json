@@ -1,0 +1,40 @@
+{
+  "schema": "controlled-negative/1",
+  "quest": "storage-reservation-lost-outcome-idempotency",
+  "base": "125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+  "classification": "behavioral-red",
+  "positivePopulation": false,
+  "carrier": {
+    "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/controlled-negative/red-witness.test.js.txt",
+    "sha256": "6511fd8f3ba6c6a0fea2173be987d63a58d5ee247bcf673edf1ce00b3c4e8e37",
+    "bytes": 24918
+  },
+  "controlledNegative": {
+    "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/controlled-negative/base125bb-controlled-negative.tap",
+    "sha256": "a60eea279884b13eb69977279af684ece2e0b349e092001f91c82d240e440026",
+    "bytes": 59517
+  },
+  "sealRed": {
+    "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/controlled-negative/base125bb-seal-red.tap",
+    "sha256": "4df164de4951c8e666608813018d1953e0b7d9a28df0d13c35ce3bc49e356952",
+    "bytes": 4101
+  },
+  "reproduction": {
+    "worktree": "git worktree add --detach <scratch> 125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+    "overlay": "cp red-witness.test.js.txt <scratch>/test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+    "dependencies": "ln -s <source-node_modules> <scratch>/node_modules",
+    "command": "npm run test:file -- test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+    "expected": {
+      "exitCode": 1,
+      "testFiles": 1,
+      "testFilesPassed": 0,
+      "testFilesFailed": 1,
+      "assertions": 80,
+      "tapTotal": 71,
+      "tapPassed": 28,
+      "tapFailed": 43
+    },
+    "primaryFailure": "A committed reservation whose answer is lost is retried blindly and fails UNIQUE storage_reservations.reservation_id.",
+    "fidelity": "The inert carrier is the candidate witness with only the new error-constant import replaced by exact literal values so it loads on the immutable base. It exercises base production owners and contains no candidate product helper or method."
+  }
+}

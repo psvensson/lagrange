@@ -1,0 +1,14 @@
+placement-shell=1354283
+placement-head=94b89ce7db209865f1dea92c265524d089b7ab8f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:1.9 mode:local retry: timeout: lanecap:7
+placement-pid=1354709
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 80C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 19C (nvme/Composite)
+ok test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js (93 assertions, 1808ms)
+# test-files total=1 pass=1 fail=0 assertions=93
+{"sha":"94b89ce7db209865f1dea92c265524d089b7ab8f","machine":"adam-laptop","file":"test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js","status":0,"reason":null}

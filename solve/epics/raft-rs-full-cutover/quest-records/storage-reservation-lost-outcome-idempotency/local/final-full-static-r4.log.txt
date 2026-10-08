@@ -1,0 +1,294 @@
+
+> lagrange-server@0.2.6 test:static
+> npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:no-legacy-consensus-references && npm run audit:quest-log-append-only && npm run audit:closed-quest-shape && npm run audit:steering-diet && npm run audit:rule-set && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint
+
+
+> lagrange-server@0.2.6 test:unused
+> knip --exclude exports,duplicates
+
+Configuration hints (2)
+node-fetch                  knip.json  Remove from ignoreDependencies   
+test/**/*.test-part-*.js    knip.json  Refine entry pattern (no matches)
+
+> lagrange-server@0.2.6 test:unused:prod
+> knip --production --include dependencies
+
+
+> lagrange-server@0.2.6 test:unused:ratchet
+> node scripts/check-unused-exports.js
+
+Unused-export ratchet OK: 1422/1422 unused export(s) across 333 file(s).
+
+> lagrange-server@0.2.6 test:deps
+> depcruise --config dependency-cruiser.config.cjs src scripts test
+
+
+✔ no dependency violations found (5049 modules, 20756 dependencies cruised)
+
+
+> lagrange-server@0.2.6 audit:file-size
+> node scripts/check-file-size-thresholds.js
+
+Source oversized-file ratchet: 27/27 over 800 lines.
+Test oversized-file ratchet: 21/21 over 1500 lines.
+
+Largest oversized files (25 max):
+2820 test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js (threshold 1500)
+2232 test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js (threshold 1500)
+2082 test/diagnostics/topology-convergence-graph.test.js (threshold 1500)
+1916 test/distributed/harness/cluster-class-lifecycle-base.js (threshold 1500)
+1877 test/rebalancer/replace-replica-workflow-tail-more-test-cases.js (threshold 1500)
+1873 test/distributed/harness/assertions-convergence-wait.js (threshold 1500)
+1864 test/bootstrap/node-joining-service.test.js (threshold 1500)
+1770 test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js (threshold 1500)
+1764 test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (threshold 1500)
+1740 test/rebalancer/rebalance-coordinator-outcome-routing.test.js (threshold 1500)
+1714 test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js (threshold 1500)
+1689 test/distributed/harness/post-rebalance-closure-contract.js (threshold 1500)
+1647 test/distributed/harness/__tests__/cluster-active-wait-startup-progress-witness-test-cases.js (threshold 1500)
+1633 test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js (threshold 1500)
+1632 src/raft/raft-rs-runtime-owner.js (threshold 800)
+1624 test/distributed/harness/cluster-class-control-snapshot-recovery.js (threshold 1500)
+1597 test/distributed/harness/cluster-class-quiescence.js (threshold 1500)
+1595 test/distributed/harness/report-writer.js (threshold 1500)
+1588 test/logging/logs-table-service.test.js (threshold 1500)
+1568 test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js (threshold 1500)
+1555 test/distributed/harness/__tests__/report-writer.test.js (threshold 1500)
+1513 test/distributed/harness/__tests__/run.test.js (threshold 1500)
+1128 src/partition/partition-service-entry-apply-base.js (threshold 800)
+1068 src/control-plane/control-plane-readiness-priority-recovery-planning.js (threshold 800)
+1033 src/rebalancer/operation-workflow-dispatch-response-reconcile.js (threshold 800)
+
+> lagrange-server@0.2.6 test:complexity
+> node scripts/check-complexity.js
+
+Complexity ratchet OK: 1757/1757 violations (threshold: 12).
+Saved complexity report to test-output/analysis/complexity-src-test.json.
+
+> lagrange-server@0.2.6 test:metrics
+> npm run test:complexity:cognitive && npm run test:cycles && npm run test:duplication
+
+
+> lagrange-server@0.2.6 test:complexity:cognitive
+> node scripts/check-cognitive-complexity.js
+
+Cognitive complexity ratchet OK: 152/152 violations (threshold: 20).
+Saved cognitive complexity report to test-output/analysis/cognitive-complexity-src-scripts.json.
+
+> lagrange-server@0.2.6 test:cycles
+> node scripts/check-circular-dependencies.js
+
+Circular dependency ratchet OK: 0/0 cycle group(s).
+Saved cycle report to test-output/analysis/madge-circular-src-scripts-test.json.
+
+> lagrange-server@0.2.6 test:duplication
+> node scripts/check-duplication.js
+
+[32mJSON report saved to test-output/analysis/jscpd-src-scripts/jscpd-report.json[39m
+[src+scripts] Duplication ratchet OK: 48/48 clone group(s), 1510/1510 duplicated line(s).
+Saved duplication report to test-output/analysis/jscpd-src-scripts/jscpd-report.json.
+[32mJSON report saved to test-output/analysis/jscpd-test/jscpd-report.json[39m
+[test] Duplication ratchet OK: 706/706 clone group(s), 26655/26655 duplicated line(s).
+Saved duplication report to test-output/analysis/jscpd-test/jscpd-report.json.
+
+> lagrange-server@0.2.6 test:metadata-gateway:audit
+> node scripts/check-unified-system-metadata-gateway.js
+
+[unified-system-metadata-gateway] ok
+
+> lagrange-server@0.2.6 audit:runtime-grammar
+> node scripts/check-runtime-grammar-contracts.js && npm run audit:state-machine-pressure
+
+Scanned 15 JavaScript files
+Found 0 runtime-grammar-contract violations
+
+> lagrange-server@0.2.6 audit:state-machine-pressure
+> node scripts/check-state-machine-pressure-preflight.js
+
+State-machine pressure preflight: pass ready=true static=7 snapshots=0: issues=0
+
+> lagrange-server@0.2.6 audit:operation-progress-authority
+> node scripts/check-operation-progress-authority.js
+
+operation progress authority guard passed
+
+> lagrange-server@0.2.6 audit:service-portability-claims
+> node scripts/check-service-portability-claims.js
+
+service-portability claims: valid
+
+> lagrange-server@0.2.6 audit:current-capabilities
+> node scripts/check-current-capabilities.js
+
+current capabilities: valid
+
+> lagrange-server@0.2.6 audit:cli-docs
+> node scripts/check-cli-docs.js
+
+CLI documentation: valid
+
+> lagrange-server@0.2.6 audit:closure-ledger
+> node scripts/closure-ledger-state.js --check-state
+
+closure ledger STATE check: 43 records normalized, 0 drift.
+
+> lagrange-server@0.2.6 audit:no-kiro
+> node scripts/check-no-kiro-refs.js
+
+no-kiro guard: clean (no live `.kiro/` references).
+
+> lagrange-server@0.2.6 audit:no-legacy-naming
+> node scripts/check-no-legacy-naming.js
+
+no-legacy-naming guard: clean (CLI naming and public service surface).
+
+> lagrange-server@0.2.6 audit:no-legacy-consensus-references
+> node scripts/checks/no-legacy-consensus-reference-ratchet.js
+
+no-legacy-consensus-reference-ratchet: ratchet OK: 0/0 retired consensus references in 0 of 5320 scanned files (strict target 0: npm run audit:no-legacy-consensus-references:strict; scope src/ test/ scripts/ examples/ architecture/ docs/current package.json package-lock.json Dockerfile test/distributed/; excluded solve/)
+
+> lagrange-server@0.2.6 audit:quest-log-append-only
+> node scripts/checks/check-quest-log-append-only.js
+
+quest-log append-only: clean
+
+> lagrange-server@0.2.6 audit:closed-quest-shape
+> node scripts/checks/check-closed-quest-shape.js
+
+closed-quest shape: clean
+
+> lagrange-server@0.2.6 audit:steering-diet
+> node scripts/checks/check-steering-diet.js
+
+{
+  "rules": 27,
+  "ruleProblems": [],
+  "alwaysLoadFiles": [
+    "AGENTS.md",
+    "docs/steering/router.md",
+    "docs/steering/rules.md"
+  ],
+  "alwaysLoadLines": 360,
+  "steeringSourceLines": 555,
+  "steeringCorpusLines": 875,
+  "unregisteredOperations": []
+}
+
+> lagrange-server@0.2.6 audit:rule-set
+> node scripts/checks/check-rule-set.js
+
+{
+  "revision": 3,
+  "sealedRules": 27,
+  "ruleBodies": 27,
+  "offences": []
+}
+
+> lagrange-server@0.2.6 audit:impact-contracts
+> node scripts/checks/impact-contract-registry.js
+
+impact-contracts: PASS (49 contracts, 20 coupled pairs, sha256:dc5ec4c42720113468b7f257bdea15a51bde67036f2e378d6bab8a6c71872ee9)
+
+> lagrange-server@0.2.6 audit:shards
+> node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check
+
+curated test shards: current
+primary classification OK: 2279 tests (unit=1994 integration=80 bootstrap=198 convergence-probe=3 packaging=4)
+resource classification OK — 2279 tests, digest fnv1a32-949b391f
+subsystem classification OK — 2279 tests, 22 subsystems, digest fnv1a32-6492b572
+
+> lagrange-server@0.2.6 audit:guidelines
+> npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary
+
+
+> lagrange-server@0.2.6 audit:guideline:literals
+> node scripts/check-guideline-literals.js
+
+Scanned 2094 JavaScript files
+Found 0 new literal-guideline violations
+Matched 1268 inherited literal-guideline baseline violations
+
+> lagrange-server@0.2.6 audit:guideline:decision-boundaries
+> node scripts/check-guideline-decision-boundaries.js
+
+Scanned 2094 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 758 inherited decision-boundary baseline violations
+
+> lagrange-server@0.2.6 audit:guideline:boundary-mode-contracts
+> node scripts/check-guideline-boundary-mode-contracts.js
+
+Scanned 768 JavaScript files
+Found 0 boundary-mode-contract hotspot violations
+
+> lagrange-server@0.2.6 audit:guideline:hot-path-diagnostics
+> node scripts/check-guideline-hot-path-diagnostics.js
+
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 31 inherited hot-path diagnostics baseline violations
+
+> lagrange-server@0.2.6 audit:guideline:deferred-outcomes
+> node scripts/check-guideline-deferred-outcomes.js
+
+Scanned 2 JavaScript files
+Found 0 structured deferred-outcome hotspot violations
+
+> lagrange-server@0.2.6 audit:guideline:silent-catch
+> node scripts/check-guideline-silent-catch.js
+
+Scanned 1796 JavaScript files
+Found 0 silent catch violations
+Matched 93 inherited silent-catch baseline violations
+
+> lagrange-server@0.2.6 audit:guideline:ambient-intrinsics
+> node scripts/check-guideline-ambient-intrinsics.js
+
+Scanned 551 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 3850 inherited ambient-intrinsic baseline violations
+
+> lagrange-server@0.2.6 audit:style-terminal-vocabulary
+> node scripts/check-style-terminal-vocabulary.js
+
+Scanned 2094 JavaScript files
+Found 0 terminalize vocabulary violations
+Matched 4 inherited terminalize-vocabulary baseline violations
+
+> lagrange-server@0.2.6 audit:doc-audience
+> node scripts/check-doc-audience.js
+
+Documentation path boundary holds.
+
+> lagrange-server@0.2.6 audit:doc-ascii
+> node scripts/checks/check-doc-ascii-hyphens.js
+
+Public documentation is em-dash free.
+
+> lagrange-server@0.2.6 audit:documentation-current
+> node scripts/check-documentation-current-state.js
+
+Documentation current-state check passed: 506 files; {"steering":5,"history":1,"current":148,"compatibility":4,"evidence":59,"planning":287,"generated":2}.
+
+> lagrange-server@0.2.6 audit:roadmap-authority
+> node scripts/check-roadmap-authority.js
+
+Roadmap authority check passed: 56 feature rows.
+
+> lagrange-server@0.2.6 steering:check
+> npm run steering:generate && git diff --quiet -- docs/steering/generated && node scripts/check-steering-freshness.js
+
+
+> lagrange-server@0.2.6 steering:generate
+> node scripts/gen-tools-index.js && node scripts/gen-solve-commands-index.js
+
+Wrote /mnt/data/peter/projects/lagrange/.claude/worktrees/codex-reservation-idempotency/docs/steering/generated/tools-index.md
+Wrote /mnt/data/peter/projects/lagrange/.claude/worktrees/codex-reservation-idempotency/docs/steering/generated/solve-commands.md
+
+> lagrange-server@0.2.6 lint:scripts
+> eslint scripts/
+
+
+> lagrange-server@0.2.6 lint
+> eslint src/ test/ --ignore-pattern 'test/.gitkeep'
+

@@ -1,0 +1,13 @@
+placement-shell=940063
+placement-head=94b89ce7db209865f1dea92c265524d089b7ab8f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:1.7 mode:local retry: timeout: lanecap:11
+placement-pid=940493
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: unmeasurable (no sensors)
+Terminated
+{"sha":"94b89ce7db209865f1dea92c265524d089b7ab8f","machine":"carinas-windows","file":"test/integration/public-binding-cell-invocation-seam.integration.test.js","status":null,"reason":"deadline"}
+Terminated

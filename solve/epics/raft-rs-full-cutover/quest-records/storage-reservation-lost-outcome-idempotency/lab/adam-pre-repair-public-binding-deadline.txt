@@ -1,0 +1,14 @@
+placement-shell=1355745
+placement-head=94b89ce7db209865f1dea92c265524d089b7ab8f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry: timeout: lanecap:7
+placement-pid=1356165
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: hold cpu 78C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 78C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 19C (nvme/Composite)
+Terminated
+{"sha":"94b89ce7db209865f1dea92c265524d089b7ab8f","machine":"adam-laptop","file":"test/integration/public-binding-cell-invocation-seam.integration.test.js","status":null,"reason":"deadline"}
+Terminated

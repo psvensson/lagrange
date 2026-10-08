@@ -1205,7 +1205,10 @@ export function registerReplicaOperationRepositoryTailMoreTests({
     const coordinator = createTestCoordinator();
     try {
       const move = {
-        type: OperationType.ADD,
+        // This test isolates the coordinator-to-repository read facade. Use a
+        // non-storage-increasing operation so the reduced repository fixture
+        // does not pretend it durably owns storage_reservations.
+        type: OperationType.REMOVE,
         partitionId: TEST_PARTITION_ID,
         entityType: TEST_ENTITY_TYPE,
         entityId: TEST_PARTITION_ID,

@@ -1,0 +1,312 @@
+{
+  "schema": "storage-reservation-corrected-lab-evidence/1",
+  "base": "125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+  "rejectedReviewFingerprint": "3e7444575061480d55dc1e93b2e5f4d37b7804ce3e07f8370c126407eb237331",
+  "carrier": {
+    "baseControlledNegativeCommit": "853599787e4778d415e3e95d05479d51fc40cb84",
+    "preRepairCandidateCommit": "94b89ce7db209865f1dea92c265524d089b7ab8f",
+    "correctedCandidateCommit": "08daa49b685c3daae0951a1e43402979f9efba84",
+    "correctedParent": "94b89ce7db209865f1dea92c265524d089b7ab8f",
+    "correctedSourceFingerprint": "63f124b02b2004c070aee303d2234ed5893abcbb6eaec4cd893b6524fa0b239c",
+    "correctedSourceFiles": [
+      {
+        "path": "src/rebalancer/rebalance-coordinator-owner-facade.js",
+        "sha256": "d9e51b69df55785d5d1077892d53121d537706f50e65cc2e4ccd0b2f55a3fa45",
+        "bytes": 13596
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-reservation-adoption.js",
+        "sha256": "0e65981f435f3c7f6963f2711325ea8413ed9fe6c380c098c1855ab3d74db8eb",
+        "bytes": 4850
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+        "sha256": "a6a14b89f39546a8cce4deaac9327434022ee65c4a3a30239bd233c5f5729fd1",
+        "bytes": 24560
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-shared.js",
+        "sha256": "7038a581635f33f1963a2135899e1d84e3cfccbf3056a3ddb6cefbbc44d3ee17",
+        "bytes": 12511
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "sha256": "26087843a74b22e1a75e02281977c31d764581f27100ce214401f5972c7f83c4",
+        "bytes": 28193
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository-read-methods.js",
+        "sha256": "c0d1a676f65493281dc25a78d0c19a5664251e17991949bfd03b067a9da53ee1",
+        "bytes": 23421
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository.js",
+        "sha256": "b9752bfa033b943950057112f4030ecf5994a9090596acf0c926723fc544ee4d",
+        "bytes": 33606
+      },
+      {
+        "path": "src/rebalancer/storage-reservation-authority.js",
+        "sha256": "38108b2e0a8444838361af3f2a2de7b980927dd2a0b768d7e7854b9c905eae32",
+        "bytes": 2943
+      },
+      {
+        "path": "test/rebalancer/admission-real-size-estimates.test.js",
+        "sha256": "203b42d68ee336ccf475bd272c3870da5e0bf59eed0fc51b9f539aed55e0d8e0",
+        "bytes": 15336
+      },
+      {
+        "path": "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+        "sha256": "8998df8eb05c28d2033308bc6871a9ef06a0270dd058ca63ef87f508f32a43e7",
+        "bytes": 31862
+      },
+      {
+        "path": "test/rebalancer/operation-log-persistence.property.test.js",
+        "sha256": "4985d6aa097cab73f43622562c6af57d4187430fee44781cc6870a0784b3e97c",
+        "bytes": 17374
+      },
+      {
+        "path": "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js",
+        "sha256": "b1527cf20635822c44316ebe5da982c5352a3d75f35336746b94edb0c2d41c04",
+        "bytes": 14044
+      },
+      {
+        "path": "test/rebalancer/replica-operation-repository-tail-more-test-cases.js",
+        "sha256": "1f4073e22468212b0e1474f981ee797606697a2a88bca9d76319d36ee671d06b",
+        "bytes": 42226
+      },
+      {
+        "path": "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+        "sha256": "7d4aa8f81076d05fee86cff75ae2d6db70a666fd56bc9d6fa7f20098a4015051",
+        "bytes": 19878
+      },
+      {
+        "path": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "sha256": "4753b4788ef7de7a074e98fa663b7a7b5caf4664d34e87f5629001fe94fa3bf6",
+        "bytes": 27174
+      },
+      {
+        "path": "test/shards/impact-contracts.json",
+        "sha256": "dcbc8376ac62f2f00179d28fc0289e4f21c60aec925ede7ea0764bd4c62f936f",
+        "bytes": 71159
+      },
+      {
+        "path": "test/shards/impact-graph-seal.json",
+        "sha256": "70e23ca009e5464f0d9d0b90910b09d1e4269ae2fbd1c42a089bf62507a8e385",
+        "bytes": 452
+      },
+      {
+        "path": "test/shards/primary-classes.json",
+        "sha256": "76564e7f82cbeeaa3ff040273f6b798535597c727a74acdf1a63ce29a952aa99",
+        "bytes": 166302
+      },
+      {
+        "path": "test/shards/resource-classes.json",
+        "sha256": "6e4840301a890bbac99320d5b19c214c4d334535e1eef0b1c732a871a98004e9",
+        "bytes": 173934
+      },
+      {
+        "path": "test/shards/subsystem-classes.json",
+        "sha256": "92a1e2c0dc945ae364be5f27411dc1ca088321c0b8e674db1a2b1e13ce23c74e",
+        "bytes": 648895
+      }
+    ],
+    "finalCandidateCommit": "49a9ffb986ba670763432de39d6fc7a182153f3e",
+    "finalParent": "08daa49b685c3daae0951a1e43402979f9efba84",
+    "finalSourceFingerprint": "4de018ed9a28b2a7f4d09e10c8f5b62a04c6a957dc2a7914e007421f2d10206e",
+    "finalSourceFiles": [
+      {
+        "path": "src/rebalancer/rebalance-coordinator-owner-facade.js",
+        "sha256": "d9e51b69df55785d5d1077892d53121d537706f50e65cc2e4ccd0b2f55a3fa45",
+        "bytes": 13596
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-reservation-adoption.js",
+        "sha256": "0e65981f435f3c7f6963f2711325ea8413ed9fe6c380c098c1855ab3d74db8eb",
+        "bytes": 4850
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+        "sha256": "17d34c62970b10f8d00dd3b51d21f1424a6ab96249fae73f576a7adc13b76f1d",
+        "bytes": 24550
+      },
+      {
+        "path": "src/rebalancer/rebalance-coordinator-shared.js",
+        "sha256": "7038a581635f33f1963a2135899e1d84e3cfccbf3056a3ddb6cefbbc44d3ee17",
+        "bytes": 12511
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "sha256": "26087843a74b22e1a75e02281977c31d764581f27100ce214401f5972c7f83c4",
+        "bytes": 28193
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository-read-methods.js",
+        "sha256": "c0d1a676f65493281dc25a78d0c19a5664251e17991949bfd03b067a9da53ee1",
+        "bytes": 23421
+      },
+      {
+        "path": "src/rebalancer/replica-operation-repository.js",
+        "sha256": "b9752bfa033b943950057112f4030ecf5994a9090596acf0c926723fc544ee4d",
+        "bytes": 33606
+      },
+      {
+        "path": "src/rebalancer/storage-reservation-authority.js",
+        "sha256": "38108b2e0a8444838361af3f2a2de7b980927dd2a0b768d7e7854b9c905eae32",
+        "bytes": 2943
+      },
+      {
+        "path": "test/rebalancer/admission-real-size-estimates.test.js",
+        "sha256": "203b42d68ee336ccf475bd272c3870da5e0bf59eed0fc51b9f539aed55e0d8e0",
+        "bytes": 15336
+      },
+      {
+        "path": "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+        "sha256": "8998df8eb05c28d2033308bc6871a9ef06a0270dd058ca63ef87f508f32a43e7",
+        "bytes": 31862
+      },
+      {
+        "path": "test/rebalancer/operation-log-persistence.property.test.js",
+        "sha256": "4985d6aa097cab73f43622562c6af57d4187430fee44781cc6870a0784b3e97c",
+        "bytes": 17374
+      },
+      {
+        "path": "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js",
+        "sha256": "b1527cf20635822c44316ebe5da982c5352a3d75f35336746b94edb0c2d41c04",
+        "bytes": 14044
+      },
+      {
+        "path": "test/rebalancer/replica-operation-repository-tail-more-test-cases.js",
+        "sha256": "1f4073e22468212b0e1474f981ee797606697a2a88bca9d76319d36ee671d06b",
+        "bytes": 42226
+      },
+      {
+        "path": "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
+        "sha256": "7d4aa8f81076d05fee86cff75ae2d6db70a666fd56bc9d6fa7f20098a4015051",
+        "bytes": 19878
+      },
+      {
+        "path": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "sha256": "4753b4788ef7de7a074e98fa663b7a7b5caf4664d34e87f5629001fe94fa3bf6",
+        "bytes": 27174
+      },
+      {
+        "path": "test/shards/impact-contracts.json",
+        "sha256": "dcbc8376ac62f2f00179d28fc0289e4f21c60aec925ede7ea0764bd4c62f936f",
+        "bytes": 71159
+      },
+      {
+        "path": "test/shards/primary-classes.json",
+        "sha256": "76564e7f82cbeeaa3ff040273f6b798535597c727a74acdf1a63ce29a952aa99",
+        "bytes": 166302
+      },
+      {
+        "path": "test/shards/resource-classes.json",
+        "sha256": "6e4840301a890bbac99320d5b19c214c4d334535e1eef0b1c732a871a98004e9",
+        "bytes": 173934
+      },
+      {
+        "path": "test/shards/subsystem-classes.json",
+        "sha256": "92a1e2c0dc945ae364be5f27411dc1ca088321c0b8e674db1a2b1e13ce23c74e",
+        "bytes": 648895
+      }
+    ]
+  },
+  "runner": {
+    "focusedHelper": "/tmp/raft-rs-takeover-20261006/run-focused-lab-shard-with-bundle.mjs",
+    "runtimeHelper": "/tmp/raft-rs-takeover-20261006/run-focused-lab-shard-runtime-with-bundle.mjs",
+    "runtimeHelperSha256": "89f7d3cd514763b50f54403f26d525437297aea0be28e9809b38f27bc8d4f3a2",
+    "runtimeOuterPlacementDeadlineMs": 420000,
+    "testTimingChanged": false
+  },
+  "runs": [
+    {
+      "kind": "final-owner-positive",
+      "machine": "adam-laptop",
+      "agent": "codex:durability-closure-reservation-final",
+      "testFile": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+      "commit": "49a9ffb986ba670763432de39d6fc7a182153f3e",
+      "exitCode": 0,
+      "fileAssertions": 100,
+      "tap": {
+        "total": 100,
+        "pass": 100,
+        "fail": 0
+      },
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/adam-final-owner-witness.txt",
+        "sha256": "8576b85db557f531f8bfb6e2eaf43d1ac030483c38e5ac51df740a861a875722",
+        "bytes": 835
+      }
+    },
+    {
+      "kind": "corrected-owner-positive",
+      "machine": "adam-laptop",
+      "agent": "codex:durability-closure-reservation-corrected",
+      "testFile": "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+      "commit": "08daa49b685c3daae0951a1e43402979f9efba84",
+      "exitCode": 0,
+      "fileAssertions": 100,
+      "tap": {
+        "total": 100,
+        "pass": 100,
+        "fail": 0
+      },
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/adam-corrected-owner-witness.txt",
+        "sha256": "93b6ca50a299af70833317ec71f6ce533ff8927d0e160d9896a555eb30edae95",
+        "bytes": 835
+      }
+    },
+    {
+      "kind": "corrected-public-binding-runtime-red",
+      "machine": "carinas-windows",
+      "agent": "codex:durability-closure-reservation-runtime-corrected",
+      "testFile": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+      "commit": "08daa49b685c3daae0951a1e43402979f9efba84",
+      "exitCode": 1,
+      "durationMs": 287567,
+      "fileAssertions": 2,
+      "tap": {
+        "total": 1,
+        "pass": 0,
+        "fail": 1
+      },
+      "classification": "sys-postgres-wire ADD operations time out in SENDING before endpoint publication; no reservation UNIQUE or reservation-creation-failed signature",
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/carina-corrected-public-binding-runtime.txt",
+        "sha256": "002824743eafa2623a795946ddc00419c77ad107346f7937e9cd1a20a8470b01",
+        "bytes": 21353
+      }
+    },
+    {
+      "kind": "pre-repair-public-binding-no-verdict",
+      "machine": "adam-laptop",
+      "commit": "94b89ce7db209865f1dea92c265524d089b7ab8f",
+      "outerDeadlineMs": 180000,
+      "classification": "placement deadline; no TAP verdict",
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/adam-pre-repair-public-binding-deadline.txt",
+        "sha256": "66e15d013b474a68f8f4fb298ba6dbcbe42b19c91e7410d3b4ea6dc6eaee2654",
+        "bytes": 724
+      }
+    },
+    {
+      "kind": "pre-repair-public-binding-no-verdict",
+      "machine": "carinas-windows",
+      "commit": "94b89ce7db209865f1dea92c265524d089b7ab8f",
+      "outerDeadlineMs": 180000,
+      "classification": "placement deadline; no TAP verdict",
+      "evidence": {
+        "path": "solve/epics/raft-rs-full-cutover/quest-records/storage-reservation-lost-outcome-idempotency/lab/carina-pre-repair-public-binding-deadline.txt",
+        "sha256": "303d8cc9c265fc7b0f2acdcd466c5f6e40dec1edc4361a4122d74decc7ea71e8",
+        "bytes": 572
+      }
+    }
+  ],
+  "claims": [
+    "The final carrier after the required terminal-state vocabulary correction passes the exact owner witness on locked Adam and matches the review worktree across every listed production, test, registry, and classification file; the excluded impact seal is checkout-derived metadata.",
+    "The corrected deterministic owner witness passes on a locked remote host.",
+    "The exact corrected public Binding runtime does not reproduce the reservation UNIQUE signature, but it is red before Binding topology because sys-postgres-wire ADD remains in SENDING until its existing step bound is spent.",
+    "The public Binding runtime red is preserved as a separate dependency and is not claimed as reservation end-to-end success."
+  ]
+}

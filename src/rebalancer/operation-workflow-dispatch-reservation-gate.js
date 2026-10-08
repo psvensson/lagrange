@@ -8,6 +8,7 @@
 // dispatch as OPERATION_NOT_DISPATCHABLE.
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
+  buildReservationAuthorityUnavailableError,
 } from './operation-reservation-attempt-outcome.js';
 import {
   repairOperationRowForGateRepairedReservation,
@@ -23,6 +24,16 @@ const DISPATCH_RESERVATION_UNAVAILABLE_PREFIX =
   'storage reservation unavailable: ';
 const DISPATCH_RESERVATION_REPAIR_FAILED_FALLBACK =
   'reservation repair failed';
+
+function assertReservationAuthorityAvailable(attempt) {
+  if (attempt?.authorityUnavailable !== true) {
+    return;
+  }
+  throw buildReservationAuthorityUnavailableError(
+    DISPATCH_RESERVATION_UNAVAILABLE_PREFIX +
+      (attempt.error || DISPATCH_RESERVATION_REPAIR_FAILED_FALLBACK),
+  );
+}
 
 function isStorageIncreasingOperationType(operationType) {
   return (
@@ -97,6 +108,7 @@ async function ensureDispatchReservationOrSkip(owner, operation) {
     await repairGateRepairedOperationRow(owner, operation, attempt);
     return null;
   }
+  assertReservationAuthorityAvailable(attempt);
   return owner.buildSkippedOperationResult(
     OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
     operation.operationId,

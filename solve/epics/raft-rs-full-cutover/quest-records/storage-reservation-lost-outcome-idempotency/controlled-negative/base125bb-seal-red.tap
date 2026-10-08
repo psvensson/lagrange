@@ -1,0 +1,117 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 56C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js (2 assertions, 854ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-owner-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Creating operation {
+  operationId: 'ee517474-42c9-4844-807f-f254ef78b96b',
+  type: 'ADD',
+  partitionId: 'partition-lost-reservation-answer',
+  targetNodeId: 'reservation-target-node',
+  entityType: 'partition',
+  entityId: 'partition-lost-reservation-answer',
+  bootstrapTopologyStamped: true,
+  bootstrapReplicaIdCount: 2
+}
+Shutting down RebalanceCoordinator { nodeId: 'reservation-owner-node', inFlightOperations: 0 }
+# Subtest: lost reservation INSERT answer adopts one exact durable capacity hold
+    not ok 1 - Storage reservation creation failed for operation ee517474-42c9-4844-807f-f254ef78b96b: UNIQUE constraint failed: storage_reservations.reservation_id
+      ---
+      stack: >
+        RebalanceCoordinator.createOperationRecordInternal
+        (src/rebalancer/rebalance-coordinator-operation-creation.js:858:13)
+      
+        async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate
+        (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:732:14)
+      
+        async Test.<anonymous>
+        (test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js:253:25)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-creation.js
+        lineNumber: 858
+        columnNumber: 13
+        typeName: RebalanceCoordinator
+        methodName: createOperationRecordInternal
+        functionName: RebalanceCoordinator.createOperationRecordInternal
+      tapCaught: returnedPromiseRejection
+      source: |2
+              OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED
+            ) {
+              throw new Error(
+        ------------^
+                RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX +
+                  `${operation.operationId}: ` +
+      ...
+    
+    1..1
+not ok 1 - lost reservation INSERT answer adopts one exact durable capacity hold # time=45.277ms
+  ---
+  at:
+    fileName: test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    lineNumber: 242
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('lost reservation INSERT answer adopts one exact durable capacity hold',
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+1..1
+# { total: 1, pass: 0, fail: 1 }
+# time=50.845ms
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'ee517474-42c9-4844-807f-f254ef78b96b',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'ee517474-42c9-4844-807f-f254ef78b96b',
+    replica_id: 'partition-lost-reservation-answer-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1791302368751,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1791302368755
+}
+Failed to create storage reservation for operation {
+  operationId: 'ee517474-42c9-4844-807f-f254ef78b96b',
+  reservationId: 'res-ee517474-42c9-4844-807f-f254ef78b96b',
+  error: 'UNIQUE constraint failed: storage_reservations.reservation_id'
+}
+# test-files total=1 pass=0 fail=1 assertions=2

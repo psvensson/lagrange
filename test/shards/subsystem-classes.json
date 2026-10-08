@@ -12,7 +12,7 @@
     "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 21,
-    "placement-rebalance": 259,
+    "placement-rebalance": 260,
     "query-sql": 166,
     "release-packaging": 15,
     "runtime-primitives": 22,
@@ -25,10 +25,10 @@
     "transport-messaging": 89,
     "wasm-toolchain": 57
   },
-  "censusSize": 2279,
-  "digest": "fnv1a32-c28b8998",
+  "censusSize": 2280,
+  "digest": "fnv1a32-4912b6a3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-220cc15c",
+  "observationDigest": "fnv1a32-fcf6d7bb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1810,6 +1810,7 @@
     "test/rebalancer/storage-capacity-ownership.test.js": "placement-rebalance",
     "test/rebalancer/storage-capacity-semantic-projection-owner.test.js": "placement-rebalance",
     "test/rebalancer/storage-pressure-behavior.test.js": "placement-rebalance",
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": "placement-rebalance",
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-preservation.property.test.js": "placement-rebalance",
     "test/rebalancer/system-partition-start-delay-removal.property.test.js": "placement-rebalance",
@@ -10564,6 +10565,7 @@
         "src/rebalancer/replica-operation-repository-row-methods.js",
         "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/replica-status.js",
+        "src/rebalancer/storage-reservation-authority.js",
         "src/rebalancer/unified-rebalancer-move-execution.js",
         "src/rebalancer/unified-rebalancer-rebalance-loop.js"
       ],
@@ -10633,7 +10635,10 @@
     "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
-        "src/rebalancer/rebalance-coordinator.js"
+        "src/constants/index.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/replica-status.js",
+        "src/rebalancer/storage-capacity-constants.js"
       ]
     },
     "test/rebalancer/reservation-reconcile-premature-orphan-release.test.js": {
@@ -10769,6 +10774,12 @@
       ],
       "directories": [
         "src/rebalancer"
+      ]
+    },
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/rebalancer/rebalance-coordinator.js"
       ]
     },
     "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js": {
