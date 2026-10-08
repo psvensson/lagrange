@@ -80,6 +80,8 @@ async function setup(t, {initial = false} = {}) {
   const clock = new VirtualTimeSource({startMs: NOW});
   let writes = 0;
   let claimWrites = 0;
+  let resolutionWrites = 0;
+  let resolutionChanges = 0;
   let fault = null;
   let failReads = false;
   const pending = [];
@@ -96,9 +98,11 @@ async function setup(t, {initial = false} = {}) {
   const gateway = {
     async executeQuery(sql, params = []) {
       if (sql.includes('SET message_group_membership_phase') ||
-        sql.includes('SET message_group_membership_owner_claim')) {
+        sql.includes('SET message_group_membership_owner_claim') ||
+        sql.includes('SET message_group_membership_lane_key')) {
         if (sql.includes('SET message_group_membership_phase')) writes++;
-        else claimWrites++;
+        else if (sql.includes('SET message_group_membership_owner_claim')) claimWrites++;
+        else resolutionWrites++;
         const action = fault; fault = null;
         if (typeof action === 'function') await action();
         if (action === 'delayed') {
@@ -107,6 +111,9 @@ async function setup(t, {initial = false} = {}) {
         }
         if (action === 'refused') return {success: false, error: 'authorization write refused'};
         const answer = run(sql, params);
+        if (sql.includes('SET message_group_membership_lane_key')) {
+          resolutionChanges += answer.changes ?? 0;
+        }
         if (action === 'lost-and-unreadable') failReads = true;
         if (action === 'lost' || action === 'lost-and-unreadable') {
           return {success: false, error: 'authorization result lost'};
@@ -168,6 +175,10 @@ async function setup(t, {initial = false} = {}) {
   row: () => db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?').get(O),
   get writes() {
     return writes;
+  }, get resolutionWrites() {
+    return resolutionWrites;
+  }, get resolutionChanges() {
+    return resolutionChanges;
   }, get claimWrites() {
     return claimWrites;
   },
@@ -465,4 +476,149 @@ test('a non-NULL invalid lease must not match the NULL-lease CAS', async (t) => 
       assert.equal(f.row().message_group_membership_owner_claim, null);
     });
   }
+});
+
+
+async function settleInitial(f, repository = f.repository, identity = ENCODED_IDENTITY) {
+  assert.equal(typeof repository.settleMessageGroupMembershipNonAdmission, 'function',
+    'the existing repository must own terminal-first membership resolution');
+  return repository.settleMessageGroupMembershipNonAdmission({operationId: O, identity});
+}
+function withoutResolution(row) {
+  const copy = {...row};
+  delete copy.message_group_membership_lane_key;
+  delete copy.message_group_membership_obligation_state;
+  return copy;
+}
+
+test('terminal-first NULL holder settles non-admission without creating an execution claim', async (t) => {
+  const f = await setup(t, {initial: true});
+  await terminal(f);
+  const before = f.row();
+  assert.equal((await settleInitial(f, f.repo(TARGET_NODE))).outcome, 'recorded');
+  assert.equal(f.row().message_group_membership_lane_key, null);
+  assert.equal(f.row().message_group_membership_obligation_state, 'definitive_non_admission');
+  assert.deepEqual(withoutResolution(f.row()), withoutResolution(before));
+  assert.equal(f.row().message_group_membership_owner_claim, null);
+  assert.equal(f.resolutionChanges, 1);
+  f.reopen();
+  assert.equal((await settleInitial(f, f.repo('third-node'))).outcome, 'recorded');
+  assert.equal(f.resolutionWrites, 1, 'exact replay recognizes the settled row');
+  assert.equal((await f.repository.claimMessageGroupMembershipOwner(f.claimRequest())).outcome, 'conflict');
+});
+
+test('terminal-first concurrent settlers may observe one resolution but mutate once', async (t) => {
+  const f = await setup(t, {initial: true}); await terminal(f);
+  const results = await Promise.all([settleInitial(f), settleInitial(f, f.repo(TARGET_NODE))]);
+  assert.ok(results.every((r) => r.outcome === 'recorded'));
+  assert.equal(f.resolutionChanges, 1);
+  assert.equal(f.row().message_group_membership_owner_claim, null);
+});
+
+test('terminal-first resolver cannot settle a live operation or authorize a learner', async (t) => {
+  const f = await setup(t, {initial: true}); const before = f.row();
+  assert.equal((await settleInitial(f)).outcome, 'conflict');
+  assert.deepEqual(f.row(), before); assert.equal(f.resolutionWrites, 0);
+});
+
+test('terminal-first existing holder must be current; expiry permits exact takeover then resolution', async (t) => {
+  const f = await setup(t, {initial: true});
+  assert.equal((await f.repository.claimMessageGroupMembershipOwner(f.claimRequest())).outcome, 'recorded');
+  await terminal(f);
+  assert.equal((await settleInitial(f, f.repo(TARGET_NODE))).outcome, 'stale_owner');
+  f.clock.advance(30000);
+  const next = f.repo(TARGET_NODE);
+  assert.equal((await next.claimMessageGroupMembershipOwner(f.claimRequest())).outcome, 'recorded');
+  assert.equal((await settleInitial(f, next)).outcome, 'recorded');
+  assert.equal(f.row().workflow_step, WORKFLOW_STEP.FAILED);
+});
+
+test('terminal-first held-claim renewal defeats stale resolution without erasing the winner', async (t) => {
+  const f = await setup(t, {initial: true});
+  await f.repository.claimMessageGroupMembershipOwner(f.claimRequest()); await terminal(f);
+  const before = f.row().message_group_membership_owner_claim;
+  f.fault(async () => {
+    f.clock.advance(1);
+    assert.equal((await f.repository.claimMessageGroupMembershipOwner(f.claimRequest())).outcome, 'recorded');
+  });
+  assert.equal((await settleInitial(f)).outcome, 'unknown');
+  assert.notEqual(f.row().message_group_membership_owner_claim, before);
+  assert.equal(f.row().message_group_membership_lane_key, `message-group:${GROUP}`);
+  assert.equal((await settleInitial(f)).outcome, 'recorded');
+});
+
+test('terminal-first cannot erase an issued permit, a stamp, or a changed source', async (t) => {
+  for (const [column, value] of [
+    ['message_group_membership_permit', JSON.stringify(prior)],
+    ['message_group_learner_stamp', JSON.stringify(learnerStamp)],
+    ['message_group_voter_stamp', '{}'],
+    ['message_group_removal_stamp', '{}'],
+    ['source_replica_id', 'wrong-source'],
+  ]) {
+    await t.test(column, async (t) => {
+      const f = await setup(t, {initial: true}); await terminal(f);
+      assert.equal(f.run(`UPDATE replica_operations SET ${column} = ? WHERE operation_id = ?`, [value, O]).changes, 1);
+      const before = f.row();
+      assert.equal((await settleInitial(f)).outcome, 'conflict');
+      assert.deepEqual(f.row(), before); assert.equal(f.resolutionWrites, 0);
+    });
+  }
+});
+
+test('terminal-first requires exact positive terminal time rather than a terminal-looking status', async (t) => {
+  for (const completion of [null, 0, -1]) {
+    await t.test(String(completion), async (t) => {
+      const f = await setup(t, {initial: true}); await terminal(f);
+      f.run('UPDATE replica_operations SET completed_at = ? WHERE operation_id = ?', [completion, O]);
+      assert.equal((await settleInitial(f)).outcome, 'conflict');
+      assert.equal(f.row().message_group_membership_lane_key, `message-group:${GROUP}`);
+    });
+  }
+});
+
+test('terminal-first lost reply and unavailable read remain exact replay, not a new grant', async (t) => {
+  const f = await setup(t, {initial: true}); await terminal(f);
+  f.fault('lost-and-unreadable');
+  assert.equal((await settleInitial(f)).outcome, 'unknown');
+  assert.equal(f.row().message_group_membership_lane_key, null);
+  f.reads(true); f.reopen();
+  assert.equal((await settleInitial(f)).outcome, 'recorded');
+  assert.equal(f.resolutionChanges, 1); assert.equal(f.resolutionWrites, 1);
+});
+
+test('terminal-first delayed losing SQL cannot rewrite a resolved lane', async (t) => {
+  const f = await setup(t, {initial: true}); await terminal(f);
+  f.fault('delayed');
+  assert.equal((await settleInitial(f)).outcome, 'unknown');
+  assert.equal(f.row().message_group_membership_lane_key, `message-group:${GROUP}`);
+  assert.equal((await settleInitial(f, f.repo(TARGET_NODE))).outcome, 'recorded');
+  assert.deepEqual(f.flush().map((r) => r.changes), [0]);
+});
+
+test('terminal-first cannot act on unavailable or changed current boot', async (t) => {
+  const f = await setup(t, {initial: true}); await terminal(f);
+  assert.equal((await settleInitial(f, f.repo('missing-node'))).outcome, 'unavailable');
+  f.fault(() => f.run('UPDATE nodes SET boot_incarnation = 2 WHERE node_id = ?', [OWNER]));
+  assert.equal((await settleInitial(f)).outcome, 'unknown');
+  assert.equal(f.row().message_group_membership_obligation_state, 'definitive_non_admission');
+});
+
+test('terminal-first resolution permits a distinct later operation through the existing lane index', async (t) => {
+  const f = await setup(t, {initial: true}); await terminal(f);
+  const old = await f.repository.queryAuthoritativeOperationById(O);
+  const nextIdentity = {...JSON.parse(ENCODED_IDENTITY), operationId: 'next-operation',
+    targetReplicaId: 'fresh-next-target', targetPeerId: peerOf('fresh-next-target'),
+    transitionIdentity: 'next-transition'};
+  const next = {...old, operationId: nextIdentity.operationId,
+    replicaId: nextIdentity.targetReplicaId, createdAt: NOW + 1, updatedAt: NOW + 1,
+    status: ReplicaStatus.PENDING, workflowStep: WORKFLOW_STEP.PENDING,
+    completedAt: null, stepsHistory: [], messageGroupMembershipOwnerClaim: null,
+    messageGroupMembershipIdentity: JSON.stringify(nextIdentity)};
+  const conflict = await f.repository.persistNewOperation(next, {returnDisposition: true});
+  assert.equal(conflict.disposition, 'membership_lane_conflict');
+  assert.equal((await settleInitial(f)).outcome, 'recorded');
+  await f.repository.persistNewOperation(next, {returnDisposition: true});
+  const admitted = await f.repository.queryAuthoritativeOperationById(next.operationId);
+  assert.equal(admitted?.replicaId, next.replicaId);
+  assert.equal(f.row().workflow_step, WORKFLOW_STEP.FAILED);
 });
