@@ -74,6 +74,20 @@ const RAFT_MEMBERSHIP_TRANSITION_REASON = Object.freeze({
     'membership-transition-proposal-anchor-unavailable',
 });
 
+// Host operation authority is observed before entering the native runtime turn.
+// An observation is not a committed-membership receipt or a CREATE grant.
+const RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME = Object.freeze({
+  OBSERVED: 'observed', REFUSED: 'refused', UNAVAILABLE: 'unavailable',
+});
+const RAFT_MEMBERSHIP_AUTHORIZATION_REASON = Object.freeze({
+  REQUIRED: 'membership-authorization-required',
+  INVALID: 'membership-authorization-invalid',
+  UNAVAILABLE: 'membership-authorization-unavailable',
+  MISMATCH: 'membership-authorization-mismatch',
+  STALE_OWNER: 'membership-authorization-stale-owner',
+  WRONG_RECIPIENT: 'membership-authorization-wrong-recipient',
+});
+
 const RAFT_OPERATION_OUTCOME = Object.freeze({
   CORE_OK: 'CORE_OK',
   CORE_REFUSED: 'CORE_REFUSED',
@@ -188,6 +202,8 @@ const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
 });
 
 export {
+  RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME,
+  RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
   RAFT_EVENT,
   RAFT_LEADERSHIP_TRANSFER_REASON,
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,

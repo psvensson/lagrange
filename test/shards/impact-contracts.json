@@ -779,6 +779,20 @@
         "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
         "test/control-plane/replica-dispatch-reservation-identity.test.js"
       ]
+    },
+    "message-group-learner-authorization-consumption": {
+      "description": "The existing repository observes exact issued ADD_LEARNER intent and current host-bound holder/recipient facts; the group-admission owner consumes that observation before reserving the permanent peer identity and invoking the semantic port. The native runtime alone decides term/configuration/lifecycle/generation freshness and proposes. This does not authenticate transport, settle the operation from a proposal reply, or grant CREATE.",
+      "owners": [
+        "src/rebalancer/replica-operation-repository.js",
+        "src/rebalancer/replica-operation-message-group-learner-observation.js",
+        "src/rebalancer/replica-operation-message-group-membership-owner-claim.js",
+        "src/raft/raft-rs-group-membership-admission.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-membership-transition-runtime.js"
+      ],
+      "tests": [
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1470,6 +1484,31 @@
         "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
         "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
         "test/control-plane/replica-dispatch-reservation-identity.test.js"
+      ]
+    },
+    "message-group-learner-authorization-consumption": {
+      "description": "The existing repository observes exact issued ADD_LEARNER intent and current host-bound holder/recipient facts; the group-admission owner consumes that observation before reserving the permanent peer identity and invoking the semantic port. The native runtime alone decides term/configuration/lifecycle/generation freshness and proposes. This does not authenticate transport, settle the operation from a proposal reply, or grant CREATE.",
+      "endpoints": [
+        {
+          "id": "durable-operation-observation",
+          "owners": [
+            "src/rebalancer/replica-operation-repository.js",
+            "src/rebalancer/replica-operation-message-group-learner-observation.js",
+            "src/rebalancer/replica-operation-message-group-membership-owner-claim.js"
+          ]
+        },
+        {
+          "id": "native-membership-consumption",
+          "owners": [
+            "src/raft/raft-rs-group-membership-admission.js",
+            "src/raft/raft-operation-port-constants.js",
+            "src/raft/raft-rs-membership-transition-runtime.js"
+          ]
+        }
+      ],
+      "contract": "message-group-learner-authorization-consumption",
+      "witnessTests": [
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
       ]
     }
   }

@@ -1,3 +1,5 @@
+import {observeMessageGroupLearnerAuthorization} from
+  './replica-operation-message-group-learner-observation.js';
 /**
  * ReplicaOperationRepository — SQL/cache reads and writes, row <-> operation
  * translation for replica_operations.
@@ -585,6 +587,10 @@ class ReplicaOperationRepository {
   /** Claim membership recovery ownership; no action authorization is created. */
   claimMessageGroupMembershipOwner(request) {
     return claimMessageGroupMembershipOwner(this, request);
+  }
+  /** Observe exact issued learner intent for a bound runtime recipient. */
+  observeMessageGroupLearnerAuthorization(request, receiver) {
+    return observeMessageGroupLearnerAuthorization(this, request, receiver);
   }
   /** Record initial learner intent; runtime and CREATE admission remain separate. */
   authorizeMessageGroupLearner(request) {
