@@ -5,10 +5,8 @@ last_reviewed: 2026-10-08
 
 # Owner router
 
-Every rule in [`rules.md`](rules.md) names an owner key. This table is the
-only place a key becomes a path, so renaming or replacing an implementation
-changes one row here and no rule. Consult an owner when the work touches it;
-nothing below is read by default.
+[`rules.md`](rules.md) names owner keys; only this table maps them to paths.
+Rename paths here, not in rules. Read owners only when relevant to the task.
 
 | Key | Authority | Consult when |
 | --- | --- | --- |
