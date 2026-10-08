@@ -171,6 +171,22 @@ function assertCommittedLearner(f, proposal) {
     'proposal/ConfState alone does not settle the separate operation obligation');
 }
 
+// Execute a real repository change while the authoritative boot read is
+// awaiting its fixture callback. The callback clears itself before repository
+// writes so their own authoritative boot reads cannot recurse into the pause.
+async function duringBootRead(f, change) {
+  let crossed = false;
+  f.pauseNodes(async () => {
+    assert.equal(crossed, false, 'the intended boot-read window engages once');
+    crossed = true;
+    f.pauseNodes(null);
+    await change();
+  });
+  const result = await f.run();
+  assert.equal(crossed, true, 'the authorization must reach the paused boot read');
+  return result;
+}
+
 test('durable learner intent is consumed only through the bound repository and real runtime',
   {timeout: 30000}, async (t) => {
     assert.equal(typeof admission.proposeAuthorizedGroupLearner, 'function',
@@ -290,6 +306,48 @@ test('durable learner intent is consumed only through the bound repository and r
           assertNoProposal(f, count);
         });
       }
+    });
+    await t.test('renewal during the boot read defeats the previously observed holder', async (t) => {
+      const f = await fixture(t);
+      const count = f.proposalCount();
+      const result = await duringBootRead(f, async () => {
+        f.clock.advance(1);
+        const renewed = await f.repository.claimMessageGroupMembershipOwner({
+          operationId: O, identity: f.request.identity, expectedClaim: f.request.executionClaim});
+        assert.equal(renewed.outcome, 'recorded', 'the competing real holder CAS must win');
+        assert.notEqual(renewed.claim, f.request.executionClaim);
+      });
+      assert.equal(result.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        'a holder replaced during boot observation cannot reach native proposal');
+      assertNoProposal(f, count);
+    });
+    await t.test('successful settlement during the boot read defeats stale nonterminal state', async (t) => {
+      const f = await fixture(t);
+      const count = f.proposalCount();
+      const result = await duringBootRead(f, () => settleOperation(f, true));
+      assert.equal(f.row().status, ReplicaStatus.REMOVED);
+      assert.equal(result.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        'successful settlement during boot observation cannot authorize a learner');
+      assertNoProposal(f, count);
+    });
+    await t.test('failure during the boot read retains the already-issued exact learner action', async (t) => {
+      const f = await fixture(t);
+      const result = await duringBootRead(f, () => settleOperation(f));
+      assert.equal(f.row().status, ReplicaStatus.FAILED);
+      assert.equal(f.row().message_group_membership_permit, f.request.permit);
+      assert.equal(f.row().message_group_membership_obligation_state, 'unknown');
+      assertCommittedLearner(f, result);
+    });
+    await t.test('unavailable final operation observation is not stale permission', async (t) => {
+      const f = await fixture(t);
+      const count = f.proposalCount();
+      const result = await duringBootRead(f, async () => {
+        f.failReads('replica_operations');
+      });
+      assert.equal(result.reason, portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.UNAVAILABLE,
+        'unavailable final operation observation must retain a retryable refusal');
+      assert.equal(result.retryable, true);
+      assertNoProposal(f, count);
     });
     await t.test('request and host binding mutations during the read cannot retarget the proposal', async (t) => {
       const f = await fixture(t);
