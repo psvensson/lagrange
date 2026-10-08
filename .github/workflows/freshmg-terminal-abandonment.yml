@@ -38,6 +38,7 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -58,7 +59,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Add tests first and measure missing repository operation
+      - name: Add tests first with isolated copies of one closed schema fixture
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$BASE"
@@ -70,10 +71,11 @@ jobs:
           cp test-output/analysis/complexity-scoped.json test-output/learner/cyclomatic-before.json
           cp test-output/analysis/cognitive-complexity-scoped.json test-output/learner/cognitive-before.json
           python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/prepare-learner-authorization.py . tests > test-output/learner/test-preparation.txt
+          python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/share-membership-schema-fixture.py . >> test-output/learner/test-preparation.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add test/rebalancer/message-group-membership-branch-authorization.test.js test/integration/message-group-membership-claim-cache.integration.test.js
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: initial learner intent, terminal exclusion and real cache boundary'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: initial learner intent with isolated durable fixtures and real cache boundary'
           git rev-parse HEAD > test-output/learner/red-sha.txt
           exec 9>/tmp/lagrange-contract-first-measurement.lock
           flock -w 120 9
@@ -146,7 +148,7 @@ jobs:
           exec 9>/tmp/lagrange-contract-first-measurement.lock
           flock -w 120 9
           python3 - <<'PY'
-          import os,subprocess
+          import subprocess
           from pathlib import Path
           claim=Path('src/rebalancer/replica-operation-message-group-membership-owner-claim.js')
           auth=Path('src/rebalancer/replica-operation-message-group-membership-authorization.js')
@@ -173,7 +175,7 @@ jobs:
                   p.write_bytes(original)
           PY
           git diff --exit-code -- src test
-      - name: Preserve and push exact measured WIP source
+      - name: Preserve original failure and push exact measured WIP source
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -181,19 +183,22 @@ jobs:
           gh auth setup-git
           test -z "$(git status --porcelain --untracked-files=no)"
           out=test-output/learner
+          gh api repos/psvensson/lagrange/actions/artifacts/11554857284/zip > "$out/failed-37787377904.zip"
+          echo 'f800881e390978eb96ca8e0d50858e844ec6126aa28f3a9cb203ab73462731a3  test-output/learner/failed-37787377904.zip' | sha256sum -c -
+          node scripts/solve.js evidence add "$out/failed-37787377904.zip" --id "$QUEST" --text 'Initial learner run 37787377904: expected missing-method red engaged; lint refused one 105-character test line. No green/mutation/source approval. Original archive retained; corrected line and immutable schema-fixture reuse preserve all owner-write durability and original limits.' --json > "$out/prior-failure-canonical.json"
           git diff --binary "$BASE" > "$out/change.patch"
           git bundle create "$out/candidate.bundle" HEAD "^$BASE"
           python3 - <<'PY'
           import hashlib,json,os,zipfile
           from pathlib import Path
           p=Path('test-output/learner')
-          files={f.name:f.read_bytes() for f in p.iterdir() if f.is_file()}
+          files={f.name:f.read_bytes() for f in p.iterdir() if f.is_file() and f.suffix!='.zip'}
           with zipfile.ZipFile(p/f'learner-proof-{os.environ["GITHUB_RUN_ID"]}.zip','w',zipfile.ZIP_DEFLATED) as z:
               for name,data in files.items(): z.writestr(name,data)
               z.writestr('manifest.json',json.dumps({k:hashlib.sha256(v).hexdigest() for k,v in files.items()},indent=2)+'\n')
           PY
-          node scripts/solve.js evidence add "$out/learner-proof-$GITHUB_RUN_ID.zip" --id "$QUEST" --text "Initial learner intent: actual repository row races and real single-seed SQL/Raft/CDC/cache, test-first red/green and three source mutation controls. No runtime membership or CREATE activation; no independent approval." --json > "$out/canonical.json"
-          node scripts/solve.js note --id "$QUEST" --attempt "Initial learner authorization implemented in existing repository, using shared claim/T0 row predicates and holder policy. GCP $GITHUB_RUN_ID measures missing method red, same unit and live-cache cases green, and exact terminal/holder/target mutation controls. Original issued action survives lost answer/terminality/takeover. This records durable intent only: runtime consumer, committed learner, CREATE and debt-driver wiring remain incomplete. No new store or coordinator, no release approval." --json > "$out/attempt.json"
+          node scripts/solve.js evidence add "$out/learner-proof-$GITHUB_RUN_ID.zip" --id "$QUEST" --text "Initial learner intent: actual repository row races and real single-seed SQL/Raft/CDC/cache, test-first red/green and three source mutation controls. Each unit still has an isolated WAL/FULL database; only immutable closed schema setup is shared. No runtime membership or CREATE activation; no independent approval." --json > "$out/canonical.json"
+          node scripts/solve.js note --id "$QUEST" --attempt "Initial learner authorization implemented in existing repository, using shared claim/T0 row predicates and holder policy. GCP $GITHUB_RUN_ID measures missing method red, same unit and live-cache cases green, original hard time budgets, and exact terminal/holder/target mutation controls. Original issued action survives lost answer/terminality/takeover. Prior lint failure retained. Runtime consumer, committed learner, CREATE and debt-driver wiring remain incomplete. No new store or coordinator, no release approval." --json > "$out/attempt.json"
           python3 - <<'PY'
           import hashlib,json,os
           from pathlib import Path
