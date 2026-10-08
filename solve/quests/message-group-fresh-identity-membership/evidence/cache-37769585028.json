@@ -1,0 +1,42 @@
+{
+  "schema": "freshmg-cache-integration/1",
+  "runId": 37769585028,
+  "candidateSha": "3f7b0fbe7dc954b4d5e606afbc7cc932ec5166ae",
+  "result": "failure",
+  "independentApproval": false,
+  "multiHostAcceptance": false,
+  "fixtureBoundary": "real seed and issued boot; real gateway/SQL/Raft/CDC/cache; synthetic row inside existing operation-key lane; no physical source/CREATE claim",
+  "retainedEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "5e7de887fa97d2e2aced92d9dcd92439f8ddf8f1a38f0f9b3fce350caaa08995",
+      "bytes": 2875,
+      "asset": "message-group-fresh-identity-membership--cache-37769585028.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--cache-37769585028.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T11:24:41.410Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "evidence message-group-fresh-identity-membership--cache-37769585028.zip uploaded and verified",
+      "evidence": "sha256:5e7de887fa97d2e2aced92d9dcd92439f8ddf8f1a38f0f9b3fce350caaa08995",
+      "asset": "message-group-fresh-identity-membership--cache-37769585028.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--cache-37769585028.zip",
+      "bytes": 2875
+    }
+  },
+  "outputs": {
+    "SHA256SUMS": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  test-output/claim-cache/exit.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/final-status.txt\n9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  test-output/claim-cache/lint-exit.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/lint.stderr.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/lint.txt\nb632bc51308a6443efdbb2cea70c6c274cb0f659541235c4698e73be1673fd89  test-output/claim-cache/provenance.txt\naf6e38286bd689d51f0b4c8dd549e466da8f9af36cf42cecc35979b20889f44f  test-output/claim-cache/sources.sha256\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/stderr.txt\ndd273f6b00294e02e6ea5e55d5a60ca3e1a9c2e1acb808fed1514883b3532b39  test-output/claim-cache/stdout.txt\n",
+    "final-status.txt": "",
+    "exit.txt": "1\n",
+    "lint-exit.txt": "0\n",
+    "lint.stderr.txt": "",
+    "lint.txt": "",
+    "provenance.txt": "candidate=3f7b0fbe7dc954b4d5e606afbc7cc932ec5166ae\nrun=37769585028\nrunner=lagrange-gcp-runner\n",
+    "sources.sha256": "6ac960f46a68d54916bdf57b99ea7ced42c3c9b3ccd5f099adb6c74bce097c9a  test/integration/message-group-membership-claim-cache.integration.test.js\n15813fb2f933ca46806b6156bc542c2cf0ce518766ba4384be7f4f303fa42256  src/rebalancer/replica-operation-message-group-membership-owner-claim.js\nc62951b8f1738835239e8614ee514b100514a317a8e1f52ee542aa2d309d1f82  src/rebalancer/replica-operation-repository.js\n",
+    "stderr.txt": "",
+    "stdout.txt": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/integration/message-group-membership-claim-cache.integration.test.js\n\n# test-files planned=1\nclassified lane exclusive: 1 file(s), jobs=1\nthermal: unmeasurable (no sensors)\nnot ok test/integration/message-group-membership-claim-cache.integration.test.js (1 assertions, 29985ms)\n# TAP assertions failed; test process exited 1\nTAP version 13\n{\"level\":50,\"time\":\"2026-10-08T11:23:40.730Z\",\"nodeId\":\"membership-claim-cache-seed\",\"pid\":10889,\"subsystem\":\"rebalance-coordinator\",\"operationId\":\"cache-claim-1791458620110\",\"type\":\"REPLACE\",\"partitionId\":\"cache-visibility-fixture-1791458620110\",\"targetNodeId\":\"membership-claim-cache-seed\",\"errorMessage\":\"Message not acknowledged\",\"nodeId\":\"membership-claim-cache-seed\",\"msg\":\"Operation failed\"}\n{\"level\":50,\"time\":\"2026-10-08T11:23:40.762Z\",\"nodeId\":\"membership-claim-cache-seed\",\"pid\":10889,\"subsystem\":\"partition\",\"partitionId\":\"storage_reservations-p1\",\"tableName\":\"storage_reservations\",\"operation\":\"UPDATE\",\"error\":\"Latency topology services are not initialized\",\"nodeId\":\"membership-claim-cache-seed\",\"msg\":\"Failed to deliver CDC event\"}\n# Subtest: repository NULL-lease claim becomes visible through real SystemTableCache\nnot ok 1 - repository NULL-lease claim becomes visible through real SystemTableCache\n  ---\n  duration_ms: 27990.415678\n  type: 'test'\n  location: '/mnt/ciwork/lagrange/lagrange/claim-cache-37769585028-1/test/integration/message-group-membership-claim-cache.integration.test.js:24:1'\n  failureType: 'testCodeFailure'\n  error: 'the actual NULL-lease mutation must engage'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n  stack: |-\n    file:///mnt/ciwork/lagrange/lagrange/claim-cache-37769585028-1/test/integration/message-group-membership-claim-cache.integration.test.js:109:16\n    runNextTicks (node:internal/process/task_queues:64:5)\n    listOnTimeout (node:internal/timers:547:9)\n    process.processTimers (node:internal/timers:521:7)\n    async TestContext.<anonymous> (file:///mnt/ciwork/lagrange/lagrange/claim-cache-37769585028-1/test/integration/message-group-membership-claim-cache.integration.test.js:50:7)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 28000.037324\n# time=29985ms\n# test-files total=1 pass=0 fail=1 assertions=1\n"
+  },
+  "priorEvidence": "solve/quests/message-group-fresh-identity-membership/evidence/cache-37768602809.json",
+  "priorCorrection": "The prior fixture was not non-executing: ordinary reconciliation consumed it and advanced SENDING/lease, so the exact claim CAS correctly returned UNKNOWN. Current fixture explicitly holds the real owner-key lane, without patching SQL/cache/CDC/readiness. Founder-token mismatch remains a separate admission issue."
+}
