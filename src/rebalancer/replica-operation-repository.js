@@ -577,11 +577,12 @@ class ReplicaOperationRepository {
         REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS;
     this._shuttingDown = false;
   }
-  /** Claim membership recovery ownership; no action authorization is created. */
+  /** Settle never-authorized terminal intent; no execution claim is acquired. */
   settleMessageGroupMembershipNonAdmission(request) {
     return settleMessageGroupMembershipNonAdmission(this, request);
   }
 
+  /** Claim membership recovery ownership; no action authorization is created. */
   claimMessageGroupMembershipOwner(request) {
     return claimMessageGroupMembershipOwner(this, request);
   }
