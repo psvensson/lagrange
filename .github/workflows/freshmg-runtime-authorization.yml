@@ -9,134 +9,68 @@ concurrency:
   group: freshmg-runtime-review-20261008
   cancel-in-progress: false
 env:
-  EXPECTED: 6d09b134c2ac0f7639b98751f4ed7f535367cb11
+  EXPECTED: 963edd9678466b8ae7246add2d9c535b1b53e2cc
   WORK_BRANCH: work/freshmg-runtime-authorization-20261008
   QUEST: message-group-fresh-identity-membership
   LAGRANGE_LANE_JOBS_CAP: '1'
 jobs:
-  restart-profile:
+  holder-revalidation:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
-      pull-requests: write
+    defaults:
+      run:
+        shell: bash
+        working-directory: candidate-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.sha }}
-          path: carrier-${{ github.run_id }}
+          path: carrier-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ env.EXPECTED }}
-          path: candidate-${{ github.run_id }}
+          path: candidate-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Profile the unchanged witness, not a modified recovery protocol
-        shell: bash
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/restart-profile-$GITHUB_RUN_ID"
-          mkdir -p "$out"
-          cd "candidate-$GITHUB_RUN_ID"
-          test "$(git rev-parse HEAD)" = "$EXPECTED"
-          test -z "$(git status --porcelain)"
-          npm ci > "$out/install.txt" 2>&1
-          { node --version; npm --version; nproc; free -b; cat /proc/loadavg; } > "$out/host.txt"
-          echo 'GitHub-hosted component profile, not GCP or a distributed run; one-worker existing cap, unchanged budgets and durable settings.' > "$out/substrate.txt"
-          python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/profile-restart-cost-r2.py . "$out" "$EXPECTED" > "$out/profile.stdout.txt" 2> "$out/profile.stderr.txt"
-      - name: Publish bounded findings through the existing evidence and Git owners
-        shell: bash
+      - name: Measure original race, correction and source-revert controls
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/run-runtime-review-r2.sh measure
+      - name: Preserve exact WIP and evidence through normal Git push
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          export PROOF_OUT="$GITHUB_WORKSPACE/restart-profile-$GITHUB_RUN_ID"
-          cd "candidate-$GITHUB_RUN_ID"
-          gh auth setup-git
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
-          git diff --exit-code -- src test
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib,json,os,zipfile
-          out=Path(os.environ['PROOF_OUT'])
-          manifest={str(p.relative_to(out)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.rglob('*')) if p.is_file()}
-          (out/'member-sha256.json').write_text(json.dumps(manifest,indent=2)+'\n')
-          archive=out.parent/(out.name+'.zip')
-          with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
-              for p in sorted(out.rglob('*')):
-                  if p.is_file():z.write(p,str(p.relative_to(out)))
-          with zipfile.ZipFile(archive) as z:
-              for name,digest in manifest.items():assert hashlib.sha256(z.read(name)).hexdigest()==digest
-          (out/'archive-sha256.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'\n')
-          PY
-          node scripts/solve.js evidence add "$PROOF_OUT.zip" --id "$QUEST" --text 'Unchanged 16-case restart witness cost profile for PR109 duration finding. Sampling/native/durable attribution only; no lowered durability, changed assertions, new owner or distributed acceptance. R2 holder-state race 4222118121 remains open and requires paused-read tests before any repair.' --json > "$PROOF_OUT/canonical.json"
-          node scripts/solve.js note --id "$QUEST" --finding "Review 5460477132 confirms both complexity fixes but retains duration and adds paused-boot-read stale-holder finding 4222118121. This bounded attempt profiles unchanged restart source $EXPECTED and records that safety finding. No blanket terminal rejection: failure after issued intent retains its action under existing contract. No source change, gate promotion or independent approval." --kind evidence --json > "$PROOF_OUT/note.json"
-          python3 - <<'PY'
-          from pathlib import Path
-          import json,os
-          out=Path(os.environ['PROOF_OUT'])
-          record={'schema':'restart-cost-attempt/1','runId':int(os.environ['GITHUB_RUN_ID']),
-              'sourceSha':os.environ['EXPECTED'],'summary':json.loads((out/'cost-summary.json').read_text()),
-              'canonicalEvidence':json.loads((out/'canonical.json').read_text()),
-              'archiveSha256':(out/'archive-sha256.txt').read_text().strip(),
-              'originalLabVerdict':'FAIL','independentApproval':False,'distributedAcceptance':False}
-          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('restart-cost-'+os.environ['GITHUB_RUN_ID']+'.json')
-          dest.write_text(json.dumps(record,indent=2)+'\n')
-          PY
-          cp ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/profile-restart-cost-r2.py scripts/quest-evidence/profile-restart-cost-r2.py
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- scripts/quest-evidence/profile-restart-cost-r2.py "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/restart-cost-$GITHUB_RUN_ID.json"
-          git diff --cached --check
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: attribute unchanged restart cost and retain new holder-race finding'
-          git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-          git rev-parse HEAD > "$PROOF_OUT/published-sha.txt"
-          git status --porcelain > "$PROOF_OUT/final-status.txt"
-          gh pr view 109 --repo psvensson/lagrange --json body --jq .body > "$PROOF_OUT/previous-pr-body.md"
-          python3 - <<'PY'
-          from pathlib import Path
-          import os
-          out=Path(os.environ['PROOF_OUT']); head=(out/'published-sha.txt').read_text().strip()
-          text=(out/'previous-pr-body.md').read_text()
-          text=text.replace('Head: `ff8c95ee3546458db0154e7eb8920bcd1978b9c4`', 'Head: `'+head+'`')
-          text+='\n\n## R2 continuation\n\nBoth source-complexity findings were corrected and confirmed by review 5460477132. Runtime source remains at the measured f786555f correction. Restart duration and operation revalidation after the boot-read await remain OPEN. Latest exact-head cost measurement: Actions '+os.environ['GITHUB_RUN_ID']+'. No independent approval, main merge or gate closure.\n'
-          (out/'updated-pr-body.md').write_text(text)
-          PY
-          gh pr edit 109 --repo psvensson/lagrange --body-file "$PROOF_OUT/updated-pr-body.md"
-      - name: Preserve source state and all outcomes
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/run-runtime-review-r2.sh publish
+      - name: Retain all failed outcomes and recoverable work
         if: always()
-        shell: bash
+        working-directory: ${{ github.workspace }}
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/restart-profile-$GITHUB_RUN_ID"
+          out="$GITHUB_WORKSPACE/runtime-r2-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          cd "candidate-$GITHUB_RUN_ID"
+          cd candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT
+          git diff --binary "$EXPECTED" > "$out/total-change.patch"
           git status --porcelain > "$out/archive-status.txt"
-          git diff --binary > "$out/uncommitted.patch"
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then
+            git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"
+          fi
+          if [ -f test-output/reports/test-results.ndjson ]; then
+            cp test-output/reports/test-results.ndjson "$out/all-results.ndjson"
+          fi
+          echo 'GitHub-hosted one-worker component measurement, not GCP or physical distributed acceptance. Restart-duration finding and full lab FAIL remain unresolved.' > "$out/substrate.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-restart-profile-${{ github.run_id }}-${{ github.run_attempt }}
-          path: restart-profile-${{ github.run_id }}/
+          name: freshmg-runtime-r2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-r2-${{ github.run_id }}-${{ github.run_attempt }}/
           retention-days: 14
           if-no-files-found: error
-      - name: Keep duration debt explicit
+      - name: Do not portray the unresolved complete review as green
         if: always()
-        shell: bash
         run: |
-          out="$GITHUB_WORKSPACE/restart-profile-$GITHUB_RUN_ID"
-          python3 - "$out" <<'PY'
-          import json,re,sys
-          from pathlib import Path
-          out=Path(sys.argv[1]); r=json.loads((out/'unchanged.result.json').read_text())
-          rows=re.findall(r'^ok (test/\S+) \(\d+ assertions, (\d+)ms\)',(out/'unchanged.stdout.txt').read_text(),re.M)
-          assert len(rows)==1
-          print({'functionalExit':r['exit'],'durationMs':int(rows[0][1]),'budgetMs':2000})
-          sys.exit(0 if r['exit']==0 and int(rows[0][1])<=2000 else 1)
-          PY
+          echo 'The bounded R2 result is retained separately. The restart unit-file duration finding remains open; no complete PR/cutover approval.'
+          exit 1
