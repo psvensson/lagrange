@@ -9,186 +9,123 @@ concurrency:
   group: freshmg-terminal-abandonment-20261008
   cancel-in-progress: false
 env:
-  BASE: 6623b93ceaf69a01268526fa7bdd9248176b598a
-  BEFORE_T1: 76c3a6175142a88cb79f332409d95587216c06ba
+  EXPECTED: f1487f97b4444f708aa0624ccd75d453714d427c
   WORK_BRANCH: work/freshmg-terminal-abandonment-20261008
   QUEST: message-group-fresh-identity-membership
 jobs:
-  wake:
+  retain-and-review:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-        with:
-          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
-          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
-      - name: Start only the existing proof runner
-        run: |
-          set -euo pipefail
-          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
-          if [ "$status" != RUNNING ]; then
-            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
-          fi
-  cache-proof:
-    needs: wake
-    runs-on: [self-hosted, gcp]
-    timeout-minutes: 25
+    timeout-minutes: 20
     permissions:
       contents: write
       actions: read
-    defaults:
-      run:
-        shell: bash
-        working-directory: t1-cache-${{ github.run_id }}
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.sha }}
-          path: carrier-${{ github.run_id }}
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ env.BASE }}
-          path: t1-cache-${{ github.run_id }}
-          persist-credentials: false
+          ref: ${{ env.EXPECTED }}
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Prepare the corrected cache oracle against unchanged T1 source
-        id: prepare
+      - name: Verify and persist both positive and failed original archives
+        shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$BASE"
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
           test -z "$(git status --porcelain)"
-          mkdir -p test-output/t1-cache
-          printf 'base=%s\ncarrier=%s\nrunner=%s\nrun=%s\n' "$BASE" "$GITHUB_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/t1-cache/provenance.txt
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          mkdir -p test-output/t1-retention
           npm ci
-          python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/prepare-terminal-abandonment-cache.py . > test-output/t1-cache/preparation.txt
-          npm exec --no -- eslint test/integration/message-group-membership-claim-cache.integration.test.js scripts/checks/test-subsystem-classification-constants.js > test-output/t1-cache/lint.txt 2>&1
-          npm run test:metadata:refresh > test-output/t1-cache/metadata.txt 2>&1
-          git diff --check
-          git diff --exit-code "$BASE" -- src
-          git add test/integration/message-group-membership-claim-cache.integration.test.js scripts/checks/test-subsystem-classification-constants.js test/shards/
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: assert terminal intent visibility and the CDC-owned HLC advance'
-          git rev-parse HEAD > test-output/t1-cache/source-sha.txt
-          test -z "$(git status --porcelain --untracked-files=no)"
-      - name: Source-revert negative must fail at the actual terminal branch
-        id: red
-        run: |
-          set -euo pipefail
-          exec 9>/tmp/lagrange-contract-first-measurement.lock
-          flock -w 120 9
-          source=src/rebalancer/replica-operation-message-group-membership-authorization.js
-          cp "$source" "$RUNNER_TEMP/t1-cache-source-$GITHUB_RUN_ID.js"
-          trap 'cp "$RUNNER_TEMP/t1-cache-source-$GITHUB_RUN_ID.js" "$source"' EXIT
-          git show "$BEFORE_T1:$source" > "$source"
-          set +e
-          timeout 90s npm run test:file -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/t1-cache/red.txt 2>&1
-          status=$?
-          set -e
-          echo "$status" > test-output/t1-cache/red-exit.txt
-          tail -55 test-output/t1-cache/red.txt
-          test "$status" -eq 1
-          grep -q 'T1 must record exact terminal abandonment' test-output/t1-cache/red.txt
-          grep -q ERR_ASSERTION test-output/t1-cache/red.txt
-          cp "$RUNNER_TEMP/t1-cache-source-$GITHUB_RUN_ID.js" "$source"
-          git diff --exit-code -- "$source"
-      - name: Exact repaired source must publish terminal intent and a newer origin HLC
-        id: green
-        run: |
-          set -euo pipefail
-          exec 9>/tmp/lagrange-contract-first-measurement.lock
-          flock -w 120 9
-          set +e
-          timeout 90s npm run test:file -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/t1-cache/green.txt 2>&1
-          status=$?
-          set -e
-          echo "$status" > test-output/t1-cache/green-exit.txt
-          tail -65 test-output/t1-cache/green.txt
-          test "$status" -eq 0
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/t1-cache/regressions.txt 2>&1
-          echo 0 > test-output/t1-cache/regressions-exit.txt
-          npm run audit:shards > test-output/t1-cache/shards.txt 2>&1
-          set +e
-          npm run test:metrics:scoped:strict -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/t1-cache/test-metrics.txt 2>&1
-          echo "$?" > test-output/t1-cache/test-metrics-exit.txt
-          set -e
-      - name: Retain the failed oracle and exact new evidence; push WIP only
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh auth setup-git
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
-          gh api repos/psvensson/lagrange/actions/artifacts/11550360990/zip > "$RUNNER_TEMP/t1-prior-failed-$GITHUB_RUN_ID.zip"
           python3 - <<'PY'
-          import hashlib,json,os,zipfile
+          import hashlib,json,os,subprocess,zipfile
           from pathlib import Path
-          archive=Path(os.environ['RUNNER_TEMP'])/('t1-prior-failed-'+os.environ['GITHUB_RUN_ID']+'.zip')
-          digest=hashlib.sha256(archive.read_bytes()).hexdigest()
-          assert digest=='d3dd0155d4db51909aa055b401d5359b41e52c47999ab52a83c902ea3fbb3598'
-          with zipfile.ZipFile(archive) as z:
-              for line in z.read('SHA256SUMS').decode().splitlines():
-                  expected,name=line.split(None,1)
-                  entry=name.strip().removeprefix('test-output/t1-cache/')
-                  assert hashlib.sha256(z.read(entry)).hexdigest()==expected,entry
-              outputs={n:z.read(n).decode() for n in z.namelist() if n.endswith(('.txt','.patch'))}
-              failed={'schema':'freshmg-terminal-cache-failed-oracle/1','runId':37776477963,
-                'sourceSha':z.read('source-sha.txt').decode().strip(),'artifactId':11550360990,
-                'archiveSha256':digest,'archiveAndMembersVerified':True,'passed':False,
-                'finding':'Real T1/cache action engaged; whole-row equality incorrectly included cache-only updated_at_hlc. PartitionCDCGenerator.stampOriginHlc owns this timestamp; SystemTableCache uses HLCTimestamp.compare. Corrected oracle asserts strict causal advance and retains every ordinary field comparison. No runtime repair or weakened timeout.',
-                'outputs':outputs}
-          q=Path('solve/quests')/os.environ['QUEST']/'evidence'
-          (q/'terminal-abandonment-cache-failed-37776477963.json').write_text(json.dumps(failed,indent=2)+'\n')
-          PY
-          node scripts/solve.js note --id "$QUEST" --attempt "T1 cache proof $GITHUB_RUN_ID uses actual repository terminal settlement and abandonment through live SQL/Raft/CDC/cache. Source-reverted negative fails at T1, repaired positive requires newer CDC origin HLC and all ordinary fields unchanged. Original failed oracle 37776477963 retained with verified raw output: it wrongly compared cache-only updated_at_hlc as immutable. Ordinary coordinator is quiesced before synthetic learner fixture; no physical learner or removal, full reconciler, multihost or independent approval is claimed." --json > test-output/t1-cache/attempt.json
-          python3 - <<'PY'
-          import hashlib,json,os
-          from pathlib import Path
-          p=Path('test-output/t1-cache')
-          files={f.name:f.read_text() for f in p.iterdir() if f.is_file()}
-          record={'schema':'freshmg-terminal-abandonment-cache/1','runId':int(os.environ['GITHUB_RUN_ID']),
-            'baseSha':os.environ['BASE'],'carrierSha':os.environ['GITHUB_SHA'],
-            'sourceSha':(p/'source-sha.txt').read_text().strip(),'runner':os.environ['RUNNER_NAME'],
-            'independentApproval':False,'distributedAcceptance':False,
-            'fixtureSourceSha':'38cd8d4c913ccc3bd20d1914377cc528d1be8d1c',
-            'proofCeiling':'actual single-seed SQL/Raft/CDC/cache; coordinator quiesced before synthetic committed learner fixture; no physical membership action, live debt driver, full replacement or multi-host proof',
-            'outputs':files,'sha256':{k:hashlib.sha256(v.encode()).hexdigest() for k,v in files.items()}}
-          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/('terminal-abandonment-cache-'+os.environ['GITHUB_RUN_ID']+'.json')
+          records=[]
+          archives=[
+            (37775751002,11549548269,'585ad9c0062c7b33c569ee8bbebe65d6ec8185541ac0cfdb249232555235bbda','test-output/t1/','passed'),
+            (37776477963,11550360990,'d3dd0155d4db51909aa055b401d5359b41e52c47999ab52a83c902ea3fbb3598','test-output/t1-cache/','failed-harness-oracle'),
+            (37777372340,11550855904,'1ff24efe70af75cda81b7f9a652e8416bbecc7cd0f2936dc267a33538a52a3da','test-output/t1-cache/','passed')]
+          for run,artifact,digest,prefix,verdict in archives:
+              file=Path(os.environ['RUNNER_TEMP'])/f't1-proof-{run}-{os.environ["GITHUB_RUN_ID"]}.zip'
+              with file.open('wb') as output:
+                  subprocess.run(['gh','api',f'repos/psvensson/lagrange/actions/artifacts/{artifact}/zip'],stdout=output,check=True)
+              assert hashlib.sha256(file.read_bytes()).hexdigest()==digest
+              with zipfile.ZipFile(file) as z:
+                  count=0
+                  for line in z.read('SHA256SUMS').decode().splitlines():
+                      expected,name=line.split(None,1)
+                      entry=name.strip().removeprefix(prefix)
+                      assert hashlib.sha256(z.read(entry)).hexdigest()==expected,entry
+                      count+=1
+                  source=z.read('source-sha.txt').decode().strip()
+              evidence=subprocess.run(['node','scripts/solve.js','evidence','add',str(file),
+                  '--id',os.environ['QUEST'],'--text',f'T1 {verdict} original Actions run {run}; archive and every member verified before canonical upload. Not full-cutover proof.','--json'],
+                  text=True,stdout=subprocess.PIPE,check=True)
+              receipt=json.loads(evidence.stdout)
+              records.append({'runId':run,'artifactId':artifact,'sourceSha':source,'verdict':verdict,
+                  'archiveSha256':digest,'verifiedManifestMembers':count,'canonicalEvidence':receipt})
+          record={'schema':'freshmg-t1-retained-proofs/1','retentionRun':int(os.environ['GITHUB_RUN_ID']),
+              'reviewedWorkSha':os.environ['EXPECTED'],'independentApproval':False,'distributedAcceptance':False,
+              'artifacts':records}
+          dest=Path('solve/quests')/os.environ['QUEST']/'evidence'/'terminal-abandonment-retention.json'
+          assert not dest.exists(), 'do not overwrite existing retained proof'
           dest.write_text(json.dumps(record,indent=2)+'\n')
+          Path('test-output/t1-retention/retention.json').write_text(json.dumps(record,indent=2)+'\n')
           PY
-          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/terminal-abandonment-cache-$GITHUB_RUN_ID.json" "solve/quests/$QUEST/evidence/terminal-abandonment-cache-failed-37776477963.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain T1 cache red green and the corrected HLC oracle failure'
-          git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-          git rev-parse HEAD > test-output/t1-cache/published-sha.txt
-      - name: Archive every outcome and recoverable candidate
-        if: always()
+          node scripts/solve.js note --id "$QUEST" --attempt 'T1 terminal abandonment increment and live SQL/Raft/CDC/cache proof complete as a bounded WIP. Actual test-first and source-revert negatives, repaired positives, three predicate mutants, failed cache HLC oracle, strict integration-test metrics and exact original archives retained. No external membership or CREATE activation. Request separate exact-head source/harness review; prior branches and full Quest remain unapproved.' --json > test-output/t1-retention/attempt.json
+          git diff --check
+          git diff --exit-code -- src test scripts .github
+      - name: Push evidence only, update current review packet, then request independent review
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p test-output/t1-cache
-          git diff --binary "$BASE" > test-output/t1-cache/full-work.patch
-          git diff --binary > test-output/t1-cache/uncommitted.patch
-          git status --porcelain > test-output/t1-cache/final-status.txt
-          git diff --exit-code "$BASE" -- src > test-output/t1-cache/runtime-diff.txt
-          git archive --format=tar.gz -o test-output/t1-cache/source.tar.gz HEAD
-          if [ "$(git rev-parse HEAD)" != "$BASE" ]; then
-            git bundle create test-output/t1-cache/candidate.bundle HEAD "^$BASE"
-          fi
-          find test-output/t1-cache -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/t1-cache/SHA256SUMS
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
+          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/terminal-abandonment-retention.json"
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain exact T1 source test failure and cache proof archives'
+          git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          candidate="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$candidate"
+          echo "$candidate" > test-output/t1-retention/published-sha.txt
+          cat > "$RUNNER_TEMP/pr107-body.md" <<EOF
+          ## Exact current source-review packet
+
+          Head **$candidate**; source behavior measured at **435320302ac976d60abedeffc978e43f0edb76d6**, latest test/cache candidate **4ece9393a9fe475ba6a79be8c76c420c1908f2e3**. Base **76c3a6175142a88cb79f332409d95587216c06ba**, existing sealed message-group-fresh-identity-membership Quest. No main merge, terminal landing, planner/handler unpark, physical CREATE or membership REMOVE activation. Parent #105/#106 and C0 retain their separate open reviews.
+
+          ## Implemented T1 responsibility
+
+          The existing selectMessageGroupMembershipBranch now allows a terminal operation with a committed learner to select exact target abandonment under the current live holder. Its same-row CAS matches exact terminal status/step/completed_at and retains immutable O/S/T/source generation, holder, learner/prior permit, boot and absent voter/removal-stamp predicates. PROMOTE remains nonterminal-only. Promotion committed first retains J1 forward direction. Selection retains membership lane/debt and changes no ordinary status, completed_at, reservation or cleanup claim. Recorded intent is not a runtime dispatch grant.
+
+          ## Actual GCP proof
+
+          **37775751002**: new tests red on inherited source; same tests and regressions green (**4 files / 141 reported assertions**). Three source mutations caught at named assertions: absent terminal-time predicate, terminal promotion admission, absent holder predicate. Exact source restored; lint and regenerated shard audit pass. One inherited source cyclomatic violation decreased 45 to 44; no cognitive/decision-boundary violations. This is not the full static/corpus gate.
+
+          **37777372340**: live SQL/Raft -> CDC -> SystemTableCache test passes; reverting only T1 source fails at the actual terminal branch. Same four files /141 reported assertions pass; strict integration-test complexity and current metadata audits pass. Test reuses the known #105 fixture: ordinary coordinator shutdown is joined before synthetic rows, while real SQL/Raft/CDC/cache remain live. A committed-learner stamp is supplied fixture data, not a physical admission grant. The test verifies one exact terminal CAS, immutable ordinary fields, retained debt and lane, observational replay, and a strictly newer producer-owned origin HLC.
+
+          **37776477963** remains FAILED: the original oracle mistakenly treated cache-only updated_at_hlc as immutable. Runtime already recorded the correct intent; the correction imports the existing HLCTimestamp ordering and explicitly asserts advancement. No runtime edit, timeout increase, or silent test removal fixed that failure.
+
+          All three original archives, source snapshots/bundles and raw outputs are canonically retained after archive/member checks and Solver re-download/hash verification. Read evidence/terminal-abandonment-retention.json and the per-run records under the existing Quest. Author self-review is not independent approval.
+
+          ## Required review and remaining product work
+
+          Review exact **$candidate** for same-row terminal/promotion race exclusion, unchanged source/target subject, owner renewal/takeover/boot checks, unknown results, no lane/debt loss and harness fidelity. The file-backed tests substitute the distributed gateway; the cache test uses the real single-seed data path with quiesced reconciliation. Neither proves full membership driver, live learner admission/removal, multi-host replacement, seed-loss recovery or cutover/A1-v13 compatibility.
+
+          Return explicit category-complete ACCEPT/REJECT of this bounded source increment. Full learner-authorization/runtime/CREATE wiring and debt driver remain required. Do not merge or approve merely from passing counts.
+          EOF
+          gh pr edit 107 --repo psvensson/lagrange --title 'FreshMG: terminal learner abandonment with live SQL and cache proof' --body-file "$RUNNER_TEMP/pr107-body.md"
+          for i in 1 2 3 4 5; do
+            actual="$(gh pr view 107 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+            [ "$actual" = "$candidate" ] && break
+            sleep 2
+          done
+          test "$actual" = "$candidate"
+          gh pr edit 107 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 107 --repo psvensson/lagrange --json headRefOid,url,reviewRequests > test-output/t1-retention/review-request.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-t1-cache-${{ github.run_id }}-${{ github.run_attempt }}
-          path: t1-cache-${{ github.run_id }}/test-output/t1-cache/
+          name: freshmg-t1-retention-${{ github.run_id }}
+          path: test-output/t1-retention/
           retention-days: 14
           if-no-files-found: error
