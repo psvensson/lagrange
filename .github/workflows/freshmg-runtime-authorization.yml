@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -39,18 +40,24 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Bind isolated source and exercise only test fixtures
+      - name: Bind source and retain the failed default-sync assumption
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           export PROOF_OUT="$GITHUB_WORKSPACE/runtime-r3-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$PROOF_OUT"
+          gh api repos/psvensson/lagrange/actions/artifacts/11569731320/zip > "$PROOF_OUT/failed-wal-default-37821588598.zip"
+          echo "d9125c66923a062f616be2ee4c3ef60e8ab1832fa8b8b6eb155aa043ebeb4a0b  $PROOF_OUT/failed-wal-default-37821588598.zip" | sha256sum -c -
           test "$(git rev-parse HEAD)" = "$EXPECTED"
           test -z "$(git status --porcelain)"
           printf 'base=%s\ncarrier=%s\nrunner=%s\ncap=%s\n' "$EXPECTED" "$GITHUB_SHA" "$RUNNER_NAME" "$LAGRANGE_LANE_JOBS_CAP" > "$PROOF_OUT/provenance.txt"
-          echo 'GitHub-hosted component run. Prior GCP worker unavailable; no GCP service reconfiguration, distributed cluster, full lab rerun or certification.' > "$PROOF_OUT/substrate.txt"
+          echo 'Hosted component run, not GCP or multi-host acceptance. Prior experiment caught NORMAL on WAL reopen and was never pushed. Corrected experiment explicitly selects FULL on every open; original assertions and deadlines remain.' > "$PROOF_OUT/substrate.txt"
           npm ci > "$PROOF_OUT/install.txt" 2>&1
-          python3 -m py_compile ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/review-runtime-r3.py
-          python3 ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/review-runtime-r3.py > "$PROOF_OUT/experiment.stdout.txt" 2> "$PROOF_OUT/experiment.stderr.txt"
+          script="../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/review-runtime-r3.py"
+          python3 -m py_compile "$script"
+          cp "$script" "$PROOF_OUT/measured-runner.py"
+          python3 "$script" > "$PROOF_OUT/experiment.stdout.txt" 2> "$PROOF_OUT/experiment.stderr.txt"
       - name: Commit the bounded fixture correction and remeasure exact bytes
         run: |
           set -euo pipefail
@@ -62,9 +69,9 @@ jobs:
           git diff --binary "$EXPECTED" > "$out/proposed.patch"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          node scripts/solve.js note --id "$QUEST" --attempt 'Author adversarial review: demonstrate the symmetric final-read boot window without adding another reread; retain it as an unresolved owner-interaction question. Measure raw SQLite DELETE/FULL against production-journal WAL while retaining FULL on every fixture open/reopen. Preserve all sixteen restart cases and independent disk reads. Derive two historical-prose corrections from the untouched machine evidence. No production code or sealed acceptance changed.' --json > "$out/attempt.json"
+          node scripts/solve.js note --id "$QUEST" --attempt 'Author R3 review: no additional reread claimed to provide atomic multi-owner authorization. Reproduce the symmetric boot window and keep it unresolved. Correct test journal to WAL while explicitly retaining FULL on every open/reopen, preserving all sixteen restart cases and independent disk reads. The first experiment 37821588598 failed its FULL assertion on reopen and was not adopted. Two prose corrections are derived from untouched machine evidence. No production code or sealed acceptance changed.' --json > "$out/attempt.json"
           git add -- test/raft/raft-rs-backend/partition-node-cluster.js test/shards/ "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/lab-attribution-37803287356-correction.md"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: align native partition fixture journal without reducing sync durability'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: align native partition fixture journal while explicitly preserving FULL'
           git rev-parse HEAD > "$out/fixture-sha.txt"
           npm run test:file -- test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js test/integration/message-group-learner-runtime-authorization.integration.test.js test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js > "$out/exact-tests.txt" 2>&1
           test -z "$(git status --porcelain)"
@@ -107,7 +114,7 @@ jobs:
               for n,h in manifest.items():assert hashlib.sha256(z.read(n)).hexdigest()==h
           (out/'archive-sha256.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'\n')
           PY
-          node scripts/solve.js evidence add "$PROOF_OUT.zip" --id "$QUEST" --text 'Author adversarial R3 review: symmetric final-operation-read boot counterexample stays unresolved. Paired DELETE/FULL vs WAL/FULL native partition fixture measurement preserves every restart matrix case, oracle and sync level; exact-head focused run and journal/sync mutation engagement are separate facts. Correct attribution prose from machine record. No production mutation, independent approval, physical distributed acceptance or cutover closure.' --json > "$PROOF_OUT/canonical.json"
+          node scripts/solve.js evidence add "$PROOF_OUT.zip" --id "$QUEST" --text 'Author adversarial R3: final-read boot counterexample unresolved. Paired DELETE/FULL vs WAL/explicit FULL fixture measurement preserves all restart cells and oracles; exact-head run and two mutations retain original gates. First failed WAL-default assumption is nested. Correct attribution prose from machine record. No production mutation, independent approval, physical acceptance or cutover closure.' --json > "$PROOF_OUT/canonical.json"
           python3 - <<'PY'
           from pathlib import Path
           import json,os
@@ -147,5 +154,5 @@ jobs:
       - name: Retain unresolved authorization verdict
         if: always()
         run: |
-          echo 'The final-read boot counterexample is unresolved. No complete PR, source approval or cutover certification follows from the fixture correction.'
+          echo 'Final-read boot boundary unresolved; no complete PR, independent approval or cutover certification follows from fixture correction.'
           exit 1
