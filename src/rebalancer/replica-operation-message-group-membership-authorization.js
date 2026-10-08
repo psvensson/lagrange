@@ -42,14 +42,25 @@ function permitsMatch(prior, next, identity, spec) {
     prior.peerId === identity.targetPeerId && next.peerId === identity.targetPeerId &&
     next.proposalIndex === null;
 }
-const SQL = `UPDATE replica_operations SET message_group_membership_phase = ?,
+// An existing membership obligation can outlive ordinary operation settlement.
+// Only pre-promotion target abandonment may be newly selected after settlement;
+// the exact completion timestamp joins the same operation-row CAS, never a new lane.
+function branchSettlementGuard(repository, row, spec) {
+  if (!repository.isOperationTerminal(row)) {
+    return row.completedAt === null ? {sql: 'completed_at IS NULL', params: []} : null;
+  }
+  if (spec.phase !== PHASE.TARGET_REMOVAL_IN_FLIGHT ||
+    !Number.isSafeInteger(row.completedAt) || row.completedAt <= 0) return null;
+  return {sql: 'completed_at = ?', params: [row.completedAt]};
+}
+const branchSelectionSql = (settlement) => `UPDATE replica_operations SET message_group_membership_phase = ?,
   message_group_membership_permit = ?, message_group_membership_obligation_state = ?
   WHERE operation_id = ? AND type = ? AND partition_id = ? AND entity_type = ?
   AND entity_id = ? AND source_replica_id = ? AND replica_id = ?
   AND source_node_id = ? AND target_node_id = ?
   AND message_group_membership_lane_key = ? AND message_group_membership_identity = ?
   AND message_group_source_lifecycle_claim = ? AND message_group_membership_owner_claim = ?
-  AND status = ? AND workflow_step = ? AND completed_at IS NULL
+  AND status = ? AND workflow_step = ? AND ${settlement.sql}
   AND message_group_membership_phase = ? AND message_group_membership_permit = ?
   AND message_group_membership_obligation_state = ? AND message_group_learner_stamp = ?
   AND message_group_voter_stamp IS NULL AND message_group_removal_stamp IS NULL`;
@@ -85,7 +96,8 @@ async function selectMessageGroupMembershipBranch(repository, request) {
     if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE, row);
     return result(OUTCOME.RECORDED, row);
   }
-  if (repository.isOperationTerminal(row) || row.completedAt !== null ||
+  const settlement = branchSettlementGuard(repository, row, spec);
+  if (!settlement ||
     row.messageGroupMembershipPhase !== PHASE.LEARNER_COMMITTED ||
     row.messageGroupMembershipPermit !== priorPermit ||
     row.messageGroupMembershipObligationState !== MEMBERSHIP_OBLIGATION.UNKNOWN ||
@@ -107,12 +119,12 @@ async function selectMessageGroupMembershipBranch(repository, request) {
     row.sourceReplicaId, row.replicaId, row.sourceNodeId, row.targetNodeId,
     row.messageGroupMembershipLaneKey, row.messageGroupMembershipIdentity,
     row.messageGroupSourceLifecycleClaim, row.messageGroupMembershipOwnerClaim, row.status,
-    row.workflowStep, PHASE.LEARNER_COMMITTED, priorPermit,
+    row.workflowStep, ...settlement.params, PHASE.LEARNER_COMMITTED, priorPermit,
     MEMBERSHIP_OBLIGATION.UNKNOWN, row.messageGroupLearnerStamp];
   // A false or lost answer is not a cancellation. Re-observe the exact row;
   // retrying this same CAS or its competing branch is safe on the same basis.
   try {
-    await repository.executeOperationMutationWithRetry(SQL, params);
+    await repository.executeOperationMutationWithRetry(branchSelectionSql(settlement), params);
   } catch {
     // The exact authoritative read below resolves an uncertain write result.
   }
