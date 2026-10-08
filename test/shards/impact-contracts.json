@@ -540,7 +540,8 @@
         "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
         "test/partition/committed-statement-outcome.test.js",
         "test/partition/partition-runtime-reconstruction-leadership.test.js",
-        "test/partition/partition-unreadable-durable-record.test.js"
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/partition/canonical-system-mutation-capability-boundary.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -559,7 +560,8 @@
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/partition/partition-port-refusal-outcomes.test.js",
         "test/partition/partition-write-typed-releases.test.js",
-        "test/partition/partition-consensus-hold-log.test.js"
+        "test/partition/partition-consensus-hold-log.test.js",
+        "test/partition/canonical-system-mutation-capability-boundary.test.js"
       ]
     },
     "partition-session-transaction-persistence-admission": {
@@ -1205,7 +1207,8 @@
         "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
         "test/partition/committed-statement-outcome.test.js",
         "test/partition/partition-runtime-reconstruction-leadership.test.js",
-        "test/partition/partition-unreadable-durable-record.test.js"
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/partition/canonical-system-mutation-capability-boundary.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1235,7 +1238,8 @@
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/partition/partition-port-refusal-outcomes.test.js",
         "test/partition/partition-write-typed-releases.test.js",
-        "test/partition/partition-consensus-hold-log.test.js"
+        "test/partition/partition-consensus-hold-log.test.js",
+        "test/partition/canonical-system-mutation-capability-boundary.test.js"
       ]
     },
     "spread-cure-transition-authorization": {

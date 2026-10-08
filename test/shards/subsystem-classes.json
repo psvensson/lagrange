@@ -4,31 +4,31 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 305,
-    "cdc-metadata": 62,
+    "bootstrap-membership": 307,
+    "cdc-metadata": 64,
     "cli-tooling": 96,
     "control-plane": 214,
     "convergence-topology": 83,
     "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 21,
-    "placement-rebalance": 267,
+    "placement-rebalance": 268,
     "query-sql": 172,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 146,
+    "services-runtime": 147,
     "solver-tooling": 7,
-    "storage-partition": 167,
+    "storage-partition": 171,
     "storage-raft": 117,
-    "test-infrastructure": 142,
+    "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2320,
-  "digest": "fnv1a32-67a8a185",
+  "censusSize": 2331,
+  "digest": "fnv1a32-00b716b3",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-14a7c8ab",
+  "observationDigest": "fnv1a32-758d785c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -124,6 +124,7 @@
     "test/bootstrap/bootstrap-failure-cleanup.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-mode.test.js": "bootstrap-membership",
+    "test/bootstrap/bootstrap-partition-registry-authority-witness.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-phase-state-machine-integration.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-readiness-ladder.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-readiness-state.test.js": "bootstrap-membership",
@@ -1003,8 +1004,11 @@
     "test/integration/benchmark-system-table-read-path.integration.test.js": "query-sql",
     "test/integration/benchmark-table-create-timeout-diagnostics.integration.test.js": "convergence-topology",
     "test/integration/bidirectional-websocket.integration.test.js": "transport-messaging",
+    "test/integration/bootstrap-cdc-provider-replacement-identity.integration.test.js": "cdc-metadata",
+    "test/integration/bootstrap-partition-private-storage-consumer.integration.test.js": "bootstrap-membership",
     "test/integration/call-cell-public-outcome-adversarial.integration.test.js": "services-runtime",
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "cdc-metadata",
+    "test/integration/cdc-local-authoritative-private-consumer.integration.test.js": "cdc-metadata",
     "test/integration/cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
     "test/integration/concurrent-join-message-group-assignment.integration.test.js": "transport-messaging",
@@ -1048,11 +1052,14 @@
     "test/integration/public-consumer-contract-ratchet.integration.test.js": "query-sql",
     "test/integration/raft-leader-election.integration.test.js": "storage-raft",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
+    "test/integration/replica-handler-partition-private-consumer.integration.test.js": "storage-partition",
+    "test/integration/replica-operation-owner-capability-boundary.integration.test.js": "placement-rebalance",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
     "test/integration/seed-node-bootstrap.integration.test.js": "bootstrap-membership",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "bootstrap-membership",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "services-runtime",
     "test/integration/services-p1-self-referential-write.integration.test.js": "services-runtime",
+    "test/integration/services-row-owner-capability-boundary.integration.test.js": "services-runtime",
     "test/integration/single-node-default-replica-count-writes.integration.test.js": "placement-rebalance",
     "test/integration/sql-engine-system-writes-contract.integration.test.js": "query-sql",
     "test/integration/sql-workflow.integration.test.js": "query-sql",
@@ -1213,6 +1220,7 @@
     "test/packaging/single-executable-completeness.property.test.js": "release-packaging",
     "test/partition/ack-extraction-from-response.property.test.js": "storage-partition",
     "test/partition/adjacent-partition-merging.property.test.js": "storage-partition",
+    "test/partition/canonical-system-mutation-capability-boundary.test.js": "storage-partition",
     "test/partition/cdc-buffer-replay-robustness.test.js": "storage-partition",
     "test/partition/cdc-event-buffer.property.test.js": "storage-partition",
     "test/partition/cdc-event-buffer.test.js": "storage-partition",
@@ -1236,6 +1244,7 @@
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
     "test/partition/managed-merge-epoch-persistence-effects.test.js": "storage-partition",
     "test/partition/managed-merge-workflow.test.js": "storage-partition",
+    "test/partition/managed-router-partition-command-ingress.test.js": "storage-partition",
     "test/partition/managed-split-epoch-persistence-effects.test.js": "storage-partition",
     "test/partition/managed-split-metrics-provider.test.js": "storage-partition",
     "test/partition/managed-split-resume-under-write-load.test.js": "storage-partition",
@@ -1252,6 +1261,7 @@
     "test/partition/partition-admission-redrive-wakes.test.js": "storage-partition",
     "test/partition/partition-cdc-generator.test.js": "storage-partition",
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "storage-partition",
+    "test/partition/partition-command-admission-committed-application.test.js": "storage-partition",
     "test/partition/partition-commit-deadline-wait-bound-spent.test.js": "storage-partition",
     "test/partition/partition-consensus-hold-log.test.js": "storage-partition",
     "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js": "storage-partition",
@@ -2008,6 +2018,7 @@
     "test/scripts/analyze-topology-convergence.test.js": "test-infrastructure",
     "test/scripts/apparatus-release-consolidation-budget.test.js": "test-infrastructure",
     "test/scripts/canary-corpus-needed.test.js": "test-infrastructure",
+    "test/scripts/canonical-system-mutation-capability-boundary-audit.test.js": "test-infrastructure",
     "test/scripts/certification-verdict.test.js": "test-infrastructure",
     "test/scripts/change-proof-boundary.test.js": "test-infrastructure",
     "test/scripts/change-proof-collection-safety.test.js": "test-infrastructure",
@@ -2682,6 +2693,11 @@
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js",
         "test/integration/helpers/cluster-test-helpers.js"
+      ]
+    },
+    "test/bootstrap/bootstrap-partition-registry-authority-witness.test.js": {
+      "files": [
+        "test/partition/partition-founding-stamp.js"
       ]
     },
     "test/bootstrap/bootstrap-request-admission-precheck.test.js": {
@@ -7008,6 +7024,24 @@
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
       ]
     },
+    "test/integration/bootstrap-cdc-provider-replacement-identity.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/cdc-integration-setup.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
+        "test/partition/partition-founding-stamp.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
+    "test/integration/bootstrap-partition-private-storage-consumer.integration.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/partition/partition-service.js",
+        "test/partition/partition-founding-stamp.js"
+      ]
+    },
     "test/integration/call-cell-public-outcome-adversarial.integration.test.js": {
       "files": [
         "src/bootstrap/shared/call-cell-invocation-setup.js",
@@ -7037,6 +7071,18 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js"
+      ]
+    },
+    "test/integration/cdc-local-authoritative-private-consumer.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/cdc-integration-setup.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
+        "src/partition/partition-service.js",
+        "test/partition/partition-founding-stamp.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
     "test/integration/cdc-propagation.integration.test.js": {
@@ -7419,6 +7465,19 @@
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
+    "test/integration/replica-handler-partition-private-consumer.integration.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "test/partition/partition-founding-stamp.js"
+      ]
+    },
+    "test/integration/replica-operation-owner-capability-boundary.integration.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "test/partition/partition-founding-stamp.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": {
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js"
@@ -7444,6 +7503,20 @@
     "test/integration/services-p1-self-referential-write.integration.test.js": {
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/integration/services-row-owner-capability-boundary.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/cdc/cdc-integration-service.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/message-group/message-group-service-row-owner.js",
+        "src/node/replica-state-machine.js",
+        "src/node/replica-transport-handler-identity.js",
+        "src/partition/partition-service.js",
+        "test/partition/partition-founding-stamp.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
     "test/integration/single-node-default-replica-count-writes.integration.test.js": {
@@ -8389,6 +8462,12 @@
         "src/partition/partition-constants.js"
       ]
     },
+    "test/partition/managed-router-partition-command-ingress.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
     "test/partition/managed-split-epoch-persistence-effects.test.js": {
       "files": [
         "src/partition/partition-constants.js"
@@ -8421,6 +8500,12 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/partition-command-admission-committed-application.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/raft/raft-rs-durable-store.js"
       ]
     },
     "test/partition/partition-commit-deadline-wait-bound-spent.test.js": {
@@ -12000,6 +12085,24 @@
       "directories": [
         "data/releases",
         "solve"
+      ]
+    },
+    "test/scripts/canonical-system-mutation-capability-boundary-audit.test.js": {
+      "files": [
+        "solve/quests/canonical-system-mutation-capability-boundary/capability-baseline.json",
+        "src/bootstrap/bootstrap-service.js",
+        "src/bootstrap/node-joining-publication-activation.js",
+        "src/bootstrap/owners/bootstrap-topology-snapshot-owner-authoritative-rows.js",
+        "src/bootstrap/shared/partition-service-activation.js",
+        "src/bootstrap/shared/snapshot-catchup-wiring.js",
+        "src/cdc/cdc-integration-service-local-system-table-routing.js",
+        "src/node/replica-handler-committed-membership-methods.js",
+        "src/node/replica-handler-membership-methods.js",
+        "src/node/replica-transport-handler-identity.js",
+        "src/query/sql-query-engine-instance-initializer.js"
+      ],
+      "directories": [
+        "src/partition"
       ]
     },
     "test/scripts/certification-verdict.test.js": {

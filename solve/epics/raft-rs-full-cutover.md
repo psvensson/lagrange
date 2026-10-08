@@ -10,6 +10,7 @@ doneWhen:
     file: solve/oracle/raft-rs-full-cutover.json
 quests:
   - public-binding-two-partition-harness
+  - canonical-system-mutation-capability-boundary
 authorizes:
   - architecture
   - docs

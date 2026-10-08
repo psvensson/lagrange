@@ -178,6 +178,14 @@ export const SUBSYSTEM_OVERRIDES = Object.freeze({
     subsystem: SUBSYSTEM_SERVICES_RUNTIME,
     reason: 'a service handler writing its services row; message-group is only the transport it uses',
   },
+  'test/integration/replica-operation-owner-capability-boundary.integration.test.js': {
+    subsystem: SUBSYSTEM_PLACEMENT_REBALANCE,
+    reason: 'proves replica-operation creation and update ownership at the rebalancer boundary',
+  },
+  'test/integration/replica-handler-partition-private-consumer.integration.test.js': {
+    subsystem: SUBSYSTEM_STORAGE_PARTITION,
+    reason: 'proves a ReplicaHandler consumer cannot traverse a partition service storage-operation port',
+  },
   'test/integration/node-join-convergence-slo.integration.test.js': {
     subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
     reason: 'join SLO is a membership property that happens to be measured during convergence',

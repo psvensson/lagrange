@@ -1,0 +1,101 @@
+{
+  "schema": "solve-quest/2",
+  "id": "canonical-system-mutation-capability-boundary",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Starting from exact clean 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af and preserving the sealed raft-rs operation-port contract, canonical system mutations are admitted, proposed and applied only through existing semantic owners. A reference obtainable from the production registry/provider/router/query/CDC/bootstrap composition cannot reach a raw SQLite connection or statement, arbitrary local mutation function, semantic Raft proposal operation, committed-apply callback, mutable proposal or pending state, invocable private handler, raw socket/server/client, or equivalent alias. PartitionService and MessageRouter keep those implementation capabilities private and expose only named operations and immutable observations. The protected policy is specialized and owner-derived: MessageGroupServiceRowOwner with ReplicaStateMachine owns exact handler-bound SERVICES registration/lifecycle activation; partition service-row creation, ReplicaStateMachine and ReplicaCleanupTombstoneOwner own their exact SERVICES identity, lifecycle, created_at, create_attempt_token and cleanup_token transitions; ReplicaOperationRepository/RebalanceCoordinator own operation rows, workflow fields, and the current creation-time message-group membership tuple with its unique per-group lane, lost-answer adoption/reopen, terminal/update preservation; ReplicaCreateAdmissionOwner owns the durable create_admission CAS. No current post-insert membership phase transition is a positive of this Quest. The same fresh matching payload succeeds from the named current owner and has zero effect from generic gateway, CDC, QUERY, SYSTEM_TABLE_WRITE, FORWARD_WRITE, transaction, bootstrap or migration aliases without that owner capability. No table-wide ban silently captures unrelated fields: every protected field set has one named owner and every unclassified field stops for judgment. Protected system-metadata mutation consumes an exact existing-owner capability before proposal; committed/replayed bytes enter application only through the existing runtime transaction owner's exact captured callback. Serialized origin, purpose, type, digest, node id, boot scalar, copied command or copied committed record is never authority. Local leader, follower redirect, remote leader, retry, replay, managed-split child creation and handler/boot replacement preserve the same private route. Ordinary supported application SQL and DDL, explicitly owner-authorized system mutations, transactions, CDC, bootstrap/rejoin, snapshot catch-up, split/recovery, ACK/reconnect/pressure and restart continue through their existing owners without a second persistence, consensus, router, authentication, workflow or row-lifecycle owner. A whole-graph capability ledger strictly decreases and controlled aliases restore every red escape.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/canonical-system-mutation-capability-boundary/evidence/receipt.json",
+      "requiredReceipts": [
+        "outer-partition-object-graph-has-no-raw-authority",
+        "outer-router-object-graph-has-no-raw-handler-or-socket-authority",
+        "direct-db-local-sql-propose-apply-and-handler-forgeries-have-zero-effect",
+        "committed-apply-enters-only-from-runtime-application-transaction-owner",
+        "protected-system-mutation-capability-is-private-exact-and-noncopyable",
+        "handler-bound-services-active-owner-positive-and-fresh-copy-negative",
+        "services-identity-lifecycle-created-and-cleanup-fields-have-one-writer",
+        "replica-operation-workflow-admission-and-membership-fields-have-one-writer",
+        "generic-query-forward-write-transaction-and-ddl-cannot-upgrade-authority",
+        "ordinary-sql-ddl-and-index-management-remain-functional",
+        "gateway-cdc-bootstrap-and-remote-leader-mutations-remain-functional",
+        "transactions-replay-restart-and-unknown-outcomes-remain-functional",
+        "split-snapshot-catchup-and-recovery-remain-functional",
+        "post-managed-split-child-preserves-protected-field-policy",
+        "identity81-late-create-cleanup-successor-and-settlement-cone-remains-green",
+        "capability-ledger-decreases-and-evasion-mutants-fail",
+        "registered-owner-interactions-pass-on-the-same-bytes"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "compose-over-frozen-operation-port",
+      "statement": "The sealed raft-rs operation-port Quest and its exact frozen semantic port stay valid. This Quest closes public authority reachable around PartitionService and MessageRouter; it does not expose a smaller RawNode facade, remove an operation required by the frozen port, or reinterpret the old receipt."
+    },
+    {
+      "id": "one-existing-owner-per-decision",
+      "statement": "Partition command admission, durable application, SQLite ownership, Raft runtime entry, router connection authority, and each system-row lifecycle decision remain with their existing owners. The boundary transports owner intent and evidence; it does not become a second persistence, consensus, authentication, workflow, or row-lifecycle owner."
+    },
+    {
+      "id": "whole-production-object-graph",
+      "statement": "The closure covers production registry and provider returns, own and prototype properties, getters, aliases, returned callbacks, Map values, handler registration, raw WebSocket/server/client references, direct local delivery and imports. Hiding one property while another callable or traversable path retains equivalent authority is red."
+    },
+    {
+      "id": "private-proposal-and-apply",
+      "statement": "Only the partition write/transaction owner may request a semantic proposal, and only the existing raft-rs application transaction owner may invoke the exact captured committed-apply callback. A recognized command shape or copied committed record cannot enter either boundary."
+    },
+    {
+      "id": "protected-system-mutation-capability",
+      "statement": "Protected metadata mutation requires an unforgeable, nonserializable, exact-instance capability issued by the existing semantic row owner and consumed by the current router/partition admission owners before proposal. The first executable pair is MessageGroupServiceRowOwner.activateReplica through ReplicaStateMachine.runHandlerBoundActivation: the exact STOPPED SERVICES identity, created_at, lifecycle generation and current handler permit ACTIVE. A generic caller carrying the same fresh matching predicate and destination payload has zero effect. Purpose strings, origin enums, booleans, row digests, node/boot fields and signed-looking payload data are not grants. Followers and restart replay do not deserialize a capability: committed bytes reach application only from the existing runtime transaction owner's exact private callback, which may consume durable semantic preconditions owned by the command's row owner. Capability unavailability before proposal is a typed hold/refusal, never a generic SQL fallback."
+    },
+    {
+      "id": "specialized-protected-field-policy",
+      "statement": "The protected policy is an operation-and-field-set registry derived from current owners, not a system-table or name-prefix ban. SERVICES protects creation identity (service_id, service_type, node_id, partition_id, group_id, replica_id, address, created_at), lifecycle transitions (status, state_entered_at, previous_state, trigger_reason, error_message with their owner-stamped updated_at), raft_role publication, and exact cleanup/create generation (cleanup_token, create_attempt_token, created_at). replica_operations protects immutable operation identity, owner workflow/terminal/lease fields, message_group membership fields and create_admission fields. Fields outside this inventory keep current behavior unless a separately recorded owner judgment classifies them."
+    },
+    {
+      "id": "nonvacuous-owner-versus-copy-pair",
+      "statement": "Every protected field-set witness uses two fresh isolated production compositions with byte-identical current row, predicate, destination and handler/boot facts. The owner route succeeds in one; a generic caller route without the owner capability is attempted before any state change in the other and produces zero local mutation, proposal, applied progress or capability mint. Stale-predicate, duplicate-destination, missing-handler, wrong-generation and already-applied failures are separate controls and cannot satisfy this receipt."
+    },
+    {
+      "id": "same-local-and-remote-route",
+      "statement": "Local leader, follower redirect, remote leader, retry, replay and handler or boot replacement use the same private router/proposal chain. Generic QUERY, SYSTEM_TABLE_WRITE, FORWARD_WRITE, executionOptions.buildRequest, public deliver, direct handler calls and raw socket send cannot upgrade a copied protected command into authority. The trusted-private-network assumption remains; this Quest adds no hostile-wire-peer cryptography claim."
+    },
+    {
+      "id": "private-schema-and-transaction-closure",
+      "statement": "Generic SQL, prepared statements, active transaction staging/commit, executeLocalQuery, migration/index DDL, CDC fallback and bootstrap SQL cannot mutate or remove owner-private schema, triggers, fences or runtime tables, and cannot write the specialized SERVICES or replica_operations owner fields without the exact field owner capability. Legitimate bootstrap, migration, lifecycle, CREATE-admission and cleanup access is a narrow existing-owner operation/capability; current membership write access is only the ReplicaOperationRepository/RebalanceCoordinator creation INSERT with its unique-lane recovery contract. None is a caller-selected bootstrap=true, owner name, field list or table-name exception in a generic path."
+    },
+    {
+      "id": "operation-only-external-replacements",
+      "statement": "Actual external raw consumers are replaced by the narrow operation they need: SELECT-only authoritative reads, owned snapshot export/dispatch, immutable consensus status or committed-membership observations, non-callable exact handler-registration identity, immutable connection/reconnect observations, and server-listening status. They never receive the underlying DB, port, handler, Map, socket, server or client."
+    },
+    {
+      "id": "normal-behavior-preserved",
+      "statement": "Supported application SQL and DDL, index management, canonical system-table owner writes, CDC local and remote routing, session commit and rollback, unknown proposal outcomes, bootstrap/seed/rejoin, exact handler unregister/removal, ACK/reconnect/backpressure, snapshot catch-up, split/recovery, replay and restart retain their existing semantics and budgets. A real ManagedSplitWorkflow of the system-table partition installs the same protected policy on each child before it accepts writes; an exact owner mutation succeeds on the child while the fresh copied generic mutation remains refused. No timeout increase or caller-local fallback is acceptance."
+    },
+    {
+      "id": "identity81-regression-cone",
+      "statement": "The boundary preserves current identity81 CREATE linearization and exact-generation cleanup: terminal-first CREATE has no admission or physical work; admission-first CREATE may settle independently and recover the same attempt; created_at and create_attempt_token fence late or rotated attempts; cleanup_token and exact lifecycle generation protect deletion and an ACTIVE successor; replica_operations create_admission fields remain writable only by ReplicaCreateAdmissionOwner, while the current membership tuple is written only on ReplicaOperationRepository/RebalanceCoordinator INSERT and is preserved by later terminal/workflow updates; ordinary terminal settlement and REPLACE source retention remain independent. This is regression preservation, not FreshMG acceptance."
+    },
+    {
+      "id": "capability-ledger-and-mutants",
+      "statement": "A reproducible whole-src import/object/call-graph ledger counts raw database/schema, proposal, apply, queue, handler, socket/server/client and equivalent callback capabilities outside exact private implementation allowlists. Every category ends at zero and the total public-capability inventory strictly decreases. Individually injected alias, getter, callback, Map-value, direct-import, computed-property and raw-send mutants are detected."
+    },
+    {
+      "id": "freshmg-is-separate",
+      "statement": "No FreshMG permit, membership, CREATE, cleanup, settlement, SERVICES split companion, operation protocol or business-specific B1 command is implemented or accepted by this Quest. FreshMG remains parked until the committed higher-boundary bytes are independently approved; it must then prove its original sealed acceptance without reinterpretation."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Every source attempt is frozen on exact bytes and receives category-complete independent verification newer than the attempt. Final verification replays the red controls and positives, reviews the whole alias graph and registered owner interactions, and is recorded as verifier subagent:<id> with verdict approve before landing. A model or static count alone cannot approve."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "harness-fidelity",
+    "owner-interaction"
+  ],
+  "sealedAt": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af"
+}

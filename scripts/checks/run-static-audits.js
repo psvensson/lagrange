@@ -131,6 +131,7 @@ const STATIC_AUDIT_SCRIPTS = Object.freeze([
   'audit:operation-progress-authority',
   'audit:service-portability-claims',
   'audit:current-capabilities',
+  'audit:canonical-system-mutation-capability-boundary',
   'audit:cli-docs',
   'audit:closure-ledger',
   'audit:no-kiro',

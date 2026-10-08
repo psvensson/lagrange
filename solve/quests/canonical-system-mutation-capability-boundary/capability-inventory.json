@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "id": "canonical-system-mutation-capability-boundary-l0-inventory",
+  "baseCommit": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
+  "approvedProposalSha256": "53b966cfce0500c62067752048598ccdc0c2ea7f68608141c49787c93858a73a",
+  "scope": "Exact pre-source inventory for the first private PartitionService L1 leaf; router closure and protected mutation remain L2/L3.",
+  "audit": {
+    "generator": "scripts/checks/canonical-system-mutation-capability-boundary-audit.js",
+    "baseline": "solve/quests/canonical-system-mutation-capability-boundary/capability-baseline.json",
+    "baselineSha256": "662724638832a1daaecc15d6747afbf7f3127ea891c1ebba3b4dbd371d4a7e98",
+    "currentCapabilityOccurrences": 262,
+    "classification": "partial first-partition name-count ratchet",
+    "rule": "Every file/category/name count may only decrease; a new key or increase is red.",
+    "limitation": "This AST identifier ledger is supporting L1 scope evidence. It does not certify the required whole-src import/object/call graph, opaque captures, controlled aliases, getters, callbacks, Maps, or raw-send paths, and it does not satisfy capability-ledger-decreases-and-evasion-mutants-fail. That receipt remains outstanding."
+  },
+  "productionObjectRoots": [
+    {
+      "id": "direct-partition-service",
+      "path": "src/partition/partition-service-assembly.js",
+      "access": "constructed PartitionService instance"
+    },
+    {
+      "id": "bootstrap-partition-services",
+      "path": "src/bootstrap/bootstrap-service.js",
+      "access": "BootstrapService.partitionServices Map"
+    },
+    {
+      "id": "bootstrap-api-partition-services",
+      "path": "src/bootstrap/bootstrap-api.js",
+      "access": "BootstrapAPI.partitionServices Map"
+    },
+    {
+      "id": "replica-handler-local-services",
+      "path": "src/bootstrap/node-joining-publication-activation.js",
+      "access": "ReplicaHandler.localServices and local replica.service"
+    },
+    {
+      "id": "cdc-local-partition-services",
+      "path": "src/cdc/cdc-integration-service-local-system-table-routing.js",
+      "access": "localPartitionServices or partitionServicesProvider() Map"
+    },
+    {
+      "id": "sql-query-engine-provider",
+      "path": "src/query/sql-query-engine-instance-initializer.js",
+      "access": "partitionServicesProvider()"
+    }
+  ],
+  "prototypeRoots": [
+    "src/partition/partition-service-assembly.js",
+    "src/partition/partition-service-split-accessor-base.js",
+    "src/partition/partition-service-cdc-stream-base.js",
+    "src/partition/partition-service-write-metrics-base.js",
+    "src/partition/partition-service-transaction-base.js",
+    "src/partition/partition-service-entry-apply-base.js",
+    "src/partition/partition-service-schema-migration-base.js",
+    "src/partition/partition-service-raft-init-base.js",
+    "src/partition/partition-service-core-base.js"
+  ],
+  "returnedAndCallbackRoots": [
+    {
+      "id": "cdc-generator-db",
+      "path": "src/partition/partition-service-cdc-stream-base.js",
+      "surface": "syncCDCGeneratorDependencies() -> cdcGenerator.db"
+    },
+    {
+      "id": "cdc-delivery-owner",
+      "path": "src/partition/partition-cdc-delivery.js",
+      "surface": "cdcDelivery.owner -> PartitionService"
+    },
+    {
+      "id": "split-snapshot-reader",
+      "path": "src/partition/partition-service-split-accessor-base.js",
+      "surface": "openSplitSnapshotDatabase() -> prepare/Database"
+    },
+    {
+      "id": "operation-port-opening-request",
+      "path": "src/partition/partition-consensus-port-opening.js",
+      "surface": "createOperationPort(request) captures raw DB and apply callback"
+    },
+    {
+      "id": "committed-apply-callback",
+      "path": "src/partition/partition-service-raft-init-base.js",
+      "surface": "operation-port APPLY_COMMITTED_ENTRY callback"
+    },
+    {
+      "id": "registered-transport-handler",
+      "path": "src/partition/partition-service-raft-init-base.js",
+      "surface": "bound transportHandler"
+    },
+    {
+      "id": "event-listener-receiver",
+      "path": "src/partition/partition-service-core-base.js",
+      "surface": "EventEmitter listener this and callback payloads"
+    }
+  ],
+  "externalConsumers": [
+    {
+      "operation": "authoritative SELECT",
+      "paths": [
+        "src/bootstrap/owners/bootstrap-topology-snapshot-owner-authoritative-rows.js",
+        "src/cdc/cdc-integration-service-local-system-table-routing.js"
+      ]
+    },
+    {
+      "operation": "owned snapshot dispatch",
+      "paths": [
+        "src/bootstrap/shared/snapshot-catchup-wiring.js"
+      ]
+    },
+    {
+      "operation": "committed membership/status observation",
+      "paths": [
+        "src/node/replica-handler-committed-membership-methods.js",
+        "src/node/replica-handler-membership-methods.js"
+      ]
+    },
+    {
+      "operation": "exact non-callable handler identity",
+      "paths": [
+        "src/bootstrap/shared/partition-service-activation.js",
+        "src/node/replica-transport-handler-identity.js",
+        "src/partition/partition-service-lifecycle-methods.js"
+      ]
+    }
+  ],
+  "l1OwnerFiles": [
+    "src/partition/partition-service-assembly.js",
+    "src/partition/partition-service-core-base.js",
+    "src/partition/partition-service-raft-init-base.js",
+    "src/partition/partition-service-entry-apply-base.js",
+    "src/partition/partition-service-write-metrics-base.js",
+    "src/partition/partition-service-transaction-base.js",
+    "src/partition/partition-service-cdc-stream-base.js",
+    "src/partition/partition-cdc-generator.js",
+    "src/partition/partition-cdc-delivery.js",
+    "src/partition/partition-service-split-accessor-base.js",
+    "src/partition/partition-consensus-port-opening.js"
+  ],
+  "protectedFieldRegistry": {
+    "SERVICES": {
+      "identityAndGeneration": [
+        "service_id",
+        "service_type",
+        "node_id",
+        "partition_id",
+        "group_id",
+        "replica_id",
+        "address",
+        "created_at",
+        "create_attempt_token"
+      ],
+      "lifecycleAndRole": [
+        "status",
+        "state_entered_at",
+        "previous_state",
+        "trigger_reason",
+        "error_message",
+        "updated_at",
+        "raft_role",
+        "cleanup_token"
+      ],
+      "owners": [
+        "MessageGroupServiceRowOwner",
+        "PartitionServiceRowOwner",
+        "ReplicaStateMachine",
+        "ReplicaCleanupTombstoneOwner"
+      ]
+    },
+    "replica_operations": {
+      "identity": [
+        "operation_id",
+        "type",
+        "partition_id",
+        "replica_id",
+        "target_claim_key",
+        "source_node_id",
+        "target_node_id",
+        "created_at",
+        "entity_type",
+        "entity_id",
+        "membership_publication_epoch",
+        "source_replica_id"
+      ],
+      "workflow": [
+        "status",
+        "workflow_step",
+        "updated_at",
+        "completed_at",
+        "lease_expires_at",
+        "error_message",
+        "steps_history"
+      ],
+      "membership": [
+        "message_group_membership_lane_key",
+        "message_group_membership_phase",
+        "message_group_membership_obligation_state",
+        "message_group_membership_identity",
+        "message_group_learner_stamp",
+        "message_group_voter_stamp",
+        "message_group_removal_stamp",
+        "message_group_source_lifecycle_claim"
+      ],
+      "createAdmission": [
+        "create_admission_state",
+        "create_admission_token",
+        "create_admission_replica_created_at",
+        "create_admission_attempt_token",
+        "create_admission_previous_attempt_token",
+        "create_admission_attempt_seq",
+        "create_admission_workflow_updated_at",
+        "create_admission_owner_incarnation"
+      ],
+      "owners": [
+        "ReplicaOperationRepository",
+        "RebalanceCoordinator",
+        "OperationWorkflowOwner current non-membership progress only",
+        "ReplicaCreateAdmissionOwner"
+      ],
+      "unsupported": "No current semantic operation-row delete/prune or post-insert membership transition."
+    }
+  },
+  "runtimeWitnessCoverage": {
+    "coveredNow": [
+      "direct initialized production PartitionService",
+      "prototype chain",
+      "Map values",
+      "CDC and SQL provider return shapes",
+      "CDC generator returned DB",
+      "CDC delivery owner backreference",
+      "in-memory split snapshot prepare closure",
+      "EventEmitter receiver"
+    ],
+    "outstandingBeforeWholeGraphReceipt": [
+      "actual BootstrapService registration",
+      "actual BootstrapAPI registry",
+      "actual ReplicaHandler registration",
+      "actual CDC composition provider",
+      "actual SQLQueryEngine composition provider",
+      "file-backed split snapshot",
+      "initialization/error/write/transaction/split/restart callback phases",
+      "direct-import and constructor-hook capture attempts",
+      "Symbol and throwing/unclassified getter coverage accounting"
+    ],
+    "claim": "The current P1 receipt is an honest partial red and cannot turn green until outstanding production recipes are added."
+  },
+  "requiredCoupledPairs": [
+    "partition-raft-operation-port",
+    "raft-rs-runtime-application-transaction",
+    "partition-command-admission-committed-application",
+    "managed-router-partition-command-ingress",
+    "partition-private-storage-operation-consumers",
+    "canonical-query-cdc-partition-admission",
+    "services-row-owner-protected-mutation-ingress",
+    "replica-operation-owner-protected-mutation-ingress",
+    "protected-mutation-managed-split-child-ingress"
+  ],
+  "coupledPairState": {
+    "activeExtended": [
+      "partition-raft-operation-port",
+      "raft-rs-runtime-application-transaction"
+    ],
+    "pendingPlan": "solve/quests/canonical-system-mutation-capability-boundary/coupled-pair-plan.json",
+    "pendingCount": 7,
+    "rule": "No planned pair is active or green until its real paired interaction witness exists and is measured."
+  }
+}

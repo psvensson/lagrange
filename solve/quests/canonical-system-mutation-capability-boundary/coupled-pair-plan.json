@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "id": "canonical-system-mutation-capability-boundary-pending-coupled-pairs",
+  "baseCommit": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
+  "authority": "approved higher-Quest v4 SHA256 53b966cfce0500c62067752048598ccdc0c2ea7f68608141c49787c93858a73a",
+  "activeExtensions": [
+    "partition-raft-operation-port",
+    "raft-rs-runtime-application-transaction"
+  ],
+  "pendingPairs": [
+    {
+      "id": "partition-command-admission-committed-application",
+      "status": "pending-genuine-interaction-witness",
+      "description": "Partition command admission/proposal and the raft-rs application transaction keep one command identity while public proposal and copied committed records remain outside both owners.",
+      "endpoints": [
+        {
+          "id": "partition-command-admission-and-proposal",
+          "owners": [
+            "src/partition/partition-committed-command-admission.js",
+            "src/partition/partition-write-kernel.js",
+            "src/partition/partition-service-raft-write-commit.js",
+            "src/partition/partition-service-transaction-base.js"
+          ]
+        },
+        {
+          "id": "partition-private-committed-application",
+          "owners": [
+            "src/raft/raft-rs-application-transaction-owner.js",
+            "src/partition/partition-service-entry-apply-base.js"
+          ]
+        }
+      ],
+      "regressionConeTests": [
+        "test/partition/canonical-system-mutation-capability-boundary.test.js",
+        "test/scripts/canonical-system-mutation-capability-boundary-audit.test.js",
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/partition-transaction-handler.test.js",
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js"
+      ],
+      "requiredInteractionWitness": "One production-composed admitted-command positive paired with public proposal and copied-committed-record negatives on fresh fixtures.",
+      "activationRule": "Add to impact-contracts.json only after the named interaction test exists and is measured; endpoint/unit greens alone are insufficient."
+    },
+    {
+      "id": "managed-router-partition-command-ingress",
+      "status": "pending-genuine-interaction-witness",
+      "description": "MessageRouter private dispatch/current connection authority and PartitionService handler admission preserve local and remote identity without exposing callable handlers or raw sockets.",
+      "endpoints": [
+        {
+          "id": "router-private-dispatch-and-connection-authority",
+          "owners": [
+            "src/transport/message-router.js",
+            "src/transport/message-router-handler-registry.js",
+            "src/transport/message-router-delivery-behaviors.js",
+            "src/transport/message-router-delivery-delegation.js",
+            "src/transport/message-router-inbound-dispatch.js",
+            "src/transport/message-router-connection-authority.js",
+            "src/transport/message-router-server-lifecycle.js",
+            "src/transport/router-server-manager.js"
+          ]
+        },
+        {
+          "id": "partition-private-handler-and-command-admission",
+          "owners": [
+            "src/partition/partition-service-raft-init-base.js",
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/partition/partition-committed-command-admission.js",
+            "src/partition/partition-service-lifecycle-methods.js"
+          ]
+        }
+      ],
+      "regressionConeTests": [
+        "test/partition/canonical-system-mutation-capability-boundary.test.js",
+        "test/bootstrap/partition-activation-handler-boundary.test.js",
+        "test/node/replica-executor-activation-handler-boundary.test.js",
+        "test/transport/message-router.test.js"
+      ],
+      "requiredInteractionWitness": "One real local/follower/remote exact-handler interaction with copied delivery, old handler and raw socket negatives.",
+      "activationRule": "Add to impact-contracts.json only after the named interaction test exists and is measured; endpoint/unit greens alone are insufficient."
+    },
+    {
+      "id": "partition-private-storage-operation-consumers",
+      "status": "pending-genuine-interaction-witness",
+      "description": "Partition persistence and snapshot owners return frozen rows, status, or an owned snapshot action to bootstrap, CDC and node consumers without returning SQLite, the consensus port, or callable handlers.",
+      "endpoints": [
+        {
+          "id": "partition-private-persistence-and-snapshot-owner",
+          "owners": [
+            "src/partition/partition-service-core-base.js",
+            "src/partition/partition-service-raft-init-base.js",
+            "src/partition/partition-service-split-accessor-base.js",
+            "src/partition/partition-service-cdc-stream-base.js"
+          ]
+        },
+        {
+          "id": "bootstrap-cdc-node-read-and-snapshot-consumers",
+          "owners": [
+            "src/bootstrap/owners/bootstrap-topology-snapshot-owner-authoritative-rows.js",
+            "src/bootstrap/shared/snapshot-catchup-wiring.js",
+            "src/cdc/cdc-integration-service-local-system-table-routing.js",
+            "src/node/replica-handler-committed-membership-methods.js",
+            "src/node/replica-handler-membership-methods.js",
+            "src/node/replica-transport-handler-identity.js"
+          ]
+        }
+      ],
+      "regressionConeTests": [
+        "test/partition/canonical-system-mutation-capability-boundary.test.js",
+        "test/scripts/canonical-system-mutation-capability-boundary-audit.test.js",
+        "test/raft/snapshot-dispatcher-wiring.test.js",
+        "test/partition/partition-runtime-reconstruction-leadership.test.js"
+      ],
+      "requiredInteractionWitness": "One real consumer composition proving value-only SELECT/status and owned snapshot action while raw DB/port/handler retrieval is refused.",
+      "activationRule": "Add to impact-contracts.json only after the named interaction test exists and is measured; endpoint/unit greens alone are insufficient."
+    },
+    {
+      "id": "canonical-query-cdc-partition-admission",
+      "status": "pending-genuine-interaction-witness",
+      "description": "Query, gateway, CDC, forwarded write, transaction and bootstrap submission retain ordinary behavior while sharing one PartitionService admission boundary for protected metadata.",
+      "endpoints": [
+        {
+          "id": "query-gateway-cdc-bootstrap-submitters",
+          "owners": [
+            "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
+            "src/control-plane/control-plane-system-table-gateway-query-execution.js",
+            "src/cdc/cdc-integration-service-mutation-operations.js",
+            "src/cdc/cdc-integration-service-mutations.js",
+            "src/cdc/cdc-integration-service-lifecycle.js",
+            "src/cdc/cdc-routed-mutation-readiness.js",
+            "src/query/query-executor-partition-request-builders.js",
+            "src/query/query-executor-partition-delivery.js",
+            "src/query/sql-query-engine-statement-execution.js",
+            "src/query/sql-query-engine-write-execution.js",
+            "src/query/distributed/distributed-write-coordinator.js"
+          ]
+        },
+        {
+          "id": "partition-command-and-private-schema-admission",
+          "owners": [
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/partition/partition-service-write-metrics-base.js",
+            "src/partition/partition-service-transaction-base.js",
+            "src/partition/partition-committed-command-admission.js",
+            "src/partition/partition-write-kernel.js"
+          ]
+        }
+      ],
+      "regressionConeTests": [
+        "test/partition/partition-service-transactions-query-routing.test.js",
+        "test/partition/partition-transaction-handler.test.js",
+        "test/control-plane/control-plane-system-table-gateway.test.js"
+      ],
+      "requiredInteractionWitness": "Real ordinary SQL/CDC/transaction/DDL positives paired with fresh protected generic negatives before proposal or staging.",
+      "activationRule": "Add to impact-contracts.json only after the named interaction test exists and is measured; endpoint/unit greens alone are insufficient."
+    },
+    {
+      "id": "services-row-owner-protected-mutation-ingress",
+      "status": "pending-genuine-interaction-witness",
+      "description": "Exact SERVICES semantic owners may change only their current identity/lifecycle generation while an equivalent generic command has no protected effect.",
+      "endpoints": [
+        {
+          "id": "services-semantic-row-owners",
+          "owners": [
+            "src/message-group/message-group-service-row-owner.js",
+            "src/node/replica-state-machine.js",
+            "src/node/replica-state-machine-registered-activation.js",
+            "src/node/replica-state-machine-serialization.js",
+            "src/node/replica-state-machine-authoritative-transition.js",
+            "src/node/replica-state-machine-failed-create-claim.js",
+            "src/node/replica-state-machine-removal-completion-receipt.js",
+            "src/partition/partition-service-row-owner.js",
+            "src/node/replica-cleanup-tombstone-owner.js"
+          ]
+        },
+        {
+          "id": "services-protected-command-ingress",
+          "owners": [
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
+            "src/control-plane/control-plane-system-table-gateway-query-execution.js",
+            "src/cdc/cdc-integration-service-mutation-operations.js",
+            "src/query/query-executor-partition-request-builders.js",
+            "src/partition/partition-service-transaction-base.js"
+          ]
+        }
+      ],
+      "regressionConeTests": [
+        "test/message-group/message-group-service-row-owner.test.js",
+        "test/node/replica-executor-activation-handler-boundary.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js"
+      ],
+      "requiredInteractionWitness": "Real services-p1 MessageGroupServiceRowOwner positive versus byte-identical fresh generic gateway/CDC/QUERY/FORWARD_WRITE/transaction negatives.",
+      "activationRule": "Add to impact-contracts.json only after the named interaction test exists and is measured; endpoint/unit greens alone are insufficient."
+    },
+    {
+      "id": "replica-operation-owner-protected-mutation-ingress",
+      "status": "pending-genuine-interaction-witness",
+      "description": "Replica operation identity, workflow, creation-time membership tuple and CREATE admission fields move only through their named current owners; generic whole-row or post-insert mutation remains outside authority.",
+      "endpoints": [
+        {
+          "id": "replica-operation-semantic-owners",
+          "owners": [
+            "src/rebalancer/replica-operation-repository.js",
+            "src/rebalancer/replica-operation-repository-mutation-methods.js",
+            "src/rebalancer/rebalance-coordinator-operation-creation.js",
+            "src/rebalancer/operation-workflow-owner.js",
+            "src/node/replica-create-admission-owner.js",
+            "src/bootstrap/replica-operation-create-admission-schema-constants.js",
+            "src/bootstrap/replica-operation-message-group-membership-schema-constants.js"
+          ]
+        },
+        {
+          "id": "replica-operation-protected-command-ingress",
+          "owners": [
+            "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
+            "src/cdc/cdc-integration-service-mutation-operations.js",
+            "src/query/query-executor-partition-request-builders.js",
+            "src/query/query-executor-partition-delivery.js",
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/partition/partition-service-transaction-base.js"
+          ]
+        }
+      ],
+      "regressionConeTests": [
+        "test/rebalancer/message-group-membership-operation-lane.test.js",
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
+        "test/node/replica-create-admission-owner.test.js",
+        "test/node/replica-create-admission-recovery.test.js"
+      ],
+      "requiredInteractionWitness": "Real ReplicaOperationRepository/RebalanceCoordinator and ReplicaCreateAdmissionOwner positives versus byte-identical fresh generic whole-row/field negatives.",
+      "activationRule": "Add to impact-contracts.json only after the named interaction test exists and is measured; endpoint/unit greens alone are insufficient."
+    },
+    {
+      "id": "protected-mutation-managed-split-child-ingress",
+      "status": "pending-genuine-interaction-witness",
+      "description": "Managed split child provisioning installs the same protected command policy before accepting writes while preserving split persistence, backfill, restart and abort behavior.",
+      "endpoints": [
+        {
+          "id": "managed-split-child-provision-and-open",
+          "owners": [
+            "src/partition/managed-split-workflow.js",
+            "src/partition/managed-split-workflow-provisioning-methods.js",
+            "src/partition/managed-split-workflow-state-methods.js",
+            "src/partition/managed-split-topology-adapter.js",
+            "src/partition/managed-split-workflow-topology-bindings.js"
+          ]
+        },
+        {
+          "id": "child-protected-command-ingress",
+          "owners": [
+            "src/partition/partition-service-assembly.js",
+            "src/partition/partition-service-raft-init-base.js",
+            "src/partition/partition-committed-command-admission.js"
+          ]
+        }
+      ],
+      "regressionConeTests": [
+        "test/partition/managed-split-workflow.test.js",
+        "test/partition/managed-split-workflow-transition-persistence.test.js",
+        "test/partition/managed-split-epoch-persistence-effects.test.js",
+        "test/partition/managed-split-resume-under-write-load.test.js"
+      ],
+      "requiredInteractionWitness": "Real ManagedSplitWorkflow child owner positive versus fresh copied generic negative after policy installation and before child writes.",
+      "activationRule": "Add to impact-contracts.json only after the named interaction test exists and is measured; endpoint/unit greens alone are insufficient."
+    }
+  ],
+  "claim": "These exact endpoints are frozen scope, not active witnessed interactions and not green acceptance."
+}
