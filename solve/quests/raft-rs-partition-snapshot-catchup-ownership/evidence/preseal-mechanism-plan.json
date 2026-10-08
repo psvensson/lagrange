@@ -1,0 +1,269 @@
+{
+  "schema": "snapshot-owner-mechanism-plan/2",
+  "quest": "raft-rs-partition-snapshot-catchup-ownership",
+  "sourceHead": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
+  "authority": {
+    "proposal": "/tmp/raft-rs-takeover-20261008/raft-rs-partition-snapshot-owner-dependency-decision-v7-gpt56.txt",
+    "proposalSha256": "800b8cfeb0c586978a487aac5b347e52f69dfc1089877eb5b7dfc3823e94308c",
+    "astraReview": "/tmp/raft-rs-takeover-20261008/raft-rs-partition-snapshot-owner-dependency-decision-v7-astra-review.txt",
+    "astraReviewSha256": "841489103ebee438eb4d8fc8979bc17cfe0ecfa78fbfecc66220b5c065060513",
+    "materialization": "Astra-approved v7 may be materialized into this unsealed Quest draft only; no seal, source, test receipt promotion, commit or epic closure is authorized.",
+    "orderingRuling": "/tmp/raft-rs-takeover-20261008/snapshot-owner-publication-barrier-quest-ordering-astra-ruling.txt",
+    "orderingRulingSha256": "e5b74f92c5940cb5116283304fd6bbb0557b52524bfa61f8edca422f0d26c907",
+    "materializedDraftReview": "/tmp/raft-rs-takeover-20261008/snapshot-owner-v7-materialized-draft-astra-review.txt",
+    "materializedDraftReviewDisposition": "rejected pending bounded ordering/design wording correction; this file remains unsealed planning only",
+    "formatV2": "/tmp/raft-rs-takeover-20261008/raft-rs-application-image-manifest-native-binding-v2-astra-design.txt",
+    "formatV2Sha256": "382b203221c9dd73656a8d53df0cd0343bfb8e3f4d36861614e310d5b7b65e1b",
+    "nativeTransitionsV31": "/tmp/raft-rs-takeover-20261008/raft-rs-application-image-native-owner-transitions-v3.1-astra-design.txt",
+    "nativeTransitionsV31Sha256": "80d522e572c81dfee7e35272edec8d6cf6686c9fd9e7a46a35dd3935a2539d01",
+    "threeFileDraftReview": "/tmp/raft-rs-takeover-20261008/snapshot-quest-three-file-draft-v2-v3-gpt55-review.txt",
+    "threeFileDraftReviewSha256": "a7c685a94ad0c9de967a3c42e505fb33fd10eec79ddcdf78a688dc2f206e7354",
+    "r4FutureWitness": "/tmp/raft-rs-takeover-20261008/snapshot-r4-local-open-future-acceptance-gpt56-report.txt",
+    "r4FutureWitnessSha256": "980f63864812b55571cd786922c78119eb6e3c3441dfdaf14328827b9b886c5c",
+    "r5IndependentVerdict": "/tmp/raft-rs-takeover-20261008/r5-owner-matrix-v2-independent-review-gpt56.txt",
+    "r5IndependentVerdictSha256": "3efc167236e07212c033de58c71cf21f7a52ba8ba316fd28673626d38273b73c",
+    "pathBPlan": "/tmp/raft-rs-takeover-20261008/snapshot-path-b-seven-receipt-plan-v2-gpt55.txt",
+    "pathBPlanSha256": "763b7eb57909819635b5fa9ecba4d8494734cb5184e481f26239ca6305fe1f33",
+    "unsealedStatus": "UNSEALED_FALSE; this update remains planning only and grants no source, seal, receipt, commit, push or FreshMG authorization",
+    "pathBPlanHistoricalRejected": "/tmp/raft-rs-takeover-20261008/snapshot-path-b-seven-receipt-plan-gpt55.txt",
+    "pathBPlanHistoricalRejectedSha256": "87b71f132644005e70686de0ae403cbc2ac81df3a2b88a10bf53b86bd75fc4be",
+    "pathBPlanSuccessor": "/tmp/raft-rs-takeover-20261008/snapshot-path-b-seven-receipt-plan-v2-gpt55.txt",
+    "pathBPlanSuccessorSha256": "763b7eb57909819635b5fa9ecba4d8494734cb5184e481f26239ca6305fe1f33",
+    "pathBPlanReviewV2": "/tmp/raft-rs-takeover-20261008/snapshot-path-b-seven-receipt-plan-astra-review-v2.txt",
+    "pathBPlanReviewV2Sha256": "98c491313704374593c44203e230cfdd93afa1ca1ba0fc59258a62e7200451ae",
+    "questAndPathBReview": "/tmp/raft-rs-takeover-20261008/snapshot-quest-three-file-and-path-b-v2-astra-review.txt",
+    "questAndPathBReviewSha256": "b3e6340fb82094fd32a520713a137018c6c22c6bfdacad203f3b0420ab65cfc7",
+    "nativeOwnerEndpointsV32aPending": "/tmp/raft-rs-takeover-20261008/raft-rs-application-image-native-owner-endpoints-v3.2a-astra-design.txt",
+    "nativeOwnerEndpointsV32aPendingSha256": "51d59c047919556970a6f230bfe00348e54a6ada043fb30a97e5d71b4022aa9a",
+    "nativeOwnerEndpointsV32aStatus": "pending independent review; bound as endpoint proposal only, not implementation-ready approval"
+  },
+  "ownerDecision": {
+    "gates": [
+      "LOCAL_OPEN",
+      "KNOWN_WIPE",
+      "INSTALL_ADMISSION",
+      "READ_UNAVAILABLE"
+    ],
+    "nativeReadyApplicationBarrier": "one coupled sender-publication and receiver native-Ready/application-barrier owner interaction; no sender-only predecessor is sealable here",
+    "coldRestartPositive": "mandatory three-intact-voter local-open/election/commit proof",
+    "freshMg": "parked; this draft does not unpark or satisfy FreshMG",
+    "automaticOpen": "manual callback can prove only bounded interaction; automatic lag detection/cadence remains full-cutover obligation",
+    "identity81Cleanup": "unchanged exact-generation successor cleanup boundary remains required where cleanup is in scope",
+    "sourcePublication": "private Storage published snapshot, durable-first binding, proof-gated compaction, historical B allowed with retained tail; MemStorage.apply_snapshot is receiver-only",
+    "receiverBarrier": "actual ingress plus receiver Ready; atomic same-main-DB app import/Ready durability/applied-config completion before acknowledgement or exposure; same-service continuation allowed after owner-controlled reconstruction",
+    "transactionDrain": "active or LOCAL_STAGING transactions drain or terminate through their owner; no arbitrary rollback, timeout shortening or separate debt marker claim",
+    "sourceIdentityGate": "v2 source image authoring uses authoritative CONFIG owner-RPC cluster identity; cache/default/local SQL fallback cannot seal immutable identity, and failure is typed checkpoint creation refusal before capture/publication/compaction",
+    "nativePendingAndFeedback": "bulk VALID/STAGED without matching native snapshot returns AWAITING_NATIVE_SNAPSHOT; real emitted MsgSnapshot attempts use private report_snapshot finish/failure and bounded retry, never fabricated Ready or caller-selected progress",
+    "freshCreateLateFence": "R5 requires late A CREATE/admission refusal after A closure and B admission, REPLACE source retention, exact-generation cleanup protection and settlement/cleanup/deletion separation",
+    "endpointV32aPending": "SERVICE_RESPONSE/local handler completion is the proposed MsgSnapshot Finish endpoint; raw ACK, direct/enqueue ACK, inline ACK payload and caller scalars are not authority. Durable whole-file lifecycle preflight occurs before registry/mint/core. Unreadability remains HOST_FAILURE/DURABLE_RECORD_READ. Combined receiver transaction and payload_version_unsupported_for_create are pending endpoint-design proposals, not approved implementation."
+  },
+  "pathB": {
+    "probe": "test-receipt reads required IDs, booleans, receipt statuses and overall status from harness-runtime output, including failing baseline receipt output when sealing against a genuine red",
+    "binaryHarness": "acting harnesses run outside probe mode and refuse LAGRANGE_PROBE=1",
+    "externalManifestRequired": [
+      "exact worktree path, HEAD, parent if relevant, status and copied/untracked file provenance",
+      "harness-runtime SHA, Quest harness SHA, every receipt test SHA and supplemental file SHA",
+      "exact command argv, cwd, selected test pattern, allowMultiple value, environment, timeout, exit code and raw stdout/stderr log SHA256",
+      "runner receipt path/SHA and status for green and failing baseline runs; expected-red runs preserve fail receipt output and raw logs rather than hand-written pass flags",
+      "production owner/function/transition reached before failure; setup/import/fixture construction failure is UNMEASURED",
+      "current actual result, desired future result and exact typed status/reason names",
+      "PASS, semantic RED, BLOCKED dependency or UNMEASURED/setup classification with no skip/todo/zero-selected false green",
+      "stage/fixture dependency map; independent current-reachable prefixes and controls run even when another whole cell is red",
+      "independent review packet path/SHA confirming owner-cell coverage and rejecting abandoned-generator output",
+      "for native image receipts, exact D, M, N, payloadVersion, D.membershipEpoch, membershipGenerationIndex, ConfState/config generation, bytes/digests and tamper/replay operation",
+      "before and after source/test/helper/harness/native binary hashes; review fails if bytes change during run",
+      "failure-propagating shell or child-process composition for any multi-command receipt; pipelines/last-command-only success are not accepted",
+      "exact selected test titles/counts and allowMultiple whole-cell justification from raw TAP output",
+      "stage/fixture dependencies and NOT_REACHED downstream clauses recorded separately from blanket receipt PASS dependencies"
+    ],
+    "notClaimed": [
+      "structured-stage currentness enforcement by probe",
+      "digest-bound generator authority",
+      "hand-set pass flags",
+      "historical direct requestSnapshotInstall/CREATE-gate component red as final R3 evidence",
+      "absent R7 suite or BLOCKED placeholder as sealable seven-suite coverage"
+    ],
+    "runner": "scripts/quest-evidence/harness-runtime.js existing binary runner",
+    "abandonedGenerator": "scripts/quest-evidence/raft-rs-partition-snapshot-catchup-ownership.js is not used for Path B and has no digest/currentness authority",
+    "baselineRedPolicy": "baseline reds are measured by the existing runner and may produce failing receipt output; external manifests classify those fail receipts and bind raw logs, hashes and owner-entry evidence. Pass receipts are not fabricated for reds, but runner fail receipts are preserved and probed. Setup/import/fixture failure, skip/todo/zero-selected and downstream NOT_REACHED are unmeasured or blocked, not green.",
+    "allSevenBeforeSeal": "all seven concrete future-green suites and their runner cells must exist before Quest seal; R7 cannot be absent or accepted as a BLOCKED placeholder at seal time",
+    "catalogStatus": "successor v2 closes the three Astra corrections but is not the final receipt catalog until this consolidated wording and exact seven-suite catalog are independently reviewed",
+    "dependencyPolicy": "dependencies are per fixture/stage, not blanket whole-cell PASS gates; current-reachable owner prefixes and independent controls can run while other cells are red",
+    "digestAndShellPolicy": "external manifests bind before/after source, test, helper, harness, native binary hashes, raw logs, argv/cwd/env and exit; shell composition must propagate each required command failure, preferably via one reviewed cell file or checked child-process runner",
+    "finiteSchedulePolicy": "R6/R7 finite pending, report_snapshot, retry, crash/lost-response, stage-expiry and native-boundary schedules must be allocated to concrete assertion groups before seal; timing constants remain proposed owner policy, not timeout-widening permission"
+  },
+  "cells": [
+    {
+      "id": "R1",
+      "receipt": "registered-application-snapshot-preserves-boundary-without-source-hardstate",
+      "name": "Registered application snapshot",
+      "requiredEvidence": "Real initialized file-backed PartitionService through production wrapper and manually invoked registered callback; before v2 capture, source cluster identity is read through authoritative CONFIG owner-RPC with no cache/default fallback. Prove schema, indexes, acknowledged rows, committed transaction/statement outcomes, HLC and sqlite sequence state through the boundary; exclude source HardState/vote/lifecycle/runtime tables; refuse LOCAL_STAGING or unresolved PREPARED state before publication without claiming durable PREPARE. Genuine source publication is NOT_REACHED until the owner-red transition is fixed.",
+      "status": "UNSEALED_FALSE"
+    },
+    {
+      "id": "R2",
+      "receipt": "publication-and-group-generation-are-independently-fenced",
+      "name": "Independent publication and group generation",
+      "requiredEvidence": "Exact v2 D/M/N shape: singleton raft_rs_checkpoint_manifest(manifest_json), canonical M with payloadVersion2 and no membershipEpoch, D carrying membershipEpoch as the routing/publication freshness fact, and N={bindingVersion:1, checkpoint:C} with membershipEpoch omitted. Positive publication9/durable generation0 succeeds when each matches its owner. Canonical wrong generation mutates only D.raftRs.membershipGenerationIndex while payload bytes/M/N remain unchanged: validateCheckpointDescriptor remains VALID and readCheckpoint returns CORRUPT_PAYLOAD with RAFT_RS_CHECKPOINT_REASON.MANIFEST_GENERATION_MISMATCH. Stale publication, foreign group and malformed decimal controls remain separate.",
+      "status": "UNSEALED_FALSE"
+    },
+    {
+      "id": "R3",
+      "receipt": "intact-member-catchup-preserves-local-election-and-incarnation",
+      "name": "Intact member election-safe catch-up and native install admission",
+      "requiredEvidence": "Open exact intact lagging member through LOCAL_OPEN, preserve target local identity/incarnation/election state, exercise delayed/old-leader, loss-of-quorum, joint/history and configuration-change schedules against the actual receiver owner, and require an actual receiver-native accepted Snapshot in Ready with exact v2 image/native binding before install. Final R3 must not use direct requestSnapshotInstall without receiver native Ready as authority. The old CREATE/learner requestSnapshotInstall refusal remains historical component evidence only, not the final intact-member R3 red or receipt. Source record identity remains source lifecycle identity, never target identity.",
+      "status": "UNSEALED_FALSE"
+    },
+    {
+      "id": "R4",
+      "receipt": "unsafe-local-open-and-known-wipe-refuse-without-blocking-safe-cold-restart",
+      "name": "Local open safety, known wipe, read unavailability and cold restart",
+      "requiredEvidence": "Exercise the supported-fault LOCAL_OPEN/KNOWN_WIPE/READ_UNAVAILABLE matrix from the R4 future witness: absent/noncanonical HardState term or vote; missing log; contradictory snapshot; applied beyond log; empty or contradictory ConfState; negative generation; missing applied row with other raft facts present; lifecycle missing/unreadable/retired/wrong incarnation; identity/reservation and durable group mismatch. Each negative proves typed pre-core refusal or owner failure with no unsafe install/campaign/vote/participation; positives keep legal vote0 and coherent lag. Pair with same-byte KNOWN_WIPE HOLD replay and three intact voters cold restarting, electing and committing without a preexisting leader. Historical old-DB clone rollback diagnostics are excluded.",
+      "status": "UNSEALED_FALSE"
+    },
+    {
+      "id": "R5",
+      "receipt": "fresh-learner-component-requires-exact-create-authority",
+      "name": "Exact fresh learner CREATE component",
+      "requiredEvidence": "Exact learner reservation, operation/admission/attempt/physical-worker identity, retry, terminal-first/admission-first, release/reclaim rotation, wrong role/worker/identity and successor generation. Include REPLACE source_replica_id retention, genuine owner-produced branded A/B evidence and physical-worker claim cross-wire at requestSnapshotInstall, old boot evidence refusal, explicit late A CREATE/admission fence after A closure and B admission, exact-generation cleanup preserving B bytes/artifacts, and operation settlement versus cleanup/deletion separation. Component proof remains supplemental and does not unpark FreshMG or prove v2 application-complete compatibility.",
+      "status": "UNSEALED_FALSE"
+    },
+    {
+      "id": "R6",
+      "receipt": "refusal-crash-and-lost-response-continuation-preserve-service",
+      "name": "Refusal and continuation preserve service",
+      "requiredEvidence": "Use concrete receiver-native pending/refusal schedules. Bulk VALID/STAGED without a matching native snapshot returns AWAITING_NATIVE_SNAPSHOT, preserves the live service and cannot be labelled native rejection. A real packet that native does not admit yields native_snapshot_not_admitted for image install only; binding mismatch yields native_snapshot_binding_mismatch before step/import. Refusal causes no application-image import/swap, destructive service shutdown, local lifecycle change or accepted-install marker. Previously verified unaccepted staging may remain under its exact finite lease or be released by its transfer owner; expiry/cleanup affects only that exact stage/pin and cannot delete successor artifacts. Lawful receiver-native term/entry writes remain allowed. Accepted Ready uses the atomic same-main-DB app barrier and exact completion binding; no separate debt or re-registration claim is made.",
+      "status": "UNSEALED_FALSE"
+    },
+    {
+      "id": "R7",
+      "receipt": "real-intact-dispatch-transfer-install-restart-loses-zero-acknowledged-writes",
+      "name": "Real intact owner interaction",
+      "requiredEvidence": "Manual trigger initiates production-registered source path, authoritative source identity, private durable-first native publication, real emitted MsgSnapshot N, bulk stage, unchanged packet handoff, private report_snapshot feedback through SERVICE_RESPONSE/local handler completion, receiver Ready with exactly N, physical combined Ready/app/import commit, same-service continuation or successor fence, restart and later entry replay. Include below-boundary request, too-new request temporary-unavailable/new publication, dropped-packet Failure then native re-emission, stale feedback rejection, empty-tail boundary, B<K joint restart, durable-before-native failure cuts and continuous writes without needless recapture. Callback plus bulk OFFER alone is insufficient. A concrete future-green R7 suite must exist before seal; an absent suite, R1 reused callback red or BLOCKED placeholder cannot satisfy preseal. R7 exercises manual registered dispatch and intact local restart only; FreshMG workflow, two-replace/off-seed placement, automatic lag triggering and wiped-voter replacement remain parked.",
+      "status": "UNSEALED_FALSE"
+    }
+  ],
+  "matrix": [
+    {
+      "class": "LOCAL_OPEN",
+      "requiredAuthority": "exact target-local identity/reservation/lifecycle/incarnation and coherent HardState/log/snapshot/applied/ConfState/generation",
+      "positive": "intact coherent bytes, vote0 and legal lag; three-voter cold restart elects and commits",
+      "refusal": "unreadable defers; missing/corrupt/contradictory facts refuse unsafe core without remote-majority prerequisite"
+    },
+    {
+      "class": "LOCAL_OPEN_FACT_MATRIX",
+      "requiredAuthority": "exact per-fact local owners for identity, reservation, lifecycle/incarnation, HardState, log, snapshot, applied state, ConfState and generation",
+      "positive": "canonical HardState including vote0, coherent lag, matching group/replica and intact lifecycle/reservation",
+      "refusal": "absent/noncanonical HardState term or vote; absent/corrupt/contradictory log/snapshot/applied/ConfState/generation; unreadable/absent/retired/wrong-incarnation lifecycle; identity/reservation conflict; group/replica mismatch; no fabricated absence/HOLD under read-unavailable"
+    },
+    {
+      "class": "KNOWN_WIPE",
+      "requiredAuthority": "readable current DB plus authoritative prior existence and absent durable Raft record",
+      "positive": "none in this Quest",
+      "refusal": "typed reseed-required, durable current-DB HOLD, zero core and same-byte restart refusal"
+    },
+    {
+      "class": "INSTALL_ADMISSION",
+      "requiredAuthority": "receiver-native accepted snapshot Ready plus exact application image/native manifest/lifecycle/service-generation binding, followed by atomic same-main-DB Ready/app/applied-config completion",
+      "positive": "delayed committed or coherent history prefix when receiver accepts it, with same-service continuation after owner-controlled reconstruction",
+      "refusal": "receiver rejection or unaccepted/mismatched/superseded binding refuses before install and preserves pre-acceptance service without separate debt or re-registration claim"
+    },
+    {
+      "class": "READ_UNAVAILABLE",
+      "requiredAuthority": "the actual fact owner for the transition",
+      "positive": "later retry only after fresh exact read/Ready",
+      "refusal": "local read failure blocks LOCAL_OPEN; Ready/image-binding failure blocks INSTALL_ADMISSION only; no fabricated absence/HOLD"
+    },
+    {
+      "class": "COLD_RESTART",
+      "requiredAuthority": "each replica local durable opening facts then ordinary Raft election",
+      "positive": "all intact voters open, elect and commit with no preexisting leader; legal vote0 and coherent lag are accepted local facts",
+      "refusal": "offered snapshots remain unaccepted until separate INSTALL_ADMISSION"
+    }
+  ],
+  "excludedClaims": [
+    "manual rollback/restore of a previous whole replica DB image is unsupported and outside this Quest",
+    "old-clone safe-refusal/no-effect is not claimed",
+    "automatic lag trigger/cadence is not closed",
+    "wiped-member same-voter resurrection is prohibited",
+    "wiped-member fresh-identity replacement remains parked",
+    "the generator/probe does not prove digest-bound currentness",
+    "separate accepted-image debt marker is not claimed",
+    "service re-registration is not claimed; same-service continuation is allowed after owner-controlled reconstruction",
+    "sender-only predecessor is not sealable under this draft",
+    "payloadVersion1 fresh-CREATE artifacts are not intact application snapshots and cannot be a fallback for v2 failure",
+    "bulk stage without native snapshot is pending, not native rejection or install authority",
+    "R1 callback red cannot be reused as R7 receipt without entering the real R7 source-to-target path",
+    "custom digest/result generator output is excluded from Path B evidence authority",
+    "pending or unaccepted snapshot stage never grants operation settlement, membership cleanup, deletion, member-lane release or install authority",
+    "finite unaccepted stage expiry cleans only the exact transfer-owned stage/pin/marker and cannot delete replica or successor artifacts",
+    "R7 does not certify FreshMG, automatic lag triggering, two-replace/off-seed placement or wiped-voter replacement",
+    "whole-cell PASS dependency gates are not a harness-runtime feature and cannot suppress independent current-reachable owner prefixes"
+  ],
+  "preSealOrdering": {
+    "beforeSealAndSource": [
+      "exact owner interaction and scope approved independently, including endpoint v3.2a or reviewed successor where endpoint details are needed",
+      "seven concrete future-green suites and acting harness approved independently; no absent R7 or BLOCKED placeholder may satisfy this",
+      "external exact-baseline manifests frozen with runner-produced fail receipts where genuine baseline reds are measured; before/after source/test/helper/harness/native binary hashes and raw logs are bound",
+      "at least one genuine baseline owner red observed; setup-only and skipped failures rejected; downstream NOT_REACHED clauses classified separately"
+    ],
+    "afterSealAndSourceBeforeLanding": [
+      "exact-candidate all-required greens",
+      "semantic revert/crash mutants",
+      "independent final verification"
+    ]
+  },
+  "baselineRedCandidates": [
+    {
+      "id": "R1",
+      "classification": "semantic RED",
+      "current": "checkpoint_creation_failed after registered callback/checkpoint owner entry",
+      "desired": "socket/application boundary after v2 checkpoint creation"
+    },
+    {
+      "id": "R2",
+      "classification": "semantic RED or BLOCKED",
+      "current": "missing v2 manifest-owned generation mismatch oracle; descriptor corruption/NOT_REACHED is not final reason",
+      "desired": "VALID structural descriptor then CORRUPT_PAYLOAD/MANIFEST_GENERATION_MISMATCH with payload unchanged"
+    },
+    {
+      "id": "R3",
+      "classification": "historical component RED only; not final R3 seal red",
+      "current": "direct requestSnapshotInstall/admission returns rejected_create_admission_required for CREATE/learner-style component ingress",
+      "desired": "final R3 red/green must exercise actual receiver native Ready path for intact-member install authority"
+    },
+    {
+      "id": "R4",
+      "classification": "future-scope RED selected by R4 witness",
+      "current": "multiple local durable fact defects reach native core or untyped owner paths instead of typed pre-core refusal; positives legal vote0/coherent lag pass",
+      "desired": "supported per-fact no-unsafe-install/no-participation plus known-wipe HOLD and cold-restart positives"
+    },
+    {
+      "id": "R5",
+      "classification": "approved component PASS support",
+      "current": "R5 v2 component matrix independently approved as bounded fresh-CREATE/component evidence",
+      "desired": "same evidence bound by final harness; no FreshMG or v2 intact-install claim"
+    },
+    {
+      "id": "R6",
+      "classification": "semantic RED",
+      "current": "install_rejected/shutdown instead of AWAITING_NATIVE_SNAPSHOT pending state before native Ready/refusal",
+      "desired": "stage-first pending plus separate actual native refusal/binding mismatch schedules"
+    },
+    {
+      "id": "R7",
+      "classification": "UNMEASURED until concrete future-green suite exists; not sealable as absent/BLOCKED",
+      "current": "no full source-to-target dispatch harness; R1 callback red cannot be reused as R7",
+      "desired": "end-to-end real native publication, emitted packet, receiver Ready, atomic import, restart and tail replay; concrete suite required before seal"
+    }
+  ],
+  "unresolvedOwnerDecisions": [
+    "Endpoint v3.2a is pending independent review; SERVICE_RESPONSE/local handler completion, durable whole-file lifecycle preflight, combined transaction API and payload_version_unsupported_for_create are not implementation-ready approval yet.",
+    "R3/R7 still need executable real source-to-target owner paths after the v3.1/v3.2a source publication/transport/receiver contract lands; direct requestSnapshotInstall/CREATE-gate component reds do not close final intact-member composition.",
+    "All seven concrete future-green suites must exist before Quest seal; R7 absence or BLOCKED placeholder is not acceptable preseal coverage.",
+    "R4 durable group mismatch currently exposes a missing exact local group-binding owner; final repair must use an approved existing identity/lifecycle/storage binding or an explicitly reviewed owner extension.",
+    "R6 genuine sender MsgSnapshot/refusal branch may be encoded as a future branch, but no crafted packet/Ready or pass-on-missing-producer is allowed; current pending-image branch supplies the real red.",
+    "R5 is independently approved only as bounded fresh-CREATE/component evidence; v2 fresh-CREATE compatibility and full FreshMG/off-seed workflow remain open.",
+    "Path B harness must use harness-runtime; preserve runner fail receipts for genuine baseline reds and bind them with external manifests. The untracked custom digest generator remains excluded and should not be wired into doneWhen or receipts."
+  ]
+}
