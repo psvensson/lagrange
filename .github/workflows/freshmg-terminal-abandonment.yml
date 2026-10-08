@@ -9,120 +9,159 @@ concurrency:
   group: freshmg-terminal-abandonment-20261008
   cancel-in-progress: false
 env:
-  EXPECTED: ee4ddd5ca11eb5edec2b947554419914f8b8d778
-  CANDIDATE: b4aabb36641a15269e0425e1ba3336be106094ac
+  BASE: 99f0de77e4c9954f7f52ac8343471c4cc3515daf
   WORK_BRANCH: work/freshmg-terminal-abandonment-20261008
   QUEST: message-group-fresh-identity-membership
 jobs:
-  preserve-and-review:
+  wake:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - name: Start only existing proof runner
+        run: |
+          set -euo pipefail
+          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
+          if [ "$status" != RUNNING ]; then
+            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
+          fi
+  shared-seed:
+    needs: wake
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 25
     permissions:
       contents: write
-      actions: read
       pull-requests: write
-    env:
-      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: shared-seed-${{ github.run_id }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ env.EXPECTED }}
+          ref: ${{ github.sha }}
+          path: carrier-${{ github.run_id }}
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.BASE }}
+          path: shared-seed-${{ github.run_id }}
+          persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Verify original archives and recover the exact measured commit
+      - name: Preserve assertions while sharing one real seed
         run: |
           set -euo pipefail
-          mkdir -p test-output/failed-only-retention
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
-          python3 - <<'PY'
-          import hashlib,json,os,subprocess,zipfile
-          from pathlib import Path
-          out=Path('test-output/failed-only-retention')
-          specs=[(37781772537,11552577293,'836a6f1072d0af7630312262e09a38d646d3be139974eeae668da6c0444ca72f','measurement-passed-publication-failed'),
-            (37780990679,11552945556,'99d84007a01c3fd4af90ddc003a65375baad0dfaddd9a40b8b6a1ab597535c09','test-fixture-strict-metrics-failed')]
-          records=[]
-          for run,aid,digest,verdict in specs:
-              file=out/f'original-{run}.zip'
-              with file.open('wb') as dest:
-                  subprocess.run(['gh','api',f'repos/psvensson/lagrange/actions/artifacts/{aid}/zip'],stdout=dest,check=True)
-              assert hashlib.sha256(file.read_bytes()).hexdigest()==digest
-              with zipfile.ZipFile(file) as z:
-                  names=z.namelist()
-                  assert len(names)==len(set(names))
-                  assert all('/' not in n and '\\' not in n for n in names)
-                  checked=0
-                  for line in z.read('FINAL_SHA256SUMS').decode().splitlines():
-                      expected,path=line.split(None,1)
-                      member=Path(path.strip()).name
-                      assert hashlib.sha256(z.read(member)).hexdigest()==expected,member
-                      checked+=1
-                  if run==37781772537:
-                      assert z.read('source-sha.txt').decode().strip()==os.environ['CANDIDATE']
-                      assert z.read('final-status.txt')==b'' and z.read('uncommitted.patch')==b''
-                      for name,code in [('red-unit',1),('red-cache',1),('green-unit',0),('green-cache',0),('mutant-status',1),('mutant-step',1),('mutant-sql',1),('lint',0),('shards',0),('test-metrics',0)]:
-                          assert int(z.read(name+'-exit.txt'))==code,name
-                      (out/'candidate.bundle').write_bytes(z.read('candidate.bundle'))
-                      (out/'measurement.json').write_bytes(z.read('measurement.json'))
-                  records.append({'runId':run,'artifactId':aid,'archiveSha256':digest,
-                      'verifiedManifestMembers':checked,'verdict':verdict})
-          (out/'verified-archives.json').write_text(json.dumps(records,indent=2)+'\n')
-          PY
-          git bundle verify test-output/failed-only-retention/candidate.bundle
-          git fetch test-output/failed-only-retention/candidate.bundle HEAD
-          test "$(git rev-parse FETCH_HEAD)" = "$CANDIDATE"
-          git merge-base --is-ancestor "$EXPECTED" "$CANDIDATE"
-          test "$(git rev-list --count "$EXPECTED..$CANDIDATE")" -eq 2
-          git checkout --detach "$CANDIDATE"
-          test -z "$(git status --porcelain --untracked-files=no)"
-          test "$(git diff --name-only "$EXPECTED" -- src)" = src/rebalancer/replica-operation-message-group-membership-authorization.js
-          echo 'd01217f68be1e6f817207750bcf6f389869a2f4016585cc6a2c78802c4fb55f0  src/rebalancer/replica-operation-message-group-membership-authorization.js' | sha256sum -c -
-          git diff --name-status "$EXPECTED" > test-output/failed-only-retention/recovered-paths.txt
-      - name: Persist original evidence and publish without repeating measurements
-        run: |
-          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE"
+          test -z "$(git status --porcelain)"
+          mkdir -p test-output/shared-seed
+          printf 'base=%s\ncarrier=%s\nrunner=%s\nrun=%s\n' "$BASE" "$GITHUB_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/shared-seed/provenance.txt
           npm ci
-          out=test-output/failed-only-retention
-          for run in 37781772537 37780990679; do
-            node scripts/solve.js evidence add "$out/original-$run.zip" --id "$QUEST" --text "Original failed-only T1 attempt $run: exact red/green, guardrail and publication results retained. Measurement 37781772537 passed; packaging failed because zip was absent. No repeated product measurement or changed outer verdict." --json > "$out/canonical-$run.json"
-          done
-          python3 - <<'PY'
-          import json,os
-          from pathlib import Path
-          out=Path('test-output/failed-only-retention')
-          record=json.loads((out/'measurement.json').read_text())
-          record['retentionRun']=int(os.environ['GITHUB_RUN_ID'])
-          record['originalWorkflowConclusion']='failure'
-          record['publicationFailure']='zip command absent after all required measurements passed; exact committed source recovered from verified bundle'
-          archives=json.loads((out/'verified-archives.json').read_text())
-          for a in archives:
-              a['canonicalEvidence']=json.loads((out/f"canonical-{a['runId']}.json").read_text())
-          record['retainedAttempts']=archives
-          q=Path('solve/quests')/os.environ['QUEST']
-          (q/'evidence/failed-only-37781772537.json').write_text(json.dumps(record,indent=2)+'\n')
-          PY
-          node scripts/solve.js note --id "$QUEST" --finding 'Recovered exact b4aabb366 from hash-verified 37781772537 bundle after zip executable absence stopped packaging. All required unit/live-cache red-green and three mutation controls passed; no remeasurement or runtime edit. Retained 37780990679 strict-fixture failure as well as previously canonical lint failure. T1 newly selected terminal abandonment is FAILED/FAILED only; successful REMOVED and mixed rows refuse even with stale learner hints. Existing exact SQL status/step predicates defeat delayed failed-row commands after success. Review, runtime activation and full cutover remain open.' --kind evidence --json > "$out/recovery-note.json"
-          git add -- "solve/quests/$QUEST/evidence/failed-only-37781772537.json" "solve/quests/$QUEST/log.ndjson"
+          python3 ../carrier-$GITHUB_RUN_ID/scripts/quest-evidence/share-membership-cache-boot.py . > test-output/shared-seed/preparation.txt
+          node --check test/integration/message-group-membership-claim-cache.integration.test.js
+          npm exec --no -- eslint test/integration/message-group-membership-claim-cache.integration.test.js > test-output/shared-seed/lint.txt 2>&1
+          npm run test:metrics:scoped:strict -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/shared-seed/test-metrics.txt 2>&1
+          npm run test:metadata:refresh > test-output/shared-seed/metadata.txt 2>&1
+          npm run audit:shards > test-output/shared-seed/shards.txt 2>&1
+          git diff --check
+          git diff --exit-code "$BASE" -- src
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain exact failed-only source proof and publication recovery'
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
+          git add test/integration/message-group-membership-claim-cache.integration.test.js test/shards/
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: run both T1 cache controls in one bounded seed lifetime'
+          git rev-parse HEAD > test-output/shared-seed/source-sha.txt
+      - name: Measure full file and joined teardown under existing budget
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          set +e
+          timeout 90s npm run test:file -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/shared-seed/cache.txt 2>&1
+          status=$?
+          set -e
+          echo "$status" > test-output/shared-seed/cache-exit.txt
+          tail -70 test-output/shared-seed/cache.txt
+          test "$status" -eq 0
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+          text=Path('test-output/shared-seed/cache.txt').read_text()
+          match=re.search(r'ok test/integration/message-group-membership-claim-cache.integration.test.js \((\d+) assertions, (\d+)ms\)',text)
+          assert match, 'classified file result must be explicit'
+          assert int(match[1])>=3, 'parent and both settlement cases must engage'
+          assert int(match[2])<30000, 'whole file must fit hard integration budget'
+          Path('test-output/shared-seed/timing.json').write_text(json.dumps({'fileElapsedMs':int(match[2]),'reportedAssertions':int(match[1]),'budgetMs':30000},indent=2)+'\n')
+          PY
+          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > test-output/shared-seed/regressions.txt 2>&1
+          echo 0 > test-output/shared-seed/regressions-exit.txt
+      - name: Retain measurements and push exact WIP head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          git diff --exit-code "$BASE" -- src
+          test -z "$(git status --porcelain --untracked-files=no)"
+          out=test-output/shared-seed
+          git diff --binary "$BASE" > "$out/change.patch"
+          python3 - <<'PY'
+          import hashlib,json,os,zipfile
+          from pathlib import Path
+          p=Path('test-output/shared-seed')
+          files={f.name:f.read_bytes() for f in p.iterdir() if f.is_file()}
+          manifest={k:hashlib.sha256(v).hexdigest() for k,v in files.items()}
+          with zipfile.ZipFile(p/'proof.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for name,data in files.items(): z.writestr(name,data)
+              z.writestr('manifest.json',json.dumps(manifest,indent=2)+'\n')
+          PY
+          node scripts/solve.js evidence add "$out/proof.zip" --id "$QUEST" --text "Review 4219458702: both FAILED and REMOVED cache controls share one real seed, independent row identities and full unchanged assertions. Existing 30s file budget enforced; source unchanged; not physical membership or distributed proof." --json > "$out/canonical.json"
+          node scripts/solve.js note --id "$QUEST" --attempt "Review 4219458702 corrected: shared seed lifecycle removes duplicated bootstrap/teardown cost without changing SQL/Raft/CDC semantics, settlement assertions or 30s budget. GCP $GITHUB_RUN_ID measures whole-file time and preserves both cases; runtime source unchanged. No source approval or terminal landing." --json > "$out/attempt.json"
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          p=Path('test-output/shared-seed')
+          files={f.name:f.read_text() for f in p.iterdir() if f.is_file() and f.suffix!='.zip'}
+          record={'schema':'freshmg-shared-seed-proof/1','runId':int(os.environ['GITHUB_RUN_ID']),
+            'baseSha':os.environ['BASE'],'carrierSha':os.environ['GITHUB_SHA'],
+            'sourceSha':(p/'source-sha.txt').read_text().strip(),'runner':os.environ['RUNNER_NAME'],
+            'runtimeChanges':False,'independentApproval':False,'distributedAcceptance':False,
+            'outputs':files,'sha256':{k:hashlib.sha256(v.encode()).hexdigest() for k,v in files.items()}}
+          (Path('solve/quests')/os.environ['QUEST']/'evidence'/f'shared-seed-{os.environ["GITHUB_RUN_ID"]}.json').write_text(json.dumps(record,indent=2)+'\n')
+          PY
+          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/shared-seed-$GITHUB_RUN_ID.json"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain bounded shared-seed T1 proof'
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
           git rev-parse HEAD > "$out/published-sha.txt"
-          git status --porcelain > "$out/final-status.txt"
-      - name: Request independent review at published head
+          gh pr comment 107 --repo psvensson/lagrange --body "Review 4219458702 corrected on $(git rev-parse HEAD): both FAILED and REMOVED controls now share one real seed and retain distinct rows, all original assertions, real SQL/Raft/CDC/cache and joined teardown. GCP $GITHUB_RUN_ID enforces the whole-file 30s budget; evidence is canonically retained. No runtime source change or independent approval. Please rereview this exact head."
+          gh pr edit 107 --repo psvensson/lagrange --add-reviewer @copilot
+      - name: Archive every result and recoverable candidate
+        if: always()
         run: |
           set -euo pipefail
-          exact="$(git rev-parse HEAD)"
-          gh pr comment 107 --repo psvensson/lagrange --body "Review 4219025228 corrected at exact $exact. Newly selected terminal abandonment requires FAILED/FAILED; successful REMOVED and mixed terminal states refuse. Same-row CAS defeats stale failed-row writes after success. GCP 37781772537: same tests red then green, 149 regression assertions, two live-cache cases, and three mutation kills. Original packaging failure remains documented; exact measured commit recovered from a verified bundle, not rerun. See evidence/failed-only-37781772537.json. Request category-complete exact-head review, not activation or full-cutover approval."
-          gh pr edit 107 --repo psvensson/lagrange --add-reviewer @copilot
+          mkdir -p test-output/shared-seed
+          git status --porcelain > test-output/shared-seed/final-status.txt
+          git diff --binary > test-output/shared-seed/uncommitted.patch
+          git diff --binary "$BASE" > test-output/shared-seed/full-work.patch
+          if [ "$(git rev-parse HEAD)" != "$BASE" ]; then
+            git bundle create test-output/shared-seed/candidate.bundle HEAD "^$BASE"
+          fi
+          find test-output/shared-seed -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/shared-seed/SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: failed-only-retention-${{ github.run_id }}
-          path: test-output/failed-only-retention/
+          name: freshmg-shared-seed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: shared-seed-${{ github.run_id }}/test-output/shared-seed/
           retention-days: 14
           if-no-files-found: error
