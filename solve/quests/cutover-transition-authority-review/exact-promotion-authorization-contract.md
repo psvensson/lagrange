@@ -1,127 +1,104 @@
-# Exact promotion authorization boundary (review response 4217048455)
+# Exact promotion authorization boundary
 
 Status: proposed implementation contract under the operator-approved J1
-choice. Not a claim that the parked 82b54ef9 product implements it. The receipt
-is false pending review. No existing sealed Quest is edited by this document.
+choice, awaiting independent acceptance. The inherited 82b54ef9 runtime does
+not implement it. No existing sealed Quest is edited. Read
+[the exact holder claim](exact-membership-owner-claim.md) with this contract;
+it is the authority for initial claiming, orphan recovery and successor fencing.
 
-## Existing source and the missing interaction
+## Existing owner and durable carrier
 
-At 82b54ef9, the actual carrier is the replicated `replica_operations` row.
-Its membership columns are owned by
-`src/bootstrap/replica-operation-message-group-membership-schema-constants.js`;
-ordinary repository updates preserve those columns. The owner lease is the
-same row's `lease_expires_at`, mapped to `ownerLeaseExpiresAt` by
-`replica-operation-repository-row-methods.js`. `resolveOperationOwnerNodeId`
-defines who currently owns the operation; the new code must call it, not infer
-ownership from target placement.
+The carrier is the replicated replica_operations row, owned by
+ReplicaOperationRepository. Its membership schema constants and existing
+upgrade loop own the fields. Ordinary operation updates preserve them.
+`message_group_membership_owner_claim` identifies the current membership
+holder, including node, boot, monotonic generation and expiry. It is distinct
+from the immutable pending action permit. The ordinary `lease_expires_at`
+and structural source/target owner are NOT successor membership authority.
 
-The saved cd366cc0 candidate introduces `message_group_membership_permit` and
-`ReplicaOperationMessageGroupMembershipPermitOwner.advanceStage`, reached as
-a subordinate repository operation. That column/method is NOT in the
-integrated product. Reuse/repair that already-proposed interaction in the
-FreshMG Quest; do not invent another store. Its recorded stage names include
-`learner_committed`, `promotion_proposal_in_flight`, and `voter_committed`.
-Its present REMOVE subject and failure-branch rules are rejected and cannot
-be adopted unchanged.
+The preserved cd366cc0 permit candidate is rejected design/code input, not
+accepted runtime. The new bounded source increment remains in the existing
+FreshMG Quest. Its subordinate repository methods are
+claimMessageGroupMembershipOwner and selectMessageGroupMembershipBranch;
+no second database, generic coordinator, scheduling queue or log is created.
+A repository method is not automatically a network authorization boundary.
 
-## Durable carrier and exact linearization
+## One branch-selection commit
 
-The J1 boundary is ONE committed conditional update of the operation row:
+J1 is selected by ONE committed conditional update:
 
-- prior `message_group_membership_phase = learner_committed`;
-- prior exact encoded ADD_LEARNER permit is COMMITTED, with a non-null exact
-  committed learner stamp bound to O/group/T;
-- next phase `promotion_proposal_in_flight`;
-- next permit is PROMOTE, IN_FLIGHT, sequence prior+1, proposalIndex null,
-  preserving O/transitionIdentity/group/S/T, and naming T as effect subject;
-- obligation becomes `unknown`; the same unique group lane stays held.
+- Prior phase is learner_committed, obligation unknown, and the exact stored
+  ADD_LEARNER permit is COMMITTED with a non-null committed learner stamp.
+- O/group/S/T/source-generation tuple and the unique group lane are immutable.
+- The executing repository owns the exact current membership holder claim,
+  has the same current canonical boot, and observes its claim live.
+- Next phase is promotion_proposal_in_flight; next action permit is PROMOTE,
+  IN_FLIGHT, sequence=prior+1 and proposalIndex=null, naming exact T as subject.
+- The same lane and unknown obligation remain held.
 
-The existing ReplicaOperationRepository persistence/gateway path owns that
-update. A repaired `advanceStage` (or its narrow existing-owner successor)
-performs it. `OperationWorkflowOwner` is the only runtime driver and may ask
-for PROMOTE only after the committed row is established by the canonical
-write answer or exact authoritative winner observation.
+The UPDATE matches operation id/type/group/entity, immutable S/T replica and
+node identities, exact encoded identity/source claim, exact holder claim,
+prior phase/obligation/permit and learner stamp, absent voter/removal stamps,
+and canonical ordinary nonterminal status/step plus completed_at IS NULL.
+The next permit's proposer/owner context matches the current holder, NOT the
+old structural owner. Exact current boot is observed through the existing
+authoritative gateway before and after the row write. The full runtime driver
+must bind that context again before an external membership action.
 
-This row commit is the authorization boundary. It is NOT a local queue entry,
-permit construction, proposal index, elapsed lease, runtime-local
-staleTransitionFence, acknowledgement, or later committed-voter observation.
-The SQL row's Raft-backed commit and the subsequent membership Raft commit
-are separate commits, recovered idempotently rather than called one atomic
-cross-group transaction.
+The operation-row SQL/Raft commit is authorization; the subsequent membership
+Raft configuration commit is a DIFFERENT commit. They are not an atomic
+cross-group transaction. Local progress, permit construction, a proposal
+index, elapsed lease, runtime-local stage fence or an acknowledgement cannot
+substitute for the durable row. Unknown write results are re-observed, not
+assumed absent. Claim expiry permits competition; only the exact row CAS
+identifies the holder/branch winner. A new claimant makes an old holder's
+pending branch-selection predicate lose if it commits first.
 
-The UPDATE predicate must match: operation id and REPLACE type; group/entity;
-immutable S/T replica and node identities; exact encoded membership identity
-and source lifecycle claim; lane key; prior phase, obligation and permit;
-exact learner stamp; current canonical owner binding and exact live owner
-lease/fence; and ordinary nonterminal state (`completed_at IS NULL` plus the
-repository's canonical nonterminal status/step predicate). No caller chooses
-which generation or subject counts. A generic terminal writer may win first,
-in which case promotion is not authorized. A terminal writer after this CAS
-must preserve the membership columns and cannot undo authorization.
+## Mutually exclusive pre-promotion abandonment
 
-The next permit must bind the effect subject using the runtime's existing
-`replicaIdentity`/`peerId` dimensions. Permanent target identity fields keep
-meaning T. ADD/PROMOTE use T; successful REMOVE uses S. Failed-learner REMOVE
-uses T only in its pre-promotion branch. The encoded request/receipt must
-carry the exact derived subject; never accept REMOVE plus targetPeerId as a
-substitute for source-retirement evidence.
+From the SAME exact learner-committed basis, a separately justified failed-
+learner branch may select target_removal_proposal_in_flight with REMOVE T.
+It competes with promotion on phase, prior permit and holder claim: both
+cannot win. That branch cannot later promote T or retire S under O.
+Promotion authorization and all its legal successors permanently select
+forward recovery: voter committed, source removal in flight/committed, resolved
+source absence. Generic terminal settlement, takeover, restart or cache loss
+cannot change it back into failed-target removal.
 
-## Monotonic branch selection, not an erasable flag
+ADD/PROMOTE always names T. Successful replacement REMOVE names S. Failed-
+learner REMOVE names T only before promotion authorization and under the
+exclusive abort branch. An exact response binds the same subject and full
+operation/stage/sequence context. Never repurpose targetPeerId to mean S.
+Ordinary terminal state, membership-lane release, source-own applied absence,
+physical cleanup and storage accounting keep their separate existing owners.
 
-`promotion_proposal_in_flight` and all its legal successors permanently select
-forward recovery for this O. Legal successors include voter committed, source
-removal in flight, source removal committed and resolved source absence.
-A terminal operation state, lease renewal/takeover, retry, unknown response,
-missing cache entry or restart cannot rewrite that chain back to a
-pre-promotion/failed-target-removal phase. Conflicting or unreadable phase /
-permit / stamp combinations refuse; they never default to pre-promotion.
+## Unknown outcomes and recovery
 
-The alternate pre-promotion failed-target branch must itself be selected by a
-mutually exclusive conditional update from the same exact learner-committed
-basis, recording target-removal intent. It competes with the promotion CAS;
-both cannot win. That target-removal branch forbids later PROMOTE or source
-removal under O. These are transitions in the existing membership phase and
-permit columns, not another workflow or a new compensation coordinator.
-Pruning cannot erase a still-unresolved membership obligation. A resolved old
-operation never grants authority to a late request: its operation context and
-configuration/lifecycle fences remain necessary at the runtime boundary.
+| Observed durable row | Next action |
+| --- | --- |
+| Exact requested PROMOTE phase/permit or valid forward successor | Recognize the durable direction, then validate current holder/runtime context before reconciling the action |
+| Exact old learner basis | No new grant; retry the conditional authorization or win its exclusive abort alternative; an old read does not cancel delayed SQL |
+| Pre-promotion abort branch | Reconcile T only; delayed promotion authorization against the old basis must lose |
+| Another claimant/sequence | Losing actor has no execution grant; current holder reconciles the immutable action without regressing its branch |
+| Unavailable/inconsistent row or boot | No irreversible dispatch; retain lane/action and let the existing owner reread/retry |
+| Terminal operation with retained membership debt | Ordinary execution stays terminal; claimed membership recovery retains and resolves the separate obligation |
 
-## Unknown answer and restart decision table
+A crash before commit leaves no branch grant. After commit, forward intent
+survives even if PROMOTE was not sent. A lost membership reply is settled by
+exact committed configuration/context, not configuration absence alone.
+Holder takeover does not cancel an already-authorized action. Old late
+requests remain subject to the existing native term/configuration/lifecycle
+fences and permanent identity. Runtime generation/term progress is not a
+replacement for the durable operation and current claimant.
 
-| Observation after an uncertain authorization UPDATE | Permitted next action | Forbidden action |
-| --- | --- | --- |
-| Exact requested PROMOTE permit/phase or a valid forward successor exists | Adopt the committed winner, retain forward direction; current runtime/configuration owner decides whether to retry or observe the membership change | Mint a second O, reset the sequence, or remove T as compensation |
-| Exact old learner-committed basis is observed | No PROMOTE grant. Retry the same conditional authorization; to abandon, win the mutually exclusive pre-promotion target-removal CAS first | Treat one old-state read as cancellation of a delayed promotion authorization |
-| Pre-promotion target-removal CAS has committed | Reconcile exact T removal only under that branch; delayed authorization SQL using the old basis must lose | Send PROMOTE from a previously constructed local permit |
-| Another owner/sequence has advanced | Adopt only after exact O/S/T and canonical owner validation; remain forward if promotion could have been authorized | Use local wall-clock expiry as permission to roll back |
-| Row/read/write outcome unavailable or internally inconsistent | Retain lane and exact obligation; existing owner schedules authoritative reread/retry, with explicit reason | Infer absence, release lane, delete a replica, or dispatch a new irreversible action |
+## Required product proofs
 
-A crash before the row commit leaves no grant; after commit it leaves the
-sticky forward intent even before PROMOTE is sent. After a sent request loses
-its response, current committed configuration/context and the same O/permit
-resolve completion; configuration absence alone does not disprove an in-flight
-request. Runtime generation/term/configuration fencing and exact request
-identity remain required on retries. The current runtime-local stage fence
-is an optimization, never the durable recovery authority.
-
-## Concrete proof obligations for the existing FreshMG implementation
-
-Use real repository SQL/CAS with the existing canonical schemas and runtime
-port, not a test that only supplies a copied grant:
-
-1. Race promotion authorization with ordinary terminal settlement and with
-   pre-promotion target-removal selection; exactly one admissible branch wins.
-2. Lose the authorization answer before/after its actual commit; reopen with
-   no volatile state and prove the table above, including delayed SQL retry.
-3. Advance owner lease/sequence after an old request was built; prove no
-   regressed authorization, wrong subject or stale-runtime admission.
-4. Lose PROMOTE / REMOVE S answers; target rollback remains forbidden and
-   exact committed subject/context settles only its own obligation.
-5. Preserve the lane after ordinary terminal settlement until the existing
-   membership owner proves its exact release condition; cleanup/reservations
-   retain their separate contracts.
-
-The existing eight-receipt FreshMG acceptance still requires actual CREATE,
-state transfer, promotion, two replacements, restart and physical off-seed
-proof. This document defines the missing durable interaction so it can be
-implemented and falsified; it does not certify those later product steps.
+Test promotion versus terminal settlement and abort selection; old holder
+versus winning successor; loss before/after authorization commit; delayed
+losing SQL; exact replay after volatile-state loss; wrong S/T subject; stale
+boot/claim/configuration; retained terminal debt and competing group operation.
+The actual producer of the committed learner basis, runtime request admission,
+promotion/removal settlement and exact CREATE worker remain separate unfinished
+parts of the same FreshMG Quest. Its eight original receipts, including two
+replacements and physical off-seed restart/seed loss, are not satisfied by
+these row-only tests or by this contract.
