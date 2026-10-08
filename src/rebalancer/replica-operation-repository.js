@@ -13,7 +13,7 @@
  * - replica status observation (cache + authoritative)
  * - entity service row lookups
  */
-import {claimMessageGroupMembershipOwner} from
+import {claimMessageGroupMembershipOwner, settleMessageGroupMembershipNonAdmission} from
   './replica-operation-message-group-membership-owner-claim.js';
 import {v4 as uuidv4} from 'uuid';
 import {selectMessageGroupMembershipBranch} from
@@ -578,6 +578,10 @@ class ReplicaOperationRepository {
     this._shuttingDown = false;
   }
   /** Claim membership recovery ownership; no action authorization is created. */
+  settleMessageGroupMembershipNonAdmission(request) {
+    return settleMessageGroupMembershipNonAdmission(this, request);
+  }
+
   claimMessageGroupMembershipOwner(request) {
     return claimMessageGroupMembershipOwner(this, request);
   }
