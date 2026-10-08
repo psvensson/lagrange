@@ -1,4 +1,4 @@
-name: freshmg-cache-visibility-review
+name: freshmg-cache-budget-review
 on:
   push:
     branches: [ops/c0-review-20261008]
@@ -9,15 +9,77 @@ concurrency:
   group: freshmg-cache-visibility
   cancel-in-progress: false
 env:
-  CANDIDATE: 98b4de5f31094e397ce97019d72ebfcadb2a2b36
+  BASE: 2b754edd5b5e026a43e1d9022306549374fada79
   WORK_BRANCH: work/freshmg-null-claim-20261008
   QUEST: message-group-fresh-identity-membership
 jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      candidate: ${{ steps.publish.outputs.candidate }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          path: carrier
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.BASE }}
+          path: work
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Tighten the fixture budget and run canonical artifact producers
+        working-directory: work
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE"
+          test -z "$(git status --porcelain)"
+          mkdir -p test-output/cache-budget-prepare
+          npm ci
+          python3 ../carrier/scripts/quest-evidence/freshmg-cache-budget-correction.py .
+          npx eslint test/integration/message-group-membership-claim-cache.integration.test.js
+          npm run test:metadata:refresh > test-output/cache-budget-prepare/metadata.txt
+          npm run audit:shards > test-output/cache-budget-prepare/shards.txt
+          git diff --check
+          git diff --exit-code "$BASE" -- src
+      - name: Publish only the explicit test and producer output
+        id: publish
+        working-directory: work
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          paths=set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())
+          allowed={'test/integration/message-group-membership-claim-cache.integration.test.js','test/shards/primary-classes.json','test/shards/resource-classes.json','test/shards/subsystem-classes.json','test/shards/impact-graph-seal.json'}
+          assert paths <= allowed, paths
+          PY
+          git add test/integration/message-group-membership-claim-cache.integration.test.js test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'test: enforce cache integration budget and refresh generated shard identities'
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$BASE"
+          git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          candidate="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$candidate"
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$candidate" > test-output/cache-budget-prepare/candidate.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: freshmg-cache-prepare-${{ github.run_id }}
+          path: work/test-output/cache-budget-prepare/
+          retention-days: 14
+          if-no-files-found: error
   wake:
+    needs: prepare
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: read
       id-token: write
     steps:
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
@@ -31,77 +93,89 @@ jobs:
           if [ "$status" != RUNNING ]; then
             gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
           fi
-  cache:
-    needs: wake
+  measure:
+    needs: [prepare, wake]
     runs-on: [self-hosted, gcp]
-    timeout-minutes: 12
+    timeout-minutes: 10
+    env:
+      CANDIDATE: ${{ needs.prepare.outputs.candidate }}
     defaults:
       run:
         shell: bash
-        working-directory: claim-cache-${{ github.run_id }}-${{ github.run_attempt }}
+        working-directory: cache-budget-${{ github.run_id }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ env.CANDIDATE }}
-          path: claim-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          path: cache-budget-${{ github.run_id }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Bind exact source and install dependencies
+      - name: Two predeclared clean executions, both under the existing file budget
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE"
-          test -z "$(git status --porcelain)"
-          mkdir -p test-output/claim-cache
+          mkdir -p test-output/cache-budget
           npm ci
-          node --check test/integration/message-group-membership-claim-cache.integration.test.js
-          printf 'candidate=%s\nrun=%s\nrunner=%s\n' "$CANDIDATE" "$GITHUB_RUN_ID" "$RUNNER_NAME" > test-output/claim-cache/provenance.txt
-      - name: Actual SQL/Raft/CDC/cache, with ordinary reconciliation quiesced
-        run: |
-          set -euo pipefail
+          printf 'candidate=%s\nrun=%s\nrunner=%s\n' "$CANDIDATE" "$GITHUB_RUN_ID" "$RUNNER_NAME" > test-output/cache-budget/provenance.txt
           exec 9>/tmp/lagrange-contract-first-measurement.lock
           flock -w 120 9
-          set +e
-          timeout 180s npm run test:file -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/claim-cache/stdout.txt 2> test-output/claim-cache/stderr.txt
-          status=$?
-          set -e
-          echo "$status" > test-output/claim-cache/exit.txt
-          tail -120 test-output/claim-cache/stdout.txt
-          tail -80 test-output/claim-cache/stderr.txt >&2
-          exit "$status"
-      - name: Retain exact outcome and source hashes on every exit
+          for n in 1 2; do
+            set +e
+            timeout 60s npm run test:file -- test/integration/message-group-membership-claim-cache.integration.test.js > "test-output/cache-budget/$n.stdout.txt" 2> "test-output/cache-budget/$n.stderr.txt"
+            result=$?
+            set -e
+            echo "$result" > "test-output/cache-budget/$n.exit.txt"
+            cat "test-output/cache-budget/$n.stdout.txt"
+            test "$result" -eq 0
+            python3 - "$n" <<'PY'
+          import sys,re
+          from pathlib import Path
+          text=(Path('test-output/cache-budget')/(sys.argv[1]+'.stdout.txt')).read_text()
+          times=re.findall(r'^ok test/integration/message-group-membership-claim-cache.integration.test.js \([^\n]*?, ([0-9]+)ms\)',text,re.M)
+          assert len(times)==1 and int(times[0])<30000, text
+          PY
+          done
+      - name: Retain budget outcome, lint, metadata and phase timings on any failure
         if: always()
         run: |
           set -euo pipefail
-          mkdir -p test-output/claim-cache
+          mkdir -p test-output/cache-budget
           set +e
-          npx eslint test/integration/message-group-membership-claim-cache.integration.test.js > test-output/claim-cache/lint.txt 2> test-output/claim-cache/lint.stderr.txt
-          status=$?
+          npx eslint test/integration/message-group-membership-claim-cache.integration.test.js > test-output/cache-budget/lint.txt 2>&1
+          echo "$?" > test-output/cache-budget/lint.exit.txt
+          npm run audit:shards > test-output/cache-budget/shards.txt 2>&1
+          echo "$?" > test-output/cache-budget/shards.exit.txt
           set -e
-          echo "$status" > test-output/claim-cache/lint-exit.txt
-          git status --porcelain > test-output/claim-cache/final-status.txt
-          sha256sum test/integration/message-group-membership-claim-cache.integration.test.js src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js > test-output/claim-cache/sources.sha256
-          find test-output/claim-cache -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/claim-cache/SHA256SUMS
-          exit "$status"
+          git status --porcelain > test-output/cache-budget/final-status.txt
+          git diff --exit-code "$BASE" -- src > test-output/cache-budget/runtime-diff.txt
+          sha256sum test/integration/message-group-membership-claim-cache.integration.test.js test/shards/*.json > test-output/cache-budget/source.sha256
+          find test-output/cache-budget -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/cache-budget/SHA256SUMS
+          test "$(cat test-output/cache-budget/lint.exit.txt)" = 0
+          test "$(cat test-output/cache-budget/shards.exit.txt)" = 0
+          test ! -s test-output/cache-budget/final-status.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-cache-${{ github.run_id }}
-          path: claim-cache-${{ github.run_id }}-${{ github.run_attempt }}/test-output/claim-cache/
+          name: freshmg-cache-budget-${{ github.run_id }}
+          path: cache-budget-${{ github.run_id }}/test-output/cache-budget/
           retention-days: 14
           if-no-files-found: error
   record:
-    needs: cache
-    if: always()
+    needs: [prepare, measure]
+    if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
       actions: read
       pull-requests: write
+    env:
+      CANDIDATE: ${{ needs.prepare.outputs.candidate }}
+      RESULT: ${{ needs.measure.result }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -111,60 +185,40 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Retain evidence and request review without weakening any assertion
+      - name: Preserve precise verdict; earlier over-budget pass is not accepted
         env:
           GH_TOKEN: ${{ github.token }}
-          RESULT: ${{ needs.cache.result }}
         run: |
           set -euo pipefail
           npm ci
-          mkdir -p test-output/cache-retention
-          export ARCHIVE_NAME="freshmg-cache-$GITHUB_RUN_ID"
-          export ARCHIVE_FILE="test-output/cache-retention/cache-$GITHUB_RUN_ID.zip"
-          gh api "repos/psvensson/lagrange/actions/runs/$GITHUB_RUN_ID/artifacts" > test-output/cache-retention/artifacts.json
-          export ARTIFACT_ID="$(python3 -c 'import json,os; a=[x for x in json.load(open("test-output/cache-retention/artifacts.json"))["artifacts"] if x["name"]==os.environ["ARCHIVE_NAME"]];assert len(a)==1;print(a[0]["id"])')"
-          gh api "repos/psvensson/lagrange/actions/artifacts/$ARTIFACT_ID/zip" > "$ARCHIVE_FILE"
+          export PACKET="$RUNNER_TEMP/cache-budget-packet"
+          mkdir -p "$PACKET" test-output/cache-budget-retention
+          gh run download "$GITHUB_RUN_ID" --repo psvensson/lagrange --name "freshmg-cache-budget-$GITHUB_RUN_ID" --dir "$PACKET"
           python3 - <<'PY'
-          import json,os,hashlib,zipfile
+          import os,hashlib
           from pathlib import Path
-          d=Path('test-output/cache-retention')
-          a=next(x for x in json.loads((d/'artifacts.json').read_text())['artifacts'] if x['id']==int(os.environ['ARTIFACT_ID']))
-          archive=Path(os.environ['ARCHIVE_FILE'])
-          assert hashlib.sha256(archive.read_bytes()).hexdigest()==a['digest'].split(':')[1]
-          with zipfile.ZipFile(archive) as z:
-              for line in z.read('SHA256SUMS').decode().splitlines():
-                  h,n=line.split(None,1)
-                  assert hashlib.sha256(z.read(Path(n).name)).hexdigest()==h, n
-              outputs={n:z.read(n).decode() for n in z.namelist()}
-              if os.environ['RESULT']=='success':
-                  assert outputs['exit.txt'].strip()=='0' and outputs['lint-exit.txt'].strip()=='0'
-                  assert outputs['final-status.txt']==''
-              (d/'observations.json').write_text(json.dumps(outputs,indent=2)+'\n')
+          d=Path(os.environ['PACKET'])
+          for line in (d/'SHA256SUMS').read_text().splitlines():
+              h,n=line.split(None,1)
+              assert hashlib.sha256((d/Path(n).name).read_bytes()).hexdigest()==h,n
           PY
-          node scripts/solve.js evidence add "$ARCHIVE_FILE" --id "$QUEST" --json > test-output/cache-retention/store.json
+          tar -C "$PACKET" -czf "test-output/cache-budget-retention/cache-budget-$GITHUB_RUN_ID.tar.gz" .
+          node scripts/solve.js evidence add "test-output/cache-budget-retention/cache-budget-$GITHUB_RUN_ID.tar.gz" --id "$QUEST" --json > test-output/cache-budget-retention/store.json
           python3 - <<'PY'
-          import json,os
+          import os,json
           from pathlib import Path
-          d=Path('test-output/cache-retention')
-          r={'schema':'freshmg-cache-integration/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'result':os.environ['RESULT'],'independentApproval':False,'multiHostAcceptance':False,'fixtureBoundary':'real seed/issued boot/gateway/SQL/Raft/CDC/cache, but ordinary RebalanceCoordinator shutdown joined before inserting synthetic operation row; separate actual repository facade; no live reconciliation, founder admission or physical CREATE proof','retainedEvidence':json.loads((d/'store.json').read_text()),'outputs':json.loads((d/'observations.json').read_text()),'priorEvidence':['solve/quests/message-group-fresh-identity-membership/evidence/cache-37769585028.json','solve/quests/message-group-fresh-identity-membership/evidence/cache-37768602809.json'],'correction':'Owner-key exclusion alone did not quiesce ordinary lease touching; prior run recorded a claim but correctly failed because the NULL SQL arm did not engage. Current test joins the existing owner lifecycle before fixture insertion. Exact NULL-SQL engagement, unchanged ordinary/identity fields, actual cache claim and zero physical fixture replicas remain asserted.'}
-          p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('cache-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
+          d=Path(os.environ['PACKET'])
+          r={'schema':'freshmg-cache-budget/1','sourceSha':os.environ['CANDIDATE'],'runId':int(os.environ['GITHUB_RUN_ID']),'result':os.environ['RESULT'],'independentApproval':False,'fileBudgetMs':30000,'declaredExecutions':2,'fixtureChange':'use existing replicaStaggerDelayMs=0 test pacing option; election safety/timings unchanged; Node test timeout restored to 30000; phase markers retained','metadata':'canonical refresh plus audit:shards','scope':'quiesced ordinary coordinator, real SQL/Raft/CDC/cache, synthetic row; no live reconciliation or physical admission','previousFunctionalOnlyRun':37770527496,'previousLimit':'30241ms file duration and 120000ms test timeout violated budget; not accepted as budget-conforming proof','retainedEvidence':json.loads(Path('test-output/cache-budget-retention/store.json').read_text()),'outputs':{p.name:p.read_text() for p in d.iterdir()}}
+          p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('cache-budget-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
           PY
-          node scripts/solve.js note --id "$QUEST" --attempt "PR105 cache-only boundary at $CANDIDATE: ordinary reconciliation quiesced via joined existing coordinator shutdown before synthetic row; SQL/Raft/CDC/cache stay actual. GCP $GITHUB_RUN_ID result=$RESULT. No assertion weakened: real NULL SQL arm, exact visible claim and unchanged row/identity are required. Prior owner-key-only attempt 37769585028 did not engage NULL due ordinary lease touching; all failures remain evidence. Not live reconciliation, founder admission, physical or cutover proof."
-          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/cache-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain quiesced-owner real cache integration and explicit limits'
+          node scripts/solve.js note --id "$QUEST" --attempt "PR105 findings 4218403605/4218403662: canonical metadata refreshed and cache test timeout restored to 30 seconds; remove fixture's optional 20ms replica staggering via existing config, retain phase timings. Two predeclared executions must each pass and classifier file time must be below 30 seconds. Run $GITHUB_RUN_ID on $CANDIDATE result=$RESULT. Prior functional 30241ms result retained but not accepted against hard budget. No runtime/election-safety settings changed, no independent approval."
+          git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/cache-budget-$GITHUB_RUN_ID.json"
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain cache budget result and explicit prior limit'
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$CANDIDATE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           published="$(git rev-parse HEAD)"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$published"
-          gh pr comment 105 --repo psvensson/lagrange --body "Exact cache proof $CANDIDATE, GCP $GITHUB_RUN_ID: $RESULT; packet $published. Ordinary reconciliation is now explicitly quiesced with its own joined shutdown, while actual SQL/Raft/CDC/cache remain live. Exact NULL-SQL and cache-visibility assertions unchanged. Earlier founder-token and lease-interleaving failures retained. Review this bounded integration ceiling and source repair independently; no full reconciliation/physical grant or approval inferred."
+          gh pr comment 105 --repo psvensson/lagrange --body "Budget/metadata response on exact $CANDIDATE, GCP $GITHUB_RUN_ID: $RESULT. Canonical test artifacts refreshed, 30-second timeout restored, optional test fixture staggering removed without changing runtime election requirements. Two predeclared runs must both be below the hard file budget. All outcomes retained at $published; previous functional-but-overbudget run is not approved."
           if [ "$RESULT" = success ]; then
-            test "$(gh pr view 105 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)" = "$published"
             gh pr edit 105 --repo psvensson/lagrange --add-reviewer @copilot
           fi
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: freshmg-cache-retention-${{ github.run_id }}
-          path: test-output/cache-retention/
-          retention-days: 14
-          if-no-files-found: error
