@@ -1,0 +1,78 @@
+{
+  "schema": "freshmg-cache-integration/1",
+  "runId": 37768602809,
+  "candidateSha": "b435d6b4cbda9ef37bb54cf1d3835f433c6697d8",
+  "result": "failure",
+  "independentApproval": false,
+  "multiHostAcceptance": false,
+  "fixtureBoundary": "synthetic non-executing operation-row tuple inserted through actual repository; real seed boot/gateway/SQL/Raft/CDC/cache; no physical CREATE grant",
+  "retainedEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "83398b3ba1256e679aa6cee3c96308e09a768ef97d762966ed2ce2d5723aef43",
+      "bytes": 3964,
+      "asset": "message-group-fresh-identity-membership--cache.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--cache.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T11:16:17.448Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "evidence message-group-fresh-identity-membership--cache.zip uploaded and verified",
+      "evidence": "sha256:83398b3ba1256e679aa6cee3c96308e09a768ef97d762966ed2ce2d5723aef43",
+      "asset": "message-group-fresh-identity-membership--cache.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--cache.zip",
+      "bytes": 3964
+    }
+  },
+  "outputs": {
+    "SHA256SUMS": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  test-output/claim-cache/exit.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/final-status.txt\n9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  test-output/claim-cache/lint-exit.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/lint.stderr.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/lint.txt\nf331cc039fad495a3ca34118d86faa557274ce503de270c5eb5dab6a8323bf8f  test-output/claim-cache/provenance.txt\n48393b5a8eb5ea3fe91c88d5a99831c03680160ae177dbdf1ab28b829dbd7e72  test-output/claim-cache/sources.sha256\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/stderr.txt\nf81308eef048c0957e71589063cbf706b1d999678c353d9278d23648504e4e09  test-output/claim-cache/stdout.txt\n",
+    "final-status.txt": "",
+    "exit.txt": "1\n",
+    "lint-exit.txt": "0\n",
+    "lint.stderr.txt": "",
+    "lint.txt": "",
+    "provenance.txt": "candidate=b435d6b4cbda9ef37bb54cf1d3835f433c6697d8\nrun=37768602809\nrunner=lagrange-gcp-runner\n",
+    "sources.sha256": "05f5d50c0cdb959ace55f4908ba4e0b4bc0749a0aea20ddfae006e81d7526cdb  test/integration/message-group-membership-claim-cache.integration.test.js\n15813fb2f933ca46806b6156bc542c2cf0ce518766ba4384be7f4f303fa42256  src/rebalancer/replica-operation-message-group-membership-owner-claim.js\nc62951b8f1738835239e8614ee514b100514a317a8e1f52ee542aa2d309d1f82  src/rebalancer/replica-operation-repository.js\n",
+    "stderr.txt": "",
+    "stdout.txt": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/integration/message-group-membership-claim-cache.integration.test.js\n\n# test-files planned=1\nclassified lane exclusive: 1 file(s), jobs=1\nthermal: unmeasurable (no sensors)\nnot ok test/integration/message-group-membership-claim-cache.integration.test.js (1 assertions, 30656ms)\n# TAP assertions failed; test process exited 1\nTAP version 13\n{\"level\":50,\"time\":\"2026-10-08T11:15:00.069Z\",\"nodeId\":\"membership-claim-cache-seed\",\"pid\":9800,\"subsystem\":\"rebalance-coordinator\",\"operationId\":\"cache-claim-1791458099446\",\"type\":\"REPLACE\",\"partitionId\":\"cache-visibility-fixture-1791458099446\",\"targetNodeId\":\"membership-claim-cache-seed\",\"errorMessage\":\"Message not acknowledged\",\"nodeId\":\"membership-claim-cache-seed\",\"msg\":\"Operation failed\"}\n{\"level\":50,\"time\":\"2026-10-08T11:15:00.118Z\",\"nodeId\":\"membership-claim-cache-seed\",\"pid\":9800,\"subsystem\":\"partition\",\"partitionId\":\"storage_reservations-p1\",\"tableName\":\"storage_reservations\",\"operation\":\"UPDATE\",\"error\":\"Latency topology services are not initialized\",\"nodeId\":\"membership-claim-cache-seed\",\"msg\":\"Failed to deliver CDC event\"}\n# Subtest: repository NULL-lease claim becomes visible through real SystemTableCache\nnot ok 1 - repository NULL-lease claim becomes visible through real SystemTableCache\n  ---\n  duration_ms: 28689.228843\n  type: 'test'\n  location: '/mnt/ciwork/lagrange/lagrange/claim-cache-37768602809-1/test/integration/message-group-membership-claim-cache.integration.test.js:24:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    {\"outcome\":\"unknown\",\"operation\":{\"operationId\":\"cache-claim-1791458099446\",\"type\":\"REPLACE\",\"partitionId\":\"cache-visibility-fixture-1791458099446\",\"entityType\":\"message_group\",\"entityId\":\"cache-visibility-fixture-1791458099446\",\"replicaId\":\"cache-visibility-fixture-1791458099446-target\",\"targetClaimKey\":null,\"sourceNodeId\":\"membership-claim-cache-seed\",\"targetNodeId\":\"membership-claim-cache-seed\",\"status\":\"pending\",\"workflowStep\":\"SENDING\",\"createdAt\":1791458099446,\"updatedAt\":1791458099727,\"completedAt\":null,\"errorMessage\":null,\"stepsHistory\":[{\"step\":\"SENDING\",\"timestamp\":1791458099727,\"previousStep\":\"PENDING\",\"reason\":\"dispatch_sending\",\"ownerKey\":\"cache-claim-1791458099446\",\"readinessSnapshot\":{\"nodeId\":\"membership-claim-cache-seed\",\"dimensions\":{\"processAlive\":false,\"clusterMemberHealthy\":false,\"routingReady\":false,\"loadReady\":false,\"placementEligible\":false,\"provisioningEligible\":false,\"controlPlaneWritable\":false,\"controlPlanePublished\":false,\"controlPlaneRecoveryEligible\":false,\"metadataPublicationHealthy\":false,\"repairEligible\":false,\"serveEligible\":false},\"reasonCodes\":[\"planning_snapshot_refresh_pending\"],\"lifecycleState\":null,\"observedAt\":\"2026-10-08T11:14:58.589Z\",\"decisionDimension\":\"repairEligible\",\"runtimeAuthority\":{\"state\":\"unavailable\",\"authorityAvailable\":false,\"ready\":false,\"processAlive\":false,\"clusterMemberHealthy\":false,\"routingReady\":false,\"writeEligible\":false,\"recoveryEligible\":false,\"repairEligible\":false,\"publication\":{\"state\":\"degraded\",\"healthy\":false,\"mode\":null,\"reason\":null},\"visibility\":{\"state\":\"unavailable\",\"published\":false,\"observedAt\":null},\"repair\":{\"state\":\"not_attempted\",\"applied\":false,\"observedAt\":null},\"provisioning\":{\"state\":\"blocked\",\"eligible\":false},\"failure\":{\"state\":\"present\",\"reason\":\"planning_snapshot_refresh_pending\"},\"reasonCodes\":[\"planning_snapshot_refresh_pending\"]},\"projectionReadinessContract\":{\"state\":\"recovery_open\",\"ready\":false,\"recoveryOpen\":true,\"publication\":{\"ready\":false,\"boundaryOutcome\":null},\"readiness\":{\"serveEligible\":false,\"repairEligible\":false,\"recoveryEligible\":false},\"priorityRecovery\":{\"active\":false,\"reasonCodes\":[\"planning_snapshot_refresh_pending\"]},\"reasonCodes\":[\"planning_snapshot_refresh_pending\"]}}}],\"sourceReplicaId\":\"cache-visibility-fixture-1791458099446-source\",\"messageGroupMembershipLaneKey\":\"message-group:cache-visibility-fixture-1791458099446\",\"messageGroupMembershipPhase\":\"learner_requested\",\"messageGroupMembershipObligationState\":\"intent_recorded\",\"messageGroupMembershipIdentity\":\"{\\\"operationId\\\":\\\"cache-claim-1791458099446\\\",\\\"groupId\\\":\\\"cache-visibility-fixture-1791458099446\\\",\\\"sourceReplicaId\\\":\\\"cache-visibility-fixture-1791458099446-source\\\",\\\"sourceNodeId\\\":\\\"membership-claim-cache-seed\\\",\\\"sourceCreatedAt\\\":1791458099446,\\\"sourceCreateAttemptToken\\\":\\\"cache-claim-1791458099446-nonexecuting-source-fixture\\\",\\\"targetReplicaId\\\":\\\"cache-visibility-fixture-1791458099446-target\\\",\\\"targetPeerId\\\":\\\"3465010311920253561\\\",\\\"targetNodeId\\\":\\\"membership-claim-cache-seed\\\",\\\"targetAddress\\\":\\\"ws://127.0.0.1:56652\\\",\\\"transitionIdentity\\\":\\\"cache-claim-1791458099446-transition\\\",\\\"membershipLaneKey\\\":\\\"message-group:cache-visibility-fixture-1791458099446\\\"}\",\"messageGroupMembershipOwnerClaim\":null,\"messageGroupMembershipPermit\":null,\"messageGroupLearnerStamp\":null,\"messageGroupVoterStamp\":null,\"messageGroupRemovalStamp\":null,\"messageGroupSourceLifecycleClaim\":\"{\\\"replicaId\\\":\\\"cache-visibility-fixture-1791458099446-source\\\",\\\"createdAt\\\":1791458099446,\\\"stateEnteredAt\\\":1791458099446,\\\"createAttemptToken\\\":\\\"cache-claim-1791458099446-nonexecuting-source-fixture\\\"}\",\"createAdmissionState\":null,\"createAdmissionToken\":null,\"createAdmissionReplicaCreatedAt\":null,\"createAdmissionAttemptToken\":null,\"createAdmissionPreviousAttemptToken\":null,\"createAdmissionAttemptSeq\":null,\"createAdmissionWorkflowUpdatedAt\":null,\"createAdmissionOwnerIncarnation\":null,\"membershipPublicationEpoch\":1,\"ownerLeaseExpiresAt\":1791458129727,\"semanticPhase\":\"accepted\",\"witnesses\":{\"activationWitness\":false,\"sourceRetirementWitness\":false,\"settlementWitness\":false,\"failureWitness\":false}},\"claim\":null}\n    + actual - expected\n    \n    + 'unknown'\n    - 'recorded'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'recorded'\n  actual: 'unknown'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///mnt/ciwork/lagrange/lagrange/claim-cache-37768602809-1/test/integration/message-group-membership-claim-cache.integration.test.js:101:14)\n    runNextTicks (node:internal/process/task_queues:64:5)\n    listOnTimeout (node:internal/timers:547:9)\n    process.processTimers (node:internal/timers:521:7)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 28698.45234\n# time=30656ms\n# test-files total=1 pass=0 fail=1 assertions=1\n"
+  },
+  "priorFailure": {
+    "runId": 37767526592,
+    "candidate": "29280b016f464c08204549c89648d74485c97a39",
+    "result": "failure",
+    "firstDivergence": "booted founder service did not supply nonempty CREATE-attempt token expected by new identity format; assertion before operation insertion",
+    "interpretation": "founder source-generation admission remains unresolved product work; not hidden by the isolated cache test",
+    "retainedEvidence": {
+      "id": "message-group-fresh-identity-membership",
+      "uploaded": {
+        "sha256": "11c73245adbf9ae5ec9ffcfe0ea754f332277ecc189e2a23e3c4c55b84f7181b",
+        "bytes": 2539,
+        "asset": "message-group-fresh-identity-membership--founder-37767526592.zip",
+        "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--founder-37767526592.zip"
+      },
+      "entry": {
+        "ts": "2026-10-08T11:16:20.249Z",
+        "type": "finding",
+        "kind": "evidence",
+        "text": "evidence message-group-fresh-identity-membership--founder-37767526592.zip uploaded and verified",
+        "evidence": "sha256:11c73245adbf9ae5ec9ffcfe0ea754f332277ecc189e2a23e3c4c55b84f7181b",
+        "asset": "message-group-fresh-identity-membership--founder-37767526592.zip",
+        "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--founder-37767526592.zip",
+        "bytes": 2539
+      }
+    },
+    "outputs": {
+      "exit.txt": "1\n",
+      "SHA256SUMS": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  test-output/claim-cache/exit.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/final-status.txt\n9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  test-output/claim-cache/lint-exit.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/lint.stderr.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/lint.txt\nc1b93879b0f4180aa795b84b3d95baac98474415723fcd88fdd17cb90a7de280  test-output/claim-cache/provenance.txt\n6556a131a74a2e2a1f6fc464004b47f77894f225bd8ba794a75b74be125da7d6  test-output/claim-cache/sources.sha256\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  test-output/claim-cache/stderr.txt\n84a8254d9d67f37b11eec2da7a74a38f13cf5ff67a4312ee38ea73579e4c5229  test-output/claim-cache/stdout.txt\n",
+      "final-status.txt": "",
+      "lint-exit.txt": "0\n",
+      "lint.stderr.txt": "",
+      "lint.txt": "",
+      "provenance.txt": "candidate=29280b016f464c08204549c89648d74485c97a39\nrun=37767526592\nrunner=lagrange-gcp-runner\n",
+      "sources.sha256": "6bed6489b37ad30d2b30c6adfbcdcabfe7f4754d799c6cd084135506d5657a0c  test/integration/message-group-membership-claim-cache.integration.test.js\n15813fb2f933ca46806b6156bc542c2cf0ce518766ba4384be7f4f303fa42256  src/rebalancer/replica-operation-message-group-membership-owner-claim.js\nc62951b8f1738835239e8614ee514b100514a317a8e1f52ee542aa2d309d1f82  src/rebalancer/replica-operation-repository.js\n",
+      "stderr.txt": "",
+      "stdout.txt": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/integration/message-group-membership-claim-cache.integration.test.js\n\n# test-files planned=1\nclassified lane exclusive: 1 file(s), jobs=1\nthermal: unmeasurable (no sensors)\nnot ok test/integration/message-group-membership-claim-cache.integration.test.js (1 assertions, 29858ms)\n# TAP assertions failed; test process exited 1\nTAP version 13\n# Subtest: repository NULL-lease claim becomes visible through real SystemTableCache\nnot ok 1 - repository NULL-lease claim becomes visible through real SystemTableCache\n  ---\n  duration_ms: 27842.941328\n  type: 'test'\n  location: '/mnt/ciwork/lagrange/lagrange/claim-cache-37767526592-1/test/integration/message-group-membership-claim-cache.integration.test.js:29:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    'object' !== 'string'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'string'\n  actual: 'object'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///mnt/ciwork/lagrange/lagrange/claim-cache-37767526592-1/test/integration/message-group-membership-claim-cache.integration.test.js:57:14)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 27852.147857\n# time=29858ms\n# test-files total=1 pass=0 fail=1 assertions=1\n"
+    }
+  }
+}
