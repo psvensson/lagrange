@@ -2,32 +2,38 @@
   "schema": "test-receipt/1",
   "quest": "cutover-transition-authority-review",
   "status": "fail",
-  "testFileDigests": {},
+  "sourceSha": "4cdeac1c43ccc470ee5816a7439197d1d6c21bf4",
+  "evidence": "solve/quests/cutover-transition-authority-review/evidence/gcp-37736547313.json",
+  "testFileDigests": {
+    "scripts/quest-evidence/cutover-transition-authority-baseline.js": "363e258e16c14151d44a98ff3a33f4d5136b068c51536cf0a419f11e95bafef9"
+  },
   "receipts": [
     {
       "id": "replacement-source-target-and-obligations-classified",
       "passed": false,
-      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+      "detail": "Working census records the source/target conflict; complete phase-specific success/failure table and independent review remain outstanding. No WIP permit accepted."
     },
     {
       "id": "workflow-commit-projection-and-restart-classified",
       "passed": false,
-      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+      "detail": "Actual repository persist versus volatile mirror/progress is traced. Production reachability of the separately locked remote-retry route and full failed-write/restart proof remain open."
     },
     {
       "id": "snapshot-local-open-wipe-and-install-classified",
       "passed": false,
-      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+      "detail": "Draft gate distinctions are recorded; current accepted snapshot/CREATE bytes and the registered durable install chain still require source-bound reconciliation."
     },
     {
       "id": "source-bound-deterministic-discriminators-measured",
-      "passed": false,
-      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+      "passed": true,
+      "command": "node scripts/quest-evidence/cutover-transition-authority-baseline.js test-output/contract-first/baseline.json 4cdeac1c43ccc470ee5816a7439197d1d6c21bf4",
+      "testFile": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "detail": "Measured on lagrange-gcp-runner in Actions run 37736547313: positive dispatch/non-extension controls engage; real store produces 1 CAS winner and 1 conflict while adapter issues 2 dispatches; longer conflicting prefix is accepted by callback. Baseline exits 1 and the Action stays RED. Existing 3 focused files pass 105 assertions. Archive and member hashes verified. This receipt means the bounded discriminator was measured, not that the runtime is corrected, the production race is proved, or certification passed."
     },
     {
       "id": "independent-category-complete-contract-review",
       "passed": false,
-      "detail": "Outstanding contract-review obligation; not yet independently measured and accepted."
+      "detail": "No independent approval has been issued. Owner-interaction, recovery/replay, concurrency/serialization and harness-fidelity review remains mandatory before a runtime repair."
     }
   ]
 }
