@@ -14,7 +14,7 @@ import {REPLICA_OPERATIONS_SCHEMA, STORAGE_RESERVATIONS_SCHEMA} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {generateCreateTableSQL, generateCreateIndexSQL} from
   '../../src/bootstrap/system-table-schema-sql.js';
-import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus, WORKFLOW_STEP_TO_STATUS} from '../../src/rebalancer/replica-status.js';
 import {TEST_OPERATION_ID, TEST_TARGET_NODE_ID, createCoordinatorWithStorage,
   createDeterministicTimerQueue, initializeConfig} from
   '../../test/rebalancer/reservation-dispatch-gate-test-harness.js';
@@ -26,7 +26,7 @@ const [mode, arg, caseName] = process.argv.slice(2);
 const targetStep = (name) => name === 'terminal_committed' ?
   WORKFLOW_STEP.FAILED : WORKFLOW_STEP.SENDING;
 const targetStatus = (name) => name === 'terminal_committed' ?
-  ReplicaStatus.FAILED : ReplicaStatus.SENDING;
+  ReplicaStatus.FAILED : WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.SENDING];
 
 async function worker(dbPath, scenario) {
   initializeConfig();
