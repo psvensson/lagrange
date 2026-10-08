@@ -27,6 +27,7 @@ test('repository NULL-lease claim becomes visible through real SystemTableCache'
     let bootstrap;
     let booted;
     let repository;
+    let coordinatorShutdown;
     try {
       const port = getUniquePort();
       bootstrap = await createVirginSeedBootstrapService({nodeId: NODE,
@@ -120,12 +121,13 @@ test('repository NULL-lease claim becomes visible through real SystemTableCache'
         assert.equal(cache.getAll(TABLE).filter((row) => row.operation_id === id).length, 1);
         assert.equal(cache.getAll('services').some((row) => row.group_id === group), false,
           'no physical source or target is instantiated during the witness');
-        // Stop ordinary reconciliation before releasing the fixture's held
-        // key. SQL/Raft/cache observations above used the live node owners.
-        await coordinator.shutdown();
+        // Shutdown fences ordinary work synchronously; join only after this
+        // held lane returns, so shutdown never waits on its own callback.
+        coordinatorShutdown = coordinator.shutdown();
       });
     } finally {
       repository?.markShuttingDown();
+      await coordinatorShutdown;
       await gracefulShutdown(bootstrap, booted, null);
       await cleanupTestEnvironment();
     }
