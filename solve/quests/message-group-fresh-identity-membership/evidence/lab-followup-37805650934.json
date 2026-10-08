@@ -1,0 +1,2284 @@
+{
+  "schema": "freshmg-lab-followup/1",
+  "runId": 37805650934,
+  "baseSha": "97a030da287160e5597f0dd5ce5d60541caaf5e8",
+  "candidateBeforeRepairSha": "87a200e2c3878bc8e8459e1b96b20bd1571d2e03",
+  "runtimeSourceSha": "605789e86aaf7dcca8fa4406235388b998460eb0",
+  "repairSha": "b8c3aef59de4a5313572c27ee4dc0c81e02571cf",
+  "runtimeChanged": false,
+  "originalLabVerdict": "FAIL",
+  "physicalBaseline": "NOT_RUN",
+  "independentApproval": false,
+  "distributedAcceptance": false,
+  "traces": {
+    "base-trace": {
+      "exitCode": 1,
+      "durationSeconds": 12.224,
+      "tapSha256": "b036bb953df1c496a2c577ad33d07c1b715ee49c780c272bb03b8d2568387457",
+      "trace": [
+        {
+          "elapsedMs": 0,
+          "phase": "group-start"
+        },
+        {
+          "elapsedMs": 165,
+          "phase": "group-ready"
+        },
+        {
+          "elapsedMs": 202,
+          "phase": "client-start",
+          "budgetMs": 8000
+        },
+        {
+          "elapsedMs": 203,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 219,
+          "phase": "proposals-replicated"
+        },
+        {
+          "elapsedMs": 220,
+          "phase": "campaign-requested"
+        },
+        {
+          "elapsedMs": 418,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent",
+            "failureCode": "partition_write_outcome_unknown",
+            "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+            "consensus": {
+              "reason": "leadership-lost"
+            },
+            "partitionId": "faj-dup",
+            "readAuthorityWitness": {
+              "state": "not_applicable"
+            }
+          }
+        },
+        {
+          "elapsedMs": 425,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 425,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 426,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 426,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 426,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 426,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 426,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 426,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 426,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 426,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 437,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 459,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 501,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 582,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 582,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 582,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 582,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 743,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1064,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1704,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1704,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1704,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1704,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1704,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1704,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1704,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1705,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1705,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 1705,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2984,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 2984,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2985,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 2985,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2985,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 2985,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2985,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 2985,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2985,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 2985,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 4985,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 6984,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 6984,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 6984,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 6984,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 6984,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5"
+        },
+        {
+          "elapsedMs": 6984,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 6985,
+          "phase": "client-answer",
+          "response": {
+            "failureCode": "partition_write_outcome_unknown",
+            "partitionId": "faj-dup",
+            "success": false,
+            "error": "The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent",
+            "errorCode": null,
+            "retryAfterMs": null,
+            "deferRetry": false,
+            "participantNodeId": "node-3",
+            "participantAddress": "node-3/partition/faj-dup-r3",
+            "backpressured": false,
+            "failedTable": null,
+            "rows": [],
+            "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+            "spentWait": {
+              "awaited": "settled answer for the write's entry",
+              "entryId": "qexec-71844777-f2b7-4e82-925f-0595aa6eece5",
+              "deliveries": 54,
+              "unknownAnswers": 1,
+              "lostAnswers": 0,
+              "waitedMs": 6567,
+              "lastObservedState": {
+                "state": "partition_write_outcome_unknown",
+                "reason": "leadership-lost",
+                "logIndex": null
+              }
+            }
+          }
+        }
+      ],
+      "executorBudgetMs": 8000
+    },
+    "candidate-trace": {
+      "exitCode": 1,
+      "durationSeconds": 10.664,
+      "tapSha256": "42a9ee48bf977b8578f0c93c6dbbd4dc7f3216895791c6f745fcfc68e1f7cb0b",
+      "trace": [
+        {
+          "elapsedMs": 0,
+          "phase": "group-start"
+        },
+        {
+          "elapsedMs": 162,
+          "phase": "group-ready"
+        },
+        {
+          "elapsedMs": 201,
+          "phase": "client-start",
+          "budgetMs": 8000
+        },
+        {
+          "elapsedMs": 202,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 218,
+          "phase": "proposals-replicated"
+        },
+        {
+          "elapsedMs": 219,
+          "phase": "campaign-requested"
+        },
+        {
+          "elapsedMs": 422,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent",
+            "failureCode": "partition_write_outcome_unknown",
+            "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+            "consensus": {
+              "reason": "leadership-lost"
+            },
+            "partitionId": "faj-dup",
+            "readAuthorityWitness": {
+              "state": "not_applicable"
+            }
+          }
+        },
+        {
+          "elapsedMs": 429,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 429,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 430,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 430,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 430,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 430,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 430,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 430,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 430,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 430,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 440,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 440,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 441,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 441,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 441,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 441,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 441,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 441,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 441,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 441,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 461,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 502,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 583,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 744,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1065,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1065,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1065,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1065,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1065,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1065,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1066,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1066,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1066,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1066,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1706,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1706,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1706,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1706,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1706,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1706,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1706,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1707,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 1707,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 1707,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 2987,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 4987,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 4987,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 4988,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 4988,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 4988,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 4988,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 4988,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 4988,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 6988,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 6988,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 6989,
+          "phase": "delivery-start",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 6989,
+          "phase": "delivery-answer",
+          "address": "node-2/partition/faj-dup-r2",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 6989,
+          "phase": "delivery-start",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 6989,
+          "phase": "delivery-answer",
+          "address": "node-3/partition/faj-dup-r3",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "redirect": "LEADER_REDIRECT",
+            "leaderAddress": "node-1/partition/faj-dup-r1",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 6989,
+          "phase": "delivery-start",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f"
+        },
+        {
+          "elapsedMs": 6989,
+          "phase": "delivery-answer",
+          "address": "node-1/partition/faj-dup-r1",
+          "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+          "response": {
+            "acknowledged": true,
+            "success": false,
+            "error": "No leader available for write operation",
+            "failureCode": "partition_write_not_leader",
+            "partitionId": "faj-dup"
+          }
+        },
+        {
+          "elapsedMs": 6990,
+          "phase": "client-answer",
+          "response": {
+            "failureCode": "partition_write_outcome_unknown",
+            "partitionId": "faj-dup",
+            "success": false,
+            "error": "The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent",
+            "errorCode": null,
+            "retryAfterMs": null,
+            "deferRetry": false,
+            "participantNodeId": "node-3",
+            "participantAddress": "node-1/partition/faj-dup-r1",
+            "backpressured": false,
+            "failedTable": null,
+            "rows": [],
+            "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+            "spentWait": {
+              "awaited": "settled answer for the write's entry",
+              "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+              "deliveries": 54,
+              "unknownAnswers": 1,
+              "lostAnswers": 0,
+              "waitedMs": 6568,
+              "lastObservedState": {
+                "state": "partition_write_outcome_unknown",
+                "reason": "leadership-lost",
+                "logIndex": null
+              }
+            }
+          }
+        },
+        {
+          "elapsedMs": 8340,
+          "phase": "r2-leading"
+        },
+        {
+          "elapsedMs": 8353,
+          "phase": "both-proposals-committed"
+        },
+        {
+          "elapsedMs": 8353,
+          "phase": "network-healed"
+        },
+        {
+          "elapsedMs": 8353,
+          "phase": "answers-joined",
+          "answered": {
+            "failureCode": "partition_write_outcome_unknown",
+            "partitionId": "faj-dup",
+            "success": false,
+            "error": "The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent",
+            "errorCode": null,
+            "retryAfterMs": null,
+            "deferRetry": false,
+            "participantNodeId": "node-3",
+            "participantAddress": "node-1/partition/faj-dup-r1",
+            "backpressured": false,
+            "failedTable": null,
+            "rows": [],
+            "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+            "spentWait": {
+              "awaited": "settled answer for the write's entry",
+              "entryId": "qexec-db7afaa0-8f81-4800-b243-339ab297269f",
+              "deliveries": 54,
+              "unknownAnswers": 1,
+              "lostAnswers": 0,
+              "waitedMs": 6568,
+              "lastObservedState": {
+                "state": "partition_write_outcome_unknown",
+                "reason": "leadership-lost",
+                "logIndex": null
+              }
+            }
+          },
+          "held": {
+            "success": false,
+            "error": "The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent",
+            "failureCode": "partition_write_outcome_unknown",
+            "consensus": {
+              "reason": "leadership-lost"
+            },
+            "partitionId": "faj-dup",
+            "entryId": "faj-B"
+          }
+        }
+      ],
+      "executorBudgetMs": 8000
+    }
+  },
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "466707a2da27ed4768d443469b62faf292a768666dbd25ff8a80eca3e3fa23c0",
+      "bytes": 27535,
+      "asset": "message-group-fresh-identity-membership--lab-followup-37805650934.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--lab-followup-37805650934.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T16:05:21.002Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Lab followup: full-TAP observational F-aj phase traces at two exact sources with unchanged assertions/8s execution budget. Separately repaired pre-gate fixture column copying and 362-to-360-line steering prose. Original failed collector 37804470705 preserved inside this archive: it read summarized stdout instead of full TAP after the base test passed. No trace result overrides original lab FAIL; physical baseline remains not run.",
+      "evidence": "sha256:466707a2da27ed4768d443469b62faf292a768666dbd25ff8a80eca3e3fa23c0",
+      "asset": "message-group-fresh-identity-membership--lab-followup-37805650934.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--lab-followup-37805650934.zip",
+      "bytes": 27535
+    }
+  },
+  "archiveSha256": "466707a2da27ed4768d443469b62faf292a768666dbd25ff8a80eca3e3fa23c0",
+  "repairedTests": "\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/scripts/rule-set-revision.test.js test/scripts/steering-diet.test.js test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js\n\n# test-files planned=3\nclassified lane ordinary: 3 file(s), jobs=4\nthermal: unmeasurable (no sensors)\nok test/scripts/rule-set-revision.test.js (18 assertions, 354ms)\nok test/scripts/steering-diet.test.js (11 assertions, 705ms)\nok test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js (16 assertions, 13734ms)\n# test-files total=3 pass=3 fail=0 assertions=45\n",
+  "steeringAudit": "\n> lagrange-server@0.2.6 audit:steering-diet\n> node scripts/checks/check-steering-diet.js\n\n{\n  \"rules\": 27,\n  \"ruleProblems\": [],\n  \"alwaysLoadFiles\": [\n    \"AGENTS.md\",\n    \"docs/steering/router.md\",\n    \"docs/steering/rules.md\"\n  ],\n  \"alwaysLoadLines\": 360,\n  \"steeringSourceLines\": 574,\n  \"steeringCorpusLines\": 894,\n  \"unregisteredOperations\": []\n}\n",
+  "retainedFailedCollector": {
+    "runId": 37804470705,
+    "sha256": "d3ad1df41bd6a4419dfd2193ffb5f3fe1296c93e8f4c009e14c3b0a045967075",
+    "reason": "passed base file emits trace only in full TAP; old collector incorrectly searched summary stdout"
+  }
+}
