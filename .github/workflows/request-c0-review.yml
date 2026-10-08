@@ -1,36 +1,152 @@
-name: request-freshmg-source-review
+name: freshmg-cache-visibility-review
 on:
   push:
     branches: [ops/c0-review-20261008]
     paths: [.github/workflows/request-c0-review.yml]
 permissions:
   contents: read
-  pull-requests: write
 concurrency:
-  group: request-c0-review-20261008
+  group: freshmg-cache-visibility
   cancel-in-progress: false
+env:
+  CANDIDATE: 29280b016f464c08204549c89648d74485c97a39
+  WORK_BRANCH: work/freshmg-null-claim-20261008
 jobs:
-  request:
+  wake:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - name: Request bounded source review on the exact proof subject
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - run: |
+          set -euo pipefail
+          status="$(gcloud compute instances describe lagrange-ci-runner --project something-2e584 --zone europe-north1-a --format='value(status)')"
+          if [ "$status" != RUNNING ]; then
+            gcloud compute instances start lagrange-ci-runner --project something-2e584 --zone europe-north1-a
+          fi
+  cache:
+    needs: wake
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 12
+    defaults:
+      run:
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EXPECTED: 75977928ec0f8d8f17804e06b08e3ee0965b3f73
+        working-directory: claim-cache-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.CANDIDATE }}
+          path: claim-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Check exact source and test syntax
         run: |
           set -euo pipefail
-          test "$(gh pr view 105 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)" = "$EXPECTED"
-          mkdir -p evidence
-          gh pr view 105 --repo psvensson/lagrange --json headRefOid,baseRefOid,body > evidence/exact-request.json
-          gh pr comment 105 --repo psvensson/lagrange --body "Please review exact $EXPECTED: the narrow SQL NULL lease correction, not the inherited dormant claim/branch implementation. Canonical decoder omits absent lease; the writer now matches IS NULL only for that one field and preserves the exact lease predicate. Actual GCP run 37765480208 retained test-first RED (two failures), unchanged-test GREEN (3 files/62 reported assertions), and controlled removal-of-lease-predicate RED; targeted lint passed. Check invalid non-NULL values, renewal interleaving, single-winner competition, identity preservation and harness fidelity. Return explicit ACCEPT/REJECT with remaining findings; no source landing, activation, cutover or C0 closure is requested."
-          gh pr edit 105 --repo psvensson/lagrange --add-reviewer @copilot
-          gh pr view 105 --repo psvensson/lagrange --json headRefOid,reviewRequests > evidence/request-result.json
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          test -z "$(git status --porcelain)"
+          mkdir -p test-output/claim-cache
+          npm ci
+          node --check test/integration/message-group-membership-claim-cache.integration.test.js
+          printf 'candidate=%s\nrun=%s\nrunner=%s\n' "$CANDIDATE" "$GITHUB_RUN_ID" "$RUNNER_NAME" > test-output/claim-cache/provenance.txt
+      - name: Run real bootstrap, SQL/Raft and SystemTableCache integration
+        id: run
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          set +e
+          timeout 180s npm run test:file -- test/integration/message-group-membership-claim-cache.integration.test.js > test-output/claim-cache/stdout.txt 2> test-output/claim-cache/stderr.txt
+          status=$?
+          set -e
+          echo "$status" > test-output/claim-cache/exit.txt
+          tail -120 test-output/claim-cache/stdout.txt
+          tail -80 test-output/claim-cache/stderr.txt >&2
+          exit "$status"
+      - name: Always retain lint, provenance and the original failure
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p test-output/claim-cache
+          set +e
+          npx eslint test/integration/message-group-membership-claim-cache.integration.test.js > test-output/claim-cache/lint.txt 2> test-output/claim-cache/lint.stderr.txt
+          status=$?
+          set -e
+          echo "$status" > test-output/claim-cache/lint-exit.txt
+          git status --porcelain > test-output/claim-cache/final-status.txt
+          sha256sum test/integration/message-group-membership-claim-cache.integration.test.js src/rebalancer/replica-operation-message-group-membership-owner-claim.js src/rebalancer/replica-operation-repository.js > test-output/claim-cache/sources.sha256
+          find test-output/claim-cache -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/claim-cache/SHA256SUMS
+          exit "$status"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-source-review-${{ github.run_id }}
-          path: evidence/
+          name: freshmg-cache-${{ github.run_id }}
+          path: claim-cache-${{ github.run_id }}-${{ github.run_attempt }}/test-output/claim-cache/
           retention-days: 14
           if-no-files-found: error
+  record:
+    needs: cache
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.CANDIDATE }}
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Canonically retain proof, append actual outcome and push without force
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.cache.result }}
+        run: |
+          set -euo pipefail
+          npm ci
+          mkdir -p test-output/cache-retention
+          export ARCHIVE_NAME="freshmg-cache-$GITHUB_RUN_ID"
+          gh api "repos/psvensson/lagrange/actions/runs/$GITHUB_RUN_ID/artifacts" > test-output/cache-retention/artifacts.json
+          export ARTIFACT_ID="$(python3 -c 'import json,os; a=[x for x in json.load(open("test-output/cache-retention/artifacts.json"))["artifacts"] if x["name"]==os.environ["ARCHIVE_NAME"]];assert len(a)==1;print(a[0]["id"])')"
+          gh api "repos/psvensson/lagrange/actions/artifacts/$ARTIFACT_ID/zip" > test-output/cache-retention/cache.zip
+          python3 - <<'PY'
+          import json,os,hashlib,zipfile
+          from pathlib import Path
+          d=Path('test-output/cache-retention')
+          a=next(x for x in json.loads((d/'artifacts.json').read_text())['artifacts'] if x['id']==int(os.environ['ARTIFACT_ID']))
+          assert hashlib.sha256((d/'cache.zip').read_bytes()).hexdigest()==a['digest'].split(':')[1]
+          with zipfile.ZipFile(d/'cache.zip') as z:
+              for line in z.read('SHA256SUMS').decode().splitlines():
+                  h,n=line.split(None,1)
+                  assert hashlib.sha256(z.read(Path(n).name)).hexdigest()==h, n
+              (d/'observations.json').write_text(json.dumps({n:z.read(n).decode() for n in z.namelist()},indent=2)+'\n')
+          PY
+          node scripts/solve.js evidence add test-output/cache-retention/cache.zip --quest message-group-fresh-identity-membership --json > test-output/cache-retention/store.json
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          d=Path('test-output/cache-retention'); outputs=json.loads((d/'observations.json').read_text())
+          r={'schema':'freshmg-cache-integration/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'result':os.environ['RESULT'],'independentApproval':False,'multiHostAcceptance':False,'retainedEvidence':json.loads((d/'store.json').read_text()),'outputs':outputs}
+          p=Path('solve/quests/message-group-fresh-identity-membership/evidence')/('cache-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
+          PY
+          node scripts/solve.js note --id message-group-fresh-identity-membership --attempt "PR105 cache-visibility review response: exact integration test $CANDIDATE uses real bootstrap, gateway, SQL/Raft and SystemTableCache; run $GITHUB_RUN_ID result=$RESULT. Original output and first failure retained. No cache injection, fake distributed gateway or physical replacement acceptance; no source approval inferred."
+          git add solve/quests/message-group-fresh-identity-membership/log.ndjson "solve/quests/message-group-fresh-identity-membership/evidence/cache-$GITHUB_RUN_ID.json"
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain actual membership-claim cache integration result'
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$CANDIDATE"
+          git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          gh pr comment 105 --repo psvensson/lagrange --body "Cache visibility integration at $CANDIDATE ran in Actions/GCP $GITHUB_RUN_ID: $RESULT. Exact retained evidence is committed at $(git rev-parse HEAD). No acceptance or physical distributed proof is implied; a failed result remains a blocker."
