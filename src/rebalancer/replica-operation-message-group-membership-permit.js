@@ -7,7 +7,8 @@ import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from
 
 const MEMBERSHIP_BRANCH = Object.freeze({PROMOTE: 'promote',
   ABORT_LEARNER: 'abort_learner'});
-const MEMBERSHIP_PHASE = Object.freeze({LEARNER_COMMITTED: 'learner_committed',
+const MEMBERSHIP_PHASE = Object.freeze({LEARNER_REQUESTED: 'learner_requested',
+  LEARNER_IN_FLIGHT: 'learner_proposal_in_flight', LEARNER_COMMITTED: 'learner_committed',
   PROMOTION_IN_FLIGHT: 'promotion_proposal_in_flight',
   TARGET_REMOVAL_IN_FLIGHT: 'target_removal_proposal_in_flight'});
 const MEMBERSHIP_PERMIT_STATE = Object.freeze({COMMITTED: 'committed',
@@ -15,7 +16,8 @@ const MEMBERSHIP_PERMIT_STATE = Object.freeze({COMMITTED: 'committed',
 const MEMBERSHIP_AUTHORIZATION_OUTCOME = Object.freeze({RECORDED: 'recorded',
   CONFLICT: 'conflict', UNAVAILABLE: 'unavailable', UNKNOWN: 'unknown',
   INVALID: 'invalid', STALE_OWNER: 'stale_owner'});
-const MEMBERSHIP_OBLIGATION = Object.freeze({UNKNOWN: 'unknown'});
+const MEMBERSHIP_OBLIGATION = Object.freeze({INTENT_RECORDED: 'intent_recorded',
+  UNKNOWN: 'unknown'});
 const PERMIT_VERSION = 2;
 const MAX_RECORD_BYTES = 16384;
 const IDENTITY_KEYS = Object.freeze(['operationId', 'groupId',

@@ -10,15 +10,16 @@ import {OperationType} from './replica-status.js';
 import {REPLICA_OPERATION_OWNER_LEASE_TTL_MS,
   REPLICA_OPERATION_OWNER_LEASE_ADOPTION, resolveOperationOwnerLeaseAdoption} from './replica-operation-owner-lease.js';
 import {decodeMembershipIdentity, decodeMembershipOwnerClaim,
+  MEMBERSHIP_PHASE, MEMBERSHIP_OBLIGATION,
   MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME} from
   './replica-operation-message-group-membership-permit.js';
 
 const READ = Object.freeze({authoritativeReadMode:
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
 leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED});
-const INITIAL_PHASE = 'learner_requested';
-const INITIAL_OBLIGATION = 'intent_recorded';
-const UNRESOLVED_OBLIGATION = 'unknown';
+const INITIAL_PHASE = MEMBERSHIP_PHASE.LEARNER_REQUESTED;
+const INITIAL_OBLIGATION = MEMBERSHIP_OBLIGATION.INTENT_RECORDED;
+const UNRESOLVED_OBLIGATION = MEMBERSHIP_OBLIGATION.UNKNOWN;
 const answer = (outcome, operation = null, claim = null) =>
   Object.freeze({outcome, operation, claim});
 function sourceClaimMatches(encoded, identity) {
@@ -242,4 +243,4 @@ async function settleMessageGroupMembershipNonAdmission(repository, request) {
   return isDefinitivelySettled(repository, after.row, identity, encodedIdentity) ?
     answer(OUTCOME.RECORDED, after.row) : answer(OUTCOME.UNKNOWN, after.row);
 }
-export {settleMessageGroupMembershipNonAdmission};
+export {settleMessageGroupMembershipNonAdmission, membershipRowWhere, neverAuthorized};
