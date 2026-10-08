@@ -28,7 +28,7 @@
   "censusSize": 2323,
   "digest": "fnv1a32-a479fde2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f905b61d",
+  "observationDigest": "fnv1a32-5dbf317e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2811,6 +2811,7 @@
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -3490,6 +3491,7 @@
       "files": [
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -3500,6 +3502,7 @@
       "files": [
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -3510,6 +3513,7 @@
       "files": [
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -3912,6 +3916,7 @@
         "src/control-plane/owners/service-endpoints-owner.js",
         "src/node/replica-state-machine.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -4591,6 +4596,7 @@
         "src/control-plane/membership-publication-priority-partition-summary.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -4623,6 +4629,7 @@
         "src/control-plane/membership-publication-coordinator-reconcile.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -4745,6 +4752,7 @@
         "src/control-plane/membership-publication-row-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -4758,6 +4766,7 @@
         "src/control-plane/membership-publication-row-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -4772,6 +4781,7 @@
         "src/control-plane/membership-publication-row-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -4793,6 +4803,7 @@
         "src/control-plane/membership-publication-row-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -4908,6 +4919,7 @@
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -6800,6 +6812,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -7572,6 +7585,7 @@
     "test/message-group/message-group-fresh-learner-promotion.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-membership-transition-runtime.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -8012,6 +8026,7 @@
     "test/node/message-group-service-handler-membership.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -8097,6 +8112,7 @@
     "test/node/replica-handler-membership-relay.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -8772,6 +8788,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -9322,6 +9339,7 @@
         "src/partition/partition-service-leadership-transfer.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -9505,6 +9523,7 @@
     "test/raft/raft-rs-backend/durable-commit-sync.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
@@ -9679,6 +9698,7 @@
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
@@ -9725,6 +9745,7 @@
     "test/raft/raft-rs-backend/membership-changed-event.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -9734,6 +9755,7 @@
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -9768,6 +9790,7 @@
     "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-group-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -9780,6 +9803,7 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-host-contract.js",
         "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -9825,6 +9849,7 @@
         "src/node/replica-handler-remove-execution-methods.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-core-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-group-membership-admission.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-membership-administration.js",
@@ -9844,6 +9869,7 @@
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -9880,6 +9906,7 @@
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -9976,6 +10003,7 @@
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -9999,6 +10027,7 @@
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -10034,6 +10063,7 @@
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-core-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -10082,6 +10112,7 @@
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -10093,6 +10124,7 @@
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -10128,6 +10160,7 @@
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -10136,6 +10169,7 @@
     "test/raft/raft-rs-backend/transfer-leadership-drop-classification.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -10146,6 +10180,7 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -10156,6 +10191,7 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
