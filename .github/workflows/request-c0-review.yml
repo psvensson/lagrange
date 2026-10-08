@@ -1,4 +1,4 @@
-name: request-c0-review
+name: request-freshmg-source-review
 on:
   push:
     branches: [ops/c0-review-20261008]
@@ -14,23 +14,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Request exact contract review, not implementation approval
+      - name: Request bounded source review on the exact proof subject
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          EXPECTED: 79bcff42ec29e5a554f7fc7e9e9e4f4ed4c237e7
+          EXPECTED: 75977928ec0f8d8f17804e06b08e3ee0965b3f73
         run: |
           set -euo pipefail
-          test "$(gh pr view 104 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)" = "$EXPECTED"
+          test "$(gh pr view 105 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)" = "$EXPECTED"
           mkdir -p evidence
-          gh pr view 104 --repo psvensson/lagrange --json headRefOid,body > evidence/exact-request.json
-          gh pr comment 104 --repo psvensson/lagrange --body "Exact current C0 review subject: $EXPECTED (not the historical request SHA in the prior body). Read exact-membership-owner-claim.md and classification-disposition-20261008.md. The revision explicitly defines NULL-claim recovery after structural owner loss: existing ADOPT_AS_FENCED_SUCCESSOR eligibility, exact NULL-to-generation-1 operation-row CAS including observed ordinary lease, competing structural/expired successors, and claim-before-orphan-touch ordering. Existing claims use exact old claim, node/boot, generation, phase/action/stamps and conditional commit; issued action permits stay immutable. Promotion/abort authority is the membership holder, not the general orphan sweep. Return category-complete ACCEPT/REJECT of bounded C0 classification, addressing 4217554373/4217554444/4217392058 and exact review identity. Missing driver, claim implementation and multi-host proof remain separately unimplemented; do not approve runtime or closure based on document titles. Source changes will require a separate exact-head review. No merge requested."
-          gh pr edit 104 --repo psvensson/lagrange --add-reviewer @copilot
-          gh pr view 104 --repo psvensson/lagrange --json headRefOid,reviewRequests > evidence/request-result.json
+          gh pr view 105 --repo psvensson/lagrange --json headRefOid,baseRefOid,body > evidence/exact-request.json
+          gh pr comment 105 --repo psvensson/lagrange --body "Please review exact $EXPECTED: the narrow SQL NULL lease correction, not the inherited dormant claim/branch implementation. Canonical decoder omits absent lease; the writer now matches IS NULL only for that one field and preserves the exact lease predicate. Actual GCP run 37765480208 retained test-first RED (two failures), unchanged-test GREEN (3 files/62 reported assertions), and controlled removal-of-lease-predicate RED; targeted lint passed. Check invalid non-NULL values, renewal interleaving, single-winner competition, identity preservation and harness fidelity. Return explicit ACCEPT/REJECT with remaining findings; no source landing, activation, cutover or C0 closure is requested."
+          gh pr edit 105 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 105 --repo psvensson/lagrange --json headRefOid,reviewRequests > evidence/request-result.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: c0-frozen-request-${{ github.run_id }}
+          name: freshmg-source-review-${{ github.run_id }}
           path: evidence/
           retention-days: 14
           if-no-files-found: error
