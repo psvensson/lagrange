@@ -9,7 +9,7 @@ concurrency:
   group: freshmg-cache-visibility
   cancel-in-progress: false
 env:
-  CANDIDATE: 3f7b0fbe7dc954b4d5e606afbc7cc932ec5166ae
+  CANDIDATE: 98b4de5f31094e397ce97019d72ebfcadb2a2b36
   WORK_BRANCH: work/freshmg-null-claim-20261008
   QUEST: message-group-fresh-identity-membership
 jobs:
@@ -50,7 +50,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Bind exact integration fixture and source
+      - name: Bind exact source and install dependencies
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE"
@@ -59,7 +59,7 @@ jobs:
           npm ci
           node --check test/integration/message-group-membership-claim-cache.integration.test.js
           printf 'candidate=%s\nrun=%s\nrunner=%s\n' "$CANDIDATE" "$GITHUB_RUN_ID" "$RUNNER_NAME" > test-output/claim-cache/provenance.txt
-      - name: Actual SQL/Raft/CDC/cache within the existing operation lane
+      - name: Actual SQL/Raft/CDC/cache, with ordinary reconciliation quiesced
         run: |
           set -euo pipefail
           exec 9>/tmp/lagrange-contract-first-measurement.lock
@@ -72,7 +72,7 @@ jobs:
           tail -120 test-output/claim-cache/stdout.txt
           tail -80 test-output/claim-cache/stderr.txt >&2
           exit "$status"
-      - name: Always retain original outcome, lint and source hashes
+      - name: Retain exact outcome and source hashes on every exit
         if: always()
         run: |
           set -euo pipefail
@@ -111,7 +111,7 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Retain uniquely named evidence and request review only on success
+      - name: Retain evidence and request review without weakening any assertion
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ needs.cache.result }}
@@ -146,17 +146,17 @@ jobs:
           import json,os
           from pathlib import Path
           d=Path('test-output/cache-retention')
-          r={'schema':'freshmg-cache-integration/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'result':os.environ['RESULT'],'independentApproval':False,'multiHostAcceptance':False,'fixtureBoundary':'real seed and issued boot; real gateway/SQL/Raft/CDC/cache; synthetic row inside existing operation-key lane; no physical source/CREATE claim','retainedEvidence':json.loads((d/'store.json').read_text()),'outputs':json.loads((d/'observations.json').read_text()),'priorEvidence':'solve/quests/message-group-fresh-identity-membership/evidence/cache-37768602809.json','priorCorrection':'The prior fixture was not non-executing: ordinary reconciliation consumed it and advanced SENDING/lease, so the exact claim CAS correctly returned UNKNOWN. Current fixture explicitly holds the real owner-key lane, without patching SQL/cache/CDC/readiness. Founder-token mismatch remains a separate admission issue.'}
+          r={'schema':'freshmg-cache-integration/1','runId':int(os.environ['GITHUB_RUN_ID']),'candidateSha':os.environ['CANDIDATE'],'result':os.environ['RESULT'],'independentApproval':False,'multiHostAcceptance':False,'fixtureBoundary':'real seed/issued boot/gateway/SQL/Raft/CDC/cache, but ordinary RebalanceCoordinator shutdown joined before inserting synthetic operation row; separate actual repository facade; no live reconciliation, founder admission or physical CREATE proof','retainedEvidence':json.loads((d/'store.json').read_text()),'outputs':json.loads((d/'observations.json').read_text()),'priorEvidence':['solve/quests/message-group-fresh-identity-membership/evidence/cache-37769585028.json','solve/quests/message-group-fresh-identity-membership/evidence/cache-37768602809.json'],'correction':'Owner-key exclusion alone did not quiesce ordinary lease touching; prior run recorded a claim but correctly failed because the NULL SQL arm did not engage. Current test joins the existing owner lifecycle before fixture insertion. Exact NULL-SQL engagement, unchanged ordinary/identity fields, actual cache claim and zero physical fixture replicas remain asserted.'}
           p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('cache-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
           PY
-          node scripts/solve.js note --id "$QUEST" --attempt "PR105 real SQL-to-cache visibility on $CANDIDATE under the existing operation-key lane; run $GITHUB_RUN_ID result=$RESULT. Corrects prior overclaim of non-executing fixture: 37768602809 showed ordinary dispatch advanced SENDING and invalidated CAS. No new lock, patched readiness, fake SQL/CDC/cache answer, physical CREATE authority or founder admission proof. All earlier failures retained and unique evidence asset added without overwrite."
+          node scripts/solve.js note --id "$QUEST" --attempt "PR105 cache-only boundary at $CANDIDATE: ordinary reconciliation quiesced via joined existing coordinator shutdown before synthetic row; SQL/Raft/CDC/cache stay actual. GCP $GITHUB_RUN_ID result=$RESULT. No assertion weakened: real NULL SQL arm, exact visible claim and unchanged row/identity are required. Prior owner-key-only attempt 37769585028 did not engage NULL due ordinary lease touching; all failures remain evidence. Not live reconciliation, founder admission, physical or cutover proof."
           git add "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/cache-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain lane-scoped cache proof and qualified earlier failures'
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'evidence: retain quiesced-owner real cache integration and explicit limits'
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$CANDIDATE"
           git push origin "HEAD:refs/heads/$WORK_BRANCH"
           published="$(git rev-parse HEAD)"
           test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$published"
-          gh pr comment 105 --repo psvensson/lagrange --body "Exact cache proof at $CANDIDATE, GCP run $GITHUB_RUN_ID: $RESULT. Published packet $published. The real operation-key lane isolates the synthetic row from ordinary dispatch; gateway, SQL/Raft, CDC and cache remain real. Prior scheduler interaction and founder-token failures are retained, not reinterpreted as successful membership admission. Please review this precise cache proof and the NULL-lease delta only; no activation, merge or broader cutover approval."
+          gh pr comment 105 --repo psvensson/lagrange --body "Exact cache proof $CANDIDATE, GCP $GITHUB_RUN_ID: $RESULT; packet $published. Ordinary reconciliation is now explicitly quiesced with its own joined shutdown, while actual SQL/Raft/CDC/cache remain live. Exact NULL-SQL and cache-visibility assertions unchanged. Earlier founder-token and lease-interleaving failures retained. Review this bounded integration ceiling and source repair independently; no full reconciliation/physical grant or approval inferred."
           if [ "$RESULT" = success ]; then
             test "$(gh pr view 105 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)" = "$published"
             gh pr edit 105 --repo psvensson/lagrange --add-reviewer @copilot
