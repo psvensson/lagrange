@@ -16,7 +16,7 @@
 import {claimMessageGroupMembershipOwner, settleMessageGroupMembershipNonAdmission} from
   './replica-operation-message-group-membership-owner-claim.js';
 import {v4 as uuidv4} from 'uuid';
-import {selectMessageGroupMembershipBranch} from
+import {selectMessageGroupMembershipBranch, authorizeMessageGroupLearner} from
   './replica-operation-message-group-membership-authorization.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
@@ -585,6 +585,10 @@ class ReplicaOperationRepository {
   /** Claim membership recovery ownership; no action authorization is created. */
   claimMessageGroupMembershipOwner(request) {
     return claimMessageGroupMembershipOwner(this, request);
+  }
+  /** Record initial learner intent; runtime and CREATE admission remain separate. */
+  authorizeMessageGroupLearner(request) {
+    return authorizeMessageGroupLearner(this, request);
   }
   /** Select a durable membership branch; never directly dispatches Raft. */
   selectMessageGroupMembershipBranch(request) {
