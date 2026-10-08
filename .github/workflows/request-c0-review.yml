@@ -5,28 +5,143 @@ on:
     paths: [.github/workflows/request-c0-review.yml]
 permissions:
   contents: read
-  pull-requests: write
 concurrency:
   group: request-c0-review-20261008
   cancel-in-progress: false
+env:
+  EXPECTED: 9fa3d0b30b5c33d2d4cffb5cfcf986eac6e455b6
+  WORK_BRANCH: integrate/rs-raft-contract-first-20261008
+  QUEST: cutover-transition-authority-review
 jobs:
-  request:
+  record-and-request:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: write
     steps:
-      - name: Request independent review of the confirmed evidence head
-        shell: bash
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.EXPECTED }}
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Verify and retain original GCP evidence through Solver
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          expected=41a8cdfb33ddc4acddafa192f7f5141a6ae38119
-          actual="$(gh pr view 104 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
-          printf 'expected=%s\nactual=%s\n' "$expected" "$actual"
-          test "$actual" = "$expected"
-          # The previous run retained and published evidence successfully, then
-          # stopped at its immediate post-push PR identity check. Do not repeat
-          # that upload or overwrite its evidence. This job only requests review.
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
+          npm ci
+          mkdir -p test-output/c0-final-classification
+          python3 - <<'PY'
+          import hashlib, io, json, os, subprocess, zipfile
+          from pathlib import Path
+          root=Path.cwd(); out=root/'test-output/c0-final-classification'
+          target='ae20b6601ca27bcab7758840bc4830945558b524'
+          items=[
+            (11538213446,37751962637,'terminal-owner','1c267f14ae8f48778577a8880733e77e5c6e226adb09afcd1293bcac9391a623'),
+            (11538781160,37751962572,'strengthened-crash','b10baeb4c6c758ddd5a17163b30839d380af9da9c71c285ac9c011ca65c38041'),
+            (11538510400,37750464523,'saved-mutation-reproduction','86951d6a149e81fed33936275f8f5e90956bd0b7b3eba8020a2fbdd3ee71b933'),
+            (11538075738,37750464523,'saved-publication','b58de48d2bd38129d1b81a7b12041c924c277a5bec41f4e055e2cec175fda990'),
+            (11538695190,37751224863,'failed-terminal-harness','59199568fa679e8de20598de237b3a267fc17bbc776bee2319c230ffae0d8c21')]
+          evidence={'schema':'c0-classification-evidence/1','runtimeSha':'82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af',
+                    'correctedWitnessSha':target,'independentApproval':False,'distributedAcceptance':False,'artifacts':[]}
+          sha=lambda b:hashlib.sha256(b).hexdigest()
+          for aid,run,label,digest in items:
+              raw=subprocess.check_output(['gh','api',f'repos/psvensson/lagrange/actions/artifacts/{aid}/zip'])
+              assert sha(raw)==digest, f'archive mismatch {aid}'
+              archive=zipfile.ZipFile(io.BytesIO(raw))
+              assert len(set(archive.namelist()))==len(archive.namelist())
+              assert sum(i.file_size for i in archive.infolist())<10000000
+              assert all(not Path(n).is_absolute() and '..' not in Path(n).parts for n in archive.namelist())
+              members={n:archive.read(n) for n in archive.namelist() if not n.endswith('/')}
+              by_name={Path(n).name:n for n in members}
+              assert len(by_name)==len(members), 'ambiguous member basenames'
+              verified=0
+              if 'SHA256SUMS' in by_name:
+                  for line in members[by_name['SHA256SUMS']].decode().splitlines():
+                      expected,name=line.split(None,1)
+                      name=name.lstrip('*')
+                      actual=members[by_name[Path(name).name]]
+                      assert sha(actual)==expected, f'member mismatch {name}'
+                      verified+=1
+              local=out/f'c0-{label}-{run}.zip'; local.write_bytes(raw)
+              encoded=subprocess.check_output(['node','scripts/solve.js','evidence','add',str(local),'--id',os.environ['QUEST'],'--text',f'Exact {label} artifact from run {run}; archive and {verified} member digests verified. Retains original verdict and proof ceiling.','--json'],text=True)
+              uploaded=json.loads(encoded)
+              (out/f'{label}-upload.json').write_text(json.dumps(uploaded,indent=2)+'\n')
+              entry={'id':aid,'runId':run,'label':label,'sha256':digest,'manifestMembersVerified':verified,
+                     'uploaded':uploaded['uploaded'],'members':{n:sha(b) for n,b in members.items()}}
+              for base in ['terminal-obligation.json','process-loss.json','reproducer.json','restored.json']:
+                  if base in by_name:
+                      value=json.loads(members[by_name[base]])
+                      if base in ['terminal-obligation.json','process-loss.json']:
+                          assert value['sourceSha']==target and value['measurementStatus']=='measured'
+                      entry[base]=value if base!='process-loss.json' else {
+                          'measurementStatus':value['measurementStatus'],'sourceSha':value['sourceSha'],
+                          'proofCeiling':value['proofCeiling'],'sourceDigests':value['sourceDigests'],
+                          'cases':[{'name':c['name'],'passed':c['passed'],
+                            'cut':next(m for m in c['before']['messages'] if m['kind']=='cut'),
+                            'reopened':next(m for m in c['after']['messages'] if m['kind']=='result')}
+                            for c in value['cases']]}
+              for base in ['focused.stdout.txt','snapshot.stdout.txt','regressions.txt','final-status.txt','runtime-source-diff.txt']:
+                  if base in by_name:entry[base]=members[by_name[base]].decode()
+              evidence['artifacts'].append(entry)
+          q=root/'solve/quests'/os.environ['QUEST']
+          ep=q/'evidence/classification-gcp-20261008.json'
+          ep.write_text(json.dumps(evidence,indent=2)+'\n')
+          receipt=json.loads((q/'evidence/receipt.json').read_text())
+          receipt['sourceSha']=target
+          receipt['evidence']='solve/quests/'+os.environ['QUEST']+'/evidence/classification-gcp-20261008.json'
+          receipt['status']='fail'
+          for name in ['cutover-terminal-obligation-baseline.js','cutover-workflow-crash-baseline.js']:
+              p='scripts/quest-evidence/'+name
+              receipt.setdefault('testFileDigests',{})[p]=sha((root/p).read_bytes())
+          details={
+            'replacement-source-target-and-obligations-classified':'Operator approved J1 in operator-decision-20261008-j1.md; exact O/S/T subjects, durable promotion-authorization boundary and distinct obligations classified in classification-disposition-20261008.md. This does not accept WIP permit code or certify production replacement.',
+            'workflow-commit-projection-and-restart-classified':'Actual repository commit and volatile mirror/progress relationship classified. Corrected owner-entry and six strengthened process-loss witnesses pass on exact ae20b660. Terminal ordinary entry preserves exact debt and refuses a competing group lane without physical work; membership recovery driver remains classified missing product implementation.',
+            'snapshot-local-open-wipe-and-install-classified':'LOCAL_OPEN/KNOWN_WIPE/INSTALL_ADMISSION/READ_UNAVAILABLE and existing owner responsibilities are classified. Source-bound missing callback/Ready/image integration is transferred to the existing snapshot product frontier; no successful intact catch-up or physical cluster claim.',
+            'source-bound-deterministic-discriminators-measured':'Retained original red and failed-harness evidence plus corrected GCP measurements. Positive controls and proof ceilings preserved; raw files retained through hash-verified canonical Solver uploads.',
+            'independent-category-complete-contract-review':'Still outstanding on this newly classified packet. Earlier rejections and self-review remain unchanged; no independent verdict manufactured.'}
+          for r in receipt['receipts']:
+              r['passed']=r['id']!='independent-category-complete-contract-review'
+              r['detail']=details[r['id']]
+          (q/'evidence/receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          PY
+          node scripts/solve.js note --id "$QUEST" --attempt 'User-selected J1, retained 19 saved files, corrected Node22/four-identity review findings, strengthened real SQL crash cuts and exercised ordinary terminal entries with retained membership debt. Classification now identifies next existing FreshMG/snapshot implementation boundaries; no runtime source change. Four bounded classification/measurement receipts are supported; independent contract review remains outstanding.' --json > test-output/c0-final-classification/attempt.json
+          node scripts/solve.js probe --id "$QUEST" --json > test-output/c0-final-classification/probe.json
+          git diff --check
+          git diff --exit-code 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af -- src
+      - name: Push evidence only and request actual independent classification review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
+          git add -- "solve/quests/$QUEST/evidence/classification-gcp-20261008.json" "solve/quests/$QUEST/evidence/receipt.json" "solve/quests/$QUEST/log.ndjson"
+          LAGRANGE_SKIP_PRECOMMIT=1 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'C0: retain exact GCP evidence and complete bounded authority classifications'
+          git push origin "HEAD:refs/heads/$WORK_BRANCH"
+          head="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$head"
+          echo "$head" > test-output/c0-final-classification/pushed-sha.txt
+          cat > test-output/c0-final-classification/review-request.md <<EOF
+          Review exact head $head on PR #104. No source changes or preservation-ref merge.
+
+          Read the unchanged C0 quest.json, classification-disposition-20261008.md, operator-decision-20261008-j1.md and evidence/classification-gcp-20261008.json. The user has selected J1: forward recovery from durable promotion authorization, no automatic target rollback thereafter. Both source/target and four identity dimensions are explicit. Six real-repository file-backed SIGKILL cases now assert actual cut engagement. Ordinary terminal entrypoints preserve exact membership debt and reject a second group operation; applied terminal-record effect is not dispatch. The failed initial boolean assertion is retained as harness failure. Node22 prepare and four-identity review findings are corrected.
+
+          Judge the sealed C0 classification claim, not completed FreshMG or snapshot product code (C0 prohibits those source changes). Reject remaining UNKNOWN authority or unsupported classifications. Known missing callback/Ready/application-image and FreshMG phase-driver implementation remain separate named product obligations, not hidden success. Verify harness fidelity, crash/replay limits, exact S/T policy and context, refusal/recovery ownership, and unchanged independent-review requirements. Do not infer release approval from green tests. Return explicit ACCEPT/REJECT of this bounded classification packet and identify any remaining blocker. A self-review is not independent review; old rejections stay recorded. C0 has not been landed.
+          EOF
+          gh pr comment 104 --repo psvensson/lagrange --body-file test-output/c0-final-classification/review-request.md
           gh pr edit 104 --repo psvensson/lagrange --add-reviewer @copilot
-          gh pr view 104 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
-          echo 'Requested scoped follow-up review of process-loss evidence and J1 proposal. No closure, policy ruling or source approval implied.' >> "$GITHUB_STEP_SUMMARY"
+          gh pr view 104 --repo psvensson/lagrange --json headRefOid,reviewRequests,isDraft,url
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: c0-classification-record-${{ github.run_id }}
+          path: test-output/c0-final-classification/
+          retention-days: 14
+          if-no-files-found: error
