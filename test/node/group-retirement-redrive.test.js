@@ -87,7 +87,7 @@ SPLIT_ACK_STATUS.CLEANUP_COMPLETED} = {}) {
 // recover: a restarted owner, the workflow recovered from the durable record
 // by the PRODUCTION split recovery.
 function openSplitOwner(world, {fence = FENCE, participantStatus =
-SPLIT_ACK_STATUS.CLEANUP_COMPLETED, recover = false} = {}) {
+SPLIT_ACK_STATUS.CLEANUP_COMPLETED, recover = false, resume = false} = {}) {
   const metadata = JSON.parse(
     world.tablesRows.get(TABLE_ID).partition_transition_metadata);
   return createWorkflowOwner(world, {family: 'split', recover, workflow: {
@@ -95,7 +95,7 @@ SPLIT_ACK_STATUS.CLEANUP_COMPLETED, recover = false} = {}) {
     partitionId: world.partitionId,
     status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE, metadata,
     participants: [{participantKey: SOURCE_KEY, status: participantStatus}],
-  }});
+  }, resume});
 }
 
 async function settleTurns(world, rounds = 10) {
@@ -271,7 +271,6 @@ test('W4d an owner restart mid-dissolution resumes from the durable record',
       ?.dissolvedReplicaIds, [first], 'setup: first\'s answer is recorded');
     firstOwner.kill();
     const askedBeforeRestart = deliveriesTo(world, first).length;
-    world.dropDeliveryTo.clear();
     t.same(world.terminals, [], 'setup: the split has not completed');
     // The restarted owner recovers the workflow from the record (PRODUCTION
     // recovery); the finished source re-delivers CLEANUP_COMPLETED on leader
@@ -281,23 +280,37 @@ test('W4d an owner restart mid-dissolution resumes from the durable record',
     world.setTablesRow({...leased, partition_transition_metadata:
       JSON.stringify({...JSON.parse(leased.partition_transition_metadata),
         workflowLeaseExpiresAt: 0})});
-    const restarted = await openSplitOwner(world, {recover: true});
-    // The restarted process (a new owner identity) claims the record before
-    // it drives: only the claim holder deletes a retired group's row.
-    restarted.resolveWorkflowState(WORKFLOW_ID);
-    t.equal((await claimWorkflowOwnershipCore(restarted, WORKFLOW_ID))
-      .accepted, true, 'the restarted owner claimed the record');
-    const answer = await restarted.acknowledgeSourceParticipant(WORKFLOW_ID, {
+    const restarted = await openSplitOwner(world,
+      {recover: true, resume: true});
+    // Production owner-start recovery claims the durable record and begins a
+    // new-fence retirement pass. Keep the remaining members unreachable until
+    // that claim is visible so the old source callback can be challenged.
+    for (let turn = 0; turn < 60; turn += 1) {
+      await settleTurns(world, 1);
+      const current = JSON.parse(world.tablesRows.get(TABLE_ID)
+        .partition_transition_metadata);
+      if (current.workflowFenceToken > FENCE) break;
+    }
+    const claimed = JSON.parse(world.tablesRows.get(TABLE_ID)
+      .partition_transition_metadata);
+    t.equal(claimed.workflowFenceToken, FENCE + 1,
+      'production owner-start recovery claimed the next fence');
+    const stale = await restarted.acknowledgeSourceParticipant(WORKFLOW_ID, {
       participantKey: SOURCE_KEY, status: SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
       fenceToken: FENCE});
-    t.equal(answer.result, 'accepted', 'the re-delivery is accepted');
+    t.equal(stale.result, 'stale_fence',
+      'the captured predecessor callback stays inert after the claim');
+    world.dropDeliveryTo.clear();
+    world.emitNodeRow(readyNodeRow(`${second}-node`));
     t.equal(await driveUntilRemoved(world, world.members), true,
-      'the restarted owner resumed the dissolution');
+      'the production ready-event redrive resumed the dissolution');
     for (const replicaId of world.members) {
       assertMemberRetired(t, world, replicaId, 'W4d');
     }
     t.equal(deliveriesTo(world, first).length, askedBeforeRestart,
       'the recorded answer is not asked again');
+    t.equal(deliveriesTo(world, second).at(-1)?.fenceToken, FENCE + 1,
+      'the resumed retirement dispatch carries the fresh owner fence');
     t.same(world.terminals, [WORKFLOW_ID], 'the split completed');
     assertNoBackstopOrConfChange(t, world, 'W4d');
   });

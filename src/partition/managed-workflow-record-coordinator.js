@@ -40,6 +40,7 @@ import {
   phaseMonotonicChange,
   registrationChange,
   renewalChange,
+  sourceStartAuthorizationChange,
   transitionChange,
 } from './managed-workflow-record-changes.js';
 import {workflowAttemptOf} from './partition-constants.js';
@@ -386,6 +387,41 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
   }
 
   /**
+   * Authorize source-mirror START against the durable record at its mutation
+   * turn. Accepted and already-started confirmations are the only outcomes
+   * that permit a physical worker to run.
+   * @param {string} workflowId
+   * @param {Object} ack - SNAPSHOT_STARTED participant acknowledgement.
+   * @param {Object} authorization - Exact record/payload contract.
+   * @return {Promise<Object>} Typed participant acknowledgement result.
+   */
+  async authorizeParticipantStart(workflowId, ack, authorization) {
+    assertAcknowledgement(ack);
+    const live = this.requireWorkflow(workflowId);
+    const change = sourceStartAuthorizationChange(this.recordOwner, ack,
+      this.isParticipantTransitionAllowed, authorization);
+    const write = await applyGuardedChange(this.recordOwner, workflowId,
+      change, {tableId: live.tableId});
+    const key = String(ack[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]);
+    if (write.outcome === RECORD_CHANGE_OUTCOME.ACCEPTED) {
+      const participant = write.workflow?.participants?.get(key);
+      return {result: participant?.status ===
+        ack[PARTICIPANT_ACK_FIELD.STATUS] ?
+        PARTICIPANT_ACK_RESULT.ACCEPTED : PARTICIPANT_ACK_RESULT.DUPLICATE,
+      participantKey: key,
+      acknowledgedAt: participant?.acknowledgedAt ?? this.now()};
+    }
+    if (write.outcome === RECORD_CHANGE_OUTCOME.REFUSED) {
+      return this.respondToAckRejection(workflowId, write.refusal);
+    }
+    throw Object.assign(new Error(COORDINATOR_ERROR_MSG.ACK_NOT_LANDED +
+      `${workflowId} (${write.outcome})`), {
+      recordChangeOutcome: write.outcome,
+      superseded: write.outcome === RECORD_CHANGE_OUTCOME.SUPERSEDED,
+      unacknowledged: [], acknowledgedReplicaIds: []});
+  }
+
+  /**
    * An owner-recorded outcome (dissolved, dissolution failed, target
    * provisioned): an owned acknowledgement whose answer is CHECKED. Accepted,
    * or a duplicate of the recorded status, lands; any other answer is typed
@@ -426,6 +462,12 @@ class RecordProjectedWorkflowCoordinator extends DurableWorkflowCoordinator {
         fence);
     case PARTICIPANT_ACK_RESULT.DUPLICATE:
       return this.rejectAckDuplicate(workflowId, participant, key, status);
+    case PARTICIPANT_ACK_RESULT.INVALID_TRANSITION:
+      return {result: PARTICIPANT_ACK_RESULT.INVALID_TRANSITION,
+        participantKey: key,
+        reason: WORKFLOW_ERROR_MSG.PARTICIPANT_INVALID_TRANSITION,
+        currentStatus: participant?.status ?? null,
+        receivedStatus: status};
     default:
       return this.validateParticipantTransitionGraph(workflowId,
         participant, key, status);

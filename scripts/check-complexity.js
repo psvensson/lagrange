@@ -102,7 +102,9 @@ const TARGET_THRESHOLD = 12;
 // value, then tightened 1760 -> 1757 on the checker's hint for the merged
 // tree (the merge persistence's same-owner re-sync left with the record
 // store redesign).
-const BASELINE_COUNT = 1757;
+// 2026-10-06 (quest/partition-replication-restart-attempt-handoff): tightened
+// 1757 -> 1756 on the checker's hint after the shared START owner extraction.
+const BASELINE_COUNT = 1756;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

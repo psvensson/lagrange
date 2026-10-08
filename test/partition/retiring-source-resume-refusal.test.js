@@ -26,6 +26,7 @@ import {
   buildMergeSourceParticipantKey,
 } from '../../src/partition/merge-ack-constants.js';
 import {
+  SPLIT_ACK_CHECKPOINT_FIELD,
   SPLIT_ACK_STATUS,
   SPLIT_PARTICIPANT_PREFIX,
 } from '../../src/partition/split-ack-constants.js';
@@ -69,22 +70,23 @@ function resumeContext(row, base = {}) {
     },
     emitSplitSourceAck(metadata, status) {
       redelivered.push({status, fence: metadata.workflowFenceToken});
-      return Promise.resolve({});
+      return Promise.resolve({result: 'accepted'});
     },
     emitMergeSourceAck(metadata, status) {
       redelivered.push({status, fence: metadata.workflowFenceToken});
-      return Promise.resolve({});
+      return Promise.resolve({result: 'accepted'});
     },
   });
   return {context, workerRuns, redelivered};
 }
 
-const splitRow = (status) => transitionRow(
+const splitRow = (status, extra = {}) => transitionRow(
   PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE, {
     [FIELD.SOURCE_PARTITION_ID]: PARTITION_ID,
     [FIELD.TARGET_PARTITION_IDS]: ['users-p1-a', 'users-p1-b'],
     [FIELD.PARTICIPANTS]: {
       [SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION]: {status}},
+    ...extra,
   });
 
 for (const [status, redelivers] of [
@@ -117,10 +119,18 @@ test('control: a split source still mirroring at the cutover resumes',
     const source = await restartOverCommittedCommands({
       partitionId: PARTITION_ID, tableId: 'users', tableName: 'users',
       schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
-    }, []);
+    }, [{entryId: 'cutover-barrier', type: 'INSERT',
+      sql: 'INSERT INTO users (id) VALUES (?)', params: ['a']}]);
     try {
       const {context, workerRuns} = resumeContext(
-        splitRow(SPLIT_ACK_STATUS.CUTOVER_APPLIED),
+        splitRow(SPLIT_ACK_STATUS.CUTOVER_APPLIED, {
+          [FIELD.SOURCE_CHECKPOINT]: {
+            [SPLIT_ACK_CHECKPOINT_FIELD.SNAPSHOT_BARRIER_INDEX]:
+              source.committed[0].index,
+            [SPLIT_ACK_CHECKPOINT_FIELD.REPLAY_WATERMARK_INDEX]:
+              source.committed[0].index,
+          },
+        }),
         Object.create(source.restarted));
       const resumed = await PartitionService.prototype
         .startOrResumeSplitReplicationFromDurable.call(context);

@@ -2,6 +2,8 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineInitialPartitionProvisioning} from './sql-query-engine-initial-partition-provisioning.js';
 import {createSQLQueryEngineRoutingMetadataMethods} from './sql-query-engine-routing-metadata-methods.js';
 import {throwIfCancellationRequested} from './query-cancellation.js';
+import {deliverProcessedSourceReplicationStart} from
+  '../partition/managed-source-replication-start-delivery.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STEADY_STATE = 'steady_state';
@@ -178,19 +180,14 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
     }
 
-    const response = await this.messageRouter.deliver(serviceInfo.address, {
-      type: PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION,
-      partitionId,
-      tableId,
-      tableName,
-      transitionMetadata,
-    });
-
-    if (!response?.acknowledged || response?.success === false) {
-      throw new Error(
-        response?.error || QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED,
-      );
-    }
+    await deliverProcessedSourceReplicationStart(
+      this.messageRouter, serviceInfo.address, {
+        type: PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION,
+        partitionId,
+        tableId,
+        tableName,
+        transitionMetadata,
+      }, QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
   }
 
   /**
