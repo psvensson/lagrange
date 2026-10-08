@@ -16,14 +16,14 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Bind independent review to the exact runtime-consumer source and evidence
+      - name: Bind rereview to the exact corrected source and retained evidence
         shell: bash
         run: |
           set -euo pipefail
-          expected=ff8c95ee3546458db0154e7eb8920bcd1978b9c4
+          expected=6d09b134c2ac0f7639b98751f4ed7f535367cb11
           actual="$(gh pr view 109 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
           printf 'expected=%s\nactual=%s\n' "$expected" "$actual"
           test "$actual" = "$expected"
           gh pr edit 109 --repo psvensson/lagrange --add-reviewer @copilot
           gh pr view 109 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
-          echo 'Requested category-complete owner-interaction, recovery, concurrency and harness-fidelity review. Known lab FAIL, complexity/census obligations and incomplete production driver remain explicit. No main merge, source approval, C0/FreshMG closure or release certification.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Rereview requested after review 5459955866: two same-owner complexity corrections, original native/holder/permit mutation controls, no extra await or authority expansion. Restart duration is explicitly unresolved and the complete Action is RED. Proof ran on hosted Linux, not GCP or a distributed cluster. Review the whole source scope and fixture limits; no prior rejection overridden or main/Quest/release approval claimed.' >> "$GITHUB_STEP_SUMMARY"
