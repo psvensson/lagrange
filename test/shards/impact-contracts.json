@@ -779,6 +779,39 @@
         "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
         "test/control-plane/replica-dispatch-reservation-identity.test.js"
       ]
+    },
+    "snapshot-content-canonical-format": {
+      "description": "The checkpoint store seals actual application content and its canonical descriptor/manifest; validation rejects tampered binding.",
+      "owners": [
+        "src/raft/snapshot-checkpoint-store.js",
+        "src/raft/snapshot-checkpoint-format.js",
+        "src/raft/snapshot-checkpoint-constants.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/partition-snapshot-content-format-future.test.js"
+      ]
+    },
+    "snapshot-content-durable-record": {
+      "description": "Checkpoint content reads the exact copied applied boundary and complete reserved peer mapping from their existing owners.",
+      "owners": [
+        "src/raft/snapshot-checkpoint-store.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-peer-identity.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/partition-snapshot-content-format-future.test.js"
+      ]
+    },
+    "snapshot-content-create-version": {
+      "description": "Checkpoint version admission preserves genuine v1 fresh CREATE and refuses v2 before target mutation.",
+      "owners": [
+        "src/raft/snapshot-checkpoint-format.js",
+        "src/raft/snapshot-install.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/partition-snapshot-content-format-future.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1470,6 +1503,72 @@
         "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js",
         "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
         "test/control-plane/replica-dispatch-reservation-identity.test.js"
+      ]
+    },
+    "snapshot-content-canonical-format": {
+      "description": "The checkpoint store seals actual application content and its canonical descriptor/manifest; validation rejects tampered binding.",
+      "endpoints": [
+        {
+          "id": "producer",
+          "owners": [
+            "src/raft/snapshot-checkpoint-store.js"
+          ]
+        },
+        {
+          "id": "consumer",
+          "owners": [
+            "src/raft/snapshot-checkpoint-format.js",
+            "src/raft/snapshot-checkpoint-constants.js"
+          ]
+        }
+      ],
+      "contract": "snapshot-content-canonical-format",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/partition-snapshot-content-format-future.test.js"
+      ]
+    },
+    "snapshot-content-durable-record": {
+      "description": "Checkpoint content reads the exact copied applied boundary and complete reserved peer mapping from their existing owners.",
+      "endpoints": [
+        {
+          "id": "producer",
+          "owners": [
+            "src/raft/snapshot-checkpoint-store.js"
+          ]
+        },
+        {
+          "id": "consumer",
+          "owners": [
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-peer-identity.js"
+          ]
+        }
+      ],
+      "contract": "snapshot-content-durable-record",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/partition-snapshot-content-format-future.test.js"
+      ]
+    },
+    "snapshot-content-create-version": {
+      "description": "Checkpoint version admission preserves genuine v1 fresh CREATE and refuses v2 before target mutation.",
+      "endpoints": [
+        {
+          "id": "producer",
+          "owners": [
+            "src/raft/snapshot-checkpoint-format.js"
+          ]
+        },
+        {
+          "id": "consumer",
+          "owners": [
+            "src/raft/snapshot-install.js"
+          ]
+        }
+      ],
+      "contract": "snapshot-content-create-version",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/partition-snapshot-content-format-future.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js"
       ]
     }
   }

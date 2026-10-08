@@ -14,7 +14,7 @@ import Database from 'better-sqlite3';
 import {
   ensureDirectory,
   fsyncDirectory,
-  readCanonicalJson,
+  writeAtomicDurableBytesAsync,
   sha256Digest,
   writeAtomicDurable,
 } from '../runtime/oci-host-agent-durable-files.js';
@@ -40,8 +40,13 @@ import {
   RAFT_CHECKPOINT_PAYLOAD_VERSION,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
   RAFT_RS_CHECKPOINT_REASON,
+  RAFT_RS_CHECKPOINT_ENTITY_VERSION,
+  RAFT_RS_APPLICATION_IMAGE_VERSION,
+  RAFT_RS_SNAPSHOT_JSON_LIMITS,
 } from './snapshot-checkpoint-constants.js';
 import {
+  canonicalSnapshotJsonBytes,
+  parseCanonicalSnapshotJson,
   buildCheckpointDescriptor,
   checkpointResult,
   matchCheckpointIdentity,
@@ -55,6 +60,10 @@ import {
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {readRaftRsPeerIdentityReservations} from
   './raft-rs-peer-identity.js';
+
+import {sealApplicationContent, validateApplicationContent} from
+  './snapshot-application-content.js';
+import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
 
 const CREATION = RAFT_CHECKPOINT_CREATION_OUTCOME;
 const VALIDATION = RAFT_CHECKPOINT_VALIDATION_OUTCOME;
@@ -242,6 +251,16 @@ function readRaftRsRecord(copyDb, groupId) {
 }
 
 function readRaftRsReservations(copyDb) {
+  const {count, bytes, longest} = copyDb.prepare('SELECT count(*) AS count, ' +
+    'sum(length(CAST(replica_identity AS BLOB)) + length(raft_peer_id)) AS bytes, ' +
+    'max(length(replica_identity)) AS longest FROM ' + RAFT_RS_PEER_TABLE).get();
+  if (count > RAFT_RS_SNAPSHOT_JSON_LIMITS.MAX_ARRAY_ELEMENTS ||
+      bytes > RAFT_RS_SNAPSHOT_JSON_LIMITS.MAX_TOTAL_STRING_UTF8_BYTES ||
+      longest > RAFT_RS_SNAPSHOT_JSON_LIMITS.MAX_STRING_CODE_UNITS) {
+    const error = new TypeError(RAFT_RS_CHECKPOINT_REASON.JSON_LIMIT_EXCEEDED);
+    error.reason = RAFT_RS_CHECKPOINT_REASON.JSON_LIMIT_EXCEEDED;
+    throw error;
+  }
   try {
     return readRaftRsPeerIdentityReservations(copyDb);
   } catch {
@@ -292,18 +311,68 @@ function readRaftRsCheckpoint(copyDb, groupId) {
   };
 }
 
-function prepareRaftRsCheckpointCopy(copyDb, groupId) {
-  const raftRsDescriptor = readRaftRsCheckpoint(copyDb, groupId);
+function numericPeerOrder(left, right) {
+  return BigInt(left) < BigInt(right) ? -1 : BigInt(left) > BigInt(right) ? 1 : 0;
+}
+
+function canonicalizeRaftRsFacts(facts) {
+  const confState = {...facts.confState};
+  for (const field of ['voters', 'learners', 'votersOutgoing', 'learnersNext']) {
+    confState[field] = [...confState[field]].sort(numericPeerOrder);
+  }
+  return {...facts, confState, peerReservations: [...facts.peerReservations]
+    .sort((left, right) => numericPeerOrder(left.peerId, right.peerId))};
+}
+
+function appliedTransactionFacts(db, groupId, appliedIndex) {
+  const pending = new Set();
+  let max = null;
+  const rows = db.prepare('SELECT data FROM _raft_rs_log WHERE group_id = ? ' +
+    'AND log_index <= ? AND entry_type = 0 AND data IS NOT NULL ORDER BY log_index')
+    .iterate(groupId, BigInt(appliedIndex));
+  for (const {data} of rows) {
+    if (!data) continue;
+    const command = decodeCommittedProposal(Buffer.from(data, 'base64'));
+    if (command?.type === PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION) {
+      pending.add(command.sessionId);
+    } else if ([PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
+      PARTITION_SERVICE_OPERATION.COMMIT, PARTITION_SERVICE_OPERATION.ROLLBACK]
+      .includes(command?.type)) {
+      pending.delete(command.sessionId);
+    }
+    const timestamp = typeof command?.timestamp === 'string' ?
+      HLCTimestamp.tryFromString(command.timestamp) : null;
+    if (timestamp && (!max || timestamp.compare(max) > 0)) max = timestamp;
+  }
+  return {pending: pending.size > 0,
+    maxCommittedHlc: max ? max.toString() : NO_COMMITTED_HLC};
+}
+
+function prepareRaftRsCheckpointCopy(copyDb, groupId, identity, payloadVersion) {
+  let raftRsDescriptor = readRaftRsCheckpoint(copyDb, groupId);
   if (!raftRsDescriptor) {
     return {gate: creationResult(CREATION.APPLY_WATERMARK_DIVERGENCE,
       [RAFT_RS_CHECKPOINT_REASON.BOUNDARY])};
   }
-  scrubRaftRsCopy(copyDb);
+  let maxCommittedHlc = NO_COMMITTED_HLC;
+  if (payloadVersion === RAFT_RS_APPLICATION_IMAGE_VERSION) {
+    const transactions = appliedTransactionFacts(copyDb, groupId,
+      raftRsDescriptor.appliedIndex);
+    if (transactions.pending) {
+      return {gate: creationResult(CREATION.PREPARED_TRANSACTIONS_PENDING,
+        ['prepared_undecided'])};
+    }
+    maxCommittedHlc = transactions.maxCommittedHlc;
+    raftRsDescriptor = canonicalizeRaftRsFacts(raftRsDescriptor);
+    sealApplicationContent(copyDb, identity, raftRsDescriptor, maxCommittedHlc);
+  } else {
+    scrubRaftRsCopy(copyDb);
+  }
   return {
     gate: creationResult(CREATION.CREATED),
     watermarks: {committedIndex: Number(raftRsDescriptor.appliedIndex)},
     lastIncluded: {found: true, term: Number(raftRsDescriptor.appliedTerm)},
-    maxCommittedHlc: NO_COMMITTED_HLC,
+    maxCommittedHlc,
     raftRsDescriptor,
   };
 }
@@ -399,6 +468,16 @@ async function createSqliteStateMachineCheckpoint(options) {
   if (!db || db.memory || !db.open) {
     return creationResult(CREATION.UNSUPPORTED_ADAPTER, ['memory_backed_db']);
   }
+  const payloadVersion = options.raftRsGroupId ?
+    RAFT_RS_CHECKPOINT_ENTITY_VERSION[identity.entity.kind] :
+    RAFT_CHECKPOINT_PAYLOAD_VERSION[RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE];
+  if (!payloadVersion || (options.raftRsGroupId &&
+      options.raftRsGroupId !== identity.raftGroupId)) {
+    return creationResult(CREATION.UNSUPPORTED_ADAPTER, [RAFT_RS_CHECKPOINT_REASON.ENTITY_KIND]);
+  }
+  if (db.inTransaction) {
+    return creationResult(CREATION.PREPARED_TRANSACTIONS_PENDING, ['local_transaction_active']);
+  }
   ensureDirectory(checkpointsRoot);
   const stagingDir = path.join(
     checkpointsRoot,
@@ -412,7 +491,7 @@ async function createSqliteStateMachineCheckpoint(options) {
     let prepared;
     try {
       prepared = options.raftRsGroupId ?
-        prepareRaftRsCheckpointCopy(copyDb, options.raftRsGroupId) :
+        prepareRaftRsCheckpointCopy(copyDb, options.raftRsGroupId, identity, payloadVersion) :
         prepareSqliteCheckpointCopy(copyDb);
     } finally {
       copyDb.close();
@@ -443,15 +522,16 @@ async function createSqliteStateMachineCheckpoint(options) {
       payloadKind: options.raftRsGroupId ?
         RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE :
         RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE,
-      payloadVersion: RAFT_CHECKPOINT_PAYLOAD_VERSION[
-        options.raftRsGroupId ? RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE :
-          RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE],
+      payloadVersion,
       payloadByteLength: payloadBytes.length,
       payloadDigest: sha256Digest(payloadBytes),
       ...(options.raftRsGroupId ? {raftRs: raftRsDescriptor} : {}),
     });
     const generationDir = path.join(
       checkpointsRoot, String(watermarks.committedIndex));
+    if (payloadVersion === RAFT_RS_APPLICATION_IMAGE_VERSION) {
+      return await publishApplicationImage(stagingDir, generationDir, descriptor);
+    }
     ensureDirectory(generationDir);
     const finalPayload = path.join(generationDir, RAFT_CHECKPOINT_PAYLOAD_FILE);
     fs.renameSync(stagingPayload, finalPayload);
@@ -473,14 +553,65 @@ async function createSqliteStateMachineCheckpoint(options) {
       checkpointDir: generationDir,
       descriptor,
     });
+  } catch (error) {
+    if (error.reason === RAFT_RS_CHECKPOINT_REASON.JSON_LIMIT_EXCEEDED) {
+      return creationResult(CREATION.RESOURCE_LIMIT_EXCEEDED, [error.reason]);
+    }
+    if (error.reason) return creationResult(CREATION.UNSUPPORTED_ADAPTER, [error.reason]);
+    throw error;
   } finally {
     removeStagingDirectory(stagingDir);
   }
 }
 
+async function publishApplicationImage(stagingDir, generationDir, descriptor) {
+  const descriptorBytes = canonicalSnapshotJsonBytes(descriptor);
+  await writeAtomicDurableBytesAsync(
+    path.join(stagingDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE), descriptorBytes);
+  // Publish the complete directory once. A nonempty existing generation can
+  // never be replaced, even by two concurrent creators racing at the same B.
+  try {
+    fs.renameSync(stagingDir, generationDir);
+    fsyncDirectory(path.dirname(generationDir));
+    return creationResult(CREATION.CREATED, [], {checkpointDir: generationDir, descriptor});
+  } catch (error) {
+    if (!['EEXIST', 'ENOTEMPTY'].includes(error.code)) throw error;
+  }
+  const existing = readCheckpoint({checkpointDir: generationDir});
+  if (existing.outcome === VALIDATION.VALID) {
+    const {membershipEpoch: _oldEpoch, ...oldContent} = existing.descriptor;
+    const {membershipEpoch: _newEpoch, ...newContent} = descriptor;
+    if (canonicalSnapshotJsonBytes(oldContent).equals(canonicalSnapshotJsonBytes(newContent))) {
+      return creationResult(CREATION.CREATED, [],
+        {checkpointDir: generationDir, descriptor: existing.descriptor});
+    }
+  }
+  return creationResult(CREATION.SAME_BOUNDARY_CONFLICT);
+}
+
 function readDescriptorFile(descriptorPath) {
   try {
-    return {value: readCanonicalJson(descriptorPath, VALIDATION.CORRUPT_DESCRIPTOR)};
+    const fd = fs.openSync(descriptorPath, 'r');
+    try {
+      const maximum = RAFT_RS_SNAPSHOT_JSON_LIMITS.MAX_CANONICAL_BYTES;
+      const size = fs.fstatSync(fd).size;
+      if (size > maximum) {
+        return {error: {reason: RAFT_RS_CHECKPOINT_REASON.JSON_LIMIT_EXCEEDED}};
+      }
+      const bytes = Buffer.alloc(Math.min(size + 1, maximum + 1));
+      let length = 0;
+      while (length < bytes.length) {
+        const read = fs.readSync(fd, bytes, length, bytes.length - length, null);
+        if (read === 0) break;
+        length += read;
+      }
+      if (length > maximum || length > size) {
+        return {error: {reason: RAFT_RS_CHECKPOINT_REASON.JSON_LIMIT_EXCEEDED}};
+      }
+      return {value: parseCanonicalSnapshotJson(bytes.subarray(0, length))};
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch (error) {
     return {error};
   }
@@ -507,6 +638,10 @@ function validatePayloadAgainstDescriptor(checkpointDir, descriptor) {
       RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE) {
     const payloadDb = new Database(payloadPath, {readonly: true});
     try {
+      if (descriptor.payloadVersion === RAFT_RS_APPLICATION_IMAGE_VERSION) {
+        validateApplicationContent(payloadDb, descriptor);
+        return checkpointResult(VALIDATION.VALID);
+      }
       let reservations;
       try {
         reservations = readRaftRsPeerIdentityReservations(payloadDb);
@@ -525,10 +660,14 @@ function validatePayloadAgainstDescriptor(checkpointDir, descriptor) {
       const tables = payloadDb.prepare(
         'SELECT name FROM sqlite_master WHERE type=\'table\'').all()
         .map(({name}) => name).filter((name) => !name.startsWith('sqlite_'));
-      if (tables.length !== 1 || tables[0] !== RAFT_RS_PEER_TABLE) {
+      if (descriptor.payloadVersion !== RAFT_RS_APPLICATION_IMAGE_VERSION &&
+          (tables.length !== 1 || tables[0] !== RAFT_RS_PEER_TABLE)) {
         return checkpointResult(VALIDATION.CORRUPT_PAYLOAD,
           [RAFT_RS_CHECKPOINT_REASON.PAYLOAD_TABLES]);
       }
+    } catch (error) {
+      return checkpointResult(VALIDATION.CORRUPT_PAYLOAD,
+        [error.reason || RAFT_RS_CHECKPOINT_REASON.MANIFEST]);
     } finally {
       payloadDb.close();
     }
@@ -555,7 +694,9 @@ function readCheckpoint(options) {
   }
   const parsed = readDescriptorFile(descriptorPath);
   if (parsed.error) {
-    return checkpointResult(VALIDATION.CORRUPT_DESCRIPTOR, ['descriptor_bytes']);
+    return checkpointResult(VALIDATION.CORRUPT_DESCRIPTOR,
+      [parsed.error.reason === RAFT_RS_CHECKPOINT_REASON.JSON_LIMIT_EXCEEDED ?
+        parsed.error.reason : 'descriptor_bytes']);
   }
   const structural = validateCheckpointDescriptor(parsed.value);
   if (structural.outcome !== VALIDATION.VALID) {

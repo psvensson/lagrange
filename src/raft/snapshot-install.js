@@ -30,6 +30,7 @@ import {
   RAFT_CHECKPOINT_APPLIED_STATE_KEY,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
   RAFT_CHECKPOINT_PAYLOAD_KIND,
+  RAFT_RS_APPLICATION_IMAGE_VERSION,
   RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
 } from './snapshot-checkpoint-constants.js';
@@ -545,6 +546,12 @@ async function requestSnapshotInstall(options) {
   }
   const raftRsImage = validation.descriptor.payloadKind ===
     RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE;
+  if (raftRsImage &&
+      validation.descriptor.payloadVersion === RAFT_RS_APPLICATION_IMAGE_VERSION) {
+    return installResult(OUTCOME.REJECTED, {
+      reason: REJECTION.PAYLOAD_VERSION_UNSUPPORTED_FOR_CREATE,
+    });
+  }
   if (raftRsImage && !await admitsRaftRsInstall(options, validation.descriptor)) {
     return installResult(OUTCOME.REJECTED, {
       reason: REJECTION.CREATE_ADMISSION_REQUIRED,

@@ -9,6 +9,7 @@ import {exactKeys, validHex256} from '../runtime/oci-host-agent-durable-files.js
 
 import {
   RAFT_CHECKPOINT_DESCRIPTOR_FIELDS,
+  RAFT_RS_APPLICATION_IMAGE_VERSION,
   RAFT_CHECKPOINT_ENTITY_FIELDS,
   RAFT_CHECKPOINT_ENVELOPE_VERSION,
   RAFT_CHECKPOINT_PAYLOAD_KIND,
@@ -147,8 +148,8 @@ function raftRsDescriptorMatchesEnvelope(descriptor) {
     raftRs.groupId === descriptor.raftGroupId &&
     BigInt(raftRs.appliedIndex) === BigInt(descriptor.lastIncludedIndex) &&
     BigInt(raftRs.appliedTerm) === BigInt(descriptor.lastIncludedTerm) &&
-    BigInt(raftRs.membershipGenerationIndex) ===
-      BigInt(descriptor.membershipEpoch);
+    (descriptor.payloadVersion === RAFT_RS_APPLICATION_IMAGE_VERSION ||
+      BigInt(raftRs.membershipGenerationIndex) === BigInt(descriptor.membershipEpoch));
 }
 
 // Structural field checks beyond exact-object shape, evaluated as one table:
@@ -227,7 +228,8 @@ function validateCheckpointDescriptor(descriptor) {
     );
   }
   if (descriptor.payloadVersion !==
-      RAFT_CHECKPOINT_PAYLOAD_VERSION[descriptor.payloadKind]) {
+      RAFT_CHECKPOINT_PAYLOAD_VERSION[descriptor.payloadKind] &&
+      !(raftRsImage && descriptor.payloadVersion === RAFT_RS_APPLICATION_IMAGE_VERSION)) {
     return checkpointResult(
       OUTCOME.UNSUPPORTED_PAYLOAD_KIND,
       [`payloadVersion:${descriptor.payloadVersion}`],
@@ -290,3 +292,6 @@ export {
   matchCheckpointIdentity,
   validateCheckpointDescriptor,
 };
+
+export {canonicalSnapshotJsonBytes, parseCanonicalSnapshotJson} from
+  './snapshot-checkpoint-json.js';

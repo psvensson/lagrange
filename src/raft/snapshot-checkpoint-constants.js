@@ -36,6 +36,24 @@ const RAFT_CHECKPOINT_PAYLOAD_VERSION = Object.freeze({
   [RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE]: 1,
 });
 
+// Entity/version dispatch is format-owned; unknown entities are unsupported.
+const RAFT_RS_CHECKPOINT_ENTITY_VERSION = Object.freeze({
+  'partition': 2,
+  'message-group': 1,
+});
+const RAFT_RS_APPLICATION_IMAGE_VERSION = 2;
+const RAFT_RS_CHECKPOINT_MANIFEST_TABLE = 'raft_rs_checkpoint_manifest';
+const RAFT_RS_SNAPSHOT_JSON_LIMITS = Object.freeze({
+  MAX_CANONICAL_BYTES: 16777216,
+  MAX_CONTAINER_DEPTH: 8,
+  MAX_PROJECTED_VALUES: 262144,
+  MAX_TOTAL_PROPERTIES_AND_ELEMENTS: 262144,
+  MAX_RECORD_KEYS: 32,
+  MAX_ARRAY_ELEMENTS: 65536,
+  MAX_STRING_CODE_UNITS: 1048576,
+  MAX_TOTAL_STRING_UTF8_BYTES: 8388608,
+});
+
 const RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS = Object.freeze([
   'groupId', 'appliedIndex', 'appliedTerm', 'membershipGenerationIndex',
   'confState', 'peerReservations',
@@ -48,6 +66,11 @@ const RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS = Object.freeze([
 ]);
 const RAFT_RS_CHECKPOINT_REASON = Object.freeze({
   DESCRIPTOR: 'raftRs',
+  JSON_LIMIT_EXCEEDED: 'snapshot_json_limit_exceeded',
+  MANIFEST_GENERATION_MISMATCH: 'raft_rs_manifest_generation_mismatch',
+  MANIFEST: 'raft_rs_manifest',
+  APPLICATION_SCHEMA: 'raft_rs_application_schema',
+  ENTITY_KIND: 'raft_rs_entity_kind',
   BOUNDARY: 'raft_rs_boundary',
   PAYLOAD_KIND_REQUIRED: 'raft_rs_payload_kind_required',
   PEER_RESERVATIONS: 'peer_reservations',
@@ -79,6 +102,8 @@ const RAFT_CHECKPOINT_APPLIED_GAP_MARKER_VALUE = 'applied_gap';
 // must never be advertised as recovery progress.
 const RAFT_CHECKPOINT_CREATION_OUTCOME = Object.freeze({
   CREATED: 'created',
+  SAME_BOUNDARY_CONFLICT: 'same_boundary_conflict',
+  RESOURCE_LIMIT_EXCEEDED: 'resource_limit_exceeded',
   UNSUPPORTED_ADAPTER: 'unsupported_adapter',
   APPLY_WATERMARK_DIVERGENCE: 'apply_watermark_divergence',
   PREPARED_TRANSACTIONS_PENDING: 'prepared_transactions_pending',
@@ -124,6 +149,10 @@ const RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS = Object.freeze([
 const RAFT_CHECKPOINT_ENTITY_FIELDS = Object.freeze(['kind', 'id']);
 
 export {
+  RAFT_RS_CHECKPOINT_ENTITY_VERSION,
+  RAFT_RS_APPLICATION_IMAGE_VERSION,
+  RAFT_RS_CHECKPOINT_MANIFEST_TABLE,
+  RAFT_RS_SNAPSHOT_JSON_LIMITS,
   RAFT_CHECKPOINT_APPLIED_GAP_MARKER_VALUE,
   RAFT_CHECKPOINT_APPLIED_STATE_KEY,
   RAFT_CHECKPOINT_CREATION_OUTCOME,

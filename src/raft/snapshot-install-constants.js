@@ -55,6 +55,7 @@ const RAFT_SNAPSHOT_INSTALL_REJECTION = Object.freeze({
   CHECKPOINT_INVALID: 'checkpoint_invalid',
   WORKER_PATH_UNSUPPORTED: 'worker_path_unsupported',
   CREATE_ADMISSION_REQUIRED: 'create_admission_required',
+  PAYLOAD_VERSION_UNSUPPORTED_FOR_CREATE: 'payload_version_unsupported_for_create',
   RAFT_RS_DESCRIPTOR_MISMATCH: 'raft_rs_descriptor_mismatch',
   CREATE_GENERATION_MISMATCH: 'create_generation_mismatch',
 });

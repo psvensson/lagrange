@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-rs-application-image-content-format",
+  "statement": "The direct raft-rs checkpoint content owner seals and validates an immutable application-complete v2 M/D/C/N image with exact application schema, rows, outcomes and sequence state, strict bounded canonical bytes, and same-boundary idempotence/conflict, while every production activation path remains parked.",
+  "epic": "raft-rs-full-cutover",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "test-output/solve/raft-rs-application-image-content-format.receipt.json",
+      "requiredReceipts": [
+        "direct-v2-content-format",
+        "production-paths-remain-inactive",
+        "registered-callback-no-seal-no-dial",
+        "legacy-v1-create-remains-supported"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Source changes require independent verification recorded through Solver before audit and landing."
+    },
+    {
+      "id": "exact-content-scope",
+      "statement": "Scope is snapshot-checkpoint constants, format/codec and store content ownership, plus the narrow install version dispatch needed to retain v1 CREATE and typed-refuse v2 CREATE. Tests, this Quest and its evidence harness are included."
+    },
+    {
+      "id": "v2-content-contract",
+      "statement": "V2 owns immutable manifest, descriptor, payload digest/content and native binding M/D/C/N; it preserves acknowledged application schema, explicit and implicit indexes, rows, transaction and statement outcomes, AUTOINCREMENT high-water, and excludes sender-local Raft, lifecycle, runtime and vote state."
+    },
+    {
+      "id": "strict-bounded-codec",
+      "statement": "The v2.3 shape-directed detached codec is the only M/D/N byte grammar: Proxy/getter/toJSON/cycle/Unicode and deterministic resource-limit rules apply. The R12 supported-schema compatibility decision remains a required STOP before terminal landing."
+    },
+    {
+      "id": "same-boundary-immutability",
+      "statement": "The exact same boundary and image is idempotent; the same boundary with changed application bytes is a typed conflict and cannot overwrite the first sealed image."
+    },
+    {
+      "id": "no-live-activation",
+      "statement": "Do not change snapshot-catchup callback inputs, automatic cadence, native Storage publication or compaction, transfer routing, receiver Ready/application import, lifecycle shutdown, retry/progress, or report_snapshot. The caller census must remain closed."
+    },
+    {
+      "id": "create-version-gate",
+      "statement": "Fresh CREATE v1 behavior remains supported by its existing admission/install owner. V2 CREATE is typed unsupported before destructive installation and has no legacy or SQL fallback."
+    },
+    {
+      "id": "owner-interactions",
+      "statement": "Handle checkpoint-store to canonical-format/codec, checkpoint-store read-only consumption of raft-rs durable record and peer identity, and checkpoint-format version to install admission dispatch together. Register exact impact-contract pairs for these interactions before source if the registry lacks them."
+    },
+    {
+      "id": "final-coupled-gate-preserved",
+      "statement": "This dependency proves content only. Its receipt cannot satisfy the final catch-up Quest, which reruns all R1-R7 on the exact coupled activation head including publication, transport, receiver atomicity, restart, retry and pressure evidence."
+    }
+  ],
+  "sealedAt": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af"
+}
