@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/cutover-owner-entry.yml
       - scripts/quest-evidence/cutover-owner-entry-baseline.js
+      - scripts/quest-evidence/cutover-terminal-obligation-baseline.js
 permissions:
   contents: read
 concurrency:
@@ -62,6 +63,7 @@ jobs:
           printf 'candidate=%s\nrunner=%s\nrun=%s\n' "$GITHUB_SHA" "$RUNNER_NAME" "$GITHUB_RUN_ID" > test-output/c0-owner/provenance.txt
           npm ci
           node --check scripts/quest-evidence/cutover-owner-entry-baseline.js
+          node --check scripts/quest-evidence/cutover-terminal-obligation-baseline.js
       - name: Measure scheduler and owner-entry interleaving
         run: |
           set -euo pipefail
@@ -76,11 +78,26 @@ jobs:
           cat test-output/c0-owner/owner-entry.stderr.txt >&2
           test "$STATUS" -eq 0
           node -e 'const r=JSON.parse(require("fs").readFileSync("test-output/c0-owner/owner-entry.json")); if(r.sourceSha!==process.env.GITHUB_SHA||r.measurementStatus!=="measured")process.exit(2)'
-      - name: Existing progress and retry regressions
+      - name: Measure terminal operation with retained exact membership lane
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/lagrange-contract-first-measurement.lock
+          flock -w 120 9
+          set +e
+          timeout 90s node scripts/quest-evidence/cutover-terminal-obligation-baseline.js test-output/c0-owner/terminal-obligation.json "$GITHUB_SHA" > test-output/c0-owner/terminal.stdout.txt 2> test-output/c0-owner/terminal.stderr.txt
+          STATUS=$?
+          set -e
+          printf '%s\n' "$STATUS" > test-output/c0-owner/terminal-exit.txt
+          tail -100 test-output/c0-owner/terminal.stdout.txt
+          cat test-output/c0-owner/terminal.stderr.txt >&2
+          test "$STATUS" -eq 0
+          node -e 'const r=JSON.parse(require("fs").readFileSync("test-output/c0-owner/terminal-obligation.json")); if(r.sourceSha!==process.env.GITHUB_SHA||r.measurementStatus!=="measured")process.exit(2)'
+      - name: Existing progress, retry and membership-lane regressions
         if: always() && steps.install.outcome == 'success'
         run: |
           set -uo pipefail
-          npm run test:file -- test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/operation-workflow-owner-handoff-retry-backoff.test.js > test-output/c0-owner/focused.stdout.txt 2> test-output/c0-owner/focused.stderr.txt
+          npm run test:file -- test/rebalancer/operation-progress-store.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/operation-workflow-owner-handoff-retry-backoff.test.js test/rebalancer/message-group-membership-operation-lane.test.js > test-output/c0-owner/focused.stdout.txt 2> test-output/c0-owner/focused.stderr.txt
           STATUS=$?
           printf '%s\n' "$STATUS" > test-output/c0-owner/focused-exit.txt
           tail -50 test-output/c0-owner/focused.stdout.txt
@@ -106,7 +123,7 @@ jobs:
           mkdir -p test-output/c0-owner
           git diff --exit-code "$BASE" -- src > test-output/c0-owner/runtime-source-diff.txt
           git status --porcelain > test-output/c0-owner/final-status.txt
-          sha256sum scripts/quest-evidence/cutover-owner-entry-baseline.js > test-output/c0-owner/harness.sha256
+          sha256sum scripts/quest-evidence/cutover-owner-entry-baseline.js scripts/quest-evidence/cutover-terminal-obligation-baseline.js > test-output/c0-owner/harness.sha256
           find test-output/c0-owner -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > test-output/c0-owner/SHA256SUMS
       - name: Retain all results, including failed controls
         if: always()
