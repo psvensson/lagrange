@@ -210,7 +210,7 @@ function createCuttableTransport() {
  * @param {string} partitionId - The partition.
  * @return {Object} The harness.
  */
-function createCommittedMembershipHarness(partitionId) {
+function createCommittedMembershipHarness(partitionId, options = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'o1-membership-'));
   const network = createCuttableTransport();
   const services = new Map();
@@ -264,6 +264,10 @@ function createCommittedMembershipHarness(partitionId) {
       nodeId: member[1],
       transport: network,
       systemTableCache: cache,
+      ...(typeof options.cdcIntegrationServiceFactory === 'function' ? {
+        cdcIntegrationService:
+          options.cdcIntegrationServiceFactory(member),
+      } : {}),
       schema: TABLE_SCHEMA,
       dbPath: dbPathOf(member),
       deferElection,
