@@ -94,6 +94,20 @@ test('T1 a delayed failed-row abandonment cannot apply after success is observed
   assert.deepEqual(f.row(), successful);
 });
 '''
+    reply = """        if (action === 'lost-and-unreadable') failReads = true;
+        if (action === 'lost' || action === 'lost-and-unreadable') {
+          return {success: false, error: 'authorization result lost'};
+        }
+        return answer;"""
+    text = once(text, reply, '        return faultedMembershipWriteAnswer(action, answer);')
+    text = once(text, '  const gateway = {', """  function faultedMembershipWriteAnswer(action, answer) {
+    if (action === 'lost-and-unreadable') failReads = true;
+    if (action === 'lost' || action === 'lost-and-unreadable') {
+      return {success: false, error: 'authorization result lost'};
+    }
+    return answer;
+  }
+  const gateway = {""")
     unit.write_text(text)
     text = read_exact(cache, '4f2b5f11058d08c0a27627aabcde724db3eca179')
     old = "test('repository claim and T1 terminal abandonment reach real SystemTableCache',"
