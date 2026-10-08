@@ -1,0 +1,108 @@
+{
+  "schema": "freshmg-runtime-review-r1/1",
+  "reviewId": 5459955866,
+  "runId": 37815226541,
+  "baseSha": "ff8c95ee3546458db0154e7eb8920bcd1978b9c4",
+  "measuredSha": "f786555fc2ec74c60dcc00a6d04c6aa0735945d8",
+  "strictComplexityBefore": 2,
+  "strictComplexityAfter": 0,
+  "strictCognitiveAfter": 0,
+  "timings": {
+    "integration": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "16",
+          "5230"
+        ]
+      ]
+    },
+    "regression": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "1005"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "871"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "999"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "910"
+        ]
+      ]
+    }
+  },
+  "mutations": [
+    {
+      "name": "permit",
+      "exitCode": 1,
+      "assertion": "wrong group, recipient boot, sender and changed payload",
+      "caught": true
+    },
+    {
+      "name": "holder",
+      "exitCode": 1,
+      "assertion": "current canonical boot and exact renewed holder",
+      "caught": true
+    },
+    {
+      "name": "native",
+      "exitCode": 1,
+      "assertion": "native same-turn fencing must remain in force",
+      "caught": true
+    }
+  ],
+  "restartTest": {
+    "path": "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+    "assertions": 16,
+    "durationMs": 8376,
+    "budgetMs": 2000,
+    "budgetSatisfied": false,
+    "profile": {
+      "calls": 3431,
+      "openMs": 150.63650000000007,
+      "readMs": 283.65797500001577,
+      "closeMs": 43.9580589999855,
+      "totalProcessMs": 8724.842445
+    }
+  },
+  "newStores": 0,
+  "newRuntimeOwners": 0,
+  "newExports": 0,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL",
+  "distributedAcceptance": false,
+  "releaseCertification": false,
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "76fe18b76818d81c242193ea6cff97340314cbc4a33d1008eb37db7f547cc032",
+      "bytes": 68697,
+      "asset": "message-group-fresh-identity-membership--runtime-review-37815226541-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--runtime-review-37815226541-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T17:18:07.284Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "PR109 review 5459955866 corrective attempt: two strict complexity findings, unchanged owner boundaries and await order, exact native-consumer positives and three predicate mutations. Separate restart oracle-cost profile does not alter timing verdict or certify the unit budget. Original lab FAIL and final acceptance blocks remain.",
+      "evidence": "sha256:76fe18b76818d81c242193ea6cff97340314cbc4a33d1008eb37db7f547cc032",
+      "asset": "message-group-fresh-identity-membership--runtime-review-37815226541-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--runtime-review-37815226541-1.zip",
+      "bytes": 68697
+    }
+  },
+  "canonicalArchiveSha256": "76fe18b76818d81c242193ea6cff97340314cbc4a33d1008eb37db7f547cc032"
+}
