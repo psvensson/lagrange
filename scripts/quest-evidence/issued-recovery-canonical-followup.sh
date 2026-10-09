@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 out="$GITHUB_WORKSPACE/issued-recovery-followup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
 quest_dir="solve/quests/$QUEST"
 dir="$quest_dir/evidence/issued-action-recovery-20261009"
@@ -32,8 +33,9 @@ const {parse}=require('espree');
 const clean=(value)=>JSON.stringify(value,(key,item)=>['raw','start','end','loc','range'].includes(key)?undefined:typeof item==='bigint'?String(item):item);
 const ast=(text)=>clean(parse(text,{ecmaVersion:'latest',sourceType:'module'}));
 assert.equal(ast(fs.readFileSync(process.env.OUT+'/test-before.js','utf8')),ast(fs.readFileSync('test/raft/raft-rs-backend/issued-action-record-read.test.js','utf8')));
-console.log('ESLint formatting preserves the entire parsed test AST apart from source locations and literal spelling.');
+console.log('ESLint formatting preserves the parsed test AST except source positions and literal spelling.');
 JS
+  python3 ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/prepare-issued-recovery-canonical-fix.py
   measure lint npm exec --no -- eslint "${files[@]}" || true
   measure metrics npm run test:metrics:scoped:strict -- "${files[@]}" || true
   measure file-size node scripts/check-file-size-thresholds.js --strict "${files[@]}" || true
@@ -42,20 +44,18 @@ JS
   measure grammar node scripts/check-runtime-grammar-contracts.js --json "${files[0]}" "${files[1]}" || true
   measure metadata npm run test:metadata:refresh
   measure shards npm run audit:shards
-  git diff --exit-code "$EXPECTED" -- src package.json package-lock.json
+  git diff --exit-code "$EXPECTED" -- src/raft/raft-rs-durable-store.js package.json package-lock.json
   git diff --check
   git config user.name 'github-actions[bot]'
   git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-  node scripts/solve.js note --id "$QUEST" --attempt 'Canonical package followup after 37903414861: repair only 23 ESLint formatting findings in the new storage-read test, with parsed AST equality. Regenerate classification through producers, then measure all static and normal-driver test obligations independently. Every failed check remains recorded and blocks the aggregate; collecting later evidence is not bypassing a failed gate. No production repair, new recovery protocol, source approval or main integration.' --json > "$out/attempt.json"
-  git add -- "${files[3]}" test/shards/ "$quest_dir/log.ndjson"
-  LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: format recovery witness without AST changes and regenerate canonical metadata'
+  node scripts/solve.js note --id "$QUEST" --attempt 'Canonical correction after 37904141211: retain that first followup and its untracked Python-cache stop. Fix the single measured free-floating zero string through RAFT_RS_ZERO_INDEX without changing the comparison. Retain AST-equivalent test formatting. Supply the missing proof-checker output argument, disable Python bytecode creation before execution, and inspect explicit JSON violation counts rather than exit alone. Add opt-in normal-sqlite mode to existing diagnostic commands and execute both source mutation sets with actual locked better-sqlite3. No lifetime/protocol/receipt schema/CREATE change or approval.' --json > "$out/attempt.json"
+  git add -- "${files[0]}" "${files[3]}" "$dir/run-diagnostic.py" "$dir/run-record-controls.py" test/shards/ "$quest_dir/log.ndjson"
+  LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'fix: use owned zero constant and complete canonical recovery proof wiring'
   git rev-parse HEAD > "$out/source-sha.txt"
   measure tests npm run test:file -- "${files[2]}" "${files[3]}" test/raft/raft-rs-backend/durable-store-committed-entries.test.js || true
-  # The ordinary runner above uses the normal locked better-sqlite3 dependency.
-  # The proof-checker below intentionally retains its historical diagnostic adapter.
-  measure proof-checker python3 "$dir/test-proof-checker.py" || true
-  measure codec-mutations python3 "$dir/run-diagnostic.py" "$PWD" "$out/codec-mutations" || true
-  measure store-mutations python3 "$dir/run-record-controls.py" "$out/store-mutations" || true
+  measure proof-checker python3 "$dir/test-proof-checker.py" "$out/proof-checker" || true
+  measure codec-mutations python3 "$dir/run-diagnostic.py" "$PWD" "$out/codec-mutations" --normal-sqlite || true
+  measure store-mutations python3 "$dir/run-record-controls.py" "$out/store-mutations" --normal-sqlite || true
   git diff --exit-code -- src test
   test -z "$(git status --porcelain)"
   python3 - <<'PY'
@@ -63,10 +63,11 @@ import json,os,re
 from pathlib import Path
 out=Path(os.environ['OUT'])
 checks={p.name.removesuffix('.exit.txt'):int(p.read_text()) for p in out.glob('*.exit.txt')}
+counts={name:json.loads((out/(name+'.stdout.txt')).read_text())['totalViolationCount'] for name in ['decisions','literals','grammar']}
 rows=re.findall(r'^ok (test/\S+) \((\d+) assertions, (\d+)ms\)',(out/'tests.stdout.txt').read_text(),re.M)
 expected={'test/raft/raft-rs-backend/issued-action-recovery.test.js','test/raft/raft-rs-backend/issued-action-record-read.test.js','test/raft/raft-rs-backend/durable-store-committed-entries.test.js'}
 budget=len(rows)==3 and {r[0] for r in rows}==expected and all(int(r[2])<=2000 for r in rows)
-r={'schema':'issued-recovery-canonical-followup/1','runId':os.environ['GITHUB_RUN_ID'],'baseSha':os.environ['EXPECTED'],'sourceSha':(out/'source-sha.txt').read_text().strip(),'checks':checks,'normalDriverTests':rows,'perFileBudgetMs':2000,'allFileBudgetsSatisfied':budget,'allChecksPassed':all(v==0 for v in checks.values()) and budget,'independentApproval':False,'runtimeSourceChanged':False,'fullLabVerdict':'FAIL','proofCeiling':'Normal better-sqlite3 with historical low-level native test driver. Python proof-checker/mutation runs retain their disclosed node:sqlite diagnostic adapter. Not runtime/CREATE/physical acceptance.'}
+r={'schema':'issued-recovery-canonical-followup/1','runId':os.environ['GITHUB_RUN_ID'],'baseSha':os.environ['EXPECTED'],'sourceSha':(out/'source-sha.txt').read_text().strip(),'checks':checks,'explicitViolationCounts':counts,'normalDriverTests':rows,'perFileBudgetMs':2000,'allFileBudgetsSatisfied':budget,'allChecksPassed':all(v==0 for v in checks.values()) and all(v==0 for v in counts.values()) and budget,'independentApproval':False,'runtimeSourceChange':'owned zero constant, no change to decision semantics','fullLabVerdict':'FAIL','proofCeiling':'Normal better-sqlite3 with historical low-level native test driver, including 5 codec and 7 store mutation controls. Python checker self-tests retain their diagnostic node:sqlite adapter. Not production runtime/receipt/CREATE or physical acceptance.'}
 (out/'result.json').write_text(json.dumps(r,indent=2)+'\n')
 PY
   ;;
@@ -87,7 +88,7 @@ with zipfile.ZipFile(str(out)+'.zip','w',zipfile.ZIP_DEFLATED) as z:
   if p.is_file():z.write(p,str(p.relative_to(out)))
 (out/'archive-sha256.txt').write_text(hashlib.sha256(Path(str(out)+'.zip').read_bytes()).hexdigest()+'\n')
 PY
-  node scripts/solve.js evidence add "$out.zip" --id "$QUEST" --text 'Corrected recovery packet canonical followup: AST-preserving lint repair, producer metadata, all scoped static checks and normal better-sqlite3 native/store tests. Separately labeled node:sqlite proof-checker/mutations. Read aggregate verdict; any static or timing failure stays open. No runtime source change or release approval.' --json > "$out/canonical.json"
+  node scripts/solve.js evidence add "$out.zip" --id "$QUEST" --text 'Corrected recovery packet normal-driver proof: owned zero constant, AST-preserving formatting, actual violation-count gate, clean Python lifetime and 22 better-sqlite3 cases plus 12 exact-assertion mutations. Check aggregate and per-file timings. Diagnostic checker self-tests use node:sqlite. Original 37904141211 failed attempt is nested with its hash; no main integration or protocol approval.' --json > "$out/canonical.json"
   python3 - <<'PY'
 from pathlib import Path
 import json,os
@@ -95,7 +96,7 @@ out=Path(os.environ['OUT']);r=json.loads((out/'result.json').read_text());r['can
 p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('issued-recovery-followup-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
 PY
   git add -- "$quest_dir/log.ndjson" "$quest_dir/evidence/issued-recovery-followup-$GITHUB_RUN_ID.json"
-  LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain canonical recovery results and unresolved gates'
+  LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain canonical recovery result and exact source identity'
   git push origin "HEAD:refs/heads/$WORK_BRANCH"
   test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
   git rev-parse HEAD > "$out/published-sha.txt"
