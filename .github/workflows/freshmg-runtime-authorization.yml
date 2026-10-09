@@ -59,7 +59,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'],'a') as f:f.write(f'CARRIER={target}\n')
           print('Verified input bundle, files:',sorted(files))
           PY
-      - name: Measure recipient boundaries after formatting-only correction
+      - name: Measure recipient boundaries through actual outbound dialing
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/registered-learner-20261009/continue.sh measure
