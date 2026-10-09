@@ -1,0 +1,328 @@
+diff --git a/test/integration/message-group-learner-runtime-authorization.integration.test.js b/test/integration/message-group-learner-runtime-authorization.integration.test.js
+--- a/test/integration/message-group-learner-runtime-authorization.integration.test.js
++++ b/test/integration/message-group-learner-runtime-authorization.integration.test.js
+@@ -10,6 +10,9 @@
+ import os from 'node:os';
+ import path from 'node:path';
+ import {test} from 'node:test';
++import {fork} from 'node:child_process';
++import * as membershipRecording from
++  '../../src/rebalancer/replica-operation-message-group-membership-authorization.js';
+ import {createServiceDeliveryFixture} from '../test-helpers/service-delivery-fixture.js';
+ import Database from 'better-sqlite3';
+ import * as admission from '../../src/raft/raft-rs-group-membership-admission.js';
+@@ -68,7 +71,8 @@
+   const port = cluster.node(leader);
+   const status = port.readStatus();
+   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'learner-authorization-'));
+-  const db = new Database(path.join(dir, 'operations.sqlite'));
++  const operationFile = path.join(dir, 'operations.sqlite');
++  const db = new Database(operationFile);
+   t.after(() => {
+     db.close(); fs.rmSync(dir, {recursive: true, force: true});
+   });
+@@ -160,7 +164,7 @@
+   const transport = await createServiceDeliveryFixture(t, NODE);
+   let delivery = await transport.local();
+   return {cluster, port, leader, repository, repositoryFor, clock, execute, reads,
+-    request, receiver, observe, db, gateway, transport,
++    request, receiver, observe, db, gateway, transport, operationFile,
+     get delivery() {
+       return delivery;
+     },
+@@ -321,6 +325,65 @@
+   const result = await f.run();
+   assert.equal(crossed, true, 'the authorization must reach the paused boot read');
+   return result;
++}
++
++
++function boundMembershipReader(f) {
++  const port = f.cluster.node(f.cluster.leaderReplicaId());
++  return port[portContract.RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP].bind(port);
++}
++function recordLearner(f, read = boundMembershipReader(f), request = f.request,
++  repository = f.repository) {
++  assert.equal(typeof membershipRecording.recordMessageGroupLearnerCommit, 'function',
++    'existing repository owner must record an exact recovered learner');
++  return membershipRecording.recordMessageGroupLearnerCommit(repository, request, read);
++}
++function unchangedOrdinaryFields(row) {
++  const copy = {...row};
++  delete copy.message_group_membership_phase;
++  delete copy.message_group_membership_permit;
++  delete copy.message_group_learner_stamp;
++  return copy;
++}
++function phaseWrite(sql) {
++  return sql.includes('SET message_group_membership_phase');
++}
++function recordingWorker(t, f, {hold = false, request = f.request,
++  nodeId = NODE, now = NOW} = {}) {
++  const child = fork(new URL('../test-helpers/message-group-learner-record-worker.js',
++    import.meta.url), [], {stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
++    env: {...process.env, LAGRANGE_RECORD_WORKER: JSON.stringify({file: f.operationFile,
++      request, nodeId, now, hold})}});
++  let stdout = ''; let stderr = '';
++  child.stdout.on('data', (data) => { stdout += data; });
++  child.stderr.on('data', (data) => { stderr += data; });
++  const exited = new Promise((resolve) => {
++    child.once('exit', (code, signal) => resolve({code, signal, stdout, stderr}));
++  });
++  t.after(async () => {
++    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
++    await exited;
++  });
++  let boundaryResolve; let resultResolve;
++  const boundary = new Promise((resolve) => { boundaryResolve = resolve; });
++  const result = new Promise((resolve) => { resultResolve = resolve; });
++  child.on('message', async (message) => {
++    if (message.type === 'read') {
++      try {
++        const answer = await boundMembershipReader(f)(message.request);
++        if (child.connected) child.send({type: 'answer', id: message.id, answer});
++      } catch (error) {
++        if (child.connected) child.send({type: 'answer', id: message.id, error: error.message});
++      }
++    } else if (message.type === 'before-row-write') boundaryResolve(message);
++    else if (message.type === 'result') resultResolve(message);
++  });
++  const failOnExit = exited.then((exit) => {
++    throw new Error(`recording worker exited before expected evidence: ${JSON.stringify(exit)}`);
++  });
++  // Each wait owns its own exit race; no detached rejection if only one is used.
++  return {child, exited, boundary: () => Promise.race([boundary, failOnExit]),
++    result: () => Promise.race([result, failOnExit])};
+ }
+ 
+ test('durable learner intent is consumed only through the bound repository and real runtime',
+@@ -986,4 +1049,164 @@
+       release();
+       assertCommittedLearner(f, await promised);
+     });
++
++    await t.test('exact native result records once without issuing CREATE or rewriting old fences',
++      async (t) => {
++        const f = await fixture(t);
++        const proposed = await f.run(); assertCommittedLearner(f, proposed);
++        const before = f.row(); const proposals = f.proposalCount();
++        assert.equal((await recordLearner(f)).outcome, 'recorded');
++        const recorded = f.row();
++        assert.equal(recorded.message_group_membership_phase, 'learner_committed');
++        assert.deepEqual(JSON.parse(recorded.message_group_membership_permit),
++          {...JSON.parse(f.request.permit), permitState: 'committed',
++            proposalIndex: proposed.proposalIndex});
++        assert.deepEqual(unchangedOrdinaryFields(recorded), unchangedOrdinaryFields(before),
++          'recording must preserve ordinary state, exact holder, lane and membership debt');
++        assert.ok(JSON.parse(recorded.message_group_learner_stamp).learners.includes(
++          deriveRaftRsPeerId(TARGET)));
++        const changes = f.db.prepare('SELECT total_changes() AS n').get().n;
++        const replay = await recordLearner(f, () => { throw new Error('replay must not refresh'); });
++        assert.equal(replay.outcome, 'recorded');
++        assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n, changes);
++        assert.equal(f.proposalCount(), proposals, 'recording never proposes membership');
++        assert.equal(f.cluster.replicas.has(TARGET), false, 'recording creates no target');
++      });
++    await t.test('issued intent without committed origin stays unresolved and retains the lane',
++      async (t) => {
++        const f = await fixture(t); const before = f.row(); const proposals = f.proposalCount();
++        assert.equal((await recordLearner(f)).outcome, 'unknown');
++        assert.deepEqual(f.row(), before, 'unresolved origin cannot mutate the operation');
++        assert.equal(f.proposalCount(), proposals, 'outcome recovery never reissues an action');
++      });
++    await t.test('wrong original action evidence cannot advance the learner operation', async (t) => {
++      const f = await fixture(t); assertCommittedLearner(f, await f.run());
++      const before = f.row(); const read = boundMembershipReader(f);
++      const forged = async (request) => {
++        const answer = await read(request);
++        if (answer.kind !== 'committed-action') return answer;
++        const copy = structuredClone(answer); copy.receipt.context.operationId = 'another-operation';
++        return copy;
++      };
++      assert.equal((await recordLearner(f, forged)).outcome, 'conflict');
++      assert.deepEqual(f.row(), before, 'wrong original action cannot acquire the learner stamp');
++    });
++    await t.test('historical ADD after actual removal cannot record current learner eligibility',
++      async (t) => {
++        const f = await fixture(t); assertCommittedLearner(f, await f.run());
++        const removal = {...interveningLearnerTransition(f, TARGET), operationId: O,
++          transitionIdentity: 'consumer-transition', permitSequence: 2,
++          stage: portContract.RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE};
++        const removed = await f.port[portContract.RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](removal);
++        assert.equal(removed.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
++        assert.ok(f.cluster.settle(() => FOUNDERS.every((id) =>
++          !f.cluster.node(id).readStatus().confState.learners.includes(deriveRaftRsPeerId(TARGET)))));
++        assert.equal((await readLearnerAction(f)).kind, 'committed-action');
++        const before = f.row();
++        assert.equal((await recordLearner(f)).outcome, 'conflict');
++        assert.deepEqual(f.row(), before, 'historical ADD cannot become current learner progress');
++      });
++    await t.test('holder replacement during native evidence acquisition defeats the old row CAS',
++      async (t) => {
++        const f = await fixture(t); assertCommittedLearner(f, await f.run());
++        const read = boundMembershipReader(f); let renewed;
++        const changeHolder = async (request) => {
++          const answer = await read(request);
++          if (request.purpose === membershipRead.COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP) {
++            f.clock.advance(1);
++            renewed = await f.repository.claimMessageGroupMembershipOwner({operationId: O,
++              identity: f.request.identity, expectedClaim: f.request.executionClaim});
++            assert.equal(renewed.outcome, 'recorded');
++          }
++          return answer;
++        };
++        assert.equal((await recordLearner(f, changeHolder)).outcome, 'unknown');
++        assert.equal(f.row().message_group_membership_owner_claim, renewed.claim);
++        assert.equal(f.row().message_group_learner_stamp, null,
++          'the old holder cannot install a learner stamp');
++        assert.equal((await recordLearner(f, read, {...f.request,
++          executionClaim: renewed.claim})).outcome, 'recorded');
++      });
++    await t.test('terminal settlement racing recording is retained and retried as exact debt',
++      async (t) => {
++        const f = await fixture(t); assertCommittedLearner(f, await f.run());
++        const execute = f.gateway.executeQuery; let crossed = false;
++        f.gateway.executeQuery = async (sql, params) => {
++          if (phaseWrite(sql) && !crossed) { crossed = true; await settleOperation(f); }
++          return execute(sql, params);
++        };
++        assert.equal((await recordLearner(f)).outcome, 'unknown');
++        assert.equal(crossed, true, 'terminal race must execute before the actual conditional write');
++        assert.equal(f.row().message_group_learner_stamp, null,
++          'terminal-state changes must defeat the earlier recording basis');
++        const terminal = f.row();
++        assert.equal((await recordLearner(f)).outcome, 'recorded');
++        assert.deepEqual(unchangedOrdinaryFields(f.row()), unchangedOrdinaryFields(terminal));
++        assert.equal(f.row().message_group_membership_obligation_state, 'unknown');
++      });
++    await t.test('success settled before recording never resurrects learner execution', async (t) => {
++      const f = await fixture(t); assertCommittedLearner(f, await f.run());
++      await settleOperation(f, true); const before = f.row();
++      assert.equal((await recordLearner(f)).outcome, 'conflict');
++      assert.deepEqual(f.row(), before);
++    });
++    await t.test('lost recording reply resolves only by exact durable readback', async (t) => {
++      const f = await fixture(t); assertCommittedLearner(f, await f.run());
++      const execute = f.gateway.executeQuery; let lost = false;
++      f.gateway.executeQuery = async (sql, params) => {
++        const answer = await execute(sql, params);
++        if (phaseWrite(sql)) { lost = true; return {success: false, error: 'record reply lost'}; }
++        return answer;
++      };
++      assert.equal((await recordLearner(f)).outcome, 'recorded');
++      assert.equal(lost, true, 'actual recording write answer must be lost');
++      assert.equal(f.row().message_group_membership_phase, 'learner_committed');
++    });
++    await t.test('lost write plus unavailable read stays unknown until reconstructed readback',
++      async (t) => {
++        const f = await fixture(t); assertCommittedLearner(f, await f.run());
++        const execute = f.gateway.executeQuery;
++        f.gateway.executeQuery = async (sql, params) => {
++          const answer = await execute(sql, params);
++          if (phaseWrite(sql)) {
++            f.failReads('replica_operations'); return {success: false, error: 'record reply lost'};
++          }
++          return answer;
++        };
++        assert.equal((await recordLearner(f)).outcome, 'unknown');
++        assert.equal(f.row().message_group_membership_phase, 'learner_committed');
++        f.failReads(null);
++        assert.equal((await recordLearner(f, boundMembershipReader(f), f.request,
++          f.repositoryFor(NODE))).outcome, 'recorded');
++      });
++    await t.test('operation worker loss after native commit recovers under a successor without reproposal',
++      async (t) => {
++        const f = await fixture(t); assertCommittedLearner(f, await f.run());
++        const proposals = f.proposalCount(); const initial = f.row();
++        const writer = recordingWorker(t, f, {hold: true});
++        const boundary = await writer.boundary();
++        assert.equal(boundary.inTransaction, false);
++        assert.equal(boundary.phase, 'learner_proposal_in_flight');
++        assert.equal(boundary.nativeReads, 2, 'both actual native reads must finish before process cut');
++        writer.child.kill('SIGKILL');
++        const exit = await writer.exited;
++        assert.equal(exit.signal, 'SIGKILL', 'the actual recording worker must be terminated');
++        assert.deepEqual(f.row(), initial, 'no operation receipt may appear before the held SQL write');
++        const holder = JSON.parse(f.request.executionClaim);
++        f.clock.advance(holder.expiresAt - f.clock.now() + 1);
++        const successor = f.repositoryFor(SUCCESSOR);
++        const claim = await successor.claimMessageGroupMembershipOwner({operationId: O,
++          identity: f.request.identity, expectedClaim: f.request.executionClaim});
++        assert.equal(claim.outcome, 'recorded', 'successor uses the actual membership-holder CAS');
++        const reader = recordingWorker(t, f, {nodeId: SUCCESSOR, now: f.clock.now(),
++          request: {...f.request, executionClaim: claim.claim}});
++        const answer = await reader.result(); const readerExit = await reader.exited;
++        assert.equal(readerExit.code, 0, readerExit.stderr);
++        assert.equal(answer.outcome, 'recorded');
++        assert.equal(f.row().message_group_membership_phase, 'learner_committed');
++        assert.equal(f.row().message_group_membership_owner_claim, claim.claim);
++        assert.equal(f.row().message_group_membership_obligation_state, 'unknown');
++        assert.equal(f.proposalCount(), proposals, 'worker recovery must not repropose the original ADD');
++        assert.equal(f.cluster.replicas.has(TARGET), false, 'worker recovery is not CREATE');
++      });
+   });
+diff --git a/test/test-helpers/message-group-learner-record-worker.js b/test/test-helpers/message-group-learner-record-worker.js
+--- /dev/null
++++ b/test/test-helpers/message-group-learner-record-worker.js
+@@ -0,0 +1,61 @@
++/** Isolated operation worker for the commit-before-record process-loss witness.
++ * Native state lives in the parent's actual ports; IPC transports their answers.
++ * Operation SQL uses its own normal-driver connection, never canned row replies.
++ */
++import Database from 'better-sqlite3';
++import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
++import {recordMessageGroupLearnerCommit} from
++  '../../src/rebalancer/replica-operation-message-group-membership-authorization.js';
++import {VirtualTimeSource} from '../../src/time/time-source.js';
++import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
++
++refuseUnderProbe('the learner operation recording process witness');
++const options = JSON.parse(process.env.LAGRANGE_RECORD_WORKER);
++const db = new Database(options.file);
++db.pragma('journal_mode = WAL'); db.pragma('synchronous = FULL');
++const pending = new Map();
++let serial = 0;
++process.on('message', (message) => {
++  const request = pending.get(message.id);
++  if (message.type !== 'answer' || !request) return;
++  pending.delete(message.id);
++  if (message.error) request.reject(new Error(message.error));
++  else request.resolve(message.answer);
++});
++function readMembership(request) {
++  return new Promise((resolve, reject) => {
++    serial += 1; pending.set(serial, {resolve, reject});
++    process.send({type: 'read', id: serial, request});
++  });
++}
++function execute(sql, params = []) {
++  const statement = db.prepare(sql);
++  return statement.reader ? {success: true, rows: statement.all(...params)} :
++    {success: true, affectedRows: statement.run(...params).changes};
++}
++const gateway = {
++  async executeQuery(sql, params) {
++    if (options.hold && sql.includes('SET message_group_membership_phase')) {
++      process.send({type: 'before-row-write', nativeReads: serial,
++        inTransaction: db.inTransaction,
++        phase: db.prepare('SELECT message_group_membership_phase AS phase FROM replica_operations ' +
++          'WHERE operation_id = ?').get(options.request.operationId).phase});
++      await new Promise(() => {}); // Parent's measured SIGKILL is the only release.
++    }
++    return execute(sql, params);
++  },
++  async readAuthoritativeRows(_table, sql, params) { return execute(sql, params); },
++};
++const noLog = {debug() {}, info() {}, warn() {}, error() {}};
++const repository = new ReplicaOperationRepository({nodeId: options.nodeId,
++  membershipOwnerBootIncarnation: 1, timeSource: new VirtualTimeSource({startMs: options.now}),
++  controlPlaneSystemTableGateway: gateway, logger: noLog,
++  systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
++  cdcIntegrationService: {waitForCacheUpdate: async () => {}},
++  authoritativeVisibilityTimeoutMs: 0, authoritativeVisibilityRetryDelayMs: 0});
++try {
++  const answer = await recordMessageGroupLearnerCommit(repository, options.request, readMembership);
++  process.send({type: 'result', outcome: answer.outcome, nativeReads: serial});
++} finally {
++  db.close(); process.disconnect();
++}

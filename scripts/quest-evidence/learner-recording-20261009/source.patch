@@ -1,0 +1,158 @@
+diff --git a/src/rebalancer/replica-operation-message-group-membership-authorization.js b/src/rebalancer/replica-operation-message-group-membership-authorization.js
+--- a/src/rebalancer/replica-operation-message-group-membership-authorization.js
++++ b/src/rebalancer/replica-operation-message-group-membership-authorization.js
+@@ -17,6 +17,15 @@
+   membershipClaimIsLocalAndLive, membershipBootIsCurrent,
+   membershipRowWhere, neverAuthorized} from
+   './replica-operation-message-group-membership-owner-claim.js';
++
++import {snapshotIssuedLearnerRequest, matchesIssuedLearnerOperation} from
++  './replica-operation-message-group-learner-observation.js';
++import {COMMITTED_MEMBERSHIP_READ_PURPOSE as READ_PURPOSE,
++  COMMITTED_LEARNER_ACTION_KIND as ACTION_KIND} from
++  '../raft/raft-committed-membership-constants.js';
++import {encodeCommittedLearnerAdmission, decodeCommittedLearnerAdmission,
++  INVALID_COMMITTED_LEARNER_ADMISSION, encodeCommittedMembershipContext} from
++  '../raft/raft-rs-committed-membership-context.js';
+ 
+ const result = (outcome, operation = null) => Object.freeze({outcome, operation});
+ function priorLearnerStamp(row, identity, prior) {
+@@ -237,3 +246,127 @@
+   return persistInitialLearnerIntent(repository, row, claim, input);
+ }
+ export {authorizeMessageGroupLearner};
++
++
++function learnerActionOf(input) {
++  const permit = input.decodedPermit;
++  return Object.freeze({operationId: input.operationId,
++    transitionIdentity: permit.transitionIdentity, permitSequence: permit.permitSequence,
++    stage: permit.permitStage, replicaIdentity: permit.replicaIdentity, peerId: permit.peerId});
++}
++function historicalLearnerMatches(origin, input, observedAppliedIndex) {
++  const {decodedIdentity: identity, decodedPermit: permit} = input;
++  return origin !== INVALID_COMMITTED_LEARNER_ADMISSION &&
++    origin.groupId === identity.groupId && origin.term === String(permit.leaderTerm) &&
++    encodeCommittedMembershipContext(origin.context) ===
++      encodeCommittedMembershipContext(learnerActionOf(input)) &&
++    Number(origin.index) > permit.leaderConfigurationStamp.membershipGenerationIndex &&
++    Number.isSafeInteger(observedAppliedIndex) && observedAppliedIndex >= Number(origin.index);
++}
++function stampSupportsLearner(stamp, origin, identity) {
++  const sourcePeer = deriveRaftRsPeerId(identity.sourceReplicaId);
++  return stamp !== null && stamp.gateOpen === true &&
++    stamp.term >= Number(origin.term) && stamp.appliedIndex >= Number(origin.index) &&
++    stamp.membershipGenerationIndex >= Number(origin.index) &&
++    stamp.learners.includes(identity.targetPeerId) && stamp.voters.includes(sourcePeer) &&
++    stamp.identities[sourcePeer] === identity.sourceReplicaId &&
++    stamp.identities[identity.targetPeerId] === identity.targetReplicaId;
++}
++function committedLearnerPermit(input, index) {
++  // Original execution fences remain unchanged. Only the established permit
++  // outcome and actual committed proposal anchor advance; never a new attempt.
++  return JSON.stringify({...input.decodedPermit, permitState: STATE.COMMITTED,
++    proposalIndex: Number(index)});
++}
++async function acquireLearnerCommitEvidence(input, readMembership) {
++  try {
++    const answer = await readMembership({purpose: READ_PURPOSE.LEARNER_ACTION,
++      groupId: input.decodedIdentity.groupId, action: learnerActionOf(input)});
++    if (answer?.kind !== ACTION_KIND.COMMITTED) {
++      return {outcome: answer?.kind === ACTION_KIND.UNRESOLVED ?
++        OUTCOME.UNKNOWN : OUTCOME.UNAVAILABLE};
++    }
++    const origin = decodeCommittedLearnerAdmission(encodeCommittedLearnerAdmission(answer.receipt));
++    if (!historicalLearnerMatches(origin, input, answer.observedAppliedIndex)) {
++      return {outcome: OUTCOME.CONFLICT};
++    }
++    // This is an observation, not a live CREATE grant. The same host-bound
++    // native read obtains both facts; no caller-supplied receipt is accepted.
++    const stamp = committedStampOfAnswer(await readMembership({purpose: READ_PURPOSE.BOOTSTRAP}));
++    if (stamp === null) return {outcome: OUTCOME.UNAVAILABLE};
++    if (!stampSupportsLearner(stamp, origin, input.decodedIdentity)) {
++      return {outcome: OUTCOME.CONFLICT};
++    }
++    return {outcome: OUTCOME.RECORDED, permit: committedLearnerPermit(input, origin.index),
++      stamp: JSON.stringify(stamp)};
++  } catch {
++    return {outcome: OUTCOME.UNAVAILABLE};
++  }
++}
++function learnerRecordIdentityMatches(row, input) {
++  return membershipRowIdentityMatches(row, input.decodedIdentity, input.identity) &&
++    row.messageGroupMembershipOwnerClaim === input.executionClaim &&
++    row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN &&
++    row.messageGroupVoterStamp === null && row.messageGroupRemovalStamp === null;
++}
++function learnerCommitAlreadyRecorded(row, input) {
++  if (row.messageGroupMembershipPhase !== PHASE.LEARNER_COMMITTED) return false;
++  const permit = decodeMembershipPermit(row.messageGroupMembershipPermit);
++  return permit?.permitState === STATE.COMMITTED &&
++    row.messageGroupMembershipPermit === committedLearnerPermit(input, permit.proposalIndex) &&
++    priorLearnerStamp(row, input.decodedIdentity, permit) !== null;
++}
++async function recordLearnerCommitMutation(repository, input, before, evidence) {
++  const basis = membershipRowWhere(before);
++  try {
++    await repository.executeOperationMutationWithRetry(
++      `UPDATE replica_operations SET message_group_membership_phase = ?,
++        message_group_membership_permit = ?, message_group_learner_stamp = ?
++        WHERE ${basis.where}`,
++      [PHASE.LEARNER_COMMITTED, evidence.permit, evidence.stamp, ...basis.params]);
++  } catch {
++    // An answer can be lost after commit. Only exact durable readback resolves it.
++  }
++  const after = await observeMembershipOperation(repository, input.operationId);
++  if (!after.available) return result(OUTCOME.UNKNOWN);
++  const row = after.row;
++  if (!learnerRecordIdentityMatches(row, input) ||
++      row.messageGroupMembershipPhase !== PHASE.LEARNER_COMMITTED ||
++      row.messageGroupMembershipPermit !== evidence.permit ||
++      row.messageGroupLearnerStamp !== evidence.stamp ||
++      !membershipClaimIsLocalAndLive(repository, input.claim, input.decodedIdentity) ||
++      !await membershipBootIsCurrent(repository)) return result(OUTCOME.UNKNOWN, row);
++  return result(OUTCOME.RECORDED, row);
++}
++/** Recover one already-issued learner result into the existing operation row.
++ * readMembership is the host-bound native owner's method, NEVER a request field
++ * or a serialized receipt. The caller retains group routing/lifetime ownership.
++ * RECORDED retains the membership lane and ordinary terminal state. It grants no
++ * CREATE, new proposal, successor attempt, reservation release or source cleanup.
++ */
++async function recordMessageGroupLearnerCommit(repository, request, readMembership) {
++  const input = snapshotIssuedLearnerRequest(request);
++  if (!input || typeof readMembership !== 'function') return result(OUTCOME.INVALID);
++  if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE);
++  const before = await observeMembershipOperation(repository, input.operationId);
++  if (!before.available) return result(OUTCOME.UNAVAILABLE);
++  if (!learnerRecordIdentityMatches(before.row, input)) return result(OUTCOME.CONFLICT, before.row);
++  if (!membershipClaimIsLocalAndLive(repository, input.claim, input.decodedIdentity)) {
++    return result(OUTCOME.STALE_OWNER, before.row);
++  }
++  // Exact readback is independent of current role; later configuration drift
++  // cannot rewrite the recorded stamp or turn this historical return into CREATE.
++  if (learnerCommitAlreadyRecorded(before.row, input)) return result(OUTCOME.RECORDED, before.row);
++  if (!matchesIssuedLearnerOperation(repository, before.row, input)) {
++    return result(OUTCOME.CONFLICT, before.row);
++  }
++  const evidence = await acquireLearnerCommitEvidence(input, readMembership);
++  if (evidence.outcome !== OUTCOME.RECORDED) return result(evidence.outcome, before.row);
++  if (!membershipClaimIsLocalAndLive(repository, input.claim, input.decodedIdentity)) {
++    return result(OUTCOME.STALE_OWNER, before.row);
++  }
++  // Exact row CAS binds holder, identity, prior permit, stamps and terminal
++  // fields across the native awaits. No read/write transaction spans Raft groups.
++  return recordLearnerCommitMutation(repository, input, before.row, evidence);
++}
++export {recordMessageGroupLearnerCommit};
+diff --git a/src/rebalancer/replica-operation-message-group-learner-observation.js b/src/rebalancer/replica-operation-message-group-learner-observation.js
+--- a/src/rebalancer/replica-operation-message-group-learner-observation.js
++++ b/src/rebalancer/replica-operation-message-group-learner-observation.js
+@@ -125,4 +125,6 @@
+     input.decodedIdentity, receiver)) return refuse(REASON.STALE_OWNER);
+   return answer(OUTCOME.OBSERVED, null, {transition: nativeTransition(input)});
+ }
+-export {observeMessageGroupLearnerAuthorization};
++export {observeMessageGroupLearnerAuthorization,
++  snapshotRequest as snapshotIssuedLearnerRequest,
++  exactIssuedIntent as matchesIssuedLearnerOperation};
