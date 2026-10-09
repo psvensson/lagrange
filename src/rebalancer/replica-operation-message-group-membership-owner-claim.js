@@ -244,3 +244,6 @@ async function settleMessageGroupMembershipNonAdmission(repository, request) {
     answer(OUTCOME.RECORDED, after.row) : answer(OUTCOME.UNKNOWN, after.row);
 }
 export {settleMessageGroupMembershipNonAdmission, membershipRowWhere, neverAuthorized};
+
+// Reused by the recipient-side observation, never replaced by cache policy.
+export {READ as MEMBERSHIP_AUTHORIZATION_READ_OPTIONS};

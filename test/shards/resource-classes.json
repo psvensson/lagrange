@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2305,
+    "ordinary": 2307,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2322,
-  "digest": "fnv1a32-08a97bcb",
+  "censusSize": 2324,
+  "digest": "fnv1a32-a7de57bc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1007,6 +1007,7 @@
     "test/integration/managed-split-writes-after-cutover.integration.test.js": "ordinary",
     "test/integration/membership-consistency.integration.test.js": "ordinary",
     "test/integration/message-group-fresh-identity-replacement.integration.test.js": "ordinary",
+    "test/integration/message-group-learner-runtime-authorization.integration.test.js": "ordinary",
     "test/integration/message-group-membership-claim-cache.integration.test.js": "ordinary",
     "test/integration/message-group-multi-join-formation.integration.test.js": "ordinary",
     "test/integration/message-group-service-handler-services-row.integration.test.js": "ordinary",
@@ -2244,6 +2245,7 @@
     "test/transport/rpc-client.test.js": "ordinary",
     "test/transport/rpc-correlation-correctness.property.test.js": "ordinary",
     "test/transport/rpc-timeout-behavior.property.test.js": "ordinary",
+    "test/transport/service-delivery-lifetime.test.js": "ordinary",
     "test/transport/service-response-correlation.property.test.js": "ordinary",
     "test/transport/transport-provider-interface.property.test.js": "ordinary",
     "test/transport/transport-registry-provider-management.property.test.js": "ordinary",

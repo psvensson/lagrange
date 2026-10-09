@@ -1,0 +1,100 @@
+{
+  "schema": "freshmg-delivery-lifetime/1",
+  "runId": 37886131059,
+  "baseSha": "ca1cb1384daee9592c88f7b47851043abdb7a5ae",
+  "sourceSha": "d9e87b2961993121d75df11d3a177d380ad790df",
+  "executionSubstrate": "GitHub-hosted Ubuntu, one classified worker",
+  "proofCeiling": "actual router identification/service dispatch over in-process sockets, actual operation repository with file SQL, actual native ports and delayed Ready send; not physical network, global metadata atomicity or committed receipt/CREATE",
+  "previousLabVerdict": "FAIL",
+  "independentApproval": false,
+  "distributedAcceptance": false,
+  "restartDurationResolved": false,
+  "globalBootReadCounterexampleResolved": false,
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "42ee58f6a4c6b731708f3326be43379bfe4eaa22d5a3e494a70514cde40554d5",
+      "bytes": 136846,
+      "asset": "message-group-fresh-identity-membership--delivery-lifetime-37886131059-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--delivery-lifetime-37886131059-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T04:58:05.403Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Actual router delivery lifetime -> issued learner -> queued native turn: staged transport/native red controls, exact-source positive regressions and native/socket/lifetime mutations. In-process sockets and file-backed operation fixture, not physical network or globally atomic metadata. Delivery refusal retains issued obligation; no CREATE, committed-receipt driver, main merge or final acceptance.",
+      "evidence": "sha256:42ee58f6a4c6b731708f3326be43379bfe4eaa22d5a3e494a70514cde40554d5",
+      "asset": "message-group-fresh-identity-membership--delivery-lifetime-37886131059-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--delivery-lifetime-37886131059-1.zip",
+      "bytes": 136846
+    }
+  },
+  "archiveSha256": "42ee58f6a4c6b731708f3326be43379bfe4eaa22d5a3e494a70514cde40554d5",
+  "mutations": [
+    "native-execution-guard",
+    "socket-identity",
+    "local-lifetime"
+  ],
+  "timings": {
+    "consumer": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "26",
+          "3011"
+        ]
+      ]
+    },
+    "transport": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/transport/local-delivery.property.test.js",
+          "7",
+          "928"
+        ],
+        [
+          "test/transport/message-router-transport-cleanup.test.js",
+          "16",
+          "1122"
+        ],
+        [
+          "test/transport/node-incarnation-websocket-fence.test.js",
+          "79",
+          "1151"
+        ],
+        [
+          "test/transport/service-delivery-lifetime.test.js",
+          "5",
+          "704"
+        ]
+      ]
+    },
+    "regressions": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "1009"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "1058"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "1332"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "1213"
+        ]
+      ]
+    }
+  }
+}

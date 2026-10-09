@@ -1,0 +1,472 @@
+{
+  "schema": "freshmg-lab-attribution/1",
+  "runId": 37803287356,
+  "candidateSha": "605789e86aaf7dcca8fa4406235388b998460eb0",
+  "baseSha": "97a030da287160e5597f0dd5ce5d60541caaf5e8",
+  "labRunId": "freshmg-lab-20261008T150005Z",
+  "labArchiveSha256": "6fbaf0e6af0b5cc799d0e32da034922de7de979c0f3a5980c504f6272e4265f4",
+  "labVerdict": "FAIL",
+  "physicalBaseline": "NOT_RUN",
+  "comparison": [
+    {
+      "file": "test/node/message-group-service-handler-membership.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/node/message-group-service-handler-membership.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 940,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - a real committed learner plus exact admission package is the only CREATE path"
+      },
+      "candidate": {
+        "file": "test/node/message-group-service-handler-membership.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 957,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - a real committed learner plus exact admission package is the only CREATE path"
+      }
+    },
+    {
+      "file": "test/rebalancer/spread-cure-transition-authorization-row.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/rebalancer/spread-cure-transition-authorization-row.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 1179,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - the authorization rides the operation row and rows without it preserve the pre-admission payload"
+      },
+      "candidate": {
+        "file": "test/rebalancer/spread-cure-transition-authorization-row.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 1139,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - the authorization rides the operation row and rows without it preserve the pre-admission payload"
+      }
+    },
+    {
+      "file": "test/rebalancer/message-group-membership-change-parked.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/rebalancer/message-group-membership-change-parked.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 4,
+        "durationMs": 1250,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - fresh-identity closing condition: seed-only mg-1 enters one REPLACE operation instead of the interim membership park"
+      },
+      "candidate": {
+        "file": "test/rebalancer/message-group-membership-change-parked.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 4,
+        "durationMs": 1343,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - fresh-identity closing condition: seed-only mg-1 enters one REPLACE operation instead of the interim membership park"
+      }
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-regression.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/raft/raft-rs-backend/operation-port-regression.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 4368,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - the verified integration remains green while transport has no raft-rs node access"
+      },
+      "candidate": {
+        "file": "test/raft/raft-rs-backend/operation-port-regression.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 4380,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - the verified integration remains green while transport has no raft-rs node access"
+      }
+    },
+    {
+      "file": "test/raft/raft-rs-backend/peer-identity.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/raft/raft-rs-backend/peer-identity.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 317,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - a raft peer id survives restart, ignores address and is never reassigned"
+      },
+      "candidate": {
+        "file": "test/raft/raft-rs-backend/peer-identity.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 319,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - a raft peer id survives restart, ignores address and is never reassigned"
+      }
+    },
+    {
+      "file": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 8,
+        "durationMs": 901,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - enumerations: the stamp kinds and bootstrap sources are the two stamp origins plus the record"
+      },
+      "candidate": {
+        "file": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 8,
+        "durationMs": 879,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - enumerations: the stamp kinds and bootstrap sources are the two stamp origins plus the record"
+      }
+    },
+    {
+      "file": "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 16,
+        "durationMs": 16087,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 15 - M4 (pre-gate record): a record whose schema predates the gate is refused typed and non-retryable, distinct from missing and unreadable"
+      },
+      "candidate": {
+        "file": "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 16,
+        "durationMs": 17457,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 15 - M4 (pre-gate record): a record whose schema predates the gate is refused typed and non-retryable, distinct from missing and unreadable"
+      }
+    },
+    {
+      "file": "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 102,
+        "durationMs": 1458,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - owner key must contain the operationId"
+      },
+      "candidate": {
+        "file": "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 102,
+        "durationMs": 1476,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - owner key must contain the operationId"
+      }
+    },
+    {
+      "file": "test/scripts/rule-set-revision.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/scripts/rule-set-revision.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 18,
+        "durationMs": 402,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 9 - the always-load transitive path is within 360 lines"
+      },
+      "candidate": {
+        "file": "test/scripts/rule-set-revision.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 18,
+        "durationMs": 362,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 9 - the always-load transitive path is within 360 lines"
+      }
+    },
+    {
+      "file": "test/query/partition-write-answer-consumers.test.js",
+      "classification": "candidate_regression",
+      "base": {
+        "file": "test/query/partition-write-answer-consumers.test.js",
+        "attempt": 1,
+        "ok": true,
+        "assertions": 2,
+        "durationMs": 9019,
+        "retriedOnce": false,
+        "firstFailureLine": null
+      },
+      "candidate": {
+        "file": "test/query/partition-write-answer-consumers.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 10635,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - F-aj: the query executor re-delivers an unknown outcome under the write's one entryId until it is settled - its client gets the original result, applied once; a router holding the code re-proposes it only under its entryId, idempotently"
+      }
+    },
+    {
+      "file": "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 44,
+        "durationMs": 12423,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - service-row progress should continue the REPLACE into source removal even when authoritative operation reads miss"
+      },
+      "candidate": {
+        "file": "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 44,
+        "durationMs": 12438,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - service-row progress should continue the REPLACE into source removal even when authoritative operation reads miss"
+      }
+    },
+    {
+      "file": "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 173,
+        "durationMs": 1584,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - executeOperation should be guarded by shared workflow single-flight"
+      },
+      "candidate": {
+        "file": "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 173,
+        "durationMs": 1580,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - executeOperation should be guarded by shared workflow single-flight"
+      }
+    },
+    {
+      "file": "test/scripts/steering-diet.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/scripts/steering-diet.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 11,
+        "durationMs": 717,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 4 - each representative task reaches its owner from the always-load layer"
+      },
+      "candidate": {
+        "file": "test/scripts/steering-diet.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 11,
+        "durationMs": 724,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 4 - each representative task reaches its owner from the always-load layer"
+      }
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 7,
+        "durationMs": 5879,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - one private runtime owner is the only production binding importer"
+      },
+      "candidate": {
+        "file": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 7,
+        "durationMs": 6085,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - one private runtime owner is the only production binding importer"
+      }
+    },
+    {
+      "file": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 8,
+        "durationMs": 783,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 3 - T7: the stamp origins - the leader's COMMITTED answer at creation, and the GENESIS founding sets of the provisioner and the seed"
+      },
+      "candidate": {
+        "file": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 8,
+        "durationMs": 789,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 3 - T7: the stamp origins - the leader's COMMITTED answer at creation, and the GENESIS founding sets of the provisioner and the seed"
+      }
+    },
+    {
+      "file": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+      "classification": "red_at_both_same_first_assertion",
+      "base": {
+        "file": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 109,
+        "durationMs": 2032,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 4 - src/control-plane/replica-dispatch-readiness-capture.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough"
+      },
+      "candidate": {
+        "file": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 109,
+        "durationMs": 2039,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 4 - src/control-plane/replica-dispatch-readiness-capture.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough"
+      }
+    },
+    {
+      "file": "test/rebalancer/replace-replica-workflow.test.js",
+      "classification": "lab_failure_not_reproduced_on_gcp",
+      "base": {
+        "file": "test/rebalancer/replace-replica-workflow.test.js",
+        "attempt": 1,
+        "ok": true,
+        "assertions": 291,
+        "durationMs": 1912,
+        "retriedOnce": false,
+        "firstFailureLine": null
+      },
+      "candidate": {
+        "file": "test/rebalancer/replace-replica-workflow.test.js",
+        "attempt": 1,
+        "ok": true,
+        "assertions": 291,
+        "durationMs": 1830,
+        "retriedOnce": false,
+        "firstFailureLine": null
+      }
+    }
+  ],
+  "source": [
+    {
+      "commit": "97a030da287160e5597f0dd5ce5d60541caaf5e8",
+      "srcTree": "18cce2b3458bf61481f81c9113edaf61ca6e205b",
+      "testBlobs": {
+        "test/node/message-group-service-handler-membership.test.js": "752ba6706c041b9bdc7d0d1bcfd2bb9c25de0760",
+        "test/rebalancer/spread-cure-transition-authorization-row.test.js": "ac8b0b35c1c4c01616f667b264f9adeaa35a12b3",
+        "test/rebalancer/message-group-membership-change-parked.test.js": "bf2ac4bfa724ae23ade554538835640da021e2f7",
+        "test/raft/raft-rs-backend/operation-port-regression.test.js": "0802d4e668479d3c159c8eb5e6e230c755e26438",
+        "test/raft/raft-rs-backend/peer-identity.test.js": "e3eab12e8eaeaaf5a4861d1bb869612ead4ad0a4",
+        "test/raft/raft-rs-backend/evidence-o1-static.test.js": "c7a53d343873ccc8e99d44bf8f8c3c5d0c04be5f",
+        "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "f3bdaeef313cb544074dd47cb988aa5e80f821e9",
+        "test/rebalancer/rebalance-coordinator-outcome-routing.test.js": "10ac5618155a0f5de2e6cdf726ab055df1da0451",
+        "test/scripts/rule-set-revision.test.js": "fff2603b61bee95a5e64d9516de691aa115597ff",
+        "test/query/partition-write-answer-consumers.test.js": "2dff46fda527f87b8a0aed252a9e054dc292e39f",
+        "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js": "8123f07358bc1f60d3dfafe827116bc524665c4c",
+        "test/rebalancer/rebalance-coordinator-operation-ownership.test.js": "78e67daeda90902eead53caca3b25b7ffa06db09",
+        "test/scripts/steering-diet.test.js": "cdb3f463b61d9125fb2df705fd449a084f48a7dc",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js": "2c6cb2159107b4609ed3bcee800b057a99c5def2",
+        "test/raft/raft-rs-backend/committed-membership-census.test.js": "1e6f738ea112e3d5bb25cee6e45bcf169ead9cc2",
+        "test/rebalancer/replica-operation-membership-epoch-binding.test.js": "3b5ff91666bd52f41792c9c8a62a273152923944",
+        "test/rebalancer/replace-replica-workflow.test.js": "a3aa5154407d0201cb1cf4637dcce103431cb843"
+      },
+      "lockfileSha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd"
+    },
+    {
+      "commit": "605789e86aaf7dcca8fa4406235388b998460eb0",
+      "srcTree": "99186095cb54c316f6def8974f8c7c8c633eda5a",
+      "testBlobs": {
+        "test/node/message-group-service-handler-membership.test.js": "752ba6706c041b9bdc7d0d1bcfd2bb9c25de0760",
+        "test/rebalancer/spread-cure-transition-authorization-row.test.js": "ac8b0b35c1c4c01616f667b264f9adeaa35a12b3",
+        "test/rebalancer/message-group-membership-change-parked.test.js": "bf2ac4bfa724ae23ade554538835640da021e2f7",
+        "test/raft/raft-rs-backend/operation-port-regression.test.js": "0802d4e668479d3c159c8eb5e6e230c755e26438",
+        "test/raft/raft-rs-backend/peer-identity.test.js": "e3eab12e8eaeaaf5a4861d1bb869612ead4ad0a4",
+        "test/raft/raft-rs-backend/evidence-o1-static.test.js": "c7a53d343873ccc8e99d44bf8f8c3c5d0c04be5f",
+        "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "f3bdaeef313cb544074dd47cb988aa5e80f821e9",
+        "test/rebalancer/rebalance-coordinator-outcome-routing.test.js": "10ac5618155a0f5de2e6cdf726ab055df1da0451",
+        "test/scripts/rule-set-revision.test.js": "fff2603b61bee95a5e64d9516de691aa115597ff",
+        "test/query/partition-write-answer-consumers.test.js": "2dff46fda527f87b8a0aed252a9e054dc292e39f",
+        "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js": "8123f07358bc1f60d3dfafe827116bc524665c4c",
+        "test/rebalancer/rebalance-coordinator-operation-ownership.test.js": "78e67daeda90902eead53caca3b25b7ffa06db09",
+        "test/scripts/steering-diet.test.js": "cdb3f463b61d9125fb2df705fd449a084f48a7dc",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js": "2c6cb2159107b4609ed3bcee800b057a99c5def2",
+        "test/raft/raft-rs-backend/committed-membership-census.test.js": "1e6f738ea112e3d5bb25cee6e45bcf169ead9cc2",
+        "test/rebalancer/replica-operation-membership-epoch-binding.test.js": "3b5ff91666bd52f41792c9c8a62a273152923944",
+        "test/rebalancer/replace-replica-workflow.test.js": "a3aa5154407d0201cb1cf4637dcce103431cb843"
+      },
+      "lockfileSha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd"
+    }
+  ],
+  "deferredSlowFiles": [
+    "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+    "test/bootstrap/phase-failure-handling.property.test.js",
+    "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+    "test/integration/raft-leader-election.integration.test.js",
+    "test/integration/seed-owner-read-diagnosis.integration.test.js",
+    "test/integration/node-join-replica-activation.integration.test.js"
+  ],
+  "independentApproval": false,
+  "distributedAcceptance": false,
+  "limits": [
+    "Inherited relative to this increment does not mean acceptable for release.",
+    "Same first assertion does not by itself prove identical underlying cause.",
+    "A GCP pass never erases the original lab failure.",
+    "The six slow failures remain open; no full-cone or per-file timing approval."
+  ],
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "8b56d1f9f56a60058dbe354bee8429830c87a812c3cbfeef7c4191108820ee17",
+      "bytes": 158499,
+      "asset": "message-group-fresh-identity-membership--lab-attribution-37803287356.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--lab-attribution-37803287356.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T15:47:40.789Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Exact base/candidate attribution of 17 assertion/fixture failures from user lab run freshmg-lab-20261008T150005Z. Original lab remains FAIL, six slow failures remain open, no physical cluster, source changes or release approval. This archive contains new GCP diagnostic results, not the original user tar.gz.",
+      "evidence": "sha256:8b56d1f9f56a60058dbe354bee8429830c87a812c3cbfeef7c4191108820ee17",
+      "asset": "message-group-fresh-identity-membership--lab-attribution-37803287356.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--lab-attribution-37803287356.zip",
+      "bytes": 158499
+    }
+  },
+  "archiveSha256": "8b56d1f9f56a60058dbe354bee8429830c87a812c3cbfeef7c4191108820ee17"
+}

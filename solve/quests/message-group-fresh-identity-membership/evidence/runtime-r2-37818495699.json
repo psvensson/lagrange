@@ -1,0 +1,71 @@
+{
+  "schema": "freshmg-runtime-r2/1",
+  "reviewId": 5460477132,
+  "findingId": 4222118121,
+  "runId": 37818495699,
+  "baseSha": "963edd9678466b8ae7246add2d9c535b1b53e2cc",
+  "sourceSha": "ab5298277d47a244dacb6d730778c4788ad05151",
+  "redSha": "97e2b1071107507eac468f6b61af8a59cf8bb0d8",
+  "timings": {
+    "integration": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "20",
+          "2186"
+        ]
+      ]
+    },
+    "regressions": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "1152"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "774"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "958"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "866"
+        ]
+      ]
+    }
+  },
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "89981ce5cc66717d0ffe2775a2907487d549558f98f971b3bf8ae4a512a8a2d0",
+      "bytes": 34078,
+      "asset": "message-group-fresh-identity-membership--runtime-r2-37818495699-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--runtime-r2-37818495699-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T17:44:17.267Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "PR109 R2 paused-boot-read correction: real repository renewal and success must refuse old observations; terminal failure after issue preserves its admitted action; final unreadable operation remains typed unavailable. Red/green/source-revert on the real native-consumer witness. No cross-group atomicity, physical CREATE, full driver or distributed proof. Original lint-stopped attempt 37817790691 retained inside.",
+      "evidence": "sha256:89981ce5cc66717d0ffe2775a2907487d549558f98f971b3bf8ae4a512a8a2d0",
+      "asset": "message-group-fresh-identity-membership--runtime-r2-37818495699-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--runtime-r2-37818495699-1.zip",
+      "bytes": 34078
+    }
+  },
+  "archiveSha256": "89981ce5cc66717d0ffe2775a2907487d549558f98f971b3bf8ae4a512a8a2d0",
+  "proofCeiling": "file-backed canonical operation repository, supplied boot/node bindings, actual native ports with in-process inbox; observed race across boot await, not atomic cross-group authorization or registered physical CREATE",
+  "restartDurationResolved": false,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL",
+  "distributedAcceptance": false
+}

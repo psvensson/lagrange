@@ -17,6 +17,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import Database from 'better-sqlite3';
+import assert from 'node:assert/strict';
+import {SQLITE_STORE_PRAGMA} from '../../../src/storage/sqlite-store-constants.js';
+import {RAFT_RS_SYNCHRONOUS_PRAGMA} from
+  '../../../src/raft/raft-rs-durable-store-constants.js';
 
 import {
   RAFT_OPERATION_PORT_REQUEST,
@@ -202,6 +206,16 @@ class PartitionNodeCluster {
   buildReplica(replicaId, bootstrapReplicaIds, extraRequest = {}) {
     const dbFile = this.dbFileOf(replicaId);
     const openedDatabase = new Database(dbFile);
+    // Use the partition's WAL journal, retaining FULL synchronization for ALL
+    // fixture commits, including every reopen. WAL's connection default can
+    // be NORMAL, so select FULL explicitly rather than relying on that default.
+    openedDatabase.pragma(SQLITE_STORE_PRAGMA.JOURNAL_MODE_WAL);
+    openedDatabase.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.SET_FULL);
+    assert.equal(openedDatabase.pragma('journal_mode', {simple: true}), 'wal',
+      'partition fixture must use the production WAL journal');
+    assert.equal(openedDatabase.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.READ,
+      {simple: true}), RAFT_RS_SYNCHRONOUS_PRAGMA.FULL_LEVEL,
+    'partition fixture must retain FULL synchronization');
     const db = this.wrapDatabase ?
       this.wrapDatabase(replicaId, openedDatabase) : openedDatabase;
     db.exec(SERVICES_DDL);

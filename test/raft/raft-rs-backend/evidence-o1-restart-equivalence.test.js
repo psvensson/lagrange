@@ -309,9 +309,20 @@ test('M4 (pre-gate record): a record whose schema predates the gate is ' +
     'setup: the pre-gate DDL is the production DDL minus the gate columns');
     db.exec(`ALTER TABLE ${RAFT_RS_TABLE.APPLIED_STATE} RENAME TO gated`);
     db.exec(preGate);
-    db.exec(`INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE} SELECT group_id, ` +
-      'applied_index, voters, learners, voters_outgoing, learners_next, ' +
-      'auto_leave FROM gated');
+    // Preserve every non-gate field of the actual schema, including later
+    // membership-generation additions. Only gate-column absence is varied.
+    const columns = db.pragma(`table_info(${RAFT_RS_TABLE.APPLIED_STATE})`)
+      .map((row) => row.name);
+    const selectedColumns = columns.map((column) =>
+      `"${column.replaceAll('"', '""')}"`).join(', ');
+    const previous = db.prepare(`SELECT ${selectedColumns} FROM gated ` +
+      'ORDER BY group_id').all();
+    assert.ok(previous.length > 0, 'setup: actual durable records must be copied');
+    db.exec(`INSERT INTO ${RAFT_RS_TABLE.APPLIED_STATE} (${selectedColumns}) ` +
+      `SELECT ${selectedColumns} FROM gated`);
+    assert.deepEqual(db.prepare(`SELECT ${selectedColumns} FROM ` +
+      `${RAFT_RS_TABLE.APPLIED_STATE} ORDER BY group_id`).all(), previous,
+    'setup: all non-gate durable values survive the pre-gate reconstruction');
     db.exec('DROP TABLE gated');
     db.close();
     const hints = replica.request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS];

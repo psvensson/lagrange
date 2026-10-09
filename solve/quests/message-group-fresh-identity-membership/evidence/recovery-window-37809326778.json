@@ -1,0 +1,817 @@
+{
+  "schema": "cutover-recovery-window-attempt/1",
+  "runId": 37809326778,
+  "sourceSha": "50ef7714d0fb74e9cad61d739eb62d486fe87ac9",
+  "runtimeBase": "3fda8406d4c97bfd47231072e8065fb61f3a13f6",
+  "measurementStep": "success",
+  "mutationStep": "success",
+  "runtimeChanged": false,
+  "originalLabVerdict": "FAIL",
+  "distributedAcceptance": false,
+  "independentApproval": false,
+  "measurement": {
+    "schema": "retry-recovery-window/1",
+    "sourceSha": "50ef7714d0fb74e9cad61d739eb62d486fe87ac9",
+    "measurementStatus": "measured",
+    "runtimeChanged": false,
+    "queryBoundaryResults": [
+      {
+        "name": "positive-immediate",
+        "availableAtMs": 0,
+        "budgetMs": 8000,
+        "returnedAtMs": 0,
+        "remainingAtReturnMs": 8000,
+        "response": {
+          "partitionId": "retry-window-p1",
+          "success": true,
+          "rows": [],
+          "changes": 1
+        },
+        "deliveries": [
+          {
+            "atMs": 0,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-689ce8ac-6550-4088-acc2-8bee75787418",
+            "timeoutMs": 8000
+          }
+        ],
+        "delays": [],
+        "warnings": []
+      },
+      {
+        "name": "positive-timely-recovery",
+        "availableAtMs": 1000,
+        "budgetMs": 8000,
+        "returnedAtMs": 1275,
+        "remainingAtReturnMs": 6725,
+        "response": {
+          "partitionId": "retry-window-p1",
+          "success": true,
+          "rows": [],
+          "changes": 1
+        },
+        "deliveries": [
+          {
+            "atMs": 0,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-1d154358-b7cc-4581-873e-10073b452b6b",
+            "timeoutMs": 8000
+          },
+          {
+            "atMs": 5,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-1d154358-b7cc-4581-873e-10073b452b6b",
+            "timeoutMs": 7995
+          },
+          {
+            "atMs": 15,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-1d154358-b7cc-4581-873e-10073b452b6b",
+            "timeoutMs": 7985
+          },
+          {
+            "atMs": 35,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-1d154358-b7cc-4581-873e-10073b452b6b",
+            "timeoutMs": 7965
+          },
+          {
+            "atMs": 75,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-1d154358-b7cc-4581-873e-10073b452b6b",
+            "timeoutMs": 7925
+          },
+          {
+            "atMs": 155,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-1d154358-b7cc-4581-873e-10073b452b6b",
+            "timeoutMs": 7845
+          },
+          {
+            "atMs": 315,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-1d154358-b7cc-4581-873e-10073b452b6b",
+            "timeoutMs": 7685
+          },
+          {
+            "atMs": 635,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-1d154358-b7cc-4581-873e-10073b452b6b",
+            "timeoutMs": 7365
+          },
+          {
+            "atMs": 1275,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-1d154358-b7cc-4581-873e-10073b452b6b",
+            "timeoutMs": 6725
+          }
+        ],
+        "delays": [
+          {
+            "atMs": 0,
+            "delayMs": 5
+          },
+          {
+            "atMs": 5,
+            "delayMs": 10
+          },
+          {
+            "atMs": 15,
+            "delayMs": 20
+          },
+          {
+            "atMs": 35,
+            "delayMs": 40
+          },
+          {
+            "atMs": 75,
+            "delayMs": 80
+          },
+          {
+            "atMs": 155,
+            "delayMs": 160
+          },
+          {
+            "atMs": 315,
+            "delayMs": 320
+          },
+          {
+            "atMs": 635,
+            "delayMs": 640
+          }
+        ],
+        "warnings": []
+      },
+      {
+        "name": "recovery-after-deadline",
+        "availableAtMs": 9000,
+        "budgetMs": 8000,
+        "returnedAtMs": 6555,
+        "remainingAtReturnMs": 1445,
+        "response": {
+          "failureCode": "partition_write_outcome_unknown",
+          "entryId": "caller-stable-id",
+          "partitionId": "retry-window-p1",
+          "success": false,
+          "error": "The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent",
+          "errorCode": null,
+          "retryAfterMs": null,
+          "deferRetry": false,
+          "participantNodeId": "test-node",
+          "participantAddress": "test-node/partition/retry-window-p1",
+          "backpressured": false,
+          "failedTable": null,
+          "rows": [],
+          "spentWait": {
+            "awaited": "settled answer for the write's entry",
+            "entryId": "caller-stable-id",
+            "deliveries": 12,
+            "unknownAnswers": 12,
+            "lostAnswers": 0,
+            "waitedMs": 6555,
+            "lastObservedState": {
+              "state": "partition_write_outcome_unknown",
+              "reason": null,
+              "logIndex": null
+            }
+          }
+        },
+        "deliveries": [
+          {
+            "atMs": 0,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 8000
+          },
+          {
+            "atMs": 5,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 7995
+          },
+          {
+            "atMs": 15,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 7985
+          },
+          {
+            "atMs": 35,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 7965
+          },
+          {
+            "atMs": 75,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 7925
+          },
+          {
+            "atMs": 155,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 7845
+          },
+          {
+            "atMs": 315,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 7685
+          },
+          {
+            "atMs": 635,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 7365
+          },
+          {
+            "atMs": 1275,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 6725
+          },
+          {
+            "atMs": 2555,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 5445
+          },
+          {
+            "atMs": 4555,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 3445
+          },
+          {
+            "atMs": 6555,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "caller-stable-id",
+            "timeoutMs": 1445
+          }
+        ],
+        "delays": [
+          {
+            "atMs": 0,
+            "delayMs": 5
+          },
+          {
+            "atMs": 5,
+            "delayMs": 10
+          },
+          {
+            "atMs": 15,
+            "delayMs": 20
+          },
+          {
+            "atMs": 35,
+            "delayMs": 40
+          },
+          {
+            "atMs": 75,
+            "delayMs": 80
+          },
+          {
+            "atMs": 155,
+            "delayMs": 160
+          },
+          {
+            "atMs": 315,
+            "delayMs": 320
+          },
+          {
+            "atMs": 635,
+            "delayMs": 640
+          },
+          {
+            "atMs": 1275,
+            "delayMs": 1280
+          },
+          {
+            "atMs": 2555,
+            "delayMs": 2000
+          },
+          {
+            "atMs": 4555,
+            "delayMs": 2000
+          }
+        ],
+        "warnings": [
+          {
+            "message": "Partition write outcome still unknown when its delivery budget was spent",
+            "detail": {
+              "partitionId": "retry-window-p1",
+              "awaited": "settled answer for the write's entry",
+              "entryId": "caller-stable-id",
+              "deliveries": 12,
+              "unknownAnswers": 12,
+              "lostAnswers": 0,
+              "waitedMs": 6555,
+              "lastObservedState": {
+                "state": "partition_write_outcome_unknown",
+                "reason": null,
+                "logIndex": null
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "recovery-in-residual-window",
+        "availableAtMs": 7277,
+        "budgetMs": 8000,
+        "returnedAtMs": 6555,
+        "remainingAtReturnMs": 1445,
+        "response": {
+          "failureCode": "partition_write_outcome_unknown",
+          "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+          "partitionId": "retry-window-p1",
+          "success": false,
+          "error": "The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent",
+          "errorCode": null,
+          "retryAfterMs": null,
+          "deferRetry": false,
+          "participantNodeId": "test-node",
+          "participantAddress": "test-node/partition/retry-window-p1",
+          "backpressured": false,
+          "failedTable": null,
+          "rows": [],
+          "spentWait": {
+            "awaited": "settled answer for the write's entry",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "deliveries": 12,
+            "unknownAnswers": 12,
+            "lostAnswers": 0,
+            "waitedMs": 6555,
+            "lastObservedState": {
+              "state": "partition_write_outcome_unknown",
+              "reason": null,
+              "logIndex": null
+            }
+          }
+        },
+        "deliveries": [
+          {
+            "atMs": 0,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 8000
+          },
+          {
+            "atMs": 5,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 7995
+          },
+          {
+            "atMs": 15,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 7985
+          },
+          {
+            "atMs": 35,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 7965
+          },
+          {
+            "atMs": 75,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 7925
+          },
+          {
+            "atMs": 155,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 7845
+          },
+          {
+            "atMs": 315,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 7685
+          },
+          {
+            "atMs": 635,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 7365
+          },
+          {
+            "atMs": 1275,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 6725
+          },
+          {
+            "atMs": 2555,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 5445
+          },
+          {
+            "atMs": 4555,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 3445
+          },
+          {
+            "atMs": 6555,
+            "address": "test-node/partition/retry-window-p1",
+            "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+            "timeoutMs": 1445
+          }
+        ],
+        "delays": [
+          {
+            "atMs": 0,
+            "delayMs": 5
+          },
+          {
+            "atMs": 5,
+            "delayMs": 10
+          },
+          {
+            "atMs": 15,
+            "delayMs": 20
+          },
+          {
+            "atMs": 35,
+            "delayMs": 40
+          },
+          {
+            "atMs": 75,
+            "delayMs": 80
+          },
+          {
+            "atMs": 155,
+            "delayMs": 160
+          },
+          {
+            "atMs": 315,
+            "delayMs": 320
+          },
+          {
+            "atMs": 635,
+            "delayMs": 640
+          },
+          {
+            "atMs": 1275,
+            "delayMs": 1280
+          },
+          {
+            "atMs": 2555,
+            "delayMs": 2000
+          },
+          {
+            "atMs": 4555,
+            "delayMs": 2000
+          }
+        ],
+        "warnings": [
+          {
+            "message": "Partition write outcome still unknown when its delivery budget was spent",
+            "detail": {
+              "partitionId": "retry-window-p1",
+              "awaited": "settled answer for the write's entry",
+              "entryId": "qexec-4d292542-5346-4899-9020-7527ac3433c8",
+              "deliveries": 12,
+              "unknownAnswers": 12,
+              "lostAnswers": 0,
+              "waitedMs": 6555,
+              "lastObservedState": {
+                "state": "partition_write_outcome_unknown",
+                "reason": null,
+                "logIndex": null
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "nativeElectionControl": {
+      "kind": "guarded-production-operation-ports",
+      "founders": [
+        "a",
+        "b",
+        "c"
+      ],
+      "lost": "a",
+      "leader": "b",
+      "rounds": 21,
+      "boundRounds": 600,
+      "pausedObservations": 10,
+      "before": [
+        {
+          "outcome": "CORE_OK",
+          "groupId": "retry-window-native",
+          "replicaIdentity": "b",
+          "peerId": "4477677635727087946",
+          "term": 1,
+          "commitIndex": 0,
+          "confChangePending": false,
+          "appliedIndex": 0,
+          "configurationKey": "[[\"3349882092070664930\",\"4477677635727087946\",\"5374906597990186442\"],[],[],[],false]",
+          "membershipGenerationIndex": 0,
+          "lifecycleIncarnation": "6635ba8f-652b-44ff-8ea7-28ce90d3edac",
+          "role": "follower",
+          "leaderId": "a",
+          "leaderAddress": "raft-rs://replica-a",
+          "leaderAddressStatus": "resolved",
+          "peerCount": 2,
+          "peers": [
+            {
+              "peerId": "5374906597990186442",
+              "replicaIdentity": "a",
+              "address": "raft-rs://replica-a",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "3349882092070664930",
+              "replicaIdentity": "c",
+              "address": "raft-rs://replica-c",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "none-observed"
+              }
+            }
+          ],
+          "followerProgress": {},
+          "inboundStepRefusals": [],
+          "confState": {
+            "voters": [
+              "5374906597990186442",
+              "3349882092070664930",
+              "4477677635727087946"
+            ],
+            "learners": [],
+            "votersOutgoing": [],
+            "learnersNext": [],
+            "autoLeave": false
+          },
+          "gateOpen": true,
+          "bootstrapIndex": 0,
+          "admissionIndex": 0,
+          "identityRecorded": true,
+          "runtimeHealth": "healthy",
+          "groupHealth": "usable",
+          "runtimeGeneration": 1
+        },
+        {
+          "outcome": "CORE_OK",
+          "groupId": "retry-window-native",
+          "replicaIdentity": "c",
+          "peerId": "3349882092070664930",
+          "term": 1,
+          "commitIndex": 0,
+          "confChangePending": false,
+          "appliedIndex": 0,
+          "configurationKey": "[[\"3349882092070664930\",\"4477677635727087946\",\"5374906597990186442\"],[],[],[],false]",
+          "membershipGenerationIndex": 0,
+          "lifecycleIncarnation": "80ccab30-7d27-46d4-a4e1-7e3ae4c004d6",
+          "role": "follower",
+          "leaderId": "a",
+          "leaderAddress": "raft-rs://replica-a",
+          "leaderAddressStatus": "resolved",
+          "peerCount": 2,
+          "peers": [
+            {
+              "peerId": "5374906597990186442",
+              "replicaIdentity": "a",
+              "address": "raft-rs://replica-a",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "4477677635727087946",
+              "replicaIdentity": "b",
+              "address": "raft-rs://replica-b",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "none-observed"
+              }
+            }
+          ],
+          "followerProgress": {},
+          "inboundStepRefusals": [],
+          "confState": {
+            "voters": [
+              "5374906597990186442",
+              "3349882092070664930",
+              "4477677635727087946"
+            ],
+            "learners": [],
+            "votersOutgoing": [],
+            "learnersNext": [],
+            "autoLeave": false
+          },
+          "gateOpen": true,
+          "bootstrapIndex": 0,
+          "admissionIndex": 0,
+          "identityRecorded": true,
+          "runtimeHealth": "healthy",
+          "groupHealth": "usable",
+          "runtimeGeneration": 1
+        }
+      ],
+      "after": [
+        {
+          "outcome": "CORE_OK",
+          "groupId": "retry-window-native",
+          "replicaIdentity": "b",
+          "peerId": "4477677635727087946",
+          "term": 2,
+          "commitIndex": 0,
+          "confChangePending": true,
+          "appliedIndex": 0,
+          "configurationKey": "[[\"3349882092070664930\",\"4477677635727087946\",\"5374906597990186442\"],[],[],[],false]",
+          "membershipGenerationIndex": 0,
+          "lifecycleIncarnation": "6635ba8f-652b-44ff-8ea7-28ce90d3edac",
+          "role": "leader",
+          "leaderId": "b",
+          "leaderAddress": "raft-rs://replica-b",
+          "leaderAddressStatus": "resolved",
+          "peerCount": 2,
+          "peers": [
+            {
+              "peerId": "5374906597990186442",
+              "replicaIdentity": "a",
+              "address": "raft-rs://replica-a",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "3349882092070664930",
+              "replicaIdentity": "c",
+              "address": "raft-rs://replica-c",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            }
+          ],
+          "followerProgress": {
+            "raft-rs://replica-a": 0,
+            "raft-rs://replica-c": 0
+          },
+          "inboundStepRefusals": [],
+          "confState": {
+            "voters": [
+              "5374906597990186442",
+              "3349882092070664930",
+              "4477677635727087946"
+            ],
+            "learners": [],
+            "votersOutgoing": [],
+            "learnersNext": [],
+            "autoLeave": false
+          },
+          "gateOpen": true,
+          "bootstrapIndex": 0,
+          "admissionIndex": 0,
+          "identityRecorded": true,
+          "runtimeHealth": "healthy",
+          "groupHealth": "usable",
+          "runtimeGeneration": 1
+        },
+        {
+          "outcome": "CORE_OK",
+          "groupId": "retry-window-native",
+          "replicaIdentity": "c",
+          "peerId": "3349882092070664930",
+          "term": 2,
+          "commitIndex": 0,
+          "confChangePending": false,
+          "appliedIndex": 0,
+          "configurationKey": "[[\"3349882092070664930\",\"4477677635727087946\",\"5374906597990186442\"],[],[],[],false]",
+          "membershipGenerationIndex": 0,
+          "lifecycleIncarnation": "80ccab30-7d27-46d4-a4e1-7e3ae4c004d6",
+          "role": "follower",
+          "leaderId": "b",
+          "leaderAddress": "raft-rs://replica-b",
+          "leaderAddressStatus": "resolved",
+          "peerCount": 2,
+          "peers": [
+            {
+              "peerId": "5374906597990186442",
+              "replicaIdentity": "a",
+              "address": "raft-rs://replica-a",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "4477677635727087946",
+              "replicaIdentity": "b",
+              "address": "raft-rs://replica-b",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            }
+          ],
+          "followerProgress": {},
+          "inboundStepRefusals": [],
+          "confState": {
+            "voters": [
+              "5374906597990186442",
+              "3349882092070664930",
+              "4477677635727087946"
+            ],
+            "learners": [],
+            "votersOutgoing": [],
+            "learnersNext": [],
+            "autoLeave": false
+          },
+          "gateOpen": true,
+          "bootstrapIndex": 0,
+          "admissionIndex": 0,
+          "identityRecorded": true,
+          "runtimeHealth": "healthy",
+          "groupHealth": "usable",
+          "runtimeGeneration": 1
+        }
+      ],
+      "limitation": "No conversion from deterministic ticks to physical latency; not a SQL workload."
+    },
+    "proofCeiling": "Real QueryExecutor routing/budget/redelivery with supplied responses and clock; separate real native tick schedule. Not an end-to-end SQL/election composition, durability or pass-rate proof.",
+    "residualWindow": {
+      "exists": true,
+      "recoveryAtMs": 7277,
+      "responseSettled": false,
+      "ownerReturnedBeforeRecovery": true,
+      "policyOwner": "createPartitionAttemptBudget.waitForRetryBudget",
+      "classification": "Observed policy boundary, not an automatic source-repair decision."
+    },
+    "sourceDigests": {
+      "src/query/query-executor-partition-delivery.js": "66eb2497ca11c37df2f4665533972c85ee933e97addc9f745b0f08576d6decc3",
+      "src/query/query-executor-partition-attempt-budget.js": "c94297c4a94b02419a366b849816fe60408605792117bb7d489956a177efa457",
+      "src/query/query-executor-unknown-outcome.js": "e0c1e8164e1d78d4e32cbce4a74ed40d82507cfc66d9f8786df669d51a510af9",
+      "test/raft/raft-rs-backend/native-election-schedules.js": "185d4d05351162b387a62cb59d55987b467a615cb64227156171c33c3204dee0"
+    }
+  },
+  "mutationResults": [
+    {
+      "mutation": "lost-entry",
+      "exit": 1,
+      "expectedAssertion": "unknown outcome preserves its exact write identity",
+      "caught": true
+    },
+    {
+      "mutation": "false-failure-type",
+      "exit": 1,
+      "expectedAssertion": "unsettled write must stay typed unknown",
+      "caught": true
+    },
+    {
+      "mutation": "overrun-delay",
+      "exit": 1,
+      "expectedAssertion": "outlasting.returnedAtMs <= BUDGET_MS",
+      "caught": true
+    }
+  ],
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "9e9286c4b2f69a65edd423c13cdf015a790283403a42d9ed607d7bbf05c6d43f",
+      "bytes": 13926,
+      "asset": "message-group-fresh-identity-membership--recovery-window-37809326778-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--recovery-window-37809326778-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T16:31:36.198Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Followup to failed lab freshmg-lab-20261008T150005Z: deterministic QueryExecutor response/budget windows and a separate native guarded-port tick schedule, not composed SQL/election acceptance. Original runtime unchanged; preserve raw outcomes and mutation controls. Route policy findings to the existing query delivery-budget owner; no FreshMG receipt is promoted.",
+      "evidence": "sha256:9e9286c4b2f69a65edd423c13cdf015a790283403a42d9ed607d7bbf05c6d43f",
+      "asset": "message-group-fresh-identity-membership--recovery-window-37809326778-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--recovery-window-37809326778-1.zip",
+      "bytes": 13926
+    }
+  },
+  "archiveSha256": "9e9286c4b2f69a65edd423c13cdf015a790283403a42d9ed607d7bbf05c6d43f"
+}

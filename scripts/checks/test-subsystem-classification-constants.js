@@ -166,6 +166,10 @@ export const SUBSYSTEM_RULES = Object.freeze([
 // semantic home differs from what their path implies. Each must name exactly
 // one live test and carry a reason, so a stale override fails like a dead rule.
 export const SUBSYSTEM_OVERRIDES = Object.freeze({
+  'test/integration/message-group-learner-runtime-authorization.integration.test.js': {
+    subsystem: SUBSYSTEM_STORAGE_RAFT,
+    reason: 'proves durable operation authorization before native Raft membership; repository storage and inbox transport supply the cross-owner fixture',
+  },
   'test/integration/message-group-membership-claim-cache.integration.test.js': {
     subsystem: SUBSYSTEM_CDC_METADATA,
     reason: 'proves repository mutation visibility in SystemTableCache; seed and message group supply the fixture, not the asserted responsibility',

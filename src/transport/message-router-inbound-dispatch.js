@@ -86,7 +86,8 @@ class MessageRouterInboundDispatch {
         return;
       }
       if (message.type === RouterMessageType.SERVICE_MESSAGE) {
-        this.handleServiceMessage(ws, message);
+        const delivery = this.connectionAuthorityOwner.captureIncomingDelivery(connectionId, ws);
+        this.handleServiceMessage(ws, message, delivery);
         return;
       }
       this.logger.warn(ROUTER_LOG_MSG.MESSAGE_UNKNOWN, {
@@ -419,9 +420,10 @@ class MessageRouterInboundDispatch {
    * resolves the handler asynchronously via SERVICE_RESPONSE.
    * @param {WebSocket} ws - WebSocket connection.
    * @param {Object} message - Service message.
+   * @param {Object|null} delivery - Owner-bound local delivery lifetime.
    * @private
    */
-  handleServiceMessage(ws, message) {
+  handleServiceMessage(ws, message, delivery = null) {
     const {targetAddress, messageId, payload} = message;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_MESSAGE_HANDLING, {
       messageId,
@@ -464,7 +466,8 @@ class MessageRouterInboundDispatch {
       timestamp: message.timestamp,
     };
     Promise.resolve()
-      .then(() => handler(envelope))
+      // The local-only second argument is not part of the wire envelope.
+      .then(() => handler(envelope, delivery))
       .then((result) => {
         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_SENT, {
           messageId,

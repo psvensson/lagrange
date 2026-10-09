@@ -3,8 +3,9 @@
 // message group are its callers: each hands over its own raft-rs operation
 // port and describes itself ({groupId, localReplicaIdentity, logger,
 // logContext?}, where `logContext` is the caller's own fields for each
-// admission record); membership requests enter through here over
-// `port.proposeConfChange` and nowhere else.
+// admission record). Founder admission uses port.proposeConfChange; the
+// operation-owned learner consumer below uses the semantic membership port
+// after authoritative operation observation. Neither bypasses native admission.
 //
 // Only the leader proposes an admission, in the port's canonical request
 // shape; a replica that is not the leader, or a peer the committed
@@ -15,11 +16,17 @@
 // (RAFT_MEMBERSHIP_ADMISSION_OUTCOME), never as proposed regardless of the
 // answer.
 
+import {membershipTransitionRefusal} from './raft-rs-membership-transition.js';
+import {deepFreeze} from './raft-operation-port.js';
 import {raftRsMembershipAdministration} from
   './raft-rs-membership-administration.js';
 import {RAFT_ROLE} from './constants.js';
 import {
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
+  RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME,
+  RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
+  RAFT_MEMBERSHIP_TRANSITION_STAGE,
+  RAFT_OPERATION,
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
@@ -259,7 +266,113 @@ function takeGroupAdmissionsInFlight(port) {
   return taken;
 }
 
+// Host-composed bindings are read once before asking the repository. They
+// are not filled in from a caller's request or from a later port observation.
+function learnerReceiver(group) {
+  return Object.freeze({groupId: group?.groupId, nodeId: group?.nodeId,
+    bootIncarnation: group?.bootIncarnation, localReplicaIdentity: group?.localReplicaIdentity,
+    senderNodeId: group?.senderNodeId, senderBootIncarnation: group?.senderBootIncarnation});
+}
+
+function learnerPortAvailable(port) {
+  return typeof port?.readStatus === 'function' &&
+    typeof port?.[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION] === 'function';
+}
+
+function refusedLearnerAuthorization(observed) {
+  const missing = observed?.outcome === RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE;
+  return deepFreeze({...membershipTransitionRefusal(missing ?
+    RAFT_MEMBERSHIP_AUTHORIZATION_REASON.UNAVAILABLE :
+    observed?.reason ?? RAFT_MEMBERSHIP_AUTHORIZATION_REASON.MISMATCH), retryable: missing});
+}
+
+function learnerRecipientMatches(status, receiver, transition) {
+  return status?.groupId === receiver.groupId &&
+    status.replicaIdentity === receiver.localReplicaIdentity &&
+    transition?.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER;
+}
+
+function reserveAndProposeAuthorizedLearner(port, receiver, transition, admitExecution) {
+  if (!liveDelivery(admitExecution)) {
+    return deliveryRefusal();
+  }
+  const reserved = reserveGroupPeerIdentity(receiver, transition.replicaIdentity);
+  if (reserved.outcome !== RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED) {
+    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
+  }
+  // Same-turn native fences remain authoritative. Do not refresh an issued
+  // transition from status here: that would turn stale permission into a grant.
+  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](transition, admitExecution);
+}
+
+// Host-composed recipient boundary. The resolver is the existing operation
+// repository's bound observation, never a boolean or caller-supplied permit
+// validator. Transport authentication/registration and the workflow driver
+// must supply the group/sender bindings; this helper does not invent them.
+function learnerDeliveryMatches(receiver, delivery) {
+  return delivery?.nodeId === receiver.nodeId &&
+    delivery.bootIncarnation === receiver.bootIncarnation &&
+    delivery.senderNodeId === receiver.senderNodeId &&
+    delivery.senderBootIncarnation === receiver.senderBootIncarnation;
+}
+
+function liveDelivery(admitExecution) {
+  try {
+    return admitExecution() === true;
+  } catch {
+    return false;
+  }
+}
+
+function deliveryRefusal() {
+  return deepFreeze({...membershipTransitionRefusal(
+    RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY), retryable: true});
+}
+
+function learnerDelivery(receiver, delivery) {
+  const admitExecution = delivery?.isCurrent;
+  if (typeof admitExecution !== 'function') {
+    return {refusal: membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_AUTHORIZATION_REASON.DELIVERY_REQUIRED)};
+  }
+  if (!learnerDeliveryMatches(receiver, delivery) || !liveDelivery(admitExecution)) {
+    return {refusal: deliveryRefusal()};
+  }
+  return {admitExecution};
+}
+
+async function proposeAuthorizedGroupLearner(port, group, request, observeAuthorization,
+  delivery) {
+  if (typeof observeAuthorization !== 'function') {
+    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
+  }
+  if (!learnerPortAvailable(port)) {
+    return refusedLearnerAuthorization({
+      outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE});
+  }
+  const receiver = learnerReceiver(group);
+  // Only a host-composed delivery context may cross this boundary. Inbound
+  // JSON cannot carry its callable fence. Do not read it from request.
+  const captured = learnerDelivery(receiver, delivery);
+  if (captured.refusal) return captured.refusal;
+  let observed;
+  try {
+    observed = await observeAuthorization(request, receiver);
+  } catch {
+    observed = {outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE};
+  }
+  if (observed?.outcome !== RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.OBSERVED) {
+    return refusedLearnerAuthorization(observed);
+  }
+  if (!learnerRecipientMatches(port.readStatus(), receiver, observed.transition)) {
+    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
+  }
+  return reserveAndProposeAuthorizedLearner(port, receiver, observed.transition,
+    captured.admitExecution);
+}
+
 export {
+  proposeAuthorizedGroupLearner,
   RAFT_GROUP_MEMBERSHIP_ADMISSION_LOG_MSG,
   REDRIVEN_ADMISSION_OUTCOMES,
   admissionOfPortAnswer,

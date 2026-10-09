@@ -133,7 +133,7 @@ function validMembershipTransitionRequest(request, stamp, stageOrdinal) {
 }
 
 function transitionCommand(request, stamp, stageOrdinal, peerId,
-  targetStatusObservation) {
+  targetStatusObservation, admitExecution) {
   return deepFreeze({
     operationId: request.operationId,
     transitionIdentity: request.transitionIdentity,
@@ -149,6 +149,9 @@ function transitionCommand(request, stamp, stageOrdinal, peerId,
     expectedConfigurationKey: stamp.configurationKey,
     expectedMembershipGenerationIndex: stamp.membershipGenerationIndex,
     targetStatusObservation,
+    // Host-only lifetime predicate. It is never encoded into the replicated
+    // ConfChange context and must be checked inside the queued native turn.
+    admitExecution,
     change: deepFreeze({transition: 0, changes: [deepFreeze({
       changeType: committedMembershipChangeType(request.stage), nodeId: peerId,
     })], context: encodeCommittedMembershipContext({
@@ -162,7 +165,7 @@ function transitionCommand(request, stamp, stageOrdinal, peerId,
   });
 }
 
-function normalizeMembershipTransition(request, registry) {
+function normalizeMembershipTransition(request, registry, admitExecution) {
   const stamp = request?.leaderConfigurationStamp;
   const stageOrdinal = stageOrdinalFor(request?.stage);
   if (!validMembershipTransitionRequest(request, stamp, stageOrdinal)) {
@@ -178,7 +181,7 @@ function normalizeMembershipTransition(request, registry) {
     return target;
   }
   return {command: transitionCommand(
-    request, stamp, stageOrdinal, peerId, target.observation)};
+    request, stamp, stageOrdinal, peerId, target.observation, admitExecution)};
 }
 
 function transitionFenceKey(command) {

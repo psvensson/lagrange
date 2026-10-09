@@ -1,0 +1,70 @@
+{
+  "schema": "freshmg-native-invalidation/1",
+  "runId": 37823435436,
+  "baseSha": "7cc110614db84a6d65e00438452fb935dc199179",
+  "testSha": "6af5472ae19ddc7ab2552e674d7702bd712ec5fa",
+  "timings": {
+    "consumer": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "22",
+          "1953"
+        ]
+      ]
+    },
+    "regressions": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "1048"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "1075"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "1327"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "1179"
+        ]
+      ]
+    }
+  },
+  "nativeConfigurationMutationCaught": true,
+  "productionSourceChanged": false,
+  "independentApproval": false,
+  "bootReadWindowResolved": false,
+  "restartDurationResolved": false,
+  "distributedAcceptance": false,
+  "fullLabVerdict": "FAIL",
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "ba15cb427cbec54dc8fbc7adb5ecbc8adb23fc6a2dd198e851896568660f95ba",
+      "bytes": 13512,
+      "asset": "message-group-fresh-identity-membership--native-invalidation-37823435436-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--native-invalidation-37823435436-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T18:21:29.194Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Author R3 continuation: actual recipient close and committed configuration drift fence delayed learner requests through existing native owners. Existing integration positives and repository regressions retained, no runtime edit. Native config mutation reaches the new assertion. Supplied operation gateway and in-process transport; no globally atomic metadata authorization, actual remote boot, registered ingress, CREATE or release proof.",
+      "evidence": "sha256:ba15cb427cbec54dc8fbc7adb5ecbc8adb23fc6a2dd198e851896568660f95ba",
+      "asset": "message-group-fresh-identity-membership--native-invalidation-37823435436-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--native-invalidation-37823435436-1.zip",
+      "bytes": 13512
+    }
+  },
+  "archiveSha256": "ba15cb427cbec54dc8fbc7adb5ecbc8adb23fc6a2dd198e851896568660f95ba"
+}

@@ -357,9 +357,9 @@ function createRaftRsOperationPort(request) {
         answered :
         committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
     },
-    [RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]: (request) =>
+    [RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]: (request, admitExecution) =>
       protocolTurn(() => {
-        const normalized = normalizeMembershipTransition(request, registry);
+        const normalized = normalizeMembershipTransition(request, registry, admitExecution);
         return normalized.refusal ?? dispatcher.execute({
           type: RUNTIME_COMMAND.PROPOSE_MEMBERSHIP_TRANSITION,
           transition: normalized.command,

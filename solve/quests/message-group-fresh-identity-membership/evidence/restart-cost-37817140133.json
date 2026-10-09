@@ -1,0 +1,774 @@
+{
+  "schema": "restart-cost-attempt/1",
+  "runId": 37817140133,
+  "sourceSha": "6d09b134c2ac0f7639b98751f4ed7f535367cb11",
+  "summary": {
+    "schema": "restart-cost-profile/1",
+    "sourceSha": "6d09b134c2ac0f7639b98751f4ed7f535367cb11",
+    "normal": {
+      "exit": 0,
+      "wallSeconds": 6.329929601999993
+    },
+    "profiled": {
+      "exit": 0,
+      "wallSeconds": 5.931652598000028
+    },
+    "sourceSha256": {
+      "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "99991527eb0e575e1a0611ad177009393a38b0780ed938723f90ca2d2817c265",
+      "test/raft/raft-rs-backend/evidence-o1-model.js": "c2bc5f2e578ae151f3c5d4dc840b139f8e3d09605839bd6f276f6f51b467367c",
+      "test/raft/raft-rs-backend/partition-node-cluster.js": "7fd7b8b45a2c7222c9be4e5ce607650d1f1dec0fa0a060ff887b32eccce7e578",
+      "test/raft/raft-rs-backend/committed-membership-oracles.js": "2da090ac2b1187a0e07cc36707e58aad4bf368ba16040d113349ad8c6a115a5a"
+    },
+    "selfSamples": [
+      {
+        "function": "writeServiceRows",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/partition-node-cluster.js",
+        "line": 470,
+        "sampledMs": 267.744
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 204.823
+      },
+      {
+        "function": "(garbage collector)",
+        "url": "",
+        "line": 0,
+        "sampledMs": 118.138
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 113.183
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 107.331
+      },
+      {
+        "function": "reserveCommittedReplica",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 157,
+        "sampledMs": 97.193
+      },
+      {
+        "function": "reserveCommittedReplica",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 157,
+        "sampledMs": 86.117
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 76.837
+      },
+      {
+        "function": "reserveCommittedReplica",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 157,
+        "sampledMs": 75.849
+      },
+      {
+        "function": "reservationOfPeerId",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 130,
+        "sampledMs": 63.75
+      },
+      {
+        "function": "reservationOfPeerId",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 130,
+        "sampledMs": 58.56
+      },
+      {
+        "function": "reserveCommittedReplica",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 157,
+        "sampledMs": 54.917
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 52.233
+      },
+      {
+        "function": "prepare",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 4,
+        "sampledMs": 51.8
+      },
+      {
+        "function": "prepare",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 4,
+        "sampledMs": 48.181
+      },
+      {
+        "function": "exec",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 8,
+        "sampledMs": 46.374
+      },
+      {
+        "function": "exec",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 8,
+        "sampledMs": 46.227
+      },
+      {
+        "function": "exec",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 8,
+        "sampledMs": 42.655
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 41.316
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 38.433
+      },
+      {
+        "function": "reserveCommittedReplica",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 157,
+        "sampledMs": 38.211
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 38.14
+      },
+      {
+        "function": "prepare",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 4,
+        "sampledMs": 37.833
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 36.264
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 35.931
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 34.692
+      },
+      {
+        "function": "prepare",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 4,
+        "sampledMs": 34.502
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 34.252
+      },
+      {
+        "function": "RaftRsReplicaLifecycleOwner",
+        "url": "file://$ROOT/src/raft/raft-rs-replica-lifecycle-owner.js",
+        "line": 94,
+        "sampledMs": 33.894
+      },
+      {
+        "function": "Database",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/database.js",
+        "line": 9,
+        "sampledMs": 33.489
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 33.319
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 32.855
+      },
+      {
+        "function": "exec",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 8,
+        "sampledMs": 32.505
+      },
+      {
+        "function": "putBootstrapAppliedState",
+        "url": "file://$ROOT/src/raft/raft-rs-durable-store.js",
+        "line": 511,
+        "sampledMs": 32.387
+      },
+      {
+        "function": "reservationOfPeerId",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 130,
+        "sampledMs": 29.267
+      },
+      {
+        "function": "unlink",
+        "url": "",
+        "line": 0,
+        "sampledMs": 27.026
+      },
+      {
+        "function": "compileSourceTextModule",
+        "url": "node:internal/modules/esm/utils",
+        "line": 344,
+        "sampledMs": 25.838
+      },
+      {
+        "function": "RaftRsReplicaLifecycleOwner",
+        "url": "file://$ROOT/src/raft/raft-rs-replica-lifecycle-owner.js",
+        "line": 94,
+        "sampledMs": 25.52
+      },
+      {
+        "function": "reservationOfPeerId",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 130,
+        "sampledMs": 25.453
+      },
+      {
+        "function": "exec",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 8,
+        "sampledMs": 25.204
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 24.044
+      },
+      {
+        "function": "exec",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 8,
+        "sampledMs": 23.083
+      },
+      {
+        "function": "prepare",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 4,
+        "sampledMs": 22.671
+      },
+      {
+        "function": "writeServiceRows",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/partition-node-cluster.js",
+        "line": 470,
+        "sampledMs": 22.634
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 22.329
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 22.1
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 22.058
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 20.775
+      },
+      {
+        "function": "close",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 13,
+        "sampledMs": 20.531
+      },
+      {
+        "function": "putBootstrapAppliedState",
+        "url": "file://$ROOT/src/raft/raft-rs-durable-store.js",
+        "line": 511,
+        "sampledMs": 20.236
+      },
+      {
+        "function": "Database",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/database.js",
+        "line": 9,
+        "sampledMs": 19.422
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "line": 83,
+        "sampledMs": 19.179
+      },
+      {
+        "function": "prepare",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 4,
+        "sampledMs": 18.612
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 18.581
+      },
+      {
+        "function": "reservationOfPeerId",
+        "url": "file://$ROOT/src/raft/raft-rs-peer-identity.js",
+        "line": 130,
+        "sampledMs": 18.207
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 17.866
+      },
+      {
+        "function": "prepare",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/wrappers.js",
+        "line": 4,
+        "sampledMs": 17.595
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 17.334
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/committed-membership-oracles.js",
+        "line": 111,
+        "sampledMs": 17.153
+      },
+      {
+        "function": "sqliteTransaction",
+        "url": "file://$ROOT/node_modules/better-sqlite3/lib/methods/transaction.js",
+        "line": 52,
+        "sampledMs": 16.955
+      }
+    ],
+    "inclusiveSamples": [
+      {
+        "function": "(root)",
+        "url": "",
+        "line": 0,
+        "sampledMs": 5793.03
+      },
+      {
+        "function": "run",
+        "url": "node:internal/test_runner/test",
+        "line": 984,
+        "sampledMs": 5188.157
+      },
+      {
+        "function": "postRun",
+        "url": "node:internal/test_runner/test",
+        "line": 1130,
+        "sampledMs": 5186.008
+      },
+      {
+        "function": "run",
+        "url": "node:internal/test_runner/test",
+        "line": 984,
+        "sampledMs": 5184.008
+      },
+      {
+        "function": "processPendingSubtests",
+        "url": "node:internal/test_runner/test",
+        "line": 739,
+        "sampledMs": 5184.008
+      },
+      {
+        "function": "runInAsyncScope",
+        "url": "node:async_hooks",
+        "line": 207,
+        "sampledMs": 5182.202
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "line": 197,
+        "sampledMs": 4717.524
+      },
+      {
+        "function": "admittedTarget",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "line": 103,
+        "sampledMs": 2909.465
+      },
+      {
+        "function": "formHistory",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-model.js",
+        "line": 281,
+        "sampledMs": 2178.63
+      },
+      {
+        "function": "commitVoterChange",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-model.js",
+        "line": 195,
+        "sampledMs": 1385.526
+      },
+      {
+        "function": "settle",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/partition-node-cluster.js",
+        "line": 330,
+        "sampledMs": 1197.384
+      },
+      {
+        "function": "settle",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-model.js",
+        "line": 160,
+        "sampledMs": 1197.384
+      },
+      {
+        "function": "deliverAll",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/partition-node-cluster.js",
+        "line": 311,
+        "sampledMs": 956.929
+      },
+      {
+        "function": "executeCommand",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1625,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1752,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 262,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "containRuntimeThrow",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 109,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 246,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "execute",
+        "url": "file://$ROOT/src/raft/raft-rs-replica-lifecycle-owner.js",
+        "line": 176,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "dispatch",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 245,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 258,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "runFormationOwner",
+        "url": "file://$ROOT/src/diagnostics/formation-turn-attribution.js",
+        "line": 744,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "runRaftProtocolActivity",
+        "url": "file://$ROOT/src/diagnostics/raft-formation-attribution.js",
+        "line": 15,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "protocolTurn",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 257,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "executeTurn",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 261,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "tick",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 344,
+        "sampledMs": 941.162
+      },
+      {
+        "function": "enqueue",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 817,
+        "sampledMs": 939.316
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1633,
+        "sampledMs": 936.089
+      },
+      {
+        "function": "withinGroup",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 797,
+        "sampledMs": 936.089
+      },
+      {
+        "function": "run",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 818,
+        "sampledMs": 936.089
+      },
+      {
+        "function": "drainInbound",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1510,
+        "sampledMs": 934.993
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1555,
+        "sampledMs": 934.993
+      },
+      {
+        "function": "thenMaybe",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 845,
+        "sampledMs": 934.993
+      },
+      {
+        "function": "perform",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1546,
+        "sampledMs": 934.993
+      },
+      {
+        "function": "assertGatedAfterRestart",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "line": 125,
+        "sampledMs": 757.164
+      },
+      {
+        "function": "electionStorm",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-model.js",
+        "line": 417,
+        "sampledMs": 740.443
+      },
+      {
+        "function": "drainReady",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1030,
+        "sampledMs": 618.637
+      },
+      {
+        "function": "buildReplica",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/partition-node-cluster.js",
+        "line": 202,
+        "sampledMs": 414.725
+      },
+      {
+        "function": "PartitionNodeCluster",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/partition-node-cluster.js",
+        "line": 85,
+        "sampledMs": 414.725
+      },
+      {
+        "function": "createModelCluster",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-model.js",
+        "line": 96,
+        "sampledMs": 414.725
+      },
+      {
+        "function": "foundCluster",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "line": 94,
+        "sampledMs": 414.725
+      },
+      {
+        "function": "roleOf",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-model.js",
+        "line": 145,
+        "sampledMs": 376.782
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+        "line": 129,
+        "sampledMs": 376.782
+      },
+      {
+        "function": "readStatus",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 346,
+        "sampledMs": 373.554
+      },
+      {
+        "function": "execute",
+        "url": "file://$ROOT/src/raft/raft-rs-replica-lifecycle-owner.js",
+        "line": 176,
+        "sampledMs": 372.481
+      },
+      {
+        "function": "dispatch",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 245,
+        "sampledMs": 372.481
+      },
+      {
+        "function": "execute",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 260,
+        "sampledMs": 372.481
+      },
+      {
+        "function": "addReplica",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/partition-node-cluster.js",
+        "line": 425,
+        "sampledMs": 371.481
+      },
+      {
+        "function": "joinFromStamp",
+        "url": "file://$ROOT/test/raft/raft-rs-backend/evidence-o1-model.js",
+        "line": 265,
+        "sampledMs": 371.481
+      },
+      {
+        "function": "executeCommand",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1625,
+        "sampledMs": 370.308
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1752,
+        "sampledMs": 370.308
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 260,
+        "sampledMs": 370.308
+      },
+      {
+        "function": "containRuntimeThrow",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 109,
+        "sampledMs": 370.308
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 246,
+        "sampledMs": 370.308
+      },
+      {
+        "function": "readStatusNow",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1247,
+        "sampledMs": 369.234
+      },
+      {
+        "function": "withinGroup",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 797,
+        "sampledMs": 368.163
+      },
+      {
+        "function": "readStatusObserved",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1254,
+        "sampledMs": 367.066
+      },
+      {
+        "function": "",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1251,
+        "sampledMs": 367.066
+      },
+      {
+        "function": "createRaftRsOperationPort",
+        "url": "file://$ROOT/src/raft/raft-rs-operation-port.js",
+        "line": 151,
+        "sampledMs": 366.31
+      },
+      {
+        "function": "readStatusUndrained",
+        "url": "file://$ROOT/src/raft/raft-rs-runtime-owner.js",
+        "line": 1225,
+        "sampledMs": 365.996
+      }
+    ],
+    "limits": "Sampling profile of one unchanged file; inclusive times overlap. Native/IO stacks and startup are included. Not power-loss, speedup, statistical or distributed proof.",
+    "runtimeChanged": false,
+    "assertionsChanged": false,
+    "independentApproval": false
+  },
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "bb2b652a580271d82b77729383188bfd026972f650d034bbecd645e27d53cb0c",
+      "bytes": 419126,
+      "asset": "message-group-fresh-identity-membership--restart-profile-37817140133.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--restart-profile-37817140133.zip"
+    },
+    "entry": {
+      "ts": "2026-10-08T17:32:11.774Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Unchanged 16-case restart witness cost profile for PR109 duration finding. Sampling/native/durable attribution only; no lowered durability, changed assertions, new owner or distributed acceptance. R2 holder-state race 4222118121 remains open and requires paused-read tests before any repair.",
+      "evidence": "sha256:bb2b652a580271d82b77729383188bfd026972f650d034bbecd645e27d53cb0c",
+      "asset": "message-group-fresh-identity-membership--restart-profile-37817140133.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--restart-profile-37817140133.zip",
+      "bytes": 419126
+    }
+  },
+  "archiveSha256": "bb2b652a580271d82b77729383188bfd026972f650d034bbecd645e27d53cb0c",
+  "originalLabVerdict": "FAIL",
+  "independentApproval": false,
+  "distributedAcceptance": false
+}
