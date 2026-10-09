@@ -9,171 +9,31 @@ concurrency:
   group: freshmg-runtime-review-20261008
   cancel-in-progress: false
 env:
-  EXPECTED: 7cc110614db84a6d65e00438452fb935dc199179
-  WORK_BRANCH: work/freshmg-runtime-authorization-20261008
-  QUEST: message-group-fresh-identity-membership
-  LAGRANGE_LANE_JOBS_CAP: '1'
-  TEST: test/integration/message-group-learner-runtime-authorization.integration.test.js
+  EXPECTED: ca1cb1384daee9592c88f7b47851043abdb7a5ae
 jobs:
-  native-invalidation:
+  source-snapshot:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    defaults:
-      run:
-        shell: bash
-        working-directory: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.sha }}
-          path: carrier-${{ github.run_id }}-${{ github.run_attempt }}
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
           ref: ${{ env.EXPECTED }}
-          path: candidate-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - name: Extend the existing witness without changing the runtime
+          fetch-depth: 1
+      - name: Preserve immutable source and tracked-file identities only
+        shell: bash
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/native-invalidation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          mkdir -p "$out"
           test "$(git rev-parse HEAD)" = "$EXPECTED"
           test -z "$(git status --porcelain)"
-          printf 'base=%s\ncarrier=%s\nrunner=%s\n' "$EXPECTED" "$GITHUB_SHA" "$RUNNER_NAME" > "$out/provenance.txt"
-          echo 'Hosted component measurement; no multi-host or GCP acceptance, no transport registration or new runtime authorization.' > "$out/substrate.txt"
-          npm ci > "$out/install.txt" 2>&1
-          script="../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/prepare-native-final-read-controls.py"
-          cp "$script" "$out/measured-preparation.py"
-          python3 "$script"
-          npm exec --no -- eslint "$TEST" --fix > "$out/lint.txt" 2>&1
-          npm run test:metrics:scoped:strict -- "$TEST" > "$out/metrics.txt" 2>&1
-          npm run test:metadata:refresh > "$out/metadata.txt" 2>&1
-          npm run audit:shards > "$out/shards.txt" 2>&1
-          git diff --exit-code "$EXPECTED" -- src test/raft/raft-rs-backend/partition-node-cluster.js
-          git diff --check
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          node scripts/solve.js note --id "$QUEST" --attempt 'Following author R3 counterexample, test actual local recipient close and actual committed native configuration drift while the final repository read is held. Reuse the existing owner and native port; no synthetic native status, transport authentication, new authority, production edit or added metadata reread. The boot-table-only counterexample and full composition remain unresolved. Direct native fixture actuation is not a second admitted workflow.' --json > "$out/attempt.json"
-          git add -- "$TEST" test/shards/ "solve/quests/$QUEST/log.ndjson"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: fence delayed learner requests against actual native lifetime and configuration changes'
-          git rev-parse HEAD > "$out/test-sha.txt"
-      - name: Measure exact committed controls and unchanged regression budgets
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/native-invalidation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          npm run test:file -- "$TEST" > "$out/consumer.txt" 2>&1
-          npm run test:file -- test/rebalancer/message-group-membership-branch-authorization.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/operation-progress-store-persistence.test.js test/rebalancer/reservation-file-backed-restart.test.js > "$out/regressions.txt" 2>&1
-          export PROOF_OUT="$out"
-          python3 - <<'PY'
-          from pathlib import Path
-          import json,os,re
-          out=Path(os.environ['PROOF_OUT']);timings={}
-          for name,limit,size in [('consumer',30000,1),('regressions',2000,4)]:
-              rows=re.findall(r'^ok (test/\S+) \((\d+) assertions, (\d+)ms\)',(out/(name+'.txt')).read_text(),re.M)
-              assert len(rows)==size,(name,rows)
-              assert all(int(ms)<=limit for _,_,ms in rows),(name,rows,limit)
-              timings[name]={'limitMs':limit,'files':rows}
-          (out/'timings.json').write_text(json.dumps(timings,indent=2)+'\n')
-          PY
-      - name: The native configuration mutation must reach the new refusal assertion
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/native-invalidation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          file=src/raft/raft-rs-membership-transition-runtime.js
-          restore() { git show "HEAD:$file" > "$file"; }
-          trap restore EXIT
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('src/raft/raft-rs-membership-transition-runtime.js');s=p.read_text()
-          old='''  if (raftRsConfStateKey(conf.value) !== command.expectedConfigurationKey ||
-                Number(group.membershipGenerationIndex) !==
-                  command.expectedMembershipGenerationIndex) {'''
-          # Match source indentation exactly rather than silently patching a different guard.
-          old=old.replace('                Number','      Number').replace('                  command','        command')
-          assert s.count(old)==1,'native configuration predicate changed'
-          p.write_text(s.replace(old,'  if (false) {',1))
-          PY
-          status=0
-          npm run test:file -- "$TEST" > "$out/config-mutation.txt" 2>&1 || status=$?
-          printf '%s\n' "$status" > "$out/config-mutation-exit.txt"
-          test "$status" -eq 1
-          grep -Fq 'an intervening committed configuration must fence the old native action' "$out/config-mutation.txt"
-          grep -Fq ERR_ASSERTION "$out/config-mutation.txt"
-          restore
-          trap - EXIT
-          git diff --exit-code -- src
-          test -z "$(git status --porcelain)"
-      - name: Retain evidence and publish exact authorized WIP
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          export PROOF_OUT="$GITHUB_WORKSPACE/native-invalidation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          gh auth setup-git
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
-          git diff --exit-code "$EXPECTED" -- src
-          git diff --binary "$EXPECTED" > "$PROOF_OUT/change.patch"
-          cp test-output/reports/test-results.ndjson "$PROOF_OUT/test-results.ndjson"
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib,json,os,zipfile
-          out=Path(os.environ['PROOF_OUT'])
-          manifest={str(p.relative_to(out)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.rglob('*')) if p.is_file()}
-          (out/'member-sha256.json').write_text(json.dumps(manifest,indent=2)+'\n')
-          archive=out.parent/(out.name+'.zip')
-          with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
-              for p in sorted(out.rglob('*')):
-                  if p.is_file():z.write(p,str(p.relative_to(out)))
-          with zipfile.ZipFile(archive) as z:
-              for n,h in manifest.items():assert hashlib.sha256(z.read(n)).hexdigest()==h
-          (out/'archive-sha256.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'\n')
-          PY
-          node scripts/solve.js evidence add "$PROOF_OUT.zip" --id "$QUEST" --text 'Author R3 continuation: actual recipient close and committed configuration drift fence delayed learner requests through existing native owners. Existing integration positives and repository regressions retained, no runtime edit. Native config mutation reaches the new assertion. Supplied operation gateway and in-process transport; no globally atomic metadata authorization, actual remote boot, registered ingress, CREATE or release proof.' --json > "$PROOF_OUT/canonical.json"
-          python3 - <<'PY'
-          from pathlib import Path
-          import json,os
-          out=Path(os.environ['PROOF_OUT'])
-          record={'schema':'freshmg-native-invalidation/1','runId':int(os.environ['GITHUB_RUN_ID']),'baseSha':os.environ['EXPECTED'],'testSha':(out/'test-sha.txt').read_text().strip(),'timings':json.loads((out/'timings.json').read_text()),'nativeConfigurationMutationCaught':True,'productionSourceChanged':False,'independentApproval':False,'bootReadWindowResolved':False,'restartDurationResolved':False,'distributedAcceptance':False,'fullLabVerdict':'FAIL','canonicalEvidence':json.loads((out/'canonical.json').read_text()),'archiveSha256':(out/'archive-sha256.txt').read_text().strip()}
-          p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('native-invalidation-'+os.environ['GITHUB_RUN_ID']+'.json')
-          p.write_text(json.dumps(record,indent=2)+'\n')
-          PY
-          git add -- "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/native-invalidation-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: preserve native invalidation controls and explicit remaining authority gap'
-          git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-          git rev-parse HEAD > "$PROOF_OUT/published-sha.txt"
-          git status --porcelain > "$PROOF_OUT/final-status.txt"
-      - name: Preserve failed work and results
-        if: always()
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/native-invalidation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          mkdir -p "$out"
-          git diff --binary "$EXPECTED" > "$out/total-change.patch"
-          git status --porcelain > "$out/archive-status.txt"
-          if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then
-            git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"
-          fi
-          if [ -f test-output/reports/test-results.ndjson ]; then
-            cp test-output/reports/test-results.ndjson "$out/archive-test-results.ndjson"
-          fi
+          mkdir -p "$RUNNER_TEMP/freshmg-source"
+          git archive --format=tar.gz -o "$RUNNER_TEMP/freshmg-source/source.tar.gz" HEAD
+          git ls-tree -r HEAD > "$RUNNER_TEMP/freshmg-source/tree-manifest.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/freshmg-source/source-sha.txt"
+          sha256sum "$RUNNER_TEMP/freshmg-source/source.tar.gz" > "$RUNNER_TEMP/freshmg-source/SHA256SUMS"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
         with:
-          name: freshmg-native-invalidation-${{ github.run_id }}-${{ github.run_attempt }}
-          path: native-invalidation-${{ github.run_id }}-${{ github.run_attempt }}/
-          retention-days: 14
+          name: freshmg-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/freshmg-source/
+          retention-days: 7
           if-no-files-found: error
-      - name: Keep complete acceptance unresolved
-        if: always()
-        run: |
-          echo 'Native refusal controls do not resolve global metadata observation or complete the FreshMG driver; full review and original lab remain RED.'
-          exit 1
