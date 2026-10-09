@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare only the two PR110 review corrections on the exact named base."""
+"""Prepare bounded PR110 review corrections on the exact named base."""
 from pathlib import Path
 import hashlib
 import shutil
@@ -82,6 +82,17 @@ s = s[:a] + '''def execute(root: Path, output: Path, name: str, command: list[st
 ''' .rstrip() + s[b:]
 compile(s, str(p), 'exec')
 p.write_text(s)
+
+p = root / REL / 'test-proof-checker.py'
+s = p.read_text()
+old = "if (record?.hardState?.term === '2') throw new Error('unrelated term refusal');"
+new = "if (Number(record?.hardState?.term) > 1) throw new Error('unrelated term refusal');"
+assert s.count(old) == 1, 'attribution fault changed'
+s = s.replace(old, new)
+old = "        self.assertEqual(sum(e['type'] == 'test:fail' for e in events), 2)"
+new = old + "\n        self.assertEqual({e['name'] for e in events if e['type'] == 'test:fail'},\n                         set(diag.EXPECTED_TESTS[1:3]))"
+assert s.count(old) == 1, 'attribution failure assertion changed'
+p.write_text(s.replace(old, new))
 
 p = root / 'architecture/contracts/issued-membership-action-recovery.md'
 s = p.read_text()
