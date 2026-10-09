@@ -1,0 +1,171 @@
+diff --git a/src/raft/raft-committed-membership-constants.js b/src/raft/raft-committed-membership-constants.js
+index f14f76e..c0a6c73 100644
+--- a/src/raft/raft-committed-membership-constants.js
++++ b/src/raft/raft-committed-membership-constants.js
+@@ -51,6 +51,7 @@ const COMMITTED_MEMBERSHIP_ANSWER_KIND = Object.freeze({
+ const COMMITTED_MEMBERSHIP_READ_PURPOSE = Object.freeze({
+   BOOTSTRAP: 'bootstrap',
+   WITNESS: 'witness',
++  LEARNER_ACTION: 'learner-action',
+   RETIREMENT: 'retirement',
+ });
+ 
+@@ -160,7 +161,19 @@ const PARTICIPATION_GATE = Object.freeze({
+ // Where a refusal of the gate was decided (its phase).
+ const PARTICIPATION_GATE_PHASE = 'participation-gate';
+ 
++const COMMITTED_LEARNER_ACTION_KIND = Object.freeze({
++  COMMITTED: 'committed-action', UNRESOLVED: 'unresolved-action', REFUSED: 'refused-action',
++});
++const COMMITTED_LEARNER_ACTION_REASON = Object.freeze({
++  APPLIED: 'learner-action-applied', NOT_RECORDED: 'learner-action-not-recorded',
++  INVALID: 'learner-action-invalid', MISMATCH: 'learner-action-mismatch',
++  UNAVAILABLE: 'learner-action-unavailable', CORRUPT: 'learner-action-corrupt-origin',
++  BEYOND_APPLIED: 'learner-action-beyond-applied-boundary',
++});
++
+ export {
++  COMMITTED_LEARNER_ACTION_KIND,
++  COMMITTED_LEARNER_ACTION_REASON,
+   BOOTSTRAP_MEMBERSHIP_SOURCE,
+   COMMITTED_MEMBERSHIP_ANSWER_FIELD,
+   COMMITTED_MEMBERSHIP_ANSWER_KIND,
+diff --git a/src/raft/raft-rs-committed-membership-context.js b/src/raft/raft-rs-committed-membership-context.js
+index 3f9ff24..a21b071 100644
+--- a/src/raft/raft-rs-committed-membership-context.js
++++ b/src/raft/raft-rs-committed-membership-context.js
+@@ -141,7 +141,55 @@ function committedMembershipContext(decoded) {
+   });
+ }
+ 
++const LEARNER_ORIGIN_KEYS = Object.freeze(['groupId', 'index', 'term', 'context']);
++const LEARNER_ORIGIN_ERROR = 'invalid committed learner origin';
++function positiveDecimal(value) {
++  return typeof value === 'string' && /^[1-9][0-9]{0,15}$/.test(value) &&
++    Number.isSafeInteger(Number(value));
++}
++function canonicalLearnerContext(context) {
++  const encoded = encodeCommittedMembershipContext(context);
++  if (context.stage !== RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
++    throw new Error(LEARNER_ORIGIN_ERROR);
++  }
++  return Object.freeze(JSON.parse(Buffer.from(encoded, CONTEXT_ENCODING)
++    .toString(CONTEXT_TEXT_ENCODING)));
++}
++function encodeCommittedLearnerAdmission({groupId, index, term, context}) {
++  if (typeof groupId !== 'string' || groupId.length === 0 ||
++      !positiveDecimal(index) || !positiveDecimal(term)) {
++    throw new Error(LEARNER_ORIGIN_ERROR);
++  }
++  return JSON.stringify({groupId, index, term, context: canonicalLearnerContext(context)});
++}
++function decodeCommittedLearnerAdmission(encoded) {
++  try {
++    const value = JSON.parse(encoded);
++    if (!value || typeof value !== 'object' || Array.isArray(value) ||
++        Object.keys(value).length !== LEARNER_ORIGIN_KEYS.length ||
++        !LEARNER_ORIGIN_KEYS.every((key) => Object.hasOwn(value, key)) ||
++        encodeCommittedLearnerAdmission(value) !== encoded) return null;
++    return Object.freeze({...value, context: Object.freeze(value.context)});
++  } catch {
++    return null;
++  }
++}
++function learnerAdmissionMatchesReservation(encoded, reservation, boundary) {
++  if (encoded === null) return true;
++  const origin = decodeCommittedLearnerAdmission(encoded);
++  return origin !== null && origin.groupId === boundary.groupId &&
++    origin.context.replicaIdentity === reservation.replicaIdentity &&
++    origin.context.peerId === reservation.peerId &&
++    BigInt(origin.index) <= BigInt(boundary.membershipGenerationIndex) &&
++    BigInt(origin.index) <= BigInt(boundary.appliedIndex) &&
++    BigInt(origin.term) <= BigInt(boundary.appliedTerm);
++}
++
+ export {
++  canonicalLearnerContext,
++  encodeCommittedLearnerAdmission,
++  decodeCommittedLearnerAdmission,
++  learnerAdmissionMatchesReservation,
+   COMMITTED_MEMBERSHIP_CONTEXT_ERROR,
+   committedMembershipChangeType,
+   committedMembershipContext,
+diff --git a/src/raft/raft-rs-committed-membership-read.js b/src/raft/raft-rs-committed-membership-read.js
+index 0b1f47b..5dc8589 100644
+--- a/src/raft/raft-rs-committed-membership-read.js
++++ b/src/raft/raft-rs-committed-membership-read.js
+@@ -14,6 +14,8 @@
+ import {deepFreeze} from './raft-operation-port.js';
+ import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+ import {
++  COMMITTED_LEARNER_ACTION_KIND as ACTION_KIND,
++  COMMITTED_LEARNER_ACTION_REASON as ACTION_REASON,
+   COMMITTED_MEMBERSHIP_ANSWER_KIND,
+   COMMITTED_MEMBERSHIP_READ_PURPOSE,
+   COMMITTED_MEMBERSHIP_REFUSAL,
+@@ -21,6 +23,8 @@ import {
+ import {
+   RAFT_RS_PEER_IDENTITY_RESOLUTION,
+ } from './raft-rs-peer-identity-constants.js';
++import {canonicalLearnerContext, decodeCommittedLearnerAdmission} from
++  './raft-rs-committed-membership-context.js';
+ import {ROLE_LEADER} from './raft-rs-runtime-owner-constants.js';
+ 
+ // Raft peer ids are decimal strings without leading zeros: the shorter one
+@@ -148,7 +152,56 @@ function answerCommittedMembership(group, status, purpose) {
+   });
+ }
+ 
++function learnerActionAnswer(kind, reason, fields = {}) {
++  return deepFreeze({kind, reason, ...fields});
++}
++function unavailableLearnerAction() {
++  return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.UNAVAILABLE);
++}
++function normalizeCommittedLearnerRead(request, groupId) {
++  try {
++    if (request.groupId !== groupId) throw new Error(ACTION_REASON.INVALID);
++    return {query: Object.freeze({groupId, action: canonicalLearnerContext(request.action)})};
++  } catch {
++    return {refusal: learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.INVALID)};
++  }
++}
++function learnerOriginRefusal(origin, query, status) {
++  if (origin.groupId !== query.groupId || Object.keys(query.action).some((key) =>
++    origin.context[key] !== query.action[key])) {
++    return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.MISMATCH);
++  }
++  if (BigInt(origin.index) > BigInt(status.appliedIndex) ||
++      BigInt(origin.index) > BigInt(status.commitIndex) ||
++      BigInt(origin.index) > BigInt(status.membershipGenerationIndex)) {
++    return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.BEYOND_APPLIED);
++  }
++  return null;
++}
++/** Historical positive evidence, never a current CREATE/absence/reissue grant.
++ * Called in the group's queued turn after recovery and committed application.
++ */
++function answerCommittedLearnerAction(group, status, query) {
++  if (unavailableMembershipRefusal(status) !== null) return unavailableLearnerAction();
++  try {
++    const encoded = group.readCommittedLearnerAdmission(query.action.replicaIdentity);
++    if (encoded === null) {
++      return learnerActionAnswer(ACTION_KIND.UNRESOLVED, ACTION_REASON.NOT_RECORDED);
++    }
++    const origin = decodeCommittedLearnerAdmission(encoded);
++    if (origin === null) return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.CORRUPT);
++    return learnerOriginRefusal(origin, query, status) ??
++      learnerActionAnswer(ACTION_KIND.COMMITTED, ACTION_REASON.APPLIED,
++        {receipt: origin, observedAppliedIndex: status.appliedIndex});
++  } catch {
++    return unavailableLearnerAction();
++  }
++}
++
+ export {
++  answerCommittedLearnerAction,
++  normalizeCommittedLearnerRead,
++  unavailableLearnerAction,
+   answerCommittedMembership,
+   ascendingPeerIdOrder,
+   committedMembershipRefusal,
