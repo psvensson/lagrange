@@ -16,15 +16,15 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Bind rereview to the measured delivery/native interaction
+      - name: Bind independent review to measured native-origin and checkpoint bytes
         shell: bash
         run: |
           set -euo pipefail
-          expected=8ece20f70392314ceba49e4e787b800bc14d07d6
-          actual="$(gh pr view 109 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          expected=f5a06f643a8f389ea545e5673758cca249674fa9
+          actual="$(gh pr view 111 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
           printf 'expected=%s\nactual=%s\n' "$expected" "$actual"
           test "$actual" = "$expected"
-          gh pr comment 109 --repo psvensson/lagrange --body 'Independent category-complete rereview requested on 8ece20f70392314ceba49e4e787b800bc14d07d6. New source d9e87b2961993121d75df11d3a177d380ad790df binds the existing router-owned local/socket delivery lifetime through the existing semantic port into the native turn immediately before proposal. Actual in-process IDENTIFY/SERVICE_MESSAGE, same-boot replacement, shutdown/reinitialize, UNKNOWN and genuine queued Ready-send controls; nine files/294 reported assertions meet unchanged budgets. Three mutations prove native execution, socket identity and local-lifetime token checks. Read evidence/delivery-lifetime-20261009-review.md under the existing FreshMG Quest and architecture/contracts/message-group-learner-delivery-lifetime.md. This does NOT resolve the canonical node-row-only boot counterexample or global operation/boot atomicity. Refusal retains the durably issued action; generic privileged native callers keep their prior trust contract. Review authority/lifetime/queue/replay/terminal semantics and fixture fidelity without assuming either source correctness or complete activation. No CREATE, exact committed-action receipt, main merge, independent author approval, restart-duration clearance or full cutover is claimed. First unengaged queue attempt is retained, not counted as positive proof.'
-          gh pr edit 109 --repo psvensson/lagrange --add-reviewer @copilot
-          gh pr view 109 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
-          echo 'Requested exact-head independent review; request success is not approval. Main and preservation refs remain unchanged.' >> "$GITHUB_STEP_SUMMARY"
+          gh pr comment 111 --repo psvensson/lagrange --body 'Independent adversarial review requested on exact head f5a06f643a8f389ea545e5673758cca249674fa9, measured source 6255634c71fa6c6c116e8e70252ef11f927f564f. Read evidence/learner-origin-20261009-review.md under the existing FreshMG Quest. Review exact original action provenance stored in the existing peer-identity row within the actual ConfState/applied transaction; conflicting origins, corrupt values, queued semantic outcome reads, group/action/index/term binding, same-file and shared-runtime reconstruction, checkpoint version-2 descriptor/payload equality, and old-image refusal. Actions 37918656129 passed seven files/263 reported assertions within unchanged budgets, strict scoped metrics/semantic counts and two exact-assertion mutation controls. Prior failed attempts retained. Rollback recovery uses the existing virtual clock and the actual owner retryAfterMs, not altered native timing. Checkpoint creation/scrubbing/payload validation is measured, NOT a complete native-origin target install/reopen. Missing origin grants no negative proof or successor attempt; no repository stamp update, CREATE/driver activation, global boot revocation, physical/GCP acceptance or main merge. PR110 generic recovery package remains a separate unmerged source. No author-issued independent approval or final gate relaxation is claimed.'
+          gh pr edit 111 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 111 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
+          echo 'Requested exact-head independent review; request success is not approval. Main and all preservation refs remain unchanged.' >> "$GITHUB_STEP_SUMMARY"
