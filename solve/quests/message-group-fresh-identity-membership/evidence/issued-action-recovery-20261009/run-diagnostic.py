@@ -132,7 +132,7 @@ def campaign(root, output, driver):
         ('historical-terms', SOURCE, 'entryTerm > term', 'entryTerm !== term',
          HISTORICAL, 'Expected values to be strictly equal'),
         ('zero-term-context', SOURCE,
-         "if (entry.term === '0') throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);", '',
+         "if (entry.term === ZERO) throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);", '',
          MALFORMED, 'malformed durable evidence must be unavailable'),
         ('omit-WAL-selection', TEST, "      db.pragma('journal_mode = WAL');", '',
          REOPEN, 'every fixture open must actually use WAL'),
