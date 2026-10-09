@@ -1,0 +1,117 @@
+diff --git a/src/transport/message-router-delivery-behaviors.js b/src/transport/message-router-delivery-behaviors.js
+--- a/src/transport/message-router-delivery-behaviors.js
++++ b/src/transport/message-router-delivery-behaviors.js
+@@ -129,7 +129,8 @@
+     timestamp: router.timeSource.now(),
+   };
+   try {
+-    const result = await Promise.resolve(handler(envelope));
++    const delivery = router.connectionAuthorityOwner?.captureLocalDelivery() ?? null;
++    const result = await Promise.resolve(handler(envelope, delivery));
+     return {
+       result: {
+         messageId,
+diff --git a/src/transport/message-router-stats-shutdown.js b/src/transport/message-router-stats-shutdown.js
+--- a/src/transport/message-router-stats-shutdown.js
++++ b/src/transport/message-router-stats-shutdown.js
+@@ -165,6 +165,7 @@
+       routerId: this.routerId,
+     });
+     this.isShuttingDown = true;
++    this.connectionAuthorityOwner.invalidateDeliveries();
+     // Close the bulk transfer channel lane with the router (S6): adopted and
+     // dialed bulk sockets plus the token-bucket drain timer.
+     this.bulkChannelRegistry?.closeAll();
+diff --git a/src/transport/message-router-connection-authority.js b/src/transport/message-router-connection-authority.js
+--- a/src/transport/message-router-connection-authority.js
++++ b/src/transport/message-router-connection-authority.js
+@@ -95,9 +95,54 @@
+     TRANSPORT_NUM.ZERO;
+ }
+ 
++function deliveryRouterMatches(router, identity) {
++  return router.initialized === true && router.isShuttingDown !== true &&
++    router.nodeId === identity.nodeId && router.bootIncarnation === identity.bootIncarnation;
++}
++
++function deliveryConnectionMatches(router, connection, ws, identity) {
++  return mapPrototypeGet(router.nodeConnections, identity.senderNodeId) === connection &&
++    connection.retired !== true && connection.state === ConnectionState.CONNECTED &&
++    connection.ws === ws && ws.readyState === WebSocket.OPEN &&
++    connection.connectionId === identity.connectionId &&
++    connection.bootIncarnation === identity.senderBootIncarnation;
++}
++
+ class RouterConnectionAuthorityOwner {
++  // Rotated at shutdown, never a per-request ledger. Old local deliveries
++  // cannot resurrect if the same router object is initialized again.
++  #deliveryLifetime = objectFreeze({});
++
+   constructor(router) {
+     this.router = router;
++  }
++  invalidateDeliveries() {
++    this.#deliveryLifetime = objectFreeze({});
++  }
++  captureLocalDelivery() {
++    const {nodeId, bootIncarnation} = this.router;
++    if (!deliveryRouterMatches(this.router, {nodeId, bootIncarnation})) return null;
++    const identity = objectFreeze({nodeId, bootIncarnation,
++      senderNodeId: nodeId, senderBootIncarnation: bootIncarnation,
++      connectionId: this.router.getLocalBootIncarnationIdentity().connectionId});
++    const lifetime = this.#deliveryLifetime;
++    return objectFreeze({...identity, isCurrent: () =>
++      lifetime === this.#deliveryLifetime && deliveryRouterMatches(this.router, identity)});
++  }
++  // nodeId is from the socket listener's adopted connection, NOT a wire field.
++  // A watermark or a different socket for the same node is never a grant.
++  captureIncomingDelivery(nodeId, ws) {
++    const connection = mapPrototypeGet(this.router.nodeConnections, nodeId);
++    const primary = this.getCurrentPrimaryBootIncarnation(nodeId);
++    if (!primary || connection.nodeId !== nodeId || connection.ws !== ws ||
++        connection.retired === true || ws.readyState !== WebSocket.OPEN) return null;
++    const local = this.captureLocalDelivery();
++    if (!local) return null;
++    const identity = objectFreeze({nodeId: local.nodeId,
++      bootIncarnation: local.bootIncarnation, senderNodeId: primary.nodeId,
++      senderBootIncarnation: primary.bootIncarnation, connectionId: primary.connectionId});
++    return objectFreeze({...identity, isCurrent: () => local.isCurrent() &&
++      deliveryConnectionMatches(this.router, connection, ws, identity)});
+   }
+   readIncomingBootIncarnation(message) {
+     return readOwnBootIncarnation(message);
+diff --git a/src/transport/message-router-inbound-dispatch.js b/src/transport/message-router-inbound-dispatch.js
+--- a/src/transport/message-router-inbound-dispatch.js
++++ b/src/transport/message-router-inbound-dispatch.js
+@@ -86,7 +86,8 @@
+         return;
+       }
+       if (message.type === RouterMessageType.SERVICE_MESSAGE) {
+-        this.handleServiceMessage(ws, message);
++        const delivery = this.connectionAuthorityOwner.captureIncomingDelivery(connectionId, ws);
++        this.handleServiceMessage(ws, message, delivery);
+         return;
+       }
+       this.logger.warn(ROUTER_LOG_MSG.MESSAGE_UNKNOWN, {
+@@ -419,9 +420,10 @@
+    * resolves the handler asynchronously via SERVICE_RESPONSE.
+    * @param {WebSocket} ws - WebSocket connection.
+    * @param {Object} message - Service message.
++   * @param {Object|null} delivery - Owner-bound local delivery lifetime.
+    * @private
+    */
+-  handleServiceMessage(ws, message) {
++  handleServiceMessage(ws, message, delivery = null) {
+     const {targetAddress, messageId, payload} = message;
+     this.logger.debug(ROUTER_LOG_MSG.SERVICE_MESSAGE_HANDLING, {
+       messageId,
+@@ -464,7 +466,8 @@
+       timestamp: message.timestamp,
+     };
+     Promise.resolve()
+-      .then(() => handler(envelope))
++      // The local-only second argument is not part of the wire envelope.
++      .then(() => handler(envelope, delivery))
+       .then((result) => {
+         this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_SENT, {
+           messageId,
