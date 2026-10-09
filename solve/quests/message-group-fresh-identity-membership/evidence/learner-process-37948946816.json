@@ -1,0 +1,176 @@
+{
+  "schema": "learner-process-loss/1",
+  "runId": "37948946816",
+  "baseSha": "85711505b502950ddfd095e108d31df237fb7464",
+  "sourceSha": "8f8213d994b84c3c5858525dbdc91de835e59b5d",
+  "redSha": "daff9859dc52c2c42097a8d4387274da18da4ef7",
+  "timings": {
+    "consumer": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "53",
+          "6037"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "process": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-process-loss.integration.test.js",
+          "4",
+          "4594"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "regressions": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "966"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "869"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "1134"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "998"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "cache": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-membership-claim-cache.integration.test.js",
+          "3",
+          "17777"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "neighbors": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/raft/raft-rs-backend/committed-membership-read.test.js",
+          "5",
+          "654"
+        ],
+        [
+          "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+          "64",
+          "714"
+        ]
+      ],
+      "withinBudget": true
+    }
+  },
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "a298549664f2ef938b6ff80b6de88c23d9d3504498936c3e98a2251883f2ef89",
+      "bytes": 173335,
+      "asset": "message-group-fresh-identity-membership--learner-process-37948946816-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--learner-process-37948946816-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T15:07:39.741Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Three actual SIGKILL schedules: native commit before recording, ordinary failed debt, and operation commit before answer. New process/different logical membership holder adopts exact expired claim, reads another durable voter, records without reproposal and retains ordinary history/debt. Native refusal correction and terminal-at-CAS controls. Normal driver, local SQLite gateway/in-process native messages: not physical distributed SQL, full workflow driver, current CREATE, successor issuance or power-loss certification.",
+      "evidence": "sha256:a298549664f2ef938b6ff80b6de88c23d9d3504498936c3e98a2251883f2ef89",
+      "asset": "message-group-fresh-identity-membership--learner-process-37948946816-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--learner-process-37948946816-1.zip",
+      "bytes": 173335
+    }
+  },
+  "mutations": [
+    {
+      "name": "permanent-is-not-unavailable",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/learner-process-37948946816-1/report-diagnostic.mjs",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ],
+      "exit": 1,
+      "timedOut": false,
+      "cleanupComplete": true,
+      "sourceSha256": "b6acc1fc66acc7ae9732a44d59b39994e47747040b6521ba9db90791b61bfae1",
+      "processGroupId": 4122,
+      "wallMs": 5121.434,
+      "intendedAssertionsFailed": true,
+      "requiredTests": [
+        "native refusal classifications retain conflict versus unavailability"
+      ],
+      "assertion": "typed permanent native refusal must not become retryable unavailability"
+    },
+    {
+      "name": "unavailable-witness-is-not-conflict",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/learner-process-37948946816-1/report-diagnostic.mjs",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ],
+      "exit": 1,
+      "timedOut": false,
+      "cleanupComplete": true,
+      "sourceSha256": "25b14299628714081c38b600cdca6e4dab5df41c27813260cfe725d7f80780bd",
+      "processGroupId": 4140,
+      "wallMs": 5108.689,
+      "intendedAssertionsFailed": true,
+      "requiredTests": [
+        "native refusal classifications retain conflict versus unavailability"
+      ],
+      "assertion": "typed permanent native refusal must not become retryable unavailability"
+    },
+    {
+      "name": "wrong-signal-is-not-sigkill",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/learner-process-37948946816-1/report-diagnostic.mjs",
+        "test/integration/message-group-learner-process-loss.integration.test.js"
+      ],
+      "exit": 1,
+      "timedOut": false,
+      "cleanupComplete": true,
+      "sourceSha256": "9a78886bee15e88af646bf066ca0354c6bba734422a5e600dece9d7d0ba189f3",
+      "processGroupId": 4159,
+      "wallMs": 1442.138,
+      "intendedAssertionsFailed": true,
+      "requiredTests": [
+        "pending",
+        "ordinary-failed",
+        "record-answer-lost"
+      ],
+      "assertion": "a graceful exit is not process-loss evidence"
+    }
+  ],
+  "processLossSchedules": 3,
+  "differentLogicalHolder": true,
+  "physicalMultiHost": false,
+  "distributedOperationSQL": false,
+  "fullDriver": false,
+  "currentCreate": false,
+  "successorIssuance": false,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL"
+}
