@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 167,
-    "storage-raft": 118,
+    "storage-raft": 119,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 93,
     "wasm-toolchain": 57
   },
-  "censusSize": 2324,
-  "digest": "fnv1a32-58fc23de",
+  "censusSize": 2325,
+  "digest": "fnv1a32-b06ff2d7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9afd0650",
+  "observationDigest": "fnv1a32-f83495ee",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1027,6 +1027,7 @@
     "test/integration/managed-split-writes-after-cutover.integration.test.js": "storage-partition",
     "test/integration/membership-consistency.integration.test.js": "bootstrap-membership",
     "test/integration/message-group-fresh-identity-replacement.integration.test.js": "transport-messaging",
+    "test/integration/message-group-learner-process-loss.integration.test.js": "storage-raft",
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": "storage-raft",
     "test/integration/message-group-membership-claim-cache.integration.test.js": "cdc-metadata",
     "test/integration/message-group-multi-join-formation.integration.test.js": "transport-messaging",
@@ -7250,6 +7251,11 @@
         "src/diagnostics/formation-turn-attribution.js"
       ]
     },
+    "test/integration/message-group-learner-process-loss.integration.test.js": {
+      "files": [
+        "test/test-helpers/learner-process-loss-worker.js"
+      ]
+    },
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": {
       "files": [
         "src/raft/raft-committed-membership-constants.js",
@@ -7264,7 +7270,8 @@
         "src/raft/snapshot-checkpoint-constants.js",
         "src/raft/snapshot-checkpoint-store.js",
         "src/raft/snapshot-install-constants.js",
-        "src/rebalancer/replica-create-admission-token.js"
+        "src/rebalancer/replica-create-admission-token.js",
+        "test/test-helpers/learner-operation-fixture.js"
       ]
     },
     "test/integration/message-group-membership-claim-cache.integration.test.js": {

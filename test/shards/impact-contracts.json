@@ -841,7 +841,8 @@
       ],
       "tests": [
         "test/integration/message-group-learner-runtime-authorization.integration.test.js",
-        "test/integration/message-group-membership-claim-cache.integration.test.js"
+        "test/integration/message-group-membership-claim-cache.integration.test.js",
+        "test/integration/message-group-learner-process-loss.integration.test.js"
       ]
     }
   },
@@ -1641,7 +1642,8 @@
       "contract": "message-group-learner-outcome-recording",
       "witnessTests": [
         "test/integration/message-group-learner-runtime-authorization.integration.test.js",
-        "test/integration/message-group-membership-claim-cache.integration.test.js"
+        "test/integration/message-group-membership-claim-cache.integration.test.js",
+        "test/integration/message-group-learner-process-loss.integration.test.js"
       ]
     }
   }
