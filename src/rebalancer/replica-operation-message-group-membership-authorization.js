@@ -9,7 +9,8 @@ import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../raft/raft-operation-port-cons
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
 import {COMMITTED_LEARNER_ACTION_KIND as ACTION_KIND,
   COMMITTED_LEARNER_ACTION_REASON as ACTION_REASON,
-  COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
+  COMMITTED_MEMBERSHIP_READ_PURPOSE, COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_REFUSAL} from '../raft/raft-committed-membership-constants.js';
 import {encodeCommittedLearnerAdmission, decodeCommittedLearnerAdmission,
   INVALID_COMMITTED_LEARNER_ADMISSION} from '../raft/raft-rs-committed-membership-context.js';
 import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
@@ -294,17 +295,32 @@ function originalLearnerOriginMatches(origin, input, query) {
     Number(origin.term) === input.permit.leaderTerm &&
     Number(origin.index) > input.permit.leaderConfigurationStamp.membershipGenerationIndex;
 }
+// Preserve the native owner's distinction: unresolved history is not a conflict,
+// and an invalid/mismatched origin is not transient transport unavailability.
+function learnerObservationRefusal(observed) {
+  if (observed?.kind === ACTION_KIND.UNRESOLVED &&
+    observed.reason === ACTION_REASON.NOT_RECORDED) return OUTCOME.UNKNOWN;
+  if (observed?.kind === ACTION_KIND.REFUSED &&
+    observed.reason === ACTION_REASON.UNAVAILABLE) return OUTCOME.UNAVAILABLE;
+  return observed?.kind === ACTION_KIND.COMMITTED && observed.reason === ACTION_REASON.APPLIED ?
+    null : OUTCOME.CONFLICT;
+}
+function learnerWitnessUnavailable(membership) {
+  return membership?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED &&
+    [COMMITTED_MEMBERSHIP_REFUSAL.HELD,
+      COMMITTED_MEMBERSHIP_REFUSAL.CONFIGURATION_GENERATION_UNAVAILABLE]
+      .includes(membership.reason);
+}
 function learnerOutcomeEvidence(observed, input, query) {
-  if (observed?.kind === ACTION_KIND.UNRESOLVED) return {refusal: OUTCOME.UNKNOWN};
-  if (observed?.kind !== ACTION_KIND.COMMITTED || observed.reason !== ACTION_REASON.APPLIED) {
-    return {refusal: OUTCOME.UNAVAILABLE};
-  }
+  const refusal = learnerObservationRefusal(observed);
+  if (refusal !== null) return {refusal};
   try {
     const encodedOrigin = encodeCommittedLearnerAdmission(observed.receipt);
     const origin = decodeCommittedLearnerAdmission(encodedOrigin);
     if (!originalLearnerOriginMatches(origin, input, query)) {
       return {refusal: OUTCOME.CONFLICT};
     }
+    if (learnerWitnessUnavailable(observed.membership)) return {refusal: OUTCOME.UNAVAILABLE};
     const encodedStamp = JSON.stringify(observed.membership);
     const committedPermit = committedLearnerPermit(input, origin.index);
     const stamp = priorLearnerStamp({messageGroupLearnerStamp: encodedStamp}, input.identity,
