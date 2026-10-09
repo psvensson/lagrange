@@ -9,14 +9,14 @@ concurrency:
   group: issued-recovery-publication-20261009
   cancel-in-progress: false
 env:
-  EXPECTED: 8ece20f70392314ceba49e4e787b800bc14d07d6
+  EXPECTED: b8611d8b9dc1538880bc07f0f8215cac7c031b74
   WORK_BRANCH: work/freshmg-issued-action-recovery-20261009
   QUEST: message-group-fresh-identity-membership
   LAGRANGE_LANE_JOBS_CAP: '1'
 jobs:
-  preserve-and-measure:
+  canonical-followup:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
     permissions:
       contents: write
     defaults:
@@ -39,130 +39,33 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Restore only the checksum-bound complete 14-file package
-        id: restore
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED"
-          test -z "$(git status --porcelain)"
-          export OUT="$GITHUB_WORKSPACE/issued-recovery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          export CARRIER="$GITHUB_WORKSPACE/carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          mkdir -p "$OUT/input"
-          python3 - <<'PY'
-          import base64,hashlib,json,lzma,os,subprocess
-          from pathlib import Path,PurePosixPath
-          carrier=Path(os.environ['CARRIER'])/'scripts/quest-evidence/issued-recovery-packet'
-          encoded=''.join((carrier/f'part{i}.b64').read_text().strip() for i in range(1,5))
-          raw=base64.b64decode(encoded,validate=True)
-          assert hashlib.sha256(raw).hexdigest()=='8daa952c67b15eba3edc6cff0beb5e8696f4fc8d03304a97e06e22228c36ffbc','carrier checksum mismatch'
-          data=json.loads(lzma.decompress(raw))
-          assert len(data)==205
-          root=Path(os.environ['OUT'])/'input'
-          for name,text in data.items():
-              parts=PurePosixPath(name)
-              assert not parts.is_absolute() and '..' not in parts.parts
-              dest=root/name;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(text.encode())
-          assert hashlib.sha256((root/'corrective.patch').read_bytes()).hexdigest()=='df0fff5cc3286058a178eee2c907fbc961d5afbaa4b71dceef8340ded700e641'
-          paths=json.loads((root/'changed-files.json').read_text());assert len(paths)==14
-          for item in paths:
-              old=item['oldGitBlob'];p=item['path']
-              if old:
-                  assert subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()==old,p
-              else: assert not Path(p).exists(),p
-          subprocess.run(['git','apply','--check',str(root/'corrective.patch')],check=True)
-          subprocess.run(['git','apply',str(root/'corrective.patch')],check=True)
-          for item in paths: assert hashlib.sha256(Path(item['path']).read_bytes()).hexdigest()==item['sha256'],item['path']
-          record={'schema':'issued-recovery-package-preservation/1','originalArchiveSha256':'e7beb0e2542b01e9ca4210f59f4836d6adf0dbc139afe65e33ea6226758b4f65','carrierSha256':hashlib.sha256(raw).hexdigest(),'patchSha256':'df0fff5cc3286058a178eee2c907fbc961d5afbaa4b71dceef8340ded700e641','restoredFiles':paths,'retainedTextMembers':205,'limits':'All corrected code and current textual evidence retained. Two nested historical input ZIPs and their original wrapper ZIP remain conversation attachments; this re-encoding is not claimed byte-identical to that wrapper.'}
-          (Path(os.environ['OUT'])/'package-integrity.json').write_text(json.dumps(record,indent=2)+'\n')
-          PY
-          printf 'base=%s\ncarrier=%s\nrunner=%s\n' "$EXPECTED" "$GITHUB_SHA" "$RUNNER_NAME" > "$OUT/provenance.txt"
-          npm ci > "$OUT/install.stdout.txt" 2> "$OUT/install.stderr.txt"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          node scripts/solve.js note --id "$QUEST" --finding '2026-10-09 user approved corrective F1-F4 implementation, permits merge commits, and requested use of working publisher. Preserve the exact 14-file corrected package against 8ece20f7 on work/freshmg-issued-action-recovery-20261009. This branch does not overwrite the separate f258bade learner-origin attempt or activate routes. Merge-commit permission is not approval of a failing candidate or main integration. Canonical dependency/static tests are newly required; prior diagnostic evidence retains its original driver and proof ceiling.' --kind decision --json > "$OUT/scope.json"
-          node scripts/solve.js note --id "$QUEST" --attempt 'Restore the exact corrective package: real per-test mutation attribution, probe refusal/timeout retention, reconstruction/WAL engagement, and the existing durable-store coherent read transaction. No reissue, CREATE, production-port exposure or main merge. WIP preservation precedes canonical validation; no independent approval claimed.' --json > "$OUT/attempt.json"
-          git diff --check
-          python3 - <<'PY'
-          import json,os,subprocess
-          from pathlib import Path
-          paths=[x['path'] for x in json.loads((Path(os.environ['OUT'])/'input/changed-files.json').read_text())]
-          subprocess.run(['git','add','--',*paths,'solve/quests/'+os.environ['QUEST']+'/log.ndjson'],check=True)
-          PY
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP: preserve corrected issued-action evidence and owned read boundary (not approved)'
-          git rev-parse HEAD > "$OUT/source-sha.txt"
-          echo "source=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Publish WIP by expected-head normal Git push
+      - name: Repair only observed formatting and measure all canonical obligations
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-canonical-followup.sh measure
+      - name: Preserve exact WIP and canonical results by normal push
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh auth setup-git
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$EXPECTED"
-          test -z "$(git status --porcelain)"
-          git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-      - name: Execute the supplied canonical entry with normal locked dependencies
-        id: canonical
-        env:
-          EXPECTED: ${{ steps.restore.outputs.source }}
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/issued-recovery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          status=0
-          bash "solve/quests/$QUEST/evidence/issued-action-recovery-20261009/run-canonical.sh" "$out/canonical" > "$out/canonical.stdout.txt" 2> "$out/canonical.stderr.txt" || status=$?
-          echo "$status" > "$out/canonical-exit.txt"
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          cat "$out/canonical.stderr.txt"
-          exit "$status"
-      - name: Retain canonical outcome and all restored evidence without greenwashing
-        if: always() && steps.restore.outputs.source != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          export OUT="$GITHUB_WORKSPACE/issued-recovery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          git diff --binary > "$OUT/post-measurement.patch"
-          git status --porcelain > "$OUT/post-measurement-status.txt"
-          if [ -d .tap/test-results ]; then cp -a .tap/test-results "$OUT/tap"; fi
-          python3 - <<'PY'
-          import hashlib,json,os,zipfile
-          from pathlib import Path
-          out=Path(os.environ['OUT'])
-          m={str(p.relative_to(out)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(out.rglob('*')) if p.is_file()}
-          (out/'member-sha256.json').write_text(json.dumps(m,indent=2)+'\n')
-          with zipfile.ZipFile(str(out)+'.zip','w',zipfile.ZIP_DEFLATED) as z:
-              for p in sorted(out.rglob('*')):
-                  if p.is_file():z.write(p,str(p.relative_to(out)))
-          (out/'canonical-archive-sha256.txt').write_text(hashlib.sha256(Path(str(out)+'.zip').read_bytes()).hexdigest()+'\n')
-          PY
-          gh auth setup-git
-          node scripts/solve.js evidence add "$OUT.zip" --id "$QUEST" --text 'Corrected package preservation and first canonical dependency/static execution. Original diagnostic reports remain historical; consult canonical-exit and individual logs. No production activation, successor permit, CREATE, independent review or main merge. Separate learner-origin carrier was left untouched.' --json > "$OUT/canonical-evidence.json"
-          python3 - <<'PY'
-          import json,os
-          from pathlib import Path
-          out=Path(os.environ['OUT']);status=out/'canonical-exit.txt'
-          r={'schema':'issued-recovery-canonical-attempt/1','runId':os.environ['GITHUB_RUN_ID'],'baseSha':os.environ['EXPECTED'],'sourceSha':(out/'source-sha.txt').read_text().strip(),'canonicalExit':int(status.read_text()) if status.exists() else None,'canonicalEvidence':json.loads((out/'canonical-evidence.json').read_text()),'archiveSha256':(out/'canonical-archive-sha256.txt').read_text().strip(),'proofCeiling':'First canonical execution of preserved corrective package, not complete runtime/receipt/CREATE chain or distributed proof','independentApproval':False,'fullLabVerdict':'FAIL'}
-          p=Path('solve/quests')/os.environ['QUEST']/'evidence'/('issued-recovery-canonical-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(r,indent=2)+'\n')
-          PY
-          git add -- "solve/quests/$QUEST/log.ndjson" "solve/quests/$QUEST/evidence/issued-recovery-canonical-$GITHUB_RUN_ID.json"
-          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'evidence: retain original corrected-package canonical verdict'
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = '${{ steps.restore.outputs.source }}'
-          git push origin "HEAD:refs/heads/$WORK_BRANCH"
-          test "$(git ls-remote origin "refs/heads/$WORK_BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
-          git rev-parse HEAD > "$OUT/published-sha.txt"
-      - name: Preserve even restoration or publication failures
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-canonical-followup.sh publish
+      - name: Preserve any incomplete attempt without deleting evidence
         if: always()
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/issued-recovery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$GITHUB_WORKSPACE/issued-recovery-followup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
           git diff --binary "$EXPECTED" > "$out/total-change.patch"
-          git status --porcelain > "$out/final-status.txt"
+          git status --porcelain > "$out/archive-status.txt"
           if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"; fi
+          if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/tap"; fi
+          if [ -f test-output/reports/test-results.ndjson ]; then cp test-output/reports/test-results.ndjson "$out/archive-test-results.ndjson"; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: issued-recovery-canonical-${{ github.run_id }}-${{ github.run_attempt }}
-          path: issued-recovery-${{ github.run_id }}-${{ github.run_attempt }}/
+          name: issued-recovery-followup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: issued-recovery-followup-${{ github.run_id }}-${{ github.run_attempt }}/
           retention-days: 14
           if-no-files-found: error
+      - name: Report the actual bounded aggregate, never a release verdict
+        if: always()
+        run: |
+          set -euo pipefail
+          file="$GITHUB_WORKSPACE/issued-recovery-followup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/result.json"
+          node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1]));console.log(JSON.stringify(r,null,2));process.exit(r.allChecksPassed?0:1)' "$file"
