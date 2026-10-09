@@ -7,8 +7,8 @@ ops="$GITHUB_WORKSPACE/carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-
 cp "$ops/refine.py" "$CARRIER/refine.py"
 cp "$ops/continue.sh" "$CARRIER/continue.sh"
 if [ "$1" = measure ]; then
-  gh api repos/psvensson/lagrange/actions/artifacts/11629001065/zip > "$out/second-37957083569.zip"
-  echo "976b896fcd04def6053e6fffb8cc1ba461a8268281edb024e585db1b64033b2b  $out/second-37957083569.zip" | sha256sum -c -
+  gh api repos/psvensson/lagrange/actions/artifacts/11631000311/zip > "$out/third-37958120911.zip"
+  echo "d6945c62247b23141066c2a6f517f603aa1af7f780a98b44f2f739fba668b5fb  $out/third-37958120911.zip" | sha256sum -c -
 fi
 python3 - <<'PY'
 import os
