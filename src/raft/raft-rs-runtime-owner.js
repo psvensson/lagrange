@@ -1,3 +1,4 @@
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from './raft-committed-membership-constants.js';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
@@ -100,7 +101,7 @@ import {
   settleParticipationGate,
   withIdentityRecord,
 } from './raft-rs-participation-gate.js';
-import {answerCommittedMembership} from
+import {answerCommittedMembership, answerCommittedLearnerAction} from
   './raft-rs-committed-membership-read.js';
 import {committedMembershipContext} from
   './raft-rs-committed-membership-context.js';
@@ -863,8 +864,7 @@ function foldedIntoBootstrap(group, entry) {
 }
 
 function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
-  if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType) &&
-      !foldedIntoBootstrap(group, entry)) {
+  if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) {
     const decoded = invokeCoreAt(
       group, expectedGeneration,
       'decode_conf_change_entry', entry.entryType, entry.data);
@@ -872,6 +872,11 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
       return decoded;
     }
     const membershipContext = committedMembershipContext(decoded.value);
+    if (foldedIntoBootstrap(group, entry)) {
+      // Replay origin provenance without replaying historical ConfState over C_j.
+      return {...invokeCoreAt(group, expectedGeneration, CORE_OPERATION.CONF_STATE),
+        membershipContext};
+    }
     const applied = invokeCoreAt(
       group, expectedGeneration, 'apply_conf_change', decoded.value);
     if (!applied.ok) {
@@ -1416,6 +1421,8 @@ function answerRefusedProposal(group, expectedGeneration, refused) {
 }
 
 const COMMAND_OPERATION = Object.freeze({
+  [RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP]: (group, command, generation) =>
+    answerCommittedLearnerAction(group, readGroupStatus(group, generation), command.query),
   [RUNTIME_COMMAND.READ_STATUS]: (group, command, generation) =>
     readGroupStatus(group, generation),
   [RUNTIME_COMMAND.CAMPAIGN]: (group, command, generation) =>
@@ -1626,7 +1633,8 @@ function executeCommand(group, command) {
   if (command?.type === RUNTIME_COMMAND.READ_STATUS) {
     return readStatusNow(group);
   }
-  if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP) {
+  if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP &&
+      command.purpose !== COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
     return thenMaybe(readStatusNow(group), (status) =>
       answerCommittedMembership(group, status, command.purpose));
   }
@@ -1667,6 +1675,7 @@ function createRuntimeDispatcher(request) {
     resolvePeerIdentity: request.resolvePeerIdentity,
     applyCommittedEntry: request.applyCommittedEntry,
     applyCommittedMembershipContext: request.applyCommittedMembershipContext,
+    readCommittedLearnerAdmission: request.readCommittedLearnerAdmission,
     applyTransactionRolledBack: request.applyTransactionRolledBack,
     runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,

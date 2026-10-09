@@ -33,7 +33,7 @@ const RAFT_CHECKPOINT_PAYLOAD_KIND = Object.freeze({
 
 const RAFT_CHECKPOINT_PAYLOAD_VERSION = Object.freeze({
   [RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE]: 1,
-  [RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE]: 1,
+  [RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE]: 2,
 });
 
 const RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS = Object.freeze([
@@ -44,7 +44,7 @@ const RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS = Object.freeze([
   'voters', 'learners', 'votersOutgoing', 'learnersNext', 'autoLeave',
 ]);
 const RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS = Object.freeze([
-  'replicaIdentity', 'peerId',
+  'replicaIdentity', 'peerId', 'learnerAdmission',
 ]);
 const RAFT_RS_CHECKPOINT_REASON = Object.freeze({
   DESCRIPTOR: 'raftRs',

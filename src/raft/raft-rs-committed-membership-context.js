@@ -141,7 +141,55 @@ function committedMembershipContext(decoded) {
   });
 }
 
+const LEARNER_ORIGIN_KEYS = Object.freeze(['groupId', 'index', 'term', 'context']);
+const LEARNER_ORIGIN_ERROR = 'invalid committed learner origin';
+function positiveDecimal(value) {
+  return typeof value === 'string' && /^[1-9][0-9]{0,15}$/.test(value) &&
+    Number.isSafeInteger(Number(value));
+}
+function canonicalLearnerContext(context) {
+  const encoded = encodeCommittedMembershipContext(context);
+  if (context.stage !== RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  return Object.freeze(JSON.parse(Buffer.from(encoded, CONTEXT_ENCODING)
+    .toString(CONTEXT_TEXT_ENCODING)));
+}
+function encodeCommittedLearnerAdmission({groupId, index, term, context}) {
+  if (typeof groupId !== 'string' || groupId.length === 0 ||
+      !positiveDecimal(index) || !positiveDecimal(term)) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  return JSON.stringify({groupId, index, term, context: canonicalLearnerContext(context)});
+}
+function decodeCommittedLearnerAdmission(encoded) {
+  try {
+    const value = JSON.parse(encoded);
+    if (!value || typeof value !== 'object' || Array.isArray(value) ||
+        Object.keys(value).length !== LEARNER_ORIGIN_KEYS.length ||
+        !LEARNER_ORIGIN_KEYS.every((key) => Object.hasOwn(value, key)) ||
+        encodeCommittedLearnerAdmission(value) !== encoded) return null;
+    return Object.freeze({...value, context: Object.freeze(value.context)});
+  } catch {
+    return null;
+  }
+}
+function learnerAdmissionMatchesReservation(encoded, reservation, boundary) {
+  if (encoded === null) return true;
+  const origin = decodeCommittedLearnerAdmission(encoded);
+  return origin !== null && origin.groupId === boundary.groupId &&
+    origin.context.replicaIdentity === reservation.replicaIdentity &&
+    origin.context.peerId === reservation.peerId &&
+    BigInt(origin.index) <= BigInt(boundary.membershipGenerationIndex) &&
+    BigInt(origin.index) <= BigInt(boundary.appliedIndex) &&
+    BigInt(origin.term) <= BigInt(boundary.appliedTerm);
+}
+
 export {
+  canonicalLearnerContext,
+  encodeCommittedLearnerAdmission,
+  decodeCommittedLearnerAdmission,
+  learnerAdmissionMatchesReservation,
   COMMITTED_MEMBERSHIP_CONTEXT_ERROR,
   committedMembershipChangeType,
   committedMembershipContext,

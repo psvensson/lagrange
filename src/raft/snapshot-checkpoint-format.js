@@ -20,6 +20,7 @@ import {
   RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS,
   RAFT_RS_CHECKPOINT_REASON,
 } from './snapshot-checkpoint-constants.js';
+import {learnerAdmissionMatchesReservation} from './raft-rs-committed-membership-context.js';
 import {validatedRaftRsPeerIdentityReservations} from
   './raft-rs-peer-identity.js';
 
@@ -124,7 +125,9 @@ function validRaftRsReservationShapes(reservations) {
     reservations.every((reservation) =>
       exactKeys(reservation, RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS) &&
       isNonEmptyString(reservation.replicaIdentity) &&
-      isDecimalInteger(reservation.peerId)) &&
+      isDecimalInteger(reservation.peerId) &&
+      (reservation.learnerAdmission === null ||
+        typeof reservation.learnerAdmission === 'string')) &&
     unique(reservations.map(({replicaIdentity}) => replicaIdentity)) &&
     unique(reservations.map(({peerId}) => peerId));
 }
@@ -138,7 +141,9 @@ function validRaftRsDescriptor(raftRs) {
     BigInt(raftRs.membershipGenerationIndex) <= BigInt(raftRs.appliedIndex) &&
     validRaftRsConfState(raftRs.confState) &&
     validRaftRsReservationShapes(raftRs.peerReservations) &&
-    validPeerReservations(raftRs.peerReservations);
+    validPeerReservations(raftRs.peerReservations) &&
+    raftRs.peerReservations.every((reservation) => learnerAdmissionMatchesReservation(
+      reservation.learnerAdmission, reservation, raftRs));
 }
 
 function raftRsDescriptorMatchesEnvelope(descriptor) {
