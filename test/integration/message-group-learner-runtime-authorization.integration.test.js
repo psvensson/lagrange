@@ -21,6 +21,7 @@ import {ReplicaStatus, OperationType} from '../../src/rebalancer/replica-status.
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {deriveRaftRsPeerId, RaftRsPeerIdentityRegistry} from '../../src/raft/raft-rs-peer-identity.js';
 import {committedMembershipContext} from '../../src/raft/raft-rs-committed-membership-context.js';
+import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {durableLog} from '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {loadRaftRsCore} from '../raft/raft-rs-backend/raw-raft-rs-test-core.js';
 import * as membershipRead from '../../src/raft/raft-committed-membership-constants.js';
@@ -994,6 +995,22 @@ test('recovered learner outcome advances only the exact operation membership fie
       assert.equal((await recordOutcome(f)).outcome, 'recorded',
         'a later genuine committed native answer remains recoverable');
     });
+    await t.test('a joint witness defers recording without classifying historical origin as conflict',
+      async (t) => {
+        const f = await issuedAndCommitted(t);
+        const before = f.row();
+        const actual = await readLearnerAction(f);
+        // Supplied configuration projection isolates classification; the origin
+        // and later non-joint answer come from the actual native owner.
+        const membership = {...actual.membership,
+          votersOutgoing: [...actual.membership.voters]};
+        membership.configurationKey = raftRsConfStateKey({...membership, autoLeave: false});
+        const joint = {...actual, membership};
+        assert.equal((await recordOutcome(f, {read: async () => joint})).outcome, 'unavailable',
+          'joint configuration is temporary and must not become permanent conflict');
+        assert.deepEqual(f.row(), before, 'joint refusal cannot advance or release membership debt');
+        assert.equal((await recordOutcome(f)).outcome, 'recorded');
+      });
     await t.test('terminal competition at learner CAS preserves exact terminal history', async (t) => {
       for (const successful of [false, true]) {
         const f = await issuedAndCommitted(t);

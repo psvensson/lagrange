@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2308,
+    "ordinary": 2309,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2325,
-  "digest": "fnv1a32-9911bfa4",
+  "censusSize": 2326,
+  "digest": "fnv1a32-e33e197c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1008,6 +1008,7 @@
     "test/integration/membership-consistency.integration.test.js": "ordinary",
     "test/integration/message-group-fresh-identity-replacement.integration.test.js": "ordinary",
     "test/integration/message-group-learner-process-loss.integration.test.js": "ordinary",
+    "test/integration/message-group-learner-recipient.integration.test.js": "ordinary",
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": "ordinary",
     "test/integration/message-group-membership-claim-cache.integration.test.js": "ordinary",
     "test/integration/message-group-multi-join-formation.integration.test.js": "ordinary",

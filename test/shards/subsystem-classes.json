@@ -22,13 +22,13 @@
     "storage-raft": 119,
     "test-infrastructure": 142,
     "transactions": 16,
-    "transport-messaging": 93,
+    "transport-messaging": 94,
     "wasm-toolchain": 57
   },
-  "censusSize": 2325,
-  "digest": "fnv1a32-b06ff2d7",
+  "censusSize": 2326,
+  "digest": "fnv1a32-8c41181b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f83495ee",
+  "observationDigest": "fnv1a32-ac457843",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1028,6 +1028,7 @@
     "test/integration/membership-consistency.integration.test.js": "bootstrap-membership",
     "test/integration/message-group-fresh-identity-replacement.integration.test.js": "transport-messaging",
     "test/integration/message-group-learner-process-loss.integration.test.js": "storage-raft",
+    "test/integration/message-group-learner-recipient.integration.test.js": "transport-messaging",
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": "storage-raft",
     "test/integration/message-group-membership-claim-cache.integration.test.js": "cdc-metadata",
     "test/integration/message-group-multi-join-formation.integration.test.js": "transport-messaging",
@@ -7254,6 +7255,19 @@
     "test/integration/message-group-learner-process-loss.integration.test.js": {
       "files": [
         "test/test-helpers/learner-process-loss-worker.js"
+      ]
+    },
+    "test/integration/message-group-learner-recipient.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit.js",
+        "test/test-helpers/learner-operation-fixture.js"
       ]
     },
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": {
