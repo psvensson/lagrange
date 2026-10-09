@@ -41,15 +41,15 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Retain patch-format and lint failures unchanged
+      - name: Retain original capability failure and static findings
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           out="$GITHUB_WORKSPACE/learner-recording-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          gh api repos/psvensson/lagrange/actions/artifacts/11616222072/zip > "$out/second-attempt-37931949476.zip"
-          echo "e0fccd29321f5c3d953732b82b2a8229d3c423f3b018249b116e056a3626cb60  $out/second-attempt-37931949476.zip" | sha256sum -c -
+          gh api repos/psvensson/lagrange/actions/artifacts/11616238714/zip > "$out/third-attempt-37932606962.zip"
+          echo "903573acb27503bb3ab4a455bed868692b9149845af3e16a1f021a0dc29efd03  $out/third-attempt-37932606962.zip" | sha256sum -c -
       - name: Prove original red, owned recording and actual worker-loss recovery
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-recording-20261009/resume.sh measure
       - name: Preserve measured work and canonical evidence, not main integration
