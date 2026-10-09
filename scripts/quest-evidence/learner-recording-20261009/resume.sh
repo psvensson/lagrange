@@ -17,6 +17,9 @@ assert p.count(a)==1
 s=(c/'run.sh').read_text()
 assert s.count('"$carrier/tests.patch"')==2
 s=s.replace('"$carrier/tests.patch"','"$out/corrected-tests.patch"')
+a=' measure test-lint npm exec --no -- eslint "$test_file" "$worker" --fix'
+assert s.count(a)==1
+s=s.replace(a,' python3 "$carrier/prepare-tests.py"\n'+a,1)
 (o/'executed-run.sh').write_text(s)
 PY
 bash "$out/executed-run.sh" "$1"
