@@ -108,7 +108,8 @@ new='''    await t.test('actual origin-bearing image installs and reopens on the
         assertExactLearnerOrigin(f, await readLearnerAction(f, TARGET), proposed.proposalIndex);
         assert.equal((await oldPort.readCommittedMembership(learnerActionQuery(f))).kind,
           membershipRead.COMMITTED_LEARNER_ACTION_KIND.REFUSED);
-        assert.ok(reopened.node.readStatus().confState.learners.includes(deriveRaftRsPeerId(TARGET)));
+        assert.ok(reopened.node.readStatus().confState.learners.includes(
+          deriveRaftRsPeerId(TARGET)));
         assert.equal(f.row().message_group_membership_permit, f.request.permit,
           'checkpoint recovery cannot refresh the original issued action');
       });
