@@ -68,7 +68,8 @@ function applyCommittedEntryTransaction({store, groupId, entry, confState,
     }
     if (committedMembershipContext !== null) {
       const appliedMembership =
-        applyCommittedMembershipContext(committedMembershipContext);
+        applyCommittedMembershipContext(committedMembershipContext,
+          Object.freeze({index: entry.index, term: entry.term}));
       if (appliedMembership && typeof appliedMembership.then === 'function') {
         throw new TypeError(ASYNC_MEMBERSHIP_CONTEXT_APPLIER_ERROR);
       }

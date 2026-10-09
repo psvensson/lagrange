@@ -436,7 +436,8 @@ function raftRsInstalledImageMatches(checkpointsRoot, replicaDbPath, marker) {
       reservations.every((reservation, index) =>
         reservation.replicaIdentity ===
           expected.peerReservations[index].replicaIdentity &&
-        reservation.peerId === expected.peerReservations[index].peerId);
+        reservation.peerId === expected.peerReservations[index].peerId &&
+        reservation.learnerAdmission === expected.peerReservations[index].learnerAdmission);
   } catch {
     return false;
   } finally {
