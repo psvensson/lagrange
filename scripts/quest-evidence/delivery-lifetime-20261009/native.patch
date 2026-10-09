@@ -1,0 +1,204 @@
+diff --git a/src/raft/raft-operation-port-constants.js b/src/raft/raft-operation-port-constants.js
+--- a/src/raft/raft-operation-port-constants.js
++++ b/src/raft/raft-operation-port-constants.js
+@@ -86,6 +86,8 @@
+   MISMATCH: 'membership-authorization-mismatch',
+   STALE_OWNER: 'membership-authorization-stale-owner',
+   WRONG_RECIPIENT: 'membership-authorization-wrong-recipient',
++  DELIVERY_REQUIRED: 'membership-delivery-required',
++  STALE_DELIVERY: 'membership-delivery-stale',
+ });
+ 
+ const RAFT_OPERATION_OUTCOME = Object.freeze({
+diff --git a/src/raft/raft-rs-group-membership-admission.js b/src/raft/raft-rs-group-membership-admission.js
+--- a/src/raft/raft-rs-group-membership-admission.js
++++ b/src/raft/raft-rs-group-membership-admission.js
+@@ -292,21 +292,57 @@
+     transition?.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER;
+ }
+ 
+-function reserveAndProposeAuthorizedLearner(port, receiver, transition) {
++function reserveAndProposeAuthorizedLearner(port, receiver, transition, admitExecution) {
++  if (!liveDelivery(admitExecution)) {
++    return deliveryRefusal();
++  }
+   const reserved = reserveGroupPeerIdentity(receiver, transition.replicaIdentity);
+   if (reserved.outcome !== RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED) {
+     return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
+   }
+   // Same-turn native fences remain authoritative. Do not refresh an issued
+   // transition from status here: that would turn stale permission into a grant.
+-  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](transition);
++  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](transition, admitExecution);
+ }
+ 
+ // Host-composed recipient boundary. The resolver is the existing operation
+ // repository's bound observation, never a boolean or caller-supplied permit
+ // validator. Transport authentication/registration and the workflow driver
+ // must supply the group/sender bindings; this helper does not invent them.
+-async function proposeAuthorizedGroupLearner(port, group, request, observeAuthorization) {
++function learnerDeliveryMatches(receiver, delivery) {
++  return delivery?.nodeId === receiver.nodeId &&
++    delivery.bootIncarnation === receiver.bootIncarnation &&
++    delivery.senderNodeId === receiver.senderNodeId &&
++    delivery.senderBootIncarnation === receiver.senderBootIncarnation;
++}
++
++function liveDelivery(admitExecution) {
++  try {
++    return admitExecution() === true;
++  } catch {
++    return false;
++  }
++}
++
++function deliveryRefusal() {
++  return deepFreeze({...membershipTransitionRefusal(
++    RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY), retryable: true});
++}
++
++function learnerDelivery(receiver, delivery) {
++  const admitExecution = delivery?.isCurrent;
++  if (typeof admitExecution !== 'function') {
++    return {refusal: membershipTransitionRefusal(
++      RAFT_MEMBERSHIP_AUTHORIZATION_REASON.DELIVERY_REQUIRED)};
++  }
++  if (!learnerDeliveryMatches(receiver, delivery) || !liveDelivery(admitExecution)) {
++    return {refusal: deliveryRefusal()};
++  }
++  return {admitExecution};
++}
++
++async function proposeAuthorizedGroupLearner(port, group, request, observeAuthorization,
++  delivery) {
+   if (typeof observeAuthorization !== 'function') {
+     return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
+   }
+@@ -315,6 +351,10 @@
+       outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE});
+   }
+   const receiver = learnerReceiver(group);
++  // Only a host-composed delivery context may cross this boundary. Inbound
++  // JSON cannot carry its callable fence. Do not read it from request.
++  const captured = learnerDelivery(receiver, delivery);
++  if (captured.refusal) return captured.refusal;
+   let observed;
+   try {
+     observed = await observeAuthorization(request, receiver);
+@@ -327,7 +367,8 @@
+   if (!learnerRecipientMatches(port.readStatus(), receiver, observed.transition)) {
+     return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
+   }
+-  return reserveAndProposeAuthorizedLearner(port, receiver, observed.transition);
++  return reserveAndProposeAuthorizedLearner(port, receiver, observed.transition,
++    captured.admitExecution);
+ }
+ 
+ export {
+diff --git a/src/raft/raft-rs-membership-transition-runtime.js b/src/raft/raft-rs-membership-transition-runtime.js
+--- a/src/raft/raft-rs-membership-transition-runtime.js
++++ b/src/raft/raft-rs-membership-transition-runtime.js
+@@ -10,6 +10,7 @@
+ } from './raft-rs-membership-transition.js';
+ import {deepFreeze} from './raft-operation-port.js';
+ import {
++  RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
+   RAFT_MEMBERSHIP_TRANSITION_REASON,
+   RAFT_MEMBERSHIP_TRANSITION_STAGE,
+   RAFT_OPERATION_OUTCOME,
+@@ -250,11 +251,30 @@
+     admitted.roleOutcome : null;
+ }
+ 
++function executionDeliveryRefusal(command) {
++  // Generic privileged membership callers retain their existing native
++  // contract. The issued-learner consumer always supplies this host fence.
++  if (command.admitExecution === undefined) return null;
++  try {
++    if (typeof command.admitExecution === 'function' && command.admitExecution() === true) {
++      return null;
++    }
++  } catch {
++    // Unavailable lifetime evidence is never execution permission.
++  }
++  return deepFreeze({...membershipTransitionRefusal(
++    RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY), retryable: true});
++}
++
+ function anchoredProposal(context, admitted) {
+   const {group, expectedGeneration, command, invokeCoreAt,
+     answerRefusedProposal, drainReady, thenMaybe} = context;
+   const preApplied = BigInt(admitted.status.applied ?? group.appliedIndex);
+   const prePending = BigInt(admitted.status.pendingConfIndex ?? 0);
++  // No await between this check and the native call. A context may have
++  // expired while waiting for the group turn, inbound drain or recovery.
++  const deliveryRefusal = executionDeliveryRefusal(command);
++  if (deliveryRefusal !== null) return deliveryRefusal;
+   const invoked = invokeCoreAt(group, expectedGeneration,
+     'propose_conf_change_v2', command.change);
+   if (!invoked.ok) {
+@@ -276,7 +296,8 @@
+ }
+ 
+ function proposeMembershipTransition(context) {
+-  const ownerRefusal = transitionOwnerRefusal(context);
++  const ownerRefusal = transitionOwnerRefusal(context) ??
++    executionDeliveryRefusal(context.command);
+   if (ownerRefusal !== null) {
+     return ownerRefusal;
+   }
+diff --git a/src/raft/raft-rs-membership-transition.js b/src/raft/raft-rs-membership-transition.js
+--- a/src/raft/raft-rs-membership-transition.js
++++ b/src/raft/raft-rs-membership-transition.js
+@@ -133,7 +133,7 @@
+ }
+ 
+ function transitionCommand(request, stamp, stageOrdinal, peerId,
+-  targetStatusObservation) {
++  targetStatusObservation, admitExecution) {
+   return deepFreeze({
+     operationId: request.operationId,
+     transitionIdentity: request.transitionIdentity,
+@@ -149,6 +149,9 @@
+     expectedConfigurationKey: stamp.configurationKey,
+     expectedMembershipGenerationIndex: stamp.membershipGenerationIndex,
+     targetStatusObservation,
++    // Host-only lifetime predicate. It is never encoded into the replicated
++    // ConfChange context and must be checked inside the queued native turn.
++    admitExecution,
+     change: deepFreeze({transition: 0, changes: [deepFreeze({
+       changeType: committedMembershipChangeType(request.stage), nodeId: peerId,
+     })], context: encodeCommittedMembershipContext({
+@@ -162,7 +165,7 @@
+   });
+ }
+ 
+-function normalizeMembershipTransition(request, registry) {
++function normalizeMembershipTransition(request, registry, admitExecution) {
+   const stamp = request?.leaderConfigurationStamp;
+   const stageOrdinal = stageOrdinalFor(request?.stage);
+   if (!validMembershipTransitionRequest(request, stamp, stageOrdinal)) {
+@@ -178,7 +181,7 @@
+     return target;
+   }
+   return {command: transitionCommand(
+-    request, stamp, stageOrdinal, peerId, target.observation)};
++    request, stamp, stageOrdinal, peerId, target.observation, admitExecution)};
+ }
+ 
+ function transitionFenceKey(command) {
+diff --git a/src/raft/raft-rs-operation-port.js b/src/raft/raft-rs-operation-port.js
+--- a/src/raft/raft-rs-operation-port.js
++++ b/src/raft/raft-rs-operation-port.js
+@@ -357,9 +357,9 @@
+         answered :
+         committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
+     },
+-    [RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]: (request) =>
++    [RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]: (request, admitExecution) =>
+       protocolTurn(() => {
+-        const normalized = normalizeMembershipTransition(request, registry);
++        const normalized = normalizeMembershipTransition(request, registry, admitExecution);
+         return normalized.refusal ?? dispatcher.execute({
+           type: RUNTIME_COMMAND.PROPOSE_MEMBERSHIP_TRANSITION,
+           transition: normalized.command,
