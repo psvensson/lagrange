@@ -18,7 +18,8 @@ import {observeMessageGroupLearnerAuthorization} from
 import {claimMessageGroupMembershipOwner, settleMessageGroupMembershipNonAdmission} from
   './replica-operation-message-group-membership-owner-claim.js';
 import {v4 as uuidv4} from 'uuid';
-import {selectMessageGroupMembershipBranch, authorizeMessageGroupLearner} from
+import {selectMessageGroupMembershipBranch, authorizeMessageGroupLearner,
+  recordMessageGroupLearnerOutcome} from
   './replica-operation-message-group-membership-authorization.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
@@ -597,6 +598,10 @@ class ReplicaOperationRepository {
     return authorizeMessageGroupLearner(this, request);
   }
   /** Select a durable membership branch; never directly dispatches Raft. */
+  recordMessageGroupLearnerOutcome(request, readCommittedLearner) {
+    return recordMessageGroupLearnerOutcome(this, request, readCommittedLearner);
+  }
+
   selectMessageGroupMembershipBranch(request) {
     return selectMessageGroupMembershipBranch(this, request);
   }
