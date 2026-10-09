@@ -4,7 +4,7 @@ s=p.read_text()
 a="const result = (outcome, operation = null) => Object.freeze({outcome, operation});"
 assert s.count(a)==1
 s=s.replace(a,a+"\nconst MEMBERSHIP_SETTLEMENT_SQL = Object.freeze({\n  NONTERMINAL: 'completed_at IS NULL', TERMINAL: 'completed_at = ?',\n});",1)
-s=s.replace("{sql: 'completed_at IS NULL', params: []}","{sql: MEMBERSHIP_SETTLEMENT_SQL.NONTERMINAL, params: []}")
+s=s.replace("return row.completedAt === null ? {sql: 'completed_at IS NULL', params: []} : null;", "return row.completedAt === null ?\n      {sql: MEMBERSHIP_SETTLEMENT_SQL.NONTERMINAL, params: []} : null;")
 s=s.replace("{sql: 'completed_at = ?', params: [row.completedAt]}","{sql: MEMBERSHIP_SETTLEMENT_SQL.TERMINAL, params: [row.completedAt]}")
 a=s.index('async function acquireLearnerCommitEvidence(')
 b=s.index('function learnerRecordIdentityMatches(',a)
@@ -29,8 +29,8 @@ async function acquireLearnerCommitEvidence(input, readMembership) {
     if (stamp === null) return {outcome: OUTCOME.UNAVAILABLE};
     return stampSupportsLearner(stamp, historical.origin, input.decodedIdentity) ?
       {outcome: OUTCOME.RECORDED,
-        permit: committedLearnerPermit(input, historical.origin.index), stamp: JSON.stringify(stamp)} :
-      {outcome: OUTCOME.CONFLICT};
+        permit: committedLearnerPermit(input, historical.origin.index),
+        stamp: JSON.stringify(stamp)} : {outcome: OUTCOME.CONFLICT};
   } catch {
     return {outcome: OUTCOME.UNAVAILABLE};
   }
