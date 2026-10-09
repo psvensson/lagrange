@@ -17,6 +17,9 @@ if sys.argv[1] == 'tests':
     replace_once('test/integration/message-group-membership-claim-cache.integration.test.js',
         'message_group_learner_stamp: JSON.stringify(learnerStamp)};',
         'message_group_learner_stamp: JSON.stringify(committedStampOfAnswer(learnerStamp))};')
+    replace_once('test/integration/message-group-learner-runtime-authorization.integration.test.js',
+        "      assert.equal((await recordOutcome(f)).outcome, 'unknown');\n      assert.equal(f.row().message_group_membership_lane_key, `message-group:${GROUP}`);",
+        "      assert.equal((await recordOutcome(f)).outcome, 'unknown',\n        'unavailable authoritative readback must not report recording');\n      assert.equal(f.row().message_group_membership_lane_key, `message-group:${GROUP}`);")
 elif sys.argv[1] == 'source':
     replace_once(module,
         'const origin = decodeCommittedLearnerAdmission(encodeCommittedLearnerAdmission(observed.receipt));',
@@ -62,8 +65,9 @@ function learnerOutcomeEvidence(observed, input, query) {''')
   EXACT_TERMINAL: 'completed_at = ?',
 });
 function branchSettlementGuard(repository, row, spec) {''')
-    replace_once(module, "{sql: 'completed_at IS NULL', params: []}",
-        '{sql: MEMBERSHIP_SETTLEMENT_PREDICATE.OPEN, params: []}')
+    replace_once(module, "return row.completedAt === null ? {sql: 'completed_at IS NULL', params: []} : null;",
+        '''return row.completedAt === null ?
+      {sql: MEMBERSHIP_SETTLEMENT_PREDICATE.OPEN, params: []} : null;''')
     replace_once(module, "{sql: 'completed_at = ?', params: [row.completedAt]}",
         '{sql: MEMBERSHIP_SETTLEMENT_PREDICATE.EXACT_TERMINAL, params: [row.completedAt]}')
 else:
