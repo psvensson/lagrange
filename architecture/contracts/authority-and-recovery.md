@@ -117,3 +117,32 @@ The current bounded execution plan belongs to
 its [contract-first plan](../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md).
 Broader reorganization remains with core-architecture-convergence and its
 activation gate. This contract is not implementation or certification proof.
+
+## Safety-first operator mandate - 2026-10-09
+
+The operator prioritizes a stable, non-corrupting system, accepts slower recovery
+in edge cases, and delegates changes to process and design rules within that
+constraint. Correctness, acknowledged obligations, and recoverability come first;
+healthy-path latency, throughput, and resource cost are optimized within them.
+Explicit temporary unavailability is preferable to invented success or unsafe
+progress. Recovery must eventually resume when its stated prerequisites return;
+fail-closed without an owned continuation is not completion.
+
+Use the existing owners and keep the healthy path small. Distinguish recording
+an immutable committed fact from granting permission for a future effect. Leases
+schedule and fence new work; their expiry does not erase already committed facts
+or by itself settle the outcome of a submitted operation. Every new irreversible
+effect retains its own authoritative ordering, exact identity, and recovery rule.
+
+Procedural quotas, incidental implementation choices, and performance thresholds
+may be changed through an explicit, evidence-based owner decision. Safety checks,
+coverage, uncertainty, and failed evidence must not be concealed by that change.
+Numeric limits currently in force remain in force until their individual revision
+is recorded; this mandate does not mass-relax tests or count an overrun as a pass.
+Keep safety verdicts distinct from recovery-progress and performance verdicts.
+
+The bounded learner-recording supersession and replacement proof obligations are
+owned by the existing FreshMG Quest's
+[safety-first ruling](../../solve/quests/message-group-fresh-identity-membership/safety-first-ruling-20261009.md).
+This mandate grants design judgment, not independent source approval, a merge,
+a release, or a claim of correctness under every possible hardware failure.

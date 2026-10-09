@@ -35,6 +35,9 @@ import {
   buildMessageGroupCreateFailureOptions,
 } from './message-group-create-activation.js';
 
+import {readMessageGroupLearnerAtRecipient} from
+  './message-group-membership-recipient.js';
+
 function isFunction(value) {
   return typeof value === 'function';
 }
@@ -86,6 +89,7 @@ class MessageGroupServiceHandler extends EventEmitter {
       });
     this.messageRouter = options.messageRouter || null;
     this.rpcClient = null;
+    this.registeredRouterHandler = null;
 
     // Executor outcome emitter — replaces direct replica_operations writes.
     this.executorOutcomeEmitter = options.executorOutcomeEmitter || null;
@@ -133,7 +137,7 @@ class MessageGroupServiceHandler extends EventEmitter {
     }
   }
 
-  async handleMessage(envelope) {
+  async handleMessage(envelope, delivery) {
     const {payload, correlationId} = envelope;
     const type = payload?.[ReplicaOperationField.TYPE];
 
@@ -143,7 +147,9 @@ class MessageGroupServiceHandler extends EventEmitter {
     );
 
     let response;
-    if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
+    if (type === ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP) {
+      response = await readMessageGroupLearnerAtRecipient(this, payload, delivery);
+    } else if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
       response = await this.handleCreateReplica(payload);
     } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
       response = await this.handleRemoveReplica(payload);
@@ -605,8 +611,8 @@ class MessageGroupServiceHandler extends EventEmitter {
       this.rpcClient = options.rpcClient;
     }
 
-    const routerHandler = async (envelope) => {
-      const response = await this.handleMessage(envelope);
+    const routerHandler = async (envelope, delivery) => {
+      const response = await this.handleMessage(envelope, delivery);
       if (this.rpcClient && response.correlationId) {
         this.rpcClient.handleResponse(
           response.correlationId,
@@ -616,6 +622,7 @@ class MessageGroupServiceHandler extends EventEmitter {
       return {acknowledged: true, ...response};
     };
 
+    this.registeredRouterHandler = routerHandler;
     messageRouter.register(handlerAddress, routerHandler);
 
     this.logger.info(
@@ -625,6 +632,7 @@ class MessageGroupServiceHandler extends EventEmitter {
   }
 
   unregisterFromRouter(messageRouter) {
+    this.registeredRouterHandler = null;
     if (!messageRouter) {
       return;
     }
@@ -645,6 +653,7 @@ class MessageGroupServiceHandler extends EventEmitter {
   }
 
   shutdown() {
+    this.registeredRouterHandler = null;
     this.logger.info(
       MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.SHUTTING_DOWN,
       {nodeId: this.nodeId},
