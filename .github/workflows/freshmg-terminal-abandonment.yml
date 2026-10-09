@@ -16,15 +16,15 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Bind independent review to measured native-origin and checkpoint bytes
+      - name: Bind independent review to exact recovered-outcome recording bytes
         shell: bash
         run: |
           set -euo pipefail
-          expected=f5a06f643a8f389ea545e5673758cca249674fa9
-          actual="$(gh pr view 111 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
+          expected=85711505b502950ddfd095e108d31df237fb7464
+          actual="$(gh pr view 113 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
           printf 'expected=%s\nactual=%s\n' "$expected" "$actual"
           test "$actual" = "$expected"
-          gh pr comment 111 --repo psvensson/lagrange --body 'Independent adversarial review requested on exact head f5a06f643a8f389ea545e5673758cca249674fa9, measured source 6255634c71fa6c6c116e8e70252ef11f927f564f. Read evidence/learner-origin-20261009-review.md under the existing FreshMG Quest. Review exact original action provenance stored in the existing peer-identity row within the actual ConfState/applied transaction; conflicting origins, corrupt values, queued semantic outcome reads, group/action/index/term binding, same-file and shared-runtime reconstruction, checkpoint version-2 descriptor/payload equality, and old-image refusal. Actions 37918656129 passed seven files/263 reported assertions within unchanged budgets, strict scoped metrics/semantic counts and two exact-assertion mutation controls. Prior failed attempts retained. Rollback recovery uses the existing virtual clock and the actual owner retryAfterMs, not altered native timing. Checkpoint creation/scrubbing/payload validation is measured, NOT a complete native-origin target install/reopen. Missing origin grants no negative proof or successor attempt; no repository stamp update, CREATE/driver activation, global boot revocation, physical/GCP acceptance or main merge. PR110 generic recovery package remains a separate unmerged source. No author-issued independent approval or final gate relaxation is claimed.'
-          gh pr edit 111 --repo psvensson/lagrange --add-reviewer @copilot
-          gh pr view 111 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
-          echo 'Requested exact-head independent review; request success is not approval. Main and all preservation refs remain unchanged.' >> "$GITHUB_STEP_SUMMARY"
+          gh pr comment 113 --repo psvensson/lagrange --body 'Independent category-complete adversarial review requested on exact head 85711505b502950ddfd095e108d31df237fb7464; measured source 292a2c6579542536d993eff8b876a34ec4783a80. Read evidence/learner-recording-20261009-review.md and architecture/contracts/message-group-learner-outcome-recording.md. Review actual same-turn native origin/witness, original action and old-term binding, final authoritative row and exact CAS, holder/terminal interleavings, UNKNOWN/readback and no-effect replay, ordinary-terminal membership debt, host-bound callback versus wire permission, and test fidelity. Normal-driver run37943949068: eight files/284 reported assertions within unchanged budgets; three exact-assertion mutations detect wrong-action borrowing, old-holder CAS overwrite and false success on unavailable readback. Source restored and artifacts hash-verified. Native/operation databases reopen in one process, NOT SIGKILL. Separate SQL/Raft/CDC visibility test has explicitly supplied native evidence, not a single full distributed proof. Cross-node takeover and terminal-in-CAS remain follow-up controls. No full driver, current CREATE, ordered successor issuance, global metadata revocation, physical GCP/lab acceptance, main merge or final compatibility proof. Native action history is not current execution permission. Inherited complexity and full-lab/timing gates remain; do not infer source correctness from bounded greens or request more rereads as cross-group atomicity. Reuse the existing owners and identify any concrete first violation.'
+          gh pr edit 113 --repo psvensson/lagrange --add-reviewer @copilot
+          gh pr view 113 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
+          echo 'Exact-head independent review requested. This successful request is not source approval; main and preserved refs remain unchanged.' >> "$GITHUB_STEP_SUMMARY"
