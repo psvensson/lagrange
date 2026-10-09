@@ -1,0 +1,56 @@
+diff --git a/test/integration/message-group-learner-runtime-authorization.integration.test.js b/test/integration/message-group-learner-runtime-authorization.integration.test.js
+--- a/test/integration/message-group-learner-runtime-authorization.integration.test.js
++++ b/test/integration/message-group-learner-runtime-authorization.integration.test.js
+@@ -600,7 +600,9 @@
+         const old = f.port;
+         const oldLifecycle = old.readStatus().lifecycleIncarnation;
+         f.cluster.restart(f.leader);
+-        assert.notEqual(f.cluster.node(f.leader).readStatus().lifecycleIncarnation, oldLifecycle);
++        assert.notEqual(f.cluster.node(f.leader), old, 'restart must construct another port');
++        assert.equal(f.cluster.node(f.leader).readStatus().lifecycleIncarnation, oldLifecycle,
++          'intact reopen retains the same durable replica incarnation');
+         const before = f.proposalCount();
+         assertExactLearnerOrigin(f, await readLearnerAction(f), proposed.proposalIndex);
+         assert.equal(f.proposalCount(), before,
+@@ -619,11 +621,13 @@
+         const f = await fixture(t);
+         const proposed = await f.run();
+         assertCommittedLearner(f, proposed);
+-        const successor = FOUNDERS.find((id) => id !== f.leader);
++        const survivors = FOUNDERS.filter((id) => id !== f.leader);
+         const oldTerm = f.port.readStatus().term;
+-        f.cluster.isolate(f.leader); f.cluster.tickers = [successor];
+-        assert.ok(f.cluster.settle(() => f.cluster.node(successor).readStatus().role === 'leader'),
+-          'an actual surviving voter must become leader');
++        f.cluster.isolate(f.leader); f.cluster.tickers = survivors;
++        assert.ok(f.cluster.settle(() => survivors.some((id) =>
++          f.cluster.node(id).readStatus().role === 'leader')),
++        'an actual surviving voter must become leader');
++        const successor = survivors.find((id) => f.cluster.node(id).readStatus().role === 'leader');
+         assert.ok(f.cluster.node(successor).readStatus().term > oldTerm);
+         const before = f.proposalCount();
+         assertExactLearnerOrigin(f, await readLearnerAction(f, successor), proposed.proposalIndex);
+@@ -651,7 +655,11 @@
+       async (t) => {
+         const f = await fixture(t);
+         const db = f.cluster.replica(f.leader).db;
+-        const before = f.port.readStatus().appliedIndex;
++        assert.ok(f.cluster.settle(() => FOUNDERS.every((id) =>
++          f.cluster.node(id).readStatus().appliedIndex > 0)),
++        'the leader no-op must commit before isolating the tested transaction');
++        const before = db.prepare('SELECT * FROM _raft_rs_applied_state WHERE group_id = ?')
++          .get(GROUP);
+         db.exec(`CREATE TRIGGER fail_origin_apply BEFORE UPDATE ON _raft_rs_applied_state
+           WHEN EXISTS (SELECT 1 FROM raft_rs_peer_identity WHERE learner_admission IS NOT NULL)
+           BEGIN SELECT RAISE(ABORT, 'origin apply rollback witness'); END`);
+@@ -663,8 +671,8 @@
+           'WHERE replica_identity = ?').get(TARGET);
+         assert.equal(origin?.learner_admission ?? null, null,
+           'failed applied-state transaction must not leave a positive origin');
+-        assert.equal(Number(db.prepare('SELECT applied_index FROM _raft_rs_applied_state ' +
+-          'WHERE group_id = ?').get(GROUP).applied_index), before);
++        assert.deepEqual(db.prepare('SELECT * FROM _raft_rs_applied_state WHERE group_id = ?')
++          .get(GROUP), before, 'the complete durable applied row must roll back with the origin');
+         db.exec('DROP TRIGGER fail_origin_apply');
+         assert.ok(f.cluster.settle(() => FOUNDERS.every((id) =>
+           f.cluster.node(id).readStatus().confState?.learners
