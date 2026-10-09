@@ -9,8 +9,8 @@ cp "$ops/finish.py" "$CARRIER/finish.py"
 cp "$ops/engagement-v2.py" "$CARRIER/engagement-v2.py"
 cp "$ops/continue.sh" "$CARRIER/continue.sh"
 if [ "$1" = measure ]; then
-  gh api repos/psvensson/lagrange/actions/artifacts/11632555578/zip > "$out/sixth-37962091585.zip"
-  echo "79f795512912a0c68f0e7bdc73fb5bc72afe527824862239dfff5428acbb9e3e  $out/sixth-37962091585.zip" | sha256sum -c -
+  gh api repos/psvensson/lagrange/actions/artifacts/11632826651/zip > "$out/seventh-37963014548.zip"
+  echo "693383639ce704679240b18fa74147238266793c5febf2e63bfa0b1703af8050  $out/seventh-37963014548.zip" | sha256sum -c -
   python3 "$CARRIER/finish.py" tools
 fi
 python3 - <<'PY'
