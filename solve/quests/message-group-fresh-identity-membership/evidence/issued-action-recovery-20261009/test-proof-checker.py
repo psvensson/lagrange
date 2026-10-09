@@ -38,7 +38,7 @@ class ProofCheckerTests(unittest.TestCase):
         old = '    const window = durableActionWindow(record);'
         self.assertEqual(self.original.decode().count(old), 1)
         changed = self.original.decode().replace(old,
-            "    if (record?.hardState?.term === '2') throw new Error('unrelated term refusal');\n" + old)
+            "    if (Number(record?.hardState?.term) > 1) throw new Error('unrelated term refusal');\n" + old)
         row, stdout = diag.execute(ROOT, OUTPUT, 'wrong-attribution', self.command,
                                    self.source, self.original, changed.encode())
         events = diag.parse_events(stdout)
@@ -48,6 +48,8 @@ class ProofCheckerTests(unittest.TestCase):
         self.assertEqual(target[0]['type'], 'test:pass')
         self.assertEqual(row['exit'], 1)
         self.assertEqual(sum(e['type'] == 'test:fail' for e in events), 2)
+        self.assertEqual({e['name'] for e in events if e['type'] == 'test:fail'},
+                         set(diag.EXPECTED_TESTS[1:3]))
         with self.assertRaisesRegex(AssertionError, 'required test did not fail'):
             diag.accept_measurement(row, events, ROOT / diag.TEST,
                 (diag.EXPECTED_TESTS[4], 'malformed durable evidence must not yield a receipt'))

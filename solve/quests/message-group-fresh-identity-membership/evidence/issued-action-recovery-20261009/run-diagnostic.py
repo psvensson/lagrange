@@ -9,6 +9,8 @@ import argparse
 from collections import Counter
 import hashlib
 import json
+import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -94,31 +96,61 @@ def accept_measurement(row: dict, events: list[dict], expected_file: Path,
 def execute(root: Path, output: Path, name: str, command: list[str],
             source: Path, original: bytes, changed: bytes | None = None,
             timeout: float = 30) -> tuple[dict, str]:
-    """Always retain a timeout's captured streams and restore original source."""
+    """Own the worker group until streams are drained, before restoring source.
+
+    The diagnostic runs on POSIX workers. Ordinary Node test descendants inherit
+    this private process group; deliberately detached hostile children are not
+    part of its trust model. A cleanup failure stops the measurement campaign.
+    """
+    if os.name != 'posix':
+        raise RuntimeError('diagnostic process-group ownership requires POSIX')
     assert source.read_bytes() == original, 'source changed outside this measurement'
     started = time.perf_counter()
     stdout = stderr = ''
-    row = {'name': name, 'command': command, 'exit': None, 'timedOut': False}
+    process = None
+    row = {'name': name, 'command': command, 'exit': None, 'timedOut': False,
+           'cleanupComplete': False}
     try:
         if changed is not None:
             source.write_bytes(changed)
         row['sourceSha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        process = subprocess.Popen(command, cwd=root, text=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   start_new_session=True)
+        row['processGroupId'] = process.pid
         try:
-            result = subprocess.run(command, cwd=root, text=True, capture_output=True,
-                                    timeout=timeout)
-            stdout, stderr = result.stdout, result.stderr
-            row['exit'] = result.returncode
+            stdout, stderr = process.communicate(timeout=timeout)
+            row['exit'] = process.returncode
         except subprocess.TimeoutExpired as error:
             stdout, stderr = text(error.stdout), text(error.stderr)
             row['timedOut'] = True
-        row['wallMs'] = round((time.perf_counter() - started) * 1000, 3)
-        (output / (name + '.stdout.txt')).write_text(stdout)
-        (output / (name + '.stderr.txt')).write_text(stderr)
-        (output / (name + '.result.json')).write_text(json.dumps(row, indent=2) + '\n')
+        finally:
+            # Kill this measurement's group even if its leader exited first.
+            # Never target the caller's group, another test, or a guessed PID.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                stdout, stderr = process.communicate(timeout=5)
+                row['exit'] = process.returncode
+                row['cleanupComplete'] = True
+            except subprocess.TimeoutExpired as error:
+                stdout, stderr = text(error.stdout), text(error.stderr)
+                row['cleanupError'] = 'owned process streams did not close after group termination'
+                process.stdout.close()
+                process.stderr.close()
+                process.wait(timeout=5)
+                raise RuntimeError(row['cleanupError']) from error
         return row, stdout
     finally:
-        source.write_bytes(original)
-
+        row['wallMs'] = round((time.perf_counter() - started) * 1000, 3)
+        try:
+            (output / (name + '.stdout.txt')).write_text(stdout)
+            (output / (name + '.stderr.txt')).write_text(stderr)
+            (output / (name + '.result.json')).write_text(json.dumps(row, indent=2) + '\n')
+        finally:
+            source.write_bytes(original)
 
 def measure(root: Path, output: Path, name: str, command: list[str], source: Path,
             original: bytes, changed: bytes | None = None,

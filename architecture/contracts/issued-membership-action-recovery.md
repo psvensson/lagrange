@@ -97,14 +97,20 @@ DeterministicRaftRsCluster/raw Ready helpers and RaftRsDurableStore. Native
 messages, elections, configuration application, log replacement and handle
 reconstruction are real. Scheduling/dropped replies are explicit fixture work.
 
-Local execution substitutes node:sqlite for better-sqlite3 through the clearly
-named diagnostic adapter. The raw Ready helper is the repository's historical
-low-level test driver, NOT the production operation-port/runtime Ready loop.
-The evidence therefore does not establish production persistence ordering,
-client reply handling, physical restart, power-loss safety, or distributed
-SQL/CDC. Snapshot-cut tests intentionally project record views; they do not
-install or compact a real snapshot. Canonical dependency/runner and GCP proof
-remain required. No normal gate result is inferred from this diagnostic.
+The original local diagnostic substituted node:sqlite for better-sqlite3.
+Subsequent Actions 37904808160 and 37905655755 ran the 22 recovery/storage cases
+with the locked normal better-sqlite3 dependency and classified runner; all
+three files met their existing 2000-ms limits. The five codec and seven storage
+mutations also ran with the normal driver in 37904808160. The separate checker
+self-tests still use the explicitly named diagnostic adapter.
+
+The raw Ready helper remains the historical low-level test driver, NOT the
+production operation-port/runtime Ready loop. Normal-driver component evidence
+does not establish production persistence ordering, client response handling,
+physical restart, power-loss safety, or distributed SQL/CDC. Snapshot-cut tests
+project record views rather than installing or compacting an actual snapshot.
+Complete runtime, change-impact/static and physical Actions/GCP acceptance
+remain required; the earlier local diagnostic is not relabeled canonical.
 
 ## Corrective boundary — 2026-10-09
 
@@ -158,7 +164,18 @@ not an abrupt process crash or power-loss proof.
 A second-connection test commits between the store's record SELECTs and proves
 that this read remains on its original snapshot; the next read sees the new
 commit. Other tests corrupt real fixture tables, rather than relying solely on
-projected arbitrary records. Local runs still use the explicit node:sqlite
-adapter; its open and transaction flags now come from SQLite itself. Normal
-better-sqlite3, actual runtime/Ready, process loss, native snapshot installation,
-and the full source/gateway gates remain required.
+projected arbitrary records. The original local node:sqlite adapter obtains
+its open and transaction flags from SQLite itself. The later normal-driver
+coverage is recorded above. Actual runtime/Ready, process loss, native snapshot
+installation, and full source/gateway gates remain required.
+
+### Diagnostic subprocess lifetime
+
+The POSIX diagnostic owns one private process group per measurement, including
+ordinary Node test descendants. It terminates that group even when the initial
+process exits first, drains retained output and reaps its direct child before
+restoring temporarily changed source. Timeout remains failed evidence, never
+a mutation success. Cleanup failures stop the campaign. No caller/lab process
+group is targeted, and this is not containment of deliberately detached hostile
+processes. The worker-lifetime witness verifies real child/grandchild engagement
+and refusal to leave them runnable after both timeout and normal parent exit.
