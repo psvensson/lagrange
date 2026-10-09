@@ -1,0 +1,82 @@
+{
+  "reviewedHead": "8ece20f70392314ceba49e4e787b800bc14d07d6",
+  "proofCeiling": "Real policy functions; supplied row/boot reads, supplied native status/proposal/drain. No SQL commit, real Raft, socket or production deadlock proof.",
+  "policyControlsPassed": true,
+  "exactReplay": "recorded",
+  "replacingOnlyLeaderTerm": "conflict",
+  "incrementingPermitSequence": "invalid",
+  "mutationAttempts": 0,
+  "normal": {
+    "result": {
+      "outcome": "CORE_OK",
+      "reason": "membership-transition-proposed",
+      "proposalIndex": 11
+    },
+    "proposals": 1
+  },
+  "oldTerm": {
+    "result": {
+      "outcome": "CORE_REFUSED",
+      "reason": "membership-transition-stale-leadership",
+      "phase": "membership-transition-admission",
+      "retryable": false,
+      "recoveryRequired": false
+    },
+    "proposals": 0
+  },
+  "oldRuntime": {
+    "result": {
+      "outcome": "CORE_REFUSED",
+      "reason": "membership-transition-stale-runtime",
+      "phase": "membership-transition-admission",
+      "retryable": false,
+      "recoveryRequired": false
+    },
+    "proposals": 0
+  },
+  "deadDelivery": {
+    "result": {
+      "outcome": "CORE_REFUSED",
+      "reason": "membership-delivery-stale",
+      "phase": "membership-transition-admission",
+      "retryable": true,
+      "recoveryRequired": false
+    },
+    "proposals": 0
+  },
+  "throwingDelivery": {
+    "result": {
+      "outcome": "CORE_REFUSED",
+      "reason": "membership-delivery-stale",
+      "phase": "membership-transition-admission",
+      "retryable": true,
+      "recoveryRequired": false
+    },
+    "proposals": 0
+  },
+  "roleOnlyAnswerNotActionSpecific": {
+    "original": {
+      "result": {
+        "outcome": "CORE_OK",
+        "reason": "membership-transition-already-learner",
+        "role": "learner"
+      },
+      "proposals": 0
+    },
+    "differentAction": {
+      "result": {
+        "outcome": "CORE_OK",
+        "reason": "membership-transition-already-learner",
+        "role": "learner"
+      },
+      "proposals": 0
+    }
+  },
+  "sourceSha256": {
+    "src/rebalancer/replica-operation-message-group-membership-authorization.js": "93f5e80aed244be5e1f9390302bc281e77440c0307c717d089f7f3d90b24d32f",
+    "src/rebalancer/replica-operation-message-group-membership-owner-claim.js": "dab58ab6f2863fee30f7d9c168fae612489be3e5179766b8e34d94a6f9022f40",
+    "src/rebalancer/replica-operation-message-group-membership-permit.js": "af91bfdeb3aef41bb0870e20ca4f1522102c9316efb364809d7cbdfc6a8963d8",
+    "src/raft/raft-rs-membership-transition-runtime.js": "4f18719c50e631f3bdf9bdfc408dc46b098aa15f538ec4f1cb78c56fdfbe0744",
+    "src/raft/raft-rs-membership-transition.js": "53001222dda022142795682b82cabe701b1310a57ae2e7ad976ea041af0e5a15"
+  }
+}
