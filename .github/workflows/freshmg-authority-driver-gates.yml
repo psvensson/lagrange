@@ -1,0 +1,99 @@
+name: freshmg-authority-submission-prerequisites
+on:
+  push:
+    branches: [ops/freshmg-authority-driver-gates-20261009]
+    paths: [.github/workflows/freshmg-authority-driver-gates.yml]
+permissions:
+  contents: read
+concurrency:
+  group: freshmg-authority-submission-20261009
+  cancel-in-progress: false
+env:
+  EXPECTED: d3d947f2d98ca9ea03f1cae91403ff551ee4d18d
+  WORK_BRANCH: work/freshmg-authority-driver-gates-20261009
+  QUEST: message-group-fresh-identity-membership
+  LAGRANGE_LANE_JOBS_CAP: '1'
+jobs:
+  owner-submission-prerequisites:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          path: carrier-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.EXPECTED }}
+          path: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Obtain pinned proof helpers and explicit readable inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "import {refuseUnderProbe} from './src/test-helpers/probe-guard.js'; refuseUnderProbe('authority carrier preparation');"
+          export CARRIER="$GITHUB_WORKSPACE/authority-carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$CARRIER" "$GITHUB_WORKSPACE/authority-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          source="$GITHUB_WORKSPACE/carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/authority-submission-20261009"
+          for f in apply-source.py apply-tests.py tests-additions.js tools.py contract.md run.sh; do cp "$source/$f" "$CARRIER/$f"; done
+          gh api repos/psvensson/lagrange/actions/artifacts/11631813259/zip > "$GITHUB_WORKSPACE/authority-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/prior-registered.zip"
+          echo "8340d6508677080d32210fee946d66bec57cbbb79dbdca150e5218cf1b02dc0d  $GITHUB_WORKSPACE/authority-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/prior-registered.zip" | sha256sum -c -
+          python3 - <<'PY'
+          import os,zipfile,hashlib,json
+          from pathlib import Path
+          workspace=Path(os.environ['GITHUB_WORKSPACE'])
+          out=workspace/('authority-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT'])
+          target=Path(os.environ['CARRIER'])
+          with zipfile.ZipFile(out/'prior-registered.zip') as z:
+            for name in ['owned-process.py','report-diagnostic.mjs']:
+              data=z.read('final-carrier/'+name)
+              (target/name).write_bytes(data)
+          hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in target.iterdir() if p.is_file()}
+          (out/'carrier-sha256.json').write_text(json.dumps(hashes,indent=2)+'\n')
+          print('Explicit readable carrier only; failed opaque payload is not executed.')
+          PY
+          echo "CARRIER=$CARRIER" >> "$GITHUB_ENV"
+      - name: Measure exact source and real retained owner-lane submissions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash "$CARRIER/run.sh" measure
+      - name: Preserve bounded candidate with expected-head non-force Git push
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash "$CARRIER/run.sh" publish
+      - name: Retain failure evidence and candidate bytes
+        if: always()
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/authority-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          git status --porcelain > "$out/archive-status.txt"
+          git diff --binary "$EXPECTED" > "$out/total-change.patch"
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"; fi
+          if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/archive-tap"; fi
+          if [ -n "${CARRIER:-}" ]; then cp -a "$CARRIER" "$out/executed-carrier"; fi
+          printf '%s\n' 'Normal hosted component proof, not atomic canonical-boot/lease commit authority, full driver/current CREATE or physical GCP acceptance. Those gates remain open.' > "$out/substrate.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: freshmg-authority-${{ github.run_id }}-${{ github.run_attempt }}
+          path: authority-${{ github.run_id }}-${{ github.run_attempt }}/
+          retention-days: 14
+          if-no-files-found: error
+      - name: State exact scope of this component result
+        if: always()
+        run: echo 'Submission-prerequisite result only. Full commit-authority, driver/CREATE, independent approval and cutover gates remain open.' >> "$GITHUB_STEP_SUMMARY"
