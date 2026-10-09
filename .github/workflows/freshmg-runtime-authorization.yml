@@ -13,12 +13,14 @@ env:
   WORK_BRANCH: work/freshmg-issued-action-recovery-20261009
   QUEST: message-group-fresh-identity-membership
   LAGRANGE_LANE_JOBS_CAP: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
 jobs:
   canonical-followup:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -39,7 +41,16 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Repair only observed formatting and measure all canonical obligations
+      - name: Keep the first followup failure and its uncommitted evidence intact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/issued-recovery-followup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          gh api repos/psvensson/lagrange/actions/artifacts/11603588192/zip > "$out/first-followup-37904141211.zip"
+          echo "20735486c2643ae95afd9d93e011e767466d0002caaa23f4da4293a5e5188542  $out/first-followup-37904141211.zip" | sha256sum -c -
+      - name: Correct the owned literal and measure normal-driver mutation evidence
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-canonical-followup.sh measure
       - name: Preserve exact WIP and canonical results by normal push
         env:
