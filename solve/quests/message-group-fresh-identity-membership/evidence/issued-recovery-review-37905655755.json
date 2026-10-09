@@ -1,0 +1,72 @@
+{
+  "schema": "issued-recovery-review-handoff/1",
+  "runId": "37905655755",
+  "baseSha": "06d9c931574288666dfd0c063411b0c72a6b84a1",
+  "testSha": "e5ff3dc782e819190b36f183a102100fd8f0291e",
+  "timings": {
+    "files": [
+      [
+        "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+        "5",
+        "260"
+      ],
+      [
+        "test/raft/raft-rs-backend/issued-action-record-read.test.js",
+        "9",
+        "536"
+      ],
+      [
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js",
+        "8",
+        "515"
+      ]
+    ],
+    "limitMs": 2000
+  },
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "d8d3c76c8c7a69c967385a9a71e0c6ba3cb4ca2ef6e7a3d711a01ad7b52529bc",
+      "bytes": 76786,
+      "asset": "message-group-fresh-identity-membership--issued-recovery-review-37905655755-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--issued-recovery-review-37905655755-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T08:34:59.198Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Register existing recovery owner interaction and rerun both named witnesses plus committed-reader regression on exact unchanged runtime. Preserve separate failed origin attempt without integration. No source approval, full-cone/static claim, main merge or distributed acceptance.",
+      "evidence": "sha256:d8d3c76c8c7a69c967385a9a71e0c6ba3cb4ca2ef6e7a3d711a01ad7b52529bc",
+      "asset": "message-group-fresh-identity-membership--issued-recovery-review-37905655755-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--issued-recovery-review-37905655755-1.zip",
+      "bytes": 76786
+    }
+  },
+  "preservedOrigin": {
+    "sourceSha": "dbcda7e02df05822089819a73aee9a0594edb604",
+    "branch": "handoff/freshmg-origin-attempt-37892536228",
+    "verdict": "FAILED_NOT_INTEGRATED",
+    "canonicalEvidence": {
+      "id": "message-group-fresh-identity-membership",
+      "uploaded": {
+        "sha256": "e7c5a64e0b49e6dd83f17aadec40f59babc27a1f783e79d0d8b104aa2ed5de7c",
+        "bytes": 66421,
+        "asset": "message-group-fresh-identity-membership--preserved-origin-attempt-37892536228.zip",
+        "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--preserved-origin-attempt-37892536228.zip"
+      },
+      "entry": {
+        "ts": "2026-10-09T08:34:56.386Z",
+        "type": "finding",
+        "kind": "evidence",
+        "text": "Preserve exact separate failed learner-origin attempt 37892536228: source dbcda7e02 over f258bade, failed 33-case production-port integration and remaining static findings. Candidate bundle published under handoff/freshmg-origin-attempt-37892536228, original source/ops branches unchanged. This is failed historical input, not adopted origin/checkpoint semantics or approval.",
+        "evidence": "sha256:e7c5a64e0b49e6dd83f17aadec40f59babc27a1f783e79d0d8b104aa2ed5de7c",
+        "asset": "message-group-fresh-identity-membership--preserved-origin-attempt-37892536228.zip",
+        "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--preserved-origin-attempt-37892536228.zip",
+        "bytes": 66421
+      }
+    }
+  },
+  "runtimeSourceChanged": false,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL"
+}
