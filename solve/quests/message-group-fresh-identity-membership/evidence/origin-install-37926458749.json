@@ -1,0 +1,87 @@
+{
+  "schema": "pr111-origin-install-proof/1",
+  "runId": 37926458749,
+  "baseSha": "c3f3c352b0f5497f5072137011cbbd73a00f32cd",
+  "sourceSha": "ab16161d511b9f8d04214c8b58b2b79a55172c11",
+  "timings": {
+    "consumer": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "37",
+          "5912"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "regressions": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "1652"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "807"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "1021"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "909"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "neighbors": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/raft/raft-rs-backend/committed-membership-read.test.js",
+          "5",
+          "991"
+        ],
+        [
+          "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+          "64",
+          "1000"
+        ]
+      ],
+      "withinBudget": true
+    }
+  },
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "652ad0ddf6632fb2ec56491e817ca4bb420933b85eb9f2bc79b021708417755f",
+      "bytes": 114290,
+      "asset": "message-group-fresh-identity-membership--origin-install-37926458749-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--origin-install-37926458749-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T11:54:33.382Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Actual native ADD origin -> scrubbed checkpoint -> exact file-backed CREATE admission and sole worker -> target install -> native open/reopen -> original historical action. Direct admission-less install and wrong-action reads refuse. Same-process normal-driver proof with fixture-driven SENDING, not complete workflow driver, physical network, global revocation or successor authorization. Canonical entity identity correction and prior failed attempts retained.",
+      "evidence": "sha256:652ad0ddf6632fb2ec56491e817ca4bb420933b85eb9f2bc79b021708417755f",
+      "asset": "message-group-fresh-identity-membership--origin-install-37926458749-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--origin-install-37926458749-1.zip",
+      "bytes": 114290
+    }
+  },
+  "runtimeSourceChanged": false,
+  "fullDriver": false,
+  "fixtureStagesSending": true,
+  "sameProcessNativeReopen": true,
+  "physicalAcceptance": false,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL"
+}
