@@ -16,15 +16,15 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Bind rereview to the exact paused-read correction and retained evidence
+      - name: Bind rereview to the measured delivery/native interaction
         shell: bash
         run: |
           set -euo pipefail
-          expected=5c1595e7ea46be54f7114657b2117571f14a5c16
+          expected=8ece20f70392314ceba49e4e787b800bc14d07d6
           actual="$(gh pr view 109 --repo psvensson/lagrange --json headRefOid --jq .headRefOid)"
           printf 'expected=%s\nactual=%s\n' "$expected" "$actual"
           test "$actual" = "$expected"
-          gh pr comment 109 --repo psvensson/lagrange --body 'R2 corrective response on exact head 5c1595e7ea46be54f7114657b2117571f14a5c16: see solve/quests/message-group-fresh-identity-membership/evidence/runtime-review-5460477132-response.md. Finding 4222118121 reproduced with actual repository renewal/success during the boot-read await; original source fails three specific assertions, correction passes, and source-only revert restores them. Failure-after-issue is retained as an explicit native-commit positive. Actions 37818495699: 20 integration plus 161 regression reported assertions within unchanged budgets, strict guards green, no new owner/state/lease/export. The final operation re-observation does NOT claim atomic authorization across independent groups or exclusion of all later changes/native queue races. Review the full issued-action/holder/recipient contract and stated fixture ceiling. The unchanged restart witness still exceeds 2 seconds; its measured history/native/durable cost profile is not a timing fix. Existing full lab FAIL and final cutover gates remain open. Updated PR metadata names this exact current head; no author-issued approval or main merge.'
+          gh pr comment 109 --repo psvensson/lagrange --body 'Independent category-complete rereview requested on 8ece20f70392314ceba49e4e787b800bc14d07d6. New source d9e87b2961993121d75df11d3a177d380ad790df binds the existing router-owned local/socket delivery lifetime through the existing semantic port into the native turn immediately before proposal. Actual in-process IDENTIFY/SERVICE_MESSAGE, same-boot replacement, shutdown/reinitialize, UNKNOWN and genuine queued Ready-send controls; nine files/294 reported assertions meet unchanged budgets. Three mutations prove native execution, socket identity and local-lifetime token checks. Read evidence/delivery-lifetime-20261009-review.md under the existing FreshMG Quest and architecture/contracts/message-group-learner-delivery-lifetime.md. This does NOT resolve the canonical node-row-only boot counterexample or global operation/boot atomicity. Refusal retains the durably issued action; generic privileged native callers keep their prior trust contract. Review authority/lifetime/queue/replay/terminal semantics and fixture fidelity without assuming either source correctness or complete activation. No CREATE, exact committed-action receipt, main merge, independent author approval, restart-duration clearance or full cutover is claimed. First unengaged queue attempt is retained, not counted as positive proof.'
           gh pr edit 109 --repo psvensson/lagrange --add-reviewer @copilot
           gh pr view 109 --repo psvensson/lagrange --json number,headRefOid,isDraft,reviewRequests
-          echo 'Category-complete independent rereview requested for R2 correction, retained-failure positive, native fences, non-atomic read ceiling and test fidelity. Restart-duration finding remains explicitly unresolved; no main/Quest/release approval.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Requested exact-head independent review; request success is not approval. Main and preservation refs remain unchanged.' >> "$GITHUB_STEP_SUMMARY"
