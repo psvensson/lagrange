@@ -1,0 +1,45 @@
+--- a/test/integration/message-group-learner-runtime-authorization.integration.test.js
++++ b/test/integration/message-group-learner-runtime-authorization.integration.test.js
+@@ -2,7 +2,8 @@
+  * Operation SQL uses a canonical file-backed fixture, NOT distributed SQL.
+  * Runtime transports are the existing in-process inbox harness. Sender/recipient
+  * bindings are host fixture inputs, NOT proof of MessageRouter authentication.
+- * No target files, CREATE, transfer, promotion, cleanup or full driver is exercised.
++ * The install case adds real CREATE-CAS and target-file/native reopen proof.
++ * Full driver, physical network, promotion and cleanup remain outside its scope.
+  */
+ import assert from 'node:assert/strict';
+ import fs from 'node:fs';
+@@ -211,7 +212,7 @@
+     db: f.cluster.replica(f.leader).db, raftRsGroupId: GROUP,
+     checkpointsRoot: path.join(f.cluster.directory, 'origin-checkpoints'),
+     identity: {clusterId: 'origin-cluster', raftGroupId: GROUP,
+-      entity: {kind: 'message-group', id: GROUP},
++      entity: {kind: SERVICE_TYPE.MESSAGE_GROUP, id: GROUP},
+       membershipEpoch: status.membershipGenerationIndex},
+   });
+   assert.equal(created.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED);
+@@ -888,7 +889,7 @@
+           {recursive: true});
+         const options = {replicaDbPath: targetDbPath, checkpointsRoot: receiverRoot,
+           generationIndex: generation, expectedIdentity: {clusterId: 'origin-cluster',
+-            raftGroupId: GROUP, entity: {kind: 'message-group', id: GROUP},
++            raftGroupId: GROUP, entity: {kind: SERVICE_TYPE.MESSAGE_GROUP, id: GROUP},
+             membershipEpoch: created.descriptor.membershipEpoch},
+           expectedReplicaIdentity: TARGET, expectedPeerId: deriveRaftRsPeerId(TARGET)};
+         const direct = await requestSnapshotInstall(options);
+@@ -898,11 +899,13 @@
+         const admission = await installationAdmission(t, f);
+         assert.equal(await admission.owner.claimPhysicalWorker(admission.evidence), false,
+           'a second physical worker must not be admitted for the same generation');
++        assert.equal(created.descriptor.entity.kind, admission.evidence.entityType,
++          'checkpoint identity must use the real operation entity-type owner');
+         const installed = await requestSnapshotInstall({...options,
+           createAdmissionOwner: admission.owner, createAdmissionEvidence: admission.evidence,
+           createPhysicalWorkerClaim: admission.worker});
+         assert.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+-          'the actual origin-bearing snapshot must install under exact CREATE admission');
++          `the actual origin-bearing snapshot must install: ${JSON.stringify(installed)}`);
+         const disk = new Database(targetDbPath, {readonly: true});
+         try {
+           assert.equal(disk.prepare('SELECT COUNT(*) AS n FROM _raft_rs_log').get().n, 0,
