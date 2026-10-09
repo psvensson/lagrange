@@ -597,11 +597,12 @@ class ReplicaOperationRepository {
   authorizeMessageGroupLearner(request) {
     return authorizeMessageGroupLearner(this, request);
   }
-  /** Select a durable membership branch; never directly dispatches Raft. */
+  /** Record an exact recovered learner fact; never dispatch membership work. */
   recordMessageGroupLearnerOutcome(request, readCommittedLearner) {
     return recordMessageGroupLearnerOutcome(this, request, readCommittedLearner);
   }
 
+  /** Select a durable membership branch; never directly dispatches Raft. */
   selectMessageGroupMembershipBranch(request) {
     return selectMessageGroupMembershipBranch(this, request);
   }

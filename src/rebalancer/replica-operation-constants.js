@@ -78,6 +78,8 @@ const ReplicaOperationField = Object.freeze({
   // answer of an earlier attempt is dropped.
   ATTEMPT_SEQ: 'attemptSeq',
   MEMBERSHIP: 'membership',
+  // Exact historical learner query; never a proposal or CREATE capability.
+  MEMBERSHIP_QUERY: 'membershipQuery',
   // In-memory only (never persisted): ReplicaOperationVisibilityClass.
   VISIBILITY_CLASS: 'visibilityClass',
   PROPOSAL: 'proposal',

@@ -428,6 +428,9 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
   return normalizedSnapshot;
 }
 
+import {recordMessageGroupLearnerFromRecipient} from
+  './operation-workflow-message-group-native-read.js';
+
 class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
   constructor(options) {
     super(options);
@@ -447,6 +450,13 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       createOperationWorkflowOwnerAdapter({
         ports: this.operationWorkflowOwnerPorts,
       });
+  }
+
+  /** Recover the exact issued learner through the registered native recipient.
+   * No ordinary workflow transition or CREATE permission follows from RECORDED.
+   */
+  recordMessageGroupLearnerOutcomeFromRecipient(request, recipient) {
+    return recordMessageGroupLearnerFromRecipient(this, request, recipient);
   }
 
   selectOperationWorkflowOwnerAdapterSnapshotOperation(

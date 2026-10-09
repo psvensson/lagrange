@@ -4,13 +4,14 @@
  */
 import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {ReplicaStatus} from './replica-status.js';
-import {committedStampOfAnswer} from '../raft/raft-committed-membership-stamp.js';
+import {committedStampOfAnswer, validateBootstrapMembershipStamp} from
+  '../raft/raft-committed-membership-stamp.js';
 import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../raft/raft-operation-port-constants.js';
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
 import {COMMITTED_LEARNER_ACTION_KIND as ACTION_KIND,
   COMMITTED_LEARNER_ACTION_REASON as ACTION_REASON,
   COMMITTED_MEMBERSHIP_READ_PURPOSE, COMMITTED_MEMBERSHIP_ANSWER_KIND,
-  COMMITTED_MEMBERSHIP_REFUSAL} from '../raft/raft-committed-membership-constants.js';
+  COMMITTED_MEMBERSHIP_REFUSAL, COMMITTED_MEMBERSHIP_STAMP_DEFECT as STAMP_DEFECT} from '../raft/raft-committed-membership-constants.js';
 import {encodeCommittedLearnerAdmission, decodeCommittedLearnerAdmission,
   INVALID_COMMITTED_LEARNER_ADMISSION} from '../raft/raft-rs-committed-membership-context.js';
 import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
@@ -306,6 +307,10 @@ function learnerObservationRefusal(observed) {
     null : OUTCOME.CONFLICT;
 }
 function learnerWitnessUnavailable(membership) {
+  if (membership?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED &&
+    validateBootstrapMembershipStamp(membership).defect === STAMP_DEFECT.JOINT) {
+    return true;
+  }
   return membership?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED &&
     [COMMITTED_MEMBERSHIP_REFUSAL.HELD,
       COMMITTED_MEMBERSHIP_REFUSAL.CONFIGURATION_GENERATION_UNAVAILABLE]
