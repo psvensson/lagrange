@@ -9,15 +9,15 @@ concurrency:
   group: issued-action-recovery-corrections-20261009
   cancel-in-progress: false
 env:
-  EXPECTED: 3a16c846a8d1c594288e07d53e7b09f69c1d010a
-  WORK_BRANCH: work/issued-action-recovery-corrections-20261009
+  EXPECTED: 2d26da1b99bf66ad9ffa92d274ea8b5c75b11eae
+  WORK_BRANCH: work/freshmg-issued-action-recovery-20261009
   QUEST: message-group-fresh-identity-membership
   LAGRANGE_LANE_JOBS_CAP: '1'
   PYTHONDONTWRITEBYTECODE: '1'
 jobs:
-  corrective-proof:
+  process-lifetime-review:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
     permissions:
       contents: write
     defaults:
@@ -40,33 +40,32 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Measure literal correction and actual audit outcomes with all adversaries
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/tighten.sh measure
-      - name: Retain previous proof and publish exact bounded corrective result
+      - name: Reproduce live descendants and prove owned-group cleanup
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/process-review/run.sh measure
+      - name: Preserve canonical evidence and normal expected-head push
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/tighten.sh publish
-      - name: Preserve all failed outcomes and recoverable work
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/process-review/run.sh publish
+      - name: Preserve every failure and recoverable candidate
         if: always()
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/issued-corrections-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$GITHUB_WORKSPACE/process-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          cp -a ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections "$out/carrier"
+          cp -a ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/process-review "$out/carrier"
           git diff --binary "$EXPECTED" > "$out/total-change.patch"
           git status --porcelain > "$out/archive-status.txt"
           if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then
             git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"
           fi
-          if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/tap"; fi
           if [ -f test-output/reports/test-results.ndjson ]; then
             cp test-output/reports/test-results.ndjson "$out/all-test-results.ndjson"
           fi
-          echo 'Canonical hosted component tests, not a physical GCP run, complete change cone, independent approval or release certification. Learner-origin branch and original lab FAIL remain untouched.' > "$out/proof-limits.txt"
+          echo 'Bounded hosted Linux process-lifetime and normal SQLite component proof. No runtime/ordinary-test mutation retained, main merge, independent approval or physical acceptance. Existing full lab FAIL and all remaining cutover gates stand.' > "$out/proof-limits.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: issued-action-corrections-${{ github.run_id }}-${{ github.run_attempt }}
-          path: issued-corrections-${{ github.run_id }}-${{ github.run_attempt }}/
+          name: issued-recovery-process-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: process-review-${{ github.run_id }}-${{ github.run_attempt }}/
           retention-days: 14
           if-no-files-found: error
