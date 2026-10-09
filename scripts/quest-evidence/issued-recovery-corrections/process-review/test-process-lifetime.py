@@ -50,7 +50,7 @@ def process_state(record):
     try:
         fields = Path('/proc', str(record['pid']), 'stat').read_text().split(') ', 1)[1].split()
         return fields[0] if fields[19] == record['start'] else None
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
         return None
 
 
