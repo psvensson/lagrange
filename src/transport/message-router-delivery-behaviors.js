@@ -129,7 +129,8 @@ export async function deliverLocal(
     timestamp: router.timeSource.now(),
   };
   try {
-    const result = await Promise.resolve(handler(envelope));
+    const delivery = router.connectionAuthorityOwner?.captureLocalDelivery() ?? null;
+    const result = await Promise.resolve(handler(envelope, delivery));
     return {
       result: {
         messageId,

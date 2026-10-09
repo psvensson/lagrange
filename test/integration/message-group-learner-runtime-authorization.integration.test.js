@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
+import {createServiceDeliveryFixture} from '../test-helpers/service-delivery-fixture.js';
 import Database from 'better-sqlite3';
 import * as admission from '../../src/raft/raft-rs-group-membership-admission.js';
 import * as portContract from '../../src/raft/raft-operation-port-constants.js';
@@ -126,8 +127,16 @@ async function fixture(t, {issue = true, permitChanges = {}} = {}) {
   const receiver = {groupId: GROUP, nodeId: NODE, bootIncarnation: 1,
     localReplicaIdentity: leader, senderNodeId: NODE, senderBootIncarnation: 1};
   const observe = repository.observeMessageGroupLearnerAuthorization.bind(repository);
+  const transport = await createServiceDeliveryFixture(t, NODE);
+  let delivery = await transport.local();
   return {cluster, port, leader, repository, repositoryFor, clock, execute, reads,
-    request, receiver, observe, db,
+    request, receiver, observe, db, transport,
+    get delivery() {
+      return delivery;
+    },
+    set delivery(value) {
+      delivery = value;
+    },
     row: () => db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?').get(O),
     failReads: (table) => {
       failedTable = table;
@@ -138,7 +147,7 @@ async function fixture(t, {issue = true, permitChanges = {}} = {}) {
     pauseNodes: (callback) => {
       beforeNodes = callback;
     },
-    run: () => admission.proposeAuthorizedGroupLearner(port, receiver, request, observe),
+    run: () => admission.proposeAuthorizedGroupLearner(port, receiver, request, observe, delivery),
     proposalCount: () => cluster.coreEntries.filter((entry) =>
       entry.operation === 'propose_conf_change_v2').length};
 }
@@ -244,11 +253,11 @@ test('durable learner intent is consumed only through the bound repository and r
       const f = await fixture(t, {issue: false});
       const count = f.proposalCount();
       assert.equal((await admission.proposeAuthorizedGroupLearner(f.port, f.receiver,
-        f.request, {outcome: 'observed'})).reason,
+        f.request, {outcome: 'observed'}, f.delivery)).reason,
       portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
       assertNoProposal(f, count);
       assert.equal((await admission.proposeAuthorizedGroupLearner(null, f.receiver,
-        f.request, f.observe)).reason,
+        f.request, f.observe, f.delivery)).reason,
       portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.UNAVAILABLE);
       assertNoProposal(f, count);
       assert.equal((await f.run()).reason,
@@ -291,14 +300,14 @@ test('durable learner intent is consumed only through the bound repository and r
       for (const change of [{groupId: 'other-group'}, {bootIncarnation: 2},
         {senderNodeId: SUCCESSOR}, {senderBootIncarnation: 2}, {localReplicaIdentity: 'not-hosted'}]) {
         const answer = await admission.proposeAuthorizedGroupLearner(f.port,
-          {...f.receiver, ...change}, f.request, f.observe);
+          {...f.receiver, ...change}, f.request, f.observe, f.delivery);
         assert.equal(answer.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
         assertNoProposal(f, count);
       }
       const changed = {...f.request, permit: JSON.stringify({
         ...JSON.parse(f.request.permit), workflowOwnerFence: 'not-the-issued-fence'})};
       assert.equal((await admission.proposeAuthorizedGroupLearner(f.port, f.receiver,
-        changed, f.observe)).outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+        changed, f.observe, f.delivery)).outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
       assertNoProposal(f, count);
     });
     await t.test('current canonical boot and exact renewed holder defeat stale delivery', async (t) => {
@@ -326,6 +335,7 @@ test('durable learner intent is consumed only through the bound repository and r
       assertNoProposal(f, count);
       f.request.executionClaim = adopted.claim;
       f.receiver.senderNodeId = SUCCESSOR;
+      f.delivery = await f.transport.remote(SUCCESSOR);
       assertCommittedLearner(f, await f.run());
       assert.equal(f.row().message_group_membership_permit, f.request.permit);
     });
@@ -429,6 +439,94 @@ test('durable learner intent is consumed only through the bound repository and r
         assert.equal(f.row().message_group_membership_permit, f.request.permit,
           'native configuration refusal retains the exact unresolved operation');
       });
+    await t.test('wire copies cannot supply a callable delivery capability', async (t) => {
+      const f = await fixture(t);
+      const before = f.proposalCount();
+      const copied = JSON.parse(JSON.stringify(f.delivery));
+      const result = await admission.proposeAuthorizedGroupLearner(f.port, f.receiver,
+        {...f.request, delivery: f.delivery}, f.observe, copied);
+      assert.equal(result.reason,
+        portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.DELIVERY_REQUIRED,
+        'a wire copy cannot authorize execution from a payload field');
+      assertNoProposal(f, before);
+    });
+    await t.test('local delivery refuses after shutdown during the final read', async (t) => {
+      const f = await fixture(t);
+      const before = f.proposalCount();
+      const held = await holdFinalOperationRead(t, f);
+      await f.transport.router.shutdown();
+      await f.transport.router.initialize({startServer: false});
+      held.release();
+      const result = await held.pending;
+      assert.equal(result.reason, portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY,
+        'old local delivery must not reach native proposal after shutdown and reopen');
+      assertNoProposal(f, before);
+      assert.equal(f.row().message_group_membership_permit, f.request.permit);
+      f.delivery = await f.transport.local();
+      assertCommittedLearner(f, await f.run());
+    });
+    await t.test('same-boot socket replacement refuses old delivery but preserves exact redelivery',
+      async (t) => {
+        const f = await fixture(t);
+        f.clock.advance(30000);
+        const adopted = await f.repositoryFor(SUCCESSOR).claimMessageGroupMembershipOwner({
+          operationId: O, identity: f.request.identity, expectedClaim: f.request.executionClaim});
+        assert.equal(adopted.outcome, 'recorded');
+        f.request.executionClaim = adopted.claim;
+        f.receiver.senderNodeId = SUCCESSOR;
+        f.delivery = await f.transport.remote(SUCCESSOR);
+        const before = f.proposalCount();
+        const old = f.delivery;
+        const held = await holdFinalOperationRead(t, f);
+        await f.transport.closeRemote(SUCCESSOR);
+        f.delivery = await f.transport.remote(SUCCESSOR);
+        assert.equal(old.isCurrent(), false);
+        assert.equal(f.delivery.isCurrent(), true);
+        held.release();
+        const result = await held.pending;
+        assert.equal(result.reason,
+          portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY,
+          'a replaced socket must not carry its old action into the native proposal');
+        assertNoProposal(f, before);
+        assertCommittedLearner(f, await f.run());
+        assert.equal(f.row().message_group_membership_obligation_state, 'unknown');
+      });
+    await t.test('delivery fence is consumed after an actual queued native turn', async (t) => {
+      const release = Promise.withResolvers();
+      t.after(() => release.resolve());
+      const f = await fixture(t);
+      let heldSend = false;
+      f.cluster.sendFor = (from, address, packet) => {
+        if (from !== f.leader || heldSend) return undefined;
+        heldSend = true;
+        return release.promise.then(() => f.cluster.queue(from, address, packet));
+      };
+      let occupied = f.port.propose({queueBarrier: true});
+      // As in the existing status-observation witness, a proposal may not
+      // emit until the leader's next heartbeat. Drive only that native clock.
+      for (let tick = 0; tick < 12 && !heldSend; tick += 1) occupied = f.port.tick();
+      assert.equal(heldSend, true, 'setup: a real Ready send must be suspended');
+      assert.equal(typeof occupied?.then, 'function', 'setup: native queue must be occupied');
+      const observed = Promise.withResolvers();
+      const pending = admission.proposeAuthorizedGroupLearner(f.port, f.receiver, f.request,
+        async (...args) => {
+          const result = await f.observe(...args);
+          observed.resolve();
+          return result;
+        }, f.delivery);
+      await observed.promise;
+      await new Promise((resolve) => setImmediate(resolve));
+      const before = f.proposalCount();
+      await f.transport.router.shutdown();
+      release.resolve();
+      await occupied;
+      const result = await pending;
+      assert.equal(heldSend, true, 'actual Ready send must hold the native work queue');
+      assert.equal(result.reason, portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY,
+        'a queued native action must revalidate its live delivery at execution');
+      assertNoProposal(f, before);
+      assert.equal(f.row().message_group_membership_permit, f.request.permit);
+    });
     await t.test('request and host binding mutations during the read cannot retarget the proposal', async (t) => {
       const f = await fixture(t);
       let entered;

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2031,
+    "unit": 2032,
     "integration": 83,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2323,
-  "digest": "fnv1a32-33c84032",
+  "censusSize": 2324,
+  "digest": "fnv1a32-deedc774",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2246,6 +2246,7 @@
     "test/transport/rpc-client.test.js": "unit",
     "test/transport/rpc-correlation-correctness.property.test.js": "unit",
     "test/transport/rpc-timeout-behavior.property.test.js": "unit",
+    "test/transport/service-delivery-lifetime.test.js": "unit",
     "test/transport/service-response-correlation.property.test.js": "unit",
     "test/transport/transport-provider-interface.property.test.js": "unit",
     "test/transport/transport-registry-provider-management.property.test.js": "unit",

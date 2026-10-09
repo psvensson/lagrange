@@ -95,9 +95,54 @@ function readOwnBootIncarnation(source) {
     TRANSPORT_NUM.ZERO;
 }
 
+function deliveryRouterMatches(router, identity) {
+  return router.initialized === true && router.isShuttingDown !== true &&
+    router.nodeId === identity.nodeId && router.bootIncarnation === identity.bootIncarnation;
+}
+
+function deliveryConnectionMatches(router, connection, ws, identity) {
+  return mapPrototypeGet(router.nodeConnections, identity.senderNodeId) === connection &&
+    connection.retired !== true && connection.state === ConnectionState.CONNECTED &&
+    connection.ws === ws && ws.readyState === WebSocket.OPEN &&
+    connection.connectionId === identity.connectionId &&
+    connection.bootIncarnation === identity.senderBootIncarnation;
+}
+
 class RouterConnectionAuthorityOwner {
+  // Rotated at shutdown, never a per-request ledger. Old local deliveries
+  // cannot resurrect if the same router object is initialized again.
+  #deliveryLifetime = objectFreeze({});
+
   constructor(router) {
     this.router = router;
+  }
+  invalidateDeliveries() {
+    this.#deliveryLifetime = objectFreeze({});
+  }
+  captureLocalDelivery() {
+    const {nodeId, bootIncarnation} = this.router;
+    if (!deliveryRouterMatches(this.router, {nodeId, bootIncarnation})) return null;
+    const identity = objectFreeze({nodeId, bootIncarnation,
+      senderNodeId: nodeId, senderBootIncarnation: bootIncarnation,
+      connectionId: this.router.getLocalBootIncarnationIdentity().connectionId});
+    const lifetime = this.#deliveryLifetime;
+    return objectFreeze({...identity, isCurrent: () =>
+      lifetime === this.#deliveryLifetime && deliveryRouterMatches(this.router, identity)});
+  }
+  // nodeId is from the socket listener's adopted connection, NOT a wire field.
+  // A watermark or a different socket for the same node is never a grant.
+  captureIncomingDelivery(nodeId, ws) {
+    const connection = mapPrototypeGet(this.router.nodeConnections, nodeId);
+    const primary = this.getCurrentPrimaryBootIncarnation(nodeId);
+    if (!primary || connection.nodeId !== nodeId || connection.ws !== ws ||
+        connection.retired === true || ws.readyState !== WebSocket.OPEN) return null;
+    const local = this.captureLocalDelivery();
+    if (!local) return null;
+    const identity = objectFreeze({nodeId: local.nodeId,
+      bootIncarnation: local.bootIncarnation, senderNodeId: primary.nodeId,
+      senderBootIncarnation: primary.bootIncarnation, connectionId: primary.connectionId});
+    return objectFreeze({...identity, isCurrent: () => local.isCurrent() &&
+      deliveryConnectionMatches(this.router, connection, ws, identity)});
   }
   readIncomingBootIncarnation(message) {
     return readOwnBootIncarnation(message);

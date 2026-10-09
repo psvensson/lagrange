@@ -793,6 +793,24 @@
       "tests": [
         "test/integration/message-group-learner-runtime-authorization.integration.test.js"
       ]
+    },
+    "message-group-learner-delivery-lifetime": {
+      "description": "The current socket/local delivery lifetime stays with RouterConnectionAuthorityOwner. The issued-learner consumer requires its host-only context; the existing native turn rechecks the same predicate after queueing and immediately before proposal. Revoking delivery does not cancel the durable issued action or prove global metadata atomicity. No physical CREATE is admitted.",
+      "owners": [
+        "src/transport/message-router-connection-authority.js",
+        "src/transport/message-router-inbound-dispatch.js",
+        "src/transport/message-router-delivery-behaviors.js",
+        "src/transport/message-router-stats-shutdown.js",
+        "src/raft/raft-rs-group-membership-admission.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-membership-transition-runtime.js",
+        "src/raft/raft-operation-port-constants.js"
+      ],
+      "tests": [
+        "test/transport/service-delivery-lifetime.test.js",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1508,6 +1526,35 @@
       ],
       "contract": "message-group-learner-authorization-consumption",
       "witnessTests": [
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ]
+    },
+    "message-group-learner-delivery-lifetime": {
+      "description": "The current socket/local delivery lifetime stays with RouterConnectionAuthorityOwner. The issued-learner consumer requires its host-only context; the existing native turn rechecks the same predicate after queueing and immediately before proposal. Revoking delivery does not cancel the durable issued action or prove global metadata atomicity. No physical CREATE is admitted.",
+      "endpoints": [
+        {
+          "id": "actual-delivery-lifetime",
+          "owners": [
+            "src/transport/message-router-connection-authority.js",
+            "src/transport/message-router-inbound-dispatch.js",
+            "src/transport/message-router-delivery-behaviors.js",
+            "src/transport/message-router-stats-shutdown.js"
+          ]
+        },
+        {
+          "id": "native-execution-boundary",
+          "owners": [
+            "src/raft/raft-rs-group-membership-admission.js",
+            "src/raft/raft-rs-operation-port.js",
+            "src/raft/raft-rs-membership-transition.js",
+            "src/raft/raft-rs-membership-transition-runtime.js",
+            "src/raft/raft-operation-port-constants.js"
+          ]
+        }
+      ],
+      "contract": "message-group-learner-delivery-lifetime",
+      "witnessTests": [
+        "test/transport/service-delivery-lifetime.test.js",
         "test/integration/message-group-learner-runtime-authorization.integration.test.js"
       ]
     }

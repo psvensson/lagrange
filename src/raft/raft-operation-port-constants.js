@@ -86,6 +86,8 @@ const RAFT_MEMBERSHIP_AUTHORIZATION_REASON = Object.freeze({
   MISMATCH: 'membership-authorization-mismatch',
   STALE_OWNER: 'membership-authorization-stale-owner',
   WRONG_RECIPIENT: 'membership-authorization-wrong-recipient',
+  DELIVERY_REQUIRED: 'membership-delivery-required',
+  STALE_DELIVERY: 'membership-delivery-stale',
 });
 
 const RAFT_OPERATION_OUTCOME = Object.freeze({

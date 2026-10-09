@@ -10,6 +10,7 @@ import {
 } from './raft-rs-membership-transition.js';
 import {deepFreeze} from './raft-operation-port.js';
 import {
+  RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
   RAFT_MEMBERSHIP_TRANSITION_REASON,
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
   RAFT_OPERATION_OUTCOME,
@@ -250,11 +251,30 @@ function admittedTransitionOutcome(admitted) {
     admitted.roleOutcome : null;
 }
 
+function executionDeliveryRefusal(command) {
+  // Generic privileged membership callers retain their existing native
+  // contract. The issued-learner consumer always supplies this host fence.
+  if (command.admitExecution === undefined) return null;
+  try {
+    if (typeof command.admitExecution === 'function' && command.admitExecution() === true) {
+      return null;
+    }
+  } catch {
+    // Unavailable lifetime evidence is never execution permission.
+  }
+  return deepFreeze({...membershipTransitionRefusal(
+    RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY), retryable: true});
+}
+
 function anchoredProposal(context, admitted) {
   const {group, expectedGeneration, command, invokeCoreAt,
     answerRefusedProposal, drainReady, thenMaybe} = context;
   const preApplied = BigInt(admitted.status.applied ?? group.appliedIndex);
   const prePending = BigInt(admitted.status.pendingConfIndex ?? 0);
+  // No await between this check and the native call. A context may have
+  // expired while waiting for the group turn, inbound drain or recovery.
+  const deliveryRefusal = executionDeliveryRefusal(command);
+  if (deliveryRefusal !== null) return deliveryRefusal;
   const invoked = invokeCoreAt(group, expectedGeneration,
     'propose_conf_change_v2', command.change);
   if (!invoked.ok) {
@@ -276,7 +296,8 @@ function anchoredProposal(context, admitted) {
 }
 
 function proposeMembershipTransition(context) {
-  const ownerRefusal = transitionOwnerRefusal(context);
+  const ownerRefusal = transitionOwnerRefusal(context) ??
+    executionDeliveryRefusal(context.command);
   if (ownerRefusal !== null) {
     return ownerRefusal;
   }

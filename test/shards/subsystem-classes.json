@@ -22,11 +22,11 @@
     "storage-raft": 118,
     "test-infrastructure": 142,
     "transactions": 16,
-    "transport-messaging": 92,
+    "transport-messaging": 93,
     "wasm-toolchain": 57
   },
-  "censusSize": 2323,
-  "digest": "fnv1a32-a479fde2",
+  "censusSize": 2324,
+  "digest": "fnv1a32-58fc23de",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-5dbf317e",
   "classes": {
@@ -2265,6 +2265,7 @@
     "test/transport/rpc-client.test.js": "transport-messaging",
     "test/transport/rpc-correlation-correctness.property.test.js": "transport-messaging",
     "test/transport/rpc-timeout-behavior.property.test.js": "transport-messaging",
+    "test/transport/service-delivery-lifetime.test.js": "transport-messaging",
     "test/transport/service-response-correlation.property.test.js": "transport-messaging",
     "test/transport/transport-provider-interface.property.test.js": "transport-messaging",
     "test/transport/transport-registry-provider-management.property.test.js": "transport-messaging",

@@ -292,21 +292,57 @@ function learnerRecipientMatches(status, receiver, transition) {
     transition?.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER;
 }
 
-function reserveAndProposeAuthorizedLearner(port, receiver, transition) {
+function reserveAndProposeAuthorizedLearner(port, receiver, transition, admitExecution) {
+  if (!liveDelivery(admitExecution)) {
+    return deliveryRefusal();
+  }
   const reserved = reserveGroupPeerIdentity(receiver, transition.replicaIdentity);
   if (reserved.outcome !== RAFT_MEMBERSHIP_RESERVATION_OUTCOME.RESERVED) {
     return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
   }
   // Same-turn native fences remain authoritative. Do not refresh an issued
   // transition from status here: that would turn stale permission into a grant.
-  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](transition);
+  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](transition, admitExecution);
 }
 
 // Host-composed recipient boundary. The resolver is the existing operation
 // repository's bound observation, never a boolean or caller-supplied permit
 // validator. Transport authentication/registration and the workflow driver
 // must supply the group/sender bindings; this helper does not invent them.
-async function proposeAuthorizedGroupLearner(port, group, request, observeAuthorization) {
+function learnerDeliveryMatches(receiver, delivery) {
+  return delivery?.nodeId === receiver.nodeId &&
+    delivery.bootIncarnation === receiver.bootIncarnation &&
+    delivery.senderNodeId === receiver.senderNodeId &&
+    delivery.senderBootIncarnation === receiver.senderBootIncarnation;
+}
+
+function liveDelivery(admitExecution) {
+  try {
+    return admitExecution() === true;
+  } catch {
+    return false;
+  }
+}
+
+function deliveryRefusal() {
+  return deepFreeze({...membershipTransitionRefusal(
+    RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY), retryable: true});
+}
+
+function learnerDelivery(receiver, delivery) {
+  const admitExecution = delivery?.isCurrent;
+  if (typeof admitExecution !== 'function') {
+    return {refusal: membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_AUTHORIZATION_REASON.DELIVERY_REQUIRED)};
+  }
+  if (!learnerDeliveryMatches(receiver, delivery) || !liveDelivery(admitExecution)) {
+    return {refusal: deliveryRefusal()};
+  }
+  return {admitExecution};
+}
+
+async function proposeAuthorizedGroupLearner(port, group, request, observeAuthorization,
+  delivery) {
   if (typeof observeAuthorization !== 'function') {
     return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
   }
@@ -315,6 +351,10 @@ async function proposeAuthorizedGroupLearner(port, group, request, observeAuthor
       outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE});
   }
   const receiver = learnerReceiver(group);
+  // Only a host-composed delivery context may cross this boundary. Inbound
+  // JSON cannot carry its callable fence. Do not read it from request.
+  const captured = learnerDelivery(receiver, delivery);
+  if (captured.refusal) return captured.refusal;
   let observed;
   try {
     observed = await observeAuthorization(request, receiver);
@@ -327,7 +367,8 @@ async function proposeAuthorizedGroupLearner(port, group, request, observeAuthor
   if (!learnerRecipientMatches(port.readStatus(), receiver, observed.transition)) {
     return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
   }
-  return reserveAndProposeAuthorizedLearner(port, receiver, observed.transition);
+  return reserveAndProposeAuthorizedLearner(port, receiver, observed.transition,
+    captured.admitExecution);
 }
 
 export {
