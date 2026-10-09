@@ -62,7 +62,7 @@ PY
   measure checker python3 "$rel/test-proof-checker.py" "$out/checker"
   measure normal-tests npm run test:file -- test/raft/raft-rs-backend/issued-action-recovery.test.js test/raft/raft-rs-backend/issued-action-record-read.test.js test/raft/raft-rs-backend/durable-store-committed-entries.test.js
   measure codec-mutations python3 "$rel/run-diagnostic.py" . "$out/codec-mutations" --normal-sqlite
-  measure record-mutations python3 "$rel/run-record-controls.py" . "$out/record-mutations" --normal-sqlite
+  measure record-mutations python3 "$rel/run-record-controls.py" "$out/record-mutations" --normal-sqlite
   set +e
   LAGRANGE_PROBE=1 python3 "$rel/test-process-lifetime.py" "$out/probe-must-not-exist" > "$out/probe.stdout.txt" 2> "$out/probe.stderr.txt"
   probe=$?
