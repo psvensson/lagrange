@@ -9,12 +9,12 @@ concurrency:
   group: freshmg-runtime-review-20261008
   cancel-in-progress: false
 env:
-  EXPECTED: f5a06f643a8f389ea545e5673758cca249674fa9
+  EXPECTED: c3f3c352b0f5497f5072137011cbbd73a00f32cd
   WORK_BRANCH: work/freshmg-committed-learner-origin-20261009
   QUEST: message-group-fresh-identity-membership
   LAGRANGE_LANE_JOBS_CAP: '1'
 jobs:
-  origin-review:
+  origin-install:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -39,17 +39,17 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Measure original defects and corrected owner boundaries
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/review-run.sh measure
+      - name: Measure continuous actual origin-bearing install and reopen
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/install-run.sh measure
       - name: Preserve measured WIP with expected-head normal push
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/review-run.sh publish
-      - name: Preserve all failures and exact candidate changes
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/install-run.sh publish
+      - name: Preserve every result and exact candidate change
         if: always()
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/origin-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$GITHUB_WORKSPACE/origin-install-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
           git diff --binary "$EXPECTED" > "$out/total-change.patch"
           git status --porcelain > "$out/archive-status.txt"
@@ -60,16 +60,90 @@ jobs:
           if [ -f test-output/reports/test-results.ndjson ]; then
             cp test-output/reports/test-results.ndjson "$out/archive-results.ndjson"
           fi
-          echo 'Normal-driver hosted component measurement; not physical/GCP acceptance, repository phase advance, CREATE, successor issuance or main merge.' > "$out/substrate.txt"
+          echo 'Real file-backed CREATE CAS and target native open; fixture-driven SENDING, not complete driver or distributed acceptance.' > "$out/substrate.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-origin-review-${{ github.run_id }}-${{ github.run_attempt }}
-          path: origin-review-${{ github.run_id }}-${{ github.run_attempt }}/
+          name: freshmg-origin-install-${{ github.run_id }}-${{ github.run_attempt }}
+          path: origin-install-${{ github.run_id }}-${{ github.run_attempt }}/
           retention-days: 14
           if-no-files-found: error
-      - name: Preserve the separate unresolved cutover verdict
+      - name: Preserve separate unresolved full-cutover verdict
         if: always()
         run: |
-          echo 'The focused correction cannot certify the complete driver, original lab, duration, currentness or release gates.'
+          echo 'This component result cannot certify the full driver, current CREATE, ordered successor, original lab or main/release gates.'
           exit 1
+  isolated-mutation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        case: [input-snapshot, future-term, replay-noop, conflicting-origin]
+    env:
+      MUTATION: ${{ matrix.case }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.EXPECTED }}
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install normal locked dependencies
+        run: npm ci
+      - name: Apply exactly one deliberate weakening in this disposable checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          test -z "$(git status --porcelain)"
+          node --input-type=module -e "import {refuseUnderProbe} from './src/test-helpers/probe-guard.js'; refuseUnderProbe('isolated PR111 mutation');"
+          mkdir -p proof
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          cases={
+           'input-snapshot':('src/raft/raft-rs-committed-membership-context.js','const captured = snapshotLearnerContext(context);','const captured = context;','historical read snapshots exact own-data actions without invoking accessors','accessor action must be rejected before validation or encoding'),
+           'future-term':('src/raft/raft-rs-committed-membership-read.js',' ||\n      BigInt(origin.term) > BigInt(status.term)','','queued origin read refuses malformed bytes and impossible future terms','future-term origin cannot be committed historical evidence'),
+           'replay-noop':('src/raft/raft-rs-peer-identity.js','if (row.learner_admission === null) {','if (true) {','registry replay is a no-op and conflicting origin rolls back without replacement','identical origin replay performs no SQL update'),
+           'conflicting-origin':('src/raft/raft-rs-peer-identity.js','(row.learner_admission !== null && row.learner_admission !== encoded)','false','registry replay is a no-op and conflicting origin rolls back without replacement','conflicting origin must reject the enclosing application transaction')}
+          file,old,new,test,message=cases[os.environ['MUTATION']]
+          p=Path(file);original=p.read_bytes();text=original.decode();assert text.count(old)==1,'mutation target drift'
+          p.write_text(text.replace(old,new,1))
+          Path('proof/mutation.json').write_text(json.dumps({'case':os.environ['MUTATION'],'baseSha':os.environ['EXPECTED'],'file':file,'originalSha256':hashlib.sha256(original).hexdigest(),'mutatedSha256':hashlib.sha256(p.read_bytes()).hexdigest(),'test':test,'assertion':message},indent=2)+'\n')
+          PY
+          git diff --binary > proof/mutation.patch
+      - name: Measure exact intended failing assertion
+        shell: bash
+        run: |
+          set -uo pipefail
+          npm run test:file -- test/integration/message-group-learner-runtime-authorization.integration.test.js > proof/test.stdout.txt 2> proof/test.stderr.txt
+          status=$?
+          echo "$status" > proof/test.exit.txt
+          test "$status" -eq 1 || exit 2
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+          r=json.loads(Path('proof/mutation.json').read_text());s=Path('proof/test.stdout.txt').read_text()
+          blocks=re.split(r'(?=^    # Subtest: )',s,flags=re.M)
+          matched=[b for b in blocks if b.startswith('    # Subtest: '+r['test']+'\n')]
+          assert len(matched)==1,'missing exact test'
+          b=matched[0]
+          assert re.search(r'^    not ok \d+ - '+re.escape(r['test'])+'$',b,re.M),'required test did not fail'
+          assert "code: 'ERR_ASSERTION'" in b and r['assertion'] in b,'wrong assertion failure'
+          for field in ['cancelled','skipped']:
+           assert re.search(r'^# '+field+' 0$',s,re.M),'unexercised test'
+          r['intendedAssertionFailed']=True;r['exit']=1;r['isolatedCheckout']=True;r['sourcePublished']=False
+          Path('proof/result.json').write_text(json.dumps(r,indent=2)+'\n')
+          print(json.dumps(r,indent=2))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: pr111-mutation-${{ matrix.case }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: proof/
+          retention-days: 14
+          if-no-files-found: error
