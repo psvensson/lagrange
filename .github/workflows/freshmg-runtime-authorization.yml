@@ -9,33 +9,64 @@ concurrency:
   group: freshmg-runtime-review-20261008
   cancel-in-progress: false
 env:
-  EXPECTED: 16bcff35bc44d2c6c6151cfb29d35fa7a4b4325a
+  EXPECTED: c3176777cc91c4ff8c7c7381db1c6c8368d93ae0
+  WORK_BRANCH: work/freshmg-learner-outcome-recording-20261009
+  QUEST: message-group-fresh-identity-membership
+  LAGRANGE_LANE_JOBS_CAP: '1'
 jobs:
-  exact-source:
+  learner-recording:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: candidate-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ env.EXPECTED }}
+          ref: ${{ github.sha }}
+          path: carrier-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
-          fetch-depth: 1
-      - name: Export only tracked exact source and its blob identities
-        shell: bash
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.EXPECTED }}
+          path: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Measure exact native outcome and operation recording boundaries
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-recording-20261009/run.sh measure
+      - name: Preserve bounded result by expected-head normal Git push
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-recording-20261009/run.sh publish
+      - name: Retain all failures and exact candidate bytes
+        if: always()
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED"
-          test -z "$(git status --porcelain)"
-          out="$RUNNER_TEMP/learner-recording-source"
+          out="$GITHUB_WORKSPACE/learner-recording-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          git archive --format=tar.gz "$EXPECTED" > "$out/source.tar.gz"
-          git ls-tree -r "$EXPECTED" > "$out/tree-manifest.txt"
-          printf '%s\n' "$EXPECTED" > "$out/source-sha.txt"
-          (cd "$out" && sha256sum source.tar.gz tree-manifest.txt source-sha.txt > SHA256SUMS)
-          echo 'Read-only source export for the approved existing FreshMG continuation. No test, mutation, integration, cloud provisioning or certification.' >> "$GITHUB_STEP_SUMMARY"
+          git diff --binary "$EXPECTED" > "$out/total-change.patch"
+          git status --porcelain > "$out/archive-status.txt"
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"; fi
+          if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/archive-tap"; fi
+          if [ -f test-output/reports/test-results.ndjson ]; then cp test-output/reports/test-results.ndjson "$out/archive-results.ndjson"; fi
+          echo 'Hosted canonical component execution, not physical GCP/lab or complete replacement certification. Driver/current CREATE/successor and process-loss gates remain open.' > "$out/substrate.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
         with:
-          name: freshmg-recording-source-${{ github.run_id }}
-          path: ${{ runner.temp }}/learner-recording-source/
+          name: freshmg-learner-recording-${{ github.run_id }}-${{ github.run_attempt }}
+          path: learner-recording-${{ github.run_id }}-${{ github.run_attempt }}/
           retention-days: 14
           if-no-files-found: error
+      - name: Keep full cutover distinct from the component result
+        if: always()
+        run: |
+          echo 'No independent approval, full driver/current CREATE/successor, physical acceptance, main merge or final compatibility proof.'
+          exit 1
