@@ -831,6 +831,19 @@
       "tests": [
         "test/integration/message-group-learner-runtime-authorization.integration.test.js"
       ]
+    },
+    "message-group-learner-outcome-recording": {
+      "description": "Same-turn native historical origin and committed membership witness feed one exact existing operation-row CAS; preserve terminal debt and old execution fences; current CREATE and successor issuance remain separate.",
+      "owners": [
+        "src/raft/raft-rs-committed-membership-read.js",
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+        "src/rebalancer/replica-operation-repository.js"
+      ],
+      "tests": [
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/integration/message-group-membership-claim-cache.integration.test.js",
+        "test/integration/message-group-learner-process-loss.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1607,6 +1620,30 @@
       "contract": "message-group-committed-learner-origin",
       "witnessTests": [
         "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ]
+    },
+    "message-group-learner-outcome-recording": {
+      "description": "Same-turn native historical origin and committed membership witness feed one exact existing operation-row CAS; preserve terminal debt and old execution fences; current CREATE and successor issuance remain separate.",
+      "endpoints": [
+        {
+          "id": "native-committed-outcome",
+          "owners": [
+            "src/raft/raft-rs-committed-membership-read.js"
+          ]
+        },
+        {
+          "id": "durable-operation-recording",
+          "owners": [
+            "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+            "src/rebalancer/replica-operation-repository.js"
+          ]
+        }
+      ],
+      "contract": "message-group-learner-outcome-recording",
+      "witnessTests": [
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/integration/message-group-membership-claim-cache.integration.test.js",
+        "test/integration/message-group-learner-process-loss.integration.test.js"
       ]
     }
   }

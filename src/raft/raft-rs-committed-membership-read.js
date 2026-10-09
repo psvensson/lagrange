@@ -196,7 +196,11 @@ function answerCommittedLearnerAction(group, status, query) {
     }
     return learnerOriginRefusal(origin, query, status) ??
       learnerActionAnswer(ACTION_KIND.COMMITTED, ACTION_REASON.APPLIED,
-        {receipt: origin, observedAppliedIndex: status.appliedIndex});
+        {receipt: origin, observedAppliedIndex: status.appliedIndex,
+          // Same queued native observation, not a later second status read.
+          // This remains a witness; current CREATE still needs its own leader read.
+          membership: answerCommittedMembership(group, status,
+            COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS)});
   } catch {
     return unavailableLearnerAction();
   }

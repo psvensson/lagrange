@@ -1,0 +1,124 @@
+/** OS-process loss, not power loss or physically distributed SQL/transport.
+ * Writer reaches a measured native/operation boundary before parent SIGKILL.
+ * A new process recovers a different voter and a different logical holder.
+ */
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {fork} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {test} from 'node:test';
+import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
+
+refuseUnderProbe('learner process-loss integration');
+const worker = fileURLToPath(new URL('../test-helpers/learner-process-loss-worker.js', import.meta.url));
+const DEADLINE_MS = 8000;
+const OUTPUT_LIMIT = 1000000;
+function killOwnedGroup(child) {
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+}
+function runWorker(mode, scratch, scenario, active) {
+  return new Promise((resolve, reject) => {
+    const child = fork(worker, [mode, scratch, scenario], {
+      detached: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc']});
+    let closed;
+    const completion = new Promise((resolve) => {
+      closed = resolve;
+    });
+    const owned = {child, completion};
+    active.add(owned);
+    const result = {mode, scenario, pid: child.pid, messages: [], stdout: '', stderr: ''};
+    let failure = null;
+    let killedAtCut = false;
+    const stop = (error) => {
+      failure ??= error; killOwnedGroup(child);
+    };
+    const deadline = setTimeout(() => stop(new Error('worker failed to reach its named boundary')),
+      DEADLINE_MS);
+    child.once('error', (error) => {
+      failure = error;
+    });
+    for (const stream of ['stdout', 'stderr']) {
+      child[stream].on('data', (bytes) => {
+        result[stream] += bytes.toString();
+        if (result[stream].length > OUTPUT_LIMIT) stop(new Error('worker output exceeded its bound'));
+      });
+    }
+    child.on('message', (message) => {
+      result.messages.push(message);
+      if (mode === 'writer' && message.kind === 'cut') {
+        killedAtCut = true; killOwnedGroup(child);
+      }
+    });
+    child.once('close', (code, signal) => {
+      clearTimeout(deadline);
+      killOwnedGroup(child);
+      active.delete(owned); closed();
+      Object.assign(result, {code, signal, killedAtCut});
+      fs.writeFileSync(path.join(scratch, `${mode}-result.json`), JSON.stringify(result, null, 2));
+      if (failure) reject(Object.assign(failure, {workerResult: result}));
+      else resolve(result);
+    });
+  });
+}
+function exactCut(result, scenario, scratch) {
+  assert.equal(result.killedAtCut, true, 'the writer must reach the measured cut before termination');
+  assert.equal(result.signal, 'SIGKILL', 'a graceful exit is not process-loss evidence');
+  assert.equal(result.code, null);
+  assert.equal(result.messages.length, 1, 'no writer recording result may precede the cut');
+  const [cut] = result.messages;
+  assert.equal(cut.kind, 'cut'); assert.equal(cut.scenario, scenario);
+  assert.equal(cut.pid, result.pid);
+  assert.equal(cut.native.kind, 'committed-action');
+  assert.equal(cut.inTransaction, false, 'cut must follow commit, not an uncommitted local view');
+  for (const file of [cut.operationFile, ...cut.nativeFiles.map((item) => item.file)]) {
+    assert.ok(file.startsWith(scratch + path.sep), 'only this test owns the retained fixture files');
+    assert.ok(fs.statSync(file).size > 0);
+  }
+  const committed = scenario === 'record-answer-lost';
+  assert.equal(cut.cut, committed ? 'operation-committed-before-answer' : 'native-committed-before-record');
+  assert.equal(cut.row.message_group_membership_phase,
+    committed ? 'learner_committed' : 'learner_proposal_in_flight');
+  assert.equal(cut.row.message_group_learner_stamp === null, !committed);
+  assert.equal(cut.row.message_group_membership_obligation_state, 'unknown');
+  if (scenario === 'ordinary-failed') assert.equal(cut.row.workflow_step, 'FAILED');
+  return cut;
+}
+async function scenarioTest(t, scenario) {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'learner-process-cut-'));
+  const active = new Set();
+  t.after(async () => {
+    const owned = [...active];
+    for (const item of owned) killOwnedGroup(item.child);
+    await Promise.all(owned.map((item) => item.completion));
+    fs.rmSync(scratch, {recursive: true, force: true});
+  });
+  const writer = await runWorker('writer', scratch, scenario, active);
+  t.diagnostic(JSON.stringify({worker: writer}));
+  const cut = exactCut(writer, scenario, scratch);
+  fs.writeFileSync(path.join(scratch, 'cut.json'), JSON.stringify(cut));
+  const reader = await runWorker('reader', scratch, scenario, active);
+  t.diagnostic(JSON.stringify({worker: reader}));
+  assert.equal(reader.code, 0, `reader failed: ${reader.stderr}`);
+  assert.equal(reader.signal, null); assert.equal(reader.messages.length, 1);
+  const [recovered] = reader.messages;
+  assert.equal(recovered.kind, 'recovered');
+  assert.notEqual(recovered.pid, cut.pid, 'the stopped writer cannot be its own recovery');
+  assert.notEqual(recovered.ownerNodeId, cut.ownerNodeId);
+  assert.notEqual(recovered.nativeReplica, cut.sourceReplica);
+  assert.deepEqual(recovered.receipt, cut.native.receipt);
+  assert.equal(recovered.proposals, 0);
+  t.diagnostic(JSON.stringify({scenario, writer, reader}));
+}
+
+test('SIGKILL after native commit is recovered by a different membership holder',
+  {timeout: 25000}, async (t) => {
+    for (const scenario of ['pending', 'ordinary-failed', 'record-answer-lost']) {
+      await t.test(scenario, (t) => scenarioTest(t, scenario));
+    }
+  });

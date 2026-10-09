@@ -7,6 +7,12 @@ import {ReplicaStatus} from './replica-status.js';
 import {committedStampOfAnswer} from '../raft/raft-committed-membership-stamp.js';
 import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../raft/raft-operation-port-constants.js';
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
+import {COMMITTED_LEARNER_ACTION_KIND as ACTION_KIND,
+  COMMITTED_LEARNER_ACTION_REASON as ACTION_REASON,
+  COMMITTED_MEMBERSHIP_READ_PURPOSE, COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_REFUSAL} from '../raft/raft-committed-membership-constants.js';
+import {encodeCommittedLearnerAdmission, decodeCommittedLearnerAdmission,
+  INVALID_COMMITTED_LEARNER_ADMISSION} from '../raft/raft-rs-committed-membership-context.js';
 import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, membershipBranchSpec,
@@ -48,14 +54,19 @@ function permitsMatch(prior, next, identity, spec) {
 // An existing membership obligation can outlive ordinary operation settlement.
 // Only exact failed settlement may newly select pre-promotion target abandonment;
 // the exact completion timestamp joins the same operation-row CAS, never a new lane.
+const MEMBERSHIP_SETTLEMENT_PREDICATE = Object.freeze({
+  OPEN: 'completed_at IS NULL',
+  EXACT_TERMINAL: 'completed_at = ?',
+});
 function branchSettlementGuard(repository, row, spec) {
   if (!repository.isOperationTerminal(row)) {
-    return row.completedAt === null ? {sql: 'completed_at IS NULL', params: []} : null;
+    return row.completedAt === null ?
+      {sql: MEMBERSHIP_SETTLEMENT_PREDICATE.OPEN, params: []} : null;
   }
   if (row.status !== ReplicaStatus.FAILED || row.workflowStep !== WORKFLOW_STEP.FAILED ||
     spec.phase !== PHASE.TARGET_REMOVAL_IN_FLIGHT ||
     !Number.isSafeInteger(row.completedAt) || row.completedAt <= 0) return null;
-  return {sql: 'completed_at = ?', params: [row.completedAt]};
+  return {sql: MEMBERSHIP_SETTLEMENT_PREDICATE.EXACT_TERMINAL, params: [row.completedAt]};
 }
 const branchSelectionSql = (settlement) => `UPDATE replica_operations SET message_group_membership_phase = ?,
   message_group_membership_permit = ?, message_group_membership_obligation_state = ?
@@ -237,3 +248,156 @@ async function authorizeMessageGroupLearner(repository, request) {
   return persistInitialLearnerIntent(repository, row, claim, input);
 }
 export {authorizeMessageGroupLearner};
+
+
+// Record recovered fact, never issue an action. The host supplies the existing
+// native read port as a capability, not wire/payload-provided receipt bytes.
+function learnerRecordingInput(request) {
+  const executionClaim = request?.executionClaim;
+  const input = decodeInitialLearnerRequest(request);
+  const claim = decodeMembershipOwnerClaim(executionClaim);
+  return input && claim ? {...input, executionClaim, claim} : null;
+}
+function recordingSettlementAllowed(repository, row) {
+  if (!repository.isOperationTerminal(row)) return row.completedAt === null;
+  return row.status === ReplicaStatus.FAILED && row.workflowStep === WORKFLOW_STEP.FAILED &&
+    Number.isSafeInteger(row.completedAt) && row.completedAt > 0;
+}
+function recordingRowMatches(repository, row, input) {
+  return membershipRowIdentityMatches(row, input.identity, input.encodedIdentity) &&
+    row.messageGroupMembershipOwnerClaim === input.executionClaim &&
+    row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN &&
+    row.messageGroupVoterStamp === null && row.messageGroupRemovalStamp === null &&
+    recordingSettlementAllowed(repository, row);
+}
+function learnerOutcomeQuery(input) {
+  return Object.freeze({purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION,
+    groupId: input.identity.groupId, action: Object.freeze({operationId: input.operationId,
+      transitionIdentity: input.identity.transitionIdentity,
+      permitSequence: input.permit.permitSequence, stage: input.permit.permitStage,
+      replicaIdentity: input.identity.targetReplicaId, peerId: input.identity.targetPeerId})});
+}
+function committedLearnerPermit(input, index) {
+  return JSON.stringify({...input.permit, permitState: STATE.COMMITTED,
+    proposalIndex: Number(index)});
+}
+function exactRecordedLearner(row, input) {
+  const permit = decodeMembershipPermit(row.messageGroupMembershipPermit);
+  return row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
+    permit?.permitState === STATE.COMMITTED &&
+    row.messageGroupMembershipPermit === committedLearnerPermit(input, permit.proposalIndex) &&
+    priorLearnerStamp(row, input.identity, permit) !== null;
+}
+function originalLearnerOriginMatches(origin, input, query) {
+  return origin !== INVALID_COMMITTED_LEARNER_ADMISSION &&
+    origin.groupId === query.groupId &&
+    JSON.stringify(origin.context) === JSON.stringify(query.action) &&
+    Number(origin.term) === input.permit.leaderTerm &&
+    Number(origin.index) > input.permit.leaderConfigurationStamp.membershipGenerationIndex;
+}
+// Preserve the native owner's distinction: unresolved history is not a conflict,
+// and an invalid/mismatched origin is not transient transport unavailability.
+function learnerObservationRefusal(observed) {
+  if (observed?.kind === ACTION_KIND.UNRESOLVED &&
+    observed.reason === ACTION_REASON.NOT_RECORDED) return OUTCOME.UNKNOWN;
+  if (observed?.kind === ACTION_KIND.REFUSED &&
+    observed.reason === ACTION_REASON.UNAVAILABLE) return OUTCOME.UNAVAILABLE;
+  return observed?.kind === ACTION_KIND.COMMITTED && observed.reason === ACTION_REASON.APPLIED ?
+    null : OUTCOME.CONFLICT;
+}
+function learnerWitnessUnavailable(membership) {
+  return membership?.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED &&
+    [COMMITTED_MEMBERSHIP_REFUSAL.HELD,
+      COMMITTED_MEMBERSHIP_REFUSAL.CONFIGURATION_GENERATION_UNAVAILABLE]
+      .includes(membership.reason);
+}
+function learnerOutcomeEvidence(observed, input, query) {
+  const refusal = learnerObservationRefusal(observed);
+  if (refusal !== null) return {refusal};
+  try {
+    const encodedOrigin = encodeCommittedLearnerAdmission(observed.receipt);
+    const origin = decodeCommittedLearnerAdmission(encodedOrigin);
+    if (!originalLearnerOriginMatches(origin, input, query)) {
+      return {refusal: OUTCOME.CONFLICT};
+    }
+    if (learnerWitnessUnavailable(observed.membership)) return {refusal: OUTCOME.UNAVAILABLE};
+    const encodedStamp = JSON.stringify(observed.membership);
+    const committedPermit = committedLearnerPermit(input, origin.index);
+    const stamp = priorLearnerStamp({messageGroupLearnerStamp: encodedStamp}, input.identity,
+      decodeMembershipPermit(committedPermit));
+    if (!stamp || stamp.appliedIndex !== observed.observedAppliedIndex ||
+      stamp.membershipGenerationIndex < Number(origin.index) || stamp.term < Number(origin.term)) {
+      return {refusal: OUTCOME.CONFLICT};
+    }
+    return {committedPermit, stamp: JSON.stringify(stamp)};
+  } catch {
+    return {refusal: OUTCOME.CONFLICT};
+  }
+}
+async function observeLearnerRecording(readCommittedLearner, input) {
+  const query = learnerOutcomeQuery(input);
+  try {
+    return learnerOutcomeEvidence(await readCommittedLearner(query), input, query);
+  } catch {
+    return {refusal: OUTCOME.UNAVAILABLE};
+  }
+}
+function recordingBasisRefusal(repository, row, input) {
+  if (!recordingRowMatches(repository, row, input)) return OUTCOME.CONFLICT;
+  if (!membershipClaimIsLocalAndLive(repository, input.claim, input.identity)) {
+    return OUTCOME.STALE_OWNER;
+  }
+  return recordedLearnerIntent(row, input.encodedPermit) || exactRecordedLearner(row, input) ?
+    null : OUTCOME.CONFLICT;
+}
+async function recordObservedLearner(repository, row, input, evidence) {
+  const basis = membershipRowWhere(row);
+  try {
+    await repository.executeOperationMutationWithRetry(
+      `UPDATE replica_operations SET message_group_membership_phase = ?,
+        message_group_membership_permit = ?, message_group_learner_stamp = ?
+        WHERE ${basis.where}`,
+      [PHASE.LEARNER_COMMITTED, evidence.committedPermit, evidence.stamp, ...basis.params]);
+  } catch {
+    // COMMIT may have succeeded. Only exact owner readback settles that answer.
+  }
+  if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNKNOWN);
+  const after = await observeMembershipOperation(repository, input.operationId);
+  if (!after.available) return result(OUTCOME.UNKNOWN);
+  const recorded = recordingBasisRefusal(repository, after.row, input) === null &&
+    after.row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
+    after.row.messageGroupMembershipPermit === evidence.committedPermit &&
+    after.row.messageGroupLearnerStamp === evidence.stamp;
+  return result(recorded ? OUTCOME.RECORDED : OUTCOME.UNKNOWN, after.row);
+}
+function finishLearnerRecording(repository, row, input, evidence) {
+  const refusal = recordingBasisRefusal(repository, row, input);
+  if (refusal !== null) return result(refusal, row);
+  if (exactRecordedLearner(row, input)) return result(OUTCOME.RECORDED, row);
+  // An already-recorded observation cannot regress back into an in-flight row.
+  if (evidence === null) return result(OUTCOME.CONFLICT, row);
+  return recordObservedLearner(repository, row, input, evidence);
+}
+/** Advance only the membership phase after actual, exact native observation.
+ * The same-row CAS includes immutable identity, prior permit, holder, phase,
+ * terminal status/step/time and every membership stamp. Ordinary progress,
+ * membership debt/lane, reservations and physical CREATE remain untouched.
+ */
+async function recordMessageGroupLearnerOutcome(repository, request, readCommittedLearner) {
+  const input = learnerRecordingInput(request);
+  if (!input || typeof readCommittedLearner !== 'function') return result(OUTCOME.INVALID);
+  const before = await observeMembershipOperation(repository, input.operationId);
+  if (!before.available) return result(OUTCOME.UNAVAILABLE);
+  const initialRefusal = recordingBasisRefusal(repository, before.row, input);
+  if (initialRefusal !== null) return result(initialRefusal, before.row);
+  const evidence = exactRecordedLearner(before.row, input) ? null :
+    await observeLearnerRecording(readCommittedLearner, input);
+  if (evidence?.refusal) return result(evidence.refusal, before.row);
+  if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE);
+  // Neither the native read nor boot observation can carry an earlier row
+  // across an await. Use the actual final row as the exact conditional basis.
+  const current = await observeMembershipOperation(repository, input.operationId);
+  if (!current.available) return result(OUTCOME.UNAVAILABLE);
+  return finishLearnerRecording(repository, current.row, input, evidence);
+}
+export {recordMessageGroupLearnerOutcome};
