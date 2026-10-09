@@ -41,16 +41,16 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Retain the original process-observer failure
+      - name: Retain both earlier attempt outcomes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           out="$GITHUB_WORKSPACE/process-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          gh api repos/psvensson/lagrange/actions/artifacts/11605356682/zip > "$out/first-attempt-37908352359.zip"
-          echo "4e99101346d75d2a6a7192b245905fe6a20cc8901bf9e995408dde962a0deae3  $out/first-attempt-37908352359.zip" | sha256sum -c -
-          echo 'Original baseline confirmed live descendants; corrected execution then hit ESRCH while the observer read a disappearing /proc record. Only the test observer now accepts ENOENT or ESRCH as absence. Original failed verdict and source bundle retained.' > "$out/first-attempt-classification.txt"
+          gh api repos/psvensson/lagrange/actions/artifacts/11606076626/zip > "$out/previous-attempt-37908863477.zip"
+          echo "ea5520e6fbd5b972c935ab926e15c51f63d2d3be36bf0e98a819a62f031fa01a  $out/previous-attempt-37908863477.zip" | sha256sum -c -
+          echo '37908352359 confirmed original live descendants then stopped on ESRCH in the test observer; its complete archive is nested in 37908863477. That next run passed process cleanup, seven checker cases, 22 normal-driver cases and five codec mutations, then stopped because this carrier passed an extra root argument to the one-output-path storage runner. Only that invocation is corrected now; prior verdicts remain failed.' > "$out/previous-attempt-classification.txt"
       - name: Reproduce live descendants and prove owned-group cleanup
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/process-review/run.sh measure
       - name: Preserve canonical evidence and normal expected-head push
