@@ -44,6 +44,8 @@ import {RAFT_RS_HOST_WRITE} from './raft-rs-host-contract.js';
 import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
+import {MEMBERSHIP_ACTION_OBSERVATION, MEMBERSHIP_ACTION_EVIDENCE_REASON,
+  observeRetainedMembershipAction} from './raft-rs-committed-membership-context.js';
 
 const DECIMAL_DIGITS = /^\d+$/u;
 const PAYLOAD_ENCODING = 'base64';
@@ -245,6 +247,53 @@ function readDurableRecordIn(db, groupId) {
       },
     } : null,
   };
+}
+
+// Read the complete snapshot-anchored suffix, not an arbitrary log page.
+// Covered residual bytes are not action receipts. Validate storage positions,
+// not Raft's protocol, current eligibility or snapshot-image provenance.
+function actionRecordBoundary(record) {
+  const applied = toExactInteger(record.appliedIndex);
+  const committed = toExactInteger(record.hardState.commit);
+  const term = toExactInteger(record.hardState.term);
+  const snapshotIndex = record.snapshot === null ? 0n :
+    toExactInteger(record.snapshot.metadata.index);
+  const snapshotTerm = record.snapshot === null ? 0n :
+    toExactInteger(record.snapshot.metadata.term);
+  const generation = toExactInteger(record.membershipGenerationIndex);
+  if (applied > committed || snapshotIndex > applied || snapshotTerm > term ||
+      (snapshotIndex === 0n) !== (snapshotTerm === 0n) || generation > applied) {
+    return null;
+  }
+  return {committed, term, snapshotIndex, snapshotTerm};
+}
+
+function coherentActionSuffix(record, boundary) {
+  let previousIndex = boundary.snapshotIndex;
+  let previousTerm = boundary.snapshotTerm;
+  for (const entry of record.entries) {
+    const index = toExactInteger(entry.index);
+    if (index <= boundary.snapshotIndex) continue;
+    const term = toExactInteger(entry.term);
+    if (index !== previousIndex + 1n || term === 0n ||
+        term < previousTerm || term > boundary.term) return false;
+    previousIndex = index;
+    previousTerm = term;
+  }
+  return boundary.committed <= previousIndex;
+}
+
+function actionEvidenceUnavailable(reason) {
+  return Object.freeze({kind: MEMBERSHIP_ACTION_OBSERVATION.UNAVAILABLE, reason});
+}
+
+function readActionEvidenceIn(db, groupId, action, decodeEntry) {
+  const record = readDurableRecordIn(db, groupId);
+  const boundary = actionRecordBoundary(record);
+  if (boundary === null || !coherentActionSuffix(record, boundary)) {
+    return actionEvidenceUnavailable(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);
+  }
+  return observeRetainedMembershipAction({groupId, record, action, decodeEntry});
 }
 
 /**
@@ -585,6 +634,28 @@ class RaftRsDurableStore {
 
   static readDurableRecordIn(db, groupId) {
     return readDurableRecordIn(db, groupId);
+  }
+
+  /** Historical action evidence from this store's own single SQLite read view.
+   * Refuses all uncommitted views, including this store's own transaction.
+   * No DDL or writes. Missing suffix is unavailable; covered action unresolved.
+   * @param {string} groupId - The native owner's own group.
+   * @param {Object} action - The canonical original action tuple.
+   * @param {Function} decodeEntry - That runtime's native entry decoder.
+   * @return {Object} Historical evidence; never CREATE or reissue permission.
+   */
+  readMembershipActionEvidence(groupId, action, decodeEntry) {
+    if (this.db.inTransaction) {
+      return actionEvidenceUnavailable(
+        MEMBERSHIP_ACTION_EVIDENCE_REASON.TRANSACTION_OPEN);
+    }
+    try {
+      // Pin every SELECT to one snapshot, including against other writers.
+      return this.db.transaction(() =>
+        readActionEvidenceIn(this.db, groupId, action, decodeEntry))();
+    } catch {
+      return actionEvidenceUnavailable(MEMBERSHIP_ACTION_EVIDENCE_REASON.READ_UNAVAILABLE);
+    }
   }
 
   /**

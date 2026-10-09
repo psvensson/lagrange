@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 167,
-    "storage-raft": 118,
+    "storage-raft": 120,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 93,
     "wasm-toolchain": 57
   },
-  "censusSize": 2324,
-  "digest": "fnv1a32-58fc23de",
+  "censusSize": 2326,
+  "digest": "fnv1a32-2c28139f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5dbf317e",
+  "observationDigest": "fnv1a32-8ad77d3d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1548,6 +1548,8 @@
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-record-window.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/issued-action-record-read.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/issued-action-recovery.test.js": "storage-raft",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "storage-raft",
@@ -9684,6 +9686,22 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/issued-action-record-read.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-committed-membership-context.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-host-contract.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/issued-action-recovery.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-host-contract.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
       ]
     },
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": {

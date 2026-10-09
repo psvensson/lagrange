@@ -1,0 +1,30 @@
+{
+  "schema": "issued-recovery-canonical-attempt/1",
+  "runId": "37903414861",
+  "baseSha": "8ece20f70392314ceba49e4e787b800bc14d07d6",
+  "sourceSha": "c3f400d4cfe86bcf2ae70ca8d53f2f23398bd8b7",
+  "canonicalExit": 1,
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "2871e1eedae6192f5020b0446fc12844973f8c58d6cd9945921b5631e70e64f7",
+      "bytes": 170685,
+      "asset": "message-group-fresh-identity-membership--issued-recovery-37903414861-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--issued-recovery-37903414861-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T08:12:28.539Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Corrected package preservation and first canonical dependency/static execution. Original diagnostic reports remain historical; consult canonical-exit and individual logs. No production activation, successor permit, CREATE, independent review or main merge. Separate learner-origin carrier was left untouched.",
+      "evidence": "sha256:2871e1eedae6192f5020b0446fc12844973f8c58d6cd9945921b5631e70e64f7",
+      "asset": "message-group-fresh-identity-membership--issued-recovery-37903414861-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--issued-recovery-37903414861-1.zip",
+      "bytes": 170685
+    }
+  },
+  "archiveSha256": "2871e1eedae6192f5020b0446fc12844973f8c58d6cd9945921b5631e70e64f7",
+  "proofCeiling": "First canonical execution of preserved corrective package, not complete runtime/receipt/CREATE chain or distributed proof",
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL"
+}
