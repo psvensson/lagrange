@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -40,6 +41,16 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
+      - name: Retain the original process-observer failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/process-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          gh api repos/psvensson/lagrange/actions/artifacts/11605356682/zip > "$out/first-attempt-37908352359.zip"
+          echo "4e99101346d75d2a6a7192b245905fe6a20cc8901bf9e995408dde962a0deae3  $out/first-attempt-37908352359.zip" | sha256sum -c -
+          echo 'Original baseline confirmed live descendants; corrected execution then hit ESRCH while the observer read a disappearing /proc record. Only the test observer now accepts ENOENT or ESRCH as absence. Original failed verdict and source bundle retained.' > "$out/first-attempt-classification.txt"
       - name: Reproduce live descendants and prove owned-group cleanup
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/process-review/run.sh measure
       - name: Preserve canonical evidence and normal expected-head push
