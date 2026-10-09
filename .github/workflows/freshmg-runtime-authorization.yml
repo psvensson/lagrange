@@ -40,25 +40,33 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Retain all first-attempt results without changing verdicts
+      - name: Retain successful mutations and failed install with nested first attempts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           out="$GITHUB_WORKSPACE/origin-install-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          mkdir -p "$out/previous-37925090485"
-          gh api repos/psvensson/lagrange/actions/runs/37925090485/artifacts > "$out/previous-37925090485/artifacts.json"
-          python3 - "$out/previous-37925090485" <<'PY'
-          import hashlib,json,subprocess,sys
+          mkdir -p "$out/previous-37925854728"
+          gh api repos/psvensson/lagrange/actions/runs/37925854728/artifacts > "$out/previous-37925854728/artifacts.json"
+          python3 - "$out/previous-37925854728" <<'PY'
+          import hashlib,json,subprocess,sys,zipfile
           from pathlib import Path
           out=Path(sys.argv[1]);items=json.loads((out/'artifacts.json').read_text())['artifacts']
           assert len(items)==5,'unexpected previous evidence inventory'
+          results=[]
           for a in items:
-            with (out/(a['name']+'.zip')).open('wb') as f:
+            p=out/(a['name']+'.zip')
+            with p.open('wb') as f:
               subprocess.run(['gh','api',f"repos/psvensson/lagrange/actions/artifacts/{a['id']}/zip"],stdout=f,check=True,timeout=60)
-            assert hashlib.sha256((out/(a['name']+'.zip')).read_bytes()).hexdigest()==a['digest'].split(':')[1]
+            assert hashlib.sha256(p.read_bytes()).hexdigest()==a['digest'].split(':')[1]
+            if a['name'].startswith('pr111-mutation-'):
+              with zipfile.ZipFile(p) as z:r=json.loads(z.read('result.json'))
+              assert r['intendedAssertionFailed'] is True and r['exit']==1 and r['sourcePublished'] is False
+              results.append(r)
+          assert len(results)==4
+          (out/'verified-mutations.json').write_text(json.dumps(results,indent=2)+'\n')
           PY
-      - name: Measure continuous actual origin-bearing install and reopen
+      - name: Measure canonical-identity origin-bearing install and reopen
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/install-run.sh measure
       - name: Preserve measured WIP with expected-head normal push
         env:
@@ -90,58 +98,3 @@ jobs:
         run: |
           echo 'This component result cannot certify the full driver, current CREATE, ordered successor, original lab or main/release gates.'
           exit 1
-  isolated-mutation:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        case: [input-snapshot, future-term, replay-noop, conflicting-origin]
-    env:
-      MUTATION: ${{ matrix.case }}
-    defaults:
-      run:
-        shell: bash
-        working-directory: candidate
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ github.sha }}
-          path: carrier
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          ref: ${{ env.EXPECTED }}
-          path: candidate
-          persist-credentials: false
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - name: Install normal locked dependencies
-        run: npm ci
-      - name: Apply one deliberate weakening in its isolated checkout
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED"
-          test -z "$(git status --porcelain)"
-          node --input-type=module -e "import {refuseUnderProbe} from './src/test-helpers/probe-guard.js'; refuseUnderProbe('isolated PR111 mutation');"
-          python3 ../carrier/scripts/quest-evidence/learner-origin-20261009/isolated-review-mutation.py prepare
-          git diff --binary > proof/mutation.patch
-      - name: Preserve expected failure exit before checking its exact assertion
-        run: |
-          set -uo pipefail
-          set +e
-          npm run test:file -- test/integration/message-group-learner-runtime-authorization.integration.test.js > proof/test.stdout.txt 2> proof/test.stderr.txt
-          status=$?
-          set -e
-          echo "$status" > proof/test.exit.txt
-          python3 ../carrier/scripts/quest-evidence/learner-origin-20261009/isolated-review-mutation.py check
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: pr111-mutation-${{ matrix.case }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: candidate/proof/
-          retention-days: 14
-          if-no-files-found: error
