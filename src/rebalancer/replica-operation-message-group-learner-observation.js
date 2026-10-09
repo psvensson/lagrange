@@ -125,4 +125,6 @@ async function observeMessageGroupLearnerAuthorization(repository, request, reci
     input.decodedIdentity, receiver)) return refuse(REASON.STALE_OWNER);
   return answer(OUTCOME.OBSERVED, null, {transition: nativeTransition(input)});
 }
-export {observeMessageGroupLearnerAuthorization};
+export {observeMessageGroupLearnerAuthorization,
+  snapshotRequest as snapshotIssuedLearnerRequest,
+  exactIssuedIntent as matchesIssuedLearnerOperation};

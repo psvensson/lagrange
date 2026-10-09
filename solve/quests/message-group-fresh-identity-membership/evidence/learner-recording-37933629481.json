@@ -1,0 +1,209 @@
+{
+  "schema": "freshmg-learner-recording/1",
+  "runId": 37933629481,
+  "baseSha": "16bcff35bc44d2c6c6151cfb29d35fa7a4b4325a",
+  "sourceSha": "a6e240a9e4d09618fc8635548eaba5b6b36263b3",
+  "redSha": "6947fc123fbcc33828b3258f12b1026c45c66049",
+  "timings": {
+    "consumer": {
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "47",
+          "5761"
+        ]
+      ],
+      "limitMs": 30000,
+      "withinBudget": true
+    },
+    "regressions": {
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "996"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "1103"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "1327"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "1218"
+        ]
+      ],
+      "limitMs": 2000,
+      "withinBudget": true
+    },
+    "neighbors": {
+      "files": [
+        [
+          "test/raft/raft-rs-backend/committed-membership-read.test.js",
+          "5",
+          "707"
+        ],
+        [
+          "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+          "64",
+          "792"
+        ]
+      ],
+      "limitMs": 2000,
+      "withinBudget": true
+    }
+  },
+  "mutations": [
+    {
+      "name": "action-binding",
+      "requiredFailure": {
+        "type": "test:fail",
+        "name": "wrong original action evidence cannot advance the learner operation",
+        "file": "/home/runner/work/lagrange/lagrange/candidate-37933629481-1/test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "nesting": 1,
+        "testNumber": 35,
+        "durationMs": 78.967647,
+        "skip": false,
+        "todo": false,
+        "failureType": "testCodeFailure",
+        "errorCode": "ERR_TEST_FAILURE",
+        "assertionCode": "ERR_ASSERTION",
+        "assertionMessage": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'recorded'\n- 'conflict'\n",
+        "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'recorded'\n- 'conflict'\n"
+      },
+      "measurement": {
+        "name": "mutation-action-binding",
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=/home/runner/work/lagrange/lagrange/carrier-37933629481-1/scripts/quest-evidence/learner-recording-20261009/report.mjs",
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+        ],
+        "exit": 1,
+        "timedOut": false,
+        "cleanupComplete": true,
+        "sourceSha256": "f977c40bdd26a5e70d930334dd3d7e04be32471b0966efd6ee93e508a6a12ef3",
+        "processGroupId": 3965,
+        "wallMs": 5037.504
+      }
+    },
+    {
+      "name": "holder-cas",
+      "requiredFailure": {
+        "type": "test:fail",
+        "name": "holder replacement during native evidence acquisition defeats the old row CAS",
+        "file": "/home/runner/work/lagrange/lagrange/candidate-37933629481-1/test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "nesting": 1,
+        "testNumber": 37,
+        "durationMs": 86.278841,
+        "skip": false,
+        "todo": false,
+        "failureType": "testCodeFailure",
+        "errorCode": "ERR_TEST_FAILURE",
+        "assertionCode": "ERR_ASSERTION",
+        "assertionMessage": "the old holder cannot install a learner stamp\n+ actual - expected\n\n+ '{\"kind\":\"committed\",\"voters\":[\"2252998812317812477\",\"5703315308667030882\",\"8114374780160035431\"],\"votersOutgoing\":[],\"learners\":[\"6729398922367787700\"],\"learnersNext\":[],\"appliedIndex\":2,\"configurationKey\":\"[[\\\\\"2252998812317812477\\\\\",\\\\\"5703315308667030882\\\\\",\\\\\"8114374780160035431\\\\\"],[],[\\\\\"6729398922367787700\\\\\"],[],false]\",\"membershipGenerationIndex\":2,\"commitIndex\":2,\"term\":1,\"leaderId\":\"consumer-a\",\"gateOpen\":true,\"identities\":{\"2252998812317812477\":\"consumer-b\",\"5703315308667030882\":\"consumer-c\",\"8114374780160035431\":\"consumer-a\",\"6729398922367787700\":\"consumer-fresh\"}}'\n- null\n",
+        "message": "the old holder cannot install a learner stamp\n+ actual - expected\n\n+ '{\"kind\":\"committed\",\"voters\":[\"2252998812317812477\",\"5703315308667030882\",\"8114374780160035431\"],\"votersOutgoing\":[],\"learners\":[\"6729398922367787700\"],\"learnersNext\":[],\"appliedIndex\":2,\"configurationKey\":\"[[\\\\\"2252998812317812477\\\\\",\\\\\"5703315308667030882\\\\\",\\\\\"8114374780160035431\\\\\"],[],[\\\\\"6729398922367787700\\\\\"],[],false]\",\"membershipGenerationIndex\":2,\"commitIndex\":2,\"term\":1,\"leaderId\":\"consumer-a\",\"gateOpen\":true,\"identities\":{\"2252998812317812477\":\"consumer-b\",\"5703315308667030882\":\"consumer-c\",\"8114374780160035431\":\"consumer-a\",\"6729398922367787700\":\"consumer-fresh\"}}'\n- null\n"
+      },
+      "measurement": {
+        "name": "mutation-holder-cas",
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=/home/runner/work/lagrange/lagrange/carrier-37933629481-1/scripts/quest-evidence/learner-recording-20261009/report.mjs",
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+        ],
+        "exit": 1,
+        "timedOut": false,
+        "cleanupComplete": true,
+        "sourceSha256": "924653244410e1b423282359293cace1d4b34cb17aea0cf223926c4aa4e7c5cd",
+        "processGroupId": 3998,
+        "wallMs": 5057.926
+      }
+    },
+    {
+      "name": "terminal-cas",
+      "requiredFailure": {
+        "type": "test:fail",
+        "name": "terminal settlement racing recording is retained and retried as exact debt",
+        "file": "/home/runner/work/lagrange/lagrange/candidate-37933629481-1/test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "nesting": 1,
+        "testNumber": 38,
+        "durationMs": 86.462775,
+        "skip": false,
+        "todo": false,
+        "failureType": "testCodeFailure",
+        "errorCode": "ERR_TEST_FAILURE",
+        "assertionCode": "ERR_ASSERTION",
+        "assertionMessage": "terminal-state changes must defeat the earlier recording basis\n+ actual - expected\n\n+ '{\"kind\":\"committed\",\"voters\":[\"2252998812317812477\",\"5703315308667030882\",\"8114374780160035431\"],\"votersOutgoing\":[],\"learners\":[\"6729398922367787700\"],\"learnersNext\":[],\"appliedIndex\":2,\"configurationKey\":\"[[\\\\\"2252998812317812477\\\\\",\\\\\"5703315308667030882\\\\\",\\\\\"8114374780160035431\\\\\"],[],[\\\\\"6729398922367787700\\\\\"],[],false]\",\"membershipGenerationIndex\":2,\"commitIndex\":2,\"term\":1,\"leaderId\":\"consumer-a\",\"gateOpen\":true,\"identities\":{\"2252998812317812477\":\"consumer-b\",\"5703315308667030882\":\"consumer-c\",\"8114374780160035431\":\"consumer-a\",\"6729398922367787700\":\"consumer-fresh\"}}'\n- null\n",
+        "message": "terminal-state changes must defeat the earlier recording basis\n+ actual - expected\n\n+ '{\"kind\":\"committed\",\"voters\":[\"2252998812317812477\",\"5703315308667030882\",\"8114374780160035431\"],\"votersOutgoing\":[],\"learners\":[\"6729398922367787700\"],\"learnersNext\":[],\"appliedIndex\":2,\"configurationKey\":\"[[\\\\\"2252998812317812477\\\\\",\\\\\"5703315308667030882\\\\\",\\\\\"8114374780160035431\\\\\"],[],[\\\\\"6729398922367787700\\\\\"],[],false]\",\"membershipGenerationIndex\":2,\"commitIndex\":2,\"term\":1,\"leaderId\":\"consumer-a\",\"gateOpen\":true,\"identities\":{\"2252998812317812477\":\"consumer-b\",\"5703315308667030882\":\"consumer-c\",\"8114374780160035431\":\"consumer-a\",\"6729398922367787700\":\"consumer-fresh\"}}'\n- null\n"
+      },
+      "measurement": {
+        "name": "mutation-terminal-cas",
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=/home/runner/work/lagrange/lagrange/carrier-37933629481-1/scripts/quest-evidence/learner-recording-20261009/report.mjs",
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+        ],
+        "exit": 1,
+        "timedOut": false,
+        "cleanupComplete": true,
+        "sourceSha256": "446217acd971e16a22bfc4fd43ca9ab019b1f7c225685eec558ba45c1773c241",
+        "processGroupId": 4030,
+        "wallMs": 5074.417
+      }
+    },
+    {
+      "name": "restored-positive",
+      "measurement": {
+        "name": "restored-positive",
+        "command": [
+          "node",
+          "--test",
+          "--test-reporter=/home/runner/work/lagrange/lagrange/carrier-37933629481-1/scripts/quest-evidence/learner-recording-20261009/report.mjs",
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+        ],
+        "exit": 0,
+        "timedOut": false,
+        "cleanupComplete": true,
+        "sourceSha256": "029308134fc12509c95c50077c74c0a4ca7c0dcca6a7daa99b345e4fde52e262",
+        "processGroupId": 4066,
+        "wallMs": 4987.269
+      }
+    }
+  ],
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "9fa9caf0f39f16b2873b3de86585c075b5e3b7ca750379f30e5239d43ab2649a",
+      "bytes": 284950,
+      "asset": "message-group-fresh-identity-membership--learner-recording-37933629481-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--learner-recording-37933629481-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T13:01:36.198Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Actual native origin -> exact repository recording with no new proposal: normal-driver tests, worker SIGKILL before row write and new-process successor recovery, holder/terminal CAS races, unknown-write readback, positive replay and historical-after-remove refusal. No full native-node crash, distributed SQL/CDC, driver/current CREATE/successor activation or independent approval.",
+      "evidence": "sha256:9fa9caf0f39f16b2873b3de86585c075b5e3b7ca750379f30e5239d43ab2649a",
+      "asset": "message-group-fresh-identity-membership--learner-recording-37933629481-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--learner-recording-37933629481-1.zip",
+      "bytes": 284950
+    }
+  },
+  "operationWorkerProcessLoss": true,
+  "nativeNodesRemainAlive": true,
+  "distributedSql": false,
+  "physicalAcceptance": false,
+  "fullDriver": false,
+  "createActivation": false,
+  "successorAttemptIssuance": false,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL"
+}
