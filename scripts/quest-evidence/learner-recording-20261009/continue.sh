@@ -6,8 +6,8 @@ node --input-type=module -e "import {refuseUnderProbe} from './src/test-helpers/
 mkdir -p "$out"
 export CARRIER="$carrier" PROOF_OUT="$out"
 if [ "$1" = measure ]; then
-  gh api repos/psvensson/lagrange/actions/artifacts/11621514866/zip > "$out/first-37942096243.zip"
-  echo "c446cfa8866a31126482417752fa68a126dc0bf70811c70556365c9456b4e6f2  $out/first-37942096243.zip" | sha256sum -c -
+  gh api repos/psvensson/lagrange/actions/artifacts/11622811255/zip > "$out/previous-37942867748.zip"
+  echo "1ac1a001682337c3c0917ed5007b6ef9fef13b04c846c17601ff369db2d6eef4  $out/previous-37942867748.zip" | sha256sum -c -
 fi
 python3 - <<'PY'
 import os
@@ -21,5 +21,6 @@ s=s.replace(a,'  python3 "$carrier/refine.py" tests\n'+a)
 s=s.replace(b,'  python3 "$carrier/refine.py" source\n'+b)
 (out/'executed-run.sh').write_text(s)
 (out/'refine.py').write_text((carrier/'refine.py').read_text())
+(out/'corrective-scope.txt').write_text('Second run measured the expected missing-writer red; static checks refused two new over-complex functions and two inherited inline SQL fragments. Separate original-origin matching and final-row completion within the same owner; name existing settlement SQL constants. Cache test expects existing canonical stamp serialization, not fixture property insertion order. No new runtime authority or weaker assertion/budget.\n')
 PY
 bash "$out/executed-run.sh" "$1"
