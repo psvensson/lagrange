@@ -1,0 +1,71 @@
+{
+  "schema": "issued-recovery-canonical-followup/1",
+  "runId": "37904808160",
+  "baseSha": "b8611d8b9dc1538880bc07f0f8215cac7c031b74",
+  "sourceSha": "427c2fbfafe971d75dbb6e7b43dd482f22c79674",
+  "checks": {
+    "tests": 0,
+    "proof-checker": 0,
+    "grammar": 0,
+    "metrics": 0,
+    "metadata": 0,
+    "decisions": 0,
+    "codec-mutations": 0,
+    "lint": 0,
+    "install": 0,
+    "shards": 0,
+    "store-mutations": 0,
+    "formatting": 0,
+    "literals": 0,
+    "file-size": 0
+  },
+  "explicitViolationCounts": {
+    "decisions": 0,
+    "literals": 0,
+    "grammar": 0
+  },
+  "normalDriverTests": [
+    [
+      "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+      "5",
+      "258"
+    ],
+    [
+      "test/raft/raft-rs-backend/issued-action-record-read.test.js",
+      "9",
+      "507"
+    ],
+    [
+      "test/raft/raft-rs-backend/issued-action-recovery.test.js",
+      "8",
+      "487"
+    ]
+  ],
+  "perFileBudgetMs": 2000,
+  "allFileBudgetsSatisfied": true,
+  "allChecksPassed": true,
+  "independentApproval": false,
+  "runtimeSourceChange": "owned zero constant, no change to decision semantics",
+  "fullLabVerdict": "FAIL",
+  "proofCeiling": "Normal better-sqlite3 with historical low-level native test driver, including 5 codec and 7 store mutation controls. Python checker self-tests retain their diagnostic node:sqlite adapter. Not production runtime/receipt/CREATE or physical acceptance.",
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "a482608ed745959d03549a4ac3dd1645db33b013996f7931970975b83b8c803e",
+      "bytes": 118009,
+      "asset": "message-group-fresh-identity-membership--issued-recovery-followup-37904808160-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--issued-recovery-followup-37904808160-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T08:26:39.581Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Corrected recovery packet normal-driver proof: owned zero constant, AST-preserving formatting, actual violation-count gate, clean Python lifetime and 22 better-sqlite3 cases plus 12 exact-assertion mutations. Check aggregate and per-file timings. Diagnostic checker self-tests use node:sqlite. Original 37904141211 failed attempt is nested with its hash; no main integration or protocol approval.",
+      "evidence": "sha256:a482608ed745959d03549a4ac3dd1645db33b013996f7931970975b83b8c803e",
+      "asset": "message-group-fresh-identity-membership--issued-recovery-followup-37904808160-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--issued-recovery-followup-37904808160-1.zip",
+      "bytes": 118009
+    }
+  },
+  "archiveSha256": "a482608ed745959d03549a4ac3dd1645db33b013996f7931970975b83b8c803e"
+}
