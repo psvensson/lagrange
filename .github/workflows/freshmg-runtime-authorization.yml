@@ -40,15 +40,16 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Retain the prior failed origin attempt unchanged
+      - name: Retain both failed origin attempts without altering their verdicts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           out="$GITHUB_WORKSPACE/learner-origin-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          gh api repos/psvensson/lagrange/actions/artifacts/11599305613/zip > "$out/prior-origin-37892536228.zip"
-          echo "e7c5a64e0b49e6dd83f17aadec40f59babc27a1f783e79d0d8b104aa2ed5de7c  $out/prior-origin-37892536228.zip" | sha256sum -c -
+          gh api repos/psvensson/lagrange/actions/artifacts/11611141238/zip > "$out/prior-origin-37917632948.zip"
+          echo "25bcb1bc4c9b0ff3910ea5b2c5d6928b4c8677719b45212a1bca10ac2b690270  $out/prior-origin-37917632948.zip" | sha256sum -c -
+          echo 'This verified archive contains the original failed attempt 37892536228 with its exact checksum.' > "$out/prior-attempts.txt"
       - name: Measure original red, corrected native recovery and checkpoint binding
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/continue.sh measure
       - name: Preserve measured WIP and canonical evidence without integration
