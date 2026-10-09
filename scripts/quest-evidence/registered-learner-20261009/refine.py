@@ -23,12 +23,16 @@ s=s[:a]+'''async function connectRouters(t) {
   await recipient.initialize({startServer: true});
   await source.connectToNode(SUCCESSOR, 'ws://127.0.0.1:24272');
   for (let tick = 0; tick < 20 &&
-    source.getCurrentPrimaryConnectionBootIncarnation(SUCCESSOR) !== 1;
+    source.getCurrentPrimaryConnectionBootIncarnation(SUCCESSOR)?.bootIncarnation !== 1;
   tick += 1) await immediate();
-  assert.equal(source.getCurrentPrimaryConnectionBootIncarnation(SUCCESSOR), 1,
+  const outgoing = source.getCurrentPrimaryConnectionBootIncarnation(SUCCESSOR);
+  const incoming = recipient.getCurrentPrimaryConnectionBootIncarnation(NODE);
+  assert.equal(outgoing?.bootIncarnation, 1,
     'the actual outbound router must receive its peer identity');
-  assert.equal(recipient.getCurrentPrimaryConnectionBootIncarnation(NODE), 1,
+  assert.equal(outgoing.nodeId, SUCCESSOR);
+  assert.equal(incoming?.bootIncarnation, 1,
     'the actual incoming router must identify and adopt the dialed socket');
+  assert.equal(incoming.nodeId, NODE);
   return {source, recipient};
 }
 '''+s[b:]
