@@ -9,9 +9,11 @@ test_file=test/integration/message-group-learner-runtime-authorization.integrati
 measure() {
  local name="$1";shift
  printf '%q ' "$@" > "$out/$name.command.txt"; printf '\n' >> "$out/$name.command.txt"
+ date -u +%Y-%m-%dT%H:%M:%SZ > "$out/$name.started.txt"
  local status=0
  "$@" > "$out/$name.stdout.txt" 2> "$out/$name.stderr.txt" || status=$?
  echo "$status" > "$out/$name.exit.txt"
+ date -u +%Y-%m-%dT%H:%M:%SZ > "$out/$name.finished.txt"
  tail -25 "$out/$name.stdout.txt"
  if [ "$status" -ne 0 ];then tail -15 "$out/$name.stderr.txt";fi
  return "$status"
@@ -20,19 +22,21 @@ case "$1" in
 measure)
  test "$(git rev-parse HEAD)" = "$EXPECTED"
  test -z "$(git status --porcelain)"
- cp "$carrier/install-tests.py" "$carrier/install-run.sh" "$out/"
+ cp "$carrier/install-tests.py" "$carrier/install-run.sh" "$carrier/install-identity.patch" "$out/"
  printf 'base=%s\ncarrier=%s\nrunner=%s\n' "$EXPECTED" "$GITHUB_SHA" "$RUNNER_NAME" > "$out/provenance.txt"
  git config user.name 'github-actions[bot]'
  git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
  measure install npm ci
- node scripts/solve.js note --id "$QUEST" --finding 'Continue approved PR111 review 4229278994 with one continuous origin-bearing installation witness. Real repository-authorized native ADD, actual checkpoint, file-backed CREATE owner CAS/physical claim, fresh target snapshot install, operation-port open and native reopen. Fixture advances ordinary operation to SENDING through the existing repository; this does not claim the full OperationWorkflowOwner driver or learner-stamp integration. Missing/current CREATE and ordered successor remain gated. No runtime source edits, ownership changes, timing relaxations or main merge.' --kind decision --json > "$out/scope.json"
+ node scripts/solve.js note --id "$QUEST" --finding 'Continue approved PR111 review 4229278994 with one continuous origin-bearing installation witness. Real repository-authorized native ADD, actual checkpoint, file-backed CREATE owner CAS/physical claim, fresh target snapshot install, operation-port open and native reopen. Fixture advances ordinary operation to SENDING through the existing repository; this does not claim the full OperationWorkflowOwner driver or learner-stamp integration. Initial run 37925854728 correctly refused its mismatched fixture entity: checkpoint message-group versus canonical SERVICE_TYPE.MESSAGE_GROUP message_group. Use the existing type owner consistently, retain the failed run, and keep the real identity gate unchanged. Missing/current CREATE and ordered successor remain gated. No runtime edits or main merge.' --kind decision --json > "$out/scope.json"
  python3 "$carrier/install-tests.py"
+ git apply --check "$carrier/install-identity.patch"
+ git apply "$carrier/install-identity.patch"
  measure lint npm exec --no -- eslint "$test_file" --fix
  measure metrics npm run test:metrics:scoped:strict -- "$test_file"
  measure metadata npm run test:metadata:refresh
  measure shards npm run audit:shards
  git diff --exit-code "$EXPECTED" -- src
- node scripts/solve.js note --id "$QUEST" --attempt 'Compose actual committed origin through scrubbed checkpoint, exact real CREATE admission/sole physical worker, installed target native open and genuine connection/port replacement. Direct install and wrong-action reads refuse; no sender log or refreshed permit may be used. Canonical SQLite gateway has actual conditional row mutation. No full driver, current CREATE planner activation or successor permission is inferred.' --json > "$out/attempt.json"
+ node scripts/solve.js note --id "$QUEST" --attempt 'Compose actual committed origin through scrubbed checkpoint, exact real CREATE admission/sole physical worker, installed target native open and genuine connection/port replacement. Direct install and wrong-action reads refuse; no sender log or refreshed permit may be used. Canonical operation/checkpoint entity matches SERVICE_TYPE; the historical fixture mismatch is corrected rather than loosening owner checks. No full driver, current CREATE planner activation or successor permission is inferred.' --json > "$out/attempt.json"
  git diff --check
  git add -- "$test_file" test/shards/ "solve/quests/$QUEST/log.ndjson"
  LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'test: prove actual learner-origin install and native reopen through CREATE authority'
@@ -60,7 +64,7 @@ with zipfile.ZipFile(out.parent/(out.name+'.zip'),'w',zipfile.ZIP_DEFLATED) as z
  for p in sorted(out.rglob('*')):
   if p.is_file():z.write(p,str(p.relative_to(out)))
 PY
- node scripts/solve.js evidence add "$out.zip" --id "$QUEST" --text 'Actual native ADD origin -> scrubbed checkpoint -> exact file-backed CREATE admission and sole worker -> target install -> native open/reopen -> original historical action. Direct admission-less install and wrong-action reads refuse. Same-process normal-driver proof with fixture-driven SENDING, not complete workflow driver, physical network, global revocation or successor authorization.' --json > "$out/canonical.json"
+ node scripts/solve.js evidence add "$out.zip" --id "$QUEST" --text 'Actual native ADD origin -> scrubbed checkpoint -> exact file-backed CREATE admission and sole worker -> target install -> native open/reopen -> original historical action. Direct admission-less install and wrong-action reads refuse. Same-process normal-driver proof with fixture-driven SENDING, not complete workflow driver, physical network, global revocation or successor authorization. Canonical entity identity correction and prior failed attempts retained.' --json > "$out/canonical.json"
  python3 - <<'PY'
 import json,os
 from pathlib import Path
