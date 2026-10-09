@@ -1,0 +1,40 @@
+{
+  "schema": "pr111-adversarial-boundary-review/1",
+  "reviewedHead": "f5a06f643a8f389ea545e5673758cca249674fa9",
+  "measuredImplementation": "6255634c71fa6c6c116e8e70252ef11f927f564f",
+  "nodeVersion": "v22.16.0",
+  "newExecution": "actual codec, read shaper, registry, checkpoint validator and disk reader; real node:sqlite through diagnostic adapter; native status supplied",
+  "nativeCoreOrQueueExecuted": false,
+  "normalBetterSqlite3Measurement": false,
+  "sourceModified": false,
+  "independentApproval": false,
+  "completedObservationCount": 13,
+  "newDiagnosticExit": 0,
+  "checkpointFormatLoaderReversionExit": 0,
+  "retainedOriginArchiveSha256": "ff384eda35b9902c4363f7192b7459bc4538116e5bff6e9c527de56b7a8c599c",
+  "retainedOriginManifestEntriesVerified": 145,
+  "retainedDeliveryManifestEntriesVerified": 163,
+  "originChangeProductionBlobsVerified": 12,
+  "reviewArchiveSha256": "941ddcfa7ea211ad8f11c67586d03a4f4ff7b94e5aaa44d353c32f3ac7fe296c",
+  "reviewManifestEntriesVerified": 17,
+  "reviewArchiveLocation": "conversation attachment, not claimed uploaded to canonical GitHub release store",
+  "observations": [
+    {"name":"plain action","accepted":true,"frozen":true},
+    {"name":"accessor stage","reads":["add-learner","add-learner","add-learner","promote","add-learner"],"acceptedQueryStage":"promote","classification":"normalization defect, no wire exploit or proposal proof"},
+    {"name":"plain descriptor","outcome":"valid"},
+    {"name":"null reservation direct validator","current":"TypeError","singleModuleReversion":"corrupt_descriptor"},
+    {"name":"null reservation on-disk reader","current":"corrupt_descriptor","singleModuleReversion":"corrupt_descriptor","reason":"descriptor_bytes","productionBypassProven":false},
+    {"name":"record origin without transaction","refused":true},
+    {"name":"reservation without committed origin","kind":"unresolved-action"},
+    {"name":"valid row and coherent supplied status","kind":"committed-action","originIndex":"2","originTerm":"1"},
+    {"name":"identical replay","sqliteTotalChangesBefore":2,"sqliteTotalChangesAfter":2},
+    {"name":"conflicting origin","throws":true,"priorBytesUnchanged":true},
+    {"name":"malformed non-null origin","kind":"refused-action","reason":"learner-action-corrupt-origin"},
+    {"name":"future-term injected row","originIndex":"2","originTerm":"999","suppliedNativeTerm":1,"suppliedAppliedIndex":2,"suppliedCommitIndex":2,"suppliedMembershipGenerationIndex":2,"liveKind":"committed-action","checkpointPredicate":false,"productionGenerationOfBadRowProven":false},
+    {"name":"historical receipt after supplied removal","kind":"committed-action","currentCreatePermission":false}
+  ],
+  "failedDiagnosticAttemptsRetained": [
+    "canonical null write correctly refused; no completed result claimed",
+    "review assertion used wrong reason string; corrected to existing constant"
+  ]
+}
