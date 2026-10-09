@@ -1,0 +1,366 @@
+{
+  "schema": "issued-action-review-corrections/1",
+  "runId": 37900322515,
+  "baseSha": "3a16c846a8d1c594288e07d53e7b09f69c1d010a",
+  "sourceSha": "550da8777bebed5cf6929f1f7034e5d86bfe80f8",
+  "executionSubstrate": "GitHub-hosted Ubuntu, Node 22, canonical locked dependencies, one classified worker",
+  "timings": {
+    "native-tests": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+          "5",
+          "156"
+        ],
+        [
+          "test/raft/raft-rs-backend/durable-store-membership-action.test.js",
+          "8",
+          "369"
+        ],
+        [
+          "test/raft/raft-rs-backend/issued-action-recovery.test.js",
+          "8",
+          "366"
+        ]
+      ]
+    },
+    "consumer-regression": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "26",
+          "2054"
+        ]
+      ]
+    }
+  },
+  "mutationMeasurements": [
+    {
+      "name": "positive",
+      "exit": 0,
+      "timedOut": false,
+      "wallMs": 294.86,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/positive.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "af13b5bd8c82aa67929f7f0b71c310d097176ccda31349431f8fc63364b8d1c8"
+    },
+    {
+      "name": "unapplied-is-not-committed",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 276.383,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/unapplied-is-not-committed.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "d5bc5dae740b555008b33f2029519d9fb7c8b83f721448dc812637ee652eb666"
+    },
+    {
+      "name": "operation-id-binding",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 303.985,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/operation-id-binding.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "e3adc59a5a99f7061295085235284fe4418c1ed92c88855deed3874e6465dbd8"
+    },
+    {
+      "name": "snapshot-exclusion",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 296.137,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/snapshot-exclusion.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "6577d97f3d9cdfb3379afa65ff2c253bf652c1f2e0f6922e417b1becfec79ec8"
+    },
+    {
+      "name": "historical-terms",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 287.979,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/historical-terms.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "41a9c57bfb387d0c869c4577261921b01fb71b2bc7d4109272b8c8aa888ee12b"
+    },
+    {
+      "name": "zero-term-context",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 273.464,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/zero-term-context.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "fd6b0214e982a7ba48e814444987088f566ec308d2164c822549eb8b207e8960"
+    },
+    {
+      "name": "omit-WAL-selection",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 93.085,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/omit-WAL-selection.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "1f9614f84f36fd280523e98c285850db5aaf9f455e3d8e73b6a7b4eb2cc754aa"
+    },
+    {
+      "name": "omit-reopen",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 272.489,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/omit-reopen.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "873581f4dddcee92f919faad7ba9acef57aaa3d18ae34cf0c110bdcb438de356"
+    },
+    {
+      "name": "omit-close",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 300.238,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/omit-close.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "0f9a0a847cea75f8dcba29d38e857163fd12cb33782ee150a58ff12988f60434"
+    },
+    {
+      "name": "restored-positive",
+      "exit": 0,
+      "timedOut": false,
+      "wallMs": 287.389,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/restored-positive.events.jsonl",
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js"
+      ],
+      "sourceSha256": "af13b5bd8c82aa67929f7f0b71c310d097176ccda31349431f8fc63364b8d1c8"
+    },
+    {
+      "name": "store-positive",
+      "exit": 0,
+      "timedOut": false,
+      "wallMs": 255.737,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/store-positive.events.jsonl",
+        "test/raft/raft-rs-backend/durable-store-membership-action.test.js"
+      ],
+      "sourceSha256": "af13b5bd8c82aa67929f7f0b71c310d097176ccda31349431f8fc63364b8d1c8"
+    },
+    {
+      "name": "progress-envelope",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 262.692,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/progress-envelope.events.jsonl",
+        "test/raft/raft-rs-backend/durable-store-membership-action.test.js"
+      ],
+      "sourceSha256": "a613827effad2fd7b9ddb03618ab67ac0fd3e4fd9eb379d0c1a20fcd8ceadc1b"
+    },
+    {
+      "name": "suffix-continuity",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 259.538,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/suffix-continuity.events.jsonl",
+        "test/raft/raft-rs-backend/durable-store-membership-action.test.js"
+      ],
+      "sourceSha256": "a418f68354a47d921edd00ceb82b7d5bc4e9ec7ad7d22c11e89acf24704b10e9"
+    },
+    {
+      "name": "nonregressing-terms",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 262.619,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/nonregressing-terms.events.jsonl",
+        "test/raft/raft-rs-backend/durable-store-membership-action.test.js"
+      ],
+      "sourceSha256": "0992f88d0ce4fc020985338ff397e5e6439a121b814911c8e99ec7f9e869a5fc"
+    },
+    {
+      "name": "coherent-read-snapshot",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 269.929,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/coherent-read-snapshot.events.jsonl",
+        "test/raft/raft-rs-backend/durable-store-membership-action.test.js"
+      ],
+      "sourceSha256": "d2dc5baf41a12d9040e881456c454d9764e7b352c47e4d7dbc5e8124255f77c2"
+    },
+    {
+      "name": "legitimate-snapshot-prefix",
+      "exit": 1,
+      "timedOut": false,
+      "wallMs": 258.366,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/legitimate-snapshot-prefix.events.jsonl",
+        "test/raft/raft-rs-backend/durable-store-membership-action.test.js"
+      ],
+      "sourceSha256": "218fca7499a88a2d199df2d35d9c3ceb426c3d1df6be5bdbd32977204737a4c1"
+    },
+    {
+      "name": "store-restored-positive",
+      "exit": 0,
+      "timedOut": false,
+      "wallMs": 262.097,
+      "command": [
+        "node",
+        "--no-warnings",
+        "--test",
+        "--test-reporter=tap",
+        "--test-reporter-destination=stdout",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/candidate-37900322515-1/solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/failure-reporter.mjs",
+        "--test-reporter-destination=/home/runner/work/lagrange/lagrange/issued-corrections-37900322515-1/campaign/store-restored-positive.events.jsonl",
+        "test/raft/raft-rs-backend/durable-store-membership-action.test.js"
+      ],
+      "sourceSha256": "af13b5bd8c82aa67929f7f0b71c310d097176ccda31349431f8fc63364b8d1c8"
+    }
+  ],
+  "checkerControls": [
+    "unrelated failing test rejected while designated test passed",
+    "setup failures rejected",
+    "cancelled tests rejected",
+    "probe refused before output creation or mutation",
+    "timed-out child output and explicit failure retained",
+    "source restored after a timed-out mutated run"
+  ],
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "044953a236b98ba467c61092e1e07bf6de580445af331bb02b21606dc41fb482",
+      "bytes": 202073,
+      "asset": "message-group-fresh-identity-membership--issued-corrections-37900322515-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--issued-corrections-37900322515-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T07:41:15.749Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Issued-action package corrective proof: actual normal SQLite/native fixtures; exact designated mutation failures, WAL/reconstruction engagement, probe/timeout protections and coherent read-only store transaction with concurrent writer. Bounded component result, not actual production Ready path, retained checkpoint origin, repository advancement, physical acceptance or main approval.",
+      "evidence": "sha256:044953a236b98ba467c61092e1e07bf6de580445af331bb02b21606dc41fb482",
+      "asset": "message-group-fresh-identity-membership--issued-corrections-37900322515-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--issued-corrections-37900322515-1.zip",
+      "bytes": 202073
+    }
+  },
+  "archiveSha256": "044953a236b98ba467c61092e1e07bf6de580445af331bb02b21606dc41fb482",
+  "originalPackageSha256": "84d1695157be6bac82fccbf7c8ddcbfed0597956d60509767333de97a4b0a55b",
+  "originalReviewArchiveSha256": "828462e72f58b63f7163fc8e11eeb3ec5601fadc64b120fb5b6368927c9513aa",
+  "proofCeiling": "actual native low-level Ready fixture and coherent SQLite store reads; no production port activation, process-kill, real runtime snapshot install, checkpoint provenance, replica_operations recording or distributed acceptance",
+  "independentApproval": false,
+  "mainMerged": false,
+  "fullLabVerdict": "FAIL",
+  "restartDurationResolved": false,
+  "globalCurrentnessResolved": false
+}
