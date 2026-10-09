@@ -31,11 +31,10 @@ assert r['totalViolationCount']==1 and r['violations'][0]['value']=="'0'",r
 p=Path('src/raft/raft-rs-committed-membership-context.js');s=p.read_text()
 anchor="import {deriveRaftRsPeerId} from './raft-rs-peer-identity.js';"
 assert s.count(anchor)==1
-s=s.replace(anchor,anchor+"\nimport {RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';",1)
+s=s.replace(anchor,anchor+"\nimport {RAFT_RS_ZERO_INDEX as ZERO} from './raft-rs-durable-store-constants.js';",1)
 old="if (entry.term === '0') throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);"
-new="if (entry.term === RAFT_RS_ZERO_INDEX) throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);"
+new="if (entry.term === ZERO) throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);"
 assert s.count(old)==1
-# Preserve the mutation target as a single line until eslint records its formatting.
 s=s.replace(old,new,1);p.write_text(s)
 p=Path('solve/quests/message-group-fresh-identity-membership/evidence/issued-action-recovery-20261009/run-diagnostic.py');s=p.read_text()
 assert s.count(old)==1;p.write_text(s.replace(old,new,1))
