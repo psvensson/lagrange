@@ -1,0 +1,147 @@
+diff --git a/src/raft/raft-rs-peer-identity-constants.js b/src/raft/raft-rs-peer-identity-constants.js
+--- a/src/raft/raft-rs-peer-identity-constants.js
++++ b/src/raft/raft-rs-peer-identity-constants.js
+@@ -4,6 +4,8 @@
+ // lifecycle is owned by raft-rs-replica-lifecycle-owner.js, not this map.
+ 
+ const RAFT_RS_PEER_IDENTITY_TABLE = 'raft_rs_peer_identity';
++const RAFT_RS_LEARNER_ADMISSION_COLUMN = 'learner_admission';
++const RAFT_RS_LEARNER_ADMISSION_UNRECORDED = 'unrecorded';
+ 
+ const RAFT_RS_PEER_IDENTITY_SQL = Object.freeze({
+   CREATE_TABLE: `
+@@ -71,6 +73,8 @@
+ });
+ 
+ export {
++  RAFT_RS_LEARNER_ADMISSION_COLUMN,
++  RAFT_RS_LEARNER_ADMISSION_UNRECORDED,
+   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
+   RAFT_RS_PEER_IDENTITY_RESOLUTION,
+   RAFT_RS_PEER_IDENTITY_SQL,
+diff --git a/src/raft/raft-rs-peer-identity.js b/src/raft/raft-rs-peer-identity.js
+--- a/src/raft/raft-rs-peer-identity.js
++++ b/src/raft/raft-rs-peer-identity.js
+@@ -36,6 +36,8 @@
+ import {createHash} from 'node:crypto';
+ 
+ import {
++  RAFT_RS_LEARNER_ADMISSION_COLUMN,
++  RAFT_RS_LEARNER_ADMISSION_UNRECORDED,
+   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
+   RAFT_RS_PEER_IDENTITY_RESOLUTION,
+   RAFT_RS_PEER_IDENTITY_SQL,
+@@ -70,8 +72,9 @@
+     }
+     identities.add(replicaIdentity);
+     peerIds.add(peerId);
+-    const learnerAdmission = reservation.learnerAdmission ?? null;
+-    if (learnerAdmission !== null && typeof learnerAdmission !== TYPE_STRING) {
++    const learnerAdmission = reservation.learnerAdmission ??
++      RAFT_RS_LEARNER_ADMISSION_UNRECORDED;
++    if (typeof learnerAdmission !== TYPE_STRING) {
+       throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
+     }
+     return Object.freeze({replicaIdentity, peerId, learnerAdmission});
+@@ -116,7 +119,7 @@
+     this.db = db;
+     this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.CREATE_TABLE);
+     const columns = this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_COLUMNS).all();
+-    if (!columns.some(({name}) => name === 'learner_admission')) {
++    if (!columns.some(({name}) => name === RAFT_RS_LEARNER_ADMISSION_COLUMN)) {
+       // No evidence is fabricated for an older reservation. Null stays unknown.
+       this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.ADD_LEARNER_ADMISSION);
+     }
+diff --git a/src/raft/raft-rs-committed-membership-context.js b/src/raft/raft-rs-committed-membership-context.js
+--- a/src/raft/raft-rs-committed-membership-context.js
++++ b/src/raft/raft-rs-committed-membership-context.js
+@@ -3,6 +3,7 @@
+ } from './raft-operation-port-constants.js';
+ import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
+ import {deriveRaftRsPeerId} from './raft-rs-peer-identity.js';
++import {RAFT_RS_LEARNER_ADMISSION_UNRECORDED} from './raft-rs-peer-identity-constants.js';
+ 
+ const CONTEXT_ENCODING = 'base64';
+ const ABSENT_CONTEXT = Object.freeze({kind: 'absent'});
+@@ -143,6 +144,8 @@
+ 
+ const LEARNER_ORIGIN_KEYS = Object.freeze(['groupId', 'index', 'term', 'context']);
+ const LEARNER_ORIGIN_ERROR = 'invalid committed learner origin';
++const LEARNER_ORIGIN_DECODE = Object.freeze({VALID: 'valid', INVALID: 'invalid'});
++const INVALID_LEARNER_ORIGIN = Object.freeze({kind: LEARNER_ORIGIN_DECODE.INVALID});
+ function positiveDecimal(value) {
+   return typeof value === 'string' && /^[1-9][0-9]{0,15}$/.test(value) &&
+     Number.isSafeInteger(Number(value));
+@@ -168,16 +171,19 @@
+     if (!value || typeof value !== 'object' || Array.isArray(value) ||
+         Object.keys(value).length !== LEARNER_ORIGIN_KEYS.length ||
+         !LEARNER_ORIGIN_KEYS.every((key) => Object.hasOwn(value, key)) ||
+-        encodeCommittedLearnerAdmission(value) !== encoded) return null;
+-    return Object.freeze({...value, context: Object.freeze(value.context)});
++        encodeCommittedLearnerAdmission(value) !== encoded) return INVALID_LEARNER_ORIGIN;
++    return Object.freeze({kind: LEARNER_ORIGIN_DECODE.VALID,
++      origin: Object.freeze({...value, context: Object.freeze(value.context)})});
+   } catch {
+-    return null;
++    return INVALID_LEARNER_ORIGIN;
+   }
+ }
+ function learnerAdmissionMatchesReservation(encoded, reservation, boundary) {
+-  if (encoded === null) return true;
+-  const origin = decodeCommittedLearnerAdmission(encoded);
+-  return origin !== null && origin.groupId === boundary.groupId &&
++  if (encoded === RAFT_RS_LEARNER_ADMISSION_UNRECORDED) return true;
++  const decoded = decodeCommittedLearnerAdmission(encoded);
++  if (decoded.kind !== LEARNER_ORIGIN_DECODE.VALID) return false;
++  const {origin} = decoded;
++  return origin.groupId === boundary.groupId &&
+     origin.context.replicaIdentity === reservation.replicaIdentity &&
+     origin.context.peerId === reservation.peerId &&
+     BigInt(origin.index) <= BigInt(boundary.membershipGenerationIndex) &&
+@@ -186,6 +192,7 @@
+ }
+ 
+ export {
++  LEARNER_ORIGIN_DECODE,
+   canonicalLearnerContext,
+   encodeCommittedLearnerAdmission,
+   decodeCommittedLearnerAdmission,
+diff --git a/src/raft/raft-rs-committed-membership-read.js b/src/raft/raft-rs-committed-membership-read.js
+--- a/src/raft/raft-rs-committed-membership-read.js
++++ b/src/raft/raft-rs-committed-membership-read.js
+@@ -23,7 +23,7 @@
+ import {
+   RAFT_RS_PEER_IDENTITY_RESOLUTION,
+ } from './raft-rs-peer-identity-constants.js';
+-import {canonicalLearnerContext, decodeCommittedLearnerAdmission} from
++import {canonicalLearnerContext, decodeCommittedLearnerAdmission, LEARNER_ORIGIN_DECODE} from
+   './raft-rs-committed-membership-context.js';
+ import {ROLE_LEADER} from './raft-rs-runtime-owner-constants.js';
+ 
+@@ -188,8 +188,11 @@
+     if (encoded === null) {
+       return learnerActionAnswer(ACTION_KIND.UNRESOLVED, ACTION_REASON.NOT_RECORDED);
+     }
+-    const origin = decodeCommittedLearnerAdmission(encoded);
+-    if (origin === null) return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.CORRUPT);
++    const decoded = decodeCommittedLearnerAdmission(encoded);
++    if (decoded.kind !== LEARNER_ORIGIN_DECODE.VALID) {
++      return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.CORRUPT);
++    }
++    const {origin} = decoded;
+     return learnerOriginRefusal(origin, query, status) ??
+       learnerActionAnswer(ACTION_KIND.COMMITTED, ACTION_REASON.APPLIED,
+         {receipt: origin, observedAppliedIndex: status.appliedIndex});
+diff --git a/src/raft/snapshot-checkpoint-format.js b/src/raft/snapshot-checkpoint-format.js
+--- a/src/raft/snapshot-checkpoint-format.js
++++ b/src/raft/snapshot-checkpoint-format.js
+@@ -126,8 +126,7 @@
+       exactKeys(reservation, RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS) &&
+       isNonEmptyString(reservation.replicaIdentity) &&
+       isDecimalInteger(reservation.peerId) &&
+-      (reservation.learnerAdmission === null ||
+-        typeof reservation.learnerAdmission === 'string')) &&
++      isNonEmptyString(reservation.learnerAdmission)) &&
+     unique(reservations.map(({replicaIdentity}) => replicaIdentity)) &&
+     unique(reservations.map(({peerId}) => peerId));
+ }
