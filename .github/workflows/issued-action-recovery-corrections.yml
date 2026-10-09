@@ -9,7 +9,7 @@ concurrency:
   group: issued-action-recovery-corrections-20261009
   cancel-in-progress: false
 env:
-  EXPECTED: 8ece20f70392314ceba49e4e787b800bc14d07d6
+  EXPECTED: 3a16c846a8d1c594288e07d53e7b09f69c1d010a
   WORK_BRANCH: work/issued-action-recovery-corrections-20261009
   QUEST: message-group-fresh-identity-membership
   LAGRANGE_LANE_JOBS_CAP: '1'
@@ -40,12 +40,12 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Measure exact corrected package and adversarial checker controls
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/run.sh measure
-      - name: Preserve bounded WIP and evidence with expected-head normal Git push
+      - name: Measure literal correction and actual audit outcomes with all adversaries
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/tighten.sh measure
+      - name: Retain previous proof and publish exact bounded corrective result
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/run.sh publish
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/tighten.sh publish
       - name: Preserve all failed outcomes and recoverable work
         if: always()
         run: |
