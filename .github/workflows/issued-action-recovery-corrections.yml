@@ -1,0 +1,72 @@
+name: issued-action-recovery-corrections
+on:
+  push:
+    branches: [ops/issued-action-recovery-corrections-20261009]
+    paths: [.github/workflows/issued-action-recovery-corrections.yml]
+permissions:
+  contents: read
+concurrency:
+  group: issued-action-recovery-corrections-20261009
+  cancel-in-progress: false
+env:
+  EXPECTED: 8ece20f70392314ceba49e4e787b800bc14d07d6
+  WORK_BRANCH: work/issued-action-recovery-corrections-20261009
+  QUEST: message-group-fresh-identity-membership
+  LAGRANGE_LANE_JOBS_CAP: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  corrective-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+        working-directory: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          path: carrier-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.EXPECTED }}
+          path: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Measure exact corrected package and adversarial checker controls
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/run.sh measure
+      - name: Preserve bounded WIP and evidence with expected-head normal Git push
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/run.sh publish
+      - name: Preserve all failed outcomes and recoverable work
+        if: always()
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/issued-corrections-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          cp -a ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections "$out/carrier"
+          git diff --binary "$EXPECTED" > "$out/total-change.patch"
+          git status --porcelain > "$out/archive-status.txt"
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then
+            git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"
+          fi
+          if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/tap"; fi
+          if [ -f test-output/reports/test-results.ndjson ]; then
+            cp test-output/reports/test-results.ndjson "$out/all-test-results.ndjson"
+          fi
+          echo 'Canonical hosted component tests, not a physical GCP run, complete change cone, independent approval or release certification. Learner-origin branch and original lab FAIL remain untouched.' > "$out/proof-limits.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: issued-action-corrections-${{ github.run_id }}-${{ github.run_attempt }}
+          path: issued-corrections-${{ github.run_id }}-${{ github.run_attempt }}/
+          retention-days: 14
+          if-no-files-found: error
