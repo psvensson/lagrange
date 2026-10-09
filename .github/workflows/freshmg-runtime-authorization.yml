@@ -10,30 +10,66 @@ concurrency:
   cancel-in-progress: false
 env:
   EXPECTED: ca1cb1384daee9592c88f7b47851043abdb7a5ae
+  WORK_BRANCH: work/freshmg-runtime-authorization-20261008
+  QUEST: message-group-fresh-identity-membership
+  LAGRANGE_LANE_JOBS_CAP: '1'
 jobs:
-  source-snapshot:
+  delivery-lifetime:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+        working-directory: candidate-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ env.EXPECTED }}
+          ref: ${{ github.sha }}
+          path: carrier-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
-          fetch-depth: 1
-      - name: Preserve immutable source and tracked-file identities only
-        shell: bash
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.EXPECTED }}
+          path: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Prove missing boundary, real lifetime and native queued execution
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/delivery-lifetime-20261009/run.sh measure
+      - name: Preserve measured WIP with an expected-head non-force push
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/delivery-lifetime-20261009/run.sh publish
+      - name: Retain all failures and recoverable changes
+        if: always()
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED"
-          test -z "$(git status --porcelain)"
-          mkdir -p "$RUNNER_TEMP/freshmg-source"
-          git archive --format=tar.gz -o "$RUNNER_TEMP/freshmg-source/source.tar.gz" HEAD
-          git ls-tree -r HEAD > "$RUNNER_TEMP/freshmg-source/tree-manifest.txt"
-          git rev-parse HEAD > "$RUNNER_TEMP/freshmg-source/source-sha.txt"
-          sha256sum "$RUNNER_TEMP/freshmg-source/source.tar.gz" > "$RUNNER_TEMP/freshmg-source/SHA256SUMS"
+          out="$GITHUB_WORKSPACE/delivery-lifetime-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          git diff --binary "$EXPECTED" > "$out/total-change.patch"
+          git status --porcelain > "$out/archive-status.txt"
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then
+            git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"
+          fi
+          if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/tap-results"; fi
+          if [ -f test-output/reports/test-results.ndjson ]; then
+            cp test-output/reports/test-results.ndjson "$out/archive-results.ndjson"
+          fi
+          echo 'Hosted Ubuntu one-worker component proof, not GCP or physical distributed acceptance. Exact committed outcome and CREATE are subsequent; original full lab FAIL and restart timing remain open.' > "$out/substrate.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
         with:
-          name: freshmg-source-${{ github.run_id }}
-          path: ${{ runner.temp }}/freshmg-source/
-          retention-days: 7
+          name: freshmg-delivery-lifetime-${{ github.run_id }}-${{ github.run_attempt }}
+          path: delivery-lifetime-${{ github.run_id }}-${{ github.run_attempt }}/
+          retention-days: 14
           if-no-files-found: error
+      - name: Do not confuse bounded proof with complete cutover
+        if: always()
+        run: |
+          echo 'No main merge, independent approval, global metadata atomicity, exact committed receipt, CREATE, or full cutover is certified.'
+          exit 1
