@@ -9,12 +9,12 @@ concurrency:
   group: freshmg-runtime-review-20261008
   cancel-in-progress: false
 env:
-  EXPECTED: 85711505b502950ddfd095e108d31df237fb7464
-  WORK_BRANCH: work/freshmg-learner-outcome-recording-20261009
+  EXPECTED: 2056e3c0c457fe85ad68f2e4eac338e0f961e401
+  WORK_BRANCH: work/freshmg-registered-learner-read-20261009
   QUEST: message-group-fresh-identity-membership
   LAGRANGE_LANE_JOBS_CAP: '1'
 jobs:
-  learner-process-loss:
+  registered-learner-read:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -40,38 +40,67 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Measure process cuts and preserve exact native refusal classifications
+      - name: Verify exact preserved source and measurement input bundle
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,base64,gzip,hashlib
+          from pathlib import Path
+          workspace=Path(os.environ['GITHUB_WORKSPACE'])
+          run=os.environ['GITHUB_RUN_ID'];attempt=os.environ['GITHUB_RUN_ATTEMPT']
+          source=workspace/f'carrier-{run}-{attempt}'/'scripts/quest-evidence/registered-learner-20261009'
+          encoded=''.join((source/f'bundle-{i}.b64').read_text().strip() for i in range(1,4))
+          assert hashlib.sha256(encoded.encode()).hexdigest()=='84db95172ca8b2d24679115d678ca49e54667b89774bb012f092c9073e532431'
+          files=json.loads(gzip.decompress(base64.b64decode(encoded,validate=True)))
+          target=workspace/f'registered-learner-carrier-{run}-{attempt}';target.mkdir()
+          for name,content in files.items():
+            assert Path(name).name==name and isinstance(content,str)
+            (target/name).write_text(content)
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write(f'CARRIER={target}\n')
+          print('Verified input bundle, files:',sorted(files))
+          PY
+      - name: Measure registered recipient and workflow recording boundaries
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-process-loss-20261009/continue.sh measure
-      - name: Preserve bounded result by expected-head normal Git push
+        run: bash "$CARRIER/run.sh" measure
+      - name: Preserve measured branch with expected-head non-force push
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-process-loss-20261009/continue.sh publish
-      - name: Retain failures, exact sources and complete observations
+        run: bash "$CARRIER/run.sh" publish
+      - name: Retain every attempt and exact changed byte
         if: always()
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/learner-process-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$GITHUB_WORKSPACE/registered-learner-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
           git status --porcelain > "$out/archive-status.txt"
           git diff --binary "$EXPECTED" > "$out/total-change.patch"
           if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"; fi
-          for f in src/rebalancer/replica-operation-message-group-membership-authorization.js test/integration/message-group-learner-runtime-authorization.integration.test.js test/integration/message-group-learner-process-loss.integration.test.js test/test-helpers/learner-operation-fixture.js test/test-helpers/learner-process-loss-worker.js; do
-            if [ -f "$f" ]; then mkdir -p "$out/source/$(dirname "$f")"; cp "$f" "$out/source/$f"; fi
-          done
+          if [ -n "${CARRIER:-}" ]; then
+            cp -a "$CARRIER" "$out/final-carrier"
+            python3 - "$CARRIER/source-files.json" "$out" <<'PY'
+          import json,sys,shutil
+          from pathlib import Path
+          out=Path(sys.argv[2])
+          files=json.loads(Path(sys.argv[1]).read_text())+['test/integration/message-group-learner-recipient.integration.test.js','test/integration/message-group-learner-runtime-authorization.integration.test.js']
+          for name in files:
+            p=Path(name)
+            if p.is_file():
+              target=out/'source'/p;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,target)
+          PY
+          fi
           if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/archive-tap"; fi
           if [ -f test-output/reports/test-results.ndjson ]; then cp test-output/reports/test-results.ndjson "$out/archive-results.ndjson"; fi
-          echo 'SIGKILL process proof on a hosted worker. Operation SQL is a file-backed gateway fixture and native transport is in-process. Not physical GCP, power loss, full replacement, CREATE or ordered-successor certification.' > "$out/substrate.txt"
+          echo 'Actual in-process routers and native ports, local operation SQL fixture. Not recurring driver, CREATE, successor, atomic cross-group lease revocation or physical GCP acceptance.' > "$out/substrate.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-learner-process-${{ github.run_id }}-${{ github.run_attempt }}
-          path: learner-process-${{ github.run_id }}-${{ github.run_attempt }}/
+          name: freshmg-registered-learner-${{ github.run_id }}-${{ github.run_attempt }}
+          path: registered-learner-${{ github.run_id }}-${{ github.run_attempt }}/
           retention-days: 14
           if-no-files-found: error
-      - name: Keep full cutover distinct from the process result
+      - name: Keep full cutover verdict separate
         if: always()
         run: |
-          echo 'Full driver/current CREATE/successor, physical acceptance, original lab, main and independent approval remain unresolved.'
+          echo 'Full driver, current CREATE, ordered successor, commit-time currentness, original lab, timing and independent approval remain unresolved.'
           exit 1
