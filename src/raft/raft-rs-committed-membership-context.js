@@ -1,3 +1,5 @@
+import {types as nodeUtilTypes} from 'node:util';
+
 import {
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
 } from './raft-operation-port-constants.js';
@@ -148,9 +150,39 @@ function positiveDecimal(value) {
   return typeof value === 'string' && /^[1-9][0-9]{0,15}$/.test(value) &&
     Number.isSafeInteger(Number(value));
 }
+const LEARNER_CONTEXT_DATA_VALUE = 'value';
+const learnerOwnDescriptors = Object.getOwnPropertyDescriptors;
+const learnerOwnKeys = Reflect.ownKeys;
+const learnerPrototype = Object.getPrototypeOf;
+const learnerIsProxy = nodeUtilTypes.isProxy;
+const LEARNER_CONTEXT_PROTOTYPE = Object.prototype;
+function snapshotLearnerContext(context) {
+  if (context === null || typeof context !== 'object' || learnerIsProxy(context)) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  const prototype = learnerPrototype(context);
+  if (prototype !== LEARNER_CONTEXT_PROTOTYPE && prototype !== null) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  // Capture descriptors once, before validation. Reading an accessor to copy
+  // it would execute the untrusted value rather than snapshot the input.
+  const descriptors = learnerOwnDescriptors(context);
+  if (learnerOwnKeys(descriptors).length !== MANAGED_CONTEXT_KEYS.length) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  const captured = Object.create(null);
+  for (const key of MANAGED_CONTEXT_KEYS) {
+    const descriptor = descriptors[key];
+    if (!descriptor || !Object.hasOwn(descriptor, LEARNER_CONTEXT_DATA_VALUE) ||
+        descriptor.enumerable !== true) throw new Error(LEARNER_ORIGIN_ERROR);
+    captured[key] = descriptor.value;
+  }
+  return Object.freeze(captured);
+}
 function canonicalLearnerContext(context) {
-  const encoded = encodeCommittedMembershipContext(context);
-  if (context.stage !== RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
+  const captured = snapshotLearnerContext(context);
+  const encoded = encodeCommittedMembershipContext(captured);
+  if (captured.stage !== RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
     throw new Error(LEARNER_ORIGIN_ERROR);
   }
   return Object.freeze(JSON.parse(Buffer.from(encoded, CONTEXT_ENCODING)

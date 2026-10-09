@@ -124,7 +124,7 @@ function validRaftRsConfState(confState) {
 function validRaftRsReservationShapes(reservations) {
   return Array.isArray(reservations) &&
     reservations.every((reservation) =>
-      exactKeys(reservation, reservation.learnerAdmission === undefined ?
+      exactKeys(reservation, reservation?.learnerAdmission === undefined ?
         RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS :
         RAFT_RS_CHECKPOINT_ADMITTED_PEER_FIELDS) &&
       isNonEmptyString(reservation.replicaIdentity) &&

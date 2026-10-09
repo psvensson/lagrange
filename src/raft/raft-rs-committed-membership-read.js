@@ -174,7 +174,8 @@ function learnerOriginRefusal(origin, query, status) {
   }
   if (BigInt(origin.index) > BigInt(status.appliedIndex) ||
       BigInt(origin.index) > BigInt(status.commitIndex) ||
-      BigInt(origin.index) > BigInt(status.membershipGenerationIndex)) {
+      BigInt(origin.index) > BigInt(status.membershipGenerationIndex) ||
+      BigInt(origin.term) > BigInt(status.term)) {
     return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.BEYOND_APPLIED);
   }
   return null;
