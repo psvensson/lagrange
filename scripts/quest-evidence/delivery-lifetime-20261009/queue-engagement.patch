@@ -1,0 +1,26 @@
+diff --git a/test/integration/message-group-learner-runtime-authorization.integration.test.js b/test/integration/message-group-learner-runtime-authorization.integration.test.js
+--- a/test/integration/message-group-learner-runtime-authorization.integration.test.js
++++ b/test/integration/message-group-learner-runtime-authorization.integration.test.js
+@@ -495,16 +495,18 @@
+       const release = Promise.withResolvers();
+       t.after(() => release.resolve());
+       const f = await fixture(t);
+-      const entered = Promise.withResolvers();
+       let heldSend = false;
+       f.cluster.sendFor = (from, address, packet) => {
+         if (from !== f.leader || heldSend) return undefined;
+         heldSend = true;
+-        entered.resolve();
+         return release.promise.then(() => f.cluster.queue(from, address, packet));
+       };
+-      const occupied = f.port.propose({queueBarrier: true});
+-      await entered.promise;
++      let occupied = f.port.propose({queueBarrier: true});
++      // As in the existing status-observation witness, a proposal may not
++      // emit until the leader's next heartbeat. Drive only that native clock.
++      for (let tick = 0; tick < 12 && !heldSend; tick += 1) occupied = f.port.tick();
++      assert.equal(heldSend, true, 'setup: a real Ready send must be suspended');
++      assert.equal(typeof occupied?.then, 'function', 'setup: native queue must be occupied');
+       const observed = Promise.withResolvers();
+       const pending = admission.proposeAuthorizedGroupLearner(f.port, f.receiver, f.request,
+         async (...args) => {
