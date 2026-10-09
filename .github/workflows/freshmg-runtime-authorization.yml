@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -40,12 +41,21 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
+      - name: Retain the original patch-format failure unchanged
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/learner-recording-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          gh api repos/psvensson/lagrange/actions/artifacts/11616701370/zip > "$out/first-attempt-37931510983.zip"
+          echo "d2d144a6f8ef3aa49af6dac06fe13ba30268111b5548a7f70658496c5f84c511  $out/first-attempt-37931510983.zip" | sha256sum -c -
       - name: Prove original red, owned recording and actual worker-loss recovery
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-recording-20261009/run.sh measure
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-recording-20261009/resume.sh measure
       - name: Preserve measured work and canonical evidence, not main integration
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-recording-20261009/run.sh publish
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-recording-20261009/resume.sh publish
       - name: Retain failures and all exact recoverable changes
         if: always()
         run: |
