@@ -36,7 +36,7 @@ replace(anchor, """async function assertNativeReadEntered(held, pending) {
 }
 
 """ + anchor)
-replace('await held.entered;', 'await assertNativeReadEntered(held, pending);', 3)
+replace('; await held.entered;', ';\n    await assertNativeReadEntered(held, pending);', 3)
 replace('fx.service.raft = fx.native; held.release();', """const oldDatabase = fx.f.cluster.replica(fx.replicaId).db;
     const recovered = fx.f.cluster.restart(fx.replicaId);
     assert.equal(oldDatabase.open, false, 'the prior recipient database must close');
