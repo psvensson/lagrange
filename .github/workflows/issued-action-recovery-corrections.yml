@@ -41,16 +41,16 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Retain both earlier attempt outcomes
+      - name: Retain all three earlier attempt outcomes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           out="$GITHUB_WORKSPACE/process-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          gh api repos/psvensson/lagrange/actions/artifacts/11606076626/zip > "$out/previous-attempt-37908863477.zip"
-          echo "ea5520e6fbd5b972c935ab926e15c51f63d2d3be36bf0e98a819a62f031fa01a  $out/previous-attempt-37908863477.zip" | sha256sum -c -
-          echo '37908352359 confirmed original live descendants then stopped on ESRCH in the test observer; its complete archive is nested in 37908863477. That next run passed process cleanup, seven checker cases, 22 normal-driver cases and five codec mutations, then stopped because this carrier passed an extra root argument to the one-output-path storage runner. Only that invocation is corrected now; prior verdicts remain failed.' > "$out/previous-attempt-classification.txt"
+          gh api repos/psvensson/lagrange/actions/artifacts/11605547814/zip > "$out/previous-attempt-37909499109.zip"
+          echo "4289a814f7058fceda08dd2fff36c1e99fe8502a1687e65592c66536f36433cc  $out/previous-attempt-37909499109.zip" | sha256sum -c -
+          echo '37909499109 passed the process lifetime correction but the original checker injector assumed term 2: only one rather than both intended election-history cases failed. It now rejects any post-initial term and asserts both exact failure identities; no production election settings change. That archive nests 37908863477 (extra storage-runner argument) and 37908352359 (ESRCH observer race). All original verdicts remain failed.' > "$out/previous-attempt-classification.txt"
       - name: Reproduce live descendants and prove owned-group cleanup
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-corrections/process-review/run.sh measure
       - name: Preserve canonical evidence and normal expected-head push
