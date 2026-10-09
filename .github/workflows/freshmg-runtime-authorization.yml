@@ -9,92 +9,33 @@ concurrency:
   group: freshmg-runtime-review-20261008
   cancel-in-progress: false
 env:
-  EXPECTED: c3f3c352b0f5497f5072137011cbbd73a00f32cd
-  WORK_BRANCH: work/freshmg-committed-learner-origin-20261009
-  QUEST: message-group-fresh-identity-membership
-  LAGRANGE_LANE_JOBS_CAP: '1'
+  EXPECTED: 16bcff35bc44d2c6c6151cfb29d35fa7a4b4325a
 jobs:
-  origin-install:
+  exact-source:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: write
-      actions: read
-    defaults:
-      run:
-        shell: bash
-        working-directory: candidate-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: ${{ github.sha }}
-          path: carrier-${{ github.run_id }}-${{ github.run_attempt }}
-          persist-credentials: false
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
           ref: ${{ env.EXPECTED }}
-          path: candidate-${{ github.run_id }}-${{ github.run_attempt }}
           persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - name: Retain successful mutations and failed install with nested first attempts
-        env:
-          GH_TOKEN: ${{ github.token }}
+          fetch-depth: 1
+      - name: Export only tracked exact source and its blob identities
+        shell: bash
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/origin-install-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          mkdir -p "$out/previous-37925854728"
-          gh api repos/psvensson/lagrange/actions/runs/37925854728/artifacts > "$out/previous-37925854728/artifacts.json"
-          python3 - "$out/previous-37925854728" <<'PY'
-          import hashlib,json,subprocess,sys,zipfile
-          from pathlib import Path
-          out=Path(sys.argv[1]);items=json.loads((out/'artifacts.json').read_text())['artifacts']
-          assert len(items)==5,'unexpected previous evidence inventory'
-          results=[]
-          for a in items:
-            p=out/(a['name']+'.zip')
-            with p.open('wb') as f:
-              subprocess.run(['gh','api',f"repos/psvensson/lagrange/actions/artifacts/{a['id']}/zip"],stdout=f,check=True,timeout=60)
-            assert hashlib.sha256(p.read_bytes()).hexdigest()==a['digest'].split(':')[1]
-            if a['name'].startswith('pr111-mutation-'):
-              with zipfile.ZipFile(p) as z:r=json.loads(z.read('result.json'))
-              assert r['intendedAssertionFailed'] is True and r['exit']==1 and r['sourcePublished'] is False
-              results.append(r)
-          assert len(results)==4
-          (out/'verified-mutations.json').write_text(json.dumps(results,indent=2)+'\n')
-          PY
-      - name: Measure canonical-identity origin-bearing install and reopen
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/install-run.sh measure
-      - name: Preserve measured WIP with expected-head normal push
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/install-run.sh publish
-      - name: Preserve every result and exact candidate change
-        if: always()
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/origin-install-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          test -z "$(git status --porcelain)"
+          out="$RUNNER_TEMP/learner-recording-source"
           mkdir -p "$out"
-          git diff --binary "$EXPECTED" > "$out/total-change.patch"
-          git status --porcelain > "$out/archive-status.txt"
-          if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then
-            git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"
-          fi
-          if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/archive-tap"; fi
-          if [ -f test-output/reports/test-results.ndjson ]; then cp test-output/reports/test-results.ndjson "$out/archive-results.ndjson"; fi
-          echo 'Real file-backed CREATE CAS and target native open; fixture-driven SENDING, not complete driver or distributed acceptance.' > "$out/substrate.txt"
+          git archive --format=tar.gz "$EXPECTED" > "$out/source.tar.gz"
+          git ls-tree -r "$EXPECTED" > "$out/tree-manifest.txt"
+          printf '%s\n' "$EXPECTED" > "$out/source-sha.txt"
+          (cd "$out" && sha256sum source.tar.gz tree-manifest.txt source-sha.txt > SHA256SUMS)
+          echo 'Read-only source export for the approved existing FreshMG continuation. No test, mutation, integration, cloud provisioning or certification.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
         with:
-          name: freshmg-origin-install-${{ github.run_id }}-${{ github.run_attempt }}
-          path: origin-install-${{ github.run_id }}-${{ github.run_attempt }}/
+          name: freshmg-recording-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/learner-recording-source/
           retention-days: 14
           if-no-files-found: error
-      - name: Preserve separate unresolved full-cutover verdict
-        if: always()
-        run: |
-          echo 'This component result cannot certify the full driver, current CREATE, ordered successor, original lab or main/release gates.'
-          exit 1
