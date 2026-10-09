@@ -1,0 +1,218 @@
+{
+  "schema": "registered-learner-read/1",
+  "runId": "37963538484",
+  "baseSha": "2056e3c0c457fe85ad68f2e4eac338e0f961e401",
+  "sourceSha": "92504f38eee031a7f5536b695e48eaa0cc17a179",
+  "redSha": "c5cefedc5b9e15c92eca74ca9a97964b039b1783",
+  "timings": {
+    "recipient": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-recipient.integration.test.js",
+          "9",
+          "1135"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "consumer": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "54",
+          "3951"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "process": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-process-loss.integration.test.js",
+          "4",
+          "2955"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "regressions": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "613"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "566"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "680"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "615"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "cache": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-membership-claim-cache.integration.test.js",
+          "3",
+          "10517"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "neighbors": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/raft/raft-rs-backend/committed-membership-read.test.js",
+          "5",
+          "415"
+        ],
+        [
+          "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+          "64",
+          "495"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "transport": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/transport/service-delivery-lifetime.test.js",
+          "5",
+          "385"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "handler": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/node/message-group-service-handler.test.js",
+          "8",
+          "322"
+        ]
+      ],
+      "withinBudget": true
+    }
+  },
+  "mutations": [
+    {
+      "name": "final-recipient-lifetime",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/registered-learner-carrier-37963538484-1/report-diagnostic.mjs",
+        "test/integration/message-group-learner-recipient.integration.test.js"
+      ],
+      "exit": 1,
+      "timedOut": false,
+      "cleanupComplete": true,
+      "sourceSha256": "dc7dc44fc21920d7bcff3eb78a28cc70b724399e8a94f64fb45475a6d9aecded",
+      "processGroupId": 4052,
+      "wallMs": 873.69,
+      "intendedAssertionFailed": true,
+      "requiredTest": "handler replacement invalidates a held actual native answer, fresh read recovers",
+      "requiredAssertion": "retired handler cannot deliver evidence"
+    },
+    {
+      "name": "registration-binding",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/registered-learner-carrier-37963538484-1/report-diagnostic.mjs",
+        "test/integration/message-group-learner-recipient.integration.test.js"
+      ],
+      "exit": 1,
+      "timedOut": false,
+      "cleanupComplete": true,
+      "sourceSha256": "74547dd9f23e6dc51b51f91bd0ca918a21760ccb2325c7d2e6f404e5805d8a1e",
+      "processGroupId": 4066,
+      "wallMs": 877.238,
+      "intendedAssertionFailed": true,
+      "requiredTest": "handler replacement invalidates a held actual native answer, fresh read recovers",
+      "requiredAssertion": "retired handler cannot deliver evidence"
+    },
+    {
+      "name": "native-port-binding",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/registered-learner-carrier-37963538484-1/report-diagnostic.mjs",
+        "test/integration/message-group-learner-recipient.integration.test.js"
+      ],
+      "exit": 1,
+      "timedOut": false,
+      "cleanupComplete": true,
+      "sourceSha256": "04bed90c90d5fd065f8e5efd9ebe12d51eb9707b871a728292a17967640e47cb",
+      "processGroupId": 4080,
+      "wallMs": 886.564,
+      "intendedAssertionFailed": true,
+      "requiredTest": "native port replacement invalidates a held result",
+      "requiredAssertion": "replaced port cannot return a stale witness"
+    },
+    {
+      "name": "joint-is-temporary",
+      "command": [
+        "node",
+        "--test",
+        "--test-reporter=/home/runner/work/lagrange/lagrange/registered-learner-carrier-37963538484-1/report-diagnostic.mjs",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ],
+      "exit": 1,
+      "timedOut": false,
+      "cleanupComplete": true,
+      "sourceSha256": "033ece298c0b36478d6205c1345438b502570d75c235f3b4b67121e0f8f4ce0a",
+      "processGroupId": 4094,
+      "wallMs": 3451.849,
+      "intendedAssertionFailed": true,
+      "requiredTest": "a joint witness defers recording without classifying historical origin as conflict",
+      "requiredAssertion": "joint configuration is temporary and must not become permanent conflict"
+    }
+  ],
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "b98afbb49d0877e58a650c81d9d342bf961e40847d8ded5d45f065dcf15f5edf",
+      "bytes": 829683,
+      "asset": "message-group-fresh-identity-membership--registered-learner-37963538484-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--registered-learner-37963538484-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T17:05:34.659Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Registered historical learner read over actual in-process MessageRouter identification and service delivery -> real native ports -> workflow-owned callback -> exact existing repository recording. Handler/port replacement, payload context, wrong group/action, shutdown, no-effect replay and CREATE park controls; JOINT classification correction. Operation SQL/service descriptor remain explicit fixture; not recurring driver, physical distributed acceptance, commit-time lease/boot fencing or successor authority.",
+      "evidence": "sha256:b98afbb49d0877e58a650c81d9d342bf961e40847d8ded5d45f065dcf15f5edf",
+      "asset": "message-group-fresh-identity-membership--registered-learner-37963538484-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--registered-learner-37963538484-1.zip",
+      "bytes": 829683
+    }
+  },
+  "executionSubstrate": "GitHub-hosted Ubuntu; normal better-sqlite3; actual native ports and router sockets in process; local operation SQL fixture",
+  "recurringDriver": false,
+  "createActivation": false,
+  "commitAuthorityFinding": "4231684822 remains open",
+  "successorIssuance": false,
+  "physicalAcceptance": false,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL"
+}
