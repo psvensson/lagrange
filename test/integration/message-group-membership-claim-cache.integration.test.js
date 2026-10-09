@@ -13,6 +13,7 @@ import {performance} from 'node:perf_hooks';
 import {NodeService} from '../../src/node/node-service.js';
 import {ReplicaOperationRepository} from '../../src/rebalancer/replica-operation-repository.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
+import {encodeCommittedLearnerAdmission} from '../../src/raft/raft-rs-committed-membership-context.js';
 import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../../src/raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from '../../src/raft/raft-committed-membership-constants.js';
 import {committedStampOfAnswer} from '../../src/raft/raft-committed-membership-stamp.js';
@@ -166,9 +167,21 @@ async function exerciseSettlement(t, settlement,
   const learnerFields = {message_group_membership_phase: 'learner_committed',
     message_group_membership_obligation_state: 'unknown',
     message_group_membership_permit: JSON.stringify(prior),
-    message_group_learner_stamp: JSON.stringify(learnerStamp)};
-  assert.equal((await cdc.updateSystemTableRow(TABLE, {operation_id: id}, learnerFields))
-    .success, true);
+    message_group_learner_stamp: JSON.stringify(committedStampOfAnswer(learnerStamp))};
+  // This test isolates SQL/Raft/CDC visibility; native observation is supplied
+  // explicitly here. The other integration file obtains it from the real port.
+  const nativeOrigin = JSON.parse(encodeCommittedLearnerAdmission({groupId: group,
+    index: '5', term: '3', context: {operationId: id, transitionIdentity: `${id}-transition`,
+      permitSequence: 1, stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
+      replicaIdentity: target, peerId: peerOf(target)}}));
+  const result = await repository.recordMessageGroupLearnerOutcome(
+    {...initialInput, executionClaim: claimed.claim}, async (query) => {
+      assert.equal(query.groupId, group);
+      assert.deepEqual(query.action, nativeOrigin.context);
+      return {kind: 'committed-action', reason: 'learner-action-applied',
+        receipt: nativeOrigin, observedAppliedIndex: 6, membership: learnerStamp};
+    });
+  assert.equal(result.outcome, 'recorded', 'recovered outcome must cross actual SQL/Raft/CDC');
   await cdc.waitForCacheUpdate(TABLE, id, true, {expectedFields: learnerFields});
   const admitted = await repository.queryAuthoritativeOperationById(id);
   const completedAt = Date.now();

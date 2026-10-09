@@ -68,7 +68,7 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
   const port = cluster.node(leader);
   const status = port.readStatus();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'learner-authorization-'));
-  const db = new Database(path.join(dir, 'operations.sqlite'));
+  let db = new Database(path.join(dir, 'operations.sqlite'));
   t.after(() => {
     db.close(); fs.rmSync(dir, {recursive: true, force: true});
   });
@@ -160,7 +160,21 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
   const transport = await createServiceDeliveryFixture(t, NODE);
   let delivery = await transport.local();
   return {cluster, port, leader, repository, repositoryFor, clock, execute, reads,
-    request, receiver, observe, db, gateway, transport,
+    request, receiver, observe, gateway, transport,
+    get db() {
+      return db;
+    },
+    reopenOperations: () => {
+      const old = db;
+      db.close();
+      db = new Database(path.join(dir, 'operations.sqlite'));
+      db.pragma('journal_mode = WAL'); db.pragma('synchronous = FULL');
+      assert.equal(old.open, false, 'old operation database must actually close');
+      assert.equal(db === old, false, 'operation recovery must acquire a new connection');
+      assert.equal(db.pragma('journal_mode', {simple: true}), 'wal');
+      assert.equal(db.pragma('synchronous', {simple: true}), 2);
+      return repositoryFor(NODE);
+    },
     get delivery() {
       return delivery;
     },
@@ -321,6 +335,32 @@ async function duringBootRead(f, change) {
   const result = await f.run();
   assert.equal(crossed, true, 'the authorization must reach the paused boot read');
   return result;
+}
+
+// The host supplies a bound real native read, never a caller's claimed receipt.
+function recordOutcome(f, {repository = f.repository, request = f.request,
+  read = (query) => f.cluster.node(f.leader).readCommittedMembership(query)} = {}) {
+  assert.equal(typeof repository.recordMessageGroupLearnerOutcome, 'function',
+    'existing repository must record exact recovered learner evidence');
+  return repository.recordMessageGroupLearnerOutcome(request, read);
+}
+async function issuedAndCommitted(t) {
+  const f = await fixture(t);
+  assertCommittedLearner(f, await f.run());
+  return f;
+}
+function ordinaryAndDebt(row) {
+  const retained = {...row};
+  for (const field of ['message_group_membership_phase',
+    'message_group_membership_permit', 'message_group_learner_stamp']) delete retained[field];
+  return retained;
+}
+async function renewMembershipHolder(f) {
+  f.clock.advance(1);
+  const result = await f.repository.claimMessageGroupMembershipOwner({operationId: O,
+    identity: f.request.identity, expectedClaim: f.request.executionClaim});
+  assert.equal(result.outcome, 'recorded', 'real holder renewal must engage');
+  return result.claim;
 }
 
 test('durable learner intent is consumed only through the bound repository and real runtime',
@@ -985,5 +1025,195 @@ test('durable learner intent is consumed only through the bound repository and r
       f.request.permit = '{}'; f.receiver.localReplicaIdentity = 'not-hosted';
       release();
       assertCommittedLearner(f, await promised);
+    });
+  });
+
+
+test('recovered learner outcome advances only the exact operation membership fields',
+  {timeout: 30000}, async (t) => {
+    await t.test('issued or proposed is not a recorded learner outcome', async (t) => {
+      const f = await fixture(t);
+      const before = f.row();
+      assert.equal((await recordOutcome(f)).outcome, 'unknown');
+      const proposed = await f.run();
+      assert.equal(proposed.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
+      assert.equal((await recordOutcome(f)).outcome, 'unknown');
+      assert.deepEqual(f.row(), before, 'no evidence must retain exact in-flight debt');
+    });
+    await t.test('committed receipt and same-turn stamp record once without CREATE', async (t) => {
+      const f = await issuedAndCommitted(t);
+      const before = f.row(); const proposals = f.proposalCount();
+      const observed = await readLearnerAction(f);
+      assert.equal(observed.membership.appliedIndex, observed.observedAppliedIndex,
+        'membership and historical evidence must share the native observation');
+      const recorded = await recordOutcome(f);
+      assert.equal(recorded.outcome, 'recorded', 'exact native evidence must record');
+      const after = f.row();
+      assert.equal(after.message_group_membership_phase, 'learner_committed');
+      assert.deepEqual(JSON.parse(after.message_group_membership_permit),
+        {...JSON.parse(f.request.permit), permitState: 'committed',
+          proposalIndex: Number(observed.receipt.index)}, 'only outcome fields change in old permit');
+      assert.deepEqual(JSON.parse(after.message_group_learner_stamp), observed.membership);
+      assert.deepEqual(ordinaryAndDebt(after), ordinaryAndDebt(before),
+        'recording preserves ordinary progress, original identity, holder and membership lane/debt');
+      const changes = f.db.prepare('SELECT total_changes() AS n').get().n;
+      assert.equal((await recordOutcome(f, {read: () => {
+        throw new Error('must not reread');
+      }}))
+        .outcome, 'recorded');
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n, changes,
+        'identical replay must perform no database mutation');
+      assert.deepEqual(f.row(), after);
+      assertNoProposal(f, proposals);
+      assert.notEqual((await f.observe(f.request, f.receiver)).outcome, 'observed',
+        'recorded learner must not revive the former initial execution permission');
+    });
+    await t.test('commit before operation recording survives both database and native reopen', async (t) => {
+      const f = await issuedAndCommitted(t);
+      const before = f.row(); const proposals = f.proposalCount();
+      const oldNative = f.cluster.replica(f.leader).db;
+      f.cluster.restart(f.leader);
+      assert.equal(oldNative.open, false, 'native database must close before recovered read');
+      const recovered = f.reopenOperations();
+      assert.deepEqual(f.row(), before, 'no operation result was recorded before reconstruction');
+      assert.equal((await recordOutcome(f, {repository: recovered})).outcome, 'recorded',
+        'new repository and native owners must record the original result');
+      assertNoProposal(f, proposals);
+    });
+    await t.test('leader change recovers the old action without refreshing its permit', async (t) => {
+      const f = await issuedAndCommitted(t);
+      const initial = JSON.parse(f.request.permit); const proposals = f.proposalCount();
+      f.cluster.isolate(f.leader);
+      f.cluster.tickers = FOUNDERS.filter((id) => id !== f.leader);
+      assert.ok(f.cluster.settle(() => f.cluster.tickers.some((id) =>
+        f.cluster.node(id).readStatus().role === 'leader')));
+      const next = f.cluster.tickers.find((id) => f.cluster.node(id).readStatus().role === 'leader');
+      assert.ok(f.cluster.node(next).readStatus().term > initial.leaderTerm);
+      const read = (query) => f.cluster.node(next).readCommittedMembership(query);
+      assert.equal((await recordOutcome(f, {read})).outcome, 'recorded');
+      assert.equal(JSON.parse(f.row().message_group_membership_permit).leaderTerm,
+        initial.leaderTerm);
+      assertNoProposal(f, proposals);
+    });
+    await t.test('wrong action or inconsistent observation cannot advance the operation', async (t) => {
+      const f = await issuedAndCommitted(t); const before = f.row();
+      const actual = await readLearnerAction(f);
+      for (const damaged of [
+        {...actual, receipt: {...actual.receipt,
+          context: {...actual.receipt.context, operationId: 'another-operation'}}},
+        {...actual, observedAppliedIndex: actual.observedAppliedIndex + 1},
+        {...actual, receipt: {...actual.receipt, term: String(Number(actual.receipt.term) + 1)}},
+        {...actual, membership: null},
+      ]) {
+        assert.equal((await recordOutcome(f, {read: async () => damaged})).outcome, 'conflict',
+          'wrong action or incoherent native evidence must refuse recording');
+        assert.deepEqual(f.row(), before);
+      }
+    });
+    await t.test('holder renewal during native read prevents old-holder recording', async (t) => {
+      const f = await issuedAndCommitted(t);
+      const read = async (query) => {
+        const evidence = await f.port.readCommittedMembership(query);
+        await renewMembershipHolder(f); return evidence;
+      };
+      assert.equal((await recordOutcome(f, {read})).outcome, 'conflict');
+      assert.equal(f.row().message_group_learner_stamp, null);
+      const current = f.row().message_group_membership_owner_claim;
+      assert.equal((await recordOutcome(f, {request: {...f.request, executionClaim: current}}))
+        .outcome, 'recorded', 'current holder can recover without replacing the old permit');
+    });
+    await t.test('terminal failure during observation retains debt and permits historical recording', async (t) => {
+      const f = await issuedAndCommitted(t); const proposals = f.proposalCount();
+      let terminal;
+      const read = async (query) => {
+        const evidence = await f.port.readCommittedMembership(query);
+        await settleOperation(f); terminal = f.row(); return evidence;
+      };
+      assert.equal((await recordOutcome(f, {read})).outcome, 'recorded');
+      assert.deepEqual(ordinaryAndDebt(f.row()), ordinaryAndDebt(terminal),
+        'terminal history and outstanding membership lane must survive outcome recording');
+      assertNoProposal(f, proposals);
+    });
+    await t.test('ordinary success during observation does not revive membership progress', async (t) => {
+      const f = await issuedAndCommitted(t);
+      const read = async (query) => {
+        const evidence = await f.port.readCommittedMembership(query);
+        await settleOperation(f, true); return evidence;
+      };
+      assert.equal((await recordOutcome(f, {read})).outcome, 'conflict');
+      assert.equal(f.row().message_group_learner_stamp, null);
+    });
+    await t.test('holder changes at the actual CAS cannot be overwritten', async (t) => {
+      const f = await issuedAndCommitted(t);
+      const execute = f.repository.executeOperationMutationWithRetry.bind(f.repository);
+      let engaged = false;
+      f.repository.executeOperationMutationWithRetry = async (sql, params, ...rest) => {
+        if (!engaged && sql.includes('SET message_group_membership_phase')) {
+          engaged = true; await renewMembershipHolder(f);
+        }
+        return execute(sql, params, ...rest);
+      };
+      assert.equal((await recordOutcome(f)).outcome, 'unknown',
+        'losing exact holder CAS must not report recording');
+      assert.equal(engaged, true, 'real learner-state CAS must engage');
+      assert.equal(f.row().message_group_learner_stamp, null,
+        'old holder must not overwrite the successor row');
+    });
+    await t.test('lost mutation answer is resolved from the exact durable row', async (t) => {
+      const f = await issuedAndCommitted(t); const proposals = f.proposalCount();
+      const execute = f.repository.executeOperationMutationWithRetry.bind(f.repository);
+      let committed = false;
+      f.repository.executeOperationMutationWithRetry = async (sql, params, ...rest) => {
+        const result = await execute(sql, params, ...rest);
+        if (sql.includes('SET message_group_membership_phase')) {
+          committed = true; throw new Error('simulated lost committed answer');
+        }
+        return result;
+      };
+      assert.equal((await recordOutcome(f)).outcome, 'recorded');
+      assert.equal(committed, true);
+      assertNoProposal(f, proposals);
+    });
+    await t.test('unknown readback keeps debt and exact replay recovers without native redispatch', async (t) => {
+      const f = await issuedAndCommitted(t); const proposals = f.proposalCount();
+      const execute = f.repository.executeOperationMutationWithRetry.bind(f.repository);
+      f.repository.executeOperationMutationWithRetry = async (sql, params, ...rest) => {
+        const result = await execute(sql, params, ...rest);
+        if (sql.includes('SET message_group_membership_phase')) f.failReads('replica_operations');
+        return result;
+      };
+      assert.equal((await recordOutcome(f)).outcome, 'unknown',
+        'unavailable authoritative readback must not report recording');
+      assert.equal(f.row().message_group_membership_lane_key, `message-group:${GROUP}`);
+      f.failReads(null); f.repository.executeOperationMutationWithRetry = execute;
+      assert.equal((await recordOutcome(f, {read: () => {
+        throw new Error('no new native action');
+      }}))
+        .outcome, 'recorded');
+      assertNoProposal(f, proposals);
+    });
+    await t.test('failed write before commit is retriable but never inferred recorded', async (t) => {
+      const f = await issuedAndCommitted(t); const before = f.row();
+      const execute = f.repository.executeOperationMutationWithRetry.bind(f.repository);
+      f.repository.executeOperationMutationWithRetry = async () => {
+        throw new Error('write refused');
+      };
+      assert.equal((await recordOutcome(f)).outcome, 'unknown');
+      assert.deepEqual(f.row(), before);
+      f.repository.executeOperationMutationWithRetry = execute;
+      assert.equal((await recordOutcome(f)).outcome, 'recorded');
+    });
+    await t.test('historical ADD after real removal cannot supply a learner stamp', async (t) => {
+      const f = await issuedAndCommitted(t); const before = f.row();
+      const transition = {...interveningLearnerTransition(f, TARGET),
+        stage: portContract.RAFT_MEMBERSHIP_TRANSITION_STAGE.REMOVE, permitSequence: 2};
+      const removed = await f.port.proposeMembershipTransition(transition);
+      assert.equal(removed.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
+      assert.ok(f.cluster.settle(() => FOUNDERS.every((id) =>
+        !f.cluster.node(id).readStatus().confState.learners.includes(deriveRaftRsPeerId(TARGET)))));
+      assert.equal((await readLearnerAction(f)).kind, 'committed-action', 'historical ADD remains real');
+      assert.equal((await recordOutcome(f)).outcome, 'conflict',
+        'historical ADD is not a present learner stamp or CREATE grant');
+      assert.deepEqual(f.row(), before);
     });
   });
