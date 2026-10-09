@@ -831,6 +831,20 @@
       "tests": [
         "test/integration/message-group-learner-runtime-authorization.integration.test.js"
       ]
+    },
+    "message-group-learner-operation-recording": {
+      "description": "Exact historical learner and canonical bootstrap observations advance only the existing operation-row fact through its holder/terminal CAS; worker loss and unknown answers retain membership debt, never CREATE or successor authority.",
+      "owners": [
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+        "src/rebalancer/replica-operation-message-group-learner-observation.js",
+        "src/rebalancer/replica-operation-message-group-membership-owner-claim.js",
+        "src/raft/raft-rs-committed-membership-read.js",
+        "src/raft/raft-rs-committed-membership-context.js",
+        "src/raft/raft-committed-membership-stamp.js"
+      ],
+      "tests": [
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1605,6 +1619,31 @@
         }
       ],
       "contract": "message-group-committed-learner-origin",
+      "witnessTests": [
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ]
+    },
+    "message-group-learner-operation-recording": {
+      "description": "Exact historical learner and canonical bootstrap observations advance only the existing operation-row fact through its holder/terminal CAS; worker loss and unknown answers retain membership debt, never CREATE or successor authority.",
+      "endpoints": [
+        {
+          "id": "operation-recording",
+          "owners": [
+            "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+            "src/rebalancer/replica-operation-message-group-learner-observation.js",
+            "src/rebalancer/replica-operation-message-group-membership-owner-claim.js"
+          ]
+        },
+        {
+          "id": "native-historical-and-current-observation",
+          "owners": [
+            "src/raft/raft-rs-committed-membership-read.js",
+            "src/raft/raft-rs-committed-membership-context.js",
+            "src/raft/raft-committed-membership-stamp.js"
+          ]
+        }
+      ],
+      "contract": "message-group-learner-operation-recording",
       "witnessTests": [
         "test/integration/message-group-learner-runtime-authorization.integration.test.js"
       ]
