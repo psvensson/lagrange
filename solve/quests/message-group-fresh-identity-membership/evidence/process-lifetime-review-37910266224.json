@@ -1,0 +1,61 @@
+{
+  "schema": "issued-recovery-process-lifetime-review/1",
+  "runId": "37910266224",
+  "baseSha": "2d26da1b99bf66ad9ffa92d274ea8b5c75b11eae",
+  "sourceSha": "f93466f396f2ef5e58fbf802ed6cb0b908c90271",
+  "redSha": "5e2b257427acc4243f92a0266e7093f5734538f8",
+  "reviewId": 5467764802,
+  "findingIds": [
+    4228253017,
+    4228253103
+  ],
+  "timings": {
+    "files": [
+      [
+        "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+        "5",
+        "274"
+      ],
+      [
+        "test/raft/raft-rs-backend/issued-action-record-read.test.js",
+        "9",
+        "551"
+      ],
+      [
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js",
+        "8",
+        "540"
+      ]
+    ],
+    "limitMs": 2000
+  },
+  "processCases": 2,
+  "checkerCases": 7,
+  "normalDriverCases": 22,
+  "codecMutationControls": 5,
+  "storeMutationControls": 7,
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "b7c422fc903ed9f6b3a90e3d24f30e6ec23aa8ddbe61ad59519fd4bd315de9a7",
+      "bytes": 196466,
+      "asset": "message-group-fresh-identity-membership--process-review-37910266224-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--process-review-37910266224-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T09:18:11.536Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "PR110 review correction: real child/grandchild after timed-out and normally exited parents. Original helper and source-only revert fail both intended live-worker assertions; private-group correction passes; original checker goals, normal-driver 22 cases and twelve exact mutations rechecked. Checker fault covers real leader advancement rather than exactly term 2, retaining both exact failure identities. No runtime/ordinary-test changes or full cutover approval. Hosted Linux diagnostic/component measurement, not GCP physical acceptance.",
+      "evidence": "sha256:b7c422fc903ed9f6b3a90e3d24f30e6ec23aa8ddbe61ad59519fd4bd315de9a7",
+      "asset": "message-group-fresh-identity-membership--process-review-37910266224-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--process-review-37910266224-1.zip",
+      "bytes": 196466
+    }
+  },
+  "archiveSha256": "b7c422fc903ed9f6b3a90e3d24f30e6ec23aa8ddbe61ad59519fd4bd315de9a7",
+  "runtimeSourceChanged": false,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL",
+  "distributedAcceptance": false
+}
