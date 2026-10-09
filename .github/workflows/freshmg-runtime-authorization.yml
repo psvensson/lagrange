@@ -9,12 +9,12 @@ concurrency:
   group: freshmg-runtime-review-20261008
   cancel-in-progress: false
 env:
-  EXPECTED: c3176777cc91c4ff8c7c7381db1c6c8368d93ae0
+  EXPECTED: 85711505b502950ddfd095e108d31df237fb7464
   WORK_BRANCH: work/freshmg-learner-outcome-recording-20261009
   QUEST: message-group-fresh-identity-membership
   LAGRANGE_LANE_JOBS_CAP: '1'
 jobs:
-  learner-recording:
+  learner-process-loss:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -40,35 +40,36 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Measure recording and exact action holder unknown-answer mutations
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-recording-20261009/continue.sh measure
+      - name: Measure native commit and operation-answer process cuts
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-process-loss-20261009/run.sh measure
       - name: Preserve bounded result by expected-head normal Git push
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-recording-20261009/continue.sh publish
-      - name: Retain all failures and exact candidate bytes
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-process-loss-20261009/run.sh publish
+      - name: Retain failures, exact sources and complete observations
         if: always()
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/learner-recording-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$GITHUB_WORKSPACE/learner-process-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
-          git diff --binary "$EXPECTED" > "$out/total-change.patch"
           git status --porcelain > "$out/archive-status.txt"
+          git diff --binary "$EXPECTED" > "$out/total-change.patch"
           if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"; fi
+          for f in src/rebalancer/replica-operation-message-group-membership-authorization.js test/integration/message-group-learner-runtime-authorization.integration.test.js test/integration/message-group-learner-process-loss.integration.test.js test/test-helpers/learner-operation-fixture.js test/test-helpers/learner-process-loss-worker.js; do
+            if [ -f "$f" ]; then mkdir -p "$out/source/$(dirname "$f")"; cp "$f" "$out/source/$f"; fi
+          done
           if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/archive-tap"; fi
           if [ -f test-output/reports/test-results.ndjson ]; then cp test-output/reports/test-results.ndjson "$out/archive-results.ndjson"; fi
-          echo 'Hosted canonical component execution, not physical GCP/lab or complete replacement certification. Driver/current CREATE/successor and process-loss gates remain open.' > "$out/substrate.txt"
+          echo 'SIGKILL process proof on a hosted worker. Operation SQL is a file-backed gateway fixture and native transport is in-process. Not physical GCP, power loss, full replacement, CREATE or ordered-successor certification.' > "$out/substrate.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: freshmg-learner-recording-${{ github.run_id }}-${{ github.run_attempt }}
-          path: learner-recording-${{ github.run_id }}-${{ github.run_attempt }}/
+          name: freshmg-learner-process-${{ github.run_id }}-${{ github.run_attempt }}
+          path: learner-process-${{ github.run_id }}-${{ github.run_attempt }}/
           retention-days: 14
           if-no-files-found: error
-      - name: Keep full cutover distinct from the component result
+      - name: Keep full cutover distinct from the process result
         if: always()
         run: |
-          echo 'No independent approval, full driver/current CREATE/successor, physical acceptance, main merge or final compatibility proof.'
+          echo 'Full driver/current CREATE/successor, physical acceptance, original lab, main and independent approval remain unresolved.'
           exit 1
