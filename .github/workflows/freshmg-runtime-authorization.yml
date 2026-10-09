@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -39,6 +40,24 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
+      - name: Retain all first-attempt results without changing verdicts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/origin-install-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out/previous-37925090485"
+          gh api repos/psvensson/lagrange/actions/runs/37925090485/artifacts > "$out/previous-37925090485/artifacts.json"
+          python3 - "$out/previous-37925090485" <<'PY'
+          import hashlib,json,subprocess,sys
+          from pathlib import Path
+          out=Path(sys.argv[1]);items=json.loads((out/'artifacts.json').read_text())['artifacts']
+          assert len(items)==5,'unexpected previous evidence inventory'
+          for a in items:
+            with (out/(a['name']+'.zip')).open('wb') as f:
+              subprocess.run(['gh','api',f"repos/psvensson/lagrange/actions/artifacts/{a['id']}/zip"],stdout=f,check=True,timeout=60)
+            assert hashlib.sha256((out/(a['name']+'.zip')).read_bytes()).hexdigest()==a['digest'].split(':')[1]
+          PY
       - name: Measure continuous actual origin-bearing install and reopen
         run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/install-run.sh measure
       - name: Preserve measured WIP with expected-head normal push
@@ -57,9 +76,7 @@ jobs:
             git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"
           fi
           if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/archive-tap"; fi
-          if [ -f test-output/reports/test-results.ndjson ]; then
-            cp test-output/reports/test-results.ndjson "$out/archive-results.ndjson"
-          fi
+          if [ -f test-output/reports/test-results.ndjson ]; then cp test-output/reports/test-results.ndjson "$out/archive-results.ndjson"; fi
           echo 'Real file-backed CREATE CAS and target native open; fixture-driven SENDING, not complete driver or distributed acceptance.' > "$out/substrate.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -83,10 +100,20 @@ jobs:
         case: [input-snapshot, future-term, replay-noop, conflicting-origin]
     env:
       MUTATION: ${{ matrix.case }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: candidate
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
+          ref: ${{ github.sha }}
+          path: carrier
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
           ref: ${{ env.EXPECTED }}
+          path: candidate
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
@@ -94,56 +121,27 @@ jobs:
           package-manager-cache: false
       - name: Install normal locked dependencies
         run: npm ci
-      - name: Apply exactly one deliberate weakening in this disposable checkout
-        shell: bash
+      - name: Apply one deliberate weakening in its isolated checkout
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED"
           test -z "$(git status --porcelain)"
           node --input-type=module -e "import {refuseUnderProbe} from './src/test-helpers/probe-guard.js'; refuseUnderProbe('isolated PR111 mutation');"
-          mkdir -p proof
-          python3 - <<'PY'
-          import hashlib,json,os
-          from pathlib import Path
-          cases={
-           'input-snapshot':('src/raft/raft-rs-committed-membership-context.js','const captured = snapshotLearnerContext(context);','const captured = context;','historical read snapshots exact own-data actions without invoking accessors','accessor action must be rejected before validation or encoding'),
-           'future-term':('src/raft/raft-rs-committed-membership-read.js',' ||\n      BigInt(origin.term) > BigInt(status.term)','','queued origin read refuses malformed bytes and impossible future terms','future-term origin cannot be committed historical evidence'),
-           'replay-noop':('src/raft/raft-rs-peer-identity.js','if (row.learner_admission === null) {','if (true) {','registry replay is a no-op and conflicting origin rolls back without replacement','identical origin replay performs no SQL update'),
-           'conflicting-origin':('src/raft/raft-rs-peer-identity.js','(row.learner_admission !== null && row.learner_admission !== encoded)','false','registry replay is a no-op and conflicting origin rolls back without replacement','conflicting origin must reject the enclosing application transaction')}
-          file,old,new,test,message=cases[os.environ['MUTATION']]
-          p=Path(file);original=p.read_bytes();text=original.decode();assert text.count(old)==1,'mutation target drift'
-          p.write_text(text.replace(old,new,1))
-          Path('proof/mutation.json').write_text(json.dumps({'case':os.environ['MUTATION'],'baseSha':os.environ['EXPECTED'],'file':file,'originalSha256':hashlib.sha256(original).hexdigest(),'mutatedSha256':hashlib.sha256(p.read_bytes()).hexdigest(),'test':test,'assertion':message},indent=2)+'\n')
-          PY
+          python3 ../carrier/scripts/quest-evidence/learner-origin-20261009/isolated-review-mutation.py prepare
           git diff --binary > proof/mutation.patch
-      - name: Measure exact intended failing assertion
-        shell: bash
+      - name: Preserve expected failure exit before checking its exact assertion
         run: |
           set -uo pipefail
+          set +e
           npm run test:file -- test/integration/message-group-learner-runtime-authorization.integration.test.js > proof/test.stdout.txt 2> proof/test.stderr.txt
           status=$?
+          set -e
           echo "$status" > proof/test.exit.txt
-          test "$status" -eq 1 || exit 2
-          python3 - <<'PY'
-          import json,re
-          from pathlib import Path
-          r=json.loads(Path('proof/mutation.json').read_text());s=Path('proof/test.stdout.txt').read_text()
-          blocks=re.split(r'(?=^    # Subtest: )',s,flags=re.M)
-          matched=[b for b in blocks if b.startswith('    # Subtest: '+r['test']+'\n')]
-          assert len(matched)==1,'missing exact test'
-          b=matched[0]
-          assert re.search(r'^    not ok \d+ - '+re.escape(r['test'])+'$',b,re.M),'required test did not fail'
-          assert "code: 'ERR_ASSERTION'" in b and r['assertion'] in b,'wrong assertion failure'
-          for field in ['cancelled','skipped']:
-           assert re.search(r'^# '+field+' 0$',s,re.M),'unexercised test'
-          r['intendedAssertionFailed']=True;r['exit']=1;r['isolatedCheckout']=True;r['sourcePublished']=False
-          Path('proof/result.json').write_text(json.dumps(r,indent=2)+'\n')
-          print(json.dumps(r,indent=2))
-          PY
+          python3 ../carrier/scripts/quest-evidence/learner-origin-20261009/isolated-review-mutation.py check
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: pr111-mutation-${{ matrix.case }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: proof/
+          path: candidate/proof/
           retention-days: 14
           if-no-files-found: error
