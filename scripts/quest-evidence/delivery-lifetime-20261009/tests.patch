@@ -1,0 +1,322 @@
+diff --git a/test/integration/message-group-learner-runtime-authorization.integration.test.js b/test/integration/message-group-learner-runtime-authorization.integration.test.js
+--- a/test/integration/message-group-learner-runtime-authorization.integration.test.js
++++ b/test/integration/message-group-learner-runtime-authorization.integration.test.js
+@@ -9,6 +9,7 @@
+ import os from 'node:os';
+ import path from 'node:path';
+ import {test} from 'node:test';
++import {createServiceDeliveryFixture} from '../test-helpers/service-delivery-fixture.js';
+ import Database from 'better-sqlite3';
+ import * as admission from '../../src/raft/raft-rs-group-membership-admission.js';
+ import * as portContract from '../../src/raft/raft-operation-port-constants.js';
+@@ -126,8 +127,16 @@
+   const receiver = {groupId: GROUP, nodeId: NODE, bootIncarnation: 1,
+     localReplicaIdentity: leader, senderNodeId: NODE, senderBootIncarnation: 1};
+   const observe = repository.observeMessageGroupLearnerAuthorization.bind(repository);
++  const transport = await createServiceDeliveryFixture(t, NODE);
++  let delivery = await transport.local();
+   return {cluster, port, leader, repository, repositoryFor, clock, execute, reads,
+-    request, receiver, observe, db,
++    request, receiver, observe, db, transport,
++    get delivery() {
++      return delivery;
++    },
++    set delivery(value) {
++      delivery = value;
++    },
+     row: () => db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?').get(O),
+     failReads: (table) => {
+       failedTable = table;
+@@ -138,7 +147,7 @@
+     pauseNodes: (callback) => {
+       beforeNodes = callback;
+     },
+-    run: () => admission.proposeAuthorizedGroupLearner(port, receiver, request, observe),
++    run: () => admission.proposeAuthorizedGroupLearner(port, receiver, request, observe, delivery),
+     proposalCount: () => cluster.coreEntries.filter((entry) =>
+       entry.operation === 'propose_conf_change_v2').length};
+ }
+@@ -244,11 +253,11 @@
+       const f = await fixture(t, {issue: false});
+       const count = f.proposalCount();
+       assert.equal((await admission.proposeAuthorizedGroupLearner(f.port, f.receiver,
+-        f.request, {outcome: 'observed'})).reason,
++        f.request, {outcome: 'observed'}, f.delivery)).reason,
+       portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
+       assertNoProposal(f, count);
+       assert.equal((await admission.proposeAuthorizedGroupLearner(null, f.receiver,
+-        f.request, f.observe)).reason,
++        f.request, f.observe, f.delivery)).reason,
+       portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.UNAVAILABLE);
+       assertNoProposal(f, count);
+       assert.equal((await f.run()).reason,
+@@ -291,14 +300,14 @@
+       for (const change of [{groupId: 'other-group'}, {bootIncarnation: 2},
+         {senderNodeId: SUCCESSOR}, {senderBootIncarnation: 2}, {localReplicaIdentity: 'not-hosted'}]) {
+         const answer = await admission.proposeAuthorizedGroupLearner(f.port,
+-          {...f.receiver, ...change}, f.request, f.observe);
++          {...f.receiver, ...change}, f.request, f.observe, f.delivery);
+         assert.equal(answer.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+         assertNoProposal(f, count);
+       }
+       const changed = {...f.request, permit: JSON.stringify({
+         ...JSON.parse(f.request.permit), workflowOwnerFence: 'not-the-issued-fence'})};
+       assert.equal((await admission.proposeAuthorizedGroupLearner(f.port, f.receiver,
+-        changed, f.observe)).outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
++        changed, f.observe, f.delivery)).outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+       assertNoProposal(f, count);
+     });
+     await t.test('current canonical boot and exact renewed holder defeat stale delivery', async (t) => {
+@@ -326,6 +335,7 @@
+       assertNoProposal(f, count);
+       f.request.executionClaim = adopted.claim;
+       f.receiver.senderNodeId = SUCCESSOR;
++      f.delivery = await f.transport.remote(SUCCESSOR);
+       assertCommittedLearner(f, await f.run());
+       assert.equal(f.row().message_group_membership_permit, f.request.permit);
+     });
+@@ -429,6 +439,92 @@
+         assert.equal(f.row().message_group_membership_permit, f.request.permit,
+           'native configuration refusal retains the exact unresolved operation');
+       });
++    await t.test('wire copies cannot supply a callable delivery capability', async (t) => {
++      const f = await fixture(t);
++      const before = f.proposalCount();
++      const copied = JSON.parse(JSON.stringify(f.delivery));
++      const result = await admission.proposeAuthorizedGroupLearner(f.port, f.receiver,
++        {...f.request, delivery: f.delivery}, f.observe, copied);
++      assert.equal(result.reason,
++        portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.DELIVERY_REQUIRED,
++        'a wire copy cannot authorize execution from a payload field');
++      assertNoProposal(f, before);
++    });
++    await t.test('local delivery refuses after shutdown during the final read', async (t) => {
++      const f = await fixture(t);
++      const before = f.proposalCount();
++      const held = await holdFinalOperationRead(t, f);
++      await f.transport.router.shutdown();
++      await f.transport.router.initialize({startServer: false});
++      held.release();
++      const result = await held.pending;
++      assert.equal(result.reason, portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY,
++        'old local delivery must not reach native proposal after shutdown and reopen');
++      assertNoProposal(f, before);
++      assert.equal(f.row().message_group_membership_permit, f.request.permit);
++      f.delivery = await f.transport.local();
++      assertCommittedLearner(f, await f.run());
++    });
++    await t.test('same-boot socket replacement refuses old delivery but preserves exact redelivery',
++      async (t) => {
++        const f = await fixture(t);
++        f.clock.advance(30000);
++        const adopted = await f.repositoryFor(SUCCESSOR).claimMessageGroupMembershipOwner({
++          operationId: O, identity: f.request.identity, expectedClaim: f.request.executionClaim});
++        assert.equal(adopted.outcome, 'recorded');
++        f.request.executionClaim = adopted.claim;
++        f.receiver.senderNodeId = SUCCESSOR;
++        f.delivery = await f.transport.remote(SUCCESSOR);
++        const before = f.proposalCount();
++        const old = f.delivery;
++        const held = await holdFinalOperationRead(t, f);
++        await f.transport.closeRemote(SUCCESSOR);
++        f.delivery = await f.transport.remote(SUCCESSOR);
++        assert.equal(old.isCurrent(), false);
++        assert.equal(f.delivery.isCurrent(), true);
++        held.release();
++        const result = await held.pending;
++        assert.equal(result.reason,
++          portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY,
++          'a replaced socket must not carry its old action into the native proposal');
++        assertNoProposal(f, before);
++        assertCommittedLearner(f, await f.run());
++        assert.equal(f.row().message_group_membership_obligation_state, 'unknown');
++      });
++    await t.test('delivery fence is consumed after an actual queued native turn', async (t) => {
++      const release = Promise.withResolvers();
++      t.after(() => release.resolve());
++      const f = await fixture(t);
++      const entered = Promise.withResolvers();
++      let heldSend = false;
++      f.cluster.sendFor = (from, address, packet) => {
++        if (from !== f.leader || heldSend) return undefined;
++        heldSend = true;
++        entered.resolve();
++        return release.promise.then(() => f.cluster.queue(from, address, packet));
++      };
++      const occupied = f.port.propose({queueBarrier: true});
++      await entered.promise;
++      const observed = Promise.withResolvers();
++      const pending = admission.proposeAuthorizedGroupLearner(f.port, f.receiver, f.request,
++        async (...args) => {
++          const result = await f.observe(...args);
++          observed.resolve();
++          return result;
++        }, f.delivery);
++      await observed.promise;
++      await new Promise((resolve) => setImmediate(resolve));
++      const before = f.proposalCount();
++      await f.transport.router.shutdown();
++      release.resolve();
++      await occupied;
++      const result = await pending;
++      assert.equal(heldSend, true, 'actual Ready send must hold the native work queue');
++      assert.equal(result.reason, portContract.RAFT_MEMBERSHIP_AUTHORIZATION_REASON.STALE_DELIVERY,
++        'a queued native action must revalidate its live delivery at execution');
++      assertNoProposal(f, before);
++      assert.equal(f.row().message_group_membership_permit, f.request.permit);
++    });
+     await t.test('request and host binding mutations during the read cannot retarget the proposal', async (t) => {
+       const f = await fixture(t);
+       let entered;
+diff --git a/test/test-helpers/service-delivery-fixture.js b/test/test-helpers/service-delivery-fixture.js
+new file mode 100644
+--- /dev/null
++++ b/test/test-helpers/service-delivery-fixture.js
+@@ -0,0 +1,79 @@
++/** Actual router identification and service dispatch over in-process sockets.
++ * The endpoint and frame transport are fixture physics; no connection records,
++ * boot watermarks or delivery-context predicates are fabricated.
++ */
++import assert from 'node:assert/strict';
++import {MessageRouter} from '../../src/transport/message-router.js';
++import {createInProcWebSocketPair} from '../../src/transport/inproc-transport.js';
++import {ROUTER_MESSAGE_TYPE, TRANSPORT_EVENT} from '../../src/constants/transport.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++
++async function createServiceDeliveryFixture(t, nodeId, bootIncarnation = 1) {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  ConfigurationManager.getInstance().initialize({node: {id: nodeId}, logging: {level: 'error'}});
++  LoggingService.getInstance().initialize({level: 'error'});
++  const router = new MessageRouter({nodeId, bootIncarnation});
++  await router.initialize({startServer: false});
++  t.after(async () => {
++    await router.shutdown();
++    ConfigurationManager.resetInstance();
++    LoggingService.resetInstance();
++  });
++  const address = `${nodeId}/message-group/delivery-witness`;
++  const sockets = new Map();
++  let sequence = 0;
++  const capture = () => {
++    const deferred = Promise.withResolvers();
++    router.register(address, (envelope, delivery) => {
++      deferred.resolve({envelope, delivery});
++      return {accepted: true};
++    });
++    return deferred.promise;
++  };
++  return {
++    router,
++    async local() {
++      const received = capture();
++      await router.deliverLocal(address, `local-${sequence++}`, {probe: true}, null);
++      return (await received).delivery;
++    },
++    async remote(senderNodeId, senderBootIncarnation = 1, claimedSource = senderNodeId) {
++      const pair = createInProcWebSocketPair();
++      sockets.set(senderNodeId, pair);
++      t.after(() => pair.a.terminate());
++      const identified = Promise.withResolvers();
++      const onMessage = (data) => {
++        if (JSON.parse(data.toString()).type === ROUTER_MESSAGE_TYPE.IDENTIFY) {
++          pair.a.removeListener(TRANSPORT_EVENT.MESSAGE, onMessage);
++          identified.resolve();
++        }
++      };
++      pair.a.on(TRANSPORT_EVENT.MESSAGE, onMessage);
++      router.handleIncomingConnection(pair.b, null);
++      pair.a.send(JSON.stringify({type: ROUTER_MESSAGE_TYPE.IDENTIFY,
++        nodeId: senderNodeId, nodeAddress: `ws://${senderNodeId}:9999`,
++        bootIncarnation: senderBootIncarnation}));
++      await identified.promise;
++      assert.equal(router.nodeConnections.get(senderNodeId)?.ws, pair.b,
++        'real identification must adopt the supplied physical socket');
++      const received = capture();
++      pair.a.send(JSON.stringify({type: ROUTER_MESSAGE_TYPE.SERVICE_MESSAGE,
++        messageId: `remote-${sequence++}`, targetAddress: address,
++        sourceNodeId: claimedSource, payload: {probe: true}}));
++      return (await received).delivery;
++    },
++    async closeRemote(senderNodeId) {
++      const socket = sockets.get(senderNodeId)?.a;
++      assert.ok(socket, 'a real identified socket must exist before closing');
++      const closed = Promise.withResolvers();
++      socket.once(TRANSPORT_EVENT.CLOSE, closed.resolve);
++      socket.terminate();
++      await closed.promise;
++      // Both sides emit their already-scheduled close events before returning.
++      await new Promise((resolve) => setImmediate(resolve));
++    },
++  };
++}
++export {createServiceDeliveryFixture};
+diff --git a/test/transport/service-delivery-lifetime.test.js b/test/transport/service-delivery-lifetime.test.js
+new file mode 100644
+--- /dev/null
++++ b/test/transport/service-delivery-lifetime.test.js
+@@ -0,0 +1,63 @@
++import assert from 'node:assert/strict';
++import {test} from 'node:test';
++import {createServiceDeliveryFixture} from '../test-helpers/service-delivery-fixture.js';
++
++const LOCAL = 'delivery-receiver';
++const REMOTE = 'delivery-sender';
++
++test('delivery context uses actual adopted socket identity, not source fields', async (t) => {
++  const f = await createServiceDeliveryFixture(t, LOCAL);
++  const delivery = await f.remote(REMOTE, 1, 'forged-payload-sender');
++  assert.ok(delivery, 'registered remote handler requires owner-bound delivery context');
++  assert.equal(delivery.senderNodeId, REMOTE);
++  assert.equal(delivery.nodeId, LOCAL);
++  assert.equal(delivery.senderBootIncarnation, 1);
++  assert.equal(delivery.bootIncarnation, 1);
++  assert.equal(delivery.isCurrent(), true);
++  assert.equal(Object.isFrozen(delivery), true);
++  assert.equal(JSON.parse(JSON.stringify(delivery)).isCurrent, undefined,
++    'a serialized copy must not contain the local callable lifetime fence');
++});
++
++test('socket closure and same-boot replacement cannot revive an old delivery', async (t) => {
++  const f = await createServiceDeliveryFixture(t, LOCAL);
++  const old = await f.remote(REMOTE);
++  assert.ok(old, 'remote delivery context must be present');
++  const firstConnection = f.router.nodeConnections.get(REMOTE);
++  await f.closeRemote(REMOTE);
++  assert.equal(old.isCurrent(), false);
++  const replacement = await f.remote(REMOTE);
++  assert.notEqual(f.router.nodeConnections.get(REMOTE), firstConnection);
++  assert.notEqual(replacement.connectionId, old.connectionId);
++  assert.equal(replacement.isCurrent(), true);
++  assert.equal(old.isCurrent(), false, 'old delivery remains invalid after same-boot replacement');
++});
++
++test('UNKNOWN identification stays compatible but grants no privileged delivery', async (t) => {
++  const f = await createServiceDeliveryFixture(t, LOCAL);
++  const delivery = await f.remote(REMOTE, 0);
++  assert.equal(f.router.nodeConnections.get(REMOTE).bootIncarnation, 0);
++  assert.equal(delivery, null, 'UNKNOWN socket identity must not become a membership grant');
++});
++
++test('newer boot adoption invalidates old socket delivery', async (t) => {
++  const f = await createServiceDeliveryFixture(t, LOCAL);
++  const old = await f.remote(REMOTE, 1);
++  const current = await f.remote(REMOTE, 2);
++  assert.equal(current.senderBootIncarnation, 2);
++  assert.equal(current.isCurrent(), true);
++  assert.equal(old.isCurrent(), false, 'newly adopted boot permanently defeats old delivery');
++});
++
++test('router shutdown invalidates local delivery after reinitialization', async (t) => {
++  const f = await createServiceDeliveryFixture(t, LOCAL);
++  const old = await f.local();
++  assert.ok(old, 'local handler also receives an owned lifetime context');
++  assert.equal(old.isCurrent(), true);
++  await f.router.shutdown();
++  assert.equal(old.isCurrent(), false);
++  await f.router.initialize({startServer: false});
++  const fresh = await f.local();
++  assert.equal(fresh.isCurrent(), true);
++  assert.equal(old.isCurrent(), false, 'shutdown permanently invalidates old contexts');
++});
