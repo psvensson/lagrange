@@ -1,0 +1,140 @@
+--- a/src/rebalancer/replica-operation-message-group-membership-authorization.js
++++ b/src/rebalancer/replica-operation-message-group-membership-authorization.js
+@@ -2,6 +2,8 @@
+  * This is a repository operation, not another workflow or runtime authority.
+  * RECORDED means an exact durable intent exists; it is not a dispatch grant.
+  */
++import {decodeCommittedLearnerAdmission, INVALID_COMMITTED_LEARNER_ADMISSION} from
++  '../raft/raft-rs-committed-membership-context.js';
+ import {WORKFLOW_STEP} from '../constants/workflow.js';
+ import {ReplicaStatus} from './replica-status.js';
+ import {committedStampOfAnswer} from '../raft/raft-committed-membership-stamp.js';
+@@ -237,3 +239,108 @@
+   return persistInitialLearnerIntent(repository, row, claim, input);
+ }
+ export {authorizeMessageGroupLearner};
++
++const NO_LEARNER_COMMIT_INPUT = null;
++function learnerCommitOriginMatches(origin, input) {
++  const {identity, permit, operationId} = input;
++  return origin !== INVALID_COMMITTED_LEARNER_ADMISSION &&
++    origin.groupId === identity.groupId && origin.context.operationId === operationId &&
++    origin.context.transitionIdentity === identity.transitionIdentity &&
++    origin.context.permitSequence === permit.permitSequence &&
++    origin.context.stage === permit.permitStage &&
++    origin.context.replicaIdentity === identity.targetReplicaId &&
++    origin.context.peerId === identity.targetPeerId &&
++    origin.term === String(permit.leaderTerm) &&
++    Number(origin.index) > permit.leaderConfigurationStamp.membershipGenerationIndex;
++}
++function learnerCommitStamp(encoded, origin, identity) {
++  try {
++    const stamp = committedStampOfAnswer(JSON.parse(encoded));
++    const sourcePeer = deriveRaftRsPeerId(identity.sourceReplicaId);
++    return stamp && stamp.learners.includes(identity.targetPeerId) &&
++      stamp.voters.includes(sourcePeer) && stamp.identities[sourcePeer] === identity.sourceReplicaId &&
++      stamp.identities[identity.targetPeerId] === identity.targetReplicaId &&
++      stamp.membershipGenerationIndex >= Number(origin.index) &&
++      stamp.term >= Number(origin.term) ? stamp : NO_LEARNER_COMMIT_INPUT;
++  } catch {
++    return NO_LEARNER_COMMIT_INPUT;
++  }
++}
++function decodeLearnerCommitInput(request) {
++  const input = decodeInitialLearnerRequest(request);
++  if (!input) return NO_LEARNER_COMMIT_INPUT;
++  const {receipt, learnerStamp, executionClaim} = request;
++  if (![receipt, learnerStamp, executionClaim].every((value) => typeof value === 'string')) {
++    return NO_LEARNER_COMMIT_INPUT;
++  }
++  const claim = decodeMembershipOwnerClaim(executionClaim);
++  const origin = decodeCommittedLearnerAdmission(receipt);
++  if (!claim || !learnerCommitOriginMatches(origin, input)) return NO_LEARNER_COMMIT_INPUT;
++  const stamp = learnerCommitStamp(learnerStamp, origin, input.identity);
++  if (!stamp) return NO_LEARNER_COMMIT_INPUT;
++  return {...input, origin, claim, executionClaim,
++    encodedStamp: JSON.stringify(stamp), committedPermit: JSON.stringify({...input.permit,
++      permitState: STATE.COMMITTED, proposalIndex: Number(origin.index)})};
++}
++function learnerCommitRecorded(row, input) {
++  return row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
++    row.messageGroupMembershipPermit === input.committedPermit &&
++    row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN &&
++    row.messageGroupVoterStamp === null && row.messageGroupRemovalStamp === null &&
++    learnerCommitStamp(row.messageGroupLearnerStamp, input.origin, input.identity) !==
++      NO_LEARNER_COMMIT_INPUT;
++}
++function learnerCommitSettlementPermitted(repository, row) {
++  return repository.isOperationTerminal(row) ?
++    row.status === ReplicaStatus.FAILED && row.workflowStep === WORKFLOW_STEP.FAILED &&
++      Number.isSafeInteger(row.completedAt) && row.completedAt > 0 : row.completedAt === null;
++}
++async function persistLearnerCommit(repository, row, input) {
++  const basis = membershipRowWhere(row);
++  try {
++    await repository.executeOperationMutationWithRetry(
++      `UPDATE replica_operations SET message_group_membership_phase = ?,
++        message_group_membership_permit = ?, message_group_learner_stamp = ?
++        WHERE ${basis.where}`,
++      [PHASE.LEARNER_COMMITTED, input.committedPermit, input.encodedStamp, ...basis.params]);
++  } catch {
++    // Lost answers do not establish whether this exact row mutation committed.
++  }
++  const after = await observeMembershipOperation(repository, input.operationId);
++  if (!after.available) return result(OUTCOME.UNKNOWN);
++  const observed = after.row;
++  if (membershipRowIdentityMatches(observed, input.identity, input.encodedIdentity) &&
++    observed.messageGroupMembershipOwnerClaim === input.executionClaim &&
++    observed.messageGroupLearnerStamp === input.encodedStamp && learnerCommitRecorded(observed, input) &&
++    membershipClaimIsLocalAndLive(repository, input.claim, input.identity) &&
++    await membershipBootIsCurrent(repository)) return result(OUTCOME.RECORDED, observed);
++  return result(OUTCOME.UNKNOWN, observed);
++}
++/** Record exact native origin and a separate committed membership observation.
++ * Only the existing workflow owner supplies these native results. Serialized
++ * values are not wire credentials or permission for CREATE/new proposals.
++ * Result fields may advance; the original issued action/fences never refresh.
++ */
++async function recordMessageGroupLearnerCommit(repository, request) {
++  const input = decodeLearnerCommitInput(request);
++  if (!input) return result(OUTCOME.INVALID);
++  const before = await observeMembershipOperation(repository, input.operationId);
++  if (!before.available) return result(OUTCOME.UNAVAILABLE);
++  const row = before.row;
++  if (!membershipRowIdentityMatches(row, input.identity, input.encodedIdentity)) {
++    return result(OUTCOME.CONFLICT, row);
++  }
++  if (row.messageGroupMembershipOwnerClaim !== input.executionClaim ||
++    !membershipClaimIsLocalAndLive(repository, input.claim, input.identity)) {
++    return result(OUTCOME.STALE_OWNER, row);
++  }
++  if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE, row);
++  if (!membershipClaimIsLocalAndLive(repository, input.claim, input.identity)) {
++    return result(OUTCOME.STALE_OWNER, row);
++  }
++  if (learnerCommitRecorded(row, input)) return result(OUTCOME.RECORDED, row);
++  if (!recordedLearnerIntent(row, input.encodedPermit) ||
++    !learnerCommitSettlementPermitted(repository, row)) return result(OUTCOME.CONFLICT, row);
++  return persistLearnerCommit(repository, row, input);
++}
++export {recordMessageGroupLearnerCommit};
+--- a/src/rebalancer/replica-operation-repository-mutation-update-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-update-methods.js
+@@ -1,3 +1,5 @@
++import {recordMessageGroupLearnerCommit} from
++  './replica-operation-message-group-membership-authorization.js';
+ import {
+   REPLICA_OPERATION_UPDATE_DISPOSITION,
+ } from './replica-operation-update-disposition.js';
+@@ -76,6 +78,11 @@
+   } = options;
+ 
+   class ReplicaOperationRepositoryMutationUpdateMethods {
++    /** Record a recovered native learner fact; no CREATE or proposal dispatch. */
++    recordMessageGroupLearnerCommit(request) {
++      return recordMessageGroupLearnerCommit(this, request);
++    }
++
+     // Post-write witness + (optional) authoritative visibility confirmation
+     // for a persisted update that changed rows.
+     // Record the owner-persisted-transition witness, confirm persistence
