@@ -1,0 +1,90 @@
+{
+  "schema": "freshmg-learner-origin/1",
+  "runId": 37918656129,
+  "baseSha": "f258bade6dedde2b10b6c73d035f2b942b493b5e",
+  "sourceSha": "6255634c71fa6c6c116e8e70252ef11f927f564f",
+  "redSha": "34a04e17bdfdfc732b80862d0562f885e31d4fc8",
+  "timings": {
+    "consumer": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "33",
+          "2585"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "regressions": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "651"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "526"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "670"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "623"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "native-neighbors": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/raft/raft-rs-backend/committed-membership-read.test.js",
+          "5",
+          "440"
+        ],
+        [
+          "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+          "64",
+          "488"
+        ]
+      ],
+      "withinBudget": true
+    }
+  },
+  "newComplexity": {
+    "complexity": [],
+    "cognitive": []
+  },
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "69af953358e148082453e25e3dd0d8595434139e66f464c6f0c7c4e69f1948fe",
+      "bytes": 213392,
+      "asset": "message-group-fresh-identity-membership--learner-origin-37918656129-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--learner-origin-37918656129-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T10:38:21.301Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Bounded committed learner origin: staged original-runtime red; actual native apply, port/core/leader recovery, wrong action, rollback and checkpoint scrub/payload binding. Source/lock/commands and complete results retained. Missing origin is not non-commitment. No successor issuance, CREATE, global boot revocation, independent approval or physical distributed acceptance.",
+      "evidence": "sha256:69af953358e148082453e25e3dd0d8595434139e66f464c6f0c7c4e69f1948fe",
+      "asset": "message-group-fresh-identity-membership--learner-origin-37918656129-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--learner-origin-37918656129-1.zip",
+      "bytes": 213392
+    }
+  },
+  "proofCeiling": "actual native ports and file-backed SQL with in-process transport and checkpoint payload; not physical process loss, power loss or distributed acceptance",
+  "successorIssuance": false,
+  "createPermission": false,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL"
+}
