@@ -1,0 +1,138 @@
+diff --git a/src/raft/raft-rs-application-transaction-owner.js b/src/raft/raft-rs-application-transaction-owner.js
+index b065000..efdd1f4 100644
+--- a/src/raft/raft-rs-application-transaction-owner.js
++++ b/src/raft/raft-rs-application-transaction-owner.js
+@@ -68,7 +68,8 @@ function applyCommittedEntryTransaction({store, groupId, entry, confState,
+     }
+     if (committedMembershipContext !== null) {
+       const appliedMembership =
+-        applyCommittedMembershipContext(committedMembershipContext);
++        applyCommittedMembershipContext(committedMembershipContext,
++          Object.freeze({index: entry.index, term: entry.term}));
+       if (appliedMembership && typeof appliedMembership.then === 'function') {
+         throw new TypeError(ASYNC_MEMBERSHIP_CONTEXT_APPLIER_ERROR);
+       }
+diff --git a/src/raft/raft-rs-operation-port.js b/src/raft/raft-rs-operation-port.js
+index 071c138..ca61006 100644
+--- a/src/raft/raft-rs-operation-port.js
++++ b/src/raft/raft-rs-operation-port.js
+@@ -9,6 +9,7 @@ import {
+   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
+   RAFT_MEMBERSHIP_OPERATION,
+   RAFT_OPERATION,
++  RAFT_MEMBERSHIP_TRANSITION_STAGE,
+ } from './raft-operation-port-constants.js';
+ import {
+   COMMITTED_MEMBERSHIP_ANSWER_KIND,
+@@ -16,8 +17,10 @@ import {
+   COMMITTED_MEMBERSHIP_REFUSAL,
+ } from './raft-committed-membership-constants.js';
+ import {bootstrapOfRequest} from './raft-rs-bootstrap-membership.js';
+-import {committedMembershipRefusal} from
++import {committedMembershipRefusal, normalizeCommittedLearnerRead,
++  unavailableLearnerAction} from
+   './raft-rs-committed-membership-read.js';
++import {encodeCommittedLearnerAdmission} from './raft-rs-committed-membership-context.js';
+ import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
+ import {RAFT_OPERATION_PORT_REQUEST} from
+   './raft-operation-port-request.js';
+@@ -223,8 +226,15 @@ function createRaftRsOperationPort(request) {
+       registry.resolveReplicaIdentity(raftPeerId),
+     applyCommittedEntry: committedEntryApplication(required(
+       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
+-    applyCommittedMembershipContext: (context) =>
+-      registry.reserveCommittedReplica(context.replicaIdentity, context.peerId),
++    applyCommittedMembershipContext: (context, position) => {
++      registry.reserveCommittedReplica(context.replicaIdentity, context.peerId);
++      if (context.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
++        registry.recordCommittedLearnerAdmission(context.replicaIdentity,
++          encodeCommittedLearnerAdmission({groupId, ...position, context}));
++      }
++    },
++    readCommittedLearnerAdmission: (replicaIdentity) =>
++      registry.committedLearnerAdmission(replicaIdentity),
+     applyTransactionRolledBack:
+       request[RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
+     // Each committed entry's whole SQLite commit+apply transaction is the
+@@ -347,6 +357,14 @@ function createRaftRsOperationPort(request) {
+     // The committed configuration as frozen data ({purpose} is a
+     // COMMITTED_MEMBERSHIP_READ_PURPOSE; a bootstrap read by default).
+     [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: (readRequest) => {
++      if (readRequest?.purpose === COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
++        const normalized = normalizeCommittedLearnerRead(readRequest, groupId);
++        if (normalized.refusal) return normalized.refusal;
++        const answered = execute({type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
++          purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION, query: normalized.query});
++        const bounded = (result) => result?.kind ? result : unavailableLearnerAction();
++        return answered?.then ? answered.then(bounded) : bounded(answered);
++      }
+       const answered = execute({
+         type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
+         purpose: readRequest?.purpose ??
+diff --git a/src/raft/raft-rs-runtime-owner.js b/src/raft/raft-rs-runtime-owner.js
+index 25dc022..bcbd53e 100644
+--- a/src/raft/raft-rs-runtime-owner.js
++++ b/src/raft/raft-rs-runtime-owner.js
+@@ -1,3 +1,4 @@
++import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from './raft-committed-membership-constants.js';
+ import {createHash} from 'node:crypto';
+ import fs from 'node:fs';
+ import {createRequire} from 'node:module';
+@@ -100,7 +101,7 @@ import {
+   settleParticipationGate,
+   withIdentityRecord,
+ } from './raft-rs-participation-gate.js';
+-import {answerCommittedMembership} from
++import {answerCommittedMembership, answerCommittedLearnerAction} from
+   './raft-rs-committed-membership-read.js';
+ import {committedMembershipContext} from
+   './raft-rs-committed-membership-context.js';
+@@ -863,8 +864,7 @@ function foldedIntoBootstrap(group, entry) {
+ }
+ 
+ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
+-  if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType) &&
+-      !foldedIntoBootstrap(group, entry)) {
++  if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) {
+     const decoded = invokeCoreAt(
+       group, expectedGeneration,
+       'decode_conf_change_entry', entry.entryType, entry.data);
+@@ -872,6 +872,11 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
+       return decoded;
+     }
+     const membershipContext = committedMembershipContext(decoded.value);
++    if (foldedIntoBootstrap(group, entry)) {
++      // Replay origin provenance without replaying historical ConfState over C_j.
++      return {...invokeCoreAt(group, expectedGeneration, CORE_OPERATION.CONF_STATE),
++        membershipContext};
++    }
+     const applied = invokeCoreAt(
+       group, expectedGeneration, 'apply_conf_change', decoded.value);
+     if (!applied.ok) {
+@@ -1416,6 +1421,8 @@ function answerRefusedProposal(group, expectedGeneration, refused) {
+ }
+ 
+ const COMMAND_OPERATION = Object.freeze({
++  [RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP]: (group, command, generation) =>
++    answerCommittedLearnerAction(group, readGroupStatus(group, generation), command.query),
+   [RUNTIME_COMMAND.READ_STATUS]: (group, command, generation) =>
+     readGroupStatus(group, generation),
+   [RUNTIME_COMMAND.CAMPAIGN]: (group, command, generation) =>
+@@ -1626,7 +1633,8 @@ function executeCommand(group, command) {
+   if (command?.type === RUNTIME_COMMAND.READ_STATUS) {
+     return readStatusNow(group);
+   }
+-  if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP) {
++  if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP &&
++      command.purpose !== COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
+     return thenMaybe(readStatusNow(group), (status) =>
+       answerCommittedMembership(group, status, command.purpose));
+   }
+@@ -1667,6 +1675,7 @@ function createRuntimeDispatcher(request) {
+     resolvePeerIdentity: request.resolvePeerIdentity,
+     applyCommittedEntry: request.applyCommittedEntry,
+     applyCommittedMembershipContext: request.applyCommittedMembershipContext,
++    readCommittedLearnerAdmission: request.readCommittedLearnerAdmission,
+     applyTransactionRolledBack: request.applyTransactionRolledBack,
+     runApplySlice: request.runApplySlice,
+     admitScheduledEntry: request.admitScheduledEntry,
