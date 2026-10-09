@@ -14,6 +14,8 @@
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {
+  COMMITTED_LEARNER_ACTION_KIND as ACTION_KIND,
+  COMMITTED_LEARNER_ACTION_REASON as ACTION_REASON,
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
   COMMITTED_MEMBERSHIP_READ_PURPOSE,
   COMMITTED_MEMBERSHIP_REFUSAL,
@@ -21,6 +23,9 @@ import {
 import {
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
 } from './raft-rs-peer-identity-constants.js';
+import {INVALID_COMMITTED_LEARNER_ADMISSION,
+  canonicalLearnerContext, decodeCommittedLearnerAdmission} from
+  './raft-rs-committed-membership-context.js';
 import {ROLE_LEADER} from './raft-rs-runtime-owner-constants.js';
 
 // Raft peer ids are decimal strings without leading zeros: the shorter one
@@ -148,7 +153,59 @@ function answerCommittedMembership(group, status, purpose) {
   });
 }
 
+function learnerActionAnswer(kind, reason, fields = {}) {
+  return deepFreeze({kind, reason, ...fields});
+}
+function unavailableLearnerAction() {
+  return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.UNAVAILABLE);
+}
+function normalizeCommittedLearnerRead(request, groupId) {
+  try {
+    if (request.groupId !== groupId) throw new Error(ACTION_REASON.INVALID);
+    return {query: Object.freeze({groupId, action: canonicalLearnerContext(request.action)})};
+  } catch {
+    return {refusal: learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.INVALID)};
+  }
+}
+function learnerOriginRefusal(origin, query, status) {
+  if (origin.groupId !== query.groupId || Object.keys(query.action).some((key) =>
+    origin.context[key] !== query.action[key])) {
+    return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.MISMATCH);
+  }
+  if (BigInt(origin.index) > BigInt(status.appliedIndex) ||
+      BigInt(origin.index) > BigInt(status.commitIndex) ||
+      BigInt(origin.index) > BigInt(status.membershipGenerationIndex) ||
+      BigInt(origin.term) > BigInt(status.term)) {
+    return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.BEYOND_APPLIED);
+  }
+  return null;
+}
+/** Historical positive evidence, never a current CREATE/absence/reissue grant.
+ * Called in the group's queued turn after recovery and committed application.
+ */
+function answerCommittedLearnerAction(group, status, query) {
+  if (unavailableMembershipRefusal(status) !== null) return unavailableLearnerAction();
+  try {
+    const encoded = group.readCommittedLearnerAdmission(query.action.replicaIdentity);
+    if (encoded === null) {
+      return learnerActionAnswer(ACTION_KIND.UNRESOLVED, ACTION_REASON.NOT_RECORDED);
+    }
+    const origin = decodeCommittedLearnerAdmission(encoded);
+    if (origin === INVALID_COMMITTED_LEARNER_ADMISSION) {
+      return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.CORRUPT);
+    }
+    return learnerOriginRefusal(origin, query, status) ??
+      learnerActionAnswer(ACTION_KIND.COMMITTED, ACTION_REASON.APPLIED,
+        {receipt: origin, observedAppliedIndex: status.appliedIndex});
+  } catch {
+    return unavailableLearnerAction();
+  }
+}
+
 export {
+  answerCommittedLearnerAction,
+  normalizeCommittedLearnerRead,
+  unavailableLearnerAction,
   answerCommittedMembership,
   ascendingPeerIdOrder,
   committedMembershipRefusal,

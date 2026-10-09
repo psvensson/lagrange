@@ -1,0 +1,87 @@
+{
+  "schema": "pr111-corrective-proof/1",
+  "runId": 37924329113,
+  "baseSha": "f5a06f643a8f389ea545e5673758cca249674fa9",
+  "sourceSha": "75193dcdcebe128fb9cec5e9c428da181d0e12c1",
+  "redSha": "e54e2b6ef95a87063cf07a686f41dc66c5529462",
+  "timings": {
+    "consumer": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "36",
+          "4150"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "regressions": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "991"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "1058"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "1305"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "1188"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "neighbors": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/raft/raft-rs-backend/committed-membership-read.test.js",
+          "5",
+          "700"
+        ],
+        [
+          "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+          "64",
+          "781"
+        ]
+      ],
+      "withinBudget": true
+    }
+  },
+  "mutations": "not run in this preservation attempt",
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "8ff5075dd753e84774ff36366862bca3c2ac2816b42bf484832aeb450e157216",
+      "bytes": 54954,
+      "asset": "message-group-fresh-identity-membership--origin-review-37924329113-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--origin-review-37924329113-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T11:34:24.645Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "PR111 finite review correction: original-source named failing assertions, exact-own-data capture, native current-term ceiling with old-term positives, actual queued corrupt origin and registry replay/conflict rollback. Canonical driver, unchanged budgets, explicit semantic JSON zero checks. Isolated mutations and installation follow separately; no full driver/CREATE/successor activation, global metadata revocation or physical acceptance.",
+      "evidence": "sha256:8ff5075dd753e84774ff36366862bca3c2ac2816b42bf484832aeb450e157216",
+      "asset": "message-group-fresh-identity-membership--origin-review-37924329113-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--origin-review-37924329113-1.zip",
+      "bytes": 54954
+    }
+  },
+  "executionSubstrate": "GitHub-hosted Ubuntu; normal locked better-sqlite3; actual native ports; file-backed operation fixture and in-process transport",
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL",
+  "createActivation": false,
+  "successorIssuance": false
+}

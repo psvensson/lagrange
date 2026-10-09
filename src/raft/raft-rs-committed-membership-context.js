@@ -1,3 +1,5 @@
+import {types as nodeUtilTypes} from 'node:util';
+
 import {
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
 } from './raft-operation-port-constants.js';
@@ -141,7 +143,90 @@ function committedMembershipContext(decoded) {
   });
 }
 
+const LEARNER_ORIGIN_KEYS = Object.freeze(['groupId', 'index', 'term', 'context']);
+const LEARNER_ORIGIN_ERROR = 'invalid committed learner origin';
+const INVALID_COMMITTED_LEARNER_ADMISSION = Object.freeze({kind: 'invalid-learner-origin'});
+function positiveDecimal(value) {
+  return typeof value === 'string' && /^[1-9][0-9]{0,15}$/.test(value) &&
+    Number.isSafeInteger(Number(value));
+}
+const LEARNER_CONTEXT_DATA_VALUE = 'value';
+const learnerOwnDescriptors = Object.getOwnPropertyDescriptors;
+const learnerOwnKeys = Reflect.ownKeys;
+const learnerPrototype = Object.getPrototypeOf;
+const learnerIsProxy = nodeUtilTypes.isProxy;
+const LEARNER_CONTEXT_PROTOTYPE = Object.prototype;
+function snapshotLearnerContext(context) {
+  if (context === null || typeof context !== 'object' || learnerIsProxy(context)) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  const prototype = learnerPrototype(context);
+  if (prototype !== LEARNER_CONTEXT_PROTOTYPE && prototype !== null) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  // Capture descriptors once, before validation. Reading an accessor to copy
+  // it would execute the untrusted value rather than snapshot the input.
+  const descriptors = learnerOwnDescriptors(context);
+  if (learnerOwnKeys(descriptors).length !== MANAGED_CONTEXT_KEYS.length) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  const captured = Object.create(null);
+  for (const key of MANAGED_CONTEXT_KEYS) {
+    const descriptor = descriptors[key];
+    if (!descriptor || !Object.hasOwn(descriptor, LEARNER_CONTEXT_DATA_VALUE) ||
+        descriptor.enumerable !== true) throw new Error(LEARNER_ORIGIN_ERROR);
+    captured[key] = descriptor.value;
+  }
+  return Object.freeze(captured);
+}
+function canonicalLearnerContext(context) {
+  const captured = snapshotLearnerContext(context);
+  const encoded = encodeCommittedMembershipContext(captured);
+  if (captured.stage !== RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  return Object.freeze(JSON.parse(Buffer.from(encoded, CONTEXT_ENCODING)
+    .toString(CONTEXT_TEXT_ENCODING)));
+}
+function encodeCommittedLearnerAdmission({groupId, index, term, context}) {
+  if (typeof groupId !== 'string' || groupId.length === 0 ||
+      !positiveDecimal(index) || !positiveDecimal(term)) {
+    throw new Error(LEARNER_ORIGIN_ERROR);
+  }
+  return JSON.stringify({groupId, index, term, context: canonicalLearnerContext(context)});
+}
+function decodeCommittedLearnerAdmission(encoded) {
+  try {
+    const value = JSON.parse(encoded);
+    if (!value || typeof value !== 'object' || Array.isArray(value) ||
+        Object.keys(value).length !== LEARNER_ORIGIN_KEYS.length ||
+        !LEARNER_ORIGIN_KEYS.every((key) => Object.hasOwn(value, key)) ||
+        encodeCommittedLearnerAdmission(value) !== encoded) {
+      return INVALID_COMMITTED_LEARNER_ADMISSION;
+    }
+    return Object.freeze({...value, context: Object.freeze(value.context)});
+  } catch {
+    return INVALID_COMMITTED_LEARNER_ADMISSION;
+  }
+}
+function learnerAdmissionMatchesReservation(encoded, reservation, boundary) {
+  if (encoded === undefined) return true;
+  const origin = decodeCommittedLearnerAdmission(encoded);
+  return origin !== INVALID_COMMITTED_LEARNER_ADMISSION &&
+    origin.groupId === boundary.groupId &&
+    origin.context.replicaIdentity === reservation.replicaIdentity &&
+    origin.context.peerId === reservation.peerId &&
+    BigInt(origin.index) <= BigInt(boundary.membershipGenerationIndex) &&
+    BigInt(origin.index) <= BigInt(boundary.appliedIndex) &&
+    BigInt(origin.term) <= BigInt(boundary.appliedTerm);
+}
+
 export {
+  INVALID_COMMITTED_LEARNER_ADMISSION,
+  canonicalLearnerContext,
+  encodeCommittedLearnerAdmission,
+  decodeCommittedLearnerAdmission,
+  learnerAdmissionMatchesReservation,
   COMMITTED_MEMBERSHIP_CONTEXT_ERROR,
   committedMembershipChangeType,
   committedMembershipContext,

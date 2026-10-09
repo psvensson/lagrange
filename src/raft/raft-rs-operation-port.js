@@ -9,6 +9,7 @@ import {
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION,
+  RAFT_MEMBERSHIP_TRANSITION_STAGE,
 } from './raft-operation-port-constants.js';
 import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
@@ -16,8 +17,10 @@ import {
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from './raft-committed-membership-constants.js';
 import {bootstrapOfRequest} from './raft-rs-bootstrap-membership.js';
-import {committedMembershipRefusal} from
+import {committedMembershipRefusal, normalizeCommittedLearnerRead,
+  unavailableLearnerAction} from
   './raft-rs-committed-membership-read.js';
+import {encodeCommittedLearnerAdmission} from './raft-rs-committed-membership-context.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   './raft-operation-port-request.js';
@@ -223,8 +226,15 @@ function createRaftRsOperationPort(request) {
       registry.resolveReplicaIdentity(raftPeerId),
     applyCommittedEntry: committedEntryApplication(required(
       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
-    applyCommittedMembershipContext: (context) =>
-      registry.reserveCommittedReplica(context.replicaIdentity, context.peerId),
+    applyCommittedMembershipContext: (context, position) => {
+      registry.reserveCommittedReplica(context.replicaIdentity, context.peerId);
+      if (context.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
+        registry.recordCommittedLearnerAdmission(context.replicaIdentity,
+          encodeCommittedLearnerAdmission({groupId, ...position, context}));
+      }
+    },
+    readCommittedLearnerAdmission: (replicaIdentity) =>
+      registry.committedLearnerAdmission(replicaIdentity),
     applyTransactionRolledBack:
       request[RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
     // Each committed entry's whole SQLite commit+apply transaction is the
@@ -347,6 +357,14 @@ function createRaftRsOperationPort(request) {
     // The committed configuration as frozen data ({purpose} is a
     // COMMITTED_MEMBERSHIP_READ_PURPOSE; a bootstrap read by default).
     [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: (readRequest) => {
+      if (readRequest?.purpose === COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
+        const normalized = normalizeCommittedLearnerRead(readRequest, groupId);
+        if (normalized.refusal) return normalized.refusal;
+        const answered = execute({type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
+          purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION, query: normalized.query});
+        const bounded = (result) => result?.kind ? result : unavailableLearnerAction();
+        return answered?.then ? answered.then(bounded) : bounded(answered);
+      }
       const answered = execute({
         type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
         purpose: readRequest?.purpose ??

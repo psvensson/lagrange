@@ -51,6 +51,7 @@ const COMMITTED_MEMBERSHIP_ANSWER_KIND = Object.freeze({
 const COMMITTED_MEMBERSHIP_READ_PURPOSE = Object.freeze({
   BOOTSTRAP: 'bootstrap',
   WITNESS: 'witness',
+  LEARNER_ACTION: 'learner-action',
   RETIREMENT: 'retirement',
 });
 
@@ -160,7 +161,19 @@ const PARTICIPATION_GATE = Object.freeze({
 // Where a refusal of the gate was decided (its phase).
 const PARTICIPATION_GATE_PHASE = 'participation-gate';
 
+const COMMITTED_LEARNER_ACTION_KIND = Object.freeze({
+  COMMITTED: 'committed-action', UNRESOLVED: 'unresolved-action', REFUSED: 'refused-action',
+});
+const COMMITTED_LEARNER_ACTION_REASON = Object.freeze({
+  APPLIED: 'learner-action-applied', NOT_RECORDED: 'learner-action-not-recorded',
+  INVALID: 'learner-action-invalid', MISMATCH: 'learner-action-mismatch',
+  UNAVAILABLE: 'learner-action-unavailable', CORRUPT: 'learner-action-corrupt-origin',
+  BEYOND_APPLIED: 'learner-action-beyond-applied-boundary',
+});
+
 export {
+  COMMITTED_LEARNER_ACTION_KIND,
+  COMMITTED_LEARNER_ACTION_REASON,
   BOOTSTRAP_MEMBERSHIP_SOURCE,
   COMMITTED_MEMBERSHIP_ANSWER_FIELD,
   COMMITTED_MEMBERSHIP_ANSWER_KIND,

@@ -28,7 +28,7 @@
   "censusSize": 2324,
   "digest": "fnv1a32-58fc23de",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-5dbf317e",
+  "observationDigest": "fnv1a32-9afd0650",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7252,11 +7252,19 @@
     },
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
-        "src/raft/raft-rs-runtime-owner.js"
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-checkpoint-constants.js",
+        "src/raft/snapshot-checkpoint-store.js",
+        "src/raft/snapshot-install-constants.js",
+        "src/rebalancer/replica-create-admission-token.js"
       ]
     },
     "test/integration/message-group-membership-claim-cache.integration.test.js": {
