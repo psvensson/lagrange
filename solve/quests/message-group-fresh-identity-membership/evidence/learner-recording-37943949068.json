@@ -1,0 +1,99 @@
+{
+  "schema": "freshmg-learner-recording/1",
+  "runId": 37943949068,
+  "baseSha": "c3176777cc91c4ff8c7c7381db1c6c8368d93ae0",
+  "sourceSha": "292a2c6579542536d993eff8b876a34ec4783a80",
+  "redSha": "a050e4b2442bb8df46e3de0ed5e0e67c696733df",
+  "timings": {
+    "consumer": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+          "51",
+          "3926"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "regressions": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/rebalancer/message-group-membership-branch-authorization.test.js",
+          "90",
+          "652"
+        ],
+        [
+          "test/rebalancer/message-group-membership-operation-lane.test.js",
+          "8",
+          "573"
+        ],
+        [
+          "test/rebalancer/operation-progress-store-persistence.test.js",
+          "24",
+          "693"
+        ],
+        [
+          "test/rebalancer/reservation-file-backed-restart.test.js",
+          "39",
+          "647"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "cache": {
+      "limitMs": 30000,
+      "files": [
+        [
+          "test/integration/message-group-membership-claim-cache.integration.test.js",
+          "3",
+          "10991"
+        ]
+      ],
+      "withinBudget": true
+    },
+    "neighbors": {
+      "limitMs": 2000,
+      "files": [
+        [
+          "test/raft/raft-rs-backend/committed-membership-read.test.js",
+          "5",
+          "443"
+        ],
+        [
+          "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+          "64",
+          "480"
+        ]
+      ],
+      "withinBudget": true
+    }
+  },
+  "canonicalEvidence": {
+    "id": "message-group-fresh-identity-membership",
+    "uploaded": {
+      "sha256": "03e81a143ed679e24f7a6e3839e295d9253b4169c3074843abf62a676bc3f41a",
+      "bytes": 242696,
+      "asset": "message-group-fresh-identity-membership--learner-recording-37943949068-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--learner-recording-37943949068-1.zip"
+    },
+    "entry": {
+      "ts": "2026-10-09T14:26:43.012Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Bounded real native observation -> exact operation learner-phase CAS. Normal-driver file-backed operation tests and separate real SQL/Raft/CDC visibility; original-runtime missing-capability red retained. Preserve ordinary terminal debt, exact holder/permit, old-term recovery, lost write readback and no-effect replay. No physical process-loss, full driver/current CREATE, successor authorization, main merge or certification.",
+      "evidence": "sha256:03e81a143ed679e24f7a6e3839e295d9253b4169c3074843abf62a676bc3f41a",
+      "asset": "message-group-fresh-identity-membership--learner-recording-37943949068-1.zip",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--learner-recording-37943949068-1.zip",
+      "bytes": 242696
+    }
+  },
+  "independentApproval": false,
+  "fullDriver": false,
+  "currentCreateActivation": false,
+  "successorIssuance": false,
+  "processLossProof": false,
+  "physicalAcceptance": false,
+  "fullLabVerdict": "FAIL"
+}
