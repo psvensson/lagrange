@@ -35,7 +35,7 @@ measure)
   measure install npm ci
   git config user.name 'github-actions[bot]'
   git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-  node scripts/solve.js note --id "$QUEST" --finding 'PR110 review 5467764802: bound correction to diagnostic process lifetime and current proof wording. Reproduce live Node child/grandchild after timeout and early parent exit, then terminate only the new session/process group owned by that measurement before source restoration. No runtime, storage, transaction, schema, native authority, budget or source-approval change. Earlier native/checkpoint origin attempt remains failed and separate. Merge-commit permission does not waive gates.' --kind decision --json > "$out/scope.json"
+  node scripts/solve.js note --id "$QUEST" --finding 'PR110 review 5467764802: bound correction to diagnostic process lifetime and current proof wording. Reproduce live Node child/grandchild after timeout and early parent exit, then terminate only the new session/process group owned by that measurement before source restoration. The followup 37909499109 exposed an attribution-injector assumption that elections stop exactly at term 2; its fault now applies to every post-initial term and asserts the same two exact failed test identities, keeping the protected malformed-record test passing. No runtime, storage, transaction, schema, native authority, budget or source-approval change. Earlier native/checkpoint origin attempt remains failed and separate. Merge-commit permission does not waive gates.' --kind decision --json > "$out/scope.json"
   python3 "$carrier/prepare.py" tests
   if measure original-red python3 "$rel/test-process-lifetime.py" "$out/original-red"; then
     echo 'Expected original worker-lifetime failures did not engage' >&2; exit 2
@@ -53,10 +53,10 @@ import sys
 for path in Path(sys.argv[1]).glob('*.py'):
     compile(path.read_text(),str(path),'exec')
 PY
-  node scripts/solve.js note --id "$QUEST" --attempt 'Fix review 4228253017 in the existing diagnostic execute function: private POSIX session, group termination for timeout and normal parent exit, bounded drain/reap before source restoration, explicit cleanup failure. Add real child/grandchild regression and source-only revert. Correct 4228253103 wording to distinguish normal better-sqlite3 canonical results from diagnostic-adapter checker tests and still-missing production/physical proof. No src or ordinary test changes.' --json > "$out/attempt.json"
+  node scripts/solve.js note --id "$QUEST" --attempt 'Fix review 4228253017 in the existing diagnostic execute function: private POSIX session, group termination for timeout and normal parent exit, bounded drain/reap before source restoration, explicit cleanup failure. Add real child/grandchild regression and source-only revert. Correct 4228253103 wording to distinguish normal better-sqlite3 canonical results from diagnostic-adapter checker tests and still-missing production/physical proof. The checker fault no longer assumes exact term 2, while both exact failure identities and required protected-test pass remain asserted. No src or ordinary test changes.' --json > "$out/attempt.json"
   git diff --check
-  git add -- "$rel/run-diagnostic.py" architecture/contracts/issued-membership-action-recovery.md "solve/quests/$QUEST/log.ndjson"
-  LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'fix: terminate owned diagnostic worker groups before restoring mutation source'
+  git add -- "$rel/run-diagnostic.py" "$rel/test-proof-checker.py" architecture/contracts/issued-membership-action-recovery.md "solve/quests/$QUEST/log.ndjson"
+  LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'fix: terminate owned diagnostic groups and bind checker faults to actual leader advancement'
   git rev-parse HEAD > "$out/source-sha.txt"
   measure process-green python3 "$rel/test-process-lifetime.py" "$out/process-green"
   measure checker python3 "$rel/test-proof-checker.py" "$out/checker"
@@ -121,7 +121,7 @@ with zipfile.ZipFile(archive) as z:
     for name,digest in manifest.items():assert hashlib.sha256(z.read(name)).hexdigest()==digest
 (out/'archive-sha256.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'\n')
 PY
-  node scripts/solve.js evidence add "$out.zip" --id "$QUEST" --text 'PR110 review correction: real child/grandchild after timed-out and normally exited parents. Original helper and source-only revert fail both intended live-worker assertions; private-group correction passes; original checker, normal-driver 22 cases and twelve exact mutations rechecked. No runtime/ordinary-test changes or full cutover approval. Hosted Linux diagnostic/component measurement, not GCP physical acceptance.' --json > "$out/canonical.json"
+  node scripts/solve.js evidence add "$out.zip" --id "$QUEST" --text 'PR110 review correction: real child/grandchild after timed-out and normally exited parents. Original helper and source-only revert fail both intended live-worker assertions; private-group correction passes; original checker goals, normal-driver 22 cases and twelve exact mutations rechecked. Checker fault covers real leader advancement rather than exactly term 2, retaining both exact failure identities. No runtime/ordinary-test changes or full cutover approval. Hosted Linux diagnostic/component measurement, not GCP physical acceptance.' --json > "$out/canonical.json"
   python3 - <<'PY'
 from pathlib import Path
 import json,os
