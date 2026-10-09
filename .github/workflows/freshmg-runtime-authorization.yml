@@ -59,14 +59,14 @@ jobs:
           with open(os.environ['GITHUB_ENV'],'a') as f:f.write(f'CARRIER={target}\n')
           print('Verified input bundle, files:',sorted(files))
           PY
-      - name: Measure registered recipient and workflow recording boundaries
+      - name: Measure recipient boundaries after formatting-only correction
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash "$CARRIER/run.sh" measure
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/registered-learner-20261009/continue.sh measure
       - name: Preserve measured branch with expected-head non-force push
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash "$CARRIER/run.sh" publish
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/registered-learner-20261009/continue.sh publish
       - name: Retain every attempt and exact changed byte
         if: always()
         run: |
