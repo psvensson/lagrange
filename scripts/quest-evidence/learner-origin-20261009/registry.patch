@@ -1,0 +1,117 @@
+diff --git a/src/raft/raft-rs-peer-identity-constants.js b/src/raft/raft-rs-peer-identity-constants.js
+index e50ecfa..0cf75f7 100644
+--- a/src/raft/raft-rs-peer-identity-constants.js
++++ b/src/raft/raft-rs-peer-identity-constants.js
+@@ -9,24 +9,31 @@ const RAFT_RS_PEER_IDENTITY_SQL = Object.freeze({
+   CREATE_TABLE: `
+     CREATE TABLE IF NOT EXISTS ${RAFT_RS_PEER_IDENTITY_TABLE} (
+       replica_identity TEXT PRIMARY KEY,
+-      raft_peer_id TEXT NOT NULL UNIQUE
++      raft_peer_id TEXT NOT NULL UNIQUE,
++      learner_admission TEXT
+     )
+   `,
+   SELECT_BY_IDENTITY: `
+-    SELECT replica_identity, raft_peer_id
++    SELECT replica_identity, raft_peer_id, learner_admission
+     FROM ${RAFT_RS_PEER_IDENTITY_TABLE}
+     WHERE replica_identity = ?
+   `,
+   SELECT_BY_PEER_ID: `
+-    SELECT replica_identity, raft_peer_id
++    SELECT replica_identity, raft_peer_id, learner_admission
+     FROM ${RAFT_RS_PEER_IDENTITY_TABLE}
+     WHERE raft_peer_id = ?
+   `,
+   SELECT_ALL: `
+-    SELECT replica_identity, raft_peer_id
++    SELECT replica_identity, raft_peer_id, learner_admission
+     FROM ${RAFT_RS_PEER_IDENTITY_TABLE}
+     ORDER BY replica_identity
+   `,
++  SELECT_COLUMNS: `SELECT name FROM pragma_table_info('${RAFT_RS_PEER_IDENTITY_TABLE}')`,
++  ADD_LEARNER_ADMISSION: `ALTER TABLE ${RAFT_RS_PEER_IDENTITY_TABLE}
++    ADD COLUMN learner_admission TEXT`,
++  RECORD_LEARNER_ADMISSION: `UPDATE ${RAFT_RS_PEER_IDENTITY_TABLE}
++    SET learner_admission = ?
++    WHERE replica_identity = ? AND learner_admission IS NULL`,
+   INSERT_RESERVATION: `
+     INSERT INTO ${RAFT_RS_PEER_IDENTITY_TABLE}
+       (replica_identity, raft_peer_id)
+@@ -43,6 +50,8 @@ const RAFT_RS_PEER_IDENTITY_RESOLUTION = Object.freeze({
+ });
+ 
+ const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
++  LEARNER_ADMISSION_CONFLICT: 'committed learner origin conflicts with permanent identity',
++  LEARNER_ADMISSION_TRANSACTION: 'committed learner origin requires the application transaction',
+   RESERVATIONS_NOT_ARRAY:
+     'raft-rs peer identity reservations must be an array',
+   duplicateReservation: (replicaIdentity, peerId) =>
+diff --git a/src/raft/raft-rs-peer-identity.js b/src/raft/raft-rs-peer-identity.js
+index 43cf248..94ae417 100644
+--- a/src/raft/raft-rs-peer-identity.js
++++ b/src/raft/raft-rs-peer-identity.js
+@@ -70,7 +70,11 @@ function validatedRaftRsPeerIdentityReservations(reservations) {
+     }
+     identities.add(replicaIdentity);
+     peerIds.add(peerId);
+-    return Object.freeze({replicaIdentity, peerId});
++    const learnerAdmission = reservation.learnerAdmission ?? null;
++    if (learnerAdmission !== null && typeof learnerAdmission !== TYPE_STRING) {
++      throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
++    }
++    return Object.freeze({replicaIdentity, peerId, learnerAdmission});
+   }));
+ }
+ 
+@@ -79,6 +83,7 @@ function readRaftRsPeerIdentityReservations(db) {
+     db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all().map((row) => ({
+       replicaIdentity: row.replica_identity,
+       peerId: row.raft_peer_id,
++      learnerAdmission: row.learner_admission,
+     })));
+ }
+ 
+@@ -110,6 +115,11 @@ class RaftRsPeerIdentityRegistry {
+   constructor(db) {
+     this.db = db;
+     this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.CREATE_TABLE);
++    const columns = this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_COLUMNS).all();
++    if (!columns.some(({name}) => name === 'learner_admission')) {
++      // No evidence is fabricated for an older reservation. Null stays unknown.
++      this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.ADD_LEARNER_ADMISSION);
++    }
+   }
+ 
+   /**
+@@ -197,6 +207,30 @@ class RaftRsPeerIdentityRegistry {
+     return reservation === undefined ? null : reservation.replica_identity;
+   }
+ 
++  /** Persist native-validated origin inside the SAME committed-apply transaction.
++   * The caller owns its canonical shape. This store never derives an outcome
++   * from a reservation or accepts replacement of an already recorded origin.
++   */
++  recordCommittedLearnerAdmission(replicaIdentity, encoded) {
++    if (!this.db.inTransaction) {
++      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_TRANSACTION);
++    }
++    const row = this.reservationFor(replicaIdentity);
++    if (!row || typeof encoded !== TYPE_STRING || encoded.length === EMPTY ||
++        (row.learner_admission !== null && row.learner_admission !== encoded)) {
++      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
++    }
++    if (row.learner_admission === null) {
++      this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RECORD_LEARNER_ADMISSION)
++        .run(encoded, replicaIdentity);
++    }
++  }
++
++  /** Raw stored evidence, decoded only by the native committed-context owner. */
++  committedLearnerAdmission(replicaIdentity) {
++    return this.reservationFor(replicaIdentity)?.learner_admission ?? null;
++  }
++
+   /** All permanent reservations, in deterministic logical-identity order. */
+   reservations() {
+     return readRaftRsPeerIdentityReservations(this.db);
