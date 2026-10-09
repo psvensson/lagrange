@@ -40,12 +40,14 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Measure native commit and operation-answer process cuts
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-process-loss-20261009/run.sh measure
+      - name: Measure process cuts and preserve exact native refusal classifications
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-process-loss-20261009/continue.sh measure
       - name: Preserve bounded result by expected-head normal Git push
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-process-loss-20261009/run.sh publish
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-process-loss-20261009/continue.sh publish
       - name: Retain failures, exact sources and complete observations
         if: always()
         run: |
