@@ -1,0 +1,18 @@
+{
+  "schema": "freshmg-origin-attempt/1",
+  "baseSha": "f258bade6dedde2b10b6c73d035f2b942b493b5e",
+  "workBranch": "work/freshmg-committed-learner-origin-20261009",
+  "quest": "message-group-fresh-identity-membership",
+  "contract": "architecture/contracts/message-group-committed-learner-origin.md",
+  "purpose": "Measure exact committed learner-origin retention and recovery using the existing native application, permanent identity, committed-read and checkpoint owners.",
+  "productionActivation": false,
+  "createPermission": false,
+  "automaticSuccessorIssuance": false,
+  "independentApproval": false,
+  "fullLabVerdict": "FAIL",
+  "limits": [
+    "A missing origin remains unresolved, never non-commitment or permission to reissue.",
+    "Historical learner admission does not prove current join or CREATE eligibility.",
+    "No protected branch, preservation ref or separate 0.3 branch is modified."
+  ]
+}
