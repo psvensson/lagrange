@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -39,12 +40,21 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
+      - name: Preserve the first pending-barrier attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/delivery-lifetime-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          gh api repos/psvensson/lagrange/actions/artifacts/11596521210/zip > "$out/unengaged-queue-37885664295.zip"
+          echo "b43a928f29cd1ee947e0def9e2ba4aa73635729b5df33474e22ae9dbafd8c522  $out/unengaged-queue-37885664295.zip" | sha256sum -c -
       - name: Prove missing boundary, real lifetime and native queued execution
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/delivery-lifetime-20261009/run.sh measure
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/delivery-lifetime-20261009/run-r2.sh measure
       - name: Preserve measured WIP with an expected-head non-force push
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/delivery-lifetime-20261009/run.sh publish
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/delivery-lifetime-20261009/run-r2.sh publish
       - name: Retain all failures and recoverable changes
         if: always()
         run: |
