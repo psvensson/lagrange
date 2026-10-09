@@ -25,6 +25,15 @@ import {committedMembershipContext} from '../../src/raft/raft-rs-committed-membe
 import {PartitionNodeCluster} from '../raft/raft-rs-backend/partition-node-cluster.js';
 import {durableLog} from '../raft/raft-rs-backend/committed-membership-oracles.js';
 import {loadRaftRsCore} from '../raft/raft-rs-backend/raw-raft-rs-test-core.js';
+import * as membershipRead from '../../src/raft/raft-committed-membership-constants.js';
+import {createSqliteStateMachineCheckpoint, readCheckpoint} from
+  '../../src/raft/snapshot-checkpoint-store.js';
+import {RAFT_CHECKPOINT_CREATION_OUTCOME, RAFT_CHECKPOINT_VALIDATION_OUTCOME,
+  RAFT_CHECKPOINT_DESCRIPTOR_FILE, RAFT_CHECKPOINT_PAYLOAD_FILE} from
+  '../../src/raft/snapshot-checkpoint-constants.js';
+import {writeAtomicDurable, sha256Digest} from '../../src/runtime/oci-host-agent-durable-files.js';
+import {trapSharedCore} from '../raft/raft-rs-backend/evidence-o1-model.js';
+
 
 const GROUP = 'learner-consumer';
 const FOUNDERS = ['consumer-a', 'consumer-b', 'consumer-c'];
@@ -36,12 +45,16 @@ const NOW = 1000000;
 const {RAFT_OPERATION_OUTCOME, RAFT_MEMBERSHIP_TRANSITION_REASON} = portContract;
 const noLog = {debug() {}, info() {}, warn() {}, error() {}};
 
-async function fixture(t, {issue = true, permitChanges = {}} = {}) {
-  const cluster = new PartitionNodeCluster({partitionId: GROUP, replicaIds: FOUNDERS});
+async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = null} = {}) {
+  const cluster = new PartitionNodeCluster({partitionId: GROUP, replicaIds: FOUNDERS,
+    substrateFor: nativeTimeSource === null ? null : () => ({timeSource: nativeTimeSource})});
   t.after(() => cluster.dispose());
   cluster.tickers = [FOUNDERS[0]];
   assert.ok(cluster.settle(() => cluster.leaderReplicaId() !== null));
   const leader = cluster.leaderReplicaId();
+  assert.ok(cluster.settle(() => FOUNDERS.every((id) =>
+    BigInt(cluster.node(id).readStatus().appliedIndex) > 0n)),
+  'the founding no-op must be committed and applied before the operation fixture');
   const port = cluster.node(leader);
   const status = port.readStatus();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'learner-authorization-'));
@@ -150,6 +163,44 @@ async function fixture(t, {issue = true, permitChanges = {}} = {}) {
     run: () => admission.proposeAuthorizedGroupLearner(port, receiver, request, observe, delivery),
     proposalCount: () => cluster.coreEntries.filter((entry) =>
       entry.operation === 'propose_conf_change_v2').length};
+}
+// Query identity comes from the issued tuple, never from a later native status.
+function learnerActionQuery(f, changes = {}) {
+  const identity = JSON.parse(f.request.identity);
+  const permit = JSON.parse(f.request.permit);
+  return {purpose: membershipRead.COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION,
+    groupId: GROUP, action: {operationId: O, transitionIdentity: identity.transitionIdentity,
+      permitSequence: permit.permitSequence, stage: permit.permitStage,
+      replicaIdentity: identity.targetReplicaId, peerId: identity.targetPeerId, ...changes}};
+}
+function readLearnerAction(f, replicaId = f.leader, changes = {}) {
+  return f.cluster.node(replicaId)[portContract.RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP](
+    learnerActionQuery(f, changes));
+}
+function assertExactLearnerOrigin(f, result, proposalIndex) {
+  assert.equal(result.kind, 'committed-action', 'only exact applied action evidence is success');
+  assert.deepEqual(result.receipt.context, learnerActionQuery(f).action);
+  assert.equal(result.receipt.groupId, GROUP);
+  assert.equal(result.receipt.index, String(proposalIndex));
+  assert.equal(result.receipt.term, String(JSON.parse(f.request.permit).leaderTerm));
+  assert.ok(BigInt(result.receipt.index) <= BigInt(result.observedAppliedIndex));
+  assert.equal(Object.isFrozen(result.receipt.context), true);
+  assert.equal(Object.isFrozen(result.receipt), true);
+  assert.equal(Object.isFrozen(result), true);
+}
+async function learnerCheckpoint(f) {
+  const status = f.cluster.node(f.leader).readStatus();
+  const created = await createSqliteStateMachineCheckpoint({
+    db: f.cluster.replica(f.leader).db, raftRsGroupId: GROUP,
+    checkpointsRoot: path.join(f.cluster.directory, 'origin-checkpoints'),
+    identity: {clusterId: 'origin-cluster', raftGroupId: GROUP,
+      entity: {kind: 'message-group', id: GROUP},
+      membershipEpoch: status.membershipGenerationIndex},
+  });
+  assert.equal(created.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED);
+  assert.equal(readCheckpoint({checkpointDir: created.checkpointDir}).outcome,
+    RAFT_CHECKPOINT_VALIDATION_OUTCOME.VALID);
+  return created;
 }
 async function settleOperation(f, successful = false) {
   const row = await f.repository.queryAuthoritativeOperationById(O);
@@ -527,6 +578,189 @@ test('durable learner intent is consumed only through the bound repository and r
       assertNoProposal(f, before);
       assert.equal(f.row().message_group_membership_permit, f.request.permit);
     });
+    await t.test('uncommitted learner intent is unresolved, not a historical receipt',
+      async (t) => {
+        const f = await fixture(t);
+        const before = f.proposalCount();
+        assert.equal((await readLearnerAction(f)).kind, 'unresolved-action',
+          'a reservation or issued intent must not become committed evidence');
+        assertNoProposal(f, before);
+        f.cluster.isolate(f.leader);
+        const proposed = await f.run();
+        assert.equal(proposed.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
+        assert.equal((await readLearnerAction(f)).kind, 'unresolved-action',
+          'a locally appended uncommitted configuration is not an origin receipt');
+        f.cluster.heal(f.leader);
+        assertCommittedLearner(f, proposed);
+        for (const id of FOUNDERS) {
+          assertExactLearnerOrigin(f, await readLearnerAction(f, id),
+            proposed.proposalIndex);
+        }
+      });
+    await t.test('lost proposal response is recovered after port and native reconstruction',
+      async (t) => {
+        const f = await fixture(t);
+        // Discarded by the simulated caller; retained only by the test oracle.
+        const proposed = await f.run();
+        assertCommittedLearner(f, proposed);
+        const old = f.port;
+        const oldLifecycle = old.readStatus().lifecycleIncarnation;
+        const oldDatabase = f.cluster.replica(f.leader).db;
+        f.cluster.restart(f.leader);
+        assert.equal(oldDatabase.open, false, 'the prior database must actually close');
+        assert.equal(f.cluster.node(f.leader) === old, false, 'the port must be reconstructed');
+        assert.equal(f.cluster.replica(f.leader).db === oldDatabase, false,
+          'reconstruction must acquire a different database connection');
+        assert.equal(f.cluster.node(f.leader).readStatus().lifecycleIncarnation, oldLifecycle,
+          'same durable replica reopening preserves its physical lifecycle identity');
+        const before = f.proposalCount();
+        assertExactLearnerOrigin(f, await readLearnerAction(f), proposed.proposalIndex);
+        assert.equal(f.proposalCount(), before,
+          'recovered outcome must not repropose the old action');
+        assert.equal((await old[portContract.RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP](
+          learnerActionQuery(f))).kind, 'refused-action', 'closed ports cannot issue receipts');
+        const previousRuntime = f.cluster.node(f.leader).readStatus().runtimeGeneration;
+        const trapped = trapSharedCore(f.cluster, f.leader);
+        assert.equal(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL,
+          'the real runtime reconstruction control must engage');
+        for (const id of FOUNDERS) f.cluster.node(id).readStatus();
+        assert.notEqual(f.cluster.node(f.leader).readStatus().runtimeGeneration, previousRuntime,
+          'the actual fatal boundary must reconstruct the shared native runtime');
+        assertExactLearnerOrigin(f, await readLearnerAction(f), proposed.proposalIndex);
+        assert.equal(f.row().message_group_membership_permit, f.request.permit);
+      });
+    await t.test('historical origin survives leader change without refreshing execution fences',
+      async (t) => {
+        const f = await fixture(t);
+        const proposed = await f.run();
+        assertCommittedLearner(f, proposed);
+        let successor = null;
+        const oldTerm = f.port.readStatus().term;
+        f.cluster.isolate(f.leader);
+        // Both surviving voters must advance their election/leader leases.
+        f.cluster.tickers = FOUNDERS.filter((id) => id !== f.leader);
+        assert.ok(f.cluster.settle(() =>
+          f.cluster.tickers.some((id) => f.cluster.node(id).readStatus().role === 'leader')),
+        'an actual surviving voter must become leader');
+        successor = f.cluster.tickers.find((id) =>
+          f.cluster.node(id).readStatus().role === 'leader');
+        assert.ok(f.cluster.node(successor).readStatus().term > oldTerm);
+        const before = f.proposalCount();
+        assertExactLearnerOrigin(f, await readLearnerAction(f, successor), proposed.proposalIndex);
+        assert.equal(f.proposalCount(), before);
+        const observed = await f.observe(f.request, f.receiver);
+        const stale = await f.cluster.node(successor)
+          .proposeMembershipTransition(observed.transition);
+        assert.notEqual(stale.reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED,
+          'the old execution fences are not permission in the new native context');
+        assert.equal(f.proposalCount(), before);
+      });
+    await t.test('different action tuples cannot borrow a target historical receipt', async (t) => {
+      const f = await fixture(t);
+      const proposed = await f.run(); assertCommittedLearner(f, proposed);
+      for (const changes of [{operationId: 'other-operation'},
+        {transitionIdentity: 'other-transition'}, {permitSequence: 2}, {stage: 'promote'},
+        {replicaIdentity: 'different-target'}, {peerId: '7'}]) {
+        assert.notEqual((await readLearnerAction(f, f.leader, changes)).kind, 'committed-action');
+      }
+      const query = learnerActionQuery(f); query.groupId = 'other-group';
+      assert.equal((await f.port.readCommittedMembership(query)).kind, 'refused-action');
+      assertExactLearnerOrigin(f, await readLearnerAction(f), proposed.proposalIndex);
+    });
+    await t.test('origin and ConfState roll back together when the actual apply transaction fails',
+      async (t) => {
+        const nativeTimeSource = new VirtualTimeSource({startMs: NOW});
+        const f = await fixture(t, {nativeTimeSource});
+        const db = f.cluster.replica(f.leader).db;
+        const before = f.port.readStatus().appliedIndex;
+        db.exec(`CREATE TRIGGER fail_origin_apply BEFORE UPDATE ON _raft_rs_applied_state
+          WHEN EXISTS (SELECT 1 FROM raft_rs_peer_identity WHERE learner_admission IS NOT NULL)
+          BEGIN SELECT RAISE(ABORT, 'origin apply rollback witness'); END`);
+        await f.run();
+        assert.ok(f.cluster.settle(() =>
+          f.port.readStatus().outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE),
+        'the actual native application failure must engage');
+        const origin = db.prepare('SELECT learner_admission FROM raft_rs_peer_identity ' +
+          'WHERE replica_identity = ?').get(TARGET);
+        assert.equal(origin?.learner_admission ?? null, null,
+          'failed applied-state transaction must not leave a positive origin');
+        assert.equal(Number(db.prepare('SELECT applied_index FROM _raft_rs_applied_state ' +
+          'WHERE group_id = ?').get(GROUP).applied_index), before);
+        const committedState = db.prepare('SELECT learners FROM _raft_rs_applied_state ' +
+          'WHERE group_id = ?').get(GROUP);
+        assert.equal(JSON.parse(committedState.learners).includes(deriveRaftRsPeerId(TARGET)),
+          false, 'rolled-back ConfState cannot expose the failed learner origin');
+        db.exec('DROP TRIGGER fail_origin_apply');
+        const resumed = await f.port.tick();
+        if (resumed.recoveryRequired === true) {
+          assert.ok(Number.isSafeInteger(resumed.retryAfterMs) && resumed.retryAfterMs > 0,
+            'the recovery owner must name the remaining retry delay');
+          nativeTimeSource.advance(resumed.retryAfterMs);
+          assert.equal((await f.port.tick()).outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+            'replay must recover after the unchanged owner deadline');
+        } else {
+          assert.equal(resumed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+        }
+        assert.ok(f.cluster.settle(() => FOUNDERS.every((id) =>
+          f.cluster.node(id).readStatus().confState?.learners
+            .includes(deriveRaftRsPeerId(TARGET)))));
+        assert.equal((await readLearnerAction(f)).kind, 'committed-action');
+        assert.equal(f.row().message_group_membership_permit, f.request.permit,
+          'recovery cannot rewrite the original issued action');
+      });
+    await t.test('checkpoint scrubs native history but preserves exact learner origin',
+      async (t) => {
+        const f = await fixture(t);
+        const proposed = await f.run(); assertCommittedLearner(f, proposed);
+        const created = await learnerCheckpoint(f);
+        assert.equal(created.descriptor.payloadVersion, 2,
+          'origin-bearing images must not silently reuse the old payload contract');
+        const payload = new Database(path.join(created.checkpointDir, RAFT_CHECKPOINT_PAYLOAD_FILE),
+          {readonly: true});
+        try {
+          assert.equal(payload.prepare('SELECT 1 FROM sqlite_master WHERE name = ?')
+            .get('_raft_rs_log'), undefined, 'the old native log must really be absent');
+          const encoded = payload.prepare('SELECT learner_admission FROM raft_rs_peer_identity ' +
+          'WHERE replica_identity = ?').get(TARGET).learner_admission;
+          assert.deepEqual(JSON.parse(encoded), (await readLearnerAction(f)).receipt,
+            'the exact outcome must outlive native log retention');
+          assert.equal(created.descriptor.raftRs.peerReservations.find(
+            ({replicaIdentity}) => replicaIdentity === TARGET).learnerAdmission, encoded);
+        } finally {
+          payload.close();
+        }
+        const old = {...created.descriptor, payloadVersion: 1};
+        writeAtomicDurable(path.join(created.checkpointDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE), old);
+        assert.equal(readCheckpoint({checkpointDir: created.checkpointDir}).outcome,
+          RAFT_CHECKPOINT_VALIDATION_OUTCOME.UNSUPPORTED_PAYLOAD_KIND);
+      });
+    await t.test('checkpoint validates origin against both payload and applied boundary',
+      async (t) => {
+        const f = await fixture(t);
+        const proposed = await f.run(); assertCommittedLearner(f, proposed);
+        const created = await learnerCheckpoint(f);
+        const descriptorPath = path.join(created.checkpointDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE);
+        const altered = structuredClone(created.descriptor);
+        const reservation = altered.raftRs.peerReservations.find(
+          ({replicaIdentity}) => replicaIdentity === TARGET);
+        const origin = JSON.parse(reservation.learnerAdmission);
+        origin.index = String(BigInt(altered.raftRs.appliedIndex) + 1n);
+        reservation.learnerAdmission = JSON.stringify(origin);
+        writeAtomicDurable(descriptorPath, altered);
+        assert.equal(readCheckpoint({checkpointDir: created.checkpointDir}).outcome,
+          RAFT_CHECKPOINT_VALIDATION_OUTCOME.CORRUPT_DESCRIPTOR,
+          'a descriptor origin beyond its own applied boundary is not admissible');
+        const payloadPath = path.join(created.checkpointDir, RAFT_CHECKPOINT_PAYLOAD_FILE);
+        const payload = new Database(payloadPath);
+        payload.prepare('UPDATE raft_rs_peer_identity SET learner_admission = NULL ' +
+        'WHERE replica_identity = ?').run(TARGET); payload.close();
+        const bytes = fs.readFileSync(payloadPath);
+        writeAtomicDurable(descriptorPath, {...created.descriptor,
+          payloadByteLength: bytes.length, payloadDigest: sha256Digest(bytes)});
+        assert.equal(readCheckpoint({checkpointDir: created.checkpointDir}).outcome,
+          RAFT_CHECKPOINT_VALIDATION_OUTCOME.CORRUPT_PAYLOAD,
+          'even a digest-matched payload cannot erase its described origin');
+      });
     await t.test('request and host binding mutations during the read cannot retarget the proposal', async (t) => {
       const f = await fixture(t);
       let entered;
