@@ -9,18 +9,19 @@ concurrency:
   group: issued-recovery-publication-20261009
   cancel-in-progress: false
 env:
-  EXPECTED: b8611d8b9dc1538880bc07f0f8215cac7c031b74
+  EXPECTED: 06d9c931574288666dfd0c063411b0c72a6b84a1
   WORK_BRANCH: work/freshmg-issued-action-recovery-20261009
   QUEST: message-group-fresh-identity-membership
   LAGRANGE_LANE_JOBS_CAP: '1'
   PYTHONDONTWRITEBYTECODE: '1'
 jobs:
-  canonical-followup:
+  review-handoff:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
       actions: read
+      pull-requests: write
     defaults:
       run:
         shell: bash
@@ -41,42 +42,26 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Keep the first followup failure and its uncommitted evidence intact
+      - name: Register and prove the existing recovery-owner interaction
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-review-handoff.sh measure
+      - name: Preserve both evidence histories and request exact-head independent review
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/issued-recovery-followup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          mkdir -p "$out"
-          gh api repos/psvensson/lagrange/actions/artifacts/11603588192/zip > "$out/first-followup-37904141211.zip"
-          echo "20735486c2643ae95afd9d93e011e767466d0002caaa23f4da4293a5e5188542  $out/first-followup-37904141211.zip" | sha256sum -c -
-      - name: Correct the owned literal and measure normal-driver mutation evidence
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-canonical-followup.sh measure
-      - name: Preserve exact WIP and canonical results by normal push
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-canonical-followup.sh publish
-      - name: Preserve any incomplete attempt without deleting evidence
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/issued-recovery-review-handoff.sh publish
+      - name: Keep all outcomes and recoverable work
         if: always()
         run: |
           set -euo pipefail
-          out="$GITHUB_WORKSPACE/issued-recovery-followup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          out="$GITHUB_WORKSPACE/issued-recovery-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           mkdir -p "$out"
           git diff --binary "$EXPECTED" > "$out/total-change.patch"
-          git status --porcelain > "$out/archive-status.txt"
+          git status --porcelain > "$out/final-status.txt"
           if [ "$(git rev-parse HEAD)" != "$EXPECTED" ]; then git bundle create "$out/candidate.bundle" HEAD "^$EXPECTED"; fi
-          if [ -d .tap/test-results ]; then cp -a .tap/test-results "$out/tap"; fi
-          if [ -f test-output/reports/test-results.ndjson ]; then cp test-output/reports/test-results.ndjson "$out/archive-test-results.ndjson"; fi
+          if [ -f test-output/reports/test-results.ndjson ]; then cp test-output/reports/test-results.ndjson "$out/test-results.ndjson"; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: issued-recovery-followup-${{ github.run_id }}-${{ github.run_attempt }}
-          path: issued-recovery-followup-${{ github.run_id }}-${{ github.run_attempt }}/
+          name: issued-recovery-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: issued-recovery-review-${{ github.run_id }}-${{ github.run_attempt }}/
           retention-days: 14
           if-no-files-found: error
-      - name: Report the actual bounded aggregate, never a release verdict
-        if: always()
-        run: |
-          set -euo pipefail
-          file="$GITHUB_WORKSPACE/issued-recovery-followup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/result.json"
-          node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1]));console.log(JSON.stringify(r,null,2));process.exit(r.allChecksPassed?0:1)' "$file"
