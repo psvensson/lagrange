@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -39,12 +40,21 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Measure absent origin, committed application and retained recovery
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/run.sh measure
-      - name: Preserve measured WIP and canonical evidence on the new branch
+      - name: Retain the prior failed origin attempt unchanged
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/run.sh publish
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/learner-origin-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$out"
+          gh api repos/psvensson/lagrange/actions/artifacts/11599305613/zip > "$out/prior-origin-37892536228.zip"
+          echo "e7c5a64e0b49e6dd83f17aadec40f59babc27a1f783e79d0d8b104aa2ed5de7c  $out/prior-origin-37892536228.zip" | sha256sum -c -
+      - name: Measure original red, corrected native recovery and checkpoint binding
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/continue.sh measure
+      - name: Preserve measured WIP and canonical evidence without integration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ../carrier-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/scripts/quest-evidence/learner-origin-20261009/continue.sh publish
       - name: Preserve failures and exact recoverable changes
         if: always()
         run: |
@@ -60,7 +70,7 @@ jobs:
           if [ -f test-output/reports/test-results.ndjson ]; then
             cp test-output/reports/test-results.ndjson "$out/archive-results.ndjson"
           fi
-          echo 'Hosted component measurement. No physical/GCP acceptance, global metadata revocation, new attempt issuance, repository phase update, CREATE or main merge. Earlier full lab FAIL and timing gates remain.' > "$out/substrate.txt"
+          echo 'Hosted component measurement. No physical/GCP acceptance, global metadata revocation, new attempt issuance, repository phase update, CREATE or main merge. Prior full lab FAIL and duration gates remain.' > "$out/substrate.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -71,5 +81,5 @@ jobs:
       - name: Keep the complete cutover verdict unresolved
         if: always()
         run: |
-          echo 'The component proof is not source approval or release certification. Full FreshMG, lab and timing gates remain unresolved.'
+          echo 'The bounded result is separate from full FreshMG, original lab and timing gates. No independent source approval, main merge or release certification.'
           exit 1
