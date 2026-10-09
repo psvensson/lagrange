@@ -33,6 +33,8 @@ import {RAFT_CHECKPOINT_CREATION_OUTCOME, RAFT_CHECKPOINT_VALIDATION_OUTCOME,
   '../../src/raft/snapshot-checkpoint-constants.js';
 import {writeAtomicDurable, sha256Digest} from '../../src/runtime/oci-host-agent-durable-files.js';
 import {trapSharedCore} from '../raft/raft-rs-backend/evidence-o1-model.js';
+import {RAFT_RS_PEER_IDENTITY_ERROR_MSG} from '../../src/raft/raft-rs-peer-identity-constants.js';
+import {validateCheckpointDescriptor} from '../../src/raft/snapshot-checkpoint-format.js';
 
 
 const GROUP = 'learner-consumer';
@@ -667,6 +669,103 @@ test('durable learner intent is consumed only through the bound repository and r
       assert.equal((await f.port.readCommittedMembership(query)).kind, 'refused-action');
       assertExactLearnerOrigin(f, await readLearnerAction(f), proposed.proposalIndex);
     });
+    await t.test('historical read snapshots exact own-data actions without invoking accessors',
+      async (t) => {
+        const f = await fixture(t);
+        const proposed = await f.run(); assertCommittedLearner(f, proposed);
+        const query = learnerActionQuery(f);
+        let reads = 0;
+        Object.defineProperty(query.action, 'stage', {enumerable: true,
+          get() {
+            reads += 1;
+            return reads === 4 ? 'promote' : 'add-learner';
+          }});
+        const invalid = await f.port.readCommittedMembership(query);
+        assert.equal(invalid.reason, membershipRead.COMMITTED_LEARNER_ACTION_REASON.INVALID,
+          'accessor action must be rejected before validation or encoding');
+        assert.equal(reads, 0, 'rejecting an accessor must not evaluate it');
+        let traps = 0;
+        const proxy = new Proxy(learnerActionQuery(f).action, {
+          get(target, property) {
+            traps += 1; return Reflect.get(target, property);
+          },
+          ownKeys(target) {
+            traps += 1; return Reflect.ownKeys(target);
+          },
+          getPrototypeOf(target) {
+            traps += 1; return Reflect.getPrototypeOf(target);
+          },
+        });
+        const proxyQuery = {...learnerActionQuery(f), action: proxy};
+        assert.equal((await f.port.readCommittedMembership(proxyQuery)).reason,
+          membershipRead.COMMITTED_LEARNER_ACTION_REASON.INVALID);
+        assert.equal(traps, 0, 'proxy rejection must not invoke its traps');
+        const nonenumerable = learnerActionQuery(f).action;
+        Object.defineProperty(nonenumerable, 'stage', {enumerable: false});
+        const inherited = Object.create(learnerActionQuery(f).action);
+        for (const action of [nonenumerable, inherited,
+          {...learnerActionQuery(f).action, [Symbol('extra')]: true}]) {
+          assert.equal((await f.port.readCommittedMembership({...learnerActionQuery(f), action}))
+            .reason, membershipRead.COMMITTED_LEARNER_ACTION_REASON.INVALID);
+        }
+        const plainNull = Object.assign(Object.create(null), learnerActionQuery(f).action);
+        assertExactLearnerOrigin(f, await f.port.readCommittedMembership(
+          {...learnerActionQuery(f), action: plainNull}), proposed.proposalIndex);
+        assertExactLearnerOrigin(f, await readLearnerAction(f), proposed.proposalIndex);
+      });
+    await t.test('queued origin read refuses malformed bytes and impossible future terms',
+      async (t) => {
+        const f = await fixture(t);
+        const proposed = await f.run(); assertCommittedLearner(f, proposed);
+        const db = f.cluster.replica(f.leader).db;
+        const before = await readLearnerAction(f);
+        const original = JSON.stringify(before.receipt);
+        const update = db.prepare('UPDATE raft_rs_peer_identity SET learner_admission = ? ' +
+          'WHERE replica_identity = ?');
+        // Deliberate corruption at the durable boundary, never a normal writer.
+        update.run('{malformed-origin', TARGET);
+        const malformed = await readLearnerAction(f);
+        assert.equal(malformed.kind, membershipRead.COMMITTED_LEARNER_ACTION_KIND.REFUSED);
+        assert.equal(malformed.reason, membershipRead.COMMITTED_LEARNER_ACTION_REASON.CORRUPT,
+          'malformed live origin must be typed corrupt rather than success or throw');
+        const impossible = {...before.receipt, term: String(BigInt(f.port.readStatus().term) + 1n)};
+        update.run(JSON.stringify(impossible), TARGET);
+        const future = await readLearnerAction(f);
+        assert.equal(future.kind, membershipRead.COMMITTED_LEARNER_ACTION_KIND.REFUSED,
+          'future-term origin cannot be committed historical evidence');
+        assert.equal(future.reason, membershipRead.COMMITTED_LEARNER_ACTION_REASON.BEYOND_APPLIED);
+        update.run(original, TARGET);
+        assertExactLearnerOrigin(f, await readLearnerAction(f), proposed.proposalIndex);
+      });
+    await t.test('registry replay is a no-op and conflicting origin rolls back without replacement',
+      async (t) => {
+        const f = await fixture(t);
+        const proposed = await f.run(); assertCommittedLearner(f, proposed);
+        const db = f.cluster.replica(f.leader).db;
+        const registry = new RaftRsPeerIdentityRegistry(db);
+        const encoded = registry.committedLearnerAdmission(TARGET);
+        assert.notEqual(encoded, null, 'the real native apply must record origin first');
+        const changes = () => db.prepare('SELECT total_changes() AS n').get().n;
+        const originalChanges = changes();
+        db.transaction(() => registry.recordCommittedLearnerAdmission(TARGET, encoded))();
+        assert.equal(changes(), originalChanges, 'identical origin replay performs no SQL update');
+        const origin = JSON.parse(encoded);
+        const conflicting = JSON.stringify({...origin,
+          context: {...origin.context, operationId: 'conflicting-operation'}});
+        db.exec('CREATE TABLE origin_rollback_probe (value INTEGER)');
+        db.exec('INSERT INTO origin_rollback_probe VALUES (0)');
+        assert.throws(() => db.transaction(() => {
+          db.exec('UPDATE origin_rollback_probe SET value = 1');
+          registry.recordCommittedLearnerAdmission(TARGET, conflicting);
+        })(), {message: RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT},
+        'conflicting origin must reject the enclosing application transaction');
+        assert.equal(db.prepare('SELECT value FROM origin_rollback_probe').get().value, 0);
+        assert.equal(registry.committedLearnerAdmission(TARGET), encoded,
+          'conflicting origin must not replace previously retained bytes');
+        assert.throws(() => registry.recordCommittedLearnerAdmission(TARGET, encoded),
+          {message: RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_TRANSACTION});
+        assertExactLearnerOrigin(f, await readLearnerAction(f), proposed.proposalIndex);
+      });
     await t.test('origin and ConfState roll back together when the actual apply transaction fails',
       async (t) => {
         const nativeTimeSource = new VirtualTimeSource({startMs: NOW});
@@ -739,6 +838,11 @@ test('durable learner intent is consumed only through the bound repository and r
         const f = await fixture(t);
         const proposed = await f.run(); assertCommittedLearner(f, proposed);
         const created = await learnerCheckpoint(f);
+        const invalidShape = {...created.descriptor,
+          raftRs: {...created.descriptor.raftRs, peerReservations: [null]}};
+        assert.equal(validateCheckpointDescriptor(invalidShape).outcome,
+          RAFT_CHECKPOINT_VALIDATION_OUTCOME.CORRUPT_DESCRIPTOR,
+          'direct malformed reservation shape must be a typed refusal');
         const descriptorPath = path.join(created.checkpointDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE);
         const altered = structuredClone(created.descriptor);
         const reservation = altered.raftRs.peerReservations.find(
