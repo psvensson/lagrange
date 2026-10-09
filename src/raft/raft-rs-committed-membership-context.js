@@ -4,6 +4,7 @@ import {
 import {RAFT_RS_CONF_CHANGE_TYPE, RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from
   './raft-rs-ready-loop-constants.js';
 import {deriveRaftRsPeerId} from './raft-rs-peer-identity.js';
+import {RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';
 
 const CONTEXT_ENCODING = 'base64';
 const ABSENT_CONTEXT = Object.freeze({kind: 'absent'});
@@ -201,7 +202,9 @@ function retainedActionMatch(record, action, window, decodeEntry) {
         !RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) continue;
     const context = committedMembershipContext(decodeEntry(entry.entryType, entry.data));
     if (context !== null && MANAGED_CONTEXT_KEYS.every((key) => context[key] === action[key])) {
-      if (entry.term === '0') throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);
+      if (entry.term === RAFT_RS_ZERO_INDEX) {
+        throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);
+      }
       matched ??= Object.freeze({action: context, index: entry.index, term: entry.term});
     }
   }

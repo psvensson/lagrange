@@ -107,21 +107,21 @@ test('decreasing retained terms cannot produce evidence', (t) => {
 
 test('a snapshot-anchored compacted prefix is supported without fabricating covered receipts',
   (t) => {
-  const {peer, read, good, beforeAdd} = fixture(t);
-  peer.store.putSnapshot(GROUP, {metadata: {index: '1', term: '1',
-    confState: beforeAdd.confState}});
-  peer.db.prepare(`DELETE FROM ${RAFT_RS_TABLE.LOG}
+    const {peer, read, good, beforeAdd} = fixture(t);
+    peer.store.putSnapshot(GROUP, {metadata: {index: '1', term: '1',
+      confState: beforeAdd.confState}});
+    peer.db.prepare(`DELETE FROM ${RAFT_RS_TABLE.LOG}
     WHERE group_id = ? AND log_index <= 1`).run(GROUP);
-  assert.equal(read().kind, OUTCOME.COMMITTED,
-    'a complete post-snapshot suffix must remain supported');
-  peer.store.putSnapshot(GROUP, {metadata: {index: '2', term: '1',
-    confState: good.confState}});
-  assert.equal(read().kind, OUTCOME.UNRESOLVED,
-    'covered residual bytes are not snapshot provenance');
-  peer.db.prepare(`DELETE FROM ${RAFT_RS_TABLE.LOG} WHERE group_id = ?`).run(GROUP);
-  assert.equal(read().kind, OUTCOME.UNRESOLVED,
-    'a snapshot-only record is coherent but lacks the original action provenance');
-});
+    assert.equal(read().kind, OUTCOME.COMMITTED,
+      'a complete post-snapshot suffix must remain supported');
+    peer.store.putSnapshot(GROUP, {metadata: {index: '2', term: '1',
+      confState: good.confState}});
+    assert.equal(read().kind, OUTCOME.UNRESOLVED,
+      'covered residual bytes are not snapshot provenance');
+    peer.db.prepare(`DELETE FROM ${RAFT_RS_TABLE.LOG} WHERE group_id = ?`).run(GROUP);
+    assert.equal(read().kind, OUTCOME.UNRESOLVED,
+      'a snapshot-only record is coherent but lacks the original action provenance');
+  });
 
 test('a pruned prefix without a snapshot and an impossible snapshot boundary are refused', (t) => {
   const {peer, read} = fixture(t);
@@ -140,7 +140,9 @@ test('action reads refuse both caller and store-owned uncommitted transactions',
   let nestedAttempts = 0;
   const transaction = peer.db.transaction.bind(peer.db);
   const check = () => {
-    peer.db.transaction = (...args) => { nestedAttempts += 1; return transaction(...args); };
+    peer.db.transaction = (...args) => {
+      nestedAttempts += 1; return transaction(...args);
+    };
     try {
       assert.equal(peer.db.inTransaction, true);
       assert.deepEqual(read(), {kind: OUTCOME.UNAVAILABLE, reason: REASON.TRANSACTION_OPEN},
@@ -203,10 +205,12 @@ test('one read snapshot survives a real writer commit between record SELECTs', (
 test('read failures never recreate missing tables or manufacture a receipt', (t) => {
   const {peer, read, cluster} = fixture(t);
   assert.equal(peer.store.readMembershipActionEvidence(GROUP, ACTION,
-    () => { throw new Error('decoder unavailable'); }).kind, OUTCOME.UNAVAILABLE);
+    () => {
+      throw new Error('decoder unavailable');
+    }).kind, OUTCOME.UNAVAILABLE);
   peer.db.exec(`DROP TABLE ${RAFT_RS_TABLE.LOG}`);
   unavailable(read, 'missing evidence storage must not become a positive outcome');
-  assert.equal(peer.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' " +
+  assert.equal(peer.db.prepare('SELECT name FROM sqlite_master WHERE type = \'table\' ' +
     'AND name = ?').get(RAFT_RS_TABLE.LOG), undefined);
   assert.equal(cluster.peer('1').live, true,
     'the diagnostic does not pretend to repair the runtime');

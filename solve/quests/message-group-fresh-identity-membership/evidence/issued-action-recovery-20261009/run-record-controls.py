@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Read-owner diagnostic and exact-assertion mutations in an isolated checkout."""
+import argparse
 import importlib.util
 import json
 from pathlib import Path
-import sys
 
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('diagnostic', HERE / 'run-diagnostic.py')
@@ -27,13 +27,15 @@ TESTS = (
 
 def main():
     diag.refuse_under_probe(ROOT)
-    if len(sys.argv) != 2:
-        raise SystemExit('usage: python run-record-controls.py /isolated/evidence/output')
-    output = Path(sys.argv[1]).resolve()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('output', type=Path)
+    parser.add_argument('--normal-sqlite', action='store_true')
+    args = parser.parse_args()
+    output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     source = ROOT / SOURCE
     original = source.read_bytes()
-    command = diag.test_command(ROOT)
+    command = diag.test_command(ROOT, normal_sqlite=args.normal_sqlite)
     command[-1] = TEST
     rows = []
 

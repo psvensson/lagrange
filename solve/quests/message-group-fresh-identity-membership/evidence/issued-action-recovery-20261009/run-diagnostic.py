@@ -135,22 +135,27 @@ def measure(root: Path, output: Path, name: str, command: list[str], source: Pat
         (output / (name + '.result.json')).write_text(json.dumps(row, indent=2) + '\n')
 
 
-def test_command(root: Path) -> list[str]:
-    return ['node', '--no-warnings', '--loader', str(root / RELATIVE / 'diagnostic-loader.mjs'),
-            '--test', '--test-reporter=' + str(root / RELATIVE / 'report-diagnostic.mjs'), TEST]
+def test_command(root: Path, normal_sqlite: bool = False) -> list[str]:
+    command = ['node', '--no-warnings']
+    if not normal_sqlite:
+        command += ['--loader', str(root / RELATIVE / 'diagnostic-loader.mjs')]
+    return command + ['--test',
+        '--test-reporter=' + str(root / RELATIVE / 'report-diagnostic.mjs'), TEST]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--normal-sqlite', action='store_true',
+                        help='use locked better-sqlite3 without the diagnostic loader')
     args = parser.parse_args()
     root, output = args.root.resolve(), args.output.resolve()
     refuse_under_probe(root)  # Must precede mkdir, reading mutation bytes, or fixture work.
     source = root / SOURCE
     original = source.read_bytes()
     output.mkdir(parents=True, exist_ok=True)
-    command = test_command(root)
+    command = test_command(root, normal_sqlite=args.normal_sqlite)
     results = []
     mutations = [
         ('unapplied-is-not-committed', 'index > window.applied ||', '', EXPECTED_TESTS[1],
@@ -163,7 +168,8 @@ def main() -> int:
         ('historical-terms', 'entryTerm > term', 'entryTerm !== term', EXPECTED_TESTS[1],
          'the exact durable applied action must yield a historical receipt'),
         ('zero-term-context',
-         "if (entry.term === '0') throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);",
+         "if (entry.term === RAFT_RS_ZERO_INDEX) {\n"
+         "        throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);\n      }",
          '', EXPECTED_TESTS[4], 'malformed durable evidence must not yield a receipt'),
     ]
     try:
