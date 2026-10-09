@@ -1,7 +1,8 @@
 import {
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
 } from './raft-operation-port-constants.js';
-import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
+import {RAFT_RS_CONF_CHANGE_TYPE, RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from
+  './raft-rs-ready-loop-constants.js';
 import {deriveRaftRsPeerId} from './raft-rs-peer-identity.js';
 
 const CONTEXT_ENCODING = 'base64';
@@ -141,8 +142,110 @@ function committedMembershipContext(decoded) {
   });
 }
 
+// A retained-log observation is positive evidence only. Failure to find the
+// action never proves cancellation/non-commitment or grants a successor permit.
+const MEMBERSHIP_ACTION_OBSERVATION = Object.freeze({
+  COMMITTED: 'committed-action',
+  UNRESOLVED: 'unresolved-action',
+  UNAVAILABLE: 'action-evidence-unavailable',
+});
+const MEMBERSHIP_ACTION_EVIDENCE_REASON = Object.freeze({
+  APPLIED_ENTRY: 'exact-retained-applied-entry',
+  NO_RETAINED_PROOF: 'no-retained-applied-action-proof',
+  INVALID_RECORD: 'invalid-durable-action-record',
+});
+const MEMBERSHIP_ACTION_GROUP_REQUIRED = 'membership action observation requires its owning group';
+const CANONICAL_DURABLE_INDEX = /^(?:0|[1-9][0-9]*)$/u;
+
+function durableActionIndex(value) {
+  return typeof value === 'string' && CANONICAL_DURABLE_INDEX.test(value) ?
+    BigInt(value) : null;
+}
+
+function durableActionWindow(record) {
+  if (!record || !Array.isArray(record.entries)) return null;
+  const applied = durableActionIndex(record.appliedIndex);
+  const committed = durableActionIndex(record.hardState?.commit);
+  const term = durableActionIndex(record.hardState?.term);
+  const snapshot = record.snapshot === null ? 0n :
+    durableActionIndex(record.snapshot?.metadata?.index);
+  if ([applied, committed, term, snapshot].includes(null) ||
+      applied > committed || snapshot > applied) return null;
+  return {applied, term, snapshot};
+}
+
+function observedAction(kind, reason, fields = {}) {
+  return Object.freeze({kind, reason, ...fields});
+}
+
+function actionEntryPosition(entry, previous, term) {
+  const index = durableActionIndex(entry?.index);
+  const entryTerm = durableActionIndex(entry?.term);
+  if (index === null || entryTerm === null || index <= previous || entryTerm > term) {
+    throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);
+  }
+  return index;
+}
+
+function retainedActionMatch(record, action, window, decodeEntry) {
+  let previous = 0n;
+  let matched = null;
+  for (const entry of record.entries) {
+    const index = actionEntryPosition(entry, previous, window.term);
+    previous = index;
+    // Installed snapshots supersede covered log bytes. Residual bytes at or
+    // below that cut are NOT an applied-action receipt for the snapshot image.
+    if (index <= window.snapshot || index > window.applied ||
+        !RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) continue;
+    const context = committedMembershipContext(decodeEntry(entry.entryType, entry.data));
+    if (context !== null && MANAGED_CONTEXT_KEYS.every((key) => context[key] === action[key])) {
+      if (entry.term === '0') throw new Error(MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);
+      matched ??= Object.freeze({action: context, index: entry.index, term: entry.term});
+    }
+  }
+  return matched;
+}
+
+/** Decode exact applied-action evidence within one native owner's durable record.
+ * This subordinate codec does not read or mutate a database. The native owner
+ * supplies a coherent SAME-GROUP record via RaftRsDurableStore.observeMembershipAction.
+ * This codec checks context/local scalar invariants, NOT full log coherence; a
+ * caller-provided record/group label is not authenticated by this function.
+ * Old entry terms remain valid historical evidence after a new leader term.
+ * No-match (including snapshot-covered history) stays UNRESOLVED. This is not
+ * a current join descriptor, an absence proof or authority to reissue/CREATE.
+ * @param {Object} input - Owning group, durable record, exact original action,
+ *   and native decodeEntry(entryType, data) callback.
+ * @return {Object} Frozen historical evidence or an explicit unresolved state.
+ */
+function observeRetainedMembershipAction({groupId, record, action, decodeEntry}) {
+  if (typeof groupId !== 'string' || groupId.length === 0) {
+    throw new TypeError(MEMBERSHIP_ACTION_GROUP_REQUIRED);
+  }
+  // Reuse the canonical context owner for shape and permanent identity checks.
+  encodeCommittedMembershipContext(action);
+  try {
+    const window = durableActionWindow(record);
+    if (window === null || typeof decodeEntry !== 'function') {
+      return observedAction(MEMBERSHIP_ACTION_OBSERVATION.UNAVAILABLE,
+        MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);
+    }
+    const matched = retainedActionMatch(record, action, window, decodeEntry);
+    return matched === null ? observedAction(MEMBERSHIP_ACTION_OBSERVATION.UNRESOLVED,
+      MEMBERSHIP_ACTION_EVIDENCE_REASON.NO_RETAINED_PROOF) :
+      observedAction(MEMBERSHIP_ACTION_OBSERVATION.COMMITTED,
+        MEMBERSHIP_ACTION_EVIDENCE_REASON.APPLIED_ENTRY, {groupId, ...matched});
+  } catch {
+    return observedAction(MEMBERSHIP_ACTION_OBSERVATION.UNAVAILABLE,
+      MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD);
+  }
+}
+
 export {
   COMMITTED_MEMBERSHIP_CONTEXT_ERROR,
+  MEMBERSHIP_ACTION_OBSERVATION,
+  MEMBERSHIP_ACTION_EVIDENCE_REASON,
+  observeRetainedMembershipAction,
   committedMembershipChangeType,
   committedMembershipContext,
   encodeCommittedMembershipContext,

@@ -44,6 +44,8 @@ import {RAFT_RS_HOST_WRITE} from './raft-rs-host-contract.js';
 import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
+import {MEMBERSHIP_ACTION_OBSERVATION, MEMBERSHIP_ACTION_EVIDENCE_REASON,
+  observeRetainedMembershipAction} from './raft-rs-committed-membership-context.js';
 
 const DECIMAL_DIGITS = /^\d+$/u;
 const PAYLOAD_ENCODING = 'base64';
@@ -245,6 +247,47 @@ function readDurableRecordIn(db, groupId) {
       },
     } : null,
   };
+}
+
+// The outcome reader accepts the WHOLE retained record, not an arbitrary slice.
+// A snapshot may replace any prefix; above its cut the retained suffix must be
+// contiguous, terms cannot regress, and durable progress must be represented.
+// This is a read-boundary consistency check, not another Raft decision engine.
+function actionEvidenceUnavailable() {
+  return Object.freeze({kind: MEMBERSHIP_ACTION_OBSERVATION.UNAVAILABLE,
+    reason: MEMBERSHIP_ACTION_EVIDENCE_REASON.INVALID_RECORD});
+}
+
+function membershipActionRecordBoundary(record) {
+  const snapshot = record.snapshot?.metadata;
+  const cut = snapshot ? toExactInteger(snapshot.index) : 0n;
+  const cutTerm = snapshot ? toExactInteger(snapshot.term) : 0n;
+  const applied = toExactInteger(record.appliedIndex);
+  const committed = toExactInteger(record.hardState.commit);
+  const term = toExactInteger(record.hardState.term);
+  if (cut > applied || applied > committed || cutTerm > term ||
+      (cut > 0n && cutTerm === 0n)) {
+    return null;
+  }
+  return {cut, cutTerm, committed, term};
+}
+
+function membershipActionRecordIsCoherent(record) {
+  const boundary = membershipActionRecordBoundary(record);
+  if (boundary === null) return false;
+  let last = boundary.cut;
+  let previousTerm = boundary.cutTerm;
+  for (const entry of record.entries) {
+    const index = toExactInteger(entry.index);
+    if (index <= boundary.cut) continue;
+    const term = toExactInteger(entry.term);
+    if (index !== last + 1n || term < previousTerm || term > boundary.term) {
+      return false;
+    }
+    last = index;
+    previousTerm = term;
+  }
+  return boundary.committed <= last;
 }
 
 /**
@@ -581,6 +624,29 @@ class RaftRsDurableStore {
    */
   readDurableRecord(groupId) {
     return readDurableRecordIn(this.db, groupId);
+  }
+
+  /** Read historical action evidence from one coherent, committed SQL view.
+   * The native owner supplies its OWN group and native decoder, not request data.
+   * Refuse any preexisting transaction: its local uncommitted writes are not
+   * durable evidence. The read-only transaction below owns a consistent snapshot
+   * across every record table; it issues no DDL or persistence mutation.
+   * @param {string} groupId - The native owner's group.
+   * @param {Object} action - The canonical original action tuple.
+   * @param {Function} decodeEntry - The native configuration-entry decoder.
+   * @return {Object} Historical evidence, unresolved, or unavailable.
+   */
+  observeMembershipAction(groupId, action, decodeEntry) {
+    if (this.db.inTransaction) return actionEvidenceUnavailable();
+    try {
+      return this.db.transaction(() => {
+        const record = readDurableRecordIn(this.db, groupId);
+        if (!membershipActionRecordIsCoherent(record)) return actionEvidenceUnavailable();
+        return observeRetainedMembershipAction({groupId, record, action, decodeEntry});
+      })();
+    } catch {
+      return actionEvidenceUnavailable();
+    }
   }
 
   static readDurableRecordIn(db, groupId) {

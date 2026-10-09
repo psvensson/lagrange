@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2032,
+    "unit": 2034,
     "integration": 83,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2324,
-  "digest": "fnv1a32-deedc774",
+  "censusSize": 2326,
+  "digest": "fnv1a32-f4dae4a1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1518,6 +1518,7 @@
     "test/raft/raft-rs-backend/durable-ready-loop.test.js": "unit",
     "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js": "unit",
     "test/raft/raft-rs-backend/durable-store-committed-entries.test.js": "unit",
+    "test/raft/raft-rs-backend/durable-store-membership-action.test.js": "unit",
     "test/raft/raft-rs-backend/election-safety.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js": "unit",
     "test/raft/raft-rs-backend/evidence-o1-anchors.test.js": "unit",
@@ -1529,6 +1530,7 @@
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "unit",
     "test/raft/raft-rs-backend/identity-record-window.test.js": "unit",
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "unit",
+    "test/raft/raft-rs-backend/issued-action-recovery.test.js": "unit",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "unit",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "unit",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "unit",

@@ -811,6 +811,17 @@
         "test/transport/service-delivery-lifetime.test.js",
         "test/integration/message-group-learner-runtime-authorization.integration.test.js"
       ]
+    },
+    "issued-membership-action-record-observation": {
+      "description": "The existing durable-store owner acquires one same-group SQL snapshot and validates the retained post-snapshot envelope before the committed-context decoder identifies a historical action. The decoder is not an independent durable-record authority; no outcome read grants reissue or CREATE.",
+      "owners": [
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-committed-membership-context.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js",
+        "test/raft/raft-rs-backend/durable-store-membership-action.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1556,6 +1567,28 @@
       "witnessTests": [
         "test/transport/service-delivery-lifetime.test.js",
         "test/integration/message-group-learner-runtime-authorization.integration.test.js"
+      ]
+    },
+    "issued-membership-action-record-observation": {
+      "description": "The existing durable-store owner acquires one same-group SQL snapshot and validates the retained post-snapshot envelope before the committed-context decoder identifies a historical action. The decoder is not an independent durable-record authority; no outcome read grants reissue or CREATE.",
+      "endpoints": [
+        {
+          "id": "coherent-durable-record",
+          "owners": [
+            "src/raft/raft-rs-durable-store.js"
+          ]
+        },
+        {
+          "id": "canonical-action-context",
+          "owners": [
+            "src/raft/raft-rs-committed-membership-context.js"
+          ]
+        }
+      ],
+      "contract": "issued-membership-action-record-observation",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/issued-action-recovery.test.js",
+        "test/raft/raft-rs-backend/durable-store-membership-action.test.js"
       ]
     }
   }
