@@ -37,9 +37,19 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // another previously unimported export).
 // 2026-09-27: tightened 1435 -> 1434 per checker hint after the REPLACE
 // witness made the shared transport-delivery deferral classifier live.
-// 2026-10-03: tightened 1434 -> 1433 per checker hint (failed-gate-keeps-
-// evidence: renderRunSummary gained its first importer, the witnesses).
-const BASELINE_UNUSED_EXPORT_COUNT = 1433;
+// 2026-10-01: tightened 1434 -> 1430 per checker hint after the zero-reference
+// cutover deleted the census-disposed legacy group and timing modules.
+// 2026-10-04: tightened 1430 -> 1424 per checker hint after the cutover-orphan
+// census deleted or de-exported six exports whose only importers the cutover
+// deleted.
+// (origin/main 2026-10-03 tightened 1434 -> 1433: renderRunSummary gained
+// its first importer; superseded by the lower value here.)
+// 2026-10-04: tightened 1424 -> 1423 per checker hint after the
+// one-spread-authority deletion.
+// 2026-10-04: tightened 1423 -> 1422 per checker hint: the observation's
+// blocked-partition resolver became the first importer of the shared
+// isPriorityRecoveryClosureWitnessPending rule.
+const BASELINE_UNUSED_EXPORT_COUNT = 1422;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

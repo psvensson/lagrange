@@ -1025,8 +1025,15 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     },
   );
 
+  // Supersedes (R09) the pre-2026-10-05 expectation that a planner-ready
+  // (spread-satisfied) partition's unresolved REPLACE stops keeping
+  // topology-settling closed. Owner ruling 2026-10-05 (satisfied-in-flight
+  // REPLACE blocks planning): an unresolved operation blocks planning on its
+  // own partition until it reaches its terminal state, whatever the spread
+  // reads; the partition's planner is woken by the terminal event
+  // (replace-in-flight-blocks-planning.test.js W6).
   await t.test(
-    'checkRebalance ignores authoritative priority REPLACE rows once the owner best-effort planning answer no longer blocks that partition',
+    'checkRebalance keeps topology-settling closed on an unresolved authoritative priority REPLACE even when the best-effort planning answer reads the partition spread',
     async (t) => {
       let authoritativeEntityReadCalls = 0;
       const nodes = [
@@ -1149,8 +1156,10 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       );
       t.equal(
         evaluateStateCalls,
-        1,
-        'planner-ready in-flight priority operations should not keep topology-settling closed',
+        0,
+        'an unresolved priority REPLACE keeps topology-settling closed for ' +
+        'its own partition even when spread reads satisfied (owner ruling ' +
+        '2026-10-05)',
       );
     },
   );

@@ -1,10 +1,8 @@
+import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
 import {
   handleLatencyCdcPropagationBatchMessage as runHandleLatencyBatchMessage,
   handleLatencyCdcPropagationMessage as runHandleLatencyMessage,
 } from './message-group-service-cdc-propagation-runtime-methods.js';
-
-const LOCAL_STR_DEFERRED_RAFT_RESPONSE_DELIVERY = 'Deferred Raft response delivery';
-const LOCAL_STR_FAILED_TO_SEND_RAFT_RESPONSE = 'Failed to send Raft response';
 
 const MESSAGE_GROUP_SERVICE_INBOUND_INGRESS_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
@@ -49,12 +47,8 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
     MESSAGE_GROUP_SERVICE_LITERAL,
     MessageStatus,
     NUM,
-    RAFT_PACKET_TYPE,
     buildLatencyCdcPropagationResult,
-    isRaftPacket,
     normalizeCauseId,
-    resolveRaftTransportDeliveryOptions,
-    shouldDeferImmediateDeliveryRetry,
   } = deps;
   const cdcPropagationRuntimeDeps = {
     CDC_FORWARD_MAX_RELAY_DEPTH,
@@ -111,8 +105,8 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
 
     /**
      * Receive a message from another service or replica.
-     * Detects Raft packets and routes them directly to liferaft.
-     * Handles non-Raft messages as application messages.
+     * A raft-rs transport envelope is stepped into this replica's
+     * consensus port; every other message is an application message.
      * Requirements: 2.2, 2.3, 5.2, 5.3
      * @param {Object} message - Incoming message.
      * @return {Promise<Object>} Processing result.
@@ -123,73 +117,14 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
           MESSAGE_GROUP_SERVICE_LITERAL.MESSAGEGROUPSERVICE_NOT_INITIALIZED,
         );
       }
-      // Extract payload - handle both envelope and direct packet formats
       const payload = message.payload || message;
-      // Detect and handle Raft packets directly using isRaftPacket()
-      // No type conversion needed - packets flow through unchanged
-      // Requirements: 2.2, 2.3
-      if (isRaftPacket(payload)) {
+      if (isRaftRsTransportEnvelope(payload)) {
         if (this.raft) {
-          this.logger.trace(
-            MESSAGE_GROUP_SERVICE_LITERAL.RECEIVED_RAFT_PACKET,
-            {
-              type: payload.type,
-              term: payload.term,
-              address: payload.address,
-              replicaId: this.replicaId,
-              groupId: this.groupId,
-            },
-          );
-          if (
-            this.isJoiningExistingGroup === true &&
-            payload.type === RAFT_PACKET_TYPE.VOTE
-          ) {
-            this.clearJoinExistingGroupTimers();
-            const deniedVote = await this.raft.packet(RAFT_PACKET_TYPE.VOTED, {
-              granted: false,
-            });
-            if (deniedVote) {
-              const senderAddress = payload.address;
-              const deliveryOptions = resolveRaftTransportDeliveryOptions({
-                ...deniedVote,
-                targetAddress: senderAddress,
-              });
-              try {
-                const result = await this.transport.deliver(
-                  senderAddress,
-                  deniedVote,
-                  deliveryOptions,
-                );
-                if (
-                  !result?.acknowledged &&
-                  shouldDeferImmediateDeliveryRetry(result)
-                ) {
-                  this.logger.debug(LOCAL_STR_DEFERRED_RAFT_RESPONSE_DELIVERY, {
-                    destination: senderAddress,
-                    retryAfterMs: result.retryAfterMs,
-                    errorCode: result?.errorCode || null,
-                  });
-                }
-              } catch (err) {
-                this.logger.error(LOCAL_STR_FAILED_TO_SEND_RAFT_RESPONSE, {
-                  error: err.message,
-                  destination: senderAddress,
-                });
-              }
-            }
-            return {acknowledged: true};
-          }
-          if (this.raftRuntime) {
-            return (
-              this.raftRuntime.handleRaftPacket(message) || {
-                acknowledged: true,
-              }
-            );
-          }
+          await Promise.resolve(this.raft.step(payload));
         }
         return {acknowledged: true};
       }
-      // Handle application messages (non-Raft)
+      // Handle application messages
       // Requirements: 2.3, 5.3
       return this.handleApplicationMessage(message);
     }

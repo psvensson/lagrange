@@ -52,14 +52,9 @@ import {
   CDC_PIPELINE_METRIC,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
-import {
-  isRaftPacket,
-  isRaftRsTransportEnvelope,
-} from '../raft/raft-packet-utils.js';
+import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
 import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
-import {assertPartitionRaftProviderContract} from
-  '../raft/raft-provider-contract.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
@@ -131,7 +126,6 @@ import {
   PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -285,7 +279,6 @@ export const PARTITION_SERVICE_SHARED = {
   PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -341,7 +334,6 @@ export const PARTITION_SERVICE_SHARED = {
   WRITE_PHASE_FIELD_SQLITE_RUN_MS,
   WRITE_PHASE_FIELD_TOTAL_MS,
   assertCritical,
-  assertPartitionRaftProviderContract,
   attachTrafficReadinessListener,
   buildDurableCommitWitness,
   buildPartitionWriteEntry,
@@ -362,7 +354,6 @@ export const PARTITION_SERVICE_SHARED = {
   isBackgroundWorkLifecycleReady,
   isMetadataPublicationLifecycleReady,
   isPriorityControlPlanePartition,
-  isRaftPacket,
   isRaftRsTransportEnvelope,
   isSystemTableWriteReady,
   normalizePublishedRaftRole,

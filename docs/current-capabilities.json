@@ -160,6 +160,11 @@
       "summary": "Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress."
     },
     {
+      "id": "message-group-seed-placement",
+      "area": "Replication",
+      "summary": "Message group mg-1 keeps all of its replicas on the seed node until a fresh-replica-identity ADD path for message groups exists: losing the seed's disk loses mg-1's committed state, with no recovery path. A replica held for reseed after proven history loss stays out of consensus for good; there is no reseed procedure yet."
+    },
+    {
       "id": "single-process-data-directory",
       "area": "Storage lifecycle",
       "summary": "Replica cleanup and recreation are durably serialized by services.service_id. A directory-local SQLite ownership lock rejects a second live OS process before provenance, rejoin, or replica storage activity."
@@ -190,6 +195,46 @@
       "summary": "Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed."
     },
     {
+      "id": "postgres-wire-restricted-dialect",
+      "area": "PostgreSQL compatibility",
+      "summary": "The listener speaks the PostgreSQL wire protocol with a restricted SQL dialect; ORM and psql meta-command compatibility are not claimed. Statements drivers commonly send at startup or for introspection fail: SHOW <setting>, SET, RESET, DISCARD ALL, DEALLOCATE, version(), current_database(), current_setting(), pg_catalog tables, plain EXPLAIN, CREATE INDEX, DROP TABLE, WITH ... SELECT/INSERT/DELETE, IN (subquery) and VALUES (...) as a query."
+    },
+    {
+      "id": "sql-multiple-statements",
+      "area": "SQL",
+      "summary": "A query text that holds more than one statement is refused whole and none of it runs: SQLSTATE 0A000 over the PostgreSQL wire, error code MULTIPLE_STATEMENTS_UNSUPPORTED through the application database. Send each statement separately; trailing semicolons and comments are accepted."
+    },
+    {
+      "id": "sql-returning-insert-select",
+      "area": "SQL",
+      "summary": "INSERT, UPDATE and DELETE with RETURNING are refused (SQLSTATE 0A000, \"RETURNING is not supported\") and nothing is applied; read generated values with a separate SELECT. INSERT ... SELECT is refused the same way (\"INSERT ... SELECT is not supported\")."
+    },
+    {
+      "id": "sql-transaction-control",
+      "area": "SQL",
+      "summary": "Transaction control is BEGIN [WORK, TRANSACTION] or START TRANSACTION, optionally with the READ WRITE mode; COMMIT or END [WORK, TRANSACTION]; and ROLLBACK or ABORT [WORK, TRANSACTION]. Comments outside quotes are allowed anywhere in these statements. The other PostgreSQL transaction modes (isolation levels, READ ONLY, DEFERRABLE and NOT DEFERRABLE) are refused with SQLSTATE 0A000, naming the mode, because the engine does not provide them: a block cannot be made read-only or given a stated isolation level. The statement must be the whole query text: a transaction keyword followed by anything else (BEGIN followed by an INSERT with no semicolon) is a syntax error (SQLSTATE 42601) and nothing runs. Savepoints, COMMIT AND CHAIN and prepared transactions are not supported. ROLLBACK or COMMIT with no transaction in progress answers its command tag with a WARNING (SQLSTATE 25P01), as PostgreSQL does. Closing the connection inside a transaction block rolls the transaction back at once."
+    },
+    {
+      "id": "pgwire-driver-transaction-modes",
+      "area": "PostgreSQL compatibility",
+      "summary": "Drivers that send plain BEGIN, START TRANSACTION or BEGIN READ WRITE work. A driver that adds READ ONLY, an isolation level or DEFERRABLE to BEGIN gets SQLSTATE 0A000 and no transaction is begun. pgjdbc with setReadOnly(true) sends BEGIN READ ONLY, which includes Spring @Transactional(readOnly = true); set the pgjdbc connection property readOnlyMode=ignore to keep plain BEGIN. psycopg and SQLAlchemy send a mode only when an isolation level or read-only is configured on the connection or engine. Older asyncpg versions and some Npgsql versions send an isolation level on BEGIN. These driver behaviours are untested here; they come from driver documentation."
+    },
+    {
+      "id": "sql-transaction-budget",
+      "area": "SQL",
+      "summary": "An explicit transaction has a 60-second budget from BEGIN. When the budget runs out before COMMIT, the server rolls the transaction back within about a second. After that, any later statement in that block, including a new BEGIN, is refused with SQLSTATE 25P04 and never runs outside the transaction; the block is then failed until ROLLBACK, or until a COMMIT, which answers ROLLBACK. A COMMIT of a transaction that expired before COMMIT fails with SQLSTATE 25P04 stating that no changes were committed, and leaves the session idle. A COMMIT that fails after it began committing (for example, the budget ran out while the partitions of a multi-partition transaction were committing) answers SQLSTATE 08007 (transaction_resolution_unknown): some changes may have been committed. Known limitation: in that case the transaction can be left partly committed. If the block is still open after an 08007, the ROLLBACK that ends it carries a WARNING that the previous transaction's outcome is unknown. The embedded application database behaves the same way: a statement of transaction(callback) after the budget ran out is refused (NO_TRANSACTION), and a COMMIT that may have been partly applied rejects with TRANSACTION_OUTCOME_UNKNOWN."
+    },
+    {
+      "id": "sql-dollar-quoted-literals",
+      "area": "SQL",
+      "summary": "Dollar-quoted string literals ($$...$$, $tag$...$tag$) are stored as NULL rather than their text. Use single-quoted literals or bind parameters."
+    },
+    {
+      "id": "sql-on-conflict-do-update",
+      "area": "SQL",
+      "summary": "INSERT ... ON CONFLICT DO UPDATE replaces the conflicting row with the VALUES row: its SET list and WHERE condition are ignored. ON CONFLICT DO NOTHING skips the conflicting row as PostgreSQL does."
+    },
+    {
       "id": "node-transport-security",
       "area": "Security",
       "summary": "Node-to-node transport is plain WebSocket without cryptographic peer authentication; deploy it only on a trusted private network."
@@ -198,6 +243,11 @@
       "id": "backup-and-upgrades",
       "area": "Operations",
       "summary": "Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x."
+    },
+    {
+      "id": "upgrade-from-message-group-move-builds",
+      "area": "Operations",
+      "summary": "In-place upgrade is unsupported from any build that moved a message-group replica to a joining node under its existing replica name: every release through 0.2.5 (npm 0.1.1, 0.2.4-rc.0 to rc.2 and 0.2.5; Docker 0.1.0, 0.1.1, 0.2.4-rc.2 and 0.2.5), the unreleased 0.2.6, and main before the identity-reuse fix. A node holding a message-group replica whose name it did not create can elect a second leader and lose acknowledged writes after the upgrade; rebuild such clusters or dump and restore them."
     }
   ]
 }

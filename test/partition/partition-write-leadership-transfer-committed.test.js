@@ -82,8 +82,8 @@ const RAFT_TIMING = Object.freeze({
 // group, derived by the owner that derives it for every partition replica.
 const INDEX_ONE_TIMEOUTS = computeReplicaElectionTimeouts({
   replicaId: 'second', replicaIds: ['first', 'second'],
-  baseElectionMinMs: PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS,
-  baseElectionMaxMs: PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS,
+  baseElectionMinMs: PARTITION_SERVICE_VALUE.RAFT_ELECTION_MIN_DEFAULT_MS,
+  baseElectionMaxMs: PARTITION_SERVICE_VALUE.RAFT_ELECTION_MAX_DEFAULT_MS,
   electionJitterPerReplicaMs:
     PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS,
 });

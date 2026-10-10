@@ -16,12 +16,13 @@
 //   neutral carrier   generic machinery that merely transports execution
 //                     invents no owner - not the execution-node context, not
 //                     VirtualNetwork delivery, not a microtask continuation,
-//                     not a remote peer representation, not the transcript
+//                     not the transcript
 //
-// The two production falsifiers that matter to formation are the same claim
-// read through real objects: bootstrap and transport each REACH a Raft
-// semantic boundary, hand off to raft_protocol, and are restored afterwards.
-// Neither owns Raft merely because it made the call.
+// The production falsifiers that matter to formation exercise the canonical
+// consensus attribution mapping: bootstrap and transport each cross the
+// protocol boundary, committed apply crosses its own boundary, and the caller
+// is restored afterwards. No caller owns consensus merely because it invoked
+// the semantic boundary.
 import {test} from '../../src/test-helpers/tap.js';
 import {FORMATION_OWNER} from
   '../../src/diagnostics/formation-diagnostics-contract.js';
@@ -34,28 +35,28 @@ import {
   runTransportInboundActivity,
 } from '../../src/diagnostics/formation-owner-attribution.js';
 import {
-  createRemotePeerRepresentation,
-} from '../../src/raft/remote-peer-representation.js';
-import LifeRaft from '../../src/raft/liferaft.js';
+  runRaftApplySlice,
+  runRaftProtocolActivity,
+} from '../../src/diagnostics/raft-formation-attribution.js';
 import {
   createVirtualNetwork,
 } from '../../test/distributed/harness/virtual-network.js';
 import {
   createHostTranscript,
 } from '../../test/simulation/formation-sim-host-transcript.js';
+import {
+  PartitionNodeCluster,
+} from '../raft/raft-rs-backend/partition-node-cluster.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 
 const ZERO = 0;
 const ONE = 1;
 const TWO = 2;
 const STEP_US = 5;
-const LONG_TIMER_MS = 60_000;
 const CARRIER_DELAY_MS = 1;
 const CARRIER_HORIZON_MS = 10;
 const NODE_ID = 'node-0';
-const PEER_ADDRESS = 'node-b/partition/p1-r2';
-const SELF_ADDRESS = 'node-a/partition/p1-r1';
 const TRANSCRIPT_EVENT_NAME = 'HOST_CREATED';
-const PROBE_PACKET_TYPE = 'diagnostic-probe';
 // The accounting owner normalises an empty store to its own bucket, so "no
 // ownership transition occurred" is observed as unattributed, never as an
 // absent value.
@@ -80,54 +81,6 @@ function createWindow() {
 
 function ownerRow(snapshot, owner) {
   return snapshot.owners.find((entry) => entry.owner === owner);
-}
-
-// A Raft timers port that samples the owner in force AT THE MOMENT the
-// production protocol path arms a timer. That instant is inside the Raft
-// semantic boundary, so it is where a handoff is either visible or absent.
-function samplingTimers(onArm) {
-  const armed = new Map();
-  return {
-    active: (name) => armed.has(name),
-    adjust() {
-      return this;
-    },
-    clear(...names) {
-      if (names.length === ZERO) armed.clear();
-      for (const name of names) armed.delete(name);
-      return this;
-    },
-    end() {
-      armed.clear();
-      return true;
-    },
-    setTimeout(name, callback, duration) {
-      onArm();
-      armed.set(name, {callback, duration});
-      return this;
-    },
-    setInterval(name, callback, duration) {
-      onArm();
-      armed.set(name, {callback, duration});
-      return this;
-    },
-    setImmediate(name, callback) {
-      onArm();
-      armed.set(name, {callback, duration: ZERO});
-      return this;
-    },
-  };
-}
-
-function createRaft(onArm) {
-  const raft = new LifeRaft(SELF_ADDRESS, {
-    'election min': LONG_TIMER_MS,
-    'election max': LONG_TIMER_MS,
-    'heartbeat': LONG_TIMER_MS,
-  });
-  raft.timers.clear();
-  raft.timers = samplingTimers(onArm);
-  return raft;
 }
 
 test('an unowned execution acquires an owner only inside the entry it crosses',
@@ -258,21 +211,6 @@ test('generic carriers transport execution without inventing an owner',
     }, CARRIER_DELAY_MS);
     network.runStep({untilMs: CARRIER_HORIZON_MS});
 
-    const representation = createRemotePeerRepresentation({
-      address: PEER_ADDRESS,
-      write: (packet, callback) => {
-        observed.peerWrite = window.owner();
-        return callback(null, packet);
-      },
-    });
-    await new Promise((resolve) => {
-      representation.write({type: PROBE_PACKET_TYPE}, resolve);
-    });
-    representation.once('end', () => {
-      observed.peerEnd = window.owner();
-    });
-    representation.end();
-
     const transcript = createHostTranscript({network});
     transcript.record(TRANSCRIPT_EVENT_NAME, {nodeId: NODE_ID});
     observed.transcript = window.owner();
@@ -282,8 +220,6 @@ test('generic carriers transport execution without inventing an owner',
     t.same(observed, {
       executionNode: NEUTRAL,
       microtask: NEUTRAL,
-      peerEnd: NEUTRAL,
-      peerWrite: NEUTRAL,
       transcript: NEUTRAL,
       virtualNetwork: NEUTRAL,
     }, 'no carrier decided an owner for work that merely passed through it');
@@ -294,85 +230,242 @@ test('generic carriers transport execution without inventing an owner',
     t.end();
   });
 
-test('bootstrap reaches a Raft boundary, hands off, and is restored',
+test('bootstrap reaches the consensus protocol boundary and is restored',
   (t) => {
     const window = createWindow();
-    const armOwners = [];
-    const raft = createRaft(() => {
-      armOwners.push(window.owner());
-      window.advance();
-    });
     window.attribution.start();
     const seen = [];
+    let protocolOwner = null;
+
     runBootstrapActivity(() => {
       seen.push(window.owner());
       window.advance();
-      raft.heartbeat(LONG_TIMER_MS);
+      runRaftProtocolActivity(() => {
+        protocolOwner = window.owner();
+        window.advance();
+      });
       seen.push(window.owner());
       window.advance();
     });
-    const snapshot = window.attribution.stop();
-    raft.end();
 
-    t.same(armOwners, [FORMATION_OWNER.RAFT_PROTOCOL],
-      'the production heartbeat path arms its timer as raft_protocol');
+    const snapshot = window.attribution.stop();
+
+    t.equal(protocolOwner, FORMATION_OWNER.RAFT_PROTOCOL,
+      'the canonical protocol boundary runs as raft_protocol');
     t.same(seen, [FORMATION_OWNER.BOOTSTRAP, FORMATION_OWNER.BOOTSTRAP],
-      'bootstrap is restored after the Raft boundary returns');
+      'bootstrap is restored after the consensus boundary returns');
     t.equal(
       ownerRow(snapshot, FORMATION_OWNER.RAFT_PROTOCOL).handoffCount, ONE,
-      'the Raft entry is a new semantic boundary, not an inherited dispatch');
+      'the protocol entry is a new semantic boundary');
     t.equal(ownerRow(snapshot, FORMATION_OWNER.BOOTSTRAP).durationUs,
       STEP_US * TWO,
-      'bootstrap does not own Raft merely because it made the call');
+      'bootstrap owns only its regions around the consensus call');
     t.equal(ownerRow(snapshot, FORMATION_OWNER.RAFT_PROTOCOL).durationUs,
       STEP_US,
-      'and raft_protocol owns exactly the work inside its boundary');
+      'raft_protocol owns exactly the protocol region');
     t.equal(snapshot.overlapDurationUs, ZERO, 'no simultaneous owners');
     t.equal(snapshot.partitionDeltaUs, ZERO, 'no missing time');
     t.end();
   });
 
-test('transport inbound reaches a real DATA dispatch, hands off, and is restored',
-  async (t) => {
+test('transport inbound reaches the consensus protocol boundary and is restored',
+  (t) => {
     const window = createWindow();
-    const raft = createRaft(() => undefined);
     window.attribution.start();
     const seen = [];
-    let dispatchOwner = null;
-    const settled = new Promise((resolve) => {
-      runTransportInboundActivity(() => {
-        seen.push(window.owner());
-        window.advance();
-        raft.emit('data', {
-          address: PEER_ADDRESS,
-          leader: '',
-          state: raft.state,
-          term: raft.term,
-          type: PROBE_PACKET_TYPE,
-        }, (packet) => {
-          dispatchOwner = window.owner();
-          window.advance();
-          resolve(packet);
-        });
-        seen.push(window.owner());
+    let protocolOwner = null;
+
+    runTransportInboundActivity(() => {
+      seen.push(window.owner());
+      window.advance();
+      runRaftProtocolActivity(() => {
+        protocolOwner = window.owner();
         window.advance();
       });
+      seen.push(window.owner());
+      window.advance();
     });
-    await settled;
-    const snapshot = window.attribution.stop();
-    raft.end();
 
-    t.equal(dispatchOwner, FORMATION_OWNER.RAFT_PROTOCOL,
-      'the real production DATA dispatch executes as raft_protocol');
+    const snapshot = window.attribution.stop();
+
+    t.equal(protocolOwner, FORMATION_OWNER.RAFT_PROTOCOL,
+      'transport hands protocol work to raft_protocol');
     t.same(seen, [FORMATION_OWNER.TRANSPORT, FORMATION_OWNER.TRANSPORT],
-      'transport is restored once the dispatch boundary returns');
+      'transport is restored once the consensus boundary returns');
     t.equal(
       ownerRow(snapshot, FORMATION_OWNER.RAFT_PROTOCOL).handoffCount, ONE,
-      'the dispatch is an explicit handoff, counted as its own boundary');
+      'the protocol work is an explicit owner handoff');
     t.equal(ownerRow(snapshot, FORMATION_OWNER.TRANSPORT).durationUs,
       STEP_US * TWO,
-      'transport does not own Raft merely because it delivered the frame');
+      'transport owns only the regions around the consensus call');
     t.equal(snapshot.overlapDurationUs, ZERO, 'no simultaneous owners');
     t.equal(snapshot.partitionDeltaUs, ZERO, 'no missing time');
     t.end();
   });
+
+test('committed apply is attributed to the apply owner and restores its caller',
+  (t) => {
+    const window = createWindow();
+    window.attribution.start();
+    const seen = [];
+    let applyOwner = null;
+
+    runBootstrapActivity(() => {
+      seen.push(window.owner());
+      window.advance();
+      runRaftApplySlice(() => {
+        applyOwner = window.owner();
+        window.advance();
+      });
+      seen.push(window.owner());
+      window.advance();
+    });
+
+    const snapshot = window.attribution.stop();
+
+    t.equal(applyOwner, FORMATION_OWNER.RAFT_APPLY,
+      'committed apply executes under the dedicated apply owner');
+    t.same(seen, [FORMATION_OWNER.BOOTSTRAP, FORMATION_OWNER.BOOTSTRAP],
+      'the caller is restored after apply');
+    t.equal(ownerRow(snapshot, FORMATION_OWNER.RAFT_APPLY).handoffCount, ONE,
+      'apply is an explicit semantic boundary');
+    t.equal(snapshot.overlapDurationUs, ZERO, 'no simultaneous owners');
+    t.equal(snapshot.partitionDeltaUs, ZERO, 'no missing time');
+    t.end();
+  });
+
+// The production engagement of the consensus mapping: a real raft-rs group
+// (the one runtime every partition, message-group and WASM service port runs
+// on) charges its own protocol turns to raft_protocol and its committed-entry
+// application to raft_apply, nested exclusively inside the turn that drives
+// it. The application callback advances the clock by a fixed amount, so apply
+// time counted twice would show up in the protocol bucket.
+test('a raft-rs group charges its protocol turns and committed applies to ' +
+  'the consensus owners, exclusively, inside the enclosing turn', (t) => {
+  const APPLY_STEP_US = 1000;
+  const TICKS = 12;
+  const COMMANDS = 3;
+  let nowUs = ZERO;
+  const attribution = new FormationTurnAttribution({clock: () => nowUs++});
+  const applied = [];
+  const cluster = new PartitionNodeCluster({
+    partitionId: 'attribution-group',
+    replicaIds: ['r1'],
+    applyFor: (_replicaId, command) => {
+      nowUs += APPLY_STEP_US;
+      applied.push(command);
+    },
+  });
+  let snapshot = null;
+  try {
+    attribution.start();
+    runBootstrapActivity(() => {
+      for (let tick = 0; tick < TICKS; tick += 1) {
+        t.equal(typeof cluster.tick('r1')?.then, 'undefined',
+          'a single-voter tick turn completes synchronously');
+      }
+      t.ok(cluster.settle(() => cluster.leaderReplicaId() === 'r1'),
+        'the single voter leads');
+      for (let index = 0; index < COMMANDS; index += 1) {
+        cluster.propose('r1', {op: 'attribution', index});
+      }
+      t.ok(cluster.settle(() => applied.length === COMMANDS),
+        'every proposed command was applied');
+    });
+    snapshot = attribution.stop();
+  } finally {
+    cluster.dispose();
+  }
+  const protocol = ownerRow(snapshot, FORMATION_OWNER.RAFT_PROTOCOL);
+  const apply = ownerRow(snapshot, FORMATION_OWNER.RAFT_APPLY);
+  const enclosing = ownerRow(snapshot, FORMATION_OWNER.BOOTSTRAP);
+  t.ok(protocol.handoffCount >= TICKS,
+    `every tick turn entered raft_protocol (${protocol.handoffCount})`);
+  t.ok(protocol.durationUs > ZERO, 'and was charged protocol time');
+  t.ok(apply.handoffCount >= COMMANDS,
+    `every committed entry entered raft_apply (${apply.handoffCount})`);
+  t.ok(apply.durationUs >= COMMANDS * APPLY_STEP_US,
+    'the application work is charged to raft_apply');
+  t.ok(protocol.durationUs < APPLY_STEP_US,
+    'apply nested in a protocol turn is not also charged to raft_protocol');
+  t.ok(enclosing.durationUs > ZERO, 'the driving turn keeps its own work');
+  t.equal(protocol.durationUs + apply.durationUs + enclosing.durationUs,
+    snapshot.busyDurationUs,
+    'the consensus buckets and the enclosing turn partition its time');
+  t.ok(snapshot.busyDurationUs <= snapshot.windowDurationUs,
+    'and never exceed it');
+  t.equal(snapshot.overlapDurationUs, ZERO, 'no simultaneous owners');
+  t.equal(snapshot.partitionDeltaUs, ZERO, 'no missing time');
+  t.end();
+});
+
+// The apply slice is the entry's whole SQLite commit+apply transaction
+// (RAFT_FOLLOWER_COMMIT_APPLY_SLICE), not only the application callback: the
+// application here is trivial and the cost is in the transaction around it.
+// The store's transaction advances the clock by a fixed amount at commit for
+// each applied entry (a transaction that writes the applied state), so the
+// commit must land in raft_apply and never in the enclosing protocol turn.
+test('a committed entry\'s whole SQLite transaction, its commit included, ' +
+  'is charged to raft_apply, not to the protocol turn', (t) => {
+  const COMMIT_STEP_US = 5000;
+  const TICKS = 12;
+  const COMMANDS = 3;
+  let nowUs = ZERO;
+  const attribution = new FormationTurnAttribution({clock: () => nowUs++});
+  const applied = [];
+  const transaction = RaftRsDurableStore.prototype.transaction;
+  const putAppliedState = RaftRsDurableStore.prototype.putAppliedState;
+  let appliesInTransaction = ZERO;
+  RaftRsDurableStore.prototype.putAppliedState = function(...args) {
+    appliesInTransaction += ONE;
+    return putAppliedState.apply(this, args);
+  };
+  RaftRsDurableStore.prototype.transaction = function(work) {
+    const before = appliesInTransaction;
+    const result = transaction.call(this, work);
+    if (appliesInTransaction > before) nowUs += COMMIT_STEP_US;
+    return result;
+  };
+  const cluster = new PartitionNodeCluster({
+    partitionId: 'apply-transaction-group',
+    replicaIds: ['r1'],
+    applyFor: (_replicaId, command) => {
+      applied.push(command);
+    },
+  });
+  let snapshot = null;
+  let appliedEntries = ZERO;
+  try {
+    attribution.start();
+    runBootstrapActivity(() => {
+      for (let tick = 0; tick < TICKS; tick += 1) cluster.tick('r1');
+      t.ok(cluster.settle(() => cluster.leaderReplicaId() === 'r1'),
+        'the single voter leads');
+      for (let index = 0; index < COMMANDS; index += 1) {
+        cluster.propose('r1', {op: 'apply-transaction', index});
+      }
+      t.ok(cluster.settle(() => applied.length === COMMANDS),
+        'every proposed command was applied');
+    });
+    snapshot = attribution.stop();
+    appliedEntries = appliesInTransaction;
+  } finally {
+    RaftRsDurableStore.prototype.transaction = transaction;
+    RaftRsDurableStore.prototype.putAppliedState = putAppliedState;
+    cluster.dispose();
+  }
+  const protocol = ownerRow(snapshot, FORMATION_OWNER.RAFT_PROTOCOL);
+  const apply = ownerRow(snapshot, FORMATION_OWNER.RAFT_APPLY);
+  t.ok(appliedEntries >= COMMANDS, `${appliedEntries} applied entries ` +
+    'each committed their own transaction');
+  t.ok(apply.durationUs >= appliedEntries * COMMIT_STEP_US,
+    'every apply transaction\'s commit is charged to raft_apply ' +
+    `(${apply.durationUs}us)`);
+  t.ok(protocol.durationUs < COMMIT_STEP_US,
+    `no commit is charged to raft_protocol (${protocol.durationUs}us)`);
+  t.equal(apply.handoffCount, appliedEntries,
+    'one apply slice per committed entry transaction');
+  t.equal(snapshot.overlapDurationUs, ZERO, 'no simultaneous owners');
+  t.equal(snapshot.partitionDeltaUs, ZERO, 'no missing time');
+  t.end();
+});

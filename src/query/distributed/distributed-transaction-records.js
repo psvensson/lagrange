@@ -67,14 +67,18 @@ const distributedTransactionRecordMethods = {
   },
 
   /**
-   * Build transaction ID.
+   * Build transaction ID: unique per coordinator even when one session
+   * begins twice within one clock tick (the coordinator's sequence), since
+   * expected-transaction admission and the ended-transaction record key on
+   * it.
    * @param {string} sessionId - Session ID.
    * @return {string} Transaction ID.
    * @private
    */
 
   createTransactionId(sessionId) {
-    return `tx-${sessionId}-${this.now()}`;
+    this.transactionIdSequence += 1;
+    return `tx-${sessionId}-${this.now()}-${this.transactionIdSequence}`;
   },
 };
 

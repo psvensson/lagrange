@@ -34,9 +34,9 @@ import {
   buildReplayCursorCheckpoint,
   resolveSnapshotBarrierIndex,
 } from './partition-mirror-replay-cursor.js';
+import {reportMergeCutoverWaitSpent} from './merge-cutover-wait-report.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-
 /**
  * Failure acknowledgement per local phase at the moment a merge
  * replication run fails. The owner aborts the merge fail-safe on any of
@@ -698,8 +698,11 @@ class PartitionServiceMergeReplicationMethods {
   async waitForMergeCutoverActivation(metadata) {
     const intervalMs = PARTITION_SERVICE_DEFAULT.MERGE_CUTOVER_WAIT_INTERVAL_MS;
     const timeoutMs = PARTITION_SERVICE_DEFAULT.MERGE_CUTOVER_WAIT_TIMEOUT_MS;
-    const deadline = Date.now() + timeoutMs;
+    const startedAtMs = Date.now();
+    const deadline = startedAtMs + timeoutMs;
+    let polls = 0;
     while (Date.now() < deadline) {
+      polls += 1;
       if (this.isShutdown) {
         throw new Error(
           PARTITION_SERVICE_ERROR_MSG.MERGE_CUTOVER_WAIT_TIMEOUT,
@@ -729,6 +732,7 @@ class PartitionServiceMergeReplicationMethods {
         setTimeout(resolve, intervalMs);
       });
     }
+    reportMergeCutoverWaitSpent(this, metadata, {startedAtMs, polls});
     throw new Error(PARTITION_SERVICE_ERROR_MSG.MERGE_CUTOVER_WAIT_TIMEOUT);
   }
 

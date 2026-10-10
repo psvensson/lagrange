@@ -67,15 +67,11 @@ function createJoinStartupPlan(service) {
             .createSelfHostedMessageGroup(assignment),
         );
       }
-      if (assignment.strategy ===
-          AssignmentStrategy.MOVE_REPLICA) {
-        return service.executePhase(
-          JoiningPhase.JOINING_MESSAGE_GROUP,
-          () => service.joiningPhaseOwners
-            .joinExistingMessageGroup(assignment),
-        );
-      }
-      return undefined;
+      // Every joiner hosts its own message group; any other assignment
+      // (a MOVE_REPLICA from a seed that still moves message-group
+      // identities) is refused rather than skipped.
+      throw new Error(JOINING_ERROR_MSG.unsupportedMessageGroupAssignment(
+        assignment.strategy));
     },
   };
 

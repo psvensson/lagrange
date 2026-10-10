@@ -27,7 +27,6 @@ import {
   NodeHandle,
   NODE_ROLES,
   PORTS,
-  RAFT_PROVIDER_DEFAULTS,
 } from './cluster-test-helpers.js';
 import {
   selectStartupActiveGateOwnerProgressContinuation,
@@ -505,7 +504,6 @@ const clusterPart6TestContext = {
   QUIESCENCE_STALE_PROGRESS_STATUS,
   QUIESCENCE_STALE_PROGRESS_STEP,
   QUIESCENCE_STALE_PROGRESS_TIMEOUT_MS,
-  RAFT_PROVIDER_DEFAULTS,
   RUNTIME_AUTHORITY_REPAIR_STATE,
   selectStartupActiveGateOwnerProgressContinuation,
   summarizePriorityRecoveryProgressClasses,

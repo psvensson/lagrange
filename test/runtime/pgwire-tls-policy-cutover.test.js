@@ -96,7 +96,7 @@ class TlsPolicyAdapter {
 
   async execute(sessionId, sql, parameters) {
     this.executions.push({sessionId, sql, parameters});
-    return {rows: [], columns: []};
+    return {statementType: 'SELECT', rows: [], columns: []};
   }
 
   closeSession(sessionId) {
@@ -141,8 +141,11 @@ function createExecutor(database, observedRequests) {
     assert.equal(isSqlRequest(request), true);
     observedRequests.push(request);
     const prepared = database.prepare(request.statement);
+    // A read-only stand-in for SqlCore: it executes only SELECTs and stamps
+    // the executed statement kind as SqlCore does.
     return {
       success: true,
+      statementType: 'SELECT',
       rows: prepared.all(...request.parameters),
       columns: prepared.columns().map((column) => column.name),
     };

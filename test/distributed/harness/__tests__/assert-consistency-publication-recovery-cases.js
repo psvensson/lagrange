@@ -27,6 +27,8 @@ import {
   buildFreshPriorityDecisionClosureWitness,
 } from './assert-consistency-fixtures.js';
 
+const arrayMap = Function.call.bind(Array.prototype.map);
+
 test('assertConsistency defers strict leader comparison until the ' +
   'publication recovery gate is ready', async () => {
   const snapshotPayloadA = {
@@ -307,8 +309,14 @@ test('assertConsistencyFromSnapshots prefers canonical priority-recovery ' +
   assert.doesNotThrow(() => assertConsistencyFromSnapshots(snapshots));
 });
 
-test('assertConsistencyFromSnapshots consumes fresh priority decision closure ' +
-  'over stale publication gates', async () => {
+// SUPERSEDED (owner decision 2026-10-04, "delete the second authority").
+// Before: a fresh non-pending decision closure witness overrode the stale
+// durable publication summary (gap) and consistency passed. A non-pending
+// witness never clears a census gap now: consistency waits for the census
+// refresh of the durable summary - one event-driven reconcile hop - and then
+// passes (both halves asserted).
+test('assertConsistencyFromSnapshots waits for the durable census refresh ' +
+  'instead of consuming a non-pending decision closure', async () => {
   const stalePublicationConvergence = {
     publicationEpoch: TEST_PUBLICATION_EPOCH,
     publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
@@ -357,7 +365,28 @@ test('assertConsistencyFromSnapshots consumes fresh priority decision closure ' 
     }),
   ];
 
-  assert.doesNotThrow(() => assertConsistencyFromSnapshots(snapshots));
+  assert.throws(
+    () => assertConsistencyFromSnapshots(snapshots),
+    /priority_partitions_not_spread/,
+    'the stale durable gap is not cleared by the non-pending witness',
+  );
+
+  const refreshedPublicationConvergence = {
+    ...stalePublicationConvergence,
+    recoveryProtocolState: 'steady_published',
+    priorityRecoveryReasonCodes: [],
+    priorityPartitionSummary: priorityRecoveryDecisionSnapshots
+      .priorityPartitionSummary,
+  };
+  const refreshedSnapshots = arrayMap([TEST_NODE_A_ID, TEST_NODE_B_ID], (nodeId) =>
+    buildPublicationReadySnapshot(nodeId, {
+      publicationConvergence: refreshedPublicationConvergence,
+      priorityRecoveryDecisionSnapshots,
+    }));
+  assert.doesNotThrow(
+    () => assertConsistencyFromSnapshots(refreshedSnapshots),
+    'after the census refresh is written the publication is consistent',
+  );
 });
 
 test('assertConsistencyFromSnapshots lets a ready publication gate override ' +

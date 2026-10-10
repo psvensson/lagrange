@@ -632,7 +632,11 @@ test('Join startup - phase failure emits phaseFailed event with error',
       'phases after failure should not emit any events');
   });
 
-test('Join startup - MOVE_REPLICA strategy emits joining_message_group phase',
+// W8 (identity-reuse safety fix, A3): a MOVE_REPLICA assignment - from a
+// seed that still moves message-group identities - is refused by the
+// joiner: no joining_message_group phase starts and the join fails closed
+// rather than skipping its message group. (This test once pinned the move.)
+test('Join startup - a MOVE_REPLICA assignment is refused, never executed',
   async (t) => {
     initializeTestEnvironment();
 
@@ -650,23 +654,21 @@ test('Join startup - MOVE_REPLICA strategy emits joining_message_group phase',
       phaseStarts.push(payload.phase);
     });
 
-    const result = await service.join();
-    t.equal(result.success, true, 'join should succeed');
-
-    // With MOVE_REPLICA, the message-group phase should be joining_message_group
-    const expectedOrder = [
-      JOINING_PHASE.CONTACTING_SEED,
-      JOINING_PHASE.CONNECTING_WEBSOCKET,
-      JOINING_PHASE.JOINING_MESSAGE_GROUP,
-      JOINING_PHASE.WAITING_LEADERSHIP,
-      JOINING_PHASE.QUERYING_STATE,
-      READINESS_CONVERGENCE_PHASE,
-    ];
-    t.same(
-      phaseStarts,
-      expectedOrder,
-      'MOVE_REPLICA strategy should emit joining_message_group phase',
-    );
+    let joinError = null;
+    let result = null;
+    try {
+      result = await service.join();
+    } catch (error) {
+      joinError = error;
+    }
+    t.notOk(result?.success === true, 'the join must not succeed');
+    t.match(String(joinError?.message ?? result?.error ?? ''),
+      /MOVE_REPLICA is not supported/,
+      'the refusal names the unsupported assignment');
+    t.notOk(phaseStarts.includes(JOINING_PHASE.JOINING_MESSAGE_GROUP),
+      'no moved replica is joined');
+    t.notOk(phaseStarts.includes(JOINING_PHASE.WAITING_LEADERSHIP),
+      'the join stops at the refused assignment');
   });
 
 // ---------------------------------------------------------------------------

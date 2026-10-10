@@ -2,11 +2,9 @@
 //   conf-state-is-the-membership-authority-under-divergent-hostile-caches
 //   lagrange-rows-project-membership-and-never-alter-the-configuration
 //
-// The liferaft part A case, reproduced under the raft-rs backend. Part A's
-// liferaft measurements are NOT re-derived here: the round-3 verifier records
-// "Part A: 3 of 3 on src/raft/liferaft.js, liferaft-provider.js and
-// sqlite-log-adapter.js" (round-3.md, RE-CONFIRMATIONS), and that is cited,
-// never used as an oracle. The raft-rs side is driven here.
+// The pre-cutover Part A hostile-cache case is reproduced under raft-rs.
+// Historical measurements are not re-derived here and are never used as an
+// oracle; this file drives the current consensus path directly.
 //
 // Every expectation comes from the core itself or from the durable record read
 // with an independent SQLite connection. Nothing is declared by this file, and
@@ -89,8 +87,8 @@ function durableMembershipOf(dbFile) {
 }
 
 // The part A caches, hostile and divergent: node A's names a, b, c; node B's
-// names a, b, d with d still syncing - the liferaft shape where a SYNCING row
-// doubles as a voter.
+// names a, b, d with d still syncing - the historical hostile-cache shape
+// where a SYNCING row doubles as a voter.
 function hostileRowsFor(peerId) {
   const rows = new LagrangeMembershipRows();
   if (peerId === PEER_B) {

@@ -238,7 +238,6 @@
         "test/admin/admin-control-snapshot-owner-recovery-retry-options.test.js",
         "test/admin/admin-control-snapshot-retry-decision.test.js",
         "test/active-gate/active-gate-authoritative-repair-convergence.test.js",
-        "test/convergence/dt4-full-chain-scenario.test.js",
         "test/convergence/dt6-control-plane-migration-network.test.js",
         "test/convergence/dt6-publication-failback-network.test.js",
         "test/convergence/dt6-publication-ack-recovery-gate-network.test.js",
@@ -299,17 +298,14 @@
       ]
     },
     "raft-formation-attribution": {
-      "description": "LifeRaft protocol registration and dispatch map exclusively to raft_protocol formation diagnostics while commit/application maps exclusively to raft_apply, without moving or changing Raft behavior.",
+      "description": "Formation diagnostics owns the semantic mapping of consensus protocol work to raft_protocol and committed-apply work to raft_apply; the mapping is exclusive, restores callers, and is backend-neutral.",
       "owners": [
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
-        "src/diagnostics/raft-formation-attribution.js",
-        "src/raft/liferaft.js",
-        "src/raft/liferaft-timing-api.js",
-        "src/raft/liferaft-commit-scheduler.js"
+        "src/diagnostics/raft-formation-attribution.js"
       ],
       "tests": [
-        "test/raft/liferaft-formation-attribution-interaction.test.js"
+        "test/diagnostics/formation-attribution-semantics.test.js"
       ]
     },
     "sql-engine-system-table-read": {
@@ -329,8 +325,9 @@
     "CL-041": {
       "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "owners": [
-        "src/raft/liferaft.js",
-        "src/raft/in-memory-log-adapter.js"
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-group-constants.js"
       ],
       "tests": [
         "test/closure/CL-041.repro.test.js"
@@ -339,18 +336,20 @@
     "CL-040": {
       "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "owners": [
-        "src/raft/liferaft.js",
-        "src/raft/in-memory-log-adapter.js"
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-group-constants.js"
       ],
       "tests": [
         "test/closure/CL-040.repro.test.js"
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the log adapters never masquerade an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
-        "src/raft/liferaft.js",
-        "src/raft/in-memory-log-adapter.js"
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-group-constants.js"
       ],
       "tests": [
         "test/closure/CL-042.repro.test.js"
@@ -516,10 +515,9 @@
       ]
     },
     "partition-raft-operation-port": {
-      "description": "The rs-raft provider is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed rs-raft factory (no selection, no provider injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done; every write the replica did not take is answered by the write kernel's builders, typed with its entry: a pending write released when its replica stops leading, at its commit deadline or at shutdown with what the replica knows of it (outcome unknown once handed to consensus; not leader, deadline passed or service shut down otherwise), a proposal queue at capacity as backpressure with the queue's retry time, a proposal the port refused with the port's reason, and a router holding the answer routes it again by its code (an unknown outcome only under its own entryId); a group held on a contained unexpected throw is named once in the partition's log at error level with its message, and its end once at info.",
+      "description": "The raft-rs runtime is the partition's only consensus backend: PartitionService builds its operation-only port through the fixed raft-rs operation-port owner (no selection and no alternate runtime injection) and consumes semantic operations, typed outcomes and immutable snapshots without a live node/control graph; a refused campaign or peer admission is the port's typed answer, never reported as done; every write the replica did not take is answered by the write kernel's builders, typed with its entry: a pending write released when its replica stops leading, at its commit deadline or at shutdown with what the replica knows of it (outcome unknown once handed to consensus; not leader, deadline passed or service shut down otherwise), a proposal queue at capacity as backpressure with the queue's retry time, a proposal the port refused with the port's reason, and a router holding the answer routes it again by its code (an unknown outcome only under its own entryId); a group held on a contained unexpected throw is named once in the partition's log at error level with its message, and its end once at info.",
       "owners": [
         "src/raft/raft-operation-port.js",
-        "src/raft/raft-rs-provider.js",
         "src/raft/raft-rs-operation-port.js",
         "src/partition/partition-service-core-base.js",
         "src/partition/partition-service-raft-init-base.js",
@@ -562,7 +560,8 @@
       "tests": [
         "test/rebalancer/spread-cure-transition-authorization.test.js",
         "test/rebalancer/spread-cure-transition-authorization-row.test.js",
-        "test/partition/learner-promotion-count-check-inputs.test.js"
+        "test/partition/learner-promotion-count-check-inputs.test.js",
+        "test/partition/learner-promotion-count-check-budget-walk.test.js"
       ]
     },
     "partition-write-answer-retry-classification": {
@@ -986,31 +985,6 @@
         "test/control-plane/formation-release-handoff-consumer-parity.test.js"
       ]
     },
-    "raft-protocol-formation-attribution": {
-      "description": "LifeRaft remains the Raft behavior owner and formation diagnostics remains the accounting owner; their interaction maps production protocol callbacks and apply slices into distinct exclusive buckets while inactive attribution is behaviorally transparent.",
-      "endpoints": [
-        {
-          "id": "liferaft-protocol-and-apply-behavior",
-          "owners": [
-            "src/raft/liferaft.js",
-            "src/raft/liferaft-timing-api.js",
-            "src/raft/liferaft-commit-scheduler.js"
-          ]
-        },
-        {
-          "id": "formation-attribution-mapping",
-          "owners": [
-            "src/diagnostics/formation-diagnostics-contract.js",
-            "src/diagnostics/formation-turn-attribution.js",
-            "src/diagnostics/raft-formation-attribution.js"
-          ]
-        }
-      ],
-      "contract": "raft-formation-attribution",
-      "witnessTests": [
-        "test/raft/liferaft-formation-attribution-interaction.test.js"
-      ]
-    },
     "sql-engine-cache-membership": {
       "description": "The SQL engine and the system-table cache agree on membership rows: what the CDC owner writes, the engine reads back. Seamed in the membership-consistency harness, real in the seven-node probe.",
       "endpoints": [
@@ -1099,13 +1073,12 @@
       ]
     },
     "partition-raft-operation-port": {
-      "description": "The rs-raft provider and the PartitionService consumer must agree on the exact frozen semantic port and its typed outcomes, with no node/control fallback and no second provider on either side.",
+      "description": "The raft-rs operation-port owner and the PartitionService consumer must agree on the exact frozen semantic port and its typed outcomes, with no node/control fallback and no second consensus runtime on either side.",
       "endpoints": [
         {
-          "id": "provider-port-construction",
+          "id": "operation-port-construction",
           "owners": [
             "src/raft/raft-operation-port.js",
-            "src/raft/raft-rs-provider.js",
             "src/raft/raft-rs-operation-port.js"
           ]
         },
@@ -1153,7 +1126,8 @@
       "witnessTests": [
         "test/rebalancer/spread-cure-transition-authorization.test.js",
         "test/rebalancer/spread-cure-transition-authorization-row.test.js",
-        "test/partition/learner-promotion-count-check-inputs.test.js"
+        "test/partition/learner-promotion-count-check-inputs.test.js",
+        "test/partition/learner-promotion-count-check-budget-walk.test.js"
       ]
     },
     "partition-session-transaction-store-persistence-admission": {

@@ -59,6 +59,7 @@ const ENDPOINT_SYNC_DEFAULT = Object.freeze({
   LEADER_ELECTION_ENABLED: true,
   LEASE_NAME: 'endpoint-sync-controller',
   METRICS_ENABLED: true,
+  // ends-on: the admin stream returns the query result
   SOURCE_QUERY_TIMEOUT_MS: 30000,
   SOURCE_QUERY_MAX_RETRIES: 3,
   SOURCE_QUERY_RETRY_DELAY_MS: 1000,

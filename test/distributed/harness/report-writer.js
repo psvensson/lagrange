@@ -14,6 +14,8 @@ import {createOptimizationSummaryComputer} from
   './report-writer-optimization-summary.js';
 import {createReportWriterSummaryMethods} from './report-writer-summary-methods.js';
 import {classifyScenarioVerdict} from './validation-matrix.js';
+import {scenarioOutcomeOf} from './scenario-outcome.js';
+import {CERTIFICATION_NOT_REQUESTED} from './scenario-certification.js';
 
 /** Indentation for JSON output. */
 const JSON_INDENT = 2;
@@ -159,6 +161,13 @@ function buildScenarioEntry(scenarioName, result) {
   const entry = {
     scenario: scenarioName,
     passed: Boolean(result.passed),
+    // passed | failed | refused (not run): a refused scenario keeps
+    // passed:false for pass/fail-only readers and is named here.
+    outcome: scenarioOutcomeOf(result),
+    refusal: result.refusal || null,
+    // The certification verdict of a --certify run, else the explicit
+    // statement that this entry is not certification evidence.
+    certification: result.certification || CERTIFICATION_NOT_REQUESTED,
     verdict: verdictObj.verdict,
     verdictReason: verdictObj.reason,
     duration: result.duration || 0,
@@ -1357,6 +1366,9 @@ const REPORT_DEGRADED_FIELD_UNSERIALIZABLE = 'unserializable';
 const REPORT_DEGRADED_KEPT_SCENARIO_FIELDS = Object.freeze([
   'scenario',
   'passed',
+  'outcome',
+  'refusal',
+  'certification',
   'duration',
   'error',
   'stackTrace',

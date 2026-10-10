@@ -124,8 +124,11 @@ node per group, fully meshed within each group.
 
 ### Who owns each decision
 
-`test/simulation/formation-sim-raft-cohort.js` constructs `new LifeRaft(...)`
-directly. It is not the production `PartitionService` replica lifecycle.
+The simulator measured here built each group's consensus objects directly in
+its raft cohort, since replaced by
+`test/simulation/formation-sim-consensus-cohort.js`, which builds raft-rs
+operation ports through the production backend seam. It was not the
+production `PartitionService` replica lifecycle.
 
 | decision | owner in the simulator |
 | --- | --- |
@@ -181,7 +184,7 @@ rest. **The simulator has removed the seed concentration that caused the live
 problem**, by construction.
 
 Q1b is therefore not started. Per the stated rule, the first missing arrow is
-not a LifeRaft callback: it is
+not a consensus-runtime callback: it is
 
 ```
 cold bootstrap declaration
@@ -207,7 +210,7 @@ thing to test.
 The metered oracle captured at `22420f874` is marked
 `purpose: substrate_regression_only`, `formationCorrespondence: false`, and
 names the composition it measured: `legacySyntheticFormationComposition` -
-six cohorts keyed from table ids, one LifeRaft per node per group.
+six cohorts keyed from table ids, one raft-rs operation port per node per group.
 
 It is **valid for the sealed legacy substrate composition** and **not
 authoritative for production-composed formation**. It was not invalidated and

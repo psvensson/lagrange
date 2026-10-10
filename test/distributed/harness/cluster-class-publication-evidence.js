@@ -1,3 +1,7 @@
+import {
+  PUBLICATION_CONVERGENCE_CLAIM_STATE,
+  admitsPublicationConvergence,
+} from './publication-convergence-claim.js';
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {buildCanonicalPublicationEvidenceFromControlPlane} from
   './publication-evidence-contract.js';
@@ -570,16 +574,17 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
         expectedNodeIds,
         forceRepair: options.forceRepair === true,
       });
-    const publicationConvergenceGate =
-      readinessMode === CLUSTER_READINESS_MODE_LOAD ?
-        evaluateLoadPublishedConvergence(
-          snapshotCoverage,
-          expectedNodeIds,
-        ) :
-        {
-          ready: true,
-          reasons: Object.freeze([]),
-        };
+    // The publication gate is EVALUATED in both modes - it used to be a
+    // fabricated {ready: true} in startup, which made every startup rule
+    // that requires publicationGateReady vacuous. Startup readiness does
+    // not CLAIM publication convergence (named on the gate below and in
+    // allActive), but anything that reads `ready` reads real evidence.
+    const publicationConvergenceGate = {
+      ...evaluateLoadPublishedConvergence(snapshotCoverage, expectedNodeIds),
+      claimState: readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+        PUBLICATION_CONVERGENCE_CLAIM_STATE.CLAIMED_LOAD :
+        PUBLICATION_CONVERGENCE_CLAIM_STATE.NOT_CLAIMED_STARTUP,
+    };
     const projectionContext = buildLoadPublicationGateProjectionContext(
       readinessMode,
       snapshotCoverage,
@@ -621,7 +626,7 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
       activeByStatus &&
       (snapshotCoverage.completeCoverage === true ||
         partialCoverageDecision.converged === true) &&
-      publicationConvergenceGate.ready === true;
+      admitsPublicationConvergence(publicationConvergenceGate);
     const priorityRecoveryInvariants =
       evaluatePriorityRecoveryCrossServiceInvariants({
         readinessMode,

@@ -66,9 +66,8 @@ const EXPECTED_API_METHODS = Object.freeze([
   'isOutboundQueueAvailable',
   'getStats',
   'shutdown',
-  'registerWorkerHandler',
-  'unregisterWorkerHandler',
-  'hasWorkerHandler',
+  'getRegisteredHandler',
+  'unregisterExact',
 ]);
 
 /**

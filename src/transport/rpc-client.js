@@ -10,6 +10,7 @@
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   RPC_DEFAULT,
   RPC_ERROR_MSG,
@@ -18,6 +19,43 @@ import {
   TRANSPORT_NUM,
   TRANSPORT_SUBSYSTEM,
 } from '../constants/transport.js';
+
+const RPC_SUBJECT_SEPARATOR = ' ';
+const RPC_RESPONSE_WAIT = Object.freeze({
+  wait: 'RPC_DEFAULT.TIMEOUT_MS (or call timeout)',
+  awaited: 'correlated RPC response from the target service',
+});
+
+/**
+ * An RPC call spent its bound without a correlated response: one
+ * wait_bound_spent ERROR naming the target and what else was in flight.
+ * The caller is rejected, so this is a real spent wait; it folds per
+ * (target, request type) while the observed state is unchanged, and the
+ * per-call counters ride in `scope` so they never defeat the fold.
+ * @param {RPCClient} client - The RPC client.
+ * @param {Object} pending - The timed-out request record.
+ * @param {Object} call - {correlationId, target, timeoutMs, requestType}.
+ * @return {void}
+ */
+function reportRpcResponseSpent(client, pending, call) {
+  reportWaitBoundSpent(client.logger, {
+    ...RPC_RESPONSE_WAIT,
+    boundMs: call.timeoutMs,
+    elapsedMs: Date.now() - pending.sentAt,
+    lastObserved: {
+      requestType: call.requestType,
+      responseReceived: false,
+    },
+    scope: {
+      correlationId: call.correlationId,
+      target: call.target,
+      pendingRequests: client.pendingRequests.size,
+      responsesReceived: client.stats.responsesReceived,
+      timeouts: client.stats.timeouts,
+    },
+    subject: `${call.target}${RPC_SUBJECT_SEPARATOR}${call.requestType}`,
+  });
+}
 
 /**
  * RPCClient provides request-response semantics over message groups.
@@ -91,10 +129,11 @@ class RPCClient extends EventEmitter {
           this.pendingRequests.delete(correlationId);
           this.stats.timeouts++;
 
-          this.logger.debug(RPC_LOG_MSG.TIMEOUT, {
+          reportRpcResponseSpent(this, pending, {
             correlationId,
             target,
             timeoutMs,
+            requestType: request?.type ?? null,
           });
 
           this.emit(TRANSPORT_EVENT.TIMEOUT, {correlationId, target, timeoutMs});

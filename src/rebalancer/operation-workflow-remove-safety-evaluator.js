@@ -24,7 +24,6 @@ const {
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
   SERVICE_TYPE,
-  buildPriorityRecoveryBlockedPartitionIds,
   classifySystemPartition,
   normalizeReplicaRowNodeIds,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -388,21 +387,11 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
-  const blockedPartitionIds = new Set(
-    buildPriorityRecoveryBlockedPartitionIds(priorityPartitionSummary),
-  );
-  if (
-    blockedPartitionIds.has(operation.partitionId) &&
-    membershipSnapshot.useRecoveryProjectionMembership !== true
-  ) {
-    return context.buildDeferredRemoveSafetyEvaluationForOperation(
-      operation,
-      OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_CONTROL_DASH_PLANE_PARTITION +
-        operation.partitionId +
-        OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_SPREAD_HAS_NOT_CONVERGED,
-    );
-  }
-
+  // No blanket "priority spread has not converged" defer for a blocked
+  // partition: the spread floor below already refuses any removal that
+  // would lower the distinct-node spread, and a count-neutral removal while
+  // the partition is unspread must not loop on retry (owner decision
+  // 2026-10-04).
   const requiredDistinctNodeCount = Number(
     priorityPartitionSummary.requiredDistinctNodeCount,
   );

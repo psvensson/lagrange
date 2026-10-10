@@ -15,8 +15,6 @@ import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../src/control-plane/membership-lifecycle-constants.js';
 import {
-  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 import {
@@ -60,16 +58,19 @@ const TEST_PRIORITY_PARTITION_SUMMARY = Object.freeze({
     blockedPartitions: Object.freeze([]),
   }),
 });
+// The closure witness has two states (owner decision 2026-10-04): PENDING
+// adds a blocker; the one non-pending state says nothing about spread.
 const TEST_PRIORITY_RECOVERY_CLOSURE_WITNESS = Object.freeze({
-  state: PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION,
-  prioritySpreadPending: false,
-  publicationRefreshRequired: true,
-  closureRecordId: PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD,
-  closureWitnessClass:
-    PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
-      .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING,
-  refreshedPriorityPartitionSummary:
-    TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+  state: PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
+  blockedPartitionIds: Object.freeze([]),
+  blockedPartitionCount: 0,
+  unresolvedSemanticStateIds: Object.freeze([]),
+});
+const TEST_PRIORITY_RECOVERY_PENDING_CLOSURE_WITNESS = Object.freeze({
+  state: PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING,
+  blockedPartitionIds: Object.freeze([TEST_PRIORITY_PARTITION_ID]),
+  blockedPartitionCount: 1,
+  unresolvedSemanticStateIds: Object.freeze(['recovering_in_flight']),
 });
 const TEST_PRIORITY_RECOVERY_DECISION_SNAPSHOTS = Object.freeze({
   closureWitness: TEST_PRIORITY_RECOVERY_CLOSURE_WITNESS,
@@ -634,7 +635,13 @@ test('buildPublicationRecoveryGateSnapshot blocks on missing priority spread own
     t.end();
   });
 
-test('buildPublicationRecoveryGateSnapshot prefers the closure witness over stale durable spread metadata',
+// SUPERSEDED (owner decision 2026-10-04, "delete the second authority").
+// Before: a stale-publication closure witness (prioritySpreadPending false,
+// refreshed summary, CL-003) overrode a BLOCKED durable summary - the gate
+// read ready, published the witness's synthesized satisfied summary and named
+// CL-003. Now a non-pending witness never clears a census gap: the gate stays
+// spread-pending on the durable summary until the census refresh is written.
+test('buildPublicationRecoveryGateSnapshot keeps a durable spread gap pending over a non-pending closure witness',
   (t) => {
     const gate = buildPublicationRecoveryGateSnapshot({
       publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -646,28 +653,22 @@ test('buildPublicationRecoveryGateSnapshot prefers the closure witness over stal
       priorityRecoveryClosureWitness: TEST_PRIORITY_RECOVERY_CLOSURE_WITNESS,
     });
 
-    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.READY);
-    t.equal(gate.ready, true);
-    t.equal(gate.prioritySpreadPending, false);
-    t.equal(
-      gate.closureRecordId,
-      PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD,
-    );
-    t.equal(
-      gate.closureWitnessClass,
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
-        .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING,
-    );
-    t.match(gate.priorityPartitionSummary, {
-      satisfied: true,
-      missingPartitionIds: [],
-      blockedPartitions: [],
-    });
-    t.same(gate.reasonCodes, []);
+    t.equal(gate.ready, false);
+    t.equal(gate.prioritySpreadPending, true);
+    t.notOk('closureRecordId' in gate, 'the gate names no closure record');
+    t.match(gate.priorityPartitionSummary, {satisfied: false},
+      'the gate publishes the census summary, never a synthesized one');
+    t.ok(gate.reasonCodes.includes(
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+    ));
     t.end();
   });
 
-test('buildPublicationRecoveryGateSnapshot retires stale closure witness once durable spread metadata is refreshed',
+// SUPERSEDED: before, this asserted the STALE->FRESH conversion of the
+// witness once the durable summary refreshed (publicationRefreshRequired
+// false, record id cleared). There is no stale state to retire: with the
+// refreshed (satisfied) durable summary the gate reads ready on the census.
+test('buildPublicationRecoveryGateSnapshot reads ready once the durable census summary is spread',
   (t) => {
     const gate = buildPublicationRecoveryGateSnapshot({
       publicationEpoch: TEST_PUBLICATION_EPOCH,
@@ -682,23 +683,20 @@ test('buildPublicationRecoveryGateSnapshot retires stale closure witness once du
     t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.READY);
     t.equal(gate.ready, true);
     t.equal(gate.prioritySpreadPending, false);
-    t.equal(gate.closureRecordId, null);
-    t.equal(gate.closureWitnessClass, null);
     t.equal(
       gate.priorityRecoveryClosureWitness.state,
       PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
-    );
-    t.equal(
-      gate.priorityRecoveryClosureWitness.publicationRefreshRequired,
-      false,
     );
     t.same(gate.reasonCodes, []);
     t.end();
   });
 
-test('buildPublicationRecoveryGateSnapshot consumes the decision snapshot closure witness',
+// SUPERSEDED: before, a decision-snapshot closure witness in the stale state
+// made the gate ready over a BLOCKED durable summary (and named CL-003). The
+// decision-snapshot witness is still consumed, but only to ADD a blocker.
+test('buildPublicationRecoveryGateSnapshot consumes the decision snapshot closure witness only as a blocker',
   (t) => {
-    const gate = buildPublicationRecoveryGateSnapshot({
+    const satisfiedOverGap = buildPublicationRecoveryGateSnapshot({
       publicationEpoch: TEST_PUBLICATION_EPOCH,
       publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
       recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
@@ -708,17 +706,55 @@ test('buildPublicationRecoveryGateSnapshot consumes the decision snapshot closur
       priorityRecoveryDecisionSnapshots:
         TEST_PRIORITY_RECOVERY_DECISION_SNAPSHOTS,
     });
-
-    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.READY);
-    t.equal(gate.ready, true);
-    t.equal(gate.prioritySpreadPending, false);
-    t.equal(
-      gate.closureRecordId,
-      PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD,
-    );
-    t.same(gate.reasonCodes, []);
+    t.equal(satisfiedOverGap.prioritySpreadPending, true,
+      'a non-pending decision-snapshot witness never clears the gap');
+    const pendingOverSpread = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      requiredAckNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+      acknowledgedNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+      priorityRecoveryDecisionSnapshots: {
+        closureWitness: TEST_PRIORITY_RECOVERY_PENDING_CLOSURE_WITNESS,
+      },
+    });
+    t.equal(pendingOverSpread.prioritySpreadPending, true,
+      'a PENDING decision-snapshot witness adds the blocker');
     t.end();
   });
+
+// Witness (j): prioritySpreadPending = census gap OR witness PENDING, in one
+// place. Truth table over (census gap, witness state).
+test('(j) the closure witness may only add a blocker', (t) => {
+  const cases = [
+    [TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED, null, false],
+    [TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+      TEST_PRIORITY_RECOVERY_CLOSURE_WITNESS, false],
+    [TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+      TEST_PRIORITY_RECOVERY_PENDING_CLOSURE_WITNESS, true],
+    [TEST_PRIORITY_PARTITION_SUMMARY.BLOCKED, null, true],
+    [TEST_PRIORITY_PARTITION_SUMMARY.BLOCKED,
+      TEST_PRIORITY_RECOVERY_CLOSURE_WITNESS, true],
+    [TEST_PRIORITY_PARTITION_SUMMARY.BLOCKED,
+      TEST_PRIORITY_RECOVERY_PENDING_CLOSURE_WITNESS, true],
+  ];
+  for (const [summary, witness, expected] of cases) {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      requiredAckNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+      acknowledgedNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+      priorityPartitionSummary: summary,
+      priorityRecoveryClosureWitness: witness,
+    });
+    t.equal(gate.prioritySpreadPending, expected,
+      `census ${summary.satisfied ? 'spread' : 'gap'} + witness ` +
+        `${witness?.state || 'absent'} -> pending ${expected}`);
+  }
+  t.end();
+});
 
 test(TEST_SETTLED_PUBLISHED_MISSING_MEMBERSHIP_TEST_NAME, (t) => {
   const gate = buildPublicationRecoveryGateSnapshot({

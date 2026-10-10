@@ -1,16 +1,25 @@
-// formation-sim slice 1: the runner is deterministic (one seed, one byte
-// stream), refuses to start without a calibrated owner set, throws on an
+// formation-sim slice 1: one seed reproduces everything the harness decides,
+// the runner refuses to start without a calibrated owner set, throws on an
 // ambient clock or timer read inside an owner dispatch, and emits the live
 // report shape with formationMetrics through the shared verdict function.
 //
-// Adapter contract (constraint real-owners): the staged cohort adapts
-// LifeRaft's request/reply transport onto the virtual network and stages
-// membership by the scenario's join schedule; it simplifies real transport
-// (no framing, no reconnects, fixed link delay, no seeded loss yet) and
-// stubs LifeRaft's log `write` to acknowledge at once (no apply work: the
-// raft_apply seam belongs to a later slice); it never decides anything
-// Raft decides (elections, terms, leadership are LifeRaft's own). The
-// deterministic guard covers the synchronous prefix of each dispatch.
+// Adapter contract (constraint real-owners): the staged cohort carries each
+// raft-rs operation port's semantic envelopes over the virtual network and
+// stages membership by the scenario's join schedule through the production
+// admission owner; it simplifies real transport (no framing, no reconnects,
+// fixed link delay, no seeded loss yet) and applies nothing (the raft_apply
+// seam belongs to a later slice); it never decides anything Raft decides
+// (elections, terms, leadership are the core's own). The deterministic guard
+// covers the synchronous prefix of each dispatch.
+//
+// Election timing is the core's too, and it is not seeded (owner decision O2,
+// solve/epics/raft-rs-full-cutover/design-r3-r4-message-groups-worker-wasm-
+// 2026-09-23.md): the raft-rs core draws each election timeout from the
+// binding's own getrandom. The starved seed loses every group to a joiner
+// whose timeout elapses, so the instant of that election, and the Raft turns
+// and charges downstream of it, are not a function of the seed. What the
+// harness decides - identities, the join schedule, the owners each node
+// runs, formation inside the deadline - still is, and is held exactly.
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -43,7 +52,6 @@ import {SCENARIO, simulate} from './formation-sim-runner.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SEED = 7;
-const OTHER_SEED = 8;
 const NODE_COUNT = 5;
 const LIVE_REPORT = 'test/simulation/calibration/seed-owner-costs.report.json';
 const ACKNOWLEDGEMENT = 'witness: reads the superseded table deliberately';
@@ -63,20 +71,44 @@ function calibrationFixture(mutate) {
   return {root: dir, relative};
 }
 
-test('one seed produces one byte stream; another seed produces another', async () => {
-  const first = await simulate(SEED);
-  const second = await simulate(SEED);
-  const other = await simulate(OTHER_SEED);
-  assert.deepEqual(first, second, 'same seed, same report object');
-  const dirs = [tempDir(), tempDir()];
-  writeReport(dirs[0], first);
-  writeReport(dirs[1], second);
-  assert.deepEqual(fs.readFileSync(path.join(dirs[0], REPORT_FILE)),
-    fs.readFileSync(path.join(dirs[1], REPORT_FILE)), 'same bytes on disk');
-  assert.notDeepEqual(first.formationMetrics.nodes, other.formationMetrics.nodes,
-    'the seed reaches the election timing');
-  for (const dir of dirs) fs.rmSync(dir, {recursive: true, force: true});
-});
+// What the harness decides, without the quantities downstream of the core's
+// election timing: per-node segment and charge counts, gaps, the formed
+// instant and which joiner won each group.
+function harnessDecided(report) {
+  const metrics = report.formationMetrics;
+  return {
+    keys: Object.keys(report).sort(), scenario: report.scenario, fidelity: report.fidelity,
+    identities: metrics.identities, formationStartedAtMs: metrics.formationStartedAtMs,
+    quorumAtMs: metrics.quorumAtMs, fifthJoinAtMs: metrics.fifthJoinAtMs,
+    nodes: metrics.nodes.map((node) => ({nodeId: node.nodeId, role: node.role,
+      owners: Object.keys(node.ownerChargedMs).sort()})),
+    groups: metrics.groups.map((group) => group.groupId),
+  };
+}
+
+test('one seed reproduces what the harness decides; the core keeps its election timing',
+  async () => {
+    const first = await simulate(SEED);
+    const second = await simulate(SEED);
+    assert.deepEqual(harnessDecided(second), harnessDecided(first),
+      'same seed, same identities, schedule, owners and groups');
+    for (const report of [first, second]) {
+      const metrics = report.formationMetrics;
+      assert.ok(metrics.clusterFormedAtMs > metrics.fifthJoinAtMs &&
+        metrics.clusterFormedAtMs <= metrics.formationStartedAtMs + SCENARIO.deadlineMs,
+      'every run forms after the fifth join and inside the deadline');
+      assert.ok(metrics.groups.every((group) => typeof group.leaderId === 'string'),
+        'and leaves every group led');
+    }
+    const dirs = [tempDir(), tempDir()];
+    writeReport(dirs[0], first);
+    writeReport(dirs[1], second);
+    for (const [index, dir] of dirs.entries()) {
+      assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, REPORT_FILE), 'utf8')),
+        JSON.parse(JSON.stringify([first, second][index])), 'the bytes on disk are the report');
+    }
+    for (const dir of dirs) fs.rmSync(dir, {recursive: true, force: true});
+  });
 
 test('the report carries the live shape and every node charged per owner', async () => {
   const report = await simulate(SEED);
@@ -101,7 +133,7 @@ test('the report carries the live shape and every node charged per owner', async
   const seed = metrics.nodes.find((node) => node.role === 'seed');
   assert.ok(seed.ownerSegments[FORMATION_OWNER.RAFT_PROTOCOL] > 0,
     'the seed\'s Raft timers and inbound packets are charged as raft_protocol segments');
-  // Every group has one leader; which node leads is LifeRaft's decision under
+  // Every group has one leader; which node leads is the core's decision under
   // the charged clock (a starved seed can lose a group's leadership to a
   // joiner, the migration the live formation shows), not the harness's.
   assert.ok(metrics.groups.every((group) => typeof group.leaderId === 'string'),

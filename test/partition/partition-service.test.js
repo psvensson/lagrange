@@ -27,7 +27,7 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 import {
@@ -472,7 +472,7 @@ test(
   'PartitionService - leader change demotes local leader even without follower event',
   async (t) => {
     const systemTableCache = new SystemTableCache();
-    const raftProvider = new ControllablePartitionRaftProvider();
+    const consensusPort = new ControllableConsensusPort();
     const partition = createControllablePartitionService({
       partitionId: 'leader-change-partition-1',
       tableId: 'leader_change_table',
@@ -496,7 +496,7 @@ test(
       cdcIntegrationService: {
         updateSystemTableRow: async () => ({changes: 1}),
       },
-    }, raftProvider);
+    }, consensusPort);
 
     partition.isServicesLeaderAvailable = () => true;
 
@@ -511,7 +511,7 @@ test(
     const retryTimer = setTimeout(() => {}, 10000);
     partition.leaderNodeMutationHelper.retryTimer = retryTimer;
 
-    raftProvider.emitLeaderChange(
+    consensusPort.emitLeaderChange(
       'node-2/partition/leader-change-partition-1-r2',
     );
     await partition.flushRoleUpdate();
@@ -545,7 +545,7 @@ test(
     const canonicalLeaderAddress =
       `node-4-relocated/partition/${newLeaderReplicaId}`;
     const systemTableCache = new SystemTableCache();
-    const raftProvider = new ControllablePartitionRaftProvider();
+    const consensusPort = new ControllableConsensusPort();
     const partition = createControllablePartitionService({
       partitionId,
       tableId: 'live_leader_routing_table',
@@ -566,11 +566,11 @@ test(
       suppressLifecycleLogs: true,
       deferElection: true,
       systemTableCache,
-    }, raftProvider);
+    }, consensusPort);
 
     await partition.initialize();
 
-    raftProvider.emitLeaderChange(liveLeaderAddress, liveLeaderAddress);
+    consensusPort.emitLeaderChange(liveLeaderAddress, liveLeaderAddress);
     await Promise.resolve();
 
     t.equal(
@@ -622,7 +622,7 @@ test(
         updated_at: Date.now() + 1,
       },
     );
-    raftProvider.setLeaderObservation(
+    consensusPort.setLeaderObservation(
       `${partitionId}-r5`,
       `node-5/partition/${partitionId}-r5`,
     );

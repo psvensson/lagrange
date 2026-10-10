@@ -14,6 +14,7 @@ import {
   AUTHORITATIVE_PROBE_DEFER_CAUSE,
   AuthoritativeRowMutationHelper,
 } from '../../src/raft/authoritative-row-mutation-helper.js';
+import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
 
 // Quest partition-leader-row-publication-integrity: the durable
 // partitions.leader_node_id publication rides the delivery lane matching
@@ -287,5 +288,39 @@ t.test('the wired leader helper carries the budget and hooks', (t) => {
     value: NODE_SELF,
   });
   t.equal(logged.warn.length, 2, 'drop and defer log as typed warns');
+  t.end();
+});
+
+t.test('the spent leader-publication retry budget logs one wait_bound_spent ' +
+  'ERROR and retry ownership continues', (t) => {
+  const capture = captureLogger();
+  const armed = [];
+  const owner = buildOwnerStub({
+    logger: capture.logger,
+    timeSource: {
+      now: () => 0,
+      setTimeout: (fn, delayMs) => {
+        armed.push(delayMs);
+        return {unref() {}};
+      },
+      clearTimeout: () => {},
+    },
+  });
+  const helper = createLeaderNodeMutationHelper(owner);
+  helper.pendingValue = NODE_SELF;
+  for (let attempt = 0;
+    attempt < LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS + 1; attempt += 1) {
+    helper.retryTimer = null;
+    helper.scheduleRetry();
+  }
+  t.equal(armed.length, LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS + 1,
+    'every retry is still armed past the budget');
+  const spent = capture.spent();
+  t.equal(spent.length, 1, 'exactly one wait_bound_spent per episode');
+  t.equal(spent[0].context.wait, 'LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS');
+  t.equal(spent[0].context.lastObserved.attempts,
+    LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS);
+  t.equal(spent[0].context.scope.partitionId, ORDINARY_PARTITION);
+  t.equal(capture.errors().length, 1, 'no second ERROR in another shape');
   t.end();
 });

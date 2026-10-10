@@ -18,6 +18,7 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {
@@ -29,6 +30,11 @@ import {
   CDC_PIPELINE_READINESS_SLEEP,
   CDC_PIPELINE_READINESS_TIMEOUT_MS,
 } from '../constants/cdc-lifecycle-constants.js';
+
+const PIPELINE_READINESS_WAIT = Object.freeze({
+  wait: 'CDC_PIPELINE_READINESS_TIMEOUT_MS',
+  awaited: 'CDC subscriptions, propagation leader and a first delivery',
+});
 
 function normalizeUnmetConditions(unmetConditions) {
   return Array.isArray(unmetConditions) ?
@@ -177,15 +183,16 @@ class CDCPipelineReadinessGate extends EventEmitter {
           CDC_PIPELINE_READINESS_GATE.TIMEOUT_KIND.NO_PROGRESS :
           CDC_PIPELINE_READINESS_GATE.TIMEOUT_KIND.
             ABSOLUTE_DEADLINE_EXHAUSTED;
-        this.logger.warn(
-          CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT,
-          {
+        reportWaitBoundSpent(this.logger, {
+          ...PIPELINE_READINESS_WAIT,
+          boundMs: timeout,
+          elapsedMs: this._now() - startMs,
+          lastObserved: {
             unmetConditions: result.unmetConditions,
-            timeoutMs: timeout,
             timeoutKind,
             lastProgressElapsedMs: Math.max(0, lastProgressAtMs - startMs),
           },
-        );
+        });
         emitInvariant(this, {
           invariantId: INVARIANT_ID.CDC_SUBSCRIPTION_PROGRESS_VISIBLE,
           // The record is stamped by the node observing the invariant.

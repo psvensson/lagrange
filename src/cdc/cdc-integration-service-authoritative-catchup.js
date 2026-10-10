@@ -45,12 +45,37 @@ import {
   isUsableSystemCacheKey,
   resolveSystemCacheRowKey,
 } from '../cache/system-cache-key-descriptor.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const CATCHUP_DEFAULT = Object.freeze({
   MAX_ATTEMPTS_PER_TABLE: 3,
   RETRY_FALLBACK_DELAY_MS: 500,
   UPSERT_OPERATION: 'UPSERT',
 });
+
+const CATCHUP_TABLE_RETRY_WAIT = Object.freeze({
+  wait: 'CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE',
+  awaited: 'authoritative catch-up read of one system table hydrated',
+});
+
+// Every deferred retry of one table's catch-up read is spent: the table is
+// left un-hydrated (the caller's summary lists it failed). Catch-up re-runs
+// per join and per publication, so the report folds per table and partition.
+function reportCatchupTableRetriesSpent(service, spent) {
+  const partitionId = INITIAL_PARTITION_IDS[spent.tableName] ?? null;
+  reportWaitBoundSpent(service.logger, {
+    ...CATCHUP_TABLE_RETRY_WAIT,
+    subject: `${spent.tableName}@${partitionId}`,
+    boundMs: null,
+    elapsedMs: spent.elapsedMs,
+    lastObserved: {
+      attempts: spent.attempts,
+      lastFailure: spent.lastFailure,
+      retryAfterMs: spent.retryAfterMs,
+    },
+    scope: {nodeId: service.nodeId, tableName: spent.tableName, partitionId},
+  });
+}
 
 const CATCHUP_LOG_MSG = Object.freeze({
   SUMMARY: 'CDC catch-up hydration completed',
@@ -213,6 +238,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
     summary.tablesAttempted += 1;
     let hydrated = false;
     let lastFailure = null;
+    let firstReadStartedAtMs = null;
 
     for (let attempt = 1; attempt <= maxAttemptsPerTable; attempt += 1) {
       let readResult = null;
@@ -221,6 +247,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
           service.captureAuthoritativeCacheSweepSnapshot(tableName) :
           null;
       const readStartedAtMs = now();
+      firstReadStartedAtMs ??= readStartedAtMs;
       try {
         readResult = await service.executeAuthoritativeSystemTableRead(
           tableName,
@@ -314,6 +341,15 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
           authoritativeReadFailure(readResult) :
           CATCHUP_FAILURE_MSG.INVALID_ROW_SET;
       if (!deferred || attempt >= maxAttemptsPerTable) {
+        if (deferred) {
+          reportCatchupTableRetriesSpent(service, {
+            tableName,
+            attempts: attempt,
+            lastFailure,
+            retryAfterMs,
+            elapsedMs: now() - firstReadStartedAtMs,
+          });
+        }
         break;
       }
       await service.delayUntilShutdown(

@@ -36,8 +36,8 @@ function createMockReplica() {
         return result;
       },
     },
-    proposeEntry({key, value}) {
-      store.set(key, value);
+    proposeEntry({sessionId, key, value}) {
+      store.set(sessionId + key, value);
       return Promise.resolve();
     },
     onTimerCallback: null,

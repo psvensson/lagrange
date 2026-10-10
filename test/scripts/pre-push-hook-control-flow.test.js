@@ -208,6 +208,16 @@ test('the hook hands the pushed commit to the materializer and runs no content s
   assert.match(run.output, /materialize-pushed-tree/u);
 });
 
+test('a mixed main plus side-branch push cannot use preservation fast path', () => {
+  const run = runHook(
+    `refs/heads/main ${shas.head} refs/heads/main ${shas.base}\n` +
+    `refs/heads/topic ${shas.head} refs/heads/topic ${ZERO_SHA}\n`);
+  assert.equal(run.status, 0, run.output);
+  assert.equal(materializerCalls(run.recorded).length, 1,
+    'main in the push keeps the full proof boundary');
+  assert.doesNotMatch(run.output, /non-main branch preservation push/u);
+});
+
 // The three things the lint stage decides: what reaches eslint, what the
 // range excludes, and when the range is abandoned. A stage that silently
 // linted nothing would pass a test that only asserted the first.

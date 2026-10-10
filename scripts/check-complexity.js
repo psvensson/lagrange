@@ -75,7 +75,23 @@ const TARGET_THRESHOLD = 12;
 // split into named node predicates).
 // 2026-09-30: tightened 1796 -> 1795 on the checker's hint (the boot
 // lifecycle components no longer branch on a missing incarnation).
-const BASELINE_COUNT = 1795;
+// 2026-10-03: tightened 1795 -> 1773 on the checker's hint after the
+// origin/main ec63fbb00 merge and the native-append inference deletion.
+// 2026-10-04: tightened 1773 -> 1770 on the checker's hint after the
+// origin/main d60c30921 merge (consensus-cutover closeout tree).
+// 2026-10-04: tightened 1770 -> 1765 on the checker's hint after the
+// message-group MOVE_REPLICA selection and execution were deleted.
+// 2026-10-04: tightened 1765 -> 1764 on the checker's hint (the convergence
+// snapshot classifier's voter checks moved into convergence-voter-targets).
+// 2026-10-04 (quest/one-spread-authority): tightened 1770 -> 1767 on the
+// checker's hint after the one-spread-authority deletion (closure synthesis,
+// D9 ranking, D3 latch).
+// 2026-10-05: merge of quest/one-spread-authority keeps the lower value,
+// then tightened 1764 -> 1761 on the checker's hint for the merged tree.
+// 2026-10-05 (quest/pgwire-dml-row-counts): tightened 1761 -> 1760 on the
+// checker's hint (the PG-wire mapper's three `changes ?? rowCount ?? 0`
+// fallbacks became one call to the result-count owner).
+const BASELINE_COUNT = 1760;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

@@ -6,6 +6,7 @@ import {CONTROL_PLANE_READ_LEADER_MODE} from
 import {
   assignReplicaOperationRepositoryIncompleteReadMethods,
 } from './replica-operation-repository-incomplete-read-methods.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_READ_COALESCING_KEY_SEPARATOR = ':';
@@ -18,6 +19,33 @@ const REPLICA_OPERATION_ENTITY_READ_COALESCING_KEY_PREFIX =
 const REPLICA_OPERATION_ENTITY_NODE_READ_COALESCING_KEY_PREFIX =
   'replica-operation-entity-node';
 const REPLICA_OPERATION_READ_DELIVERY_SOURCE_PREFIX = 'control-plane:read';
+const REPLICA_OPERATION_READ_RETRY_WAIT = Object.freeze({
+  wait: 'REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS',
+  awaited: 'authoritative replica_operations read without a retryable failure',
+});
+
+/**
+ * The authoritative read retry window is spent with the read still failing
+ * retryably: one wait_bound_spent ERROR; the caller still gets the failure.
+ * @param {Object} repository
+ * @param {Object} result - The last retryable failure.
+ * @param {Object} spent - {boundMs, elapsedMs, attempts, coalescingKey}
+ * @return {void}
+ */
+function reportReplicaOperationReadRetrySpent(repository, result, spent) {
+  reportWaitBoundSpent(repository.logger, {
+    ...REPLICA_OPERATION_READ_RETRY_WAIT,
+    boundMs: spent.boundMs,
+    elapsedMs: spent.elapsedMs,
+    lastObserved: {
+      errorCode: result?.errorCode || result?.code || null,
+      error: result?.error || result?.message || null,
+      attempts: spent.attempts,
+      coalescingKey: spent.coalescingKey || null,
+    },
+    scope: {nodeId: repository.nodeId || null},
+  });
+}
 
 function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, options = {}) {
   const {
@@ -106,14 +134,22 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       }
 
       const deadlineAtMs = this.timeSource.now() + REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
+      let attempts = 0;
       while (true) {
         const result = await executeRead();
+        attempts += 1;
         if (result?.success !== false || !isRetryableControlPlaneError(result)) {
           return result;
         }
 
         const remainingMs = deadlineAtMs - this.timeSource.now();
         if (remainingMs <= 0) {
+          reportReplicaOperationReadRetrySpent(this, result, {
+            boundMs: REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+            elapsedMs: REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS - remainingMs,
+            attempts,
+            coalescingKey: queryOptions.coalescingKey,
+          });
           return result;
         }
         // Stop re-arming the backoff once the owning coordinator is shutting

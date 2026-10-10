@@ -9,6 +9,7 @@ import {
   summarizePriorityRecoveryDecisionSnapshots,
 } from './failure-bundle-priority-recovery-diagnostics-summary.js';
 import {FAILURE_BUNDLE_FOUNDATION} from './failure-bundle-foundation.js';
+import {PLAYBACK_EVENT_TYPE} from './constants.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -461,6 +462,33 @@ function buildFirstFaultTimelineFromPlaybackEvents(events) {
   };
 }
 
+// This run's own facts from its own event stream: the node ids the
+// harness created (the only nodes whose curated logs belong to the run)
+// and the scenario step that failed (its step log names it, so triage
+// never reads "unknown" for a failure at a named step).
+const SCENARIO_STEP_STATUS_FAILED = 'failed';
+
+function resolveScenarioRunFacts(sortedEvents) {
+  const runNodeIds = [];
+  let failedScenarioStep = null;
+  for (const event of sortedEvents) {
+    const details = isRecord(event?.details) ? event.details : {};
+    if (event.type === PLAYBACK_EVENT_TYPE.NODE_CREATED &&
+        typeof event.entityId === 'string') {
+      runNodeIds.push(event.entityId);
+    } else if (event.type === PLAYBACK_EVENT_TYPE.SCENARIO_STEP &&
+        details.status === SCENARIO_STEP_STATUS_FAILED &&
+        typeof details.step === 'string') {
+      failedScenarioStep = {
+        error: typeof details.error === 'string' ? details.error : null,
+        step: details.step,
+        timestampMs: normalizeNonNegativeCount(event?.timestamp),
+      };
+    }
+  }
+  return {failedScenarioStep, runNodeIds};
+}
+
 function buildPlaybackEventSummary(events) {
   const sortedEvents = [...(Array.isArray(events) ? events : [])]
     .filter((event) => isRecord(event))
@@ -548,6 +576,7 @@ function buildPlaybackEventSummary(events) {
   }
 
   return {
+    ...resolveScenarioRunFacts(sortedEvents),
     eventCount: sortedEvents.length,
     clusterStages: clusterStages.slice(-TRIAGE_CLUSTER_STAGE_LIMIT),
     load: {

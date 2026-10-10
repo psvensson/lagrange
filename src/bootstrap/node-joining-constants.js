@@ -182,12 +182,8 @@ const JOINING_LOG_MSG = Object.freeze({
   SELF_HOSTED_CREATED: 'Self-hosted message group created',
   SELF_HOSTED_METADATA_REGISTERED:
     'Registered CREATE_SELF_HOSTED metadata',
-  JOIN_ASSIGNMENT_RECEIVED: '[JOIN-DEBUG] phaseJoinExistingMessageGroup - received assignment',
-  JOIN_CREATING_WITH_PEERS: '[JOIN-DEBUG] Creating MessageGroupService with peers',
   JOIN_MESSAGE_RECEIVED: '[JOIN-DEBUG] Message received at joining node',
   JOIN_HANDLER_REGISTERED: '[JOIN-DEBUG] Registered message handler',
-  JOIN_SERVICE_INITIALIZED: '[JOIN-DEBUG] MessageGroupService initialized',
-  JOINED_EXISTING_GROUP: '[JOIN-DEBUG] Joined existing message group',
   REGISTERING_MESSAGE_GROUP_SERVICE: 'Registering message group service in cluster',
   MESSAGE_GROUP_REGISTER_NON_SUCCESS: 'Message group service registration returned non-success',
   MESSAGE_GROUP_REGISTERED: 'Message group service registered in cluster',
@@ -216,8 +212,6 @@ const JOINING_LOG_MSG = Object.freeze({
     'Resuming join session after retryable control-plane failure',
   RETRYABLE_FAILURE_LIFECYCLE_RESET:
     'Reset join lifecycle state machine for retryable resume attempt',
-  RETRYABLE_FAILURE_RESUME_EXHAUSTED:
-    'Join retryable resume budget exhausted',
   WS_INFRA_READY: 'WebSocket infrastructure setup complete',
   STATE_QUERY_START: 'Querying system state',
   STATE_QUERY_HYDRATING_CACHE: 'Hydrating system table cache',
@@ -276,17 +270,12 @@ const JOINING_LOG_MSG = Object.freeze({
   FAILED_JOIN_CLEANUP_SUMMARY:
     'Failed join cleanup summary',
   CDC_SUBSCRIPTION_RETRY: 'CDC subscription retry',
-  CDC_SUBSCRIPTION_RETRY_EXHAUSTED: 'CDC subscription retry exhausted',
   CDC_RECOVERY_DIAGNOSTICS: 'CDC recovery diagnostics',
   CDC_REESTABLISHMENT_COMPLETE: 'CDC re-establishment complete',
-  CDC_REESTABLISHMENT_TIMEOUT: 'CDC re-establishment timeout',
   CDC_READINESS_GATE_WAITING:
     'Waiting for CDC subscriptions before advertising readiness',
   CDC_READINESS_GATE_PASSED:
     'CDC subscriptions confirmed active before readiness advertisement',
-  CDC_READINESS_GATE_DEGRADED:
-    'CDC subscriptions not confirmed within timeout, ' +
-    'advertising readiness with degraded CDC status',
   CDC_CATCHUP_HYDRATION_SKIPPED:
     'CDC catch-up hydration skipped: integration service unavailable',
   CDC_CATCHUP_HYDRATION_FAILED:
@@ -300,7 +289,9 @@ const JOINING_ERROR_MSG = Object.freeze({
   SEED_NODE_ID_REQUIRED: 'Seed node ID is required',
   BOOTSTRAP_REQUEST_FAILED: 'Bootstrap request failed',
   MESSAGE_ROUTER_REQUIRED: 'MessageRouter must be initialized before creating message groups',
-  MOVE_REPLICA_MISSING: 'MOVE_REPLICA strategy requires replicaToMove in assignment',
+  unsupportedMessageGroupAssignment: (strategy) =>
+    `message group assignment ${strategy} is not supported: every joiner ` +
+    'hosts its own message group',
   replicaOwnerConflict: (replicaId, existingNodeId, joiningNodeId) =>
     `replica_owner_conflict: replica ${replicaId} owned by ${existingNodeId}, ` +
     `joining node ${joiningNodeId} is not authorized`,
@@ -374,13 +365,8 @@ const JOINING_HTTP = Object.freeze({
   CONNECTION_CLOSE: 'close',
 });
 
-const JOIN_REPLICA_DEFAULT = Object.freeze({
-  DEFER_ELECTION: false,
-  LOG_ENVELOPE: true,
-  LOG_REGISTRATION: true,
-});
-
 const CDC_REESTABLISHMENT = Object.freeze({
+  // ends-on: the CDC subscriptions become active
   TIMEOUT_MS: 30000,
   RETRY_DELAY_MS: 1000,
   MAX_RETRIES: 10,
@@ -401,7 +387,6 @@ export {
   JOIN_BACKFILL_QUERY,
   JOIN_BACKFILL_SCOPE,
   JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR,
-  JOIN_REPLICA_DEFAULT,
   JOINING_CLEANUP_STEP,
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,

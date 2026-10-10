@@ -1,6 +1,7 @@
 /**
  * Message Group Service - Reliable inter-service communication.
- * Implements 3-replica Raft groups using liferaft library for consensus.
+ * Implements 3-replica Raft groups, each replica on its raft-rs semantic
+ * operation port (the consensus runtime owner makes every Raft decision).
  *
  * Public seam: composes the MessageGroupService class from its semantic
  * method-group modules (construction/state, peer resolution, metadata
@@ -9,7 +10,6 @@
  * Requirements: 1.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.4, 6.5
  */
 import {v4 as uuidv4} from 'uuid';
-import LifeRaft from '../raft/liferaft.js';
 import {
   NUM,
   METRICS_LOG_TAG,
@@ -23,11 +23,6 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
-import {isRaftPacket, RAFT_PACKET_TYPES} from '../raft/raft-packet-utils.js';
-import {
-  RAFT_PACKET_TYPE,
-  resolveRaftTransportDeliveryOptions,
-} from '../raft/constants.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {
   UnifiedRebalancer,
@@ -57,7 +52,6 @@ import {assignMetadataPublication} from './message-group-service-metadata-public
 import {assignRaftLifecycle} from './message-group-service-raft-lifecycle.js';
 import {assignRaftTiming} from './message-group-service-raft-timing.js';
 import {
-  CDC_BATCH_COMMAND_TYPE,
   CDC_FORWARD_MAX_RELAY_DEPTH,
   DIRECT_ONLY_MESSAGE_TYPES,
   MESSAGE_DELIVERY_MODE,
@@ -71,8 +65,6 @@ import {
   shouldDeferImmediateDeliveryRetry,
   wrapCdcProposeError,
 } from './message-group-service-runtime-support.js';
-// Note: isRaftPacket and RAFT_PACKET_TYPES are imported from shared module
-// src/raft/raft-packet-utils.js - Requirements: 9.1, 9.2, 9.3, 9.4
 
 // Compose the semantic method groups onto the public class prototype.
 assignPeerResolution(MessageGroupService);
@@ -82,13 +74,11 @@ assignRaftTiming(MessageGroupService);
 
 const MESSAGE_GROUP_SERVICE_RUNTIME_METHODS =
   createMessageGroupServiceRuntimeMethods({
-    CDC_BATCH_COMMAND_TYPE,
     CDC_FORWARD_MAX_RELAY_DEPTH,
     CONTROL_PLANE_READINESS_DIMENSION,
     DIRECT_ONLY_MESSAGE_TYPES,
     HLCTimestamp,
     INITIAL_MESSAGE_GROUP_ID,
-    LifeRaft,
     MESSAGE_DELIVERY_MODE,
     MESSAGE_GROUP_APPLICATION_ERROR_MSG,
     MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
@@ -103,7 +93,6 @@ const MESSAGE_GROUP_SERVICE_RUNTIME_METHODS =
     MessageStatus,
     NUM,
     QUERY_MESSAGE_TYPE,
-    RAFT_PACKET_TYPE,
     RebalancerEntityType,
     SYSTEM_TABLE_NAME,
     TIME_MS,
@@ -114,12 +103,10 @@ const MESSAGE_GROUP_SERVICE_RUNTIME_METHODS =
     buildDeferredDeliveryError,
     buildLatencyCdcPropagationResult,
     getOrCreateCauseId,
-    isRaftPacket,
     isSystemTableWriteReady,
     normalizeCauseId,
     normalizeMessageDeliveryMode,
     normalizePublishedRaftRole,
-    resolveRaftTransportDeliveryOptions,
     resolveTransportDeliveryOptions,
     shouldDeferImmediateDeliveryRetry,
     uuidv4,
@@ -137,6 +124,4 @@ export {
   MessageGroupService,
   MessageStatus,
   RaftRole,
-  isRaftPacket,
-  RAFT_PACKET_TYPES,
 };

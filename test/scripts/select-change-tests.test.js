@@ -38,6 +38,7 @@ import {
 import {
   buildExecutionPlan,
   loadSafetySpine,
+  releaseProofSatisfiesRefusal,
 } from '../../scripts/select-change-tests.js';
 
 const root = process.cwd();
@@ -235,6 +236,47 @@ test('a REFUSED selection refuses the whole run, spine notwithstanding', () => {
   assert.equal(result.kind, SELECTION_REFUSED);
   assert.ok(result.refusals.length > 0);
   assert.match(result.refusals[0], /SAFE TEST SCOPE UNKNOWN/);
+});
+
+test('only an exact-SHA release receipt may satisfy release-proof refusal', () => {
+  const releaseRefusal = plan(['package-lock.json'], {
+    lockfileGraphChanged: true,
+  });
+  assert.equal(releaseRefusal.kind, SELECTION_REFUSED);
+  assert.equal(releaseRefusal.refusalCode, 'RELEASE_PROOF_REQUIRED');
+
+  const sha = 'a'.repeat(40);
+  const checked = [];
+  assert.equal(releaseProofSatisfiesRefusal(releaseRefusal, {
+    sha,
+    check: (subject) => {
+      checked.push(subject);
+      return true;
+    },
+  }), true);
+  assert.deepEqual(checked, [sha],
+    'the durable authority is asked about exactly the refused commit');
+
+  assert.equal(releaseProofSatisfiesRefusal(releaseRefusal, {
+    sha,
+    check: () => false,
+  }), false, 'an unproven release stays refused');
+  assert.equal(releaseProofSatisfiesRefusal(releaseRefusal, {
+    sha: 'abc',
+    check: () => true,
+  }), false, 'a partial sha cannot be authorized');
+
+  const unknownScope = plan(['src/brand-new-unmapped-area/thing.js']);
+  let unrelatedChecks = 0;
+  assert.equal(releaseProofSatisfiesRefusal(unknownScope, {
+    sha,
+    check: () => {
+      unrelatedChecks += 1;
+      return true;
+    },
+  }), false);
+  assert.equal(unrelatedChecks, 0,
+    'a release receipt never waives an unrelated unknown test scope');
 });
 
 test('an unknown source area refuses rather than selecting nothing', () => {

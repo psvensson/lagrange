@@ -12,7 +12,44 @@ import {
 import {
   PARTITION_TRANSACTION_PREPARED_STATE,
 } from './partition-service-constants.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
+const TRANSACTION_HOLD_WAIT = Object.freeze({
+  wait: 'TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS',
+  awaited: 'terminal commit or rollback of a held participant transaction',
+  healed: 'rolled_back_and_marked_lost',
+  deferred: 'heal_deferred_leader_or_candidate',
+  prepared: 'prepared',
+  active: 'active',
+  sweep: 'prepared_or_active',
+});
+
+/**
+ * Report one spent participant-transaction hold (prepared or active).
+ * @param {Object} service - Partition service.
+ * @param {Object} spent - {phase, outcome, holdDurationMs, sessionId?,
+ *   subject?, counts?}.
+ * @private
+ */
+function reportTransactionHoldSpent(service, spent) {
+  reportWaitBoundSpent(service.logger, {
+    wait: TRANSACTION_HOLD_WAIT.wait,
+    awaited: TRANSACTION_HOLD_WAIT.awaited,
+    boundMs: service.preparedStateHoldTimeoutMs,
+    elapsedMs: spent.holdDurationMs,
+    lastObserved: {
+      phase: spent.phase,
+      outcome: spent.outcome,
+      role: service.role,
+      ...spent.counts,
+    },
+    scope: {
+      partitionId: service.partitionId,
+      sessionId: spent.sessionId,
+    },
+    subject: spent.subject,
+  });
+}
 
 const {
   PARTITION_SERVICE_ERROR_MSG,
@@ -387,15 +424,19 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
     // for the durability-fitness demotion. A solo group is the carve-out:
     // no follower exists to truncate, and demotion is impossible there.
     if (!this.isStuckTransactionHealPermitted()) {
-      this.logger.warn(
-        PARTITION_SERVICE_LOG_MSG.STUCK_TRANSACTION_HEAL_DEFERRED,
-        {
-          partitionId: this.partitionId,
-          role: this.role,
+      reportTransactionHoldSpent(this, {
+        phase: TRANSACTION_HOLD_WAIT.sweep,
+        outcome: TRANSACTION_HOLD_WAIT.deferred,
+        holdDurationMs: Math.max(
+          ...expiredPreparedSessions.map((entry) => entry.holdDurationMs),
+          ...expiredActiveSessions.map((entry) => entry.holdDurationMs),
+        ),
+        subject: this.partitionId,
+        counts: {
           expiredPreparedSessionCount: expiredPreparedSessions.length,
           expiredActiveSessionCount: expiredActiveSessions.length,
         },
-      );
+      });
       return 0;
     }
     try {
@@ -413,27 +454,24 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       this.preparedTransactions.delete(expiredSession.sessionId);
       this.activeTransactions.delete(expiredSession.sessionId);
       this.preparedStateLostSessions.add(expiredSession.sessionId);
-      this.logger.warn(PARTITION_SERVICE_LOG_MSG.PREPARED_STATE_HOLD_TIMEOUT, {
-        partitionId: this.partitionId,
-        transactionId: expiredSession.sessionId,
-        sessionId: expiredSession.sessionId,
+      reportTransactionHoldSpent(this, {
+        phase: TRANSACTION_HOLD_WAIT.prepared,
+        outcome: TRANSACTION_HOLD_WAIT.healed,
         holdDurationMs: expiredSession.holdDurationMs,
-        preparedAt: expiredSession.preparedAt,
+        sessionId: expiredSession.sessionId,
+        counts: {preparedAt: expiredSession.preparedAt},
       });
     }
     for (const expiredSession of expiredActiveSessions) {
       this.activeTransactions.delete(expiredSession.sessionId);
       this.preparedStateLostSessions.add(expiredSession.sessionId);
-      this.logger.warn(
-        PARTITION_SERVICE_LOG_MSG.ACTIVE_TRANSACTION_HOLD_TIMEOUT,
-        {
-          partitionId: this.partitionId,
-          transactionId: expiredSession.sessionId,
-          sessionId: expiredSession.sessionId,
-          holdDurationMs: expiredSession.holdDurationMs,
-          startedAt: expiredSession.startedAt,
-        },
-      );
+      reportTransactionHoldSpent(this, {
+        phase: TRANSACTION_HOLD_WAIT.active,
+        outcome: TRANSACTION_HOLD_WAIT.healed,
+        holdDurationMs: expiredSession.holdDurationMs,
+        sessionId: expiredSession.sessionId,
+        counts: {startedAt: expiredSession.startedAt},
+      });
     }
     this.syncLegacyTransactionAliases();
     return expiredPreparedSessions.length + expiredActiveSessions.length;

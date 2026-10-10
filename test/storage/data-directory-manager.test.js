@@ -128,6 +128,40 @@ test('DataDirectoryManager - ensurePartitionDirExists creates directory', async 
   t.equal(fs.existsSync(partitionDir), true);
 });
 
+test('DataDirectoryManager - owns the WASM service replica database layout', async (t) => {
+  const manager = DataDirectoryManager.getInstance();
+  manager.initialize();
+
+  const dbPath = manager.getWasmServiceDbPath('service-1', 'replica-1');
+  const serviceDir = path.join(
+    path.resolve(tempDir),
+    'wasm-services',
+    'service-1',
+  );
+
+  t.equal(dbPath, path.join(serviceDir, 'replica-1.db'));
+  t.equal(fs.existsSync(serviceDir), false);
+  manager.ensureWasmServiceDirExists('service-1');
+  t.equal(fs.existsSync(serviceDir), true);
+  t.throws(() => {
+    manager.getWasmServiceDbPath('service-1', null);
+  }, /serviceId and replicaId are required/);
+  t.throws(() => {
+    manager.getWasmServiceDbPath(null, 'replica-1');
+  }, /serviceId and replicaId are required/);
+  t.throws(() => {
+    manager.ensureWasmServiceDirExists('');
+  }, /serviceId and replicaId are required/);
+});
+
+test('DataDirectoryManager - WASM service paths require initialization', async (t) => {
+  const manager = DataDirectoryManager.getInstance();
+
+  t.throws(() => {
+    manager.getWasmServiceDbPath('service-1', 'replica-1');
+  }, /not initialized/);
+});
+
 test('DataDirectoryManager - throws if not initialized', async (t) => {
   const manager = DataDirectoryManager.getInstance();
 

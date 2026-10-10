@@ -1,6 +1,26 @@
 import {
   buildUnexpectedNodeExitFailure,
 } from './harness/unexpected-node-exit.js';
+import {
+  buildCertificationTopologyRefusal,
+  evaluateScenarioCertificationTopology,
+  evaluateScenarioTopologyRequirement,
+} from './harness/scenario-host-topology.js';
+import {
+  captureCertificationNodes,
+  certifyScenarioRun,
+  certifyUnstartedScenario,
+  runCertificationStage,
+} from './harness/scenario-certification.js';
+import {
+  archiveReportedCertification,
+} from './harness/certification-evidence-archive.js';
+import {
+  SCENARIO_OUTCOME,
+  SCENARIO_RESULT_LABEL,
+  buildRefusedScenarioResult,
+  scenarioOutcomeOf,
+} from './harness/scenario-outcome.js';
 
 function createDistributedRunRuntimeBundle(deps = {}) {
   const {
@@ -121,9 +141,6 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     const configuredMaxRegression = normalizeFiniteNumber(
       configuredGate.maxThroughputRegressionRatio,
     );
-    const configuredBaselineProvider = String(
-      configuredGate.baselineProvider || '',
-    ).trim().toLowerCase();
     const configuredMitigationId = String(
       configuredGate.approvedMitigationId || '',
     ).trim();
@@ -166,8 +183,6 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           defaultMinimumThroughputRatio >= 0 ?
           defaultMinimumThroughputRatio :
           null),
-      baselineProvider: configuredBaselineProvider ||
-      BENCHMARK_GATE_DEFAULTS.baselineProvider,
       failIfBaselineMissing: configuredGate.failIfBaselineMissing === true ||
       BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing === true,
       approvedMitigationId: configuredMitigationId || null,
@@ -175,17 +190,10 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     };
   }
 
-  function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
+  function buildHistoricalBaselineIndex(historyReports) {
     const bySimilarityKey = new Map();
 
     for (const historicalReport of historyReports) {
-      const reportProvider = String(
-        historicalReport?.metadata?.raftProvider || '',
-      ).trim().toLowerCase();
-      if (reportProvider !== baselineProvider) {
-        continue;
-      }
-
       const scenarioSummaries = Array.isArray(
         historicalReport?.standardSummary?.scenarios,
       ) ?
@@ -208,7 +216,6 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         }
 
         bySimilarityKey.set(similarityKey, {
-          provider: reportProvider,
           reportPath: historicalReport?.path || null,
           reportTimestamp: historicalReport?.timestamp || null,
           scenario: scenarioSummary?.scenario || null,
@@ -388,7 +395,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
    *   clusterFactory?: Function|null,
    *   reportMetadata?: Object|null,
    * }} options
-   * @returns {Promise<{report: ReportWriter, hasFailures: boolean}>}
+   * @returns {Promise<{report: ReportWriter, hasFailures: boolean,
+   *   hasRefusals: boolean}>}
    */
   async function runScenarios(config, scenarios, options) {
     const providedStateMachinePressurePreflight =
@@ -432,6 +440,27 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       },
     });
     let hasFailures = false;
+    let hasRefusals = false;
+    // A run that requested certification (--certify) gets a certification
+    // verdict per scenario (scenario-certification.js); every other run
+    // keeps today's behaviour and says it is not certification evidence.
+    const certification = options?.certification?.requested === true ?
+      options.certification :
+      null;
+    let hasUncertified = false;
+    // Every certification-requesting entry is archived as durable evidence
+    // (certification-evidence-archive.js); an unarchived one never certifies.
+    const archiveCertification = async (scenarioName, runStartedAt,
+      extra = {}) => {
+      if (certification === null) {
+        return;
+      }
+      const archived = await archiveReportedCertification({config, report,
+        root: options.certificationEvidenceRoot, runStartedAt, scenarioName,
+        runDir: options.certificationRunDir ?? undefined,
+        write: options.certificationEvidenceWrite, ...extra});
+      hasUncertified = hasUncertified || archived.error !== null;
+    };
     const dockerOperationSink = typeof options?.dockerOperationSink === 'function' ?
       options.dockerOperationSink :
       null;
@@ -450,7 +479,40 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         );
       }
 
+      // The scenario's declared topology capability is compared with the
+      // config's host authority BEFORE anything starts: a config that
+      // cannot carry the claim REFUSES the scenario (not run, never a
+      // pass, never a failure), with no cluster, no bundle, no evidence.
+      // A module that fails to load fails THIS scenario only, named; the
+      // run continues with the next one.
+      const topology = await checkScenarioTopology(config, scenario,
+        startedAt, startMs, certification);
+      if (topology.loadFailure !== null) {
+        hasFailures = true;
+        topology.loadFailure.certification = certifyUnstartedScenario(
+          certification, topology.loadFailure, null);
+        hasUncertified = hasUncertified || certification !== null;
+        report.addResult(scenario.name, topology.loadFailure);
+        await archiveCertification(scenario.name, startedAt);
+        continue;
+      }
+      const refusal = topology.refusal;
+      if (refusal !== null) {
+        hasRefusals = true;
+        refusal.certification = certifyUnstartedScenario(certification,
+          refusal, topology.certificationTopology);
+        hasUncertified = hasUncertified || certification !== null;
+        if (options.verbose) {
+          process.stdout.write(SCENARIO_RESULT_LABEL[SCENARIO_OUTCOME.REFUSED] +
+            ' ' + scenario.name + ': ' + refusal.error + '\n');
+        }
+        report.addResult(scenario.name, refusal);
+        await archiveCertification(scenario.name, startedAt);
+        continue;
+      }
+
       let cluster = null;
+      let certificationStage = null;
       try {
         const clusterConfig = dockerOperationSink ?
           {...config, dockerOperationSink} :
@@ -482,6 +544,13 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         const scenarioPayload = normalizeScenarioPayload(
           await scenarioModule.run(cluster),
         );
+        // Certification observes REAL publication convergence and a strict
+        // convergence wait after the scenario, before teardown; it never
+        // changes the scenario's own outcome.
+        if (certification !== null) {
+          certificationStage = await runCertificationStage(cluster,
+            certification.clock);
+        }
 
         // Run log analysis before teardown
         const analyzer = cluster.getLogAnalyzer();
@@ -632,6 +701,9 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         let playback = null;
         let playbackWarning = null;
         let trace = null;
+        const certificationNodes = certification !== null && cluster ?
+          captureCertificationNodes(cluster) :
+          [];
         if (cluster) {
           try {
             await cluster.stop();
@@ -750,11 +822,68 @@ function createDistributedRunRuntimeBundle(deps = {}) {
             hasFailures = true;
           }
         }
+        // Decided last, on the final outcome, after teardown made the full
+        // node logs final.
+        scenarioResult.certification = await certifyScenarioRun({
+          certification, cluster, config, nodes: certificationNodes,
+          scenarioName: scenario.name, scenarioResult,
+          stage: certificationStage,
+          topology: topology.certificationTopology,
+        });
+        hasUncertified = hasUncertified || (certification !== null &&
+          scenarioResult.certification.certified !== true);
         report.addResult(scenario.name, scenarioResult);
+        await archiveCertification(scenario.name, startedAt,
+          {cluster, nodes: certificationNodes});
       }
     }
 
-    return {report, hasFailures};
+    return {report, hasFailures, hasRefusals, hasUncertified};
+  }
+
+  // The scenario's ordinary topology refusal; for a certification run also
+  // its certification topology (one node per machine), refused when unmet.
+  async function refuseScenarioTopology(config, scenario, certification) {
+    const scenarioModule = await loadScenarioModule(scenario.path);
+    const refusal = evaluateScenarioTopologyRequirement(
+      scenarioModule?.SCENARIO_TOPOLOGY_REQUIREMENT, config);
+    const certificationTopology = certification === null ? null :
+      evaluateScenarioCertificationTopology(
+        scenarioModule?.SCENARIO_CERTIFICATION_REQUIREMENT, config);
+    const refused = refusal ?? (certificationTopology?.met === false ?
+      buildCertificationTopologyRefusal(certificationTopology) :
+      null);
+    return {
+      certificationTopology,
+      refusal: refused === null ? null :
+        buildRefusedScenarioResult(refused, new Date().toISOString()),
+    };
+  }
+
+  // The topology check, isolated per scenario: a module import error is a
+  // failed result for that scenario (named), never an abort of the run.
+  async function checkScenarioTopology(config, scenario, startedAt, startMs,
+    certification = null) {
+    try {
+      return {loadFailure: null,
+        ...await refuseScenarioTopology(config, scenario, certification)};
+    } catch (error) {
+      return {
+        certificationTopology: null,
+        loadFailure: {
+          passed: false,
+          duration: Date.now() - startMs,
+          startedAt,
+          error: scenario.name + ': scenario module failed to load: ' +
+            String(error?.message || error),
+          stackTrace: error?.stack || null,
+          analysisSummary: null,
+          clusterSize: resolveClusterSize(config),
+          performanceDiagnostics: null,
+        },
+        refusal: null,
+      };
+    }
   }
 
   function shouldPrintLiveLogEntry(entry) {
@@ -1170,7 +1299,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
 
     lines.push(
       'Run: ' + summary.passed + '/' + summary.total +
-      ' passed, ' + summary.failed + ' failed' +
+      ' passed, ' + (summary.failed - (summary.refused || 0)) + ' failed' +
+      (summary.refused ? ', ' + summary.refused + ' refused (not run)' : '') +
       ' (' + (summary.duration / 1000).toFixed(
         SUMMARY_FIXED_DECIMALS_OPS,
       ) + 's)\n',
@@ -1196,8 +1326,12 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       const std = stdScenarios[i];
       const entry = scenarioEntries[i] || null;
       const current = std.current;
-      const result = current.passed ?
-        SUMMARY_RESULT_PASS : SUMMARY_RESULT_FAIL;
+      const outcome = scenarioOutcomeOf(entry || current);
+      const result = outcome === SCENARIO_OUTCOME.PASSED ?
+        SUMMARY_RESULT_PASS :
+        outcome === SCENARIO_OUTCOME.REFUSED ?
+          SCENARIO_RESULT_LABEL[SCENARIO_OUTCOME.REFUSED] :
+          SUMMARY_RESULT_FAIL;
 
       lines.push('\n' + result + ' ' + std.scenario + '\n');
       lines.push(

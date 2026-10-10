@@ -11,6 +11,9 @@ import {
 } from '../replication-target-authority.js';
 import {NodeService} from '../../node/node-service.js';
 import {
+  MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
+} from '../message-group-assignment.js';
+import {
   MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR,
   MessageGroupServiceRowOwner,
 } from '../../message-group/message-group-service-row-owner.js';
@@ -20,14 +23,6 @@ import {
   isRetryableControlPlaneError,
 } from '../../control-plane/control-plane-error-classification.js';
 import {
-  MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
-} from '../message-group-assignment.js';
-import {
-  BOOTSTRAP_API_DEFAULT,
-  BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
-} from '../bootstrap-api-constants.js';
-import {
-  JOIN_BACKFILL_QUERY,
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
@@ -38,10 +33,8 @@ import {
   ADDRESS,
   CDC_OPERATION,
   ENTITY_TYPE,
-  NUM,
   SERVICE_STATUS,
   TABLES,
-  TIME_MS,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 import {
@@ -72,21 +65,10 @@ const MESSAGE_GROUP_SERVICE_REGISTRATION_ADMISSION_TARGET = Object.freeze({
 });
 const MESSAGE_GROUP_REGISTER_SHORTCUT_FAILED =
   'Message group service registration shortcut returned non-success';
-const MAX_RETRYABLE_MOVE_REPLICA_ASSIGNMENT_TOKEN_UNKNOWN_RETRIES = 1;
-const MOVE_REPLICA_REGISTER_SERVICE_REQUEST_TIMEOUT_MS =
-  BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_WRITE_RETRY_TIMEOUT_MS +
-  BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS +
-  TIME_MS.SECOND * NUM.FIVE;
 const RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION = Object.freeze({
   RETRY: 'retry',
-  SURFACE: 'surface',
   TERMINAL: 'terminal',
 });
-
-function hasMoveReplicaAssignmentId(assignmentId) {
-  return typeof assignmentId === 'string' &&
-    assignmentId.length > 0;
-}
 
 function resolveRegisterServiceRequestTimeoutMs(options = {}) {
   const configuredHttpTimeoutMs =
@@ -99,23 +81,10 @@ function resolveRegisterServiceRequestTimeoutMs(options = {}) {
       options.remainingRetryBudgetMs > 0 ?
       Math.floor(options.remainingRetryBudgetMs) :
       configuredHttpTimeoutMs;
-  const assignmentRequestTimeoutMs =
-    hasMoveReplicaAssignmentId(options.assignmentId) ?
-      Math.min(
-        configuredHttpTimeoutMs,
-        MOVE_REPLICA_REGISTER_SERVICE_REQUEST_TIMEOUT_MS,
-      ) :
-      configuredHttpTimeoutMs;
   return Math.max(
     1,
-    Math.min(assignmentRequestTimeoutMs, remainingRetryBudgetMs),
+    Math.min(configuredHttpTimeoutMs, remainingRetryBudgetMs),
   );
-}
-
-function isRetryableMoveReplicaAssignmentTokenUnknownFailure(options = {}) {
-  return hasMoveReplicaAssignmentId(options.assignmentId) &&
-    options.classification?.code ===
-      BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.ASSIGNMENT_TOKEN_UNKNOWN;
 }
 
 function resolveRetryableMessageGroupRegistrationFailureAction(options = {}) {
@@ -128,15 +97,8 @@ function resolveRetryableMessageGroupRegistrationFailureAction(options = {}) {
   const retryTimeoutMs = Number.isFinite(options.retryTimeoutMs) ?
     Math.max(0, Math.floor(options.retryTimeoutMs)) :
     0;
-  if (elapsedMs >= retryTimeoutMs) {
-    return RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.TERMINAL;
-  }
-  const retryableMoveReplicaAssignmentTokenUnknownBudgetExhausted =
-    isRetryableMoveReplicaAssignmentTokenUnknownFailure(options) &&
-    Number.isFinite(options.retryableMoveReplicaAssignmentTokenUnknownBudget) &&
-    options.retryableMoveReplicaAssignmentTokenUnknownBudget <= 0;
-  return retryableMoveReplicaAssignmentTokenUnknownBudgetExhausted === true ?
-    RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.SURFACE :
+  return elapsedMs >= retryTimeoutMs ?
+    RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.TERMINAL :
     RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.RETRY;
 }
 
@@ -345,8 +307,6 @@ class CreateMessageGroupPhase {
     const sleep = this.delegates.getSleep();
     const logger = this.delegates.getLogger();
     const config = this.delegates.getConfig();
-    const bootstrapResponse =
-      this.delegates.getBootstrapResponse();
     const seedNodeAddress =
       this.delegates.getSeedNodeAddress();
     // A join registration is a birth: the row is born STOPPED (explicit) and
@@ -356,18 +316,10 @@ class CreateMessageGroupPhase {
         .REGISTRATION_STATUS_STOPPED_REQUIRED);
     }
     const now = nowFn();
-    const moveReplicaAssignment =
-      bootstrapResponse?.messageGroupAssignment || null;
     const seedNodeId =
       typeof this.delegates.getSeedNodeId === 'function' ?
         this.delegates.getSeedNodeId() :
         null;
-    const assignmentId = moveReplicaAssignment &&
-      moveReplicaAssignment.strategy ===
-        AssignmentStrategy.MOVE_REPLICA &&
-      moveReplicaAssignment.replicaToMove === replicaId ?
-      moveReplicaAssignment.assignmentId || null :
-      null;
     const serviceData =
       MessageGroupServiceRowOwner.buildRegistrationRow({
         groupId,
@@ -376,12 +328,7 @@ class CreateMessageGroupPhase {
         service,
         timestamp: now,
         status: options.status,
-        extraFields: assignmentId ?
-          {
-            [JOIN_BACKFILL_QUERY.ASSIGNMENT_ID_FIELD]:
-              assignmentId,
-          } :
-          null,
+        extraFields: null,
       });
 
     const registerUrl =
@@ -393,20 +340,17 @@ class CreateMessageGroupPhase {
         nodeId: this.nodeId,
         replicaId,
         groupId,
-        assignmentId,
         registerUrl,
       },
     );
 
     const useLocalSeedRegistrationShortcut =
-      !assignmentId &&
       typeof seedNodeId === 'string' &&
       seedNodeId.length > 0 &&
       seedNodeId === this.nodeId &&
       typeof this.delegates.upsertJoinServiceRowWithRetry ===
         'function';
     const useJoinMetadataRegistrationShortcut =
-      !assignmentId &&
       options[
         REGISTER_MESSAGE_GROUP_SERVICE_OPTION.PREFER_CONTROL_PLANE_UPSERT
       ] === true &&
@@ -475,16 +419,11 @@ class CreateMessageGroupPhase {
     const startTime = nowFn();
     let attempt = 0;
     let lastError = null;
-    let retryableMoveReplicaAssignmentTokenUnknownBudget =
-      assignmentId ?
-        MAX_RETRYABLE_MOVE_REPLICA_ASSIGNMENT_TOKEN_UNKNOWN_RETRIES :
-        0;
 
     while (nowFn() - startTime < retryTimeoutMs) {
       attempt += 1;
       const elapsedAtAttemptStartMs = nowFn() - startTime;
       const requestTimeoutMs = resolveRegisterServiceRequestTimeoutMs({
-        assignmentId,
         configuredHttpTimeoutMs: config.httpTimeoutMs,
         remainingRetryBudgetMs: retryTimeoutMs - elapsedAtAttemptStartMs,
       });
@@ -556,27 +495,14 @@ class CreateMessageGroupPhase {
           );
         const retryAction =
           resolveRetryableMessageGroupRegistrationFailureAction({
-            assignmentId,
             classification,
             elapsedMs,
             retryTimeoutMs,
-            retryableMoveReplicaAssignmentTokenUnknownBudget,
           });
         if (
           retryAction ===
           RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.RETRY
         ) {
-          if (
-            isRetryableMoveReplicaAssignmentTokenUnknownFailure({
-              assignmentId,
-              classification,
-            })
-          ) {
-            retryableMoveReplicaAssignmentTokenUnknownBudget = Math.max(
-              0,
-              retryableMoveReplicaAssignmentTokenUnknownBudget - 1,
-            );
-          }
           const nextDelayMs =
             this.delegates
               .computeSeedContactRetryDelayMs({
@@ -610,15 +536,6 @@ class CreateMessageGroupPhase {
             maxDelayMs,
           );
           continue;
-        }
-        if (
-          retryAction ===
-          RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.SURFACE
-        ) {
-          lastError = buildRetryableMessageGroupRegistrationError(
-            error,
-            classification,
-          );
         }
         break;
       }

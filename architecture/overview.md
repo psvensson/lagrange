@@ -44,7 +44,7 @@ A scalable distributed database where:
 ## Core Principles
 
 1. **Tables as the Universal Storage Model** - System metadata and user data are stored in tables
-2. **Partitions as Raft Groups** - Each partition is a Raft consensus group behind the partition Raft provider/operation-port boundary. The current production default remains Liferaft; the Rust raft-rs/WASM backend has landed behind the same partition seam but is not yet the production-default transport cutover.
+2. **Partitions as Raft Groups** - Each partition is a Raft consensus group behind the semantic Raft operation-port boundary. Production consensus is implemented by the vendored raft-rs/WASM runtime; there is no selectable alternate consensus backend.
 3. **System Cache as Canonical Observational Read Model** - In-memory cache of
    CDC-propagated system tables, updated by CDC events. It is the steady-state
    read model for propagated metadata, but it is not a second completion oracle

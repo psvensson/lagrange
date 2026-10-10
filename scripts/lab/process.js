@@ -36,7 +36,12 @@ export function run(command, args, options = {}) {
     child.on(CHILD_EVENT.EXIT, (code, signal) => {
       if (code === 0) return resolvePromise({code, signal});
       const suffix = signal ? ` signal=${signal}` : ` exit=${code}`;
-      rejectPromise(new Error(`${command} failed:${suffix}`));
+      const error = new Error(`${command} failed:${suffix}`);
+      // The exit status itself, for callers whose child has more than one
+      // non-zero outcome (the distributed runner's REFUSED is not FAIL).
+      error.exitCode = code;
+      error.signal = signal;
+      rejectPromise(error);
     });
     if (hasInput && child.stdin) child.stdin.end(options.stdin);
   });

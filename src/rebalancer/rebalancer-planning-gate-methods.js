@@ -1,4 +1,5 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {reportClusterReadinessSpent} from './cluster-readiness-wait-report.js';
 import {
   applyUserTableLeaderPlacementCure,
   evaluateLeaderPlacementCureBehindPrioritySpreadGate,
@@ -279,11 +280,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     if (elapsed >= this.clusterReadinessTimeoutMs) {
       this.clusterReadinessConfirmed = true;
       this.clusterReadinessState = 'degraded_timeout';
-      this.logger.warn(REBALANCER_LOG_MSG.CLUSTER_READINESS_TIMEOUT, {
-        entityId: this.entityId,
-        elapsedMs: elapsed,
-        unmetConditions: result.unmetConditions,
-      });
+      reportClusterReadinessSpent(this, elapsed, result);
       return null;
     }
 
@@ -422,7 +419,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
         topologySettlingBlocker,
         evaluationContext,
       );
-    if (gateSnapshot.shouldDefer !== true) {
+    if (!this.syncLocalMutationReadinessWake(gateSnapshot.shouldDefer)) {
       return null;
     }
     const scheduleDelayMs = this.increaseCurrentInterval(
@@ -573,7 +570,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       this.buildLocalMutationReadinessPlanningGateSnapshot(evaluationContext);
     const localMutationReadinessBlocker =
       gateSnapshot.localMutationReadinessBlocker;
-    if (gateSnapshot.shouldDefer !== true) {
+    if (!this.syncLocalMutationReadinessWake(gateSnapshot.shouldDefer)) {
       return null;
     }
     const scheduleDelayMs = this.increaseCurrentInterval(
@@ -714,7 +711,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @return {Promise<void>}
    */
   async checkRebalance() {
-    if (!this.isLeader || this.isShuttingDown) {
+    if (!this.isLeader || this.isShuttingDown || this.isPlanningParked()) {
       return;
     }
 

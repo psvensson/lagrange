@@ -11,6 +11,7 @@ import {
 } from './service-lifecycle-sql-contract.js';
 import {SQLQueryEngineRequestDispatch} from
   './sql-query-engine-request-dispatch.js';
+import {withExecutedStatementType} from './application-database-result.js';
 
 const SERVICE_LIFECYCLE_EXECUTION_ERROR_CODE = Object.freeze({
   COMMAND_OWNER_UNAVAILABLE: 'service_lifecycle_command_owner_unavailable',
@@ -148,10 +149,13 @@ class SQLQueryEngineServiceLifecycleExecution extends
       );
     }
     try {
-      return handled(await commandOwnerBinding.owner.execute(
+      return handled(withExecutedStatementType(
+        await commandOwnerBinding.owner.execute(
+          parsed.command,
+          parsed.payload,
+          options.securityContext,
+        ),
         parsed.command,
-        parsed.payload,
-        options.securityContext,
       ));
     } catch (_error) {
       return failure(

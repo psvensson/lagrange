@@ -58,6 +58,9 @@ import {
 } from '../node-joining-constants.js';
 import {requireIssuedBootIncarnation} from '../boot-incarnation-contract.js';
 
+import {reportNodeStateUpdateDeliverySpent} from
+  './node-state-update-wait-report.js';
+
 const NODE_STATE_PUBLICATION_OWNER_SUBJECT = 'NodeStatePublicationOwner';
 
 class NodeStatePublicationOwner {
@@ -443,6 +446,7 @@ class NodeStatePublicationOwner {
         null;
     let lastError = null;
     let sameTargetRetryCount = 0;
+    const deliveryStartedAtMs = this.now();
 
     for (let attempt = 0; attempt < targetCandidates.length; attempt++) {
       const targetAddress = targetCandidates[attempt];
@@ -679,12 +683,15 @@ class NodeStatePublicationOwner {
           continue;
         }
 
-        this.logger().error(JOINING_LOG_MSG.NODE_STATE_UPDATE_FAILED, {
-          nodeId: this.nodeId,
+        this.logNodeStateUpdateFailed(error, {
+          retryableTargetFailure,
           targetAddress,
           state,
           publicationMode,
-          error: error.message,
+          attempts: attempt + 1,
+          sameTargetRetryCount,
+          deliveryTimeoutBudgetMs,
+          elapsedMs: this.now() - deliveryStartedAtMs,
         });
         throw buildNodeStateUpdatePublicationFailureError(
           error,
@@ -695,6 +702,28 @@ class NodeStatePublicationOwner {
     }
 
     throw lastError;
+  }
+
+  /**
+   * Log a terminal node-state update failure. A retryable failure that ran
+   * out of targets and same-target retries is a spent retry bound and is
+   * reported as wait_bound_spent (subject: the node state, since heartbeats
+   * re-fire it); any other failure keeps the plain error line.
+   * @param {Error} error
+   * @param {Object} failure
+   */
+  logNodeStateUpdateFailed(error, failure) {
+    if (failure.retryableTargetFailure !== true) {
+      this.logger().error(JOINING_LOG_MSG.NODE_STATE_UPDATE_FAILED, {
+        nodeId: this.nodeId,
+        targetAddress: failure.targetAddress,
+        state: failure.state,
+        publicationMode: failure.publicationMode,
+        error: error.message,
+      });
+      return;
+    }
+    reportNodeStateUpdateDeliverySpent(this.logger(), this.nodeId, error, failure);
   }
 
   triggerBackgroundClusterMeshReconciliation(state) {

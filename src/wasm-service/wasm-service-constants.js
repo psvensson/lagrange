@@ -53,6 +53,22 @@ const WASM_SERVICE_ERROR_MSG = Object.freeze({
   SESSION_SIZE_LIMIT_EXCEEDED: 'Session context size limit exceeded',
   SERVICE_SIZE_LIMIT_EXCEEDED: 'Service total context size limit exceeded',
   SERVICE_NOT_READY: 'WASM service group is not ready',
+  MISSING_DB_PATH: 'WASM service replica requires its durable database path',
+  IN_MEMORY_DB_PATH_REFUSED:
+    'WASM service replica refuses an in-memory consensus database',
+  CONSENSUS_INIT_REFUSED: 'WASM service consensus port refused to open',
+  PEER_UNPLACED: 'WASM service peer has no services row placement',
+  PROPOSAL_REFUSED: 'WASM service proposal refused by its consensus port',
+  UNKNOWN_COMMITTED_COMMAND: 'WASM service committed an unknown command type',
+  REPLICA_ID_REQUIRED: 'WASM service replica requires its replicaId',
+  REPLICA_SET_REQUIRED:
+    'WASM service replica requires its explicit founding replica set',
+  REPLICA_SET_INVALID:
+    'WASM service founding replica set must hold distinct replica ids',
+  REPLICA_NOT_IN_SET:
+    'WASM service replica is not a member of its founding replica set',
+  PORT_ALLOCATOR_UNAVAILABLE:
+    'WASM service port allocator has no owner on this node',
   MODULE_NOT_AVAILABLE: 'WASM module not available on any node',
   RUN_EXPORT_NOT_FOUND:
     'run_export function not found in module exports',
@@ -63,6 +79,57 @@ const WASM_SERVICE_ERROR_MSG = Object.freeze({
     'run_export signature does not match required runtime' +
     ' contract (2-3 params)',
   PORT_EXHAUSTED: 'No ports available for allocation',
+  COMMAND_TYPE_REFUSED: 'WASM service command type refused',
+  REPLICA_RETIRED:
+    'WASM service replica instance is shut down or shutting down; ' +
+    'a successor is a new replica',
+  REPLICA_LIVE:
+    'WASM service replica is live for this service; stop it before ' +
+    'creating its successor',
+  STOPPED_DURING_START:
+    'WASM service replica was stopped while it was starting',
+});
+
+// The lifecycle of one WasmServiceReplica instance (R07). An instance is
+// single-use: shutdown is its end, and a successor is a new instance, as for
+// partition and message-group replicas.
+const WASM_SERVICE_REPLICA_STATE = Object.freeze({
+  CREATED: 'created',
+  STARTING: 'starting',
+  READY: 'ready',
+  STOPPING: 'stopping',
+  STOPPED: 'stopped',
+});
+
+// Typed refusals of the replica lifecycle.
+const WASM_SERVICE_LIFECYCLE_REFUSAL = Object.freeze({
+  // initialize/start of an instance whose shutdown has begun.
+  REPLICA_RETIRED: 'wasm_service_replica_retired',
+  // A replica is created over a starting or ready one for the same service.
+  REPLICA_LIVE: 'wasm_service_replica_live',
+  // The replica's stop began while its start awaited its initialization.
+  STOPPED_DURING_START: 'wasm_service_replica_stopped_during_start',
+});
+
+// The committed command vocabulary of a WASM service group's consensus log
+// (design R4): the only types its committed apply dispatches.
+const WASM_SERVICE_COMMAND_TYPE = Object.freeze({
+  KV_SET: 'kv_set',
+  KV_DELETE: 'kv_delete',
+  KV_DELETE_SESSION: 'kv_delete_session',
+  TIMER_STATE: 'timer_state',
+});
+
+const WASM_SERVICE_COMMAND_REFUSAL = Object.freeze({
+  UNKNOWN_TYPE: 'wasm_service_command_type_unknown',
+});
+
+// Typed refusals of a replica's founding identity: its explicit replica set
+// is the group's founding voters and is never inferred from one replica.
+const WASM_SERVICE_FOUNDING_REFUSAL = Object.freeze({
+  REPLICA_SET_REQUIRED: 'wasm_service_replica_set_required',
+  REPLICA_SET_INVALID: 'wasm_service_replica_set_invalid',
+  REPLICA_NOT_IN_SET: 'wasm_service_replica_not_in_set',
 });
 
 const WASM_SERVICE_LOG_MSG = Object.freeze({
@@ -96,6 +163,15 @@ const WASM_SERVICE_LOG_MSG = Object.freeze({
   DEFINITION_REJECTED: 'Service definition rejected',
   ENTRY_COMMITTED: 'Raft entry committed and applied',
   WRITE_REJECTED_SIZE_LIMIT: 'Write rejected due to size limit',
+  ASYNC_PROPOSAL_FAILED: 'Async WASM service write proposal failed',
+  PERSIST_ROLE_FAILED: 'Failed to persist WASM service replica role',
+  PERSIST_LEADER_FAILED: 'Failed to persist WASM service leader node',
+});
+
+// A committed value crosses the consensus log as base64 text: the proposal
+// codec is JSON, which a Buffer does not survive.
+const WASM_SERVICE_VALUE_ENCODING = Object.freeze({
+  BASE64: 'base64',
 });
 
 const WASM_SERVICE_EXECUTOR_TYPE = 'wasm_service';
@@ -144,7 +220,13 @@ export {
   DEFAULT_SAFETY_INTERVAL_MS,
   DEFAULT_RESOURCE_BUDGET,
   WASM_SERVICE_ERROR_MSG,
+  WASM_SERVICE_COMMAND_TYPE,
+  WASM_SERVICE_COMMAND_REFUSAL,
+  WASM_SERVICE_FOUNDING_REFUSAL,
+  WASM_SERVICE_LIFECYCLE_REFUSAL,
   WASM_SERVICE_LOG_MSG,
+  WASM_SERVICE_REPLICA_STATE,
+  WASM_SERVICE_VALUE_ENCODING,
   WASM_SERVICE_EXECUTOR_TYPE,
   SQL_ENGINE_PROFILE,
   WASM_SERVICE_PROTOCOL,

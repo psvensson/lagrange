@@ -29,6 +29,7 @@ const LOCAL_STR_SHUTDOWN_STEP_TIMEBOX =
 // graceful drain race the docker SIGKILL grace. NOTE: the sibling slow step
 // publishNodeShutdownStatus is deliberately NOT boxed here — it is cluster-facing
 // and already internally bounded by reporterTimeoutMs (see its call site).
+// ends-on: n/a timebox (the step routinely blocks 5-7 s; exit continues at 3 s)
 const SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS = 3000;
 const LOCAL_STR_SIGINT = 'SIGINT';
 const LOCAL_STR_SIGTERM = 'SIGTERM';

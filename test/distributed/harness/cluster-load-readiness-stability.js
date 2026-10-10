@@ -106,19 +106,38 @@ function buildLoadReadinessAdmissionProgressSnapshot(activeProbe) {
   );
 }
 
-function hasSatisfiedLoadReadinessPriorityRecovery(progressSnapshot) {
-  return (
+// The priority-recovery leg of the startup-support owner-recovery window.
+// Spread satisfaction needs positive evidence: a progress snapshot whose
+// priority partition summary is absent (prioritySpreadSatisfied null) is
+// priority_spread_evidence_absent, never satisfied.
+const LOAD_READINESS_PRIORITY_RECOVERY_STATE = Object.freeze({
+  SATISFIED: 'priority_recovery_satisfied',
+  UNRESOLVED: 'priority_recovery_unresolved',
+  SPREAD_UNSATISFIED: 'priority_spread_unsatisfied',
+  SPREAD_EVIDENCE_ABSENT: 'priority_spread_evidence_absent',
+});
+
+function classifyLoadReadinessPriorityRecovery(progressSnapshot) {
+  const unresolved =
     normalizeNonNegativeCount(
       progressSnapshot?.priorityRecoveryUnresolvedClassCount,
-    ) === ZERO_COUNT &&
+    ) !== ZERO_COUNT ||
     normalizeNonNegativeCount(
       progressSnapshot?.priorityRecoveryUnresolvedSemanticStateCount,
-    ) === ZERO_COUNT &&
+    ) !== ZERO_COUNT ||
     normalizeNonNegativeCount(
       progressSnapshot?.priorityRecoveryBlockedPartitionCount,
-    ) === ZERO_COUNT &&
-    progressSnapshot?.prioritySpreadSatisfied !== false
-  );
+    ) !== ZERO_COUNT;
+  if (unresolved) {
+    return LOAD_READINESS_PRIORITY_RECOVERY_STATE.UNRESOLVED;
+  }
+  if (progressSnapshot?.prioritySpreadSatisfied === false) {
+    return LOAD_READINESS_PRIORITY_RECOVERY_STATE.SPREAD_UNSATISFIED;
+  }
+  if (progressSnapshot?.prioritySpreadSatisfied !== true) {
+    return LOAD_READINESS_PRIORITY_RECOVERY_STATE.SPREAD_EVIDENCE_ABSENT;
+  }
+  return LOAD_READINESS_PRIORITY_RECOVERY_STATE.SATISFIED;
 }
 
 function hasBoundedLoadReadinessOwnerRecoveryHandoff(progressSnapshot) {
@@ -210,7 +229,10 @@ function hasPartialLoadReadinessOwnerRecoverySnapshotCoverage(
   );
 }
 
-function hasLoadReadinessStartupSupportOwnerRecoveryWindow(progressSnapshot) {
+function hasLoadReadinessStartupSupportOwnerRecoveryWindow(
+  progressSnapshot,
+  priorityRecoveryState,
+) {
   const expectedNodeCount = normalizeNonNegativeCount(
     progressSnapshot?.expectedNodeCount,
   );
@@ -238,7 +260,7 @@ function hasLoadReadinessStartupSupportOwnerRecoveryWindow(progressSnapshot) {
       ZERO_COUNT &&
     normalizeNonNegativeCount(progressSnapshot?.pendingAckCount) ===
       ZERO_COUNT &&
-    hasSatisfiedLoadReadinessPriorityRecovery(progressSnapshot) === true &&
+    priorityRecoveryState === LOAD_READINESS_PRIORITY_RECOVERY_STATE.SATISFIED &&
     boundedOwnerRecoveryHandoff === true
   );
 }
@@ -276,11 +298,17 @@ function evaluateActiveGateOwnerCohortPromotion(activeProbe) {
   }
   const progressSnapshot =
     buildLoadReadinessAdmissionProgressSnapshot(activeProbe);
+  const priorityRecoveryState =
+    classifyLoadReadinessPriorityRecovery(progressSnapshot);
   const startupSupportOwnerRecoveryWindow =
-    hasLoadReadinessStartupSupportOwnerRecoveryWindow(progressSnapshot);
+    hasLoadReadinessStartupSupportOwnerRecoveryWindow(
+      progressSnapshot,
+      priorityRecoveryState,
+    );
   return {
     promotionReady: startupSupportOwnerRecoveryWindow === true,
     startupSupportOwnerRecoveryWindow,
+    priorityRecoveryState,
   };
 }
 
@@ -344,6 +372,12 @@ function buildLoadReadinessAdmissionGate(activeProbe, options = {}) {
       activeProbe?.snapshotCoverage?.completeCoverage === true,
     startupSupportOwnerRecoveryWindow:
       promotion.startupSupportOwnerRecoveryWindow === true,
+    // Named only when the startup-support window was evaluated; null when
+    // the owner cohort decided promotion without it.
+    priorityRecoveryState:
+      typeof promotion.priorityRecoveryState === 'string' ?
+        promotion.priorityRecoveryState :
+        null,
   };
 }
 

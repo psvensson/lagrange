@@ -29,6 +29,10 @@ import {
   TABLES,
 } from '../../constants/index.js';
 
+const JOIN_SYSTEM_SERVICE_LEADERS_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'system service write leaders visible in the system table cache',
+});
 const JOINING_REQUIRED_WRITE_TABLES = Object.freeze([
   TABLES.NODES,
   TABLES.NODE_ENDPOINTS,
@@ -154,6 +158,15 @@ class WaitForLeadershipPhase {
 
     await waitForStartupConvergence({
       timeoutMs,
+      logger,
+      spentWait: JOIN_SYSTEM_SERVICE_LEADERS_WAIT,
+      scope: {nodeId: this.nodeId},
+      describeLastObserved: (readiness, context) => ({
+        timeoutKind: context.timeoutKind,
+        attempts: context.attempt,
+        missingCount: readiness?.missingCount ?? null,
+        missingLeaders: readiness?.missingLeaders || null,
+      }),
       subscriptions: [
         (notify) => subscribeToSystemTableCacheChanges(
           systemTableCache,

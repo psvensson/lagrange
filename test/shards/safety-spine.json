@@ -22,36 +22,23 @@
     "test/scripts/helper-import-closure.test.js",
     "test/scripts/push-gate-change-proof.test.js",
     "test/scripts/publish-head.test.js",
-
     "test/release/public-api-side-effect-boundary.test.js",
+    "test/release/runtime-entry-link.test.js",
     "test/release/project-hardening-contracts.test.js",
-
     "test/invariants/invariant-catalog.test.js",
     "test/contract/message-router-contract.test.js",
-
-    "test/raft/raft-replica-base.test.js",
     "test/raft/raft-log-write-owner.test.js",
-
     "test/partition/partition-transition-projection.test.js",
-    "test/worker/sqlite-system-cache.test.js",
-
     "test/query/pg-translate.test.js",
     "test/query/sql-query-engine-create-table-quorum.test.js",
-
     "test/runtime/pgwire-protocol-handler.test.js",
     "test/runtime/pgwire-session.test.js",
-
     "test/bootstrap/bootstrap-api-readiness-gating.test.js",
     "test/bootstrap/bootstrap-api-readiness-publication.test.js",
-
     "test/control-plane/readiness-single-contract-build.test.js",
     "test/control-plane/failure-class-registry.test.js",
-
     "test/transport/message-router-api.property.test.js",
-    "test/worker/worker-message-bridge.test.js",
-
     "test/service/request-cell-call-bridge.test.js",
-
     "test/utils/correlation.test.js",
     "test/utils/canonical-json-data.test.js"
   ]

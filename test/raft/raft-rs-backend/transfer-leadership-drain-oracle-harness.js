@@ -130,14 +130,14 @@ function perIndexTiming(replicaIds) {
     const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
       replicaId, replicaIds,
       baseElectionMinMs:
-        PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS,
+        PARTITION_SERVICE_VALUE.RAFT_ELECTION_MIN_DEFAULT_MS,
       baseElectionMaxMs:
-        PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS,
+        PARTITION_SERVICE_VALUE.RAFT_ELECTION_MAX_DEFAULT_MS,
       electionJitterPerReplicaMs:
         PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS,
     });
     return {
-      heartbeatMs: PARTITION_SERVICE_VALUE.LIFERAFT_HEARTBEAT_DEFAULT_MS,
+      heartbeatMs: PARTITION_SERVICE_VALUE.RAFT_HEARTBEAT_DEFAULT_MS,
       electionMinMs,
       electionMaxMs,
     };

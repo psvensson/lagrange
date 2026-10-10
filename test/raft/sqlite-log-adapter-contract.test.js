@@ -41,10 +41,6 @@ test('SQLiteLogAdapter.put/get preserves canonical full entry shape', async (t) 
     index: 4,
     term: 3,
     committed: false,
-    responses: [
-      {address: 'node-1', ack: true},
-      {address: 'node-2', ack: true},
-    ],
     command: {type: 'TEST', value: 42},
   };
 
@@ -70,22 +66,6 @@ test('SQLiteLogAdapter.saveCommand/get preserves canonical full entry shape', as
     retrieved,
     saved,
     'saveCommand/get should return the same canonical raft entry shape',
-  );
-
-  db.close();
-});
-
-test('SQLiteLogAdapter.commandAck keeps canonical full entry shape', async (t) => {
-  const {adapter, db} = createAdapter({term: 5, address: 'node-1'});
-
-  adapter.saveCommand({type: 'TEST', value: 8}, 5, 3);
-  const acked = adapter.commandAck(3, 'node-2');
-  const retrieved = adapter.get(3);
-
-  t.same(
-    retrieved,
-    acked,
-    'commandAck/get should preserve the canonical raft entry shape',
   );
 
   db.close();

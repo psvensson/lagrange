@@ -7,6 +7,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {RPCClient} from '../../src/transport/rpc-client.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
 
 // Initialize configuration and logging for tests
 ConfigurationManager.resetInstance();
@@ -144,6 +145,35 @@ test('RPCClient', async (t) => {
     );
 
     t.equal(client.stats.timeouts, 1, 'should increment timeout counter');
+
+    await client.shutdown();
+  });
+
+  t.test('repeated timeouts for one target and request type fold into ' +
+    'one wait_bound_spent ERROR', async (t) => {
+    const capture = captureLogger();
+    const client = new RPCClient({
+      messageGroupService: {sendMessage: async () => ({status: 'delivered'})},
+      defaultTimeoutMs: 20,
+    });
+    client.logger = capture.logger;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await t.rejects(client.call('fold-target', {type: 'probe'}),
+        /RPC timeout after 20ms/, 'the caller is still rejected');
+    }
+    await t.rejects(client.call('other-target', {type: 'probe'}),
+      /RPC timeout after 20ms/, 'the caller is still rejected');
+
+    const spent = capture.spent();
+    t.equal(spent.length, 2,
+      'two expiries for one subject log once; another target logs its own');
+    t.equal(spent[0].context.wait, 'RPC_DEFAULT.TIMEOUT_MS (or call timeout)');
+    t.same(spent[0].context.lastObserved,
+      {requestType: 'probe', responseReceived: false});
+    t.equal(spent[0].context.scope.target, 'fold-target');
+    t.equal(spent[1].context.scope.target, 'other-target');
+    t.equal(client.stats.timeouts, 3, 'every timeout is still counted');
 
     await client.shutdown();
   });

@@ -37,6 +37,7 @@ import {
   SHARD_TASK_STATUS,
   runBoundedShardDispatch,
 } from './call-shard-dispatch-pool.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const CALL_INVOKER_MESSAGE = Object.freeze({
   EMPTY_BATCH_SET:
@@ -80,6 +81,14 @@ const CALL_INVOKER_BUDGET_DEFAULT = Object.freeze({
 const CALL_INVOKER_ACTIVATION_DEFAULT = Object.freeze({
   RETRY_INTERVAL_MS: 250,
   WAIT_MS: 15000,
+});
+const ACTIVATION_WAIT = Object.freeze({
+  wait: 'CALL_INVOKER_ACTIVATION_DEFAULT.WAIT_MS',
+  awaited: 'ready Call Cell on the shard host after an activation lease',
+});
+const SHARD_ADMISSION_WAIT = Object.freeze({
+  wait: 'call_invocation_deadline',
+  awaited: 'admission of every shard run before the invocation deadline',
 });
 // Coordination-garbage retention: lapsed slot rows and abandoned result
 // rows older than this window are swept opportunistically, one bounded
@@ -245,8 +254,9 @@ class CallCellInvoker {
     // The activation window never outlives the caller's own deadline: a
     // short-deadline call must fail typed with budget left to report,
     // not burn its whole budget waiting for capacity.
+    const activationStartedAtMs = Date.now();
     const activationDeadline = Math.min(
-      Date.now() + this._activationWaitMs,
+      activationStartedAtMs + this._activationWaitMs,
       Number.isFinite(request.deadlineMs) ?
         request.deadlineMs :
         Number.POSITIVE_INFINITY,
@@ -270,6 +280,17 @@ class CallCellInvoker {
         countActivationLeasePublished(telemetry);
         if (Date.now() + this._activationRetryIntervalMs >
             activationDeadline) {
+          reportWaitBoundSpent(this._logger, {
+            ...ACTIVATION_WAIT,
+            boundMs: activationDeadline - activationStartedAtMs,
+            startedAtMs: activationStartedAtMs,
+            lastObserved: {lastErrorCode: error.code, publishedActivationLease},
+            scope: () => ({
+              hostNodeId,
+              partitionId: request.shard.partitionId,
+              invocationId: request.invocationId,
+            }),
+          });
           throw error;
         }
         await sleep(this._activationRetryIntervalMs);
@@ -465,6 +486,17 @@ class CallCellInvoker {
       throw rejected.reason;
     }
     if (dispatchOutcome.unadmitted.length > 0) {
+      reportWaitBoundSpent(this._logger, {
+        ...SHARD_ADMISSION_WAIT,
+        boundMs: deadlineMs - shardPhaseStartedAt,
+        startedAtMs: shardPhaseStartedAt,
+        lastObserved: {
+          admissionStop: dispatchOutcome.admissionStop,
+          settled: dispatchOutcome.settled.length,
+          unadmitted: dispatchOutcome.unadmitted.length,
+        },
+        scope: {invocationId},
+      });
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED,
         CALL_INVOKER_MESSAGE.SHARD_ADMISSION_DEADLINE,

@@ -15,12 +15,6 @@ function command(value) {
   return {type: 'sqlite-write-path', value};
 }
 
-function append(adapter, entries) {
-  return new Promise((resolve, reject) => {
-    adapter.append(entries, (error) => error ? reject(error) : resolve());
-  });
-}
-
 async function seed(adapter, count = 5) {
   for (let index = 1; index <= count; index += 1) {
     adapter.saveCommand(command(index), TERM, index);
@@ -28,7 +22,7 @@ async function seed(adapter, count = 5) {
   adapter.commit(3);
 }
 
-test('SQLite committed identity is guarded on put and bulk append', async (t) => {
+test('SQLite committed identity is guarded on canonical writes', async (t) => {
   const db = new Database(':memory:');
   const adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node'});
   try {
@@ -38,41 +32,28 @@ test('SQLite committed identity is guarded on put and bulk append', async (t) =>
       {code: RAFT_COMMITTED_ENTRY_CONFLICT_CODE},
       'put rejects committed replacement',
     );
-    await t.rejects(
-      append(adapter, [
-        {index: 4, term: TERM + 1, command: command('safe-uncommitted')},
-        {index: 2, term: TERM, command: command('conflict')},
-      ]),
+    t.throws(
+      () => adapter.saveCommand(command('conflict'), TERM + 1, 2),
       {code: RAFT_COMMITTED_ENTRY_CONFLICT_CODE},
-      'bulk append rejects the whole transaction on committed conflict',
+      'saveCommand rejects committed replacement',
     );
     t.same(adapter.get(2).command, command(2), 'committed row is unchanged');
-    t.same(adapter.get(4).command, command(4),
-      'earlier bulk item rolls back atomically');
   } finally {
     db.close();
   }
 });
 
-test('SQLite inclusive truncation APIs clamp above committed boundary', async (t) => {
-  for (const method of ['removeFrom', 'truncateFrom']) {
-    const db = new Database(':memory:');
-    const adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node'});
-    try {
-      await seed(adapter);
-      if (method === 'removeFrom') {
-        adapter.removeFrom(2);
-      } else {
-        await new Promise((resolve, reject) => {
-          adapter.truncateFrom(2, (error) => error ? reject(error) : resolve());
-        });
-      }
-      t.ok(adapter.get(3), `${method} preserves committed boundary`);
-      t.notOk(adapter.get(4), `${method} removes uncommitted suffix`);
-      t.equal(adapter.committedIndex, 3, `${method} keeps commit monotonic`);
-    } finally {
-      db.close();
-    }
+test('SQLite canonical truncation clamps above committed boundary', async (t) => {
+  const db = new Database(':memory:');
+  const adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node'});
+  try {
+    await seed(adapter);
+    adapter.removeFrom(2);
+    t.ok(adapter.get(3), 'removeFrom preserves committed boundary');
+    t.notOk(adapter.get(4), 'removeFrom removes uncommitted suffix');
+    t.equal(adapter.committedIndex, 3, 'removeFrom keeps commit monotonic');
+  } finally {
+    db.close();
   }
 });
 

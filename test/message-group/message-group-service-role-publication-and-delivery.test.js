@@ -50,6 +50,7 @@ import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 const TEST_CRITICAL_TRANSPORT_PARTITION_ADDRESS =
   'seed-node/partition/control_plane_publications-p1-r1';
@@ -84,13 +85,13 @@ test('MessageGroupService - publishes leader state as follower metadata in servi
   });
 
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
       cdcIntegrationService: mockCdcIntegrationService,
-    });
+    }));
 
     await service.initialize();
     service.systemTableCache = systemTableCache;
@@ -166,13 +167,13 @@ test('MessageGroupService - demotes non-control-plane role publication to backgr
   });
 
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-user-1',
       replicaId: 'mg-user-1-r1',
       nodeId,
       transport: router,
       cdcIntegrationService: mockCdcIntegrationService,
-    });
+    }));
 
     await service.initialize();
     service.systemTableCache = systemTableCache;
@@ -238,13 +239,13 @@ test('MessageGroupService - publishes candidate role as follower metadata', asyn
   });
 
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
       cdcIntegrationService: mockCdcIntegrationService,
-    });
+    }));
 
     await service.initialize();
     service.systemTableCache = systemTableCache;
@@ -314,14 +315,14 @@ test(
     });
 
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-local-only',
         replicaId: 'mg-local-only-r1',
         nodeId,
         transport: router,
         cdcIntegrationService: mockCdcIntegrationService,
         publishRoleMetadata: false,
-      });
+      }));
 
       await service.initialize();
       service.systemTableCache = systemTableCache;
@@ -380,13 +381,13 @@ test(
     });
 
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-1',
         replicaId: 'mg-1-r1',
         nodeId,
         transport: router,
         cdcIntegrationService: mockCdcIntegrationService,
-      });
+      }));
 
       service.systemTableCache = systemTableCache;
       service.pendingRoleUpdate = RaftRole.LEADER;
@@ -416,13 +417,13 @@ test('MessageGroupService - flushes services role update when local services lea
     };
 
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-1',
         replicaId: 'mg-1-r1',
         nodeId,
         transport: router,
         cdcIntegrationService: mockCdcIntegrationService,
-      });
+      }));
 
       service.systemTableCache = new SystemTableCache();
       service.pendingRoleUpdate = RaftRole.LEADER;
@@ -471,13 +472,13 @@ test('MessageGroupService - flushes message-group leader update when local owner
     };
 
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-1',
         replicaId: 'mg-1-r1',
         nodeId,
         transport: router,
         cdcIntegrationService: mockCdcIntegrationService,
-      });
+      }));
 
       service.systemTableCache = new SystemTableCache();
       service.isLeader = true;
@@ -528,7 +529,7 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
 
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-leader-hint-forward-target',
         replicaId: 'mg-leader-hint-forward-target-r2',
         nodeId,
@@ -543,7 +544,7 @@ test(
           'seed-node/message-group/mg-leader-hint-forward-target-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.pendingLeaderNodeUpdate = 'seed-node';
       service.persistedLeaderNodeId = null;
@@ -612,14 +613,14 @@ test(
     };
 
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-1',
         replicaId: 'mg-1-r1',
         nodeId,
         transport: router,
         cdcIntegrationService: mockCdcIntegrationService,
         bootstrapReadinessState: readinessState,
-      });
+      }));
 
       service.systemTableCache = new SystemTableCache();
       service.systemTableCache.applySystemTableChange(
@@ -684,13 +685,13 @@ test(
     let service = null;
 
     try {
-      service = new MessageGroupService({
+      service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-ready-gate',
         replicaId: 'mg-ready-gate-r1',
         nodeId,
         transport: router,
         bootstrapReadinessState: readinessState,
-      });
+      }));
 
       service.initialized = true;
       service.systemTableCache = {
@@ -762,13 +763,13 @@ test('MessageGroupService - persists leader node updates to message groups table
   });
 
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
       cdcIntegrationService: mockCdcIntegrationService,
-    });
+    }));
 
     await service.initialize();
     service.systemTableCache = systemTableCache;
@@ -809,12 +810,12 @@ test('MessageGroupService - persists leader node updates to message groups table
 test('MessageGroupService - sendMessage creates message envelope', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
 
@@ -848,12 +849,12 @@ async (t) => {
     setServiceNodeResolver() {},
   };
 
-  const service = new MessageGroupService({
+  const service = new MessageGroupService(withTestDbPath({
     groupId: 'mg-query-cleanup-success',
     replicaId: 'mg-query-cleanup-success-r1',
     nodeId: 'node-query-cleanup-success',
     transport,
-  });
+  }));
 
   service.initialized = true;
   service.retryMaxAttempts = 1;
@@ -887,12 +888,12 @@ test('MessageGroupService - QUERY payload uses fast non-durable delivery path',
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-query-fast-path',
       replicaId: 'mg-query-fast-path-r1',
       nodeId: 'node-query-fast-path',
       transport,
-    });
+    }));
 
     service.initialized = true;
     service.retryMaxAttempts = 4;
@@ -943,12 +944,12 @@ test('MessageGroupService - QUERY payload preserves deferred retry metadata',
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-query-deferred',
       replicaId: 'mg-query-deferred-r1',
       nodeId: 'node-query-deferred',
       transport,
-    });
+    }));
 
     service.initialized = true;
     service.retryMaxAttempts = 4;
@@ -1000,12 +1001,12 @@ test('MessageGroupService - QUERY payload preserves deferred retry metadata from
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-query-deferred-throw',
       replicaId: 'mg-query-deferred-throw-r1',
       nodeId: 'node-query-deferred-throw',
       transport,
-    });
+    }));
 
     service.initialized = true;
     service.retryMaxAttempts = 4;
@@ -1049,12 +1050,12 @@ test('MessageGroupService - QUERY payload forwards transport delivery options',
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-query-delivery-options',
       replicaId: 'mg-query-delivery-options-r1',
       nodeId: 'node-query-delivery-options',
       transport,
-    });
+    }));
 
     service.initialized = true;
     service.persistToRaftLog = async () => ({success: true});
@@ -1102,12 +1103,12 @@ test('MessageGroupService - idempotent control-plane payloads use direct-only de
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-control-plane-direct',
       replicaId: 'mg-control-plane-direct-r1',
       nodeId: 'node-control-plane-direct',
       transport,
-    });
+    }));
 
     service.initialized = true;
     service.retryMaxAttempts = 4;

@@ -1,5 +1,9 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {renderSqliteIdentifier} from './sqlite-identifier.js';
+import {
+  affectedRowsField,
+  sumAffectedRowCounts,
+} from './application-database-result.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -36,10 +40,11 @@ function buildDistributedMutationResult(
   fanoutMetrics,
 ) {
   const failedResults = results.filter((result) => !result.success);
-  const affectedRows = results.reduce(
-    (sum, result) => sum + (result.success ? result.changes || 0 : 0),
-    0,
-  );
+  // The partitions' own `changes` counts; one answer without a count leaves
+  // the statement's count unknown (absent), never summed as zero rows.
+  const affectedRows = sumAffectedRowCounts(results
+    .filter((result) => result.success)
+    .map((result) => result.changes));
   const rows = results.flatMap((result) =>
     result.success && Array.isArray(result.rows) ? result.rows : [],
   );
@@ -50,7 +55,7 @@ function buildDistributedMutationResult(
     results.every((result) => result.originHlc === originHlc);
   const commonResult = {
     operation,
-    affectedRows,
+    ...affectedRowsField(affectedRows),
     partitions: partitionIds,
     rows,
     ...(hasSharedOriginHlc ? {originHlc} : {}),
@@ -408,10 +413,9 @@ const queryExecutorSqlCommandMethods = {
     return {
       success: true,
       operation: QUERY_EXECUTOR_LITERAL.STRING_INSERT,
-      affectedRows:
-        typeof result?.changes === QUERY_EXECUTOR_LITERAL.STRING_NUMBER ?
-          result.changes :
-          ast.values.length,
+      // The partition's own count, or no count: never guessed from the
+      // number of VALUES rows (ON CONFLICT DO NOTHING inserts fewer).
+      ...affectedRowsField(sumAffectedRowCounts([result?.changes])),
       rows: Array.isArray(result.rows) ? result.rows : [],
       partitions: [partitionId],
       durableCommitWitness: result.durableCommitWitness,

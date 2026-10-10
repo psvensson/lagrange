@@ -338,6 +338,30 @@ test('a lagged READY is rebased to write time and granted a full lease',
     t.equal(durable.current().ready_lease_expires_at, NOW + READY_LEASE_MS);
   });
 
+// V3a (commit D): only the write that PROMOTES a non-READY row to READY is a
+// READY transition (critical admission). A write on a row that is already
+// READY - a lease renewal - keeps the cadence the heartbeat asked for, so the
+// override is never a standing critical lane for steady heartbeats.
+test('the READY_TRANSITION admission applies only to a non-READY -> READY ' +
+  'write; a READY renewal keeps the requested cadence', async (t) => {
+  const steady = {publicationMode: 'heartbeat_steady'};
+  const promotion = createDurableNodes(registeredRow());
+  t.equal((await createPublication(promotion).publish(readyRequest(steady)))
+    .outcome, OUTCOME.APPLIED);
+  t.equal(promotion.writes[0].options.workClass, 'critical',
+    'CONNECTED -> READY is admitted as a READY transition');
+  const renewal = createDurableNodes(registeredRow({
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    ready_lease_expires_at: NOW + 5_000,
+  }));
+  t.equal((await createPublication(renewal).publish(readyRequest(steady)))
+    .outcome, OUTCOME.APPLIED);
+  t.equal(renewal.writes[0].options.workClass, 'background',
+    'READY -> READY keeps the requested steady (background) cadence');
+  t.equal(renewal.writes[0].options.deliveryPriority, 'background');
+});
+
 test('the lease authority owns grant and expiry', (t) => {
   const authority = new NodeReadyLeaseAuthority({readyLeaseMs: 10});
   t.equal(authority.grant(5), 15);

@@ -11,8 +11,6 @@ RUN apt-get update && \
   npm ci --omit=dev --no-audit --no-fund && \
   rm -rf node_modules/node-sql-parser/umd \
          node_modules/node-sql-parser/*.map && \
-  find node_modules/leveldown/prebuilds -mindepth 1 -maxdepth 1 \
-         ! -name 'linux-x64' -exec rm -rf {} + && \
   rm -rf node_modules/better-sqlite3/deps \
          node_modules/better-sqlite3/src \
          node_modules/better-sqlite3/binding.gyp

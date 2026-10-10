@@ -57,13 +57,8 @@ function guardCommittedEntryWrite(
   throw new RaftCommittedEntryConflictError(existing, incoming, committedIndex);
 }
 
-function isRaftCommittedEntryConflict(error) {
-  return error?.code === RAFT_COMMITTED_ENTRY_CONFLICT_CODE;
-}
-
 export {
   COMMITTED_ENTRY_WRITE_OUTCOME,
   RAFT_COMMITTED_ENTRY_CONFLICT_CODE,
   guardCommittedEntryWrite,
-  isRaftCommittedEntryConflict,
 };

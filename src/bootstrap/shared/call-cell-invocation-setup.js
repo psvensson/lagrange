@@ -48,6 +48,7 @@ const CALL_CELL_COORDINATION_SESSION = 'call-cell-reduce-coordination';
 const CALL_CELL_INVOCATION_DEFAULT = Object.freeze({
   ACTIVATION_LEASE_MS: 60000,
   BATCH_ROW_BOUND: 4096,
+  // ends-on: the target cell answers the call
   DEADLINE_MS: 30000,
   EMIT_BUDGET: 64,
   // Policy-owned bound for concurrent partition-local shard runs per

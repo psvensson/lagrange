@@ -20,7 +20,10 @@ import {
 
 const LOCAL_STR_JOIN_CANONICAL_READINESS_CONVERGED = 'Join canonical readiness converged';
 const LOCAL_STR_JOIN_READINESS_TIMEOUT = 'JOIN_READINESS_TIMEOUT';
-const LOCAL_STR_JOIN_CANONICAL_READINESS_TIMED_OUT = 'Join canonical readiness timed out';
+const JOIN_CANONICAL_READINESS_WAIT = Object.freeze({
+  wait: 'joinReadinessTimeoutMs',
+  awaited: 'canonical join readiness snapshot ready (routing, topology, schema, leaders)',
+});
 
 const JOIN_READINESS_BLOCKED_ACTION = Object.freeze({
   NONE: 'none',
@@ -53,6 +56,11 @@ class JoinReadinessEvaluatorConvergenceMethods {
     const result = await waitForStartupConvergence({
       timeoutMs,
       now: this.now,
+      logger: this.delegates.getLogger?.() ?? null,
+      spentWait: JOIN_CANONICAL_READINESS_WAIT,
+      scope: {nodeId: this.nodeId},
+      describeLastObserved: (_result, _context, error) =>
+        error?.joinReadiness || null,
       subscriptions: [
         (notify) => subscribeToSystemTableCacheChanges(
           NodeService.getInstance().getSystemTableCache(),
@@ -347,69 +355,6 @@ class JoinReadinessEvaluatorConvergenceMethods {
         context.lastProgressElapsedMs,
     };
 
-    this.delegates.getLogger().error(
-      LOCAL_STR_JOIN_CANONICAL_READINESS_TIMED_OUT,
-      {
-        nodeId: this.nodeId,
-        timeoutMs,
-        attempts,
-        reasons: terminalEvaluation.reasons,
-        requiredSchemaVersion:
-          terminalEvaluation.requiredSchemaVersion,
-        appliedSchemaVersion:
-          terminalEvaluation.appliedSchemaVersion,
-        missingLeaders: terminalEvaluation.missingLeaders,
-        inFlightReplicaOperations:
-          terminalEvaluation.inFlightReplicaOperations,
-        inFlightReplicaOperationDetails:
-          terminalEvaluation.inFlightReplicaOperationDetails,
-        excludedSelfTargetedCount:
-          terminalEvaluation.excludedSelfTargetedCount,
-        excludedWarmingTargetCount:
-          terminalEvaluation.excludedWarmingTargetCount,
-        excludedNonDiscoveryPartitionCount:
-          terminalEvaluation.excludedNonDiscoveryPartitionCount,
-        excludedRemotePriorityControlPlaneCount:
-          terminalEvaluation.excludedRemotePriorityControlPlaneCount,
-        excludedRemotePriorityControlPlaneOperationDetails:
-          terminalEvaluation.excludedRemotePriorityControlPlaneOperationDetails,
-        excludedSelfSourcePriorityControlPlaneCount:
-          terminalEvaluation.excludedSelfSourcePriorityControlPlaneCount,
-        excludedSelfSourcePriorityControlPlaneOperationDetails:
-          terminalEvaluation
-            .excludedSelfSourcePriorityControlPlaneOperationDetails,
-        missingNodeEndpointNodeIds:
-          terminalEvaluation.missingNodeEndpointNodeIds,
-        controlPlaneTargetAddress:
-          terminalEvaluation.controlPlaneTargetAddress,
-        controlPlaneTargetCandidates:
-          terminalEvaluation.controlPlaneTargetCandidates,
-        controlPlaneTargetConnectionStates:
-          terminalEvaluation.controlPlaneTargetConnectionStates,
-        topologySnapshotEpoch:
-          terminalEvaluation.topologySnapshotEpoch,
-        appliedTopologyEpoch:
-          terminalEvaluation.appliedTopologyEpoch,
-        promotionState:
-          terminalEvaluation.promotionState,
-        promotionReasons:
-          terminalEvaluation.promotionReasons,
-        snapshotRevision:
-          terminalEvaluation.snapshotRevision,
-        snapshotRevisionState:
-          terminalEvaluation.snapshotRevisionState,
-        snapshotExpectedMinimumRevision:
-          terminalEvaluation.snapshotExpectedMinimumRevision,
-        snapshotRevisionGap:
-          terminalEvaluation.snapshotRevisionGap,
-        snapshotResumeToken:
-          terminalEvaluation.snapshotResumeToken,
-        snapshotError: snapshotErrorMessage,
-        timeoutKind: context.timeoutKind,
-        lastProgressElapsedMs:
-          context.lastProgressElapsedMs,
-      },
-    );
     return error;
   }
 

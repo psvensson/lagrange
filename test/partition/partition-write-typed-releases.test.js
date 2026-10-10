@@ -34,7 +34,7 @@ import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 import {SYSTEM_TABLE_NAME} from
@@ -190,7 +190,7 @@ test('F-ak: a proposed write still pending at its commit deadline is ' +
   quietEnvironment();
   await withDirectory(async (directory) => {
     const clock = new VirtualTimeSource({startMs: VIRTUAL_START_MS});
-    const provider = new ControllablePartitionRaftProvider();
+    const provider = new ControllableConsensusPort();
     const service = createControllablePartitionService(loneOptions(
       'fak-deadline', path.join(directory, DB_FILE), {timeSource: clock}),
     provider);
@@ -325,7 +325,7 @@ test('F-ak: a proposal the port refuses is answered CONSENSUS_REFUSED with ' +
 {timeout: TEST_TIMEOUT_MS}, async () => {
   quietEnvironment();
   await withDirectory(async (directory) => {
-    const provider = new ControllablePartitionRaftProvider();
+    const provider = new ControllableConsensusPort();
     provider.setProposeHandler(() => CORE_REFUSAL);
     const service = createControllablePartitionService(loneOptions(
       'fak-core-refused', path.join(directory, DB_FILE)), provider);

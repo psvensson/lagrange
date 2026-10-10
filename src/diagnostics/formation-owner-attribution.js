@@ -36,10 +36,6 @@ function runTransportInboundActivity(callback) {
   return runFormationOwner(FORMATION_OWNER.TRANSPORT, callback);
 }
 
-function runWorkerDispatchActivity(callback) {
-  return runFormationOwner(FORMATION_OWNER.WORKER_DISPATCH, callback);
-}
-
 export {
   runAdminActivity,
   runBootstrapActivity,
@@ -47,5 +43,4 @@ export {
   runReadinessActivity,
   runRebalancerActivity,
   runTransportInboundActivity,
-  runWorkerDispatchActivity,
 };

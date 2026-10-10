@@ -26,7 +26,6 @@ import {
 import {reconcileSystemTableCacheAgainstAuthoritativeTruth} from
   './system-table-cache-authoritative-absence-sweep.js';
 import {
-  SYSTEM_CACHE_KEY_DESCRIPTOR,
   getSystemCachePrimaryKeyField,
   isUsableSystemCacheKey,
   resolveSystemCacheRowKey,
@@ -59,11 +58,6 @@ import {
  * System table names that are cached.
  */
 const SYSTEM_TABLES = CACHE_SYSTEM_TABLES;
-
-/**
- * Primary key field names for each system table.
- */
-const PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
 
 /**
  * CDC operation types.
@@ -775,7 +769,6 @@ export {
   SystemTableCache,
   SYSTEM_TABLES,
   CDC_OPERATIONS,
-  PRIMARY_KEY_FIELDS,
   getSharedRowReadStats,
   resetSharedRowReadStats,
 };

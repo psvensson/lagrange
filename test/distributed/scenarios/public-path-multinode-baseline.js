@@ -31,11 +31,17 @@ import {
   readDeploymentManifest,
 } from './service-pipeline-deployment-helpers.js';
 import {
+  discoverPublicEndpoints,
+  openPgPublicClient,
+  provisionPublicListener,
+} from './public-seam-durability-client.js';
+import {
   buildUserActivityTableSql,
   createTableTopologyHelpers,
-  selectSettledPartitionRows,
-  topologyFingerprint,
 } from './user-table-topology-helpers.js';
+import {PARTITION_ROLE} from '../harness/scenario-ground-truth.js';
+import {SPREAD_UNIT} from '../harness/scenario-host-topology.js';
+import {createScenarioStepRunner} from '../harness/scenario-step-log.js';
 import {
   DATASET_GENERATOR,
   assertParity,
@@ -61,6 +67,52 @@ const ZERO = 0;
 const ONE = 1;
 const MIN_PARTITION_COUNT = 2;
 const MIN_DISTINCT_LEADER_HOSTS = 2;
+const CERTIFICATION_FORMATION_NODES = 5;
+const SPLIT_SPREAD_GATE = 'split-leader-host-spread';
+// What the scenario claims to prove (module docstring, quest statement and
+// the formation handoff criteria "RF=3 committed membership, leaders
+// present, placement across multiple hosts"): one COMPLETED managed split
+// (the parent dissolved, both children carrying the measured data), each
+// child holding its policy replica count of active voters across more
+// than one host, a leader for each child, and the child leaders on at
+// least two distinct hosts. The spread unit is HOST (distinct machines).
+const SPLIT_SPREAD_CLAIM = Object.freeze({
+  minChildren: MIN_PARTITION_COUNT,
+  minDistinctLeaders: MIN_DISTINCT_LEADER_HOSTS,
+  minReplicaSpreadPerChild: MIN_DISTINCT_LEADER_HOSTS,
+  requireChildLeader: true,
+  requireParentDissolved: true,
+  requirePolicyReplicaCount: true,
+  spreadUnit: SPREAD_UNIT.HOST,
+});
+
+/**
+ * The topology this scenario's claim needs, declared so the runner can
+ * refuse it BEFORE starting anything on a config that cannot carry it
+ * (refused_insufficient_host_topology): leaders on distinct HOSTS need at
+ * least two declared machines. Physical host spread is proven on the lab
+ * and GCP configs; single-host local configs are refused, never passed.
+ */
+export const SCENARIO_TOPOLOGY_REQUIREMENT = Object.freeze({
+  minDistinctHosts: MIN_DISTINCT_LEADER_HOSTS,
+  spreadUnit: SPREAD_UNIT.HOST,
+});
+
+/**
+ * The topology a CERTIFICATION run of this scenario needs - the five-node
+ * formation acceptance (owner ruling 5, 2026-10-05): five nodes, one per
+ * distinct machine, with the split/leader spread gate passing in the HOST
+ * unit. A `--certify` run on any other placement (five nodes on four
+ * machines) is REFUSED for certification; the same placement still RUNS as
+ * an ordinary run, where two child leaders on one machine stay a real
+ * failure of the host gate.
+ */
+export const SCENARIO_CERTIFICATION_REQUIREMENT = Object.freeze({
+  maxNodesPerHost: ONE,
+  minNodes: CERTIFICATION_FORMATION_NODES,
+  spreadGate: SPLIT_SPREAD_GATE,
+  spreadUnit: SPREAD_UNIT.HOST,
+});
 const DEFAULT_INVOCATION_COUNT = 60;
 const TOPOLOGY_STABLE_READBACKS = 2;
 const SPLIT_WAIT_TIMEOUT_MS = 180_000;
@@ -113,23 +165,32 @@ function defaultResourceSnapshot(cluster) {
   };
 }
 
+function resolveClock(overrides) {
+  return typeof overrides.now === 'function' ? overrides.now : Date.now;
+}
+
 function resolveScenarioDependencies(cluster) {
   const overrides =
     cluster?._scenarioOverrides?.publicPathBaseline || {};
   const noopOutput = async () => {};
   return {
+    discoverEndpoints: overrides.discoverEndpoints || discoverPublicEndpoints,
     fetchImpl: overrides.fetchImpl || fetch,
+    listenerTimeoutMs: overrides.listenerTimeoutMs,
     invocationCount: Number.isInteger(overrides.invocationCount) ?
       overrides.invocationCount :
       DEFAULT_INVOCATION_COUNT,
     logBuffer: overrides.logBuffer ||
       (() => cluster.getLogCollector().getBuffer()),
+    openPublicClient: overrides.openPublicClient || openPgPublicClient,
     pipeline: overrides.pipeline || createServicePipeline(),
     prepareProject: overrides.prepareProject ||
       (() => prepareServiceProject(SCENARIO_SUBDIR)),
+    provisionListener: overrides.provisionListener || provisionPublicListener,
     readManifest: overrides.readManifest || readDeploymentManifest,
     resourceSnapshot: overrides.resourceSnapshot ||
       defaultResourceSnapshot(cluster),
+    now: resolveClock(overrides),
     runId: typeof overrides.runId === 'string' ?
       overrides.runId :
       `${SCENARIO_NAME}-${Date.now()}`,
@@ -141,61 +202,43 @@ function resolveScenarioDependencies(cluster) {
   };
 }
 
-function partitionSpreadReached(partitionRows) {
-  const leaders = new Set(
-    partitionRows
-      .map((row) => row?.leader_node_id)
-      .filter((id) => typeof id === 'string' && id.length > ZERO),
-  );
-  return partitionRows.length >= MIN_PARTITION_COUNT &&
-    leaders.size >= MIN_DISTINCT_LEADER_HOSTS;
+function countNonParentPartitions(evaluation) {
+  return evaluation.partitions
+    .filter((entry) => entry.role !== PARTITION_ROLE.PARENT).length;
 }
 
-// Wait for the policy-driven split and cross-host leader spread. While
-// the table is still single-partition a bounded trickle of sentinel
-// rows keeps write-activity split evaluation firing. The spread must
-// hold with an identical partition/leader set across consecutive polls
-// so a mid-split window is never frozen into the measured topology.
-async function waitForSplitAndLeaderSpread(nodes, seedNode, deps) {
-  const deadline = Date.now() + deps.splitWaitTimeoutMs;
+async function insertSentinelRow(seedNode, sentinelIndex) {
+  const sentinel = buildSentinelRow(sentinelIndex);
+  await seedNode.query(SQL.INSERT_ROW, [
+    sentinel.id, sentinel.accountId, sentinel.amountCents,
+    sentinel.flagged, sentinel.pad,
+  ]);
+}
+
+// The split/leader-spread gate (helpers.waitForSplitClaim): the full
+// SPLIT_SPREAD_CLAIM must hold on TOPOLOGY_STABLE_READBACKS consecutive
+// ground-truth readbacks, so a mid-split shape (the parent still counted)
+// can never pass. While the table is still single-partition a bounded
+// trickle of sentinel rows keeps write-activity split evaluation firing.
+async function waitForSplitAndLeaderSpread(cluster, nodes, seedNode, deps) {
   let sentinelCount = ZERO;
-  let lastRows = [];
-  let stableFingerprint = null;
-  let stableCount = ZERO;
-  while (Date.now() < deadline) {
-    const allRows =
-      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS);
-    lastRows = selectSettledPartitionRows(allRows);
-    if (partitionSpreadReached(lastRows) &&
-        allRows.length === lastRows.length) {
-      const fingerprint = topologyFingerprint(lastRows);
-      stableCount = fingerprint === stableFingerprint ?
-        stableCount + ONE :
-        ONE;
-      stableFingerprint = fingerprint;
-      if (stableCount >= TOPOLOGY_STABLE_READBACKS) {
-        return {partitionRows: lastRows, sentinelCount};
+  const proven = await helpers.waitForSplitClaim(cluster, nodes, {
+    budgetMs: deps.splitWaitTimeoutMs,
+    claim: SPLIT_SPREAD_CLAIM,
+    name: SPLIT_SPREAD_GATE,
+    now: deps.now,
+    onReadback: async (evaluation) => {
+      if (countNonParentPartitions(evaluation) < MIN_PARTITION_COUNT &&
+          sentinelCount < MAX_SENTINEL_ROWS) {
+        await insertSentinelRow(seedNode, sentinelCount);
+        sentinelCount += ONE;
       }
-    } else {
-      stableFingerprint = null;
-      stableCount = ZERO;
-    }
-    if (lastRows.length < MIN_PARTITION_COUNT &&
-        sentinelCount < MAX_SENTINEL_ROWS) {
-      const sentinel = buildSentinelRow(sentinelCount);
-      await seedNode.query(SQL.INSERT_ROW, [
-        sentinel.id, sentinel.accountId, sentinel.amountCents,
-        sentinel.flagged, sentinel.pad,
-      ]);
-      sentinelCount += ONE;
-    }
-    await deps.sleep(SPLIT_WAIT_POLL_MS);
-  }
-  throw new Error(
-    `${SCENARIO_NAME}: no cross-host partition spread within ` +
-    `${deps.splitWaitTimeoutMs}ms: ` +
-    JSON.stringify(lastRows),
-  );
+    },
+    pollMs: SPLIT_WAIT_POLL_MS,
+    sleep: deps.sleep,
+    stableReadbacks: TOPOLOGY_STABLE_READBACKS,
+  });
+  return {...proven, sentinelCount};
 }
 
 function basicAuthorizationHeader() {
@@ -372,17 +415,7 @@ async function captureResourceSnapshots(nodes, deps) {
   return snapshots;
 }
 
-export async function run(cluster) {
-  const nodes = cluster.getNodes();
-  assert.ok(
-    Array.isArray(nodes) && nodes.length >= MIN_DISTINCT_LEADER_HOSTS,
-    `${SCENARIO_NAME} requires a multi-node cluster`,
-  );
-  const deps = resolveScenarioDependencies(cluster);
-  const seedNode = nodes.find((node) => node.role === 'seed') ||
-    nodes[ZERO];
-
-  // Build the service through the pipeline owner (generate + build).
+async function buildService(deps) {
   const paths = await deps.prepareProject();
   await deps.pipeline.runGenerate({
     projectDirectory: paths.projectDirectory,
@@ -393,33 +426,66 @@ export async function run(cluster) {
     writeOutput: deps.writeOutput,
   });
   const manifest = await deps.readManifest(paths.projectDirectory);
+  return {buildResult, manifest, paths};
+}
 
-  // Data substrate: table, split policies, deterministic dataset.
-  // Setup writes retry transient post-boot settling; measured phases do not.
+// The split children the gate proved, in the frozen report shape; the
+// distinct-host count is the gate's host-authority count, not node ids.
+function childTopologyFromGate(spread) {
+  const children = spread.record.partitions
+    .filter((entry) => entry.role === PARTITION_ROLE.CHILD)
+    .map((entry) => ({
+      leader_node_id: entry.leader.nodeId,
+      partition_id: entry.partitionId,
+    }));
+  return assertPartitionSpread(children, spread.hostIndex.hostOf);
+}
+
+async function prepareDataSubstrate(nodes, seedNode, deps, step) {
   const rows = generateDatasetRows();
-  await helpers.retryTransientAdminQuery(deps, 'create-table',
-    () => seedNode.query(SQL.CREATE_TABLE));
-  const tableId = await helpers.retryTransientAdminQuery(deps, 'resolve-table-id',
-    () => helpers.resolveTableId(seedNode));
-  await helpers.applySplitPolicies(seedNode, tableId, deps);
-  await helpers.waitForTableWriteReadiness(nodes, deps);
-  await helpers.seedDataset(seedNode, rows, deps);
-  const spread =
-    await waitForSplitAndLeaderSpread(nodes, seedNode, deps);
-  const topology = assertPartitionSpread(spread.partitionRows);
+  await step('create-table', () => helpers.retryTransientAdminQuery(
+    deps, 'create-table', () => seedNode.query(SQL.CREATE_TABLE)));
+  const tableId = await step('resolve-table-id', () =>
+    helpers.retryTransientAdminQuery(deps, 'resolve-table-id',
+      () => helpers.resolveTableId(seedNode)));
+  await step('apply-split-policies', () =>
+    helpers.applySplitPolicies(seedNode, tableId, deps));
+  await step('wait-table-write-readiness', () =>
+    helpers.waitForTableWriteReadiness(nodes, deps));
+  await step('seed-dataset', () =>
+    helpers.seedDataset(seedNode, rows, deps));
+  return rows;
+}
 
-  // Deploy the generated records, then measure over authenticated HTTP.
-  await deployThroughPipeline(
-    seedNode, deps, paths, buildResult.layoutPath);
-  const servingNodes = await waitForServingNodes(nodes, deps);
-  const snapshotsBefore = await captureResourceSnapshots(nodes, deps);
-  const invocations = await runMeasuredInvocations(servingNodes, deps);
-  const snapshotsAfter = await captureResourceSnapshots(nodes, deps);
+async function deployAndMeasure(nodes, seedNode, deps, built, step) {
+  await step('deploy-through-pipeline', () => deployThroughPipeline({
+    adminNode: seedNode,
+    nodes,
+    options: {
+      discoverEndpoints: deps.discoverEndpoints,
+      openClient: deps.openPublicClient,
+      sleep: deps.sleep,
+      timeoutMs: deps.listenerTimeoutMs,
+    },
+  }, deps, built.paths, built.buildResult.layoutPath));
+  const servingNodes = await step('wait-serving-nodes', () =>
+    waitForServingNodes(nodes, deps));
+  return step('measured-invocations', async () => {
+    const snapshotsBefore = await captureResourceSnapshots(nodes, deps);
+    const invocations = await runMeasuredInvocations(servingNodes, deps);
+    const snapshotsAfter = await captureResourceSnapshots(nodes, deps);
+    return {invocations, snapshotsAfter, snapshotsBefore};
+  });
+}
 
-  // Gates: stable topology, parity, fidelity, local reads,
-  // coordination evidence.
-  const finalPartitionRows = selectSettledPartitionRows(
-    await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS));
+// Gates after measurement: the topology still exactly the proven
+// children (every partitions row of the table counted, so a parent or a
+// new split appearing is a change), parity, fidelity, local reads,
+// coordination evidence.
+async function assertMeasuredEvidence(nodes, deps, context) {
+  const {built, measured, rows, topology} = context;
+  const finalPartitionRows =
+    await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS);
   assert.equal(
     finalPartitionRows.length, topology.partitions.length,
     `${SCENARIO_NAME}: partition count changed during measurement`,
@@ -427,40 +493,76 @@ export async function run(cluster) {
   const partitionCount = topology.partitions.length;
   const parity = assertParity({
     partitionCount,
-    responses: invocations,
+    responses: measured.invocations,
     rows,
   });
   const fidelity = assertWasmFidelity({
-    buildDigest: buildResult.descriptor.digest,
-    manifest,
+    buildDigest: built.buildResult.descriptor.digest,
+    manifest: built.manifest,
     runtimeKindRows: await collectRuntimeKindRows(nodes),
   });
   const logEntries = deps.logBuffer();
   const localReadProof = buildLocalReadProof({
-    invocationCount: invocations.length,
+    invocationCount: measured.invocations.length,
     logEntries,
     partitionIds: topology.partitions.map((entry) => entry.partitionId),
   });
   const coordination = await collectCoordinationEvidence(
-    nodes, invocations, partitionCount);
+    nodes, measured.invocations, partitionCount);
+  return {coordination, fidelity, localReadProof, logEntries, parity};
+}
+
+export async function run(cluster) {
+  const nodes = cluster.getNodes();
+  assert.ok(
+    Array.isArray(nodes) && nodes.length >= MIN_DISTINCT_LEADER_HOSTS,
+    `${SCENARIO_NAME} requires a multi-node cluster`,
+  );
+  const deps = resolveScenarioDependencies(cluster);
+  const step = createScenarioStepRunner(cluster, SCENARIO_NAME, deps.now);
+  const seedNode = nodes.find((node) => node.role === 'seed') ||
+    nodes[ZERO];
+
+  // Service-lifecycle SQL is admitted only over authenticated PG-wire.
+  // Request the sys-postgres-wire listener first, so its placement rides
+  // out the formation tail during the build and data phases.
+  await step('provision-lifecycle-listener', () =>
+    helpers.retryTransientAdminQuery(deps, 'provision-lifecycle-listener',
+      () => deps.provisionListener(seedNode, nodes.length)));
+
+  // Build the service through the pipeline owner (generate + build).
+  const built = await step('build-service', () => buildService(deps));
+
+  // Data substrate: table, split policies, deterministic dataset.
+  // Setup writes retry transient post-boot settling; measured phases do not.
+  const rows = await prepareDataSubstrate(nodes, seedNode, deps, step);
+  const spread = await step(SPLIT_SPREAD_GATE, () =>
+    waitForSplitAndLeaderSpread(cluster, nodes, seedNode, deps));
+  const topology = childTopologyFromGate(spread);
+
+  // Deploy the generated records, then measure over authenticated HTTP.
+  const measured =
+    await deployAndMeasure(nodes, seedNode, deps, built, step);
+  const evidence = await step('measured-evidence-gates', () =>
+    assertMeasuredEvidence(nodes, deps, {built, measured, rows, topology}));
 
   const nodeIds = nodes.map((node) => node.id);
   return composeReportDetail({
     datasetDigest: computeDatasetDigest(rows),
-    fidelity,
-    finalBytes: invocations
+    fidelity: evidence.fidelity,
+    finalBytes: measured.invocations
       .reduce((sum, invocation) => sum + invocation.bytes, ZERO),
     generatorDigest: computeGeneratorDigest(),
-    invokerTelemetry: summarizeInvokerTelemetry(logEntries),
+    invokerTelemetry: summarizeInvokerTelemetry(evidence.logEntries),
     latencyMs: computeLatencySummary(
-      invocations.map((invocation) => invocation.durationMs)),
-    localReadProof,
-    networkPerNode:
-      buildNetworkPerNode(nodeIds, snapshotsBefore, snapshotsAfter),
+      measured.invocations.map((invocation) => invocation.durationMs)),
+    localReadProof: evidence.localReadProof,
+    networkPerNode: buildNetworkPerNode(
+      nodeIds, measured.snapshotsBefore, measured.snapshotsAfter),
     nodeCount: nodes.length,
-    parity,
-    partialBytes: coordination.partialBytes,
-    resourcePerNode: buildResourcePerNode(nodeIds, snapshotsAfter),
+    parity: evidence.parity,
+    partialBytes: evidence.coordination.partialBytes,
+    resourcePerNode: buildResourcePerNode(nodeIds, measured.snapshotsAfter),
     sentinelRowCount: spread.sentinelCount,
     topology,
   });

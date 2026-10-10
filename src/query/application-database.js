@@ -24,6 +24,8 @@ import {
   projectApplicationDatabaseResult,
   projectEngineFailureCause,
 } from './application-database-result.js';
+import {COMMIT_POINT_REACHED_FIELD} from
+  './distributed/distributed-transaction-commit-point.js';
 
 const LOCAL_STR_BEGIN = 'BEGIN';
 const LOCAL_STR_COMMIT = 'COMMIT';
@@ -34,6 +36,8 @@ const LOCAL_STR_COMMIT_OPERATION = 'commit';
 const LOCAL_STR_QUERY_OPERATION = 'query';
 const LOCAL_STR_ROLLBACK_OPERATION = 'rollback';
 const LOCAL_STR_VALUE = 'value';
+const LOCAL_STR_TRANSACTION_ID = 'transactionId';
+const LOCAL_STR_STAGE = 'stage';
 const NO_RETRY_AFTER_MS = null;
 const FAILURE_METADATA_PROPERTY = Object.freeze({
   CODE: 'code',
@@ -108,9 +112,48 @@ function resolveRetryAfterMs(source) {
   return objectIs(retryAfterMs, -0) ? 0 : retryAfterMs;
 }
 
+/**
+ * Whether a failed operation is a COMMIT the engine did not type as before
+ * its commit point (commitPointReached: false): it may have committed some
+ * changes.
+ * @param {*} source - The failed answer, or what was thrown.
+ * @param {string} operation - The facade operation.
+ * @return {boolean}
+ */
+function isCommitOutcomeUnknown(source, operation) {
+  return operation === LOCAL_STR_COMMIT_OPERATION &&
+    readOwnData(source, COMMIT_POINT_REACHED_FIELD) !== false;
+}
+
+/**
+ * The typed outcome-unknown error for a COMMIT that may have committed
+ * some changes, never a plain failure that reads as "nothing was
+ * committed".
+ * @param {*} source - The failed COMMIT answer, or what was thrown.
+ * @param {*} cause - The engine failure cause.
+ * @return {ApplicationDatabaseError}
+ */
+function createCommitOutcomeUnknownError(source, cause) {
+  const engineCause = objectFreeze({
+    code: readOwnData(source, FAILURE_METADATA_PROPERTY.ERROR_CODE) ??
+      readOwnData(source, FAILURE_METADATA_PROPERTY.CODE) ?? null,
+    message: readOwnData(source, FAILURE_METADATA_PROPERTY.ERROR) ??
+      readOwnData(source, FAILURE_METADATA_PROPERTY.MESSAGE) ?? null,
+    stage: readOwnData(source, LOCAL_STR_STAGE) ?? null,
+  });
+  return createApplicationDatabaseError(
+    APPLICATION_DATABASE_ERROR_CODE.TRANSACTION_OUTCOME_UNKNOWN,
+    APPLICATION_DATABASE_ERROR_MSG.TRANSACTION_OUTCOME_UNKNOWN,
+    {cause: cause ?? engineCause, operation: LOCAL_STR_COMMIT_OPERATION},
+  );
+}
+
 function translateQueryFailure(source, operation, cause = null) {
   if (!isProxy(source) && source instanceof ApplicationDatabaseError) {
     return source;
+  }
+  if (isCommitOutcomeUnknown(source, operation)) {
+    return createCommitOutcomeUnknownError(source, cause);
   }
   const sourceCode = readOwnData(source, FAILURE_METADATA_PROPERTY.ERROR_CODE) ??
     readOwnData(source, FAILURE_METADATA_PROPERTY.CODE);
@@ -134,7 +177,8 @@ function translateQueryFailure(source, operation, cause = null) {
     });
 }
 
-async function executeCanonical(sqlCore, sql, params, options, operation) {
+async function executeCanonical(sqlCore, sql, params, options, operation,
+  project = projectApplicationDatabaseResult) {
   let result;
   try {
     result = await sqlCore.executeQuery(sql, params, options);
@@ -148,7 +192,12 @@ async function executeCanonical(sqlCore, sql, params, options, operation) {
   if (readOwnData(result, FAILURE_METADATA_PROPERTY.SUCCESS) !== true) {
     throw translateQueryFailure(result, operation);
   }
-  return projectApplicationDatabaseResult(result);
+  return project(result);
+}
+
+function projectBeginTransactionId(result) {
+  const transactionId = readOwnData(result, LOCAL_STR_TRANSACTION_ID);
+  return typeof transactionId === LOCAL_STR_STRING ? transactionId : null;
 }
 
 function createSessionId(applicationId) {
@@ -362,7 +411,8 @@ function createApplicationDatabaseFacade(options) {
           sqlCore,
           sqlSnapshot,
           paramsSnapshot,
-          createApplicationDatabaseExecutionOptions(record.sessionId),
+          createApplicationDatabaseExecutionOptions(record.sessionId, false,
+            record.transactionId),
           LOCAL_STR_QUERY_OPERATION,
         );
       } catch (error) {
@@ -473,18 +523,20 @@ function createApplicationDatabaseFacade(options) {
       sessionId: createSessionId(applicationId),
       state: APPLICATION_DATABASE_TRANSACTION_STATE.OPEN,
       tail: reflectApply(promiseResolve, PromiseConstructor, []),
+      transactionId: null,
     };
     const controlOptions = createApplicationDatabaseExecutionOptions(
       record.sessionId,
       true,
     );
     try {
-      await executeCanonical(
+      record.transactionId = await executeCanonical(
         sqlCore,
         LOCAL_STR_BEGIN,
         [],
         controlOptions,
         LOCAL_STR_BEGIN_OPERATION,
+        projectBeginTransactionId,
       );
       try {
         let callbackResult;

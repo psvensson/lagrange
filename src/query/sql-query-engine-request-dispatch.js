@@ -8,6 +8,13 @@ import {SQLQueryEngineLifecycleAndCallbackDispatch} from
   './sql-query-engine-lifecycle-and-callback-dispatch.js';
 import {SERVICE_LIFECYCLE_EXECUTION_DISPOSITION} from
   './service-lifecycle-sql-contract.js';
+import {classifyTransactionControlStatement} from
+  './sql-transaction-control-grammar.js';
+import {
+  STATEMENT_ADMISSION,
+  TRANSACTION_END_TYPES,
+  admitExpectedTransaction,
+} from './sql-query-engine-statement-admission.js';
 
 const STATEMENT_LOG_LIMIT = 100;
 
@@ -18,6 +25,28 @@ const {
   METRICS_LOG_TAG,
   isSqlRequest,
 } = SQL_QUERY_ENGINE_SHARED;
+
+/**
+ * Admit a statement a session sent for an explicit transaction only while
+ * the engine holds it; the statements that end a block (COMMIT, ROLLBACK)
+ * answer for a missing transaction themselves.
+ * @param {Object} transactionCoordinator - The engine's coordinator.
+ * @param {Object} sqlRequest - Canonical SqlRequest.
+ * @return {{state: string, failure?: Object}} STATEMENT_ADMISSION decision.
+ */
+function admitRequestTransaction(transactionCoordinator, sqlRequest) {
+  const endsBlock = TRANSACTION_END_TYPES.has(
+    classifyTransactionControlStatement(sqlRequest.statement));
+  return admitExpectedTransaction(transactionCoordinator,
+    sqlRequest.sessionId,
+    endsBlock ? null : sqlRequest.expectedTransactionId);
+}
+
+function expectedTransactionOption(sqlRequest) {
+  return sqlRequest.expectedTransactionId ?
+    {expectedTransactionId: sqlRequest.expectedTransactionId} :
+    {};
+}
 
 function resolveIssuingServiceId(sqlRequest, executionOptions = {}) {
   const issuingServiceId = executionOptions.issuingServiceId;
@@ -86,6 +115,11 @@ class SQLQueryEngineRequestDispatch extends
   async dispatchSqlRequest(sqlRequest, executionOptions = {}) {
     switch (sqlRequest.executionMode) {
     case EXECUTION_MODE.SQL_STATEMENT: {
+      const admission = admitRequestTransaction(
+        this.transactionCoordinator, sqlRequest);
+      if (admission.state === STATEMENT_ADMISSION.REFUSED) {
+        return admission.failure;
+      }
       const lifecycleExecution = await this.tryExecuteServiceLifecycleSql(
         sqlRequest.statement,
         sqlRequest.parameters,
@@ -114,6 +148,7 @@ class SQLQueryEngineRequestDispatch extends
           timeoutBudget: sqlRequest.timeoutBudget,
           cancellationToken: sqlRequest.cancellationToken || null,
           budgets: sqlRequest.budgets,
+          ...expectedTransactionOption(sqlRequest),
           ...(issuingServiceId ? {issuingServiceId} : {}),
           ...(sqlRequest.securityContext ?
             {securityContext: sqlRequest.securityContext} : {}),

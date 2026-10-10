@@ -1,5 +1,6 @@
 import {NUM, TIME_MS} from '../../constants/index.js';
 import {ROUTER_ERROR_MSG} from '../../constants/transport.js';
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
 
 const LOCAL_STR_UNKNOWN = 'unknown';
 const LOCAL_STR_READY = 'ready';
@@ -12,6 +13,34 @@ const LOCAL_QUERY_TRANSPORT_WAIT_DEFAULT = Object.freeze({
   MAX_DELAY_MS: TIME_MS.SECOND * NUM.FIVE,
   BACKOFF_MULTIPLIER: 2,
 });
+
+const LOCAL_QUERY_TRANSPORT_SPENT_WAIT = Object.freeze({
+  wait: 'LOCAL_QUERY_TRANSPORT_WAIT_DEFAULT.MAX_ATTEMPTS',
+  awaited: 'local query/data-plane transport ready before advertising READY',
+});
+
+/**
+ * Report exhausted local query-transport readiness attempts.
+ * @param {Object} options - The wait options (logger, scope, subject).
+ * @param {Object} spent - {readiness, attempt, startedAtMs, now}.
+ */
+function reportLocalQueryTransportSpent(options, spent) {
+  reportWaitBoundSpent(options.logger || null, {
+    ...LOCAL_QUERY_TRANSPORT_SPENT_WAIT,
+    boundMs: null,
+    elapsedMs: spent.now() - spent.startedAtMs,
+    lastObserved: {
+      attempts: spent.attempt,
+      state: spent.readiness.state,
+      reason: spent.readiness.reason,
+      reasonCode: spent.readiness.reasonCode,
+      errorCode: spent.readiness.errorCode,
+      retryAfterMs: spent.readiness.retryAfterMs,
+    },
+    scope: options.scope,
+    subject: options.spentSubject,
+  });
+}
 
 function normalizePositiveInteger(value, fallback) {
   return Number.isFinite(value) && value > 0 ?
@@ -124,6 +153,8 @@ async function waitForLocalQueryTransportReadiness(options = {}) {
   if (isLocalQueryTransportReady(readiness)) {
     return readiness;
   }
+  const now = typeof options.now === 'function' ? options.now : Date.now;
+  const startedAtMs = now();
 
   const maxAttempts = normalizePositiveInteger(
     options.maxAttempts,
@@ -161,6 +192,12 @@ async function waitForLocalQueryTransportReadiness(options = {}) {
       Math.min(hintedDelayMs, maxDelayMs) :
       delayMs;
     if (attempt >= maxAttempts) {
+      reportLocalQueryTransportSpent(options, {
+        readiness: lastReadiness,
+        attempt,
+        startedAtMs,
+        now,
+      });
       throw buildLocalQueryTransportNotReadyError({
         ...lastReadiness,
         retryAfterMs: effectiveDelayMs,

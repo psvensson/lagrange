@@ -12,7 +12,7 @@
 // what those proposals made it. The election of the resulting three-voter cohort is the consensus
 // core's, not the partition's: this double cannot witness a real vote, so the
 // witness ends at the configuration the partition proposed. The retired
-// liferaft double's claim that the pruned cohort then elects through real
+// double's claim that the pruned cohort then elects through real
 // vote and append RPCs needs a live-voter rs-raft witness of its own; it is
 // not asserted here.
 import {SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
@@ -31,7 +31,7 @@ import {
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from '../partition/partition-service-test-support.js';
 
@@ -135,7 +135,7 @@ async (t) => {
     );
   }
 
-  const provider = new ControllablePartitionRaftProvider();
+  const provider = new ControllableConsensusPort();
   const partition = createControllablePartitionService({
     partitionId: PARTITION_ID,
     tableId: 'sql_transaction_participants',
@@ -300,7 +300,7 @@ async (t) => {
   const unprovenReplicaId = 'row-absent-without-delete-evidence';
   const unprovenAddress = `node-unknown/partition/${unprovenReplicaId}`;
   // A peer the configuration holds without any services row (setup of the
-  // double's configuration, as the retired liferaft double joined it).
+  // double's configuration, as the retired double joined it).
   provider.peers.push({
     address: unprovenAddress,
     replicaIdentity: unprovenReplicaId,

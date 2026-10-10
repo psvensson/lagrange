@@ -321,7 +321,6 @@ const BENCHMARK_BASELINE_CACHE_TTL_MS = 0;
 const BENCHMARK_REGRESSION_GATE_ENABLED = false;
 const BENCHMARK_REGRESSION_MAX_THROUGHPUT_REGRESSION_RATIO = 0.1;
 const BENCHMARK_REGRESSION_MIN_THROUGHPUT_RATIO_SUT_TO_BASELINE = null;
-const BENCHMARK_REGRESSION_BASELINE_PROVIDER = 'liferaft';
 const BENCHMARK_REGRESSION_FAIL_IF_BASELINE_MISSING = false;
 const BENCHMARK_REGRESSION_APPROVED_MITIGATION_ID = null;
 const BENCHMARK_REGRESSION_PARITY_MISMATCH_POLICY = 'warn';
@@ -358,7 +357,6 @@ const BENCHMARK_GATE_DEFAULTS = Object.freeze({
     BENCHMARK_REGRESSION_MAX_THROUGHPUT_REGRESSION_RATIO,
   minimumThroughputRatioSutToBaseline:
     BENCHMARK_REGRESSION_MIN_THROUGHPUT_RATIO_SUT_TO_BASELINE,
-  baselineProvider: BENCHMARK_REGRESSION_BASELINE_PROVIDER,
   failIfBaselineMissing: BENCHMARK_REGRESSION_FAIL_IF_BASELINE_MISSING,
   approvedMitigationId: BENCHMARK_REGRESSION_APPROVED_MITIGATION_ID,
   parityMismatchPolicy: BENCHMARK_REGRESSION_PARITY_MISMATCH_POLICY,
@@ -694,15 +692,6 @@ const ASSERTION_POLICY = Object.freeze({
   SOFT: 'soft',
 });
 
-// --- Raft Provider Harness Defaults ---
-const RAFT_PROVIDER_ENV_KEY = 'RAFT_PROVIDER';
-const RAFT_PROVIDER_DEFAULT = 'liferaft';
-
-const RAFT_PROVIDER_DEFAULTS = Object.freeze({
-  envKey: RAFT_PROVIDER_ENV_KEY,
-  provider: RAFT_PROVIDER_DEFAULT,
-});
-
 // --- Playback Defaults ---
 const PLAYBACK_TOPOLOGY_POLL_INTERVAL_MS = 250;
 const PLAYBACK_RESOURCE_POLL_INTERVAL_MS = 250;
@@ -758,6 +747,10 @@ const PLAYBACK_EVENT_TYPE = Object.freeze({
   REPLICA_CREATED: 'replica.created',
   REPLICA_REMOVED: 'replica.removed',
   REPLICA_MOVED: 'replica.moved',
+  // A scenario's own step log (start/end of each named step) and the
+  // structured record every scenario gate emits for pass and fail.
+  SCENARIO_STEP: 'scenario.step',
+  SCENARIO_GATE: 'scenario.gate',
   WARNING: 'capture.warning',
 });
 
@@ -813,6 +806,12 @@ const DEBUG_LOGS_ENV_VAR = 'LAGRANGE_DEBUG_LOGS';
 // unperturbed behavior.
 const ARG_CAPTURE_LOGS = '--capture-logs';
 const CAPTURE_LOGS_ENV_VAR = 'LAGRANGE_CAPTURE_LOGS';
+// Request a CERTIFICATION verdict for the exact commit named by the value
+// (40 hex digits): test/distributed/harness/scenario-certification.js.
+const ARG_CERTIFY = '--certify';
+// The certification run directory the lab harness created (with its
+// started.json) before holding any node: certification-evidence-archive.js.
+const ARG_CERTIFY_RUN_DIR = '--certify-run-dir';
 
 const CLI = Object.freeze({
   DEFAULT_CONFIG: DEFAULT_CONFIG_PATH,
@@ -829,15 +828,27 @@ const CLI = Object.freeze({
   DEBUG_LOGS_ENV_VAR,
   ARG_CAPTURE_LOGS,
   CAPTURE_LOGS_ENV_VAR,
+  ARG_CERTIFY,
+  ARG_CERTIFY_RUN_DIR,
 });
 
 // --- Exit Codes ---
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
+// Nothing failed, but at least one scenario was REFUSED (not run: the
+// config's host topology cannot carry its claim). Never 0: a refused run
+// is not a pass; never 1: it is not a failure (scenario-outcome.js).
+const EXIT_REFUSED = 3;
+// Nothing failed or was refused, but a run that REQUESTED certification
+// (--certify) did not obtain `certified: true` for every scenario
+// (scenario-certification.js). Never 0: a pass is not certification.
+const EXIT_NOT_CERTIFIED = 4;
 
 const EXIT_CODES = Object.freeze({
   SUCCESS: EXIT_SUCCESS,
   FAILURE: EXIT_FAILURE,
+  REFUSED: EXIT_REFUSED,
+  NOT_CERTIFIED: EXIT_NOT_CERTIFIED,
 });
 
 export {
@@ -890,7 +901,6 @@ export {
   ASSERTION_STATUS,
   VERIFICATION_CONFIDENCE,
   ASSERTION_POLICY,
-  RAFT_PROVIDER_DEFAULTS,
   PLAYBACK,
   PLAYBACK_EVENT_TYPE,
   DETERMINISTIC_DEBUG_DEFAULTS,

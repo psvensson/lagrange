@@ -69,6 +69,11 @@ const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   // replica that does not lead refuses one typed and retryable, naming the
   // leader it knows, instead of letting the crate forward it.
   NOT_LEADER: 'membership-change-not-leader',
+  // A change whose configuration would hold no voter (a sole voter removing
+  // or demoting itself): raft-rs takes the proposal and commits it, then
+  // refuses to apply it ("removed all voters"), so the leader's port refuses
+  // it before the core is handed it. Terminal: no later state admits it.
+  REMOVES_LAST_VOTER: 'membership-change-removes-last-voter',
 });
 
 // What probePeerProgress(peerAddress) answers: the peer's matched index
@@ -104,8 +109,7 @@ const RAFT_LEADERSHIP_TRANSFER_SUCCESSOR = Object.freeze({
 // reserved raft id, no other voter to succeed, a most-caught-up transfer
 // asked of a replica that does not lead, or a request that misses the
 // canonical shape. TRANSFER_IN_PROGRESS is the retryable answer of a
-// proposal the leader drops while a transfer it accepted is running; the
-// backend that cannot transfer refuses with UNSUPPORTED_BACKEND.
+// proposal the leader drops while a transfer it accepted is running.
 const RAFT_LEADERSHIP_TRANSFER_REASON = Object.freeze({
   TRANSFER_REQUESTED: 'transfer-requested',
   TRANSFER_FORWARDED: 'transfer-forwarded',
@@ -118,7 +122,6 @@ const RAFT_LEADERSHIP_TRANSFER_REASON = Object.freeze({
   UNKNOWN_SUCCESSOR: 'transfer-unknown-successor',
   WITHOUT_REPLICA_IDENTITY: 'transfer-without-replica-identity',
   TRANSFER_IN_PROGRESS: 'leadership-transfer-in-progress',
-  UNSUPPORTED_BACKEND: 'leadership-transfer-unsupported-backend',
 });
 
 // A partition's admission of one peer: only the leader proposes it; any

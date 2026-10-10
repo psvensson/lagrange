@@ -17,9 +17,6 @@ import {
   buildPriorityRecoveryBlockedPartitionIds,
 } from '../control-plane/priority-recovery-planning-intent.js';
 import {
-  readPriorityPartitionSummarySource,
-} from '../control-plane/priority-partition-summary-source.js';
-import {
   SPREAD_CURE_AUTHORIZATION_BINDING_STATE,
   SPREAD_CURE_AUTHORIZATION_OUTCOME,
   SPREAD_CURE_PARTITION_EPOCH_NOT_READ,
@@ -31,6 +28,9 @@ import {
 // admits the whole live picture and still bounds a pathological one.
 const LEARNER_PROMOTION_INPUTS_LIST_LIMIT = 8;
 const EVIDENCE_OBJECT_TYPE = 'object';
+// The guard's summary is the census: there is no second producer to name
+// (owner decision 2026-10-04 deleted the closure-refreshed summary).
+const PRIORITY_PARTITION_SUMMARY_SOURCE_CENSUS = 'census';
 const NO_ENTRIES_WITHHELD = 0;
 
 // The list is always COPIED before it is frozen: the caller's own array (the
@@ -96,7 +96,7 @@ function buildPrioritySummaryEvidence(priorityPartitionSummary) {
       null,
     blockedPartitionIds: blockedPartitionIds.entries,
     blockedPartitionIdsWithheld: blockedPartitionIds.withheld,
-    source: readPriorityPartitionSummarySource(priorityPartitionSummary),
+    source: PRIORITY_PARTITION_SUMMARY_SOURCE_CENSUS,
   });
 }
 

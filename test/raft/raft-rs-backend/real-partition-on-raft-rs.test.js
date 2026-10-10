@@ -4,7 +4,7 @@
 // ConfState, a learner added, caught up, promoted, and the old voter removed -
 // with hostile service-cache rows rewritten underneath the whole run.
 //
-// Every peer here is what `provider.createPartitionPort(request)` returned for
+// Every peer here is what `createRaftRsOperationPort(request)` returned for
 // a request in the contract owner's own field names. No test value is an
 // oracle: what is compared against is either the core's own report or the
 // bytes on disk read through a SEPARATE read-only SQLite connection, and the
@@ -21,8 +21,8 @@ import Database from 'better-sqlite3';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {
-  RAFT_PARTITION_NODE_REQUEST,
-} from '../../../src/raft/raft-provider-contract-constants.js';
+  RAFT_OPERATION_PORT_REQUEST,
+} from '../../../src/raft/raft-operation-port-request.js';
 import {decodeCommittedProposal} from
   '../../../src/raft/raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from
@@ -109,7 +109,7 @@ function durableRecordOf(dbFile) {
 /**
  * Hostile, divergent service rows: each replica's cache says something
  * different about who belongs, and one of them calls the joiner a member
- * while it is still syncing - the liferaft shape where a SYNCING row doubles
+ * while it is still syncing - the historical shape where a SYNCING row doubles
  * as a voter. A replica nobody ever created is invented in a third cache.
  * @param {string} replicaId - Whose cache.
  * @param {number} round - The settle round, so the rows keep moving.
@@ -185,7 +185,7 @@ test('a fresh partition on the raft-rs backend starts from the membership ' +
   'its own durable record holds', async () => {
   const cluster = formedPartition();
   try {
-    // 1. Every founding replica is a frozen operation port the provider built.
+    // 1. Every founding replica is a frozen raft-rs operation port.
     for (const replicaId of FOUNDING) {
       const port = cluster.node(replicaId);
       assert.equal(Object.isFrozen(port), true);
@@ -447,8 +447,8 @@ test('the partition request names the durable storage the group runs on, ' +
   'and no backend reads a service row to find it', async () => {
   // The field set is the contract owner's. A backend that needed something
   // absent from it would have to change this list.
-  assert.ok(Object.values(RAFT_PARTITION_NODE_REQUEST)
-    .includes(RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE),
+  assert.ok(Object.values(RAFT_OPERATION_PORT_REQUEST)
+    .includes(RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE),
   'the durable storage handle is a declared requirement, not a lookup');
   const cluster = formedPartition();
   try {

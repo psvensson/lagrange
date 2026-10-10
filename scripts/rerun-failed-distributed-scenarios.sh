@@ -118,6 +118,10 @@ for (const file of listReportFiles(dir)) {
       config,
       ts,
       passed: s.passed === true,
+      // REFUSED (not run): the config cannot carry the scenario's claim;
+      // re-running it on the same config is refused again, forever.
+      refused: s.outcome === 'refused' ||
+        (s.refusal !== null && typeof s.refusal === 'object'),
       file,
     });
   } catch (_e) { /* skip */ }
@@ -131,7 +135,7 @@ for (const r of results) {
   const key = r.config + '|' + r.scenario;
   if (seen.has(key)) continue;
   seen.add(key);
-  if (!r.passed) console.log(key);
+  if (!r.passed && !r.refused) console.log(key);
 }
 ") || true
 

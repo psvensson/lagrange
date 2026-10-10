@@ -69,10 +69,21 @@ const RATCHET_TARGETS = [
     // distributed UPDATE/DELETE mutation-result owner (checker hint).
     // 2026-09-29: tightened 55/1760 -> 54/1731 after the seed and joiner
     // runtime-service handler setup converged on one guarded initializer.
-    // 2026-10-03: tightened 54/1731 -> 52/1666 on the
-    // failed-gate-keeps-evidence tree (checker hint).
-    baselineCloneGroupCount: 52,
-    baselineDuplicatedLineCount: 1666,
+    // 2026-10-01: tightened 54/1731 -> 52/1652 after the WASM replica moved
+    // onto its operation port and the legacy replica base was deleted.
+    // 2026-10-01: tightened 52/1652 -> 51/1624 after the spike, provider
+    // selection and migration tooling were deleted (checker hint).
+    // 2026-10-03: tightened 51/1624 -> 49/1559 on the checker's hint after
+    // the origin/main ec63fbb00 merge and the native-append inference
+    // deletion.
+    // origin/main 2026-10-03 tightened 54/1731 -> 52/1666 (failed-gate-
+    // keeps-evidence, checker hint); the lower value here supersedes it.
+    // 2026-10-04: tightened 49/1559 -> 48/1512 on the checker's hint
+    // (spent-waits wiring replaced duplicated expiry log blocks).
+    // 2026-10-05: tightened 48/1512 -> 48/1510 on the checker's hint (the
+    // write paths open their transaction in one two-line call).
+    baselineCloneGroupCount: 48,
+    baselineDuplicatedLineCount: 1510,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -184,10 +195,34 @@ const RATCHET_TARGETS = [
     // tree (Track A boot incarnation + Track B handler identity).
     // 2026-09-30: tightened duplicated lines 29402 -> 29388 after the
     // rejoin-hints recovered-peer decision match became one constant.
-    // 2026-10-03: tightened duplicated lines 29388 -> 29385 on the
-    // failed-gate-keeps-evidence tree (checker hint).
-    baselineCloneGroupCount: 765,
-    baselineDuplicatedLineCount: 29385,
+    // 2026-10-01: tightened 765/29388 -> 728/27645 after the legacy replica
+    // base, its packet-routing and backpressure tests, and the census-delete
+    // group tests were deleted.
+    // 2026-10-01: tightened 728/27645 -> 726/27594 after the dt6 publication
+    // network tests moved onto the raft-rs network host.
+    // 2026-10-03: tightened 726/27594 -> 718/27311 on the checker's hint
+    // after the origin/main ec63fbb00 merge, the native-append test removal
+    // and the single VirtualNetwork async drive.
+    // 2026-10-03: tightened 718/27311 -> 717/27288 on the checker's hint
+    // after the SQLite callback-facade round-trip property was retired.
+    // origin/main 2026-10-03 tightened 765/29388 -> 765/29385 (failed-gate-
+    // keeps-evidence, checker hint); the lower value here supersedes it.
+    // 2026-10-04: tightened 717/27288 -> 713/27072 on the checker's hint
+    // after the message-group MOVE_REPLICA tests were deleted.
+    // 2026-10-04: tightened 713/27072 -> 713/27050 on the checker's hint
+    // after the handler's CREATE acceptance cases became refusal cases (C3).
+    // 2026-10-04: tightened 713/27072 -> 708/26760 on the checker's hint
+    // (shared convergence stub policy targets in assertions-test-helpers).
+    // 2026-10-04 (quest/one-spread-authority): tightened 717/27288 ->
+    // 715/27221 on the checker's hint after the one-spread-authority deletion
+    // (shared replay assertion, the three-case admin spread-authority fixture).
+    // 2026-10-05: merge of quest/scenario-gates-ground-truth keeps the lower
+    // of both sides' tightened values, then tightened 708/26760 -> 708/26738
+    // on the checker's hint for the merged tree.
+    // 2026-10-05: merge of quest/one-spread-authority keeps the lower values,
+    // then tightened 708/26738 -> 706/26671 on the checker's hint.
+    baselineCloneGroupCount: 706,
+    baselineDuplicatedLineCount: 26671,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

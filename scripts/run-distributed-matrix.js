@@ -11,6 +11,7 @@ import {tmpdir} from 'node:os';
 import {basename, dirname, join} from 'node:path';
 
 import {
+  CLI,
   DISTRIBUTED_EXECUTION_ENV,
   DISTRIBUTED_EXECUTION_TARGET,
   DISTRIBUTED_MATRIX_PROFILE,
@@ -26,6 +27,14 @@ import {
   selectNodesByRole,
 } from './lab/state.js';
 import {run} from './lab/process.js';
+import {
+  SCENARIO_OUTCOME,
+  outcomeOfRunnerExit,
+  resolveRunExitCode,
+} from '../test/distributed/harness/scenario-outcome.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../test/distributed/harness/certification-evidence-statement.js';
 
 const MATRIX_RUNNER = 'test/distributed/run.js';
 const MATRIX_SUMMARIZER = 'scripts/summarize-harness-runs.js';
@@ -39,7 +48,6 @@ const MATRIX_RUN_ID_PATTERN = /[:.]/gu;
 const MATRIX_TEMP_PREFIX = 'lagrange-distributed-matrix-';
 const MATRIX_TEMP_CONFIG_SUFFIX = '.json';
 const MATRIX_ROLE_HARNESS = 'harness';
-const MATRIX_EXIT_SUCCESS = 0;
 const MATRIX_EXIT_FAILURE = 1;
 const MATRIX_FIRST_POSITION = 0;
 const MATRIX_FLAG_VALUE_OFFSET = 1;
@@ -48,6 +56,9 @@ const MATRIX_EMPTY = '';
 const MATRIX_PASSTHROUGH_MARKER = '--';
 const MATRIX_STATUS_PASS = 'PASS';
 const MATRIX_STATUS_FAIL = 'FAIL';
+// Not run: the config's host topology cannot carry the scenario's claim.
+// Never counted as passed; the matrix exits REFUSED (non-zero) for it.
+const MATRIX_STATUS_REFUSED = 'REFUSED (not run)';
 const MATRIX_STATUS_DRY = 'DRY';
 const MATRIX_DEFAULT_GCP_TEMPLATE =
   'test/distributed/config/gcp-default.json';
@@ -66,10 +77,14 @@ const MATRIX_FLAG = Object.freeze({
   DRY_RUN: '--dry-run',
   HELP: '--help',
 });
+// The matrix never certifies: a certification run is one scenario through
+// `lab harness run --certify SHA` (scenario-certification.js), so the
+// runner's --certify is reserved here and refused as a passthrough.
 const MATRIX_RESERVED_PASSTHROUGH = Object.freeze([
   MATRIX_RUNNER_FLAG_CONFIG,
   MATRIX_RUNNER_FLAG_SCENARIO,
   MATRIX_RUNNER_FLAG_OUTPUT,
+  CLI.ARG_CERTIFY,
 ]);
 const MATRIX_USAGE = [
   'Distributed scenario matrix\n\n',
@@ -366,6 +381,7 @@ async function main() {
 
     let passed = 0;
     const failed = [];
+    const refused = [];
     for (const entry of plan) {
       process.stdout.write(
         `[${entry.index}/${entry.total}] ` +
@@ -402,11 +418,19 @@ async function main() {
           MATRIX_NEWLINE,
         );
       } catch (error) {
-        failed.push({
+        const outcome = {
           scenario: entry.scenario,
           config: entry.config,
           error: error.message,
-        });
+        };
+        if (outcomeOfRunnerExit(error?.exitCode) === SCENARIO_OUTCOME.REFUSED) {
+          refused.push(outcome);
+          process.stdout.write(
+            `  -> ${MATRIX_STATUS_REFUSED}${MATRIX_NEWLINE}`,
+          );
+          continue;
+        }
+        failed.push(outcome);
         process.stderr.write(
           `  -> ${MATRIX_STATUS_FAIL}: ${error.message}${MATRIX_NEWLINE}`,
         );
@@ -415,15 +439,21 @@ async function main() {
 
     process.stdout.write(
       `Distributed matrix: ${passed} passed, ${failed.length} failed, ` +
+      `${refused.length} refused (not run), ` +
       `${plan.length} total${MATRIX_NEWLINE}`,
+    );
+    // The matrix never requests certification (--certify): say so.
+    process.stdout.write(
+      `Distributed matrix: ${NOT_CERTIFICATION_EVIDENCE.statement}` +
+      MATRIX_NEWLINE,
     );
     if (!args.dryRun) {
       await summarize(reportDirectory);
     }
-    process.exitCode =
-      failed.length > MATRIX_FIRST_POSITION ?
-        MATRIX_EXIT_FAILURE :
-        MATRIX_EXIT_SUCCESS;
+    process.exitCode = resolveRunExitCode({
+      hasFailures: failed.length > MATRIX_FIRST_POSITION,
+      hasRefusals: refused.length > MATRIX_FIRST_POSITION,
+    });
   } finally {
     await rm(temporaryDirectory, {recursive: true, force: true});
   }

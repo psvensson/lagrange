@@ -281,6 +281,8 @@ class BootstrapAPI {
         delegates: {
           getLogger: () => this.logger,
           getSqlQueryEngine: () => this.getSqlQueryEngine(),
+          isMoveReplicaHandoffRequest: (serviceData) =>
+            this.isMoveReplicaHandoffRequest(serviceData),
           validateMoveReplicaAssignmentToken: (serviceData) =>
             this.validateMoveReplicaAssignmentToken(serviceData),
           assertSingleOwnerReplicaRegistration: (serviceData, assignmentContext) =>
@@ -417,21 +419,8 @@ class BootstrapAPI {
             this.getBootstrapAuthoritativeTableRows(tableName),
           getBootstrapAdmissionTableRows: (tableName) =>
             this.getBootstrapAdmissionTableRows(tableName),
-          expireMoveReplicaAssignmentReservations: (options) =>
-            this.expireMoveReplicaAssignmentReservations(options),
-          getActiveMoveReplicaAssignmentReservations: (options) =>
-            this.getActiveMoveReplicaAssignmentReservations(options),
           getBlockingMoveReplicaBootstrapAdmissions: (now) =>
             this.getBlockingMoveReplicaBootstrapAdmissions(now),
-          getMoveReplicaBootstrapExclusionReservations: (now, options) =>
-            this.moveReplicaAssignmentOwner
-              .getMoveReplicaBootstrapExclusionReservations(now, options),
-          reserveMoveReplicaAssignment: (targetNodeId, assignment, options) =>
-            this.reserveMoveReplicaAssignment(
-              targetNodeId,
-              assignment,
-              options,
-            ),
           getBootstrapAdmissionRetryAfterMs: () =>
             this.bootstrapAdmissionRetryAfterMs,
         },

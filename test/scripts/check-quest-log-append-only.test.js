@@ -3,7 +3,8 @@
  * history, so that immutability must be enforced rather than assumed. These
  * scenarios drive the checker over a fixture repository: an in-place rewrite
  * of a committed log is refused, a deleted one is refused, and the ordinary
- * solver lifecycle (appending, adding a new quest) is admitted.
+ * solver lifecycle (appending, adding a new quest) is admitted. A merge is
+ * held to the per-lineage rule: each parent an order-preserving subsequence.
  */
 
 import assert from 'node:assert/strict';
@@ -191,4 +192,141 @@ test('a stack of append commits is admitted', (t) => {
   commit(root, 'introduce another quest');
   assert.deepEqual(questLogOffences({root, base}), [],
     'the ordinary unpublished stack is several append commits');
+});
+
+// Merge commits (2026-10-05 rule): two branches that both append to one log
+// diverge, and no merge can keep both parents as a byte prefix. A merge is
+// append-only with respect to each lineage when every parent's log survives
+// in the merge's log as an order-preserving subsequence of byte-identical
+// entries, and anything no parent recorded comes only after all of them.
+function divergedRepo(t, parents = ['side']) {
+  const root = repo(t);
+  const base = git(root, ['rev-parse', 'HEAD']).trim();
+  const tips = {};
+  for (const name of parents) {
+    git(root, ['checkout', '-q', '-b', name, base]);
+    fs.appendFileSync(path.join(root, LOG), entry(`${name} one`, {type: 'attempt'}) +
+      entry(`${name} two`, {type: 'finding'}));
+    tips[name] = commit(root, `append on ${name}`);
+  }
+  git(root, ['checkout', '-q', '-B', 'trunk', base]);
+  fs.appendFileSync(path.join(root, LOG), entry('trunk one', {type: 'attempt'}) +
+    entry('trunk two', {type: 'finding'}));
+  commit(root, 'append on trunk');
+  const blobOf = (rev) => git(root, ['show', `${rev}:${LOG}`]);
+  const baseLog = blobOf(base);
+  const tailOf = (rev) => blobOf(rev).slice(baseLog.length);
+  return {root, base, tips, baseLog, trunkTail: tailOf('HEAD'), tailOf};
+}
+
+function mergeWith(root, tips, content) {
+  git(root, ['merge', '--no-commit', '--no-ff', ...tips], {allowFailure: true});
+  write(root, LOG, content);
+  return commit(root, 'merge the appended logs');
+}
+
+test('a merge that unions both appended tails is admitted', (t) => {
+  const {root, base, tips, baseLog, trunkTail, tailOf} = divergedRepo(t);
+  mergeWith(root, [tips.side], baseLog + trunkTail + tailOf(tips.side));
+  assert.deepEqual(questLogOffences({root, base}), [],
+    'each lineage is kept whole and in order');
+});
+
+test('a merge that interleaves both lineages in order is admitted', (t) => {
+  const {root, base, tips, baseLog, trunkTail, tailOf} = divergedRepo(t);
+  const [trunkOne, trunkTwo] = trunkTail.split(/(?<=\n)/u);
+  const [sideOne, sideTwo] = tailOf(tips.side).split(/(?<=\n)/u);
+  mergeWith(root, [tips.side], baseLog + sideOne + trunkOne + sideTwo + trunkTwo);
+  assert.deepEqual(questLogOffences({root, base}), []);
+});
+
+test('a merge that drops an entry of either parent is refused', (t) => {
+  const {root, base, tips, baseLog, trunkTail, tailOf} = divergedRepo(t);
+  const [sideOne] = tailOf(tips.side).split(/(?<=\n)/u);
+  const merged = mergeWith(root, [tips.side], baseLog + trunkTail + sideOne);
+  assert.deepEqual(questLogOffences({root, base}),
+    [{path: LOG, reason: OFFENCE.REWRITTEN, at: merged}]);
+});
+
+test('a merge that drops a shared base entry is refused for both parents', (t) => {
+  const {root, base, tips, baseLog, trunkTail, tailOf} = divergedRepo(t);
+  const [, baseTwo] = baseLog.split(/(?<=\n)/u);
+  const merged = mergeWith(root, [tips.side], baseTwo + trunkTail + tailOf(tips.side));
+  assert.equal(questLogOffences({root, base}).filter((offence) =>
+    offence.at === merged && offence.reason === OFFENCE.REWRITTEN).length, 2);
+});
+
+test('a merge that edits an entry is refused', (t) => {
+  const {root, base, tips, baseLog, trunkTail, tailOf} = divergedRepo(t);
+  const merged = mergeWith(root, [tips.side],
+    baseLog + trunkTail + tailOf(tips.side).replace('side two', 'side 2!!'));
+  assert.deepEqual(questLogOffences({root, base}),
+    [{path: LOG, reason: OFFENCE.REWRITTEN, at: merged}]);
+});
+
+test('a merge that reorders the entries of one lineage is refused', (t) => {
+  const {root, base, tips, baseLog, trunkTail, tailOf} = divergedRepo(t);
+  const [sideOne, sideTwo] = tailOf(tips.side).split(/(?<=\n)/u);
+  const merged = mergeWith(root, [tips.side], baseLog + trunkTail + sideTwo + sideOne);
+  assert.deepEqual(questLogOffences({root, base}),
+    [{path: LOG, reason: OFFENCE.REWRITTEN, at: merged}]);
+});
+
+test('a merge that slips an entry no parent recorded into history is refused',
+  (t) => {
+    const {root, base, tips, baseLog, trunkTail, tailOf} = divergedRepo(t);
+    const merged = mergeWith(root, [tips.side], baseLog +
+      entry('forged', {type: 'verification', verdict: 'approve'}) +
+      trunkTail + tailOf(tips.side));
+    assert.deepEqual(questLogOffences({root, base}),
+      [{path: LOG, reason: OFFENCE.INSERTED, at: merged}]);
+  });
+
+test('a merge may append its own entry after every lineage', (t) => {
+  const {root, base, tips, baseLog, trunkTail, tailOf} = divergedRepo(t);
+  mergeWith(root, [tips.side], baseLog + trunkTail + tailOf(tips.side) +
+    entry('merged', {type: 'finding'}));
+  assert.deepEqual(questLogOffences({root, base}), []);
+});
+
+// git refuses a conflicting octopus, so the commit is built from its tree.
+function octopusWith(root, parents, content) {
+  write(root, LOG, content);
+  git(root, ['add', '-A']);
+  const tree = git(root, ['write-tree']).trim();
+  const parentArgs = parents.flatMap((parent) => ['-p', parent]);
+  const merged = git(root, ['commit-tree', tree, ...parentArgs,
+    '-m', 'octopus merge of the appended logs']).trim();
+  git(root, ['reset', '-q', '--hard', merged]);
+  return merged;
+}
+
+test('an octopus merge is held to the same rule for every parent', (t) => {
+  const {root, base, tips, baseLog, trunkTail, tailOf} =
+    divergedRepo(t, ['left', 'right']);
+  const trunk = git(root, ['rev-parse', 'HEAD']).trim();
+  const kept = octopusWith(root, [trunk, tips.left, tips.right],
+    baseLog + trunkTail + tailOf(tips.left) + tailOf(tips.right));
+  assert.equal(git(root, ['rev-list', '--parents', '-n1', kept]).trim()
+    .split(' ').length, 4, 'a three-parent commit');
+  assert.deepEqual(questLogOffences({root, base}), [], 'all three kept');
+  git(root, ['reset', '-q', '--hard', trunk]);
+  const dropped = octopusWith(root, [trunk, tips.left, tips.right],
+    baseLog + trunkTail + tailOf(tips.left));
+  assert.deepEqual(questLogOffences({root, base}),
+    [{path: LOG, reason: OFFENCE.REWRITTEN, at: dropped}],
+    'the dropped third parent is refused');
+});
+
+test('a single-parent commit is still held to a byte prefix', (t) => {
+  // Interleaving is a merge's allowance only: one parent has one lineage,
+  // and an entry inserted before its tail is a rewrite.
+  const root = repo(t);
+  const base = git(root, ['rev-parse', 'HEAD']).trim();
+  const committed = fs.readFileSync(path.join(root, LOG), ENCODING);
+  const [first, second] = committed.split(/(?<=\n)/u);
+  write(root, LOG, first + entry('inserted', {type: 'attempt'}) + second);
+  const inserted = commit(root, 'insert inside history');
+  assert.deepEqual(questLogOffences({root, base}),
+    [{path: LOG, reason: OFFENCE.REWRITTEN, at: inserted}]);
 });

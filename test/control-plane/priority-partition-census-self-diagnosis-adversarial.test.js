@@ -6,7 +6,6 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   buildDerivedPriorityPartitionSummary,
-  chooseMoreAdvancedPriorityPartitionSummary,
   isReadinessPromotable,
   normalizePriorityPartitionSummary,
 } from '../../src/control-plane/membership-publication-priority-partition-summary.js';
@@ -160,9 +159,23 @@ test('explicit malformed readiness evidence cannot promote a learner', (t) => {
     serviceRows: learnerRows,
     readinessByNodeId: {'node-3': nonPromotable},
   }), SUMMARY_HELPERS);
+  // SUPERSEDED (owner decision 2026-10-04, voters-only census). Before: a
+  // learner on a non-promotable node was excluded as learner_not_promotable
+  // (and a learner on a promotable node counted). A learner never counts
+  // now, whatever its node's readiness: it is excluded as a non-voter.
   t.equal(
-    partitionBlock(normal).exclusionReasonCounts.learner_not_promotable,
+    partitionBlock(normal).exclusionReasonCounts.raft_role_not_voter,
     1,
+  );
+  t.equal(partitionBlock(normal).readyDistinctNodeCount, 2);
+  const promotable = buildDerivedPriorityPartitionSummary(createDerivedOptions({
+    serviceRows: learnerRows,
+    readinessByNodeId: {},
+  }), SUMMARY_HELPERS);
+  t.equal(
+    partitionBlock(promotable).exclusionReasonCounts.raft_role_not_voter,
+    1,
+    'a learner on a promotable node is not a holder either',
   );
 
   let dimensionReads = 0;
@@ -412,10 +425,23 @@ test('optional diagnostics use own presence under prototype pollution', (t) => {
       configurable: true,
       enumerable: true,
     });
-    selected = chooseMoreAdvancedPriorityPartitionSummary(
-      baseline,
+    // SUPERSEDED carrier (D9, owner decision 2026-10-04): this used the
+    // deleted satisfied-first ranking to select the enriched summary; the
+    // own-presence property is now asserted on normalization itself, which
+    // every census consumer reads through.
+    selected = normalizePriorityPartitionSummary(
       enriched,
+      {},
       SUMMARY_HELPERS,
+    );
+    t.equal(
+      Object.hasOwn(
+        normalizePriorityPartitionSummary(baseline, {}, SUMMARY_HELPERS)
+          .blockedPartitions[0],
+        'exclusionReasonCounts',
+      ),
+      false,
+      'prototype pollution never adds diagnostics a block does not own',
     );
   } finally {
     if (originalCounts) {
@@ -587,22 +613,9 @@ test('negative zero and invalid explicit counts are unavailable, not defaults', 
   t.end();
 });
 
-test('exact internal totals distinguish safe-integer aggregate overflow', (t) => {
-  const baseline = semanticSummary([
-    semanticBlock(`${PARTITION_ID}-a`, {spreadGap: Number.MAX_SAFE_INTEGER}),
-    semanticBlock(`${PARTITION_ID}-b`, {spreadGap: 1}),
-  ]);
-  const worseCandidate = semanticSummary([
-    semanticBlock(`${PARTITION_ID}-a`, {spreadGap: Number.MAX_SAFE_INTEGER}),
-    semanticBlock(`${PARTITION_ID}-b`, {spreadGap: 2}),
-  ]);
-  t.same(
-    chooseMoreAdvancedPriorityPartitionSummary(
-      baseline,
-      worseCandidate,
-      SUMMARY_HELPERS,
-    ),
-    normalizePriorityPartitionSummary(baseline, {}, SUMMARY_HELPERS),
-  );
-  t.end();
-});
+// SUPERSEDED - DELETED with its subject (D9, owner decision 2026-10-04):
+// 'exact internal totals distinguish safe-integer aggregate overflow' pinned
+// the exact BigInt totals of the satisfied-first advancement comparator that
+// ranked two summaries. That comparator is deleted: the fresh census wins
+// whenever derivable, so no two summaries are ranked any more.
+

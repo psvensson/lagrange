@@ -34,7 +34,7 @@ function consensusInitRefusedError(partitionId, answer) {
  * Build the replica's operation port; a port the runtime owner refused to
  * open is the partition's typed init refusal, after shutdown.
  * @param {Object} service - The partition service.
- * @param {Object} request - Its RAFT_PARTITION_NODE_REQUEST.
+ * @param {Object} request - Its RAFT_OPERATION_PORT_REQUEST.
  * @return {Promise<Object>} The port.
  */
 async function openPartitionConsensusPort(service, request) {

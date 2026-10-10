@@ -40,7 +40,6 @@ export function registerClusterControlPlaneQuiescenceLifecycleTests(context) {
     QUIESCENCE_STALE_PROGRESS_STATUS,
     QUIESCENCE_STALE_PROGRESS_STEP,
     QUIESCENCE_STALE_PROGRESS_TIMEOUT_MS,
-    RAFT_PROVIDER_DEFAULTS,
     RUNTIME_AUTHORITY_REPAIR_STATE,
     test,
     uuidValidate,
@@ -881,11 +880,6 @@ export function registerClusterControlPlaneQuiescenceLifecycleTests(context) {
       env.ADMIN_ALLOW_INSECURE_EXTERNAL_BIND,
       'true',
       'the test-only external Admin bind must be an explicit opt-in',
-    );
-    assert.strictEqual(
-      env[RAFT_PROVIDER_DEFAULTS.envKey],
-      RAFT_PROVIDER_DEFAULTS.provider,
-      'raft provider env should default to liferaft',
     );
   });
 }

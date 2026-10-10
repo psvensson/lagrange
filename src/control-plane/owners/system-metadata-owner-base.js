@@ -16,6 +16,10 @@ import {
 import {runRetryableControlPlaneWrite} from
   '../../bootstrap/shared/retryable-control-plane-write.js';
 
+const SYSTEM_METADATA_WRITE_WAIT = Object.freeze({
+  wait: 'controlPlaneWriteRetryTimeoutMs',
+  awaited: 'system-metadata owner control-plane write accepted',
+});
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_UNKNOWN_OWNER = 'unknown-owner';
 const LOCAL_STR_FUNCTION = 'function';
@@ -425,7 +429,13 @@ class SystemMetadataOwnerBase {
     try {
       const result = await runRetryableControlPlaneWrite(
         () => executor(mutationOptions),
-        retryOptions,
+        {
+          ...retryOptions,
+          spentWait: SYSTEM_METADATA_WRITE_WAIT,
+          // Names the owner and its table: a logs-table write's spent budget
+          // is then routed off the logs table by the reporter.
+          scope: metadata,
+        },
       );
       if (result?.success === false) {
         throw buildSystemMetadataMutationError(

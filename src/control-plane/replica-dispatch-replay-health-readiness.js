@@ -5,6 +5,7 @@ import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
 } from '../rebalancer/replica-operation-step-policy.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   COLUMN,
@@ -21,6 +22,28 @@ const {
   isRetryableControlPlaneError,
   resolveReadyNodePublicationAdvancementState,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
+
+const DISPATCH_READINESS_REFRESH_WAIT = Object.freeze({
+  wait: 'OPERATION_DISPATCH_READINESS_REFRESH_TIMEOUT_MS',
+  awaited: 'authoritative readiness refresh for the dispatch target node',
+});
+
+// The race only knows the refresh had not settled; the caller then falls back
+// to the sync snapshot or defers (unchanged).
+function reportDispatchReadinessRefreshSpent(service, spent) {
+  reportWaitBoundSpent(service.logger, {
+    ...DISPATCH_READINESS_REFRESH_WAIT,
+    boundMs: spent.timeoutMs,
+    startedAtMs: spent.startedAtMs,
+    lastObserved: {
+      refreshSettled: false,
+      decisionDimension: spent.decisionDimension ?? null,
+      requestedMaxCachedAgeMs: spent.maxCachedAgeMs,
+    },
+    scope: {nodeId: service.nodeId, targetNodeId: spent.nodeId ?? null},
+    subject: spent.nodeId,
+  });
+}
 
 const READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS = Object.freeze({});
 const READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE = null;
@@ -264,6 +287,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     }
 
     let timeoutHandle = null;
+    const startedAtMs = Date.now();
     try {
       return await Promise.race([
         this.controlPlaneReadinessService.getNodeReadiness(nodeId, {
@@ -273,6 +297,13 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
         }),
         new Promise((_resolve, reject) => {
           timeoutHandle = this.setTimeoutFn(() => {
+            reportDispatchReadinessRefreshSpent(this, {
+              nodeId,
+              decisionDimension,
+              timeoutMs,
+              startedAtMs,
+              maxCachedAgeMs: 0,
+            });
             reject(
               this.buildDispatchReadinessRefreshTimeoutError(nodeId, timeoutMs),
             );

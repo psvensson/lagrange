@@ -1,7 +1,10 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import {waitForConvergence} from '../assertions.js';
-import {buildControlSnapshotRecord} from './assertions-test-helpers.js';
+import {
+  buildControlSnapshotRecord,
+  withPolicyTargets,
+} from './assertions-test-helpers.js';
 
 const CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID = 'control_plane_publications-p1';
 const CACHE_VISIBLE_PRIORITY_RECOVERY_OPERATION_ID =
@@ -34,6 +37,9 @@ const PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED = 'FAILED';
 test(
   'waitForConvergence — can ignore cache-visible spread-satisfied priority recovery operations',
   async () => {
+    // At the policy target of 3 voters (the REPLACE's source already gone,
+    // its operation row still in flight): over-target replace shapes are
+    // refused since voters == policy target is part of convergence.
     const node = {
       id: 'mock-cache-visible-priority-recovery-node',
       isReachable: async () => true,
@@ -60,16 +66,6 @@ test(
                 'node-b/' +
                 CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
                 '/r1',
-              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
-            },
-            {
-              service_type: 'partition',
-              status: 'ACTIVE',
-              raft_role: 'follower',
-              address:
-                'node-c/' +
-                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
-                '/r2',
               partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
             },
             {
@@ -115,7 +111,8 @@ test(
     };
 
     await assert.rejects(
-      waitForConvergence([node], {
+      waitForConvergence([withPolicyTargets(node,
+        [CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID])], {
         settleTimeoutMs: 80,
         finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
@@ -127,7 +124,8 @@ test(
       'cache-visible spread-satisfied operations should still gate convergence by default',
     );
 
-    const result = await waitForConvergence([node], {
+    const result = await waitForConvergence([withPolicyTargets(node,
+      [CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID])], {
       settleTimeoutMs: 80,
       finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
@@ -144,6 +142,9 @@ test(
 test(
   'waitForConvergence — can ignore spread-satisfied priority recovery decision snapshots',
   async () => {
+    // At the policy target of 3 voters (the REPLACE's source already gone,
+    // its operation row still in flight): over-target replace shapes are
+    // refused since voters == policy target is part of convergence.
     const node = {
       id: 'mock-cache-visible-priority-recovery-decision-node',
       isReachable: async () => true,
@@ -170,16 +171,6 @@ test(
                 'node-b/' +
                 CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
                 '/r1',
-              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
-            },
-            {
-              service_type: 'partition',
-              status: 'ACTIVE',
-              raft_role: 'follower',
-              address:
-                'node-c/' +
-                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
-                '/r2',
               partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
             },
             {
@@ -246,7 +237,8 @@ test(
     };
 
     await assert.rejects(
-      waitForConvergence([node], {
+      waitForConvergence([withPolicyTargets(node,
+        [CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID])], {
         settleTimeoutMs: 80,
         finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
@@ -258,7 +250,8 @@ test(
       'decision snapshots should still gate convergence by default',
     );
 
-    const result = await waitForConvergence([node], {
+    const result = await waitForConvergence([withPolicyTargets(node,
+      [CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID])], {
       settleTimeoutMs: 80,
       finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
@@ -396,6 +389,9 @@ test(
 test(
   'waitForConvergence — can ignore spread-satisfied priority recovery partitions without explicit operation ids',
   async () => {
+    // At the policy target of 3 voters (the REPLACE's source already gone,
+    // its operation row still in flight): over-target replace shapes are
+    // refused since voters == policy target is part of convergence.
     const node = {
       id: 'mock-cache-visible-priority-recovery-partition-fallback-node',
       isReachable: async () => true,
@@ -423,16 +419,6 @@ test(
                 'node-b/' +
                 CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
                 '/r1',
-              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
-            },
-            {
-              service_type: 'partition',
-              status: 'ACTIVE',
-              raft_role: 'follower',
-              address:
-                'node-c/' +
-                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
-                '/r2',
               partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
             },
             {
@@ -490,7 +476,8 @@ test(
     };
 
     await assert.rejects(
-      waitForConvergence([node], {
+      waitForConvergence([withPolicyTargets(node,
+        [CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID])], {
         settleTimeoutMs: 80,
         finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
@@ -502,7 +489,8 @@ test(
       'spread-satisfied partitions should still gate convergence by default',
     );
 
-    const result = await waitForConvergence([node], {
+    const result = await waitForConvergence([withPolicyTargets(node,
+      [CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID])], {
       settleTimeoutMs: 80,
       finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
@@ -517,7 +505,8 @@ test(
 );
 
 test(
-  'waitForConvergence — can close CDC projection leader gaps from priority recovery owner evidence',
+  'waitForConvergence — owner evidence closes the CDC projection leader ' +
+    'gap but never stands in for a partition with no voters',
   async () => {
     const node = {
       id: CDC_PROJECTION_OWNER_NODE_ID,
@@ -597,7 +586,13 @@ test(
       }),
     };
 
-    const result = await waitForConvergence([node], {
+    // The owner-missing partition has NO voter rows: it used to read as
+    // converged once owner evidence closed its CDC leader gap. A partition
+    // below its policy target is not converged, whatever closes the CDC gap.
+    await assert.rejects(waitForConvergence([withPolicyTargets(node, [
+      CDC_PROJECTION_LEADER_VISIBLE_PARTITION_ID,
+      CDC_PROJECTION_OWNER_MISSING_PARTITION_ID,
+    ])], {
       settleTimeoutMs: 80,
       finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
@@ -605,8 +600,14 @@ test(
       sampleIntervalMs: 10,
       targetVoterCount: 3,
       ignoreStaleInFlightReplicaOperations: true,
+    }), (error) => {
+      assert.strictEqual(error.diagnostics.voterTargets.state,
+        'under_target_voters');
+      assert.deepStrictEqual(
+        Array.from(error.diagnostics.voterTargets.underTarget,
+          (entry) => [entry.partitionId, entry.voters, entry.target]),
+        [[CDC_PROJECTION_OWNER_MISSING_PARTITION_ID, 0, 3]]);
+      return true;
     });
-    assert.strictEqual(typeof result.settledAfterMs, 'number');
-    assert.ok(result.settledAfterMs >= 0);
   },
 );

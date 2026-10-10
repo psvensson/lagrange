@@ -20,6 +20,8 @@ export function registerPriorityRecoverySnapshotProgressContractOwnershipTests(c
     PRIORITY_RECOVERY_NODE_ID_B,
     PRIORITY_RECOVERY_NODE_ID_C,
     PRIORITY_RECOVERY_OPERATION_ID_CREATING_REPLACE_STALE,
+    PRIORITY_RECOVERY_STATUS_ACTIVE,
+    PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
     PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY,
     PRIORITY_RECOVERY_OPERATION_ID_SERIAL_LANE_ADD,
     PRIORITY_RECOVERY_OPERATION_ID_TARGET_SERVICE_PROGRESS,
@@ -679,61 +681,80 @@ export function registerPriorityRecoverySnapshotProgressContractOwnershipTests(c
   });
 
   test(PRIORITY_RECOVERY_SERIAL_WAIT_RELEASE_TEST_NAME, async (t) => {
-    const snapshot = buildPriorityRecoveryDecisionSnapshot({
-      partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
-      publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
-      priorityPartitionSummary: {
-        blockedPartitions: [{
-          partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
-          requiredDistinctNodeCount:
+    const buildSnapshotForSourceStep = (sourceStep, sourceStatus) =>
+      buildPriorityRecoveryDecisionSnapshot({
+        partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+        priorityPartitionSummary: {
+          blockedPartitions: [{
+            partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+            requiredDistinctNodeCount:
           PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
-          readyDistinctNodeCount:
+            readyDistinctNodeCount:
           PRIORITY_RECOVERY_STALE_READY_DISTINCT_NODE_COUNT,
-          spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
-        }],
-      },
-      admission: {
-        effectiveEligibleNodeIds: [
-          PRIORITY_RECOVERY_NODE_ID_B,
-          PRIORITY_RECOVERY_NODE_ID_C,
-        ],
-        effectiveEligibleNodeCount:
+            spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+          }],
+        },
+        admission: {
+          effectiveEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+          effectiveEligibleNodeCount:
         PRIORITY_RECOVERY_SINGLE_EMERGENCY_BUDGET_LIMIT,
-        ineligibleNodes: [],
-      },
-      operationContexts: [],
-      serialLaneOperationContexts: [{
-        partitionId:
+          ineligibleNodes: [],
+        },
+        operationContexts: [],
+        serialLaneOperationContexts: [{
+          partitionId:
         PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
-        operationId: PRIORITY_RECOVERY_OPERATION_ID_CREATING_REPLACE_STALE,
-        type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
-        status: PRIORITY_RECOVERY_STATUS_CREATING,
-        workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_CREATING,
-        targetNodeId: PRIORITY_RECOVERY_NODE_ID_B,
-        targetVisibilityState:
+          operationId: PRIORITY_RECOVERY_OPERATION_ID_CREATING_REPLACE_STALE,
+          type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+          status: sourceStatus,
+          workflowStep: sourceStep,
+          targetNodeId: PRIORITY_RECOVERY_NODE_ID_B,
+          targetVisibilityState:
         PRIORITY_RECOVERY_TARGET_VISIBILITY_ACTIVE_OPERATIONAL,
-        replicaId:
+          replicaId:
         PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_REPLACEMENT_REPLICA_ID,
-        createdAtMs: PRIORITY_RECOVERY_NEWER_OPERATION_CREATED_AT_MS,
-        updatedAtMs: PRIORITY_RECOVERY_NEWER_OPERATION_CREATED_AT_MS,
-        latestTimelineStep: PRIORITY_RECOVERY_WORKFLOW_STEP_CREATING,
-        latestTimelineStatus: PRIORITY_RECOVERY_STATUS_CREATING,
-        latestTimelineInFlight: true,
-      }],
-    });
+          createdAtMs: PRIORITY_RECOVERY_NEWER_OPERATION_CREATED_AT_MS,
+          updatedAtMs: PRIORITY_RECOVERY_NEWER_OPERATION_CREATED_AT_MS,
+          latestTimelineStep: sourceStep,
+          latestTimelineStatus: sourceStatus,
+          latestTimelineInFlight: true,
+        }],
+      });
 
+    const snapshot = buildSnapshotForSourceStep(
+      PRIORITY_RECOVERY_WORKFLOW_STEP_CREATING,
+      PRIORITY_RECOVERY_STATUS_CREATING,
+    );
     t.same(
       snapshot?.blockerReasons,
-      [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION],
+      [PRIORITY_RECOVERY_BLOCKER_REASON_SERIAL_OPERATION_WAIT],
       PRIORITY_RECOVERY_SERIAL_WAIT_RELEASE_MESSAGE,
     );
     t.same(
       snapshot?.coordinator?.serialWaitOperationIds,
+      [PRIORITY_RECOVERY_OPERATION_ID_CREATING_REPLACE_STALE],
+      PRIORITY_RECOVERY_SERIAL_WAIT_RELEASE_MESSAGE,
+    );
+    const removeDispatchSnapshot = buildSnapshotForSourceStep(
+      PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+      PRIORITY_RECOVERY_STATUS_ACTIVE,
+    );
+    t.same(
+      removeDispatchSnapshot?.blockerReasons,
+      [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION],
+      PRIORITY_RECOVERY_SERIAL_WAIT_RELEASE_MESSAGE,
+    );
+    t.same(
+      removeDispatchSnapshot?.coordinator?.serialWaitOperationIds,
       PRIORITY_RECOVERY_EMPTY_OPERATION_IDS,
       PRIORITY_RECOVERY_SERIAL_WAIT_RELEASE_MESSAGE,
     );
     t.match(
-      snapshot?.progress,
+      removeDispatchSnapshot?.progress,
       {
         contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
         nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,

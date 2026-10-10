@@ -21,6 +21,26 @@ const {
   mergePriorityRecoveryDecisionSnapshots,
 } = FAILURE_BUNDLE_PLAYBACK_CLASSIFICATION;
 
+// The scenario directory is shared by every run of the scenario under one
+// output root, so a directory listing is not this run's evidence. Only the
+// nodes this run's own event stream created (node.created) are read; a
+// listing is used only when no event stream names the run's nodes.
+function selectRunNodeLogIds(relevantNodeIds, nodeLogCandidates,
+  playbackInsights) {
+  if (relevantNodeIds.length > ZERO) {
+    return relevantNodeIds;
+  }
+  const runNodeIds = playbackInsights?.playbackEventSummary?.runNodeIds;
+  if (Array.isArray(runNodeIds) && runNodeIds.length > ZERO) {
+    return runNodeIds;
+  }
+  const listed = [];
+  for (const entryName of nodeLogCandidates) {
+    listed.push(entryName.slice(ZERO, -LOG_FILE_EXTENSION.length));
+  }
+  return listed;
+}
+
 async function collectScenarioLogArtifacts(
   scenarioDir,
   relevantNodeIds,
@@ -73,12 +93,15 @@ async function collectScenarioLogArtifacts(
     }
   }
 
-  const preferredNodeIds =
-    relevantNodeIds.length > ZERO ?
-      relevantNodeIds :
-      nodeLogCandidates.map((entryName) =>
-        entryName.slice(ZERO, -LOG_FILE_EXTENSION.length),
-      );
+  const playbackInsights = await collectPlaybackEventInsights(
+    scenarioDir,
+    workspaceRoot,
+  );
+  const preferredNodeIds = selectRunNodeLogIds(
+    relevantNodeIds,
+    nodeLogCandidates,
+    playbackInsights,
+  );
 
   await Promise.all(
     preferredNodeIds.map(async (nodeId) => {
@@ -102,10 +125,6 @@ async function collectScenarioLogArtifacts(
     }),
   );
 
-  const playbackInsights = await collectPlaybackEventInsights(
-    scenarioDir,
-    workspaceRoot,
-  );
   if (playbackInsights) {
     result.playbackEventsPath = playbackInsights.playbackEventsPath;
     result.playbackEventSummary = playbackInsights.playbackEventSummary || null;

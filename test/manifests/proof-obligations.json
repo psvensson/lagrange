@@ -145,6 +145,22 @@
       "wholeTree": true
     },
     {
+      "id": "npm-run-audit-no-legacy-consensus-references",
+      "command": "npm run audit:no-legacy-consensus-references",
+      "inputs": [
+        "Dockerfile",
+        "architecture/**",
+        "docs/**",
+        "examples/**",
+        "package-lock.json",
+        "package.json",
+        "scripts/**",
+        "src/**",
+        "test/**"
+      ],
+      "wholeTree": true
+    },
+    {
       "id": "npm-run-audit-impact-contracts",
       "command": "npm run audit:impact-contracts",
       "inputs": [

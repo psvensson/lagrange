@@ -13,6 +13,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 31000;
@@ -68,12 +69,12 @@ test('Property 2: No Silent Delivery Failures - null transport throws', async (t
       async (groupId, replicaId, targetService, payload) => {
         const {router, nodeId, cleanup} = await createTestTransport();
         try {
-          const service = new MessageGroupService({
+          const service = new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             nodeId,
             transport: router,
-          });
+          }));
 
           await service.initialize();
 
@@ -118,12 +119,12 @@ test('Property 2: No Silent Delivery Failures - error message clarity', async (t
       async (groupId, replicaId, targetService) => {
         const {router, nodeId, cleanup} = await createTestTransport();
         try {
-          const service = new MessageGroupService({
+          const service = new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             nodeId,
             transport: router,
-          });
+          }));
 
           await service.initialize();
 
@@ -178,12 +179,12 @@ test('Property 2: No Silent Delivery Failures - no silent event emission', async
       async (groupId, replicaId, targetService) => {
         const {router, nodeId, cleanup} = await createTestTransport();
         try {
-          const service = new MessageGroupService({
+          const service = new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             nodeId,
             transport: router,
-          });
+          }));
 
           await service.initialize();
 
@@ -242,12 +243,12 @@ test('Property 2: No Silent Delivery Failures - valid transport works', async (t
       async (groupId, replicaId, targetService, payload) => {
         const {router, nodeId, cleanup} = await createTestTransport();
         try {
-          const service = new MessageGroupService({
+          const service = new MessageGroupService(withTestDbPath({
             groupId,
             replicaId,
             nodeId,
             transport: router,
-          });
+          }));
 
           await service.initialize();
 

@@ -289,6 +289,41 @@ test('W5 (D2/P4): time past the former budgets fails nothing after the ' +
   }
 });
 
+test('W5b (D2): the exempt REPLACE budget check reports no ' +
+  'wait_bound_spent (as at base, it only records its diagnostic)', async (t) => {
+  const harness = await createHarness();
+  try {
+    await driveToRemovalIntent(harness);
+    const lines = [];
+    const owner = harness.owner;
+    owner.logger = {
+      error: (message, context) => lines.push({level: 'error', context}),
+      warn: (message) => lines.push({level: 'warn', message}),
+      info: (message) => lines.push({level: 'info', message}),
+      debug: () => {},
+    };
+    // Reach the budget check itself: no retry grace, no observed progress.
+    owner.hasActiveTransitionRetryGrace = () => false;
+    owner.reconcileOperationProgress = async () => false;
+    const operation = await persistedOperation(harness);
+    t.equal(operation.workflowStep, WORKFLOW_STEP.STOPPING,
+      'the REPLACE waits at STOPPING (a time-exempt owner phase)');
+
+    await owner.reconcileTimeoutOperation(operation,
+      Date.now() + LONG_AFTER_MS);
+
+    t.equal(lines.filter((line) =>
+      line.context?.event === 'wait_bound_spent').length, 0,
+    'a diagnostic-only budget is not a bound: no wait_bound_spent');
+    t.equal(lines.filter((line) => line.level === 'error').length, 0,
+      'and no ERROR at all');
+    t.notOk(harness.coordinator.repository.isOperationTerminal(
+      await persistedOperation(harness)), 'and nothing is failed');
+  } finally {
+    await harness.coordinator.shutdown();
+  }
+});
+
 test('W6 (P6): target death after the intent', async (t) => {
   await t.test('the source still a voter: FAILED, the source retained',
     async (t) => {

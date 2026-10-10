@@ -11,10 +11,13 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   SIZE_UPDATE_INTERVAL_MS: TIME_MS.MINUTE,
   MANAGED_SPLIT_WRITE_ACTIVITY_DEBOUNCE_MS: TIME_MS.SECOND * NUM.FIVE,
   MERGE_CUTOVER_WAIT_INTERVAL_MS: 200,
+  // ends-on: the merge cutover becomes visible locally, or the merge is aborted
   MERGE_CUTOVER_WAIT_TIMEOUT_MS: TIME_MS.MINUTE * NUM.TWO,
+  // ends-on: the partition size write is accepted
   SIZE_PERSIST_RETRY_TIMEOUT_MS: TIME_MS.SECOND,
   SIZE_PERSIST_RETRY_BASE_DELAY_MS: 50,
   SIZE_PERSIST_RETRY_MAX_DELAY_MS: 250,
+  // ends-on: the proposed write is committed and applied
   PENDING_REQUEST_TIMEOUT_MS: TIME_MS.SECOND * 30,
   // Interim split/merge mirror delta queue bound: the durable replay
   // source is the Raft log, so the in-memory queue only ever holds
@@ -215,7 +218,6 @@ const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
 });
 
 const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
-  BACKEND_SELECTION_REFUSED: 'partition_consensus_backend_selection_refused',
   // Its consensus port refused the partition at initialization - a port that
   // opened its group held (its durable record unreadable), whatever the
   // replica count, or a lone replica's refused campaign - so initialization
@@ -253,7 +255,6 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
 });
 
 const PARTITION_SERVICE_REASON = Object.freeze({
-  COMMIT: 'commit',
   LEADER_CHANGE: 'leader change',
   TERM_CHANGE: 'term change',
 });
@@ -265,8 +266,6 @@ const PARTITION_SERVICE_ADDRESS = Object.freeze({
 });
 
 const PARTITION_SERVICE_DB = Object.freeze({
-  PRAGMA_JOURNAL_MODE: 'journal_mode = WAL',
-  PRAGMA_SYNCHRONOUS: 'synchronous = NORMAL',
   PRAGMA_PAGE_COUNT: 'page_count',
   PRAGMA_PAGE_SIZE: 'page_size',
   PRAGMA_SIMPLE: 'simple',
@@ -340,14 +339,6 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'WHERE ws_connection_state IS NOT NULL',
 });
 
-const PARTITION_SERVICE_LIFERAFT_TIMER = Object.freeze({
-  HEARTBEAT: 'heartbeat',
-  ELECTION_MIN: 'election min',
-  ELECTION_MAX: 'election max',
-  LOG: 'Log',
-  HEARTBEAT_ELECTION: 'heartbeat, election',
-});
-
 const PARTITION_SERVICE_STATUS = Object.freeze({
   INITIATED: 'initiated',
 });
@@ -405,25 +396,16 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Learner promotion wake coalesced into the in-flight check',
   LEARNER_PROMOTION_ROW_REASSERTED:
     'Learner promotion re-asserted the durable services row',
-  LEADER_DURABILITY_UNFIT:
-    'Replica local durability is unfit for leadership: writes are not ' +
-    'reaching durable storage (stuck transaction or commit/durable ' +
-    'divergence); shedding leadership if a viable successor exists',
-  LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK:
-    'Durability-unfit leader demoted WITHOUT a provable successor: the ' +
-    'bounded fallback expired with no follower ack inside the viability ' +
-    'window. Holding the seat forever starves the very ack evidence the ' +
-    'viability probe needs (self-sustaining unfit-leader deadlock); ' +
-    'demotion opens the role-gated stuck-transaction heal',
   LEADER_DURABILITY_RECOVERED:
     'Replica local durability recovered; leadership fitness restored',
   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
-  CLEARED_LIFERAFT_TIMERS: 'Cleared liferaft timers for deferred election',
+  STOPPED_SCHEDULING_FOR_DEFERRED_ELECTION:
+    'Stopped consensus scheduling for deferred election',
   COMMITTED_PREFIX_DIVERGENCE:
     'Raft committed-prefix term divergence detected: local committed entry ' +
     'conflicts with the leader and truncation is impossible by design; ' +
     'routed to the leader catch-up/repair path (surfaced once per conflict)',
-  BECAME_LEADER: 'Became leader (liferaft)',
+  BECAME_LEADER: 'Became leader',
   RAFT_TRANSITION_EVIDENCE: 'Raft leadership transition evidence',
   LEADER_CHANGED: 'Leader changed',
   JOINING_PEER_ADDRESS: 'Joining peer with fully qualified address',
@@ -434,7 +416,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Built peer address from the current live Raft leader',
   PEER_RETIRED_FROM_AUTHORITATIVE_SERVICE_CHANGE:
     'Retired Raft peer from authoritative service change',
-  RAFT_PEER_ADMISSION: 'Raft peer admission',
   PEER_ADDRESS_FROM_NODE: 'Built peer address using local nodeId',
   SINGLE_REPLICA_LEADER: 'Single replica - becoming leader immediately',
   INITIALIZED: 'Partition service initialized',
@@ -475,9 +456,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Added target_claim_key column to replica_operations table',
   ADDED_REPLICA_OPERATIONS_MEMBERSHIP_PUBLICATION_EPOCH:
     'Added membership_publication_epoch column to replica_operations table',
-  RECEIVED_RAFT_PACKET: 'Received Raft packet',
-  SENDING_RAFT_RESPONSE: 'Sending Raft response',
-  FAILED_RAFT_RESPONSE: 'Failed to send Raft response',
   UNKNOWN_MESSAGE_TYPE: 'Unknown application message type',
   HANDLING_SYSTEM_TABLE_WRITE: 'Handling system table write from remote node',
   HANDLING_REMOTE_QUERY: 'Handling remote query',
@@ -527,14 +505,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   BEGINNING_TRANSACTION: 'Beginning transaction',
   PREPARING_TRANSACTION: 'Preparing transaction',
   PREPARED_STATE_RECONSTRUCTED: 'Prepared transaction state reconstructed',
-  PREPARED_STATE_HOLD_TIMEOUT: 'Prepared transaction state hold timeout',
-  ACTIVE_TRANSACTION_HOLD_TIMEOUT:
-    'Active transaction held beyond its legal window; rolled back ' +
-    '(orphaned participant hold — run-23 zombie class)',
-  STUCK_TRANSACTION_HEAL_DEFERRED:
-    'Stuck transaction heal deferred: rolling back on a leader/candidate ' +
-    'would re-mint acked raft indices; waiting for durability-fitness ' +
-    'demotion',
   COMMITTING_TRANSACTION: 'Committing transaction',
   ROLLING_BACK_TRANSACTION: 'Rolling back transaction',
   EXECUTING_QUERY: 'Executing query',
@@ -723,17 +693,16 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
       `refused it in phase ${answer?.phase} (${answer?.outcome}: ` +
       `${answer?.reason}${detail ? ` ${JSON.stringify(detail)}` : ''})`;
   },
-  backendSelectionRefused: (option, requested) =>
-    `Partition consensus backend selection refused: ${option}=` +
-    `${JSON.stringify(requested)} names a retired consensus backend; a ` +
-    'partition runs on its single consensus path and takes no selection',
 });
 
 const PARTITION_SERVICE_VALUE = Object.freeze({
   ONE_HUNDRED: NUM.HUNDRED,
   TEN: NUM.TEN,
+  // ends-on: the delivery is acknowledged (unreachable: deliverWithAck has no caller in src/)
   DEFAULT_TIMEOUT_MS: TIME_MS.SECOND * 30,
+  // ends-on: n/a dead (no consumer in src/)
   PENDING_REQUEST_SHUTDOWN_TIMEOUT_MS: TIME_MS.SECOND * 30,
+  // ends-on: n/a misnamed (a 100-character SQL log truncation length, not a time)
   DEFAULT_QUERY_TIMEOUT_MS: NUM.HUNDRED,
   SIZE_BYTES_DIVISOR: NUM.BYTES_PER_MIB,
   SIZE_MB_PRECISION: 2,
@@ -741,11 +710,11 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   // Election timeout should be 5-10x heartbeat to avoid unnecessary elections
   // On single-node clusters, all replicas are on same node so network is fast
   // but we still need stable leadership to avoid oscillation
-  LIFERAFT_HEARTBEAT_DEFAULT_MS: RAFT_ELECTION_TIMING.HEARTBEAT_DEFAULT_MS,
-  LIFERAFT_ELECTION_MIN_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MIN_DEFAULT_MS,
-  LIFERAFT_ELECTION_MAX_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MAX_DEFAULT_MS,
+  RAFT_HEARTBEAT_DEFAULT_MS: RAFT_ELECTION_TIMING.HEARTBEAT_DEFAULT_MS,
+  RAFT_ELECTION_MIN_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MIN_DEFAULT_MS,
+  RAFT_ELECTION_MAX_DEFAULT_MS: RAFT_ELECTION_TIMING.ELECTION_MAX_DEFAULT_MS,
   // Jitter added per replica index to stagger election timeouts.
-  // Must be >= (LIFERAFT_ELECTION_MAX - LIFERAFT_ELECTION_MIN) so that
+  // Must be >= (RAFT_ELECTION_MAX - RAFT_ELECTION_MIN) so that
   // replica N's max timeout is always less than replica N+1's min timeout.
   // This guarantees r1 always fires first, preventing re-elections.
   // r1: [1000,3000], r2: [3500,5500], r3: [6000,8000], etc.
@@ -757,7 +726,6 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   CDC_PARSE_SLICE_END: NUM.HUNDRED,
   CDC_TABLE_NAME_EXTRACTION_STATE_FOUND: 'found',
   CDC_TABLE_NAME_EXTRACTION_STATE_NOT_FOUND: 'not_found',
-  LIFERAFT_SINGLE_REPLICA_COUNT: 1,
   ADDRESS_PARTS_MIN: 1,
 });
 
@@ -780,7 +748,6 @@ export {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,

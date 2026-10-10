@@ -2,6 +2,7 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {
   RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
 } from './replica-operation-step-policy.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   OBSERVED_PROGRESS_RETRY_DELAY_MS,
@@ -26,6 +27,45 @@ const DELIVERED_CREATE_PROGRESS_RESPONSE_STATUSES = Object.freeze(
     ReplicaOperationResponseStatus.COMPLETED,
   ]),
 );
+
+const DELIVERED_CREATE_PROGRESS_WAIT = Object.freeze({
+  wait: 'REBALANCE_OPERATION_BUDGET_MS',
+  awaited: 'delivered target create progress applied to the operation row',
+});
+
+/**
+ * The retained delivered-create progress retry reached its operation-budget
+ * deadline and is not re-armed: one wait_bound_spent ERROR. A retry entry
+ * without a deadline was never bounded, so it reports nothing.
+ * @param {Object} owner
+ * @param {Object} retryEntry
+ * @param {number} now - Date.now() (the deadline's clock).
+ * @return {void}
+ */
+function reportDeliveredCreateProgressSpent(owner, retryEntry, now) {
+  if (!Number.isFinite(retryEntry.deadlineMs)) {
+    return;
+  }
+  const operation = retryEntry.operationSnapshot || {};
+  reportWaitBoundSpent(owner.logger, {
+    ...DELIVERED_CREATE_PROGRESS_WAIT,
+    boundMs: TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS,
+    elapsedMs: now - retryEntry.deadlineMs +
+      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS,
+    lastObserved: {
+      kind: retryEntry.kind,
+      tableName: retryEntry.tableName || null,
+      workflowStep: operation.workflowStep || null,
+      status: operation.status || null,
+      targetNodeId: operation.targetNodeId || null,
+    },
+    scope: {
+      nodeId: owner.nodeId || null,
+      partitionId: operation.partitionId || null,
+      operationId: operation.operationId || null,
+    },
+  });
+}
 
 function withObservedProgressRetention(Base) {
   return class OperationWorkflowObservedProgressRetention extends Base {
@@ -199,6 +239,7 @@ function withObservedProgressRetention(Base) {
         !Number.isFinite(retryEntry.deadlineMs) ||
         retryEntry.deadlineMs <= now
       ) {
+        reportDeliveredCreateProgressSpent(this, retryEntry, now);
         return false;
       }
       return this.armObservedProgressRetry({

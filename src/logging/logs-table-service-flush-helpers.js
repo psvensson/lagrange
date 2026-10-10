@@ -16,6 +16,38 @@ import {
   MIN_YIELD_MS,
   MIN_SLEEP_MS,
 } from './logs-table-service-constants.js';
+import {
+  WAIT_BOUND_SPENT_SINK,
+  reportWaitBoundSpent,
+} from './wait-bound-spent.js';
+
+const LOGS_TABLE_WRITE_RETRIES_WAIT = Object.freeze({
+  wait: 'LOGS_TABLE_DEFAULT.MAX_RETRIES',
+  awaited: 'one log entry written to the logs table',
+});
+
+/**
+ * Report the logs sink's own spent retry budget. It is part of the logs
+ * sink, so it is written to the console sink only: a line written back into
+ * the logs table that just refused a write would queue another write.
+ * @param {Object} service - The logs-table service.
+ * @param {Error|null} lastError - The last write failure.
+ * @private
+ */
+function reportWriteRetriesSpent(service, lastError) {
+  reportWaitBoundSpent(service.logger, {
+    ...LOGS_TABLE_WRITE_RETRIES_WAIT,
+    boundMs: null,
+    sink: WAIT_BOUND_SPENT_SINK.CONSOLE_ONLY,
+    lastObserved: () => ({
+      attempts: service.maxRetries,
+      retryDelayMs: service.retryDelayMs,
+      lastError: lastError?.message ?? null,
+      lastErrorCode: lastError?.code ?? null,
+      pendingWrites: service.pendingWrites?.length ?? null,
+    }),
+  });
+}
 
 /**
  * Determine whether one logs-table write failure should defer the owner
@@ -108,6 +140,7 @@ const logsTableServiceFlushHelperMethods = {
       }
     }
 
+    reportWriteRetriesSpent(this, lastError);
     const error = lastError || new Error(LOGGING_ERROR_MSG.WRITE_ENTRY_FAILED);
     throw error;
   },

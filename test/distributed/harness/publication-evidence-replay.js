@@ -9,6 +9,9 @@ import {
 } from
   '../../../src/control-plane/priority-recovery-snapshot.js';
 import {
+  LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
+} from './active-gate-closure-classification.js';
+import {
   PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD,
@@ -274,10 +277,16 @@ function summarizePriorityRecoveryClosureWitness(closureWitness = null) {
           PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.STATE
         ],
       ) || null,
+    // A current witness carries no prioritySpreadPending of its own (owner
+    // decision 2026-10-04): its PENDING state is the blocker it adds. An old
+    // artifact's explicit field still reads as before.
     [PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PRIORITY_SPREAD_PENDING]:
       closureWitnessRecord[
         PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PRIORITY_SPREAD_PENDING
-      ] === true,
+      ] === true ||
+      closureWitnessRecord[
+        PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.STATE
+      ] === PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING,
     [PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PUBLICATION_REFRESH_REQUIRED]:
       closureWitnessRecord[
         PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PUBLICATION_REFRESH_REQUIRED
@@ -310,7 +319,7 @@ function classifyPublicationEvidenceClosureWitness(closureWitness = {}) {
   }
   if (
     closureWitnessState ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION ||
+      LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION ||
     closureWitness[
       PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_FIELD.PUBLICATION_REFRESH_REQUIRED
     ] === true

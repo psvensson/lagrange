@@ -11,7 +11,7 @@ replay of an old durable row (a FOSSIL naming this node with no claim stamps).
 
 | Model | Runtime |
 | --- | --- |
-| `WinElection` (claim stamped) | `seedLocalCanonicalLeaderNodeId` + `applyLocalCanonicalLeaderObservation` stamping `leader_claim_node_id` / `leader_claim_raft_term` / `leader_claim_minted_against_updated_at` (local-only annotations, `partition-service-metadata-delivery-methods.js`) with the term from `raft-replica-base.js` `resolveCurrentTermSafe` |
+| `WinElection` (claim stamped) | `seedLocalCanonicalLeaderNodeId` + `applyLocalCanonicalLeaderObservation` stamping `leader_claim_node_id` / `leader_claim_raft_term` / `leader_claim_minted_against_updated_at` (local-only annotations, `partition-service-metadata-delivery-methods.js`) with the term from `partition-service-raft-init-base.js` `resolveCurrentTermSafe` |
 | `LoseTenure` (claim cleared) | the demotion clear (`clearLocalCanonicalLeaderNodeIdIfOwned`), the demoted-replay re-null, and the teardown clear (`clearLocalCanonicalLeaderClaimOnTeardown`, hooked into partition-service shutdown) |
 | `ReplayFossil` | an equal-version CDC round-trip of an old durable PARTITIONS row: durable columns cannot carry the claim annotations, so the replayed row names this node WITHOUT a live claim |
 | `FinishSafetyRead` / `PreferLocal` | `getCriticalPartitionRowForSafety` merging on the POST-AWAIT cache state; `mergePartitionRowForSafety` firing the preference only on this node's live stamped claim (`priority-publication-safety-rows.js`) |

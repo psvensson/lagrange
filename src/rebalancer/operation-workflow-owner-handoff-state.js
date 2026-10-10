@@ -3,6 +3,8 @@ import * as COORDINATOR_HANDOFF_RETRY
   from './operation-workflow-coordinator-handoff-retry.js';
 import * as CREATE_BUDGET_DISPATCH
   from './operation-workflow-owner-create-budget-dispatch.js';
+import {reportCoordinatorHandoffStepTimeoutStop} from
+  './operation-workflow-coordinator-created-handoff-scheduling.js';
 
 const {
   CONTROL_PLANE_OPERATION_HANDOFF_MODE,
@@ -603,6 +605,8 @@ function withOwnerHandoffState(Base) {
                 operation,
               );
             if (handoffTimeoutDecision.shouldStop) {
+              reportCoordinatorHandoffStepTimeoutStop(
+                this, operation, handoffTimeoutDecision);
               this.clearCreatedOperationHandoffRetry(operationId);
               return false;
             }

@@ -555,9 +555,15 @@ export function registerFailureBundlePriorityRecoveryPlaybackEvidenceTests(conte
           .priorityRecoveryUnresolvedPartitionCount,
         0,
       );
+      // SUPERSEDED (owner decision 2026-10-04): before, the remove-dispatch
+      // REPLACE's spread_satisfied_in_flight (the kept, narrowed grace) also
+      // cleared the publication-level spread gap through the closure's
+      // synthesized summary, so the bundle had no dominant reason. The grace
+      // still classifies the partition (asserted above), but it no longer
+      // reaches the published summary: the census gap is the dominant reason.
       assert.equal(
         scenarioBundle.summary.dominantReason,
-        null,
+        'priority_partitions_not_spread',
       );
     },
   );

@@ -30,8 +30,6 @@ import {
   buildProjectionReadinessContract,
 } from '../../src/control-plane/projection-readiness-state.js';
 import {
-  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
@@ -89,17 +87,14 @@ test('background mutation stays deferred when optimistic priority closure ' +
     largestSpreadGap: 1,
     totalSpreadGap: 1,
   });
-  const optimisticSatisfiedSummary = Object.freeze({
-    satisfied: true,
-    requiredDistinctNodeCount: 3,
-    readyEligibleNodeCount: 5,
-    totalPriorityPartitionCount: 1,
-    missingPartitionIds: Object.freeze([]),
-    blockedPartitions: Object.freeze([]),
-    blockedPartitionCount: 0,
-    largestSpreadGap: 0,
-    totalSpreadGap: 0,
-  });
+  // SUPERSEDED precondition (owner decision 2026-10-04, "delete the second
+  // authority"). Before: the closure witness was in the deleted
+  // stale-publication state with a synthesized satisfied summary, and this
+  // asserted "the optimistic closure must remain recovery-ready" (gate ready
+  // over the durable gap). A non-pending witness now says nothing about
+  // spread: the gate is NOT ready while the durable census shows the gap.
+  // The protected property below - stable background mutation consumes the
+  // durable spread convergence - is unchanged.
   const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
     publicationEpoch: 7,
     publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -110,22 +105,16 @@ test('background mutation stays deferred when optimistic priority closure ' +
     ],
     priorityPartitionSummary: durablePriorityPartitionSummary,
     priorityRecoveryClosureWitness: {
-      state:
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION,
-      prioritySpreadPending: false,
-      publicationRefreshRequired: true,
-      closureRecordId: PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD,
-      closureWitnessClass:
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
-          .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING,
-      refreshedPriorityPartitionSummary: optimisticSatisfiedSummary,
+      state: PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
+      blockedPartitionIds: [],
+      unresolvedSemanticStateIds: [],
     },
   });
 
   t.equal(
     publicationRecoveryGate.ready,
-    true,
-    'the optimistic closure must remain recovery-ready',
+    false,
+    'a non-pending closure witness never makes the gate ready over a gap',
   );
   t.equal(
     publicationRecoveryGate.durablePriorityPartitionSummary?.satisfied,
@@ -163,10 +152,14 @@ test('background mutation stays deferred when optimistic priority closure ' +
     false,
     'readiness owner must not reclassify optimistic spread as durable',
   );
+  // SUPERSEDED sub-assertion (owner decision 2026-10-04): before, the
+  // optimistic closure kept the recovery-progress gate closed over the
+  // durable gap (active false). Recovery is now active exactly while the
+  // census shows the gap (Q2 = census gap OR the open operation).
   t.equal(
     priorityControlPlaneRecovery.active,
-    false,
-    'strict debt must not reopen the optimistic recovery-progress gate',
+    true,
+    'the durable census gap keeps priority control-plane recovery active',
   );
   const projectionReadinessContract = buildProjectionReadinessContract({
     dimensions,

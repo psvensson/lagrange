@@ -531,7 +531,7 @@ describe('ReportWriter', () => {
 
     it('persists metadata and extra top-level fields', async () => {
       const writer = new ReportWriter(outputPath, {
-        metadata: {raftProvider: 'liferaft'},
+        metadata: {runClass: 'benchmark'},
       });
       writer.addResult('s1', {passed: true, duration: 10});
 
@@ -544,7 +544,7 @@ describe('ReportWriter', () => {
       const report = JSON.parse(content);
 
       assert.deepEqual(report.metadata, {
-        raftProvider: 'liferaft',
+        runClass: 'benchmark',
         scenarioFilter: 'postgres-baseline-comparison',
       });
       assert.deepEqual(report.benchmarkRegressionGate, {status: 'passed'});

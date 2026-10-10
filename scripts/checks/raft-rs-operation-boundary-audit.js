@@ -22,8 +22,10 @@ const LIFECYCLE_COORDINATOR =
   'src/node/replica-handler-remove-execution-methods.js';
 const PORT_CONSTRUCTOR = 'src/raft/raft-rs-operation-port.js';
 const MEMBERSHIP_ADMIN = 'src/raft/raft-rs-membership-administration.js';
+// The group-neutral admission owner (design R3 section 1.6, D4): the one
+// coordinator a partition and a message group reach the registry through.
 const MEMBERSHIP_COORDINATOR =
-  'src/partition/partition-service-raft-membership-administration.js';
+  'src/raft/raft-rs-group-membership-admission.js';
 const DIRECT_BINDING_PATTERN =
   /(?:vendor\/raft-rs-wasm|raft_wasm(?:_bg)?(?:\.wasm|\.js)?)/u;
 const AUDIT_AST = Object.freeze({

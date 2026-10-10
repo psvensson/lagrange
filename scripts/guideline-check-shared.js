@@ -408,6 +408,7 @@ export {
   getEnclosingFunctionName,
   buildGuidelineViolationReport,
   classifyFilePath,
+  collectJavaScriptFiles,
   formatGuidelineHumanSummary,
   loadCountBaseline,
   parseSourceFile,

@@ -12,16 +12,34 @@ import {types as utilTypes} from 'node:util';
 // SqlCore.executeQuery); this module only copies the application's own row
 // data. A raw error THROWN by SqlCore is likewise reduced to primitive
 // `{code, message}` before it becomes an ApplicationDatabaseError cause.
+//
+// This module is also the ONE reader of a SqlCore result's affected-row
+// count for every public SQL surface (the application facade here, the
+// PostgreSQL wire command tags in src/runtime/pgwire-result-mapper.js). The
+// engine's canonical count field is `affectedRows`; the partition's own
+// `changes` and a client library's `rowCount` are not engine result fields.
+// The reader keeps "no count" (null) distinct from zero rows: each surface
+// decides what an absent count means for its statement, and a surface never
+// learns the field name on its own.
+//
+// It is likewise the ONE owner of the executed statement kind a SqlCore
+// result carries (`statementType`): SqlCore stamps the kind of the statement
+// it actually executed (the parsed statement type it dispatched on, or the
+// service lifecycle command), and a surface that must name the statement
+// (the PostgreSQL wire command tag) reads that kind here, never the query
+// text, which may begin with comments or a CTE.
 
 const APPLICATION_DATABASE_RESULT_FIELD = Object.freeze({
   AFFECTED_ROWS: 'affectedRows',
   ROWS: 'rows',
+  STATEMENT_TYPE: 'statementType',
 });
 const APPLICATION_DATABASE_CAUSE_FIELD = Object.freeze({
   CODE: 'code',
   MESSAGE: 'message',
 });
 const NO_AFFECTED_ROWS = 0;
+const NO_AFFECTED_ROW_COUNT = null;
 const NO_CAUSE_FIELD = null;
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
@@ -85,14 +103,91 @@ function projectRows(result) {
   return projected;
 }
 
-function projectAffectedRows(result) {
+/**
+ * Read the affected-row count a SqlCore result reports.
+ * @param {Object} result - SqlCore result.
+ * @return {?number} The non-negative safe-integer count, or null when the
+ *   result carries no readable count (absent is never read as zero rows).
+ */
+function readAffectedRowCount(result) {
   const affectedRows = readOwnDataValue(
     result,
     APPLICATION_DATABASE_RESULT_FIELD.AFFECTED_ROWS,
   );
-  return numberIsSafeInteger(affectedRows) && affectedRows >= NO_AFFECTED_ROWS ?
+  return isAffectedRowCount(affectedRows) ?
     affectedRows + NO_AFFECTED_ROWS :
-    NO_AFFECTED_ROWS;
+    NO_AFFECTED_ROW_COUNT;
+}
+
+/**
+ * Stamp the kind of the statement SqlCore executed on its result.
+ * @param {Object} result - SqlCore result.
+ * @param {string} statementType - The executed statement kind (a parsed
+ *   statement type, or a service lifecycle command).
+ * @return {Object} A copy of the result carrying the kind; a non-object
+ *   result is returned unchanged.
+ */
+function withExecutedStatementType(result, statementType) {
+  if (result === null || typeof result !== LOCAL_STR_OBJECT) return result;
+  return {...result, [APPLICATION_DATABASE_RESULT_FIELD.STATEMENT_TYPE]:
+    statementType};
+}
+
+/**
+ * Read the kind of the statement a SqlCore result reports it executed.
+ * @param {Object} result - SqlCore result.
+ * @return {?string} The executed statement kind, or null when the result
+ *   carries none (never guessed from the query text).
+ */
+function readExecutedStatementType(result) {
+  const statementType = readOwnDataValue(
+    result,
+    APPLICATION_DATABASE_RESULT_FIELD.STATEMENT_TYPE,
+  );
+  return typeof statementType === LOCAL_STR_STRING && statementType.length > 0 ?
+    statementType :
+    null;
+}
+
+function isAffectedRowCount(value) {
+  return numberIsSafeInteger(value) && value >= NO_AFFECTED_ROWS;
+}
+
+/**
+ * Sum the affected-row counts of a statement's answered parts (partition
+ * answers, participant results). A part whose count is absent or not a
+ * count leaves the statement's count unknown: the sum is null, never a
+ * total that reads the missing part as zero rows (or guesses it).
+ * @param {Array<*>} counts - One count per answered part.
+ * @return {?number} The total, or null when any part's count is unknown.
+ */
+function sumAffectedRowCounts(counts) {
+  let total = NO_AFFECTED_ROWS;
+  for (let index = 0; index < counts.length; index++) {
+    if (!isAffectedRowCount(counts[index])) return NO_AFFECTED_ROW_COUNT;
+    total += counts[index];
+  }
+  return total;
+}
+
+/**
+ * The result field carrying a statement's affected-row count: present with
+ * a known count, absent (so every reader sees "no count") with an unknown
+ * one.
+ * @param {?number} count - The count, or null when unknown.
+ * @return {Object} `{affectedRows: count}` or `{}`.
+ */
+function affectedRowsField(count) {
+  return count === NO_AFFECTED_ROW_COUNT ?
+    {} :
+    {[APPLICATION_DATABASE_RESULT_FIELD.AFFECTED_ROWS]: count};
+}
+
+function projectAffectedRows(result) {
+  const affectedRows = readAffectedRowCount(result);
+  return affectedRows === NO_AFFECTED_ROW_COUNT ?
+    NO_AFFECTED_ROWS :
+    affectedRows;
 }
 
 /**
@@ -135,6 +230,11 @@ function projectEngineFailureCause(thrown) {
 }
 
 export {
+  affectedRowsField,
+  sumAffectedRowCounts,
   projectApplicationDatabaseResult,
   projectEngineFailureCause,
+  readAffectedRowCount,
+  readExecutedStatementType,
+  withExecutedStatementType,
 };

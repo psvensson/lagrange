@@ -96,10 +96,10 @@ function createBulkSocketProvider(context) {
 
 /**
  * Set the leader-side dispatcher seam on one partition service (Phase A
- * link 2): every typed install_snapshot decision liferaft emits becomes one
+ * link 2): every typed install_snapshot decision from the snapshot owner becomes one
  * dispatchSnapshotCatchup call. The seam returns the dispatch promise
  * (always resolving to a typed result — dial faults are caught and logged)
- * so guards can await the outcome; liferaft ignores the return value.
+ * so guards can await the outcome; the consensus runtime does not consume the callback return value.
  * @param {Object} context wiring context
  * @param {Object} context.service the partition service to wire
  * @param {Object} context.systemTableCache cached system tables

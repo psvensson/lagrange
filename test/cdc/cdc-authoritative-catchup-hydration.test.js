@@ -24,6 +24,7 @@ import {INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {CDCHandler} from '../../src/message-group/cdc-handler.js';
+import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
 
 class AuthoritativeCatchupCacheRepairHost {}
 applyCDCIntegrationServiceCacheVisibilityWait(
@@ -896,3 +897,57 @@ test(
       'the stale snapshot row is not reported as repaired');
   },
 );
+
+test('catch-up retries spent on a deferred table log one wait_bound_spent ' +
+  'ERROR; a non-deferred failure logs none', async (t) => {
+  const deferredAnswer =
+    {success: false, error: 'pressure', retryAfterMs: 25, deferRetry: true};
+  const service = createServiceStub({
+    readResults: {
+      nodes: [deferredAnswer, deferredAnswer],
+      services: [new Error('boom')],
+    },
+  });
+  const capture = captureLogger();
+  service.logger = capture.logger;
+
+  const summary = await hydrateCdcPropagatedTablesFromAuthority(service, {
+    tables: ['nodes', 'services'],
+    maxAttemptsPerTable: 2,
+  });
+
+  t.same(summary.tablesFailed, ['nodes', 'services'],
+    'both tables still reported failed');
+  t.same(service.sleeps, [25], 'the retry schedule is unchanged');
+  const spent = capture.spent();
+  t.equal(spent.length, 1, 'only the exhausted deferred table reports');
+  t.equal(spent[0].context.wait, 'CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE');
+  t.equal(spent[0].context.lastObserved.attempts, 2);
+  t.equal(spent[0].context.lastObserved.retryAfterMs, 25);
+  t.equal(spent[0].context.scope.tableName, 'nodes');
+});
+
+test('a table whose catch-up retries are spent again with the same failure ' +
+  'folds into one line per table and partition', async (t) => {
+  const deferredAnswer = {
+    success: false,
+    error: 'Partition service not found',
+    retryAfterMs: 30,
+    deferRetry: true,
+  };
+  const capture = captureLogger();
+  for (let round = 0; round < 2; round += 1) {
+    const service = createServiceStub({
+      readResults: {nodes: [deferredAnswer, deferredAnswer]},
+    });
+    service.logger = capture.logger;
+    await hydrateCdcPropagatedTablesFromAuthority(service, {
+      tables: ['nodes'],
+      maxAttemptsPerTable: 2,
+    });
+  }
+  const spent = capture.spent();
+  t.equal(spent.length, 1, 'the repeat for the same table folds');
+  t.equal(spent[0].context.scope.partitionId, INITIAL_PARTITION_IDS.nodes,
+    'the report names the partition the table lives on');
+});

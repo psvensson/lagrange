@@ -45,13 +45,9 @@ import {
   PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
   arePriorityPartitionSummariesEqual,
   buildDerivedPriorityPartitionSummary,
-  chooseMoreAdvancedPriorityPartitionSummary,
   isReadinessPromotable,
   normalizePriorityPartitionSummary,
 } from './membership-publication-priority-partition-summary.js';
-import {
-  chooseClosureRefreshedPriorityPartitionSummary,
-} from './priority-partition-summary-source.js';
 import {
   buildMembershipPublicationAckCompletionSnapshot,
   buildMembershipPublicationRecoveryCohortSnapshot,
@@ -606,11 +602,12 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     },
     helperFns,
   );
-  const priorityPartitionSummaryBase = chooseMoreAdvancedPriorityPartitionSummary(
-    normalizedPriorityPartitionSummary,
-    derivedPriorityPartitionSummary,
-    helperFns,
-  );
+  // The fresh census wins whenever it is derivable (owner decision
+  // 2026-10-04): an earlier satisfied planning-snapshot summary never
+  // outranks the current rows. The embedded summary stands in only when the
+  // census cannot be derived (no service/partition rows here).
+  const priorityPartitionSummaryBase =
+    derivedPriorityPartitionSummary ?? normalizedPriorityPartitionSummary;
   const reasonCode =
     typeof planningSnapshot.reasonCode === 'string' && planningSnapshot.reasonCode.length > 0 ?
       planningSnapshot.reasonCode :
@@ -678,15 +675,9 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     },
     helperFns,
   );
-  // The final summary choice, made by the owner that also records which of
-  // the two it took, so a downstream decision can name the summary it read
-  // (quest learner-promotion-guard-inputs-observed).
-  const priorityPartitionSummary =
-    chooseClosureRefreshedPriorityPartitionSummary(
-      priorityPartitionSummaryBase,
-      priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
-      helperFns,
-    );
+  // The census is the summary: the closure witness never produces or
+  // selects one (owner decision 2026-10-04, "delete the second authority").
+  const priorityPartitionSummary = priorityPartitionSummaryBase;
   const priorityPartitionSummaryChanged = !arePriorityPartitionSummariesEqual(
     latestPublicationRow?.priorityPartitionSummary,
     priorityPartitionSummary,

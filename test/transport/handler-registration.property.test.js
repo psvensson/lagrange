@@ -1,12 +1,11 @@
 /**
- * Property test for Handler Registration on Worker Registration (Property 15).
+ * Property test for replica handler registration on the MessageRouter's
+ * registration API (register / isRegistered / unregister).
  *
- * Feature: worker-process-replica-isolation, Property 15: Handler Registration on Worker Registration
- *
- * For any worker process that registers with the main process, the MessageRouter
- * SHALL create a corresponding handler entry that routes messages to that worker.
- *
- * **Validates: Requirements 7.5**
+ * For any partition or message-group replica address, registering a handler
+ * SHALL create a handler entry that routes messages to it, and unregistering
+ * SHALL remove only that entry. (Formerly pinned through the worker-alias
+ * methods of the deleted worker consensus path; re-expressed on the real API.)
  *
  * @module test/transport/handler-registration.property.test.js
  */
@@ -15,10 +14,10 @@ import {describe, it, beforeEach, afterEach, mock} from 'node:test';
 import assert from 'node:assert';
 import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {WORKER_ENTITY_TYPE} from '../../src/worker/worker-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
-describe('Property 15: Handler Registration on Worker Registration', () => {
+describe('Replica handler registration on the MessageRouter API', () => {
   let router;
 
   beforeEach(() => {
@@ -40,7 +39,7 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
     await fc.assert(
       fc.asyncProperty(
         fc.uuid(),
-        fc.constantFrom(WORKER_ENTITY_TYPE.PARTITION, WORKER_ENTITY_TYPE.MESSAGE_GROUP),
+        fc.constantFrom(ENTITY_TYPE.PARTITION, ENTITY_TYPE.MESSAGE_GROUP),
         fc.uuid(),
         async (nodeId, entityType, replicaId) => {
           const testRouter = new MessageRouter({
@@ -52,10 +51,10 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
           const address = `${nodeId}/${entityType}/${replicaId}`;
           const deliverFn = mock.fn(async () => ({status: 'ok'}));
 
-          testRouter.registerWorkerHandler(address, deliverFn);
+          testRouter.register(address, deliverFn);
 
           assert.ok(
-            testRouter.hasWorkerHandler(address),
+            testRouter.isRegistered(address),
             'Handler should be registered for worker address',
           );
         },
@@ -80,14 +79,14 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
             inProcess: true,
           });
 
-          const address = `${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+          const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
           const receivedMessages = [];
           const deliverFn = mock.fn(async (envelope) => {
             receivedMessages.push(envelope);
             return {status: 'ok'};
           });
 
-          testRouter.registerWorkerHandler(address, deliverFn);
+          testRouter.register(address, deliverFn);
 
           // Get handler and invoke it
           const handler = testRouter.handlers.get(address);
@@ -113,14 +112,41 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
             inProcess: true,
           });
 
-          const address = `${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+          const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
           const deliverFn = mock.fn(async () => ({status: 'ok'}));
 
-          testRouter.registerWorkerHandler(address, deliverFn);
-          assert.ok(testRouter.hasWorkerHandler(address));
+          testRouter.register(address, deliverFn);
+          assert.ok(testRouter.isRegistered(address));
 
-          testRouter.unregisterWorkerHandler(address);
-          assert.strictEqual(testRouter.hasWorkerHandler(address), false);
+          testRouter.unregister(address);
+          assert.strictEqual(testRouter.isRegistered(address), false);
+        },
+      ),
+      {numRuns: 10},
+    );
+  });
+
+  // Restored from the deleted message-router-ipc test (verification
+  // cutover-repairs-review-2, RA6): a never-registered address.
+  it('reports a never-registered address as unregistered, and unregistering ' +
+    'it is a no-op', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uuid(),
+        fc.uuid(),
+        async (nodeId, replicaId) => {
+          const testRouter = new MessageRouter({
+            bootIncarnation: TEST_BOOT_INCARNATION,
+            nodeId,
+            inProcess: true,
+          });
+          const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
+          const handlerCount = testRouter.handlers.size;
+
+          assert.strictEqual(testRouter.isRegistered(address), false);
+          assert.doesNotThrow(() => testRouter.unregister(address));
+          assert.strictEqual(testRouter.isRegistered(address), false);
+          assert.strictEqual(testRouter.handlers.size, handlerCount);
         },
       ),
       {numRuns: 10},
@@ -143,21 +169,21 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
 
           // Register handlers for all replicas
           for (const replicaId of replicaIds) {
-            const address = `${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+            const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
             const deliverFn = mock.fn(async () => ({replicaId}));
             handlers.set(replicaId, deliverFn);
-            testRouter.registerWorkerHandler(address, deliverFn);
+            testRouter.register(address, deliverFn);
           }
 
           // Verify all handlers are registered
           for (const replicaId of replicaIds) {
-            const address = `${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
-            assert.ok(testRouter.hasWorkerHandler(address));
+            const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
+            assert.ok(testRouter.isRegistered(address));
           }
 
           // Invoke each handler and verify correct one is called
           for (const replicaId of replicaIds) {
-            const address = `${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+            const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
             const handler = testRouter.handlers.get(address);
             const result = await handler({});
 
@@ -183,19 +209,19 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
           });
 
           const partitionAddress =
-            `${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
+            `${nodeId}/${ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
           const msgGroupAddress =
-            `${nodeId}/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
+            `${nodeId}/${ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
 
           const partitionDeliverFn = mock.fn(async () => ({type: 'partition'}));
           const msgGroupDeliverFn = mock.fn(async () => ({type: 'message-group'}));
 
-          testRouter.registerWorkerHandler(partitionAddress, partitionDeliverFn);
-          testRouter.registerWorkerHandler(msgGroupAddress, msgGroupDeliverFn);
+          testRouter.register(partitionAddress, partitionDeliverFn);
+          testRouter.register(msgGroupAddress, msgGroupDeliverFn);
 
           // Verify both are registered
-          assert.ok(testRouter.hasWorkerHandler(partitionAddress));
-          assert.ok(testRouter.hasWorkerHandler(msgGroupAddress));
+          assert.ok(testRouter.isRegistered(partitionAddress));
+          assert.ok(testRouter.isRegistered(msgGroupAddress));
 
           // Verify correct handlers are invoked
           const partitionHandler = testRouter.handlers.get(partitionAddress);
@@ -228,8 +254,8 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
 
           // Register handlers
           for (const replicaId of replicaIds) {
-            const address = `${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
-            testRouter.registerWorkerHandler(address, async () => ({}));
+            const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
+            testRouter.register(address, async () => ({}));
           }
 
           assert.strictEqual(
@@ -240,8 +266,8 @@ describe('Property 15: Handler Registration on Worker Registration', () => {
 
           // Unregister handlers
           for (const replicaId of replicaIds) {
-            const address = `${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
-            testRouter.unregisterWorkerHandler(address);
+            const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
+            testRouter.unregister(address);
           }
 
           assert.strictEqual(

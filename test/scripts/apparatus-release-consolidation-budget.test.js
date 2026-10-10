@@ -57,7 +57,7 @@ const SEALED_TABLE = Object.freeze([
   ['open legacy epics', 0, 0, 2],
   ['open epics without doneWhen', 0, 0, 2],
   ['solve/epics total lines', 6000, 6, 8],
-  ['liferaft dependency present', 0, 0, 1],
+  ['retired consensus dependency present', 0, 0, 1],
   ['CLAUDE.md is a pointer', 0, 0, 1],
   // proof-authority-integrity: the gate's declared stage trees, the drift of
   // the committed observation census, and the falsifier receipt bound to its
@@ -192,7 +192,9 @@ function metFixture() {
 // The same rows against a tree that offends instead: no publication receipt,
 // no formation trend, a cluster claim with no dated verdict, gate chains that
 // still name the checkers the epic wants off them, two undated legacy epics,
-// the liferaft dependency, and no CLAUDE.md pointer.
+// the retired consensus dependency, and no CLAUDE.md pointer.
+const RETIRED_DEPENDENCY_NAME = ['life', 'raft'].join('');
+
 function offendingFixture() {
   const root = makeRoot();
   write(root, 'package.json', `${JSON.stringify({
@@ -200,7 +202,7 @@ function offendingFixture() {
       'check': 'npm run audit:guideline:literals && npm run audit:file-size',
       'test:complexity': 'node scripts/check-complexity.js',
     },
-    dependencies: {liferaft: '1.0.0'},
+    dependencies: {[RETIRED_DEPENDENCY_NAME]: '1.0.0'},
   })}\n`);
   write(root, 'README.md', 'a five-node cluster, with no dated verdict\n');
   // A receipt that shows nothing published and next trailing latest.

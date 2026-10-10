@@ -16,6 +16,15 @@ import {escapeSql, rowsFromResult} from './table-distribution-helpers.js';
 import {
   TABLE_DISTRIBUTION_CONTROL_QUERY_HELPERS,
 } from './table-distribution-helpers-control-query.js';
+import {
+  buildGateRecord,
+  buildNodeHostIndex,
+  clusterSpreadShortfall,
+  describeGateFailure,
+  evaluateSplitSpreadClaim,
+  pollGroundTruthClaim,
+} from '../harness/scenario-ground-truth.js';
+import {recordScenarioGate} from '../harness/scenario-step-log.js';
 
 // Policy-mutation SQL comes from the canonical owner
 // (table-distribution-helpers-control-query.js) — the scenario policy
@@ -79,9 +88,19 @@ function buildUserActivityTableSql(tableName) {
       `INSERT INTO ${tableName} ` +
       '(id, account_id, amount_cents, flagged, pad) ' +
       'VALUES (?, ?, ?, ?, ?)',
+    // Ground truth for the split/spread gates: the split lineage
+    // (version + key range) tells a lingering parent from its children,
+    // replica_count is the policy replica count.
     SELECT_PARTITIONS:
-      'SELECT partition_id, leader_node_id, state FROM partitions ' +
+      'SELECT partition_id, leader_node_id, state, table_id, ' +
+      'partition_key_start, partition_key_end, partition_version, ' +
+      'replica_count FROM partitions ' +
       `WHERE table_name = '${tableName}'`,
+    // Replica ground truth: one row per replica with its status and raft
+    // role (the gates count only active voters, by the shared predicate).
+    SELECT_SERVICES:
+      'SELECT partition_id, node_id, service_type, replica_id, status, ' +
+      'raft_role FROM services',
     SELECT_TABLE_ID:
       `SELECT table_id FROM tables WHERE table_name = '${tableName}'`,
     SELECT_TABLE_POLICIES_PREFIX:
@@ -258,9 +277,89 @@ function createTableTopologyHelpers({scenarioName, tableName, sql}) {
     }
   }
 
+  async function readSplitGroundTruth(nodes) {
+    return {
+      partitionRows: await queryRowsAcrossNodes(nodes, sql.SELECT_PARTITIONS),
+      serviceRows: await queryRowsAcrossNodes(nodes, sql.SELECT_SERVICES),
+    };
+  }
+
+  function failClaimGate(cluster, record) {
+    recordScenarioGate(cluster, record);
+    throw new Error(`${scenarioName}: ${describeGateFailure(record)}`);
+  }
+
+  // A readback that throws still leaves a gate record of what the gate
+  // saw before it, with the error, before the error propagates.
+  async function recordedPoll(cluster, recordInput, pollOptions) {
+    try {
+      return await pollGroundTruthClaim(pollOptions);
+    } catch (error) {
+      if (error?.groundTruthOutcome) {
+        recordScenarioGate(cluster, buildGateRecord({...recordInput,
+          outcome: error.groundTruthOutcome}));
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * The one split/spread gate: each readback reads the table's
+   * partitions rows AND the services rows, and the explicit claim must
+   * hold on `stableReadbacks` consecutive readbacks with an identical
+   * partition/role/leader/voter fingerprint. Pass or fail, it records
+   * the facts it decided on (scenario.gate) and states what it measured.
+   * A claim needing more hosts (or nodes, in its spread unit) than the
+   * cluster has, or naming no valid unit, is refused at once.
+   * @param {Object} cluster
+   * @param {Array<Object>} nodes
+   * @param {Object} gate {name, claim, budgetMs, pollMs, stableReadbacks,
+   *   sleep, now, onReadback?, knownParentIds?}
+   * @return {Promise<Object>} {record, hostIndex, knownParentIds}
+   */
+  async function waitForSplitClaim(cluster, nodes, gate) {
+    const hostIndex = buildNodeHostIndex(nodes);
+    const knownParentIds = gate.knownParentIds || new Set();
+    const recordInput = {
+      budgetMs: gate.budgetMs,
+      claim: gate.claim,
+      gate: gate.name,
+      hostIndex,
+      stableReadbacksRequired: gate.stableReadbacks,
+    };
+    const shortfall = clusterSpreadShortfall(hostIndex, gate.claim);
+    if (shortfall !== null) {
+      failClaimGate(cluster, buildGateRecord({...recordInput, outcome: {
+        elapsedMs: ZERO, evaluation: {unmet: [shortfall]}, passed: false,
+        readbacks: ZERO, stableReadbacks: ZERO, unmetTally: {},
+      }}));
+    }
+    const outcome = await recordedPoll(cluster, recordInput, {
+      budgetMs: gate.budgetMs,
+      evaluate: ({partitionRows, serviceRows}) => evaluateSplitSpreadClaim({
+        claim: gate.claim, hostIndex, knownParentIds, partitionRows,
+        serviceRows,
+      }),
+      now: gate.now,
+      onReadback: gate.onReadback || null,
+      pollMs: gate.pollMs,
+      readback: () => readSplitGroundTruth(nodes),
+      sleep: gate.sleep,
+      stableReadbacksRequired: gate.stableReadbacks,
+    });
+    const record = buildGateRecord({...recordInput, outcome});
+    if (!outcome.passed) {
+      failClaimGate(cluster, record);
+    }
+    recordScenarioGate(cluster, record);
+    return {hostIndex, knownParentIds, record};
+  }
+
   return {
     applySplitPolicies,
     queryRowsAcrossNodes,
+    readSplitGroundTruth,
+    waitForSplitClaim,
     resolveTableId,
     retryTransientAdminQuery,
     seedDataset,

@@ -26,8 +26,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {coreTrappingAppend} from './core-trap-envelope.js';
 import {
-  bindingWireNumbers,
   durableAppliedState,
   durableHardState,
   durableLog,
@@ -45,8 +45,8 @@ import {
   COMMITTED_MEMBERSHIP_STAMP_KIND,
   PARTICIPATION_GATE,
 } from '../../../src/raft/raft-committed-membership-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RealTimeSource} from '../../../src/time/time-source.js';
 import {
   REPLACE_COMPLETION_VERDICT,
@@ -69,8 +69,6 @@ const SETTLE_ROUNDS = 600;
 const ELECTION_ROUNDS = 200;
 const TARGET = 'gate-t';
 const LEADER_ROLE = 'leader';
-const WIRE = bindingWireNumbers();
-const TRAPPING_COMMIT = '999999';
 const FOREIGN_PEER_OFFSET = 1000;
 const REARM_BOUND_MS = 1000;
 
@@ -200,7 +198,7 @@ function oracleStamp(cluster, leader, genesis) {
 function addTarget(cluster, stamp) {
   const hints = [...Object.values(stamp.identities), TARGET];
   return cluster.addReplica(TARGET, hints,
-    {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
+    {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
 }
 
 function targetDurable(cluster) {
@@ -384,23 +382,17 @@ test('T4 (commit lag): a caught-up target between j and its own AddNode ' +
   }
 });
 
-// Traps the shared core through one port: a heartbeat whose commit lies
-// beyond any log, driven by a tick of that replica.
+// Traps the shared core through one port (core-trap-envelope.js), driven by
+// a tick of that replica.
 function trapCoreThrough(cluster, replicaId) {
   const status = cluster.node(replicaId).readStatus();
-  cluster.node(replicaId).step({
+  cluster.node(replicaId).step(coreTrappingAppend({
+    dbFile: cluster.replica(replicaId).dbFile,
     groupId: PARTITION_ID,
-    to: status.peerId,
-    message: {
-      from: String(Number(status.peerId) + FOREIGN_PEER_OFFSET),
-      to: status.peerId,
-      msgType: WIRE.messageType.MsgHeartbeat,
-      term: String(Number(status.term) + 1),
-      logTerm: '0',
-      index: '0',
-      commit: TRAPPING_COMMIT,
-    },
-  });
+    status,
+    from: String(Number(status.peerId) + FOREIGN_PEER_OFFSET),
+    term: String(Number(status.term) + 1),
+  }));
   const originalConsoleError = console.error;
   try {
     console.error = () => undefined;

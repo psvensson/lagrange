@@ -268,6 +268,17 @@ function resolveLoadMetricsSelection(entryLoadMetrics, logs) {
   };
 }
 
+// The failed phase a phase-orchestrated scenario reports, else the
+// scenario step its own step log (scenario.step events) recorded as
+// failed; never "unknown" when the scenario named the step.
+function resolveSummaryPhase(diagnostics, logs) {
+  const reportedPhase = diagnostics?.failedPhase?.phase;
+  if (reportedPhase) {
+    return reportedPhase;
+  }
+  return logs?.playbackEventSummary?.failedScenarioStep?.step || null;
+}
+
 function buildScenarioFailureBundle({
   entry,
   reportOutputPath,
@@ -369,7 +380,7 @@ function buildScenarioFailureBundle({
     summary: {
       passed: entry.passed === true,
       error: entry.error || null,
-      phase: diagnostics?.failedPhase?.phase || null,
+      phase: resolveSummaryPhase(diagnostics, logs),
       rootCauseClass: summaryRootCauseClass,
       dominantReason: failure?.dominantReason || null,
       quiescence: failure?.quiescence || null,

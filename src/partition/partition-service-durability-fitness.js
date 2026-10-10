@@ -1,6 +1,7 @@
 import {TIME_MS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   PARTITION_SERVICE_LOG_MSG,
 } from './partition-service-constants.js';
@@ -44,6 +45,36 @@ const LEADER_DURABILITY_STRIKE_LIMIT = 3;
 // names C3.
 const LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS =
   TIME_MS.SECOND * 15;
+const LEADER_DURABILITY_WAIT = Object.freeze({
+  hold: Object.freeze({
+    wait: 'TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS',
+    awaited: 'open transaction on the leader connection reaching durable ' +
+      'storage (the legal hold, over the strike bound)',
+  }),
+  successorless: Object.freeze({
+    wait: 'LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS',
+    awaited: 'a viable durability successor (a follower ack inside the ' +
+      'viability window)',
+  }),
+});
+
+/**
+ * Report one spent leader-durability bound with the unfitness evidence.
+ * @param {Object} service - Partition service.
+ * @param {Object} waitIdentity - LEADER_DURABILITY_WAIT entry.
+ * @param {Object} spent - {boundMs, elapsedMs, evidence}.
+ * @private
+ */
+function reportLeaderDurabilitySpent(service, waitIdentity, spent) {
+  const {partitionId, replicaId, ...observed} = spent.evidence;
+  reportWaitBoundSpent(service.logger, {
+    ...waitIdentity,
+    boundMs: spent.boundMs,
+    elapsedMs: spent.elapsedMs,
+    lastObserved: observed,
+    scope: {partitionId, replicaId},
+  });
+}
 // Matches the deferCandidacy inflation window: while unfit, deferral must be
 // re-asserted at least once per window or the alive zombie (whose in-memory
 // log matches the followers') is fully electable again.
@@ -229,10 +260,11 @@ class PartitionServiceDurabilityFitnessMethods {
     if (firstDetection) {
       // The loud surfacing lives HERE: the handoff seam itself logs nothing
       // (design-vet finding) and run-23's whole failure was silence.
-      this.logger.error(
-        PARTITION_SERVICE_LOG_MSG.LEADER_DURABILITY_UNFIT,
+      reportLeaderDurabilitySpent(this, LEADER_DURABILITY_WAIT.hold, {
+        boundMs: LEADER_DURABILITY_LEGAL_HOLD_MS,
+        elapsedMs: signal.heldMs,
         evidence,
-      );
+      });
     }
     // The alive zombie's in-memory log matches the followers', so vote rules
     // do NOT disfavor it: it needs candidacy deferral while unfit (CL-033/034
@@ -269,12 +301,13 @@ class PartitionServiceDurabilityFitnessMethods {
    */
   demoteDurabilityUnfitLeader(nowMs, state, evidence, successorViable) {
     if (!successorViable) {
-      this.logger.error(
-        PARTITION_SERVICE_LOG_MSG
-          .LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK,
+      reportLeaderDurabilitySpent(
+        this,
+        LEADER_DURABILITY_WAIT.successorless,
         {
-          ...evidence,
-          successorlessForMs: nowMs - state.successorlessUnfitSinceMs,
+          boundMs: LEADER_DURABILITY_SUCCESSORLESS_DEMOTION_FALLBACK_MS,
+          elapsedMs: nowMs - state.successorlessUnfitSinceMs,
+          evidence,
         },
       );
     }
