@@ -1,0 +1,278 @@
+[
+  {
+    "name": "positive",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 0,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "0485228ac2e4b394b42463c26f2a43f2d420daa4b7be88c820d261e070e6628b",
+    "processGroupId": 1547,
+    "wallMs": 1603.356,
+    "accepted": true
+  },
+  {
+    "name": "captured-callback",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "ed53d859745e7a752bcda45d6e9854a6622446adddafc3bdd2258eb6d7335f3b",
+    "processGroupId": 1570,
+    "wallMs": 1693.486,
+    "accepted": true,
+    "requiredTest": "a callback captured before re-registration cannot borrow its successor identity",
+    "requiredAssertion": "a retired captured callback must not borrow its replacement registration"
+  },
+  {
+    "name": "exact-unregister",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "953ef65d367dbc72f3cbec8428b3f1c3e8d0ca25b0e06f2927d1a58aaa170535",
+    "processGroupId": 1593,
+    "wallMs": 1611.487,
+    "accepted": true,
+    "requiredTest": "retiring an old handler cannot unregister the current handler",
+    "requiredAssertion": "retirement must leave the exact successor callback registered"
+  },
+  {
+    "name": "configured-budget",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "3d467d022d1ca2e0d015cf47574c8ec128b69117c75747bd08ffe6fcdf8d475d",
+    "processGroupId": 1616,
+    "wallMs": 1671.626,
+    "accepted": true,
+    "requiredTest": "recipient delivery uses the workflow owner configured timeout",
+    "requiredAssertion": "recipient delivery must use the owner configured timeout"
+  },
+  {
+    "name": "recording-invocation",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "2a66f44b29d8fc69895f50f028a304947593032ad672044b7ab5c1eb400e09a9",
+    "processGroupId": 1644,
+    "wallMs": 1616.435,
+    "accepted": true,
+    "requiredTest": "fence-turnover after native delivery prevents a new recording submission",
+    "requiredAssertion": "an invalidated driver invocation cannot start a recording write"
+  },
+  {
+    "name": "submitted-is-unknown",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "ae6d8859607d8c271c6bac9eb62cd0034048e645700f9418489c1c6a37ca2252",
+    "processGroupId": 1667,
+    "wallMs": 1559.962,
+    "accepted": true,
+    "requiredTest": "an already-submitted write stays UNKNOWN after invocation retirement",
+    "requiredAssertion": "retirement cannot turn a submitted write into definite noncommitment"
+  },
+  {
+    "name": "retained-owner-lane",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "2f8aebc5b7cba866724106a7f4a90ba8f64bbbe51d8056b16ce4728ee687388c",
+    "processGroupId": 1690,
+    "wallMs": 1597.778,
+    "accepted": true,
+    "requiredTest": "recording enters the existing retained operation lane before reading",
+    "requiredAssertion": "the existing operation lane must be entered"
+  },
+  {
+    "name": "queued-input-snapshot",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "cfbb51e05634e178296ccb8639e7564a5e70d79b2b418c7de763c01ce31832c0",
+    "processGroupId": 1713,
+    "wallMs": 1742.393,
+    "accepted": true,
+    "requiredTest": "queued recording snapshots encoded request and recipient without invoking accessors",
+    "requiredAssertion": "the waiting command must retain its original immutable input"
+  },
+  {
+    "name": "per-attempt-boot",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "5b83523b4007d58a8ba19eb8c0fefbd860cd84403ba6af63967d00aca3a2c84d",
+    "processGroupId": 1736,
+    "wallMs": 1746.872,
+    "accepted": true,
+    "requiredTest": "canonical-boot-revocation during retry backoff prevents a NEW receipt submission",
+    "requiredAssertion": "revoked claim or boot must prevent another submission after backoff"
+  },
+  {
+    "name": "per-attempt-lease",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "38d8995f0ac4429bbf11bc8af0303e2c62d96c56d9e55d3101e8e4e39c649375",
+    "processGroupId": 1759,
+    "wallMs": 1726.542,
+    "accepted": true,
+    "requiredTest": "lease-expiry during retry backoff prevents a NEW receipt submission",
+    "requiredAssertion": "revoked claim or boot must prevent another submission after backoff"
+  },
+  {
+    "name": "post-admission-lifetime",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "efa5c0015da9e261f89e40bf8b12375a0a163416b1a1817a93d8ea85431a2fe0",
+    "processGroupId": 1782,
+    "wallMs": 1712.039,
+    "accepted": true,
+    "requiredTest": "async admission must recheck local lifetime adjacent to actual submission",
+    "requiredAssertion": "turnover during async admission must prevent submission"
+  },
+  {
+    "name": "extra-receipt-effect",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "2e80c7059baacdec296364e1f50472eb63624596a131f65ce60c0974680d69a7",
+    "processGroupId": 1805,
+    "wallMs": 1634.672,
+    "accepted": true,
+    "requiredTest": "lease-expiry after submission permits only the exact late receipt",
+    "requiredAssertion": "late recording must change only the three historical receipt columns"
+  },
+  {
+    "name": "committed-input-not-supported",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 1,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "a69012ab7aabee4daad944b0d91259d5ca1618e274c6e226d51c5653ecc55684",
+    "processGroupId": 1828,
+    "wallMs": 1562.967,
+    "accepted": true,
+    "requiredTest": "reconstruction after SQL-answer loss consumes the committed permit without reviving it",
+    "requiredAssertion": "reconstruction must accept the exact already-committed receipt without an original packet"
+  },
+  {
+    "name": "restored-positive",
+    "command": [
+      "node",
+      "--no-warnings",
+      "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+      "--test",
+      "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+      "test/integration/message-group-learner-recipient.integration.test.js"
+    ],
+    "exit": 0,
+    "timedOut": false,
+    "cleanupComplete": true,
+    "sourceSha256": "0485228ac2e4b394b42463c26f2a43f2d420daa4b7be88c820d261e070e6628b",
+    "processGroupId": 1851,
+    "wallMs": 1688.452,
+    "accepted": true
+  }
+]

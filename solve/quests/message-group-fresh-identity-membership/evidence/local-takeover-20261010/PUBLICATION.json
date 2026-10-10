@@ -1,0 +1,118 @@
+{
+  "schema": "local-takeover-preservation/1",
+  "baseSha": "60a60b2a6461d6fd9fa0f6f96fd3e25aa94651e4",
+  "targetBranch": "handoff/rs-raft-safety-first-20261010",
+  "sourceFiles": [
+    {
+      "path": "architecture/contracts/message-group-registered-learner-read.md",
+      "afterSha256": "5b799dc8167cedaff8e6576426edf9fdacabff7f3e3ff359e245c925c7d6cd50",
+      "afterGitBlob": "4ce258a225d771e021f99b84ed1f2a824dcd351f",
+      "newFile": false,
+      "beforeSha256": "6a3f01725abbbf5a641b23abbcbd8080d8687a15cb2b2a3d2bebd56cdf5ca3a6",
+      "beforeGitBlob": "33d1bf146a62dc83010bcee366f69a8b0e0e0119",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    },
+    {
+      "path": "solve/quests/message-group-fresh-identity-membership/evidence/invocation-submission-fences-20261009-local.md",
+      "afterSha256": "2467595e0e5a1281fa362d75a770545525cc904acfac292748f3030a998a77ce",
+      "afterGitBlob": "3ccdb8aaa65f46a938b78c0ff7a628007e002793",
+      "newFile": true
+    },
+    {
+      "path": "solve/quests/message-group-fresh-identity-membership/evidence/safety-first-recording-20261010-local.md",
+      "afterSha256": "b9030e6a414e82cab7e68f3102a18ddc5fff276f944da9acaf1816b647cb6ba4",
+      "afterGitBlob": "a31db19d7f15f7f7c5c257b491eb8b3165285fa0",
+      "newFile": true
+    },
+    {
+      "path": "src/node/message-group-membership-recipient.js",
+      "afterSha256": "0485228ac2e4b394b42463c26f2a43f2d420daa4b7be88c820d261e070e6628b",
+      "afterGitBlob": "547625cfe6d9f0d055ce77e8d2f8a463e18cba99",
+      "newFile": false,
+      "beforeSha256": "7953bb8124140492f4c1b74d20174bf4c4d842c0acf840d75e5d3fc2970124a9",
+      "beforeGitBlob": "7722002f2364984d9ad5de0f4eaf38449ff3eea2",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    },
+    {
+      "path": "src/node/message-group-service-handler.js",
+      "afterSha256": "a5aa89acba0896537fe974bef71f073363b5cc247a9fbcc6f1946acaa1335c7a",
+      "afterGitBlob": "f9da8710181f8ca1b6305510fc46b747f028eea0",
+      "newFile": false,
+      "beforeSha256": "2da50532124331069c2e88d31ebbad56ff856b1f1cf60b3366f0a9b9e3518fa1",
+      "beforeGitBlob": "eccbda9ff6a5eb88814d9b56d35460da61de40f8",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-message-group-native-read.js",
+      "afterSha256": "acfa750af7008c15975721f4b3376c6555aa29c36eb972add084e0ed06967e82",
+      "afterGitBlob": "c5442a1a9793289586c5ae9e44ade5c1ff2901a8",
+      "newFile": false,
+      "beforeSha256": "8bd0c4b5521184a8a0cdcfc78915366d6d876bd62daf6cb95b86c09f16c26346",
+      "beforeGitBlob": "4dbb355b1847a3e6ff932c930680ca3ff2125813",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-owner.js",
+      "afterSha256": "251ef55a6811a4117766076acdba17f65b37e9a1d61b359e5a9d2e3af8670208",
+      "afterGitBlob": "3f4cf55c42974f7c0f375ae06d53385860573a4d",
+      "newFile": false,
+      "beforeSha256": "71aabe416297dbe51668bcf9f9c5f7c1c9aec57d9a63af9f955ce2d20d7bff01",
+      "beforeGitBlob": "0b2df9f0842c7c2b0490529460a7ec34ca04b693",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+      "afterSha256": "882ecfc97cb91432ac92ef959c046fe58b4cce1c3ddc73dd70b34d940944b8d0",
+      "afterGitBlob": "331898b38e756c785d022d7a12913d7f76f36d4b",
+      "newFile": false,
+      "beforeSha256": "0b8af3a0d7e5857b96972b05dc01985fa1b015c72e4ad7909a13a649d47a8df8",
+      "beforeGitBlob": "cf765466d87ad83e794d9a496e233ff4a1c431f7",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+      "afterSha256": "5deb3d1dca320f6891569cf92b9bbbe11a229afa40629390a61efaedf856ca7c",
+      "afterGitBlob": "9210f19402a2faf32f11ac078e0c4128c3374833",
+      "newFile": false,
+      "beforeSha256": "4fad7a63e905cd2b5f56af1fcc00971de6bcb03ae1116822a7d0348eb39232be",
+      "beforeGitBlob": "a4bc02d08dd285068321db06a68f17c92d48514a",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository.js",
+      "afterSha256": "8e43585ce3fe6f5f7fb4d4e836152d292ae8aed723756e8bc2a15b46ca790f28",
+      "afterGitBlob": "5c887953616a5e700eda7994778d62639dc2867d",
+      "newFile": false,
+      "beforeSha256": "7a744f88a3d1af6fc9e18befcf7fc03ed79d2424e56d2dcd451b8a12f64f5f1d",
+      "beforeGitBlob": "2f7aadb4f7614ea2cbd59b4a369dd9be91826309",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    },
+    {
+      "path": "test/integration/message-group-learner-recipient.integration.test.js",
+      "afterSha256": "2d810424a61477451c7f1f4529f91cee7c61545274901d3d0ca4b50a4f45ffe9",
+      "afterGitBlob": "6a1fd5f7f93037d3c162bad83544b7dbb742652d",
+      "newFile": false,
+      "beforeSha256": "ad6b072b7ca46bfa41ba3782550fad688b5acbb2a4a3e2ffd1f7af71ab6b6cb3",
+      "beforeGitBlob": "041b04c15f6f9c47c9dd37278240475dc615aa53",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "afterSha256": "480d68d026faff815dd62e86f8b4f8f76ba82c5ea021f3fcfff28540a435f68a",
+      "afterGitBlob": "6dec36e28b7673f895031e5d7530efb5318bfdd9",
+      "newFile": false,
+      "beforeSha256": "363960ef086290768caff24caf691d22906d27b06139a3cbd0788ad9da461bcc",
+      "beforeGitBlob": "071e9108d0b500c3621e2c93651ae43741631e8a",
+      "preimageBasis": "Exact GitHub blob; eight retained live checks plus current owner/contract checks"
+    }
+  ],
+  "payloadSha256": "742a8a8193e2481b66ac4d5a0ce17047da47f8ff03295b208c87060255f41cd8",
+  "originalAttachmentSha256": "9e6ee95d25ef8db3440cff378f08baec798137e7d771a832622944b70367cbf6",
+  "retainedFileCount": 126,
+  "originalAttachmentUploaded": false,
+  "canonicalTestsRun": false,
+  "independentApproval": false,
+  "mainMerge": false,
+  "driverActivation": false,
+  "note": "Preserved diagnostics are historical measurements; see ORIGINAL-ARCHIVE.txt."
+}

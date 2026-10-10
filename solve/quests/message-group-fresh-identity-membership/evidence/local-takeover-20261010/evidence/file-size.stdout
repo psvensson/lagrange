@@ -1,0 +1,6 @@
+Source oversized-file ratchet: 2/27 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+
+Largest oversized files (25 max):
+843 src/rebalancer/replica-operation-repository.js (threshold 800)
+812 src/rebalancer/operation-workflow-owner.js (threshold 800)

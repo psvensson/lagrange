@@ -846,14 +846,16 @@
       ]
     },
     "message-group-registered-learner-read": {
-      "description": "Actual registered message-group recipient binds router delivery, local service/port lifetime and exact native evidence to the existing workflow owner recorder. No ordinary staging, CREATE, proposal, or successor authority.",
+      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
       "owners": [
         "src/node/message-group-service-handler.js",
         "src/node/message-group-membership-recipient.js",
         "src/rebalancer/operation-workflow-owner.js",
         "src/rebalancer/operation-workflow-message-group-native-read.js",
         "src/rebalancer/replica-operation-constants.js",
-        "src/rebalancer/replica-operation-repository.js"
+        "src/rebalancer/replica-operation-repository.js",
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
       ],
       "tests": [
         "test/integration/message-group-learner-recipient.integration.test.js"
@@ -1661,7 +1663,7 @@
       ]
     },
     "message-group-registered-learner-read": {
-      "description": "Actual registered message-group recipient binds router delivery, local service/port lifetime and exact native evidence to the existing workflow owner recorder. No ordinary staging, CREATE, proposal, or successor authority.",
+      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
       "endpoints": [
         {
           "id": "registered-native-recipient",
@@ -1676,7 +1678,9 @@
             "src/rebalancer/operation-workflow-owner.js",
             "src/rebalancer/operation-workflow-message-group-native-read.js",
             "src/rebalancer/replica-operation-constants.js",
-            "src/rebalancer/replica-operation-repository.js"
+            "src/rebalancer/replica-operation-repository.js",
+            "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
           ]
         }
       ],

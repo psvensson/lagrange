@@ -1,0 +1,7 @@
+{
+  "schema": "exact-test-configuration-validation/1",
+  "sha256": "56ba388a76452d91baa23cfdb6257794a9f6dfbdcc581649534e1856b637c5e3",
+  "valid": true,
+  "validator": "fastjsonschema",
+  "scope": "configuration setup only, no runtime/SQL/native expected answers"
+}

@@ -1,0 +1,17 @@
+{
+  "name": "recording-invocation",
+  "command": [
+    "node",
+    "--no-warnings",
+    "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+    "--test",
+    "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+    "test/integration/message-group-learner-recipient.integration.test.js"
+  ],
+  "exit": 1,
+  "timedOut": false,
+  "cleanupComplete": true,
+  "sourceSha256": "2a66f44b29d8fc69895f50f028a304947593032ad672044b7ab5c1eb400e09a9",
+  "processGroupId": 1644,
+  "wallMs": 1616.435
+}

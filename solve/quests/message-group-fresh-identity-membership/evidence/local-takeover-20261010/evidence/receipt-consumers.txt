@@ -1,0 +1,27 @@
+src/rebalancer/replica-operation-repository-mutation-persistence-methods.js:111:    nullableOperationValue(operation.messageGroupLearnerStamp),
+src/rebalancer/replica-operation-message-group-membership-fields.js:8:  'messageGroupLearnerStamp',
+src/rebalancer/replica-operation-repository-constants.js:13:  message_group_membership_identity, message_group_learner_stamp,
+src/rebalancer/replica-operation-message-group-learner-observation.js:90:    row.messageGroupLearnerStamp !== null || row.messageGroupVoterStamp !== null ||
+src/rebalancer/replica-operation-message-group-membership-permit.js:11:  LEARNER_IN_FLIGHT: 'learner_proposal_in_flight', LEARNER_COMMITTED: 'learner_committed',
+src/rebalancer/rebalance-coordinator-shared.js:146:    message_group_membership_identity, message_group_learner_stamp,
+src/rebalancer/replica-operation-repository-row-methods.js:127:        messageGroupLearnerStamp:
+src/rebalancer/replica-operation-repository-row-methods.js:128:          nullableValue(row.message_group_learner_stamp),
+src/rebalancer/replica-operation-repository-mutation-row-methods.js:66:        message_group_learner_stamp:
+src/rebalancer/replica-operation-repository-mutation-row-methods.js:67:          nullableOperationValue(operation.messageGroupLearnerStamp),
+src/rebalancer/replica-operation-message-group-membership-authorization.js:31:    const stamp = committedStampOfAnswer(JSON.parse(row.messageGroupLearnerStamp));
+src/rebalancer/replica-operation-message-group-membership-authorization.js:81:  AND message_group_membership_obligation_state = ? AND message_group_learner_stamp = ?
+src/rebalancer/replica-operation-message-group-membership-authorization.js:117:    row.messageGroupMembershipPhase !== PHASE.LEARNER_COMMITTED ||
+src/rebalancer/replica-operation-message-group-membership-authorization.js:133:    row.workflowStep, ...settlement.params, PHASE.LEARNER_COMMITTED, priorPermit,
+src/rebalancer/replica-operation-message-group-membership-authorization.js:134:    MEMBERSHIP_OBLIGATION.UNKNOWN, row.messageGroupLearnerStamp];
+src/rebalancer/replica-operation-message-group-membership-authorization.js:149:    observed.messageGroupLearnerStamp === row.messageGroupLearnerStamp &&
+src/rebalancer/replica-operation-message-group-membership-authorization.js:178:    row.messageGroupLearnerStamp === null && row.messageGroupVoterStamp === null &&
+src/rebalancer/replica-operation-message-group-membership-authorization.js:287:  return row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
+src/rebalancer/replica-operation-message-group-membership-authorization.js:331:    const stamp = priorLearnerStamp({messageGroupLearnerStamp: encodedStamp}, input.identity,
+src/rebalancer/replica-operation-message-group-membership-authorization.js:363:        message_group_membership_permit = ?, message_group_learner_stamp = ?
+src/rebalancer/replica-operation-message-group-membership-authorization.js:365:      [PHASE.LEARNER_COMMITTED, evidence.committedPermit, evidence.stamp, ...basis.params],
+src/rebalancer/replica-operation-message-group-membership-authorization.js:376:    after.row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
+src/rebalancer/replica-operation-message-group-membership-authorization.js:378:    after.row.messageGroupLearnerStamp === evidence.stamp;
+src/rebalancer/replica-operation-message-group-membership-owner-claim.js:89:    row.messageGroupLearnerStamp === null && row.messageGroupVoterStamp === null &&
+src/rebalancer/replica-operation-message-group-membership-owner-claim.js:128:  ['message_group_learner_stamp', 'messageGroupLearnerStamp'],
+src/rebalancer/replica-operation-message-group-membership-owner-claim.js:195:    row.messageGroupLearnerStamp === null && row.messageGroupVoterStamp === null &&
+src/bootstrap/replica-operation-message-group-membership-schema-constants.js:11:  LEARNER_STAMP: 'message_group_learner_stamp',

@@ -428,7 +428,7 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
   return normalizedSnapshot;
 }
 
-import {recordMessageGroupLearnerFromRecipient} from
+import {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient} from
   './operation-workflow-message-group-native-read.js';
 
 class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
@@ -457,6 +457,11 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
    */
   recordMessageGroupLearnerOutcomeFromRecipient(request, recipient) {
     return recordMessageGroupLearnerFromRecipient(this, request, recipient);
+  }
+
+  /** Restart entry: the repository reconstructs the receipt input from durable state. */
+  recoverMessageGroupLearnerOutcomeFromRecipient(operationId, recipient) {
+    return recoverMessageGroupLearnerFromRecipient(this, operationId, recipient);
   }
 
   selectOperationWorkflowOwnerAdapterSnapshotOperation(

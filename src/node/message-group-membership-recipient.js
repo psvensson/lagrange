@@ -18,9 +18,11 @@ const unavailable = () => Object.freeze({kind: KIND.REFUSED, reason: REASON.UNAV
 const invalid = () => Object.freeze({kind: KIND.REFUSED, reason: REASON.INVALID});
 const nonempty = (value) => typeof value === 'string' && value.length > 0;
 
-function captureRecipient(handler, replicaId, delivery) {
-  const router = handler.messageRouter;
-  const registration = handler.registeredRouterHandler;
+function captureRecipient(handler, replicaId, delivery, invocation) {
+  // This pair is captured by registerWithRouter and never comes from payload.
+  // Re-reading the handler's current pair here would revive a retired callback.
+  const router = invocation?.router;
+  const registration = invocation?.callback;
   const isCurrent = delivery?.isCurrent;
   const address = `${handler.nodeId}/${ADDRESS.SERVICE_SEGMENT}/${ADDRESS.HANDLER_ID}`;
   const service = handler.resolveActiveReplicaService(replicaId);
@@ -48,10 +50,10 @@ function recipientQuery(request) {
   return {replicaId, groupId,
     query: Object.freeze({...normalized.query, purpose: PURPOSE.LEARNER_ACTION})};
 }
-async function readOrigin(handler, request, delivery) {
+async function readOrigin(handler, request, delivery, invocation) {
   const input = recipientQuery(request);
   if (!input) return invalid();
-  const captured = captureRecipient(handler, input.replicaId, delivery);
+  const captured = captureRecipient(handler, input.replicaId, delivery, invocation);
   if (!captured) return unavailable();
   if (captured.service.groupId !== input.groupId ||
     captured.service.replicaId !== input.replicaId || captured.service.nodeId !== handler.nodeId) {
@@ -62,10 +64,10 @@ async function readOrigin(handler, request, delivery) {
   // that answer must not cross into the workflow's next observation.
   return captured.current() ? answer : unavailable();
 }
-async function readMessageGroupLearnerAtRecipient(handler, request, delivery) {
+async function readMessageGroupLearnerAtRecipient(handler, request, delivery, invocation) {
   let membership;
   try {
-    membership = await readOrigin(handler, request, delivery);
+    membership = await readOrigin(handler, request, delivery, invocation);
   } catch {
     membership = unavailable();
   }

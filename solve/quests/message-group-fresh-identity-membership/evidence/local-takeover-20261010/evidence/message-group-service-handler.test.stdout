@@ -1,0 +1,21 @@
+{"type":"test:stderr","file":"test/node/message-group-service-handler.test.js","message":"(node:2020) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:\n"}
+{"type":"test:stderr","file":"test/node/message-group-service-handler.test.js","message":"--import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"../previous/diagnostic/native-loader.mjs\", pathToFileURL(\"./\"));'\n"}
+{"type":"test:stderr","file":"test/node/message-group-service-handler.test.js","message":"(Use `node --trace-warnings ...` to show where the warning was created)\n"}
+{"type":"test:pass","name":"registers with the message router service address","file":"/mnt/data/continuation-20261010/repo/test/node/message-group-service-handler.test.js","nesting":1,"testNumber":1,"durationMs":1.68628,"skip":false,"todo":false}
+{"type":"test:pass","name":"refuses CREATE_REPLICA (cache-derived topology (a fresh name)) and opens nothing","file":"/mnt/data/continuation-20261010/repo/test/node/message-group-service-handler.test.js","nesting":1,"testNumber":2,"durationMs":2.909616,"skip":false,"todo":false}
+{"type":"test:pass","name":"refuses CREATE_REPLICA (explicit topology) and opens nothing","file":"/mnt/data/continuation-20261010/repo/test/node/message-group-service-handler.test.js","nesting":1,"testNumber":3,"durationMs":0.577877,"skip":false,"todo":false}
+{"type":"test:pass","name":"refuses CREATE_REPLICA (a reissued name the group already holds elsewhere) and opens nothing","file":"/mnt/data/continuation-20261010/repo/test/node/message-group-service-handler.test.js","nesting":1,"testNumber":4,"durationMs":0.535423,"skip":false,"todo":false}
+{"type":"test:pass","name":"refuses CREATE_REPLICA (a replica already active on this node) and opens nothing","file":"/mnt/data/continuation-20261010/repo/test/node/message-group-service-handler.test.js","nesting":1,"testNumber":5,"durationMs":0.815333,"skip":false,"todo":false}
+{"type":"test:pass","name":"removes an existing local message-group replica discovered via resolver","file":"/mnt/data/continuation-20261010/repo/test/node/message-group-service-handler.test.js","nesting":1,"testNumber":6,"durationMs":11.364692,"skip":false,"todo":false}
+{"type":"test:pass","name":"resumes stalled removing message-group replicas","file":"/mnt/data/continuation-20261010/repo/test/node/message-group-service-handler.test.js","nesting":1,"testNumber":7,"durationMs":1.770636,"skip":false,"todo":false}
+{"type":"test:pass","name":"MessageGroupServiceHandler","file":"/mnt/data/continuation-20261010/repo/test/node/message-group-service-handler.test.js","nesting":0,"testNumber":1,"durationMs":20.606559,"skip":false,"todo":false}
+{"type":"test:summary","file":"/mnt/data/continuation-20261010/repo/test/node/message-group-service-handler.test.js","success":true,"counts":{"tests":7,"failed":0,"passed":7,"cancelled":0,"skipped":0,"todo":0,"topLevel":1,"suites":1},"durationMs":24.471637}
+{"type":"test:diagnostic","nesting":0,"message":"tests 7"}
+{"type":"test:diagnostic","nesting":0,"message":"suites 1"}
+{"type":"test:diagnostic","nesting":0,"message":"pass 7"}
+{"type":"test:diagnostic","nesting":0,"message":"fail 0"}
+{"type":"test:diagnostic","nesting":0,"message":"cancelled 0"}
+{"type":"test:diagnostic","nesting":0,"message":"skipped 0"}
+{"type":"test:diagnostic","nesting":0,"message":"todo 0"}
+{"type":"test:diagnostic","nesting":0,"message":"duration_ms 235.535532"}
+{"type":"test:summary","file":null,"success":true,"counts":{"tests":7,"failed":0,"passed":7,"cancelled":0,"skipped":0,"todo":0,"topLevel":1,"suites":1},"durationMs":235.535532}

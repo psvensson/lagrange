@@ -1,0 +1,4 @@
+{"type":"test:stderr","file":"test/integration/message-group-learner-recipient.integration.test.js","message":"(node:1054) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:\n"}
+{"type":"test:stderr","file":"test/integration/message-group-learner-recipient.integration.test.js","message":"--import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"../previous/diagnostic/native-loader.mjs\", pathToFileURL(\"./\"));'\n"}
+{"type":"test:stderr","file":"test/integration/message-group-learner-recipient.integration.test.js","message":"(Use `node --trace-warnings ...` to show where the warning was created)\n"}
+{"type":"test:stderr","file":"test/integration/message-group-learner-recipient.integration.test.js","message":"(node:1054) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n"}

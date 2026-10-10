@@ -1,0 +1,17 @@
+{
+  "name": "queued-input-snapshot",
+  "command": [
+    "node",
+    "--no-warnings",
+    "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+    "--test",
+    "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+    "test/integration/message-group-learner-recipient.integration.test.js"
+  ],
+  "exit": 1,
+  "timedOut": false,
+  "cleanupComplete": true,
+  "sourceSha256": "cfbb51e05634e178296ccb8639e7564a5e70d79b2b418c7de763c01ce31832c0",
+  "processGroupId": 1713,
+  "wallMs": 1742.393
+}
