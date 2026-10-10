@@ -103,7 +103,13 @@ message-group services row for a group whose lane holder owes one). Each turn:
    identity, committed initial permit, no voter/removal stamp, canonical permit
    and stamp encodings, coherent learner stamp); discovery and the recorder's
    readback both consume it. It carries no claim, lease or boot gate, so a
-   settled fact stays settled after its lease expires.
+   settled fact stays settled after its lease expires. A new promotion or
+   pre-promotion abandonment selection consumes the same predicate first (a
+   failing row is CONFLICT and no CAS is attempted). It then requires the next
+   permit to follow that learner's configuration, generation and term (else
+   INVALID) and keeps settlement, the exact prior permit, the UNKNOWN
+   obligation, the live holder, boot and the operation-row CAS; the idempotent
+   readback of an already-selected branch is a later phase and separate.
 4. Keeps a live local membership claim, waits on a live foreign one, and adopts
    an expired one through the existing claim CAS. Adoption is holder
    replacement, never a grant for a successor action.

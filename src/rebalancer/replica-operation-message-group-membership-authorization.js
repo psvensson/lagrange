@@ -90,6 +90,38 @@ const branchSelectionSql = (settlement) => `UPDATE replica_operations SET messag
   AND message_group_membership_obligation_state = ? AND message_group_learner_stamp = ?
   AND message_group_voter_stamp IS NULL AND message_group_removal_stamp IS NULL`;
 
+function nextPermitFollowsLearner(next, learner) {
+  return next.leaderConfigurationStamp.configurationKey === learner.configurationKey &&
+    next.leaderConfigurationStamp.membershipGenerationIndex === learner.membershipGenerationIndex &&
+    next.leaderTerm >= learner.term;
+}
+function selectedBranchRecorded(row, spec, nextPermit) {
+  return row.messageGroupMembershipPhase === spec.phase &&
+    row.messageGroupMembershipPermit === nextPermit &&
+    row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN;
+}
+// The selected branch is a later phase than the recorded learner fact, so its
+// idempotent read-back keeps its own request/holder/boot logic. It does not
+// renew a lease or create runtime authority.
+async function readBackSelectedBranch(repository, row, identity, prior, next) {
+  const learner = priorLearnerStamp(row, identity, prior);
+  if (!learner || !nextPermitFollowsLearner(next, learner)) return result(OUTCOME.INVALID, row);
+  const currentClaim = decodeMembershipOwnerClaim(row.messageGroupMembershipOwnerClaim);
+  if (!membershipClaimIsLocalAndLive(repository, currentClaim, identity)) {
+    return result(OUTCOME.STALE_OWNER, row);
+  }
+  if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE, row);
+  return result(OUTCOME.RECORDED, row);
+}
+// A new selection consumes the recorder's one pure recorded-fact predicate
+// first; a row failing it is not a basis for any branch and is surfaced as
+// CONFLICT. Only then must the next permit follow that learner configuration.
+function newBranchFactRefusal(row, identity, encodedIdentity, next) {
+  if (!recordedLearnerFactIsValid(row, identity, encodedIdentity)) return OUTCOME.CONFLICT;
+  const learner = committedStampOfAnswer(JSON.parse(row.messageGroupLearnerStamp));
+  return nextPermitFollowsLearner(next, learner) ? null : OUTCOME.INVALID;
+}
+
 async function selectMessageGroupMembershipBranch(repository, request) {
   // The only accepted representations here are scalar strings and encoded row values.
   if (!request || typeof request !== 'object') return result(OUTCOME.INVALID);
@@ -106,27 +138,14 @@ async function selectMessageGroupMembershipBranch(repository, request) {
   if (!membershipRowIdentityMatches(row, identity, encodedIdentity)) {
     return result(OUTCOME.CONFLICT, row);
   }
-  const learner = priorLearnerStamp(row, identity, prior);
-  if (!learner || next.leaderConfigurationStamp.configurationKey !== learner.configurationKey ||
-    next.leaderConfigurationStamp.membershipGenerationIndex !== learner.membershipGenerationIndex ||
-    next.leaderTerm < learner.term) return result(OUTCOME.INVALID, row);
-  // Idempotent read-back does not renew a lease or create runtime authority.
-  if (row.messageGroupMembershipPhase === spec.phase &&
-    row.messageGroupMembershipPermit === nextPermit &&
-    row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN) {
-    const currentClaim = decodeMembershipOwnerClaim(row.messageGroupMembershipOwnerClaim);
-    if (!membershipClaimIsLocalAndLive(repository, currentClaim, identity)) {
-      return result(OUTCOME.STALE_OWNER, row);
-    }
-    if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE, row);
-    return result(OUTCOME.RECORDED, row);
+  if (selectedBranchRecorded(row, spec, nextPermit)) {
+    return readBackSelectedBranch(repository, row, identity, prior, next);
   }
+  const factRefusal = newBranchFactRefusal(row, identity, encodedIdentity, next);
+  if (factRefusal !== null) return result(factRefusal, row);
   const settlement = branchSettlementGuard(repository, row, spec);
-  if (!settlement ||
-    row.messageGroupMembershipPhase !== PHASE.LEARNER_COMMITTED ||
-    row.messageGroupMembershipPermit !== priorPermit ||
-    row.messageGroupMembershipObligationState !== MEMBERSHIP_OBLIGATION.UNKNOWN ||
-    row.messageGroupVoterStamp !== null || row.messageGroupRemovalStamp !== null) {
+  if (!settlement || row.messageGroupMembershipPermit !== priorPermit ||
+    row.messageGroupMembershipObligationState !== MEMBERSHIP_OBLIGATION.UNKNOWN) {
     return result(OUTCOME.CONFLICT, row);
   }
   const claim = decodeMembershipOwnerClaim(row.messageGroupMembershipOwnerClaim);
@@ -477,7 +496,8 @@ async function recoverMessageGroupLearnerOutcome(repository, operationId, readCo
 export {recoverMessageGroupLearnerOutcome};
 
 /** The one validity predicate of a recorded initial learner fact, shared by
- * discovery's settled-row classification and the recorder's replay/readback.
+ * discovery's settled-row classification, the recorder's replay/readback and
+ * new (not already-selected) promotion/abandonment branch selection.
  * It judges only the immutable historical record: the row's identity columns,
  * the committed phase with a COMMITTED initial ADD_LEARNER permit of this
  * transition, no voter or removal stamp (the learner phase allows neither),
