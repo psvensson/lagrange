@@ -1,8 +1,26 @@
 ---
 audience: development
+documentClass: history
 ---
 
 # Solver Content-Addressed Fast Path
+
+## Status correction - 2026-10-10
+
+This page preserves a historical design from the retired Solver. Its schema-v3
+review manifest and candidate-workspace descriptions below are not implemented
+enforcement in the active v2 commands at
+`86d53bc79615a91ad70ff5b75b40ee091211519a`. Current commands and operational
+requirements live in the [runbook](solver-runbook.md) and active Solver owners.
+Do not use this page as evidence that a review or generic test receipt is bound
+to the current candidate.
+
+The [adversarial risk review](adversarial-risk-review-2026-10-10.md) records WF1's
+narrow repair through the existing v2 owners. Useful design constraints remain
+below as reference; they do not authorize restoring the retired machinery or
+claiming its protections before implementation and independent proof.
+
+## Historical design
 
 The Solver's safety boundary is the exact candidate content, not the serialization
 of a Git diff and not the wall clock of proof that is cryptographically bound to

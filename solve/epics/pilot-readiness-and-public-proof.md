@@ -14,6 +14,7 @@ quests:
   - user-table-leader-handoff-demotion-pairing
   - user-table-leader-placement-spread-v2
   - user-table-leader-placement-spread
+  - wasi-cell-busy-health-admission
 authorizes: []
 legacyStatus: null
 doneWhen:
@@ -25,6 +26,32 @@ doneWhen:
 ---
 
 # Pilot readiness and public-path proof
+
+## Adversarial risk follow-ups (2026-10-10)
+
+The [final risk review](../../docs/development/adversarial-risk-review-2026-10-10.md)
+routes RT1, RT2, OP1 and OP2 here. The existing planned Q7/Q11/Q12 slots remain
+the homes for transport trust, public-path failure/resource proof and the
+supported upgrade/recovery envelope. This adds neither an umbrella epic nor
+new product/edition scope. The existing `authorizes` and gates remain unchanged.
+
+| Risk | Existing or prospective slot | Required evidence before closure |
+| --- | --- | --- |
+| RT1 | Prospective `wasi-cell-busy-health-admission` | Supported WASI request/call path: busy within budget survives health/admission, concurrency is typed, idle dead and truly hung workers still fail, and recovery preserves result/effect uncertainty |
+| RT2 | Planned Q11, current runtime budget/admission owners | Measure host effect/buffer/cloning retention and aggregate Cell/node pressure; prove bounds before unbounded retention, cancellation cleanup, and continued correct SQL/control progress |
+| OP1 | Planned Q12, with existing Q8/Q9 prerequisites | Name supported version/topology/storage assumptions and execute preservation, recreate/reload or upgrade rehearsals for that envelope; no unmeasured RPO/RTO or backup claim |
+| OP2 | Planned Q7 and security/admin boundary owners | Authenticated/encrypted node trust stays Community core; admin exposure policy is explicit; broader enterprise identity/tenancy remains external |
+
+RT1 has source and synthetic-worker evidence on the reviewed main, not yet a
+complete supported-path reproduction. Create its actual bounded fix Quest when
+the current candidate and meaningful red witness are ready; the front-matter
+name is staged, not sealed. RT2 is an investigation/proof gap, not an established
+OOM incident or exploit and not permission for a second resource scheduler.
+
+Keep the running local agent's current cutover work coherent before opening
+overlapping runtime edits. Core readiness documentation may clarify rebuild/
+reload limits now; commercial backup/restore/PITR implementation stays in its
+existing external home. This finding does not move it into AGPL or expand 0.3.
 
 ## Intent (why now)
 
