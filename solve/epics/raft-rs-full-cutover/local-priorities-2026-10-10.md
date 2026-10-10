@@ -10,14 +10,16 @@ review. Read the [final risk record](../../../docs/development/adversarial-risk-
 for all accepted, revised and deferred recommendations. The existing epic and
 Quest logs continue to own work state; this page gives the next execution order.
 
-Checkpoint update: reviewed `9c19760aca5306bd400336f9ad15750167151022` on
-`takeover/rs-raft-safety-first-20261010`. Step 1's production/test bytes match the
-independently approved `a66bef3f7`; the two later commits only append Quest logs.
-RS1 is recorded as verified. TX1 is sealed, OPEN and design-rejected. **Start the
-TX1 design and witness revision next**, then obtain acceptance of that revision
-before participant source changes. The proof reconciliation below can proceed
-without blocking design work. Full FreshMG physical completion is not its entry
-gate.
+Checkpoint update: reviewed `6d24e3b4f0b64212e05ce0b66668d67dc82ba812` on
+`takeover/rs-raft-safety-first-20261010`. FreshMG's R4-D1/D2/D3 follow-up was
+committed at `045c9130e` with bounded independent approval recorded. RS1 remains recorded
+as verified. TX1 is sealed, OPEN; revision 6 was rejected and the local owner
+reports revision 7 in progress. **The query seam and six owner choices are now
+agreed in the [TX1 owner decisions](https://github.com/psvensson/lagrange/blob/0c398d50b5354caceef40e812eb1a536b66bd78b/solve/quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md).**
+Finish that revision and obtain a bounded review of its remaining correctness
+delta before participant implementation. FreshMG physical completion is not
+its entry gate. Preserve the mixed branch and isolate the integration stacks;
+do not introduce a red-test exemption.
 
 ## Start on your actual work, not the audit checkout
 
@@ -72,8 +74,8 @@ its producer, preserve before/after, and independently review the final changed
 source. Preserve/push a coherent scoped commit through the runbook's non-main
 path. Such a push preserves work; it does not certify Quest land, main or release.
 
-At the reported checkpoint, the canonical pass is on `80632c7e4`, before the
-discovery/authorization changes in `a66bef3f7`. Run the existing bounded gate on
+At the reported checkpoint, the retained canonical pass is on `80632c7e4`,
+before later discovery/authorization changes including `045c9130e`. Run the existing bounded gate on
 the intended final source and the changed discovery/fixture checks its pinned
 list omits. If another source correction is imminent, finish and review that
 coherent candidate first; do not certify every intermediate head. Preserve the
@@ -115,13 +117,13 @@ not definitive noncommitment. Preserve operation-row CAS, native origin,
 physical-generation fences and remaining membership/reservation/cleanup debt.
 After promotion, recover forward under the existing J1 rule.
 
-Before the next FreshMG CREATE/progression consumes recorded-row classification,
-resolve R4-D1: share the pure immutable validity predicate for discovery and
-recording. Do not reuse the recorder's entire live-claim/lease gate for a
-historical fact. In the same small follow-up, classify invalid phase/permit
-pairs before claim work (D2) and share safe hint filtering with the CDC wake
-route (D3). Invalid rows retain durable debt, a typed diagnosis and a repair/
-reentry owner. These findings do not revoke the bounded step-1 approval.
+R4-D1/D2/D3 are complete in the bounded follow-up at `045c9130e`; do not redo
+them. Before the next new promotion or abandonment branch is selected from
+LEARNER_COMMITTED, make branch selection consume recordedLearnerFactIsValid,
+then retain settlement, exact permit, live claim/boot and CAS checks. Preserve
+its separate idempotent selected-branch readback, whose phase is later. The
+pure historical predicate must not acquire clocks or current-owner checks.
+Invalid rows retain durable debt, a typed diagnosis and a repair/reentry owner.
 
 Keep the real two serial replacements, distinct off-seed storage, restart and
 seed-storage-loss witness. It must continue fresh SQL, CDC and routing/cache
@@ -129,117 +131,33 @@ recovery. Focused component green or a permanently parked CREATE cannot close it
 
 ## 3. Next new safety unit: transaction Leg A, then Leg B
 
-Coordinate now with the separate query owner on
-[PR100's existing design](https://github.com/psvensson/lagrange/blob/daddead73ffeb8c348663695ac2f0eaa8873cf75/solve/changes/0-3-prepared-transactions-split-merge/design.md).
-It is design only at that SHA. Agree the partition/replication and coordinator
-seam before either lane changes it. Query owns coordinator/query behavior;
-you own the local participant/replication and topology integration. Do not alter
-PR74/A1 as part of this local unit. If no query owner is actively available,
-record the seam and progress the agreed local prerequisites without inventing
-coordinator behavior or silently taking its branch.
-Keep the coordinator decision/recovery repair and its concrete consumer
-falsifier explicitly outstanding; local participant PREPARE proof cannot close
-the whole TX1 leg.
+Read the [agreed owner decisions and seam](https://github.com/psvensson/lagrange/blob/0c398d50b5354caceef40e812eb1a536b66bd78b/solve/quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md).
+They replace this handoff's earlier list of unresolved design choices. The
+query lane owns coordinator persistence, decisions, wire identity, recovery
+and statement retry; local owns participants/Raft, seed composition and the
+CDC crash boundary. PR74/A1 remains with its existing owner.
 
-TX1 is the next new safety-critical boundary implementation after the current
-coherent local unit. Schedule it without simultaneous writers to FreshMG/shared
-Raft owners. It must cover **one-phase and two-phase** transactions, not merely
-PREPARE acknowledgment. The source findings to falsify are:
+Finish revision 7, then obtain a bounded independent review of the remaining
+rowid/order/PRAGMA divergence, the production-shaped self-check fixture and
+the decision-dependent changes. Do not treat another opcode census as proof
+of deterministic SQL or reopen unaffected accepted findings for wording nits.
+A new reachable correctness counterexample still blocks its affected claim.
+After design acceptance, implement in owned worktrees and integrate one
+compatible protocol cutover. Serialize shared partition/runtime edits.
 
-- local COMMIT can precede consensus; the current committed marker does not
-  apply its carried operations to followers;
-- `NO_TRANSACTION` can be treated as COMMITTED without an outcome read;
-- timeout/failure after COMMITTING can select rollback or strand recovery;
-- local expiry can discard prepared obligations.
+The eight TX1 receipts still cover speculative visibility, replicated PREPARE,
+atomic operations/outcome/applied-index application, exact terminal identity,
+one immutable decision before fanout, no rollback after COMMIT and recovery/CDC
+after deadline/crash, for both single- and multi-participant transactions.
+Prepare-first is selected. No new MVCC, coordinator or retry framework is
+required by this decision. Retain real three-replica fault/restart proof.
 
-Use the complete TX1 requirements and witness matrix in the final risk record.
-In particular, discard speculative staging safely, retain deterministic
-prepared operations/conflict evidence, apply operations/outcome/applied index
-atomically, and persist one immutable coordinator decision before participant
-COMMIT fanout.
-Resolve uncertain persistence and exact participant outcomes; keep recovery and
-CDC obligations after the caller deadline. Never treat a missing session as
-proof of a terminal decision.
-
-The [TX1 Quest](https://github.com/psvensson/lagrange/blob/1bd3921597c2cc35ea91884dc925fe7c719ce6bd/solve/quests/replicated-transaction-decision-and-apply/quest.json)
-is now sealed and OPEN. Read its log, seam and
-[rejected design](https://github.com/psvensson/lagrange/blob/1bd3921597c2cc35ea91884dc925fe7c719ce6bd/solve/quests/replicated-transaction-decision-and-apply/design-leg-a-2026-10-10.md).
-Revise that design before participant implementation. Resolve these decisions
-with the query coordinator owner, recording concrete transition tables, source
-owners and reachable falsifiers:
-
-1. **Isolation throughout ACTIVE.** Ending staging only at PREPARE is too late
-   for other users of the shared SQLite connection. Resolve observer scope
-   against the existing read-your-writes contract. Reuse the earlier
-   [F6 alternatives](quest-records/raft-rs-single-path-partition-cutover/design-f6-session-transaction-isolation.md):
-   its c' is synchronous savepoint/replay/rollback per request, not a private
-   snapshot database. It still needs a stable-read/conflict rule and deterministic
-   results, a replay work/byte bound and no await or escaping observer while the
-   savepoint is open; another connection to the same file still competes for
-   SQLite's single writer. Prefer a bounded existing concurrency model to new row MVCC.
-2. **Exact identity end to end.** Allocate one non-reused logical transaction ID
-   before fanout and retain it through restart/retry. Carry it, participant
-   identity, mode and the needed epoch/decision/digest fields on every applicable
-   BEGIN/write/PREPARE/COMMIT/ROLLBACK/outcome request and delivery key. Today
-   PREPARE/COMMIT/ROLLBACK omit the epoch; session ID plus a per-coordinator clock
-   is insufficient. Specify deterministic operation encoding and its actual
-   values, including SQL-generated values and per-operation dedup interactions.
-   The current proposal codec uses JSON.stringify, not key-order canonicalization;
-   pin the chosen durable bytes rather than assuming canonicalization exists.
-3. **A durable PREPARE promise.** Choose one replicated conflict authority and
-   reservation whose protection survives leader change/restart until a terminal
-   decision. Cover ordinary writes, transaction writes, schema and mirror apply;
-   leader-only rowCommitEpoch/committedWriteLog cannot supply it. A conservative
-   partition reservation is an option to evaluate before row-level locking.
-   Deterministic validation belongs before positive PREPARE. A local apply/storage
-   failure after PREPARED does not authorize a new abort decision.
-   A conflicting command already in the committed log needs a deterministic,
-   non-mutating disposition: do not stall apply waiting for a later releasing
-   COMMIT in that same log.
-4. **One decision and exact outcomes.** Bind terminal commands to the immutable
-   coordinator decision and exact prepared content. First-terminal-wins prevents
-   reversal but cannot authorize a rollback after global COMMIT. Reuse the
-   coordinator's durable transaction owner with conditional monotonic writes;
-   mutable status UPSERT and commitPointReached are not that decision. Resolve
-   uncertain persistence before an incompatible decision. Even a fresh absent
-   PREPARE row is not definitive NOT_COMMITTED while delayed PREPARE/COMMIT can
-   arrive; use an authoritative terminal decision/fence and retain UNKNOWN
-   otherwise. Preserve proof identity when the outcome callback crosses owners.
-5. **Resolve 1PC before promising its fast path.** The current seal requires a
-   coordinator decision before COMMIT fanout for both modes. An unconditional
-   COMMIT followed by participant conflict refusal is inconsistent. Jointly
-   choose a prepare-first single-participant path or a clearly distinct intent/
-   participant-decision protocol; explicitly supersede any sealed promise whose
-   meaning changes. Do not silently rename an intent COMMIT, promise one round
-   prematurely, or prescribe participant refusal after an irrevocable decision.
-6. **One recovery/apply authority.** Reconcile reconstructPreparedState and
-   hasPendingPreparedTransactions with the selected durable owner; avoid another
-   authoritative log scan. Apply operations, terminal outcome and applied index
-   atomically. Account for split/merge mirroring and whole-transaction replay.
-   Cite the CDC replay/cursor/retention owner and prove the crash-after-data-commit
-   window; bounded in-memory dedup alone cannot discharge restart delivery.
-7. **Repair and complete the witnesses.** Start COMMIT without awaiting its
-   acknowledgment, observe the proposal and forbidden visibility/pending ACK,
-   then drive committed application and await completion. P1/P2 currently await
-   the ACK before advancing consensus. P2 also needs actual outcome/applied-index
-   atomicity and fault checks, not only follower row count. Preserve original red
-   evidence, add conflict/restart/late-command/1PC subcases under the eight existing
-   receipts where meaning is unchanged, and leave receipts red until covered.
-   Inventory old witnesses affected by the semantic change. Independent design
-   review must resolve the rejection; independent source and real three-replica
-   verification follow implementation.
-
-The controllable port does not prove durable Ready/log persistence; its second
-delivery of a marker is a new-index duplicate, not crash replay at the original
-boundary. Keep positive controls in separately executed cases, so a failing
-negative assertion cannot prevent their execution. Use the real backend for
-durable restart and quorum witnesses.
-
-Register the coordinator-participant coupled interaction with its discriminating
-witness when implementing the agreed seam. The local owner can revise the design
-and local witnesses now; coordinator edits remain with the query owner. Preserve
-the seal and append corrections to the review record rather than silently
-rewriting its conclusions or multiplying Quests for individual test repairs.
+The original P1/P2/P3 runnable revision must have an explicit replacement map
+and be retired from the active corpus when its stronger replacements land.
+Its red TAP and original bytes remain history. Required unresolved witnesses
+remain red; no sealed-red skip convention is introduced. Receipt 8 has a
+named local CDC owner and is not waived. The separately agreed kernel UNKNOWN
+correction may proceed with its own bounded acceptance and independent review.
 
 Leg B follows Leg A's proved participant contract. Atomically order new
 BEGIN/PREPARE admission against cutover, account for in-flight work, and preserve

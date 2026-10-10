@@ -43,8 +43,8 @@ PR115's `86d53bc79615a91ad70ff5b75b40ee091211519a` is an audit anchor.
 | Risk | Existing owner or staged unit | Required next action |
 | --- | --- | --- |
 | RS1 | Durable store / runtime Ready owner | Recorded verified on 80632c7e4; retain the four-witness evidence and its process-kill limit; recheck if relevant inputs change |
-| MG1 | Sealed `message-group-fresh-identity-membership` | Step-1 source approved at a66bef3f7 and identical through 9c19760; final canonical/changed-discovery proof remains; resolve R4-D1/D2/D3 before next effect activation, then CREATE and full replacement/recovery |
-| TX1 | Sealed, OPEN `replicated-transaction-decision-and-apply`, PR100 Leg A | Next new unit is rejected-design and witness revision with both owners; participant implementation follows design acceptance |
+| MG1 | Sealed `message-group-fresh-identity-membership` | D1/D2/D3 follow-up approved at 045c9130e; branch selection must consume the shared fact predicate before new promotion/abandonment. Final canonical/changed-discovery proof, CREATE and full replacement/recovery remain |
+| TX1 | Sealed, OPEN `replicated-transaction-decision-and-apply`, PR100 Leg A | Query seam and six owner choices agreed in owner-decisions-2026-10-10.md; finish rev7 and review its bounded delta, then implement both lanes toward one compatible cutover. Receipt 8 stays required |
 | TX2 | Prospective `transaction-topology-admission-barrier`, PR100 Leg B | After TX1, order admission/drain against cutover and preserve frozen terminal routes through restart; no participant remapping |
 | SN1 | Current checkpoint/install owners and preserved catch-up work | Distinguish FreshMG membership image from full SQL-partition recovery; preserve application, transaction, HLC and replay state before truncation |
 | RS2 | Durable-store diagnostic lifetime | Small bounded journal correction, independent of the whole snapshot program; preferably before long soak runs |
@@ -67,12 +67,17 @@ storage-controller certification.
 
 TX1 is now a declared, OPEN Quest, sealed at
 `df51b799acdb224253fdb3548ebdf8471d692f5b` against the local-visibility and follower-
-application reds. Its [Leg A design](https://github.com/psvensson/lagrange/blob/1bd3921597c2cc35ea91884dc925fe7c719ce6bd/solve/quests/replicated-transaction-decision-and-apply/design-leg-a-2026-10-10.md)
-is not accepted for implementation: the design-vet REVISE is recorded in its
-append-only log. The [local handoff](raft-rs-full-cutover/local-priorities-2026-10-10.md#3-next-new-safety-unit-transaction-leg-a-then-leg-b)
-owns the concrete revision order. Repair P1/P2's consensus-driving schedule and
-atomicity coverage under the eight sealed receipts; use explicit supersession
-only if their acceptance meaning changes. TX2 remains a staged slot; reconcile
+application reds. At reviewed head `6d24e3b4f`, revision 6 is rejected and the
+local owner reports revision 7 in progress. The
+[owner decisions](https://github.com/psvensson/lagrange/blob/0c398d50b5354caceef40e812eb1a536b66bd78b/solve/quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md)
+now agree the query seam, prepare-first single-participant behavior, conservative
+conflicts, guarded rowid direction, existing seed persistence wiring and local
+CDC ownership. Design acceptance and implementation proof remain outstanding.
+The [local handoff](raft-rs-full-cutover/local-priorities-2026-10-10.md#3-next-new-safety-unit-transaction-leg-a-then-leg-b)
+owns the concrete continuation. Isolate FreshMG and TX1 integration work while
+preserving the mixed branch; explicitly supersede obsolete runnable TX1 tests
+with stronger replacements and retain their original red evidence. All eight
+receipts remain required for TX1 land. TX2 remains a staged slot; reconcile
 the [existing PR100 design](https://github.com/psvensson/lagrange/blob/daddead73ffeb8c348663695ac2f0eaa8873cf75/solve/changes/0-3-prepared-transactions-split-merge/design.md)
 and actual local work before declaring it against a meaningful red. This does not widen the
 FreshMG seal, reopen historical transaction/snapshot Quests, or change this
