@@ -1,10 +1,10 @@
 /**
  * TX1 (quest replicated-transaction-decision-and-apply, PR100 Leg A) participant
- * red witnesses for design revision 7 (design-leg-a-v7-2026-10-10.md, section
+ * red witnesses for design revision 8 (design-leg-a-v8-2026-10-10.md, section
  * 10). Siblings: test/query/partition-transaction-seam-falsifiers.test.js (query
  * lane) and partition-transaction-replay-cursor-v4.test.js (real rs-raft log; since
  * revision 6 the positive controls, since revision 7 the classifier witnesses W6n,
- * W6s, W6p and W6r); fixture:
+ * W6s, W6p, W6r and W6r-b); fixture:
  * test/test-helpers/participant-transaction-fixture.js. The revision-2
  * file partition-transaction-replicated-apply.test.js is superseded history.
  * Consensus is driven by the test while a request is pending; each witness
@@ -437,38 +437,77 @@ test('TX1 v3 W15: the proposed PREPARE carries the BEGIN-time base, and its appl
   }
 });
 
+// Stage one row in `tx`, optionally commit an interfering write, then PREPARE.
+async function prepareRound(leader, proposed, tx, interfere) {
+  await send(leader, beginMessage(tx));
+  await send(leader, queryMessage(tx, INSERT_SQL, [`${tx.transactionId}-row`, 'staged']));
+  if (interfere) {
+    await commitOrdinaryWrite(leader, proposed, `${tx.transactionId}-w`,
+      {id: `${tx.transactionId}-w`, value: 'writer'});
+  }
+  const prepare = track(send(leader, prepareMessage(tx)));
+  const command = await awaitProposal(proposed,
+    (entry) => isPrepareCommand(entry) && entry.transactionId === tx.transactionId);
+  if (command) {
+    applyCommitted(leader, command);
+  }
+  await settleTicks();
+  return prepare.settled ? prepare.value : null;
+}
+
 test('TX1 v3 W16: contention is measured: under a concurrent writer every PREPARE answer is ' +
-  'typed (PREPARED, or refused `conflict`), and the abort rate is reported', async (t) => {
+  'typed (PREPARED, or refused `conflict`) and the abort rate is reported; uncontended, and ' +
+  'after bounded interference has ended, the PREPARE succeeds', async (t) => {
   const rounds = 4;
-  const {leader, proposed} = await startLeader();
+  const answers = [];
+  const positive = {};
+  const contended = await startLeader();
+  const quiet = await startLeader();
+  const after = await startLeader();
   try {
-    const answers = [];
     for (let round = 0; round < rounds; round += 1) {
       const tx = identityOf(`a16-${round}`);
-      await send(leader, beginMessage(tx));
-      await send(leader, queryMessage(tx, INSERT_SQL, [`c-${round}`, 'contended']));
-      await commitOrdinaryWrite(leader, proposed, `w16-${round}`,
-        {id: `w-${round}`, value: 'writer'});
-      const prepare = track(send(leader, prepareMessage(tx)));
-      const command = await awaitProposal(proposed,
-        (entry) => isPrepareCommand(entry) && entry.transactionId === tx.transactionId);
-      if (command) {
-        applyCommitted(leader, command);
-      }
-      await settleTicks();
-      answers.push(prepare.settled ? prepare.value : null);
-      await send(leader, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, tx));
+      answers.push(await prepareRound(contended.leader, contended.proposed, tx, true));
+      await send(contended.leader, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, tx));
     }
-    const typed = answers.every((answer) =>
-      (answer?.success === true && answer.state === V3.STATE.PREPARED) ||
-      (answer?.success === false && answer.refusalCause === V3.REFUSAL_CAUSE.CONFLICT));
-    const aborts = answers.filter((answer) => answer?.success === false).length;
-    t.diagnostic(`TX1 W16 measured abort rate under a concurrent writer: ${aborts}/${rounds}`);
-    assert.deepEqual({answersTyped: typed}, {answersTyped: true},
-      'the rate is measured, not promised (design section 3.6, limit L5)');
+    positive.uncontended = pick(await prepareRound(quiet.leader, quiet.proposed,
+      identityOf('a16-quiet'), false), ['success', 'state']);
+    await commitOrdinaryWrite(after.leader, after.proposed, 'w16-ended', OTHER_ROW);
+    positive.afterInterference = pick(await prepareRound(after.leader, after.proposed,
+      identityOf('a16-after'), false), ['success', 'state']);
   } finally {
-    await shutdownAll(leader);
+    await shutdownAll(contended.leader, quiet.leader, after.leader);
   }
+  const typed = answers.every((answer) =>
+    (answer?.success === true && answer.state === V3.STATE.PREPARED) ||
+    (answer?.success === false && answer.refusalCause === V3.REFUSAL_CAUSE.CONFLICT));
+  const aborts = answers.filter((answer) => answer?.success === false).length;
+  t.diagnostic(`TX1 W16 measured abort rate under a concurrent writer: ${aborts}/${rounds}`);
+  const prepared = {success: true, state: V3.STATE.PREPARED};
+  assert.deepEqual({answersTyped: typed, ...positive}, {answersTyped: true,
+    uncontended: prepared, afterInterference: prepared},
+  'the rate is measured, not promised (design 3.6, L5); an always-conflicting rule fails');
+});
+
+test('TX1 v3 W20: a transaction command carries the execution envelope; a replica on another ' +
+  'build refuses it as a host failure (nothing recorded, applied index unchanged) and applies ' +
+  'it once its envelope matches', async () => {
+  const tx = identityOf('a20e');
+  const perReplica = await onTwoReplicas(async (replica) => {
+    const prepareCommand = prepareCommandOf(tx, [operationOf(ROW)], generationOf(replica));
+    const appliedBefore = durableAppliedIndex(replica);
+    const foreign = applyCommitted(replica, {...prepareCommand,
+      executionEnvelope: {...prepareCommand.executionEnvelope, sqliteVersion: '0.0.0'}});
+    const afterForeign = {...(await outcomeOf(replica, tx)),
+      appliedAdvance: durableAppliedIndex(replica) - appliedBefore};
+    return {foreign, afterForeign, matching: applyCommitted(replica, prepareCommand),
+      afterMatching: await outcomeOf(replica, tx)};
+  });
+  const expected = {foreign: V3.CODE.ENVELOPE_MISMATCH,
+    afterForeign: {outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, state: V3.STATE.ABSENT,
+      appliedAdvance: 0}, matching: null, afterMatching: PREPARED};
+  assert.deepEqual(perReplica, [expected, expected],
+    'a replica never applies a transaction command under a build it was not vetted for');
 });
 
 // --- W5: c' isolation throughout ACTIVE ---

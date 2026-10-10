@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// TX1 (PR100 Leg A) receipts, design revision 7 (design-leg-a-v7-2026-10-10.md
+// TX1 (PR100 Leg A) receipts, design revision 8 (design-leg-a-v8-2026-10-10.md
 // section 10.2). The eight sealed receipt ids are unchanged; the CDC receipt
 // recovery-and-cdc-survive-deadline-and-crash stays deliberately absent (no CDC
 // cursor/retention owner exists, and a receipt bound only to the deadline and
@@ -17,7 +17,10 @@
 //   that does not exist yet, so receipts 2, 3 and 4 stay red until it does. The
 //   names and exact counts bind which tests run; what A1-A5 actually prove rests
 //   on independent verification (a file holding the five names with trivial
-//   bodies would pass the real halves).
+//   bodies would pass the real halves);
+// - the persisted schema-migration cutover through the production seed-hydration
+//   composition (owner decision S4c option 1), TX1 M1, named now in a file that
+//   does not exist yet, so receipt 6 stays red until it does.
 // A receipt drawing on one file is a subtest receipt (the harness's exact-count
 // rule); a receipt drawing on several files is a shell receipt that applies the
 // same rule (exactly N selected, none failed, skipped or todo) to each file.
@@ -35,6 +38,8 @@ const SEAM = Object.freeze({file: 'test/query/partition-transaction-seam-falsifi
   prefix: 'TX1 seam'});
 const REAL = Object.freeze({file:
   'test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js', prefix: 'TX1'});
+const MIGRATION = Object.freeze({file:
+  'test/integration/seed-migration-cutover-persisted.integration.test.js', prefix: 'TX1'});
 const pattern = (source, names) => `^${source.prefix} (${names.join('|')}): .*$`;
 const SHELL_AND = ' && ';
 const tapSummary = (count) => [`# tests ${count}`, '# fail 0', '# skipped 0', '# todo 0'];
@@ -51,7 +56,8 @@ const RECEIPT = Object.freeze([
     'during ACTIVE and reads replay over current committed state; a request without a ' +
     'transactionId is never absorbed into a session'],
   ['replicated-prepare-committed-and-applied-on-every-replica', [
-    [PARTICIPANT, ['W1a', 'W1b', 'W12c', 'W11a', 'W11b', 'W11c', 'W11d', 'W11e', 'W15']],
+    [PARTICIPANT, ['W1a', 'W1b', 'W12c', 'W11a', 'W11b', 'W11c', 'W11d', 'W11e', 'W15',
+      'W20']],
     [REAL, ['A1', 'A2', 'A3']]],
   'PREPARE is acknowledged only after its committed command applies on every replica, ' +
     'carries the BEGIN-time base, survives restart as a durable row, and answers UNKNOWN ' +
@@ -59,7 +65,7 @@ const RECEIPT = Object.freeze([
   ['commit-applies-operations-outcome-and-applied-index-atomically', [
     [PARTICIPANT, ['W1b', 'W2a', 'W2b', 'W2c', 'W3a', 'W3b', 'W3c', 'W4', 'W6', 'W13', 'W14',
       'W17', 'W18', 'W19']],
-    [CLASSIFIER, ['W6n', 'W6s', 'W6p', 'W6r']],
+    [CLASSIFIER, ['W6n', 'W6s', 'W6p', 'W6r', 'W6r-b']],
     [REAL, ['A5']]],
   'the decision applies operations, per-operation outcomes, the state transition, the write ' +
     'generation and the applied index in one application transaction; committed PREPAREs ' +
@@ -82,10 +88,12 @@ const RECEIPT = Object.freeze([
   'an outcome read answers UNKNOWN from absence or PREPARED and a terminal state only from ' +
     'its durable row; a write that may still commit is answered UNKNOWN by the write kernel; ' +
     'a NO_TRANSACTION commit miss is resolved by an outcome read'],
-  ['immutable-coordinator-decision-before-fanout', [[SEAM, ['S1', 'S4b', 'S4c', 'S6', 'S7',
-    'S8']]],
+  ['immutable-coordinator-decision-before-fanout', [
+    [SEAM, ['S1', 'S4b', 'S4c', 'S4d', 'S6', 'S7', 'S8']],
+    [MIGRATION, ['M1']]],
   'the decision is inserted once before fanout from retained PREPARE answers, transaction ' +
-    'state is never silently unpersisted (the migration cutover included), single-participant transactions prepare first, ' +
+    'state is never silently unpersisted (the seed engine holds its CDC service and a real ' +
+    'migration cutover persists), single-participant transactions prepare first, ' +
     'concurrent recovery converges on one decision (query lane)'],
   ['no-rollback-after-commit-decision-and-no-prepared-erasure', [
     [PARTICIPANT, ['W9', 'W12d', 'W17']],

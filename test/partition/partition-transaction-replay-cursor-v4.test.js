@@ -13,10 +13,11 @@
  * (round-5 nit N-J) adds the re-parked write: the same entryId is committed a
  * second time after the decision and must be mirrored exactly once; revision 7
  * (round-6 N6-5) puts an applied write between the decision and the re-parked
- * entry, so only a cursor bound to the outcome row's log index passes.
+ * entry; revision 8 (round-7 N7-9) adds the converse (applied first, committed
+ * again later), so neither first- nor last-occurrence de-duplication passes.
  *
  * Also here, because the participant file is at jscpd's 1000-line cap: the
- * statement-classifier witnesses W6n, W6s, W6p and W6r (design revision 7,
+ * statement-classifier witnesses W6n, W6s, W6p, W6r and W6r-b (design revision 8,
  * section 3.3), named with the participant prefix 'TX1 v3', and the four
  * positive controls (controllable port), green on the sealed head.
  */
@@ -44,6 +45,16 @@ import {
   beginMessage,
   classifierRefusalCases,
   committedQueryOf,
+  generationOf,
+  INT64_MAX,
+  IPK_SCHEMA,
+  kindRefusalCases,
+  notCommitted,
+  operationOf,
+  outcomeOf,
+  plantRowid,
+  ROW_2,
+  rowidsOf,
   connectionFlag,
   decisionCommandOf,
   durableAppliedIndex,
@@ -123,24 +134,34 @@ test('TX1 v4 RC1: a source entry whose statement failed deterministically is nev
   });
 
 test('TX1 v4 RC2: a write refused by the reservation and the transaction commands are never ' +
-  'mirrored; the re-parked write is mirrored once, from its applied entry', async () => {
+  'mirrored; a write committed twice under one entryId is mirrored once, at the index whose ' +
+  'outcome row records it, whichever occurrence that is', async () => {
   const tx = identityOf('rc2', {partitionId: PARTITION});
   // The write generation after the first applied insert is 1 (design 3.2).
   const prepare = prepareCommandOf(tx, [{entryId: 'op-x', sql: INSERT, params: ['x', 'v-x']}],
     1, PARTITION);
-  const facts = await mirroredAfterFirst([insertCommand('a'), prepare,
+  // Refused first, applied later (a re-parked write, round-6 N6-5).
+  const refusedFirst = await mirroredAfterFirst([insertCommand('a'), prepare,
     insertCommand('r', 'reserved-r'),
     decisionCommandOf(tx, V3.DECISION.ROLLBACK, prepare.preparedDigest), insertCommand('c'),
     insertCommand('r', 'reserved-r')]);
-  assert.deepEqual(facts, {setupFailure: null, mirrored: ['insert-c', 'reserved-r']},
-    'the cursor binds an APPLIED outcome to its own log index (round-5 N-J): the refused ' +
-    'entry under the same entryId is not mirrored');
+  // Applied first, committed again later and answered as a settled replay (round-7 N7-9).
+  const appliedFirst = await mirroredAfterFirst([insertCommand('a'),
+    insertCommand('r', 'replayed-r'), insertCommand('c'), insertCommand('r', 'replayed-r')]);
+  assert.deepEqual({refusedFirst, appliedFirst}, {
+    refusedFirst: {setupFailure: null, mirrored: ['insert-c', 'reserved-r']},
+    appliedFirst: {setupFailure: null, mirrored: ['replayed-r', 'insert-c']}},
+  'the cursor binds an APPLIED outcome to its own log index: neither first- nor ' +
+  'last-occurrence de-duplication by entryId passes both sequences');
 });
 
 // --- the statement classifier (moved here from the participant file in revision 7, which
 // adds W6p and W6r; the names keep the participant prefix 'TX1 v3') ---
 const LAYER = V3.CLASSIFIER_LAYER;
 const refusalOf = (answer) => pick(answer, ['failureCode', 'refusalLayer']);
+// The schema-migration backfill's rowid-range update (migration-coordinator-stage-methods.js).
+const BACKFILL_SQL = `UPDATE ${FIXTURE_TABLE} SET value = NULL WHERE value IS NULL AND ` +
+  'rowid > ? AND rowid <= ?';
 // A request answered within the settle window, or 'pending' (nothing is ever committed
 // here, so a proposed write stays pending).
 async function answeredOrPending(promise) {
@@ -183,8 +204,9 @@ test('TX1 v3 W6n: the staging classifier refuses by default, each case at its ow
 });
 
 test('TX1 v3 W6s: the leader\'s self-check refuses random(), an rs-raft table read, a ' +
-  'table-valued pragma, a PRAGMA statement, a temporary-schema read and an implicit-key insert, ' +
-  'each at its own layer; a failed self-check refuses every transaction, typed', async () => {
+  'table-valued pragma, a PRAGMA statement, a temporary-schema read, an implicit-key insert, ' +
+  'an aggregate insert and an insert at the rowid ceiling, each at its own layer; a failed ' +
+  'self-check refuses every transaction, typed', async () => {
   const determinism = await import(V3.DETERMINISM_MODULE).catch(() => null);
   const {leader} = await startLeader();
   const failing = await startLeader({determinismSelfCheck: () => ({passed: false, cases: []})});
@@ -204,6 +226,8 @@ test('TX1 v3 W6s: the leader\'s self-check refuses random(), an rs-raft table re
       refused('pragma_statement', LAYER.STATEMENT_KIND),
       refused('temp_schema_read', LAYER.DATABASE),
       refused('implicit_key_insert', LAYER.IMPLICIT_KEY),
+      refused('aggregate_insert', LAYER.ROW_ORDER),
+      refused('ceiling_insert', LAYER.ROWID_CEILING),
       {name: 'partition_table_read', admitted: true, layer: null}], admitAll: false,
     begin: {success: false, failureCode: V3.CODE.DETERMINISM_SELF_CHECK_FAILED}},
     'each probed layer refuses at its own place on the running binary before anything stages');
@@ -212,18 +236,23 @@ test('TX1 v3 W6s: the leader\'s self-check refuses random(), an rs-raft table re
   }
 });
 
-test('TX1 v3 W6p: the statement-kind layer runs before any prepare on the query wire: a ' +
-  'sessionless PRAGMA or DROP proposes nothing and leaves the connection unchanged, index DDL ' +
-  'still proposes, and a committed PRAGMA or DROP is refused identically at apply',
-async () => {
+test('TX1 v3 W6p: one statement-kind owner runs before any prepare on every path: unadmitted ' +
+  'heads (PRAGMA, DROP, ATTACH, CREATE TRIGGER, ANALYZE, a leading `;`, comment-terminator ' +
+  'tricks, unbound or foreign index DDL) on the query wire and through executeLocalQuery ' +
+  'propose and change nothing; own-table index DDL still proposes; a committed PRAGMA or DROP ' +
+  'is refused identically at apply', async () => {
   const {leader, proposed} = await startLeader();
   try {
     const wire = (sql) => send(leader, {type: PARTITION_SERVICE_MESSAGE_TYPE.QUERY, sql,
       params: []});
-    const facts = {pragma: await answeredOrPending(wire('PRAGMA reverse_unordered_selects = 1')),
-      drop: await answeredOrPending(leader.executeQuery(`DROP TABLE ${FIXTURE_TABLE}`, [])),
-      index: await answeredOrPending(leader.executeQuery(
-        `CREATE INDEX IF NOT EXISTS tx1_w6p_value ON ${FIXTURE_TABLE}(value)`, []))};
+    const facts = {wire: []};
+    for (const sql of kindRefusalCases()) {
+      facts.wire.push(await answeredOrPending(wire(sql)));
+    }
+    facts.local = await answeredOrPending(
+      leader.executeLocalQuery('PRAGMA reverse_unordered_selects = 1', []));
+    facts.index = await answeredOrPending(leader.executeQuery(
+      `CREATE INDEX IF NOT EXISTS tx1_w6p_value ON ${FIXTURE_TABLE}(value)`, []));
     facts.leader = {flag: connectionFlag(leader), table: tableExists(leader),
       proposed: proposed.map((entry) => String(entry.sql).split(' ')[0])};
     facts.applied = await onTwoReplicas(async (replica) => {
@@ -240,7 +269,8 @@ async () => {
       failureCode: V3.CODE.WRITE_STATEMENT_REFUSED};
     const applied = {applies: [null, null], flag: 0, table: 1,
       outcomes: [refusedAtApply, refusedAtApply]};
-    assert.deepEqual(facts, {pragma: refusedKind, drop: refusedKind, index: 'pending',
+    assert.deepEqual(facts, {wire: kindRefusalCases().map(() => refusedKind),
+      local: refusedKind, index: 'pending',
       leader: {flag: 0, table: 1, proposed: ['CREATE']}, applied: [applied, applied]},
     'nothing but an admitted head is ever prepared on the shared connection, on any path');
   } finally {
@@ -248,9 +278,11 @@ async () => {
   }
 });
 
-test('TX1 v3 W6r: rowid-alias writes, order-dependent session writes and writes at the rowid ' +
-  'ceiling are refused typed on the session and ordinary paths, and an ordinary insert at the ' +
-  'ceiling is refused identically at apply', async () => {
+test('TX1 v3 W6r: rowid-alias writes (bare, quoted, oid, _rowid_, qualified, AS-aliased), ' +
+  'order-dependent session writes and writes at the rowid ceiling are refused typed on the ' +
+  'session and ordinary paths; the backfill\'s rowid-range update still proposes and applies; ' +
+  'an ordinary insert and a PREPARE dry run at the ceiling are refused identically at apply',
+async () => {
   const tx = identityOf('a11r');
   const {leader, proposed} = await startLeader();
   try {
@@ -261,34 +293,96 @@ test('TX1 v3 W6r: rowid-alias writes, order-dependent session writes and writes 
     for (const [sql, params] of rowidRefusalCases()) {
       facts.session.push(await session(sql, params));
     }
+    const ordinarySql = (sql, params, entryId) =>
+      answeredOrPending(leader.executeQuery(sql, params, {entryId}));
     const [aliasInsert, aliasParams] = rowidRefusalCases()[0];
-    facts.ordinaryAlias = await answeredOrPending(leader.executeQuery(aliasInsert, aliasParams,
-      {entryId: 'w6r-alias'}));
+    facts.ordinaryAlias = await ordinarySql(aliasInsert, aliasParams, 'w6r-alias');
+    facts.ordinaryAsAlias = await ordinarySql(`INSERT INTO ${FIXTURE_TABLE} AS x (rowid, id, ` +
+      'value) VALUES (?, ?, ?)', [7, 'as', 'v'], 'w6r-as');
+    facts.backfill = await ordinarySql(BACKFILL_SQL, [0, 100], 'w6r-backfill');
     plantRowidCeiling(leader);
     facts.sessionCeiling = await session(INSERT_SQL, [ROW.id, ROW.value]);
-    facts.ordinaryCeiling = await answeredOrPending(leader.executeQuery(INSERT_SQL,
-      [OTHER_ROW.id, OTHER_ROW.value], {entryId: 'w6r-ceiling'}));
-    facts.proposed = proposed.filter((entry) => /^w6r-/u.test(String(entry.entryId))).length;
+    facts.ordinaryCeiling = await ordinarySql(INSERT_SQL, [OTHER_ROW.id, OTHER_ROW.value],
+      'w6r-ceiling');
+    facts.proposed = proposed.map((entry) => String(entry.entryId))
+      .filter((entryId) => entryId.startsWith('w6r-'));
+    const dryRun = identityOf('a11r-dry');
     facts.applied = await onTwoReplicas(async (replica) => {
+      const backfill = applyCommitted(replica, {...committedQueryOf('w6r-bf', BACKFILL_SQL),
+        params: [0, 100]});
       plantRowidCeiling(replica);
       const apply = applyCommitted(replica, ordinaryWriteOf('w6r-apply', ROW));
-      return {apply, outcome: statementOutcomeOf(replica, 'w6r-apply'),
-        rows: rowCount(replica, ROW.id)};
+      const prepare = applyCommitted(replica, prepareCommandOf(dryRun,
+        [operationOf(ROW_2)], generationOf(replica)));
+      return {backfill: [backfill, statementOutcomeOf(replica, 'w6r-bf').outcome], apply,
+        outcome: statementOutcomeOf(replica, 'w6r-apply'), rows: rowCount(replica, ROW.id),
+        prepare, dryRun: await outcomeOf(replica, dryRun, ['refusalCause'])};
     });
     const nondeterministic = (layer) => ({failureCode: V3.CODE.SESSION_WRITE_NONDETERMINISTIC,
       refusalLayer: layer});
     const ordinary = (layer) => ({failureCode: V3.CODE.WRITE_STATEMENT_REFUSED,
       refusalLayer: layer});
-    const applied = {apply: null, outcome: {outcome: 'statement_failed',
-      failureCode: V3.CODE.WRITE_STATEMENT_REFUSED}, rows: 0};
+    const applied = {backfill: [null, 'applied'], apply: null, outcome: {outcome: 'statement_failed',
+      failureCode: V3.CODE.WRITE_STATEMENT_REFUSED}, rows: 0, prepare: null,
+    dryRun: {...notCommitted(V3.STATE.REFUSED), refusalCause: V3.REFUSAL_CAUSE.ROWID_CEILING}};
     assert.deepEqual(facts, {session: rowidRefusalCases().map(([, , layer]) =>
       nondeterministic(layer)), ordinaryAlias: ordinary(LAYER.ROWID_ALIAS),
+    ordinaryAsAlias: ordinary(LAYER.ROWID_ALIAS), backfill: 'pending',
     sessionCeiling: nondeterministic(LAYER.ROWID_CEILING),
-    ordinaryCeiling: ordinary(LAYER.ROWID_CEILING), proposed: 0, applied: [applied, applied]},
-    'no replicated write can assign a rowid or reach the random-rowid fallback');
+    ordinaryCeiling: ordinary(LAYER.ROWID_CEILING), proposed: ['w6r-backfill'],
+    applied: [applied, applied]},
+    'no replicated write can assign a rowid or reach the random-rowid fallback, and the ' +
+    'migration backfill keeps working');
   } finally {
     await shutdownAll(leader);
   }
+});
+
+test('TX1 v3 W6r-b: random rowid allocation is excluded throughout a statement: an insert that ' +
+  'assigns the top key and then allocates, and two automatic insertions after an existing ' +
+  'maximum of 2^63-2, are refused identically at apply; in a transaction an INTEGER PRIMARY ' +
+  'KEY takes an explicit in-range integer and nothing else', async () => {
+  const refusedAtApply = {outcome: 'statement_failed',
+    failureCode: V3.CODE.WRITE_STATEMENT_REFUSED};
+  const perReplica = [];
+  for (const replicaId of [REPLICAS[1], REPLICAS[2]]) {
+    const ipk = await startReplica(replicaId, {schema: IPK_SCHEMA});
+    const text = await startReplica(replicaId);
+    try {
+      const topThenAllocate = applyCommitted(ipk, committedQueryOf('w6rb-ipk',
+        `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES (${INT64_MAX}, 'top'), (NULL, 'x')`));
+      plantRowid(text, INT64_MAX - 1n, 'near-top');
+      const twoAutomatic = applyCommitted(text, committedQueryOf('w6rb-text',
+        `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES ('a', 'x'), ('b', 'y')`));
+      perReplica.push({topThenAllocate, ipk: {outcome: statementOutcomeOf(ipk, 'w6rb-ipk'),
+        rowids: rowidsOf(ipk)}, twoAutomatic, text: {outcome: statementOutcomeOf(text,
+        'w6rb-text'), rowids: rowidsOf(text)}});
+    } finally {
+      await shutdownAll(ipk, text);
+    }
+  }
+  const tx = identityOf('a11rb');
+  const {leader} = await startLeader({schema: IPK_SCHEMA});
+  let session = null;
+  try {
+    await send(leader, beginMessage(tx));
+    session = [];
+    for (const [sql, params] of [[INSERT_SQL, [5, 'five']], [INSERT_SQL, [null, 'null']],
+      [INSERT_SQL, [2 ** 62, 'range']], [`INSERT INTO ${FIXTURE_TABLE} (value) VALUES (?)`,
+        ['omitted']]]) {
+      session.push(pick(await send(leader, queryMessage(tx, sql, params)),
+        ['success', 'failureCode', 'refusalLayer']));
+    }
+  } finally {
+    await shutdownAll(leader);
+  }
+  const replica = {topThenAllocate: null, ipk: {outcome: refusedAtApply, rowids: []},
+    twoAutomatic: null, text: {outcome: refusedAtApply, rowids: [String(INT64_MAX - 1n)]}};
+  const keyRefused = {success: false, failureCode: V3.CODE.SESSION_WRITE_NONDETERMINISTIC,
+    refusalLayer: LAYER.IMPLICIT_KEY};
+  assert.deepEqual({perReplica, session}, {perReplica: [replica, replica], session: [
+    {success: true, failureCode: null, refusalLayer: null}, keyRefused, keyRefused,
+    keyRefused]}, 'the post-statement ceiling sees the top row on every replica alike');
 });
 
 // --- positive controls (green on the sealed head; moved here from the participant file in

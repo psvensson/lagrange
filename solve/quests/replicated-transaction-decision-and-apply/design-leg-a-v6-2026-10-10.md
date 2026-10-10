@@ -1558,7 +1558,7 @@ retryability comment at `:47-56`.
 that cannot persist.** The greps:
 
 ```sh
-grep -rnE "['\"\`](BEGIN|START TRANSACTION|BEGIN TRANSACTION|BEGIN IMMEDIATE|BEGIN DEFERRED|COMMIT|END TRANSACTION)['\"\` ;]" src
+grep -rnE "['\"\`]{1}(BEGIN|START TRANSACTION|BEGIN TRANSACTION|BEGIN IMMEDIATE|BEGIN DEFERRED|COMMIT|END TRANSACTION)['\"\` ;]" src
 grep -rnE "transactionCoordinator\.(begin|commit)\(|\.beginTransaction\(" src
 grep -rn "new SQLQueryEngine(" src
 grep -rn "wireMigrationWorkflowOwners\|setCDCIntegrationService(" src

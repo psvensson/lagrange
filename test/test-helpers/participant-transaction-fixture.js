@@ -1,7 +1,8 @@
 /**
  * Shared fixture of the TX1 (quest replicated-transaction-decision-and-apply)
- * participant witnesses: the pinned revision-7 wire vocabulary, the canonical
- * committed commands of design-leg-a-v7-2026-10-10.md section 2, the staging
+ * participant witnesses: the pinned revision-8 wire vocabulary, the canonical
+ * committed commands of design-leg-a-v8-2026-10-10.md section 2 (with the
+ * execution envelope every replica checks), the staging
  * classifier's refusal cases with the layer that must refuse each (section 3.3), controllable replicas, request
  * builders and measurements. The literals below are the
  * design's pinned values until their owners export them; the implementation
@@ -11,6 +12,7 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../../src/raft/raft-operation-port-request.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -55,6 +57,7 @@ const V3 = Object.freeze({
     CONFLICT: 'conflict',
     STATEMENT_FAILED: 'statement_failed',
     DIGEST_INVALID: 'digest_invalid',
+    ROWID_CEILING: 'rowid_ceiling',
   }),
   CODE: Object.freeze({
     DECISION_BINDING_REQUIRED: 'participant_transaction_decision_binding_required',
@@ -70,6 +73,7 @@ const V3 = Object.freeze({
       'participant_transaction_determinism_self_check_failed',
     // The query wire and the committed SQL apply (design v7 section 3.3).
     WRITE_STATEMENT_REFUSED: 'partition_write_statement_refused',
+    ENVELOPE_MISMATCH: 'participant_transaction_execution_envelope_mismatch',
   }),
   // The classifier layer that refused a statement (design v6 section 3.3).
   CLASSIFIER_LAYER: Object.freeze({
@@ -124,6 +128,22 @@ function validationTextOf(generation, partitionId = PARTITION_ID) {
   return JSON.stringify([[V3.PARTITION_SCOPE, partitionId,
     sha256(`generation:${generation === null ? 'none' : generation}`)]]);
 }
+// The execution compatibility envelope (design v8 section 3.3): the build every
+// replica must run to apply a transaction command; this process's own build.
+const ENVELOPE = (() => {
+  const db = new Database(':memory:');
+  try {
+    return Object.freeze({
+      sqliteVersion: db.prepare('SELECT sqlite_version() AS v').get().v,
+      sqliteSourceId: db.prepare('SELECT sqlite_source_id() AS v').get().v,
+      compileOptionsDigest: sha256(db.pragma('compile_options', {simple: false})
+        .map((row) => row.compile_options).join('\n')),
+      classifierListVersion: 'tx1-leg-a-1',
+    });
+  } finally {
+    db.close();
+  }
+})();
 function operationOf(row, extra = {}) {
   return {entryId: extra.entryId ?? `op-${row.id}`, sql: extra.sql ?? INSERT_SQL,
     params: extra.params ?? [row.id, row.value]};
@@ -138,6 +158,7 @@ function prepareCommandOf(identity, operations, generation, partitionId = PARTIT
     operationsText,
     validationText,
     preparedDigest: sha256(`${operationsText}\n${validationText}`),
+    executionEnvelope: ENVELOPE,
     timestamp: '',
     proposedBy: ELSEWHERE,
     proposedAt: 0,
@@ -156,6 +177,7 @@ function decisionCommandOf(identity, decision, preparedDigest) {
     entryId: `${identity.participantId}:decision:${binding.decisionDigest}`,
     ...identityFields(identity),
     ...binding,
+    executionEnvelope: ENVELOPE,
     timestamp: '',
     proposedBy: ELSEWHERE,
     proposedAt: 0,
@@ -219,8 +241,43 @@ function rowidRefusalCases() {
       L.ROW_ORDER],
     [`UPDATE ${TABLE} SET value = (SELECT value FROM ${TABLE} WHERE id <> ?) WHERE id = ?`,
       ['top', 'q'], L.ROW_ORDER],
+    // revision 8 (round-7 N7-3): quoted, oid, _rowid_ and qualified forms
+    [`UPDATE ${TABLE} SET "rowid" = ? WHERE id = ?`, [8, 'p'], L.ROWID_ALIAS],
+    [`INSERT INTO ${TABLE} (oid, id, value) VALUES (?, ?, ?)`, [9, 'o', 'O'], L.ROWID_ALIAS],
+    [`UPDATE ${TABLE} SET value = ? WHERE _rowid_ = ?`, ['v', 1], L.ROWID_ALIAS],
+    [`UPDATE main.${TABLE} SET value = main.${TABLE}.rowid WHERE id = ?`, ['p'],
+      L.ROWID_ALIAS],
   ];
 }
+// An INTEGER PRIMARY KEY partition table (the key is the rowid alias).
+const IPK_SCHEMA = Object.freeze({columns: [
+  {name: 'id', type: 'INTEGER', primaryKey: true},
+  {name: 'value', type: 'TEXT'},
+]});
+const INT64_MAX = 9223372036854775807n;
+// Statements the statement-kind owner refuses before any prepare (round-7 N7-1,
+// N7-2, N7-4); each ends with a flag-setting PRAGMA where the lexer could be fooled.
+function kindRefusalCases() {
+  const flag = 'PRAGMA reverse_unordered_selects = 1';
+  return [
+    flag,
+    `DROP TABLE ${TABLE}`,
+    'ATTACH DATABASE \':memory:\' AS tx1_attached',
+    `CREATE TRIGGER tx1_trigger AFTER INSERT ON ${TABLE} BEGIN SELECT 1; END`,
+    'ANALYZE',
+    `;${flag}`,
+    `-- c\rINSERT INTO ${TABLE} (id, value) VALUES ('l', 'v')\n${flag}`,
+    `-- c\u2028INSERT INTO ${TABLE} (id, value) VALUES ('m', 'v')\n${flag}`,
+    'CREATE UNIQUE INDEX tx1_unique ON _participant_transactions(state)',
+    'CREATE INDEX tx1_foreign ON _partition_statement_outcomes(outcome)',
+  ];
+}
+function plantRowid(partition, rowid, id) {
+  partition.db.prepare(`INSERT INTO ${TABLE} (rowid, id, value) VALUES (?, ?, ?)`)
+    .run(rowid, id, 'planted');
+}
+const rowidsOf = (partition) => partition.db.prepare(`SELECT rowid AS r FROM ${TABLE} ORDER BY id`)
+  .safeIntegers(true).all().map((row) => String(row.r));
 // Plant a row at the rowid ceiling directly on a replica's own connection.
 function plantRowidCeiling(partition) {
   partition.db.prepare(`INSERT INTO ${TABLE} (rowid, id, value) VALUES (?, ?, ?)`)
@@ -246,7 +303,7 @@ function createReplica(replicaId, extra = {}) {
     replicaIds: [...REPLICAS],
     nodeId: 'test-node',
     peerAddresses: REPLICAS.map((id) => `test-node/partition/${id}`),
-    schema: {columns: [
+    schema: extra.schema ?? {columns: [
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'value', type: 'TEXT'},
     ]},
@@ -489,6 +546,12 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 
 export {
   COMMITTED,
+  ENVELOPE,
+  INT64_MAX,
+  IPK_SCHEMA,
+  kindRefusalCases,
+  plantRowid,
+  rowidsOf,
   ROWID_CEILING,
   SCRATCH_TABLE,
   committedQueryOf,

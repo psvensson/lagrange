@@ -3,206 +3,216 @@ audience: development
 documentClass: planning
 ---
 
-# TX1 Leg A design, revision 7 (2026-10-10)
+# TX1 Leg A design, revision 8 (2026-10-10)
 
 Quest `replicated-transaction-decision-and-apply` (sealed df51b799a). This
-revision supersedes [revision 6](design-leg-a-v6-2026-10-10.md), which the
-round-6 design vet rejected (REVISE, 2 bounded blockers R6-1 and R6-2 and nits
-N6-1..N6-9, recorded in `log.ndjson` by 6d24e3b4f). Revisions 1-6 stay as history.
+revision completes [revision 7](design-leg-a-v7-2026-10-10.md). It does two
+things:
 
-Revision 7 is revision 6 amended. Unchanged text is carried over. Every change
-answers a round-6 blocker or nit, or one of the lead's revision-7 decisions
-AK-AM. Deviations from the brief are listed in section 0.5.
+- it answers the round-7 design vet (REVISE: 2 bounded blockers R7-1 and R7-2,
+  and nits N7-1..N7-13, recorded in `log.ndjson` by e984cb8db);
+- it applies the cloud/query owner's decisions and seam agreement
+  ([`owner-decisions-2026-10-10.md`](owner-decisions-2026-10-10.md), committed
+  by 0c398d50b; the seam file's section "Cloud/query owner agreement after
+  revision 6").
 
-Citations are `file:line` on HEAD 6d24e3b4f. `git diff 91751b41f..6d24e3b4f --
-src test scripts` is empty, so round 6's check of about 45 citations still
+Revisions 1-7 stay as history. Revision 8 is revision 7 amended: unchanged
+text is carried over. Every change answers a round-7 blocker or nit, an owner
+decision, or one of the lead's revision-8 decisions AN-AP. Deviations from the
+brief are listed in section 0.5.
+
+Citations are `file:line` on HEAD e984cb8db. `git diff 4119114d7..e984cb8db --
+src test scripts` is empty, so round 7's check of about 60 citations still
 holds. Every new citation in this revision was checked on this head.
 
-Witness files (first run: `evidence/red-v7-first-run.tap`):
+Witness files (first run: `evidence/red-v8-first-run.tap`):
 
 | File | Role | Tests | Result |
 | --- | --- | --- | --- |
-| [`test/partition/partition-transaction-replicated-apply-v3.test.js`](../../../test/partition/partition-transaction-replicated-apply-v3.test.js) | participant witnesses, amended in place | 36 (939 lines) | 36 red |
-| [`test/query/partition-transaction-seam-falsifiers.test.js`](../../../test/query/partition-transaction-seam-falsifiers.test.js) | query-lane seam falsifiers, amended in place | 12 | 12 red |
-| [`test/partition/partition-transaction-replay-cursor-v4.test.js`](../../../test/partition/partition-transaction-replay-cursor-v4.test.js) | replay cursor over a real rs-raft log; the four positive controls; since revision 7 the statement-classifier witnesses W6n, W6s, W6p and W6r (named `TX1 v3 ...`) | 10 | 6 red, 4 controls green |
+| [`test/partition/partition-transaction-replicated-apply-v3.test.js`](../../../test/partition/partition-transaction-replicated-apply-v3.test.js) | participant witnesses, amended in place | 37 (978 lines) | 37 red |
+| [`test/query/partition-transaction-seam-falsifiers.test.js`](../../../test/query/partition-transaction-seam-falsifiers.test.js) | query-lane seam falsifiers, plus the separate owner's F-DET witness | 14 | 14 red |
+| [`test/partition/partition-transaction-replay-cursor-v4.test.js`](../../../test/partition/partition-transaction-replay-cursor-v4.test.js) | replay cursor; statement-admission and classifier witnesses W6n, W6s, W6p, W6r, W6r-b (named `TX1 v3 ...`); the four positive controls | 11 | 7 red, 4 controls green |
 | [`test/test-helpers/participant-transaction-fixture.js`](../../../test/test-helpers/participant-transaction-fixture.js) | shared fixture | n/a | n/a |
-| [`test/test-helpers/controllable-consensus-port.js`](../../../test/test-helpers/controllable-consensus-port.js) | the port double: it now opens the durable store when the port is created, as production does (R6-2) | n/a | n/a |
+| [`test/test-helpers/controllable-consensus-port.js`](../../../test/test-helpers/controllable-consensus-port.js) | port double, unchanged since revision 7 | n/a | n/a |
 
 ## 0. Dispositions
 
-### 0.1 The landing rule (lead decision A, unchanged)
+### 0.1 The landing rule (owner decision)
 
-There is one protocol and one cutover change set. It spans both lanes and lands
-only under the query owner's agreement of the seam
-([`seam-2026-10-10.md`](seam-2026-10-10.md), revision-3 to revision-7 sections).
+The cloud/query owner has **agreed the seam**: items A, B/S, C, C', D, E, F, G,
+H, U, V, T/AD, S4b and S4c, under the exact choices and qualifications of the
+owner record. Section 11.1 lists them as agreed.
 
-**No participant source lands before the seam is agreed.**
+Agreement is not acceptance of this design, participant source, or Quest
+landing. Each of those is a separate milestone:
 
-One exception is recorded. The write kernel's may-be-committed answer fix (AD,
-section 7) is a bounded single-owner kernel change and can land on its own. Its
-inventory is in 9.2 (revision-6 rows), and its scope is now explicit (section 7,
-round-6 N6-6). It must carry those supersessions and an independent verification
-when it lands alone.
+- after design acceptance, each lane implements in its own worktree;
+- shared owner edits are serialized;
+- the lanes integrate one compatible protocol cutover candidate.
 
-### 0.2 The 2 round-6 blockers
+TX1 stays OPEN until all of these hold for the exact candidate:
 
-| # | Blocker (round 6) | Revision-7 disposition | Section | Witness |
+- every sealed receipt is green;
+- the real three-replica witnesses A1-A5 and the persisted-migration witness M1
+  pass;
+- the source and gate checks pass.
+
+Revision 6's "receipts still red by design" exception (11.3) does not apply to
+Quest landing. The bounded AD kernel correction may land on its own, with its
+own acceptance and source verification; it does not close TX1.
+
+### 0.2 The 2 round-7 blockers
+
+| # | Blocker (round 7) | Revision-8 disposition | Section | Witness |
 | --- | --- | --- | --- | --- |
-| R6-1 | Admitted statements still read per-replica state. (a) A rowid-alias write moves the table's max rowid to the int64 ceiling, after which every `NewRowid` is random per replica, and order-dependent admitted statements diverge (PREPARED on one replica, REFUSED on another). (b) Merely preparing a PRAGMA on the ordinary query path flips the leader connection's flags before consensus, outside the classifier | Decision AK. (1) The statement-kind rule is the single owner of what may be prepared on the shared connection. It runs in the participant's `executeQuery` before any `prepare`, for sessionless and session statements, and in the committed SQL apply, where an offending committed statement is REFUSED identically on every replica. (2) Rowid: a pure-text rowid-alias rule on the session and ordinary write paths; a rowid-ceiling guard (max rowid at or above 2^62) on the leader for session and ordinary writes, plus its apply-side twin (0.5 item 3); limit L9, under which order-dependent session writes are refused (LIMIT/OFFSET, scalar subqueries, aggregates); WITHOUT ROWID tables presented as the schema owner's Leg B option. The premise of K is stated as an explicit list of state equal on every replica, each item with its owner | 3.3, 6.2, 9.2 | W6p (new), W6r (new) |
-| R6-2 | The design's self-check is un-greenable on the witnesses' own fixture: the controllable port created the rs-raft tables only at the first commit | Decision AL. The port double opens the durable store in `createOperationPort`, as production does at group creation (`raft-rs-runtime-owner.js:1652-1653`). Every consumer of the double was re-run (10.1). The self-check also probes the `database` and `implicit_key` layers (N6-1). The L4 version-pin claim is corrected (N6-2). All red evidence is re-recorded | 3.3, 10.1, 11.3 | W6s, W6n (c4 now reaches its layer) |
+| R7-1 | The ceiling guard runs before a statement. One statement can assign the top key and then allocate (`VALUES (2^63-1, ...), (NULL, ...)` on an INTEGER PRIMARY KEY table; `INSERT INTO t AS x (rowid, ...)` evades the assignment parse), so random rowids stay reachable | Decision AN. The ceiling becomes a **post-statement** invariant at four sites: session staging inside c'; each PREPARE dry-run operation; each COMMIT-apply operation; each ordinary committed SQL apply. After the statement, `max(rowid)` of the own table, read as an exact BigInt (`safeIntegers`), must be below 2^62; otherwise the statement's effects roll back and it is refused `rowid_ceiling`. Inside an allocating statement on an INTEGER PRIMARY KEY table, the shapes that could lower the top key again (REPLACE resolution, a key-assigning `DO UPDATE`) are refused, so the post-statement check sees every intermediate maximum. On the ordinary path the alias rule refuses an alias token anywhere outside the top-level WHERE clause, so `AS alias` needs no special parse. The pre-check stays for legacy state | 3.3 | W6r-b (new), W6r (AS alias, dry-run half) |
+| R7-2 | Premise item 1 was stated as held, but F-DET and the unreplicated `executeLocalQuery` break it; `executeLocalQuery` is also a prepare site outside the kind owner | Decision AO. (1) `executeLocalQuery`, the CDC bootstrap direct path's head checks and the `executeSystemTableRead` fallback route through the statement-admission owner. (2) Premise item 1 lists its breakers with owners. (3) F-DET is not fixed in TX1. Limit L11 states the consequence, K is conditional on it, F-DET is an R17 finding with a red witness owned by a separate owner, and the owner choice is presented | 3.3, 6.2, 9.3, 11.3 | W6p (`executeLocalQuery` case), seam FDET (separate owner) |
 
-### 0.3 The witnesses round 6 requires (its section 3)
+### 0.3 The owner decisions, applied section by section (decision AP)
 
-| # | Requirement | Witness | Red on 6d24e3b4f because | Not greenable by |
+| Owner decision | Applied as | Section | Witness |
+| --- | --- | --- | --- |
+| Prepare-first is final; retire the ONE_PHASE_COMMIT fast path and its incompatible assertions and documentation; DIRECT_AUTOCOMMIT unchanged | 11.2 states the choice. Derivation 4 (9.2) inventories every ONE_PHASE_COMMIT site in `src`, `test` and the documents, each with its supersession | 9.2, 11.2 | S7 |
+| L5 and L3 accepted as an availability trade-off, not an R12 exception | 3.6 and 8.4 restated. A deadline bounds a caller's wait, never the PREPARED obligation. PREPARED never expires into permission. An eligible recovering engine returns and releases a PREPARED row only by the authoritative decision | 3.6, 8.4 | W16 (uncontended and after-interference positives), W12d, S4a, S8 |
+| Rowid: owned admission guards for the supported SQL population; WITHOUT ROWID deferred | The five acceptance conditions mapped one by one to mechanisms and witnesses | 3.3 | W6r, W6r-b, W6p, L9 |
+| L6: a pre-cutover census that every partition table's max rowid is below 2^62 | In the L6 precondition | 11.3 | n/a |
+| The opcode check enforces a stated supported SQL population with default refusal; it is never a proof; observing a new opcode never expands it | 3.3 restated; `SoftNull` is vetted into the population on an explicit argument, and `NotFound` and `Filter` stay refused (L7) | 3.3 | W6n |
+| Pin the execution compatibility envelope for all replicas, restored followers included | Transaction commands carry an execution envelope, and every replica refuses to apply one under another build (a host failure). L10 is reframed | 2.3, 3.3, 11.3 | W20 (new) |
+| No 50 ms bound promise | The replay budget drops its wall-clock clause; work is bounded by operation and byte counts | 3.1 | n/a |
+| S4c option 1 is final: call `setCDCIntegrationService` on the seed SQL engine after CDC creation or upgrade, through the existing setter; no `autoStartDistributedTransactionRecovery` flip; keep the refusal case | S4c's structural check requires that call after both branches. S4d runs the real phase in both construction branches. M1 names the persisted two-participant migration through actual production composition | 9.2, 11.1 | S4c, S4d (new), M1 (named) |
+| Receipt 8: named owners and a durable obligation | 8.3 names the owners and specifies the obligation | 8.3 | receipt 8 stays absent |
+| Trust boundary | 2.4 states it: decision records are authoritative through the trusted coordinator route; a self-computed digest is content identity, not authentication; no second decision lookup during committed apply | 2.4 | n/a |
+| H: register the coupled pair through the impact-contract owner | 11.1 | 11.1 | gate |
+| Retirement map for the revision-2 file | 9.2 maps P1, P2, P3 and both controls to stronger live witnesses, with an explicit retirement entry | 9.2 | n/a |
+| Current counts are inventories, not seal thresholds | 10.2 | 10.2 | n/a |
+| Agreed items are no longer open | 0.7 and 11 | 0.7, 11 | n/a |
+
+### 0.4 The witnesses round 7 requires (its section 3)
+
+| # | Requirement | Witness | Red on e984cb8db because | Not greenable by |
 | --- | --- | --- | --- | --- |
-| 1 | The ceiling sequence and order-dependent statements: rowid-alias writes refused on the transaction and ordinary paths, and the ceiling staging check | W6r | the six session cases stage (no `failureCode`); the ordinary alias insert and the ordinary insert at the ceiling are both proposed (`proposed: 2`, answers pending); at apply, an ordinary insert on a ceiling table applies (`outcome: applied`, rows 1) | a session-only rule (the ordinary alias write and the ordinary ceiling write are measured); a leader-only ceiling check (the apply half is measured on two followers); a refusal at the wrong layer (each answer pins `refusalLayer`) |
-| 2 | A sessionless QUERY PRAGMA proposes nothing and leaves the flag at 0; a committed SQL PRAGMA is refused typed at apply | W6p | the sessionless PRAGMA and DROP are proposed and stay pending; the leader's flag is 1 (set by `prepare` alone); at apply both PRAGMA and `DROP TABLE` apply on both replicas (flag 1, table dropped, outcomes `applied`) | a classifier that runs after `prepare` (the flag must read 0); refusing all DDL (the index DDL the index service sends must still be proposed) |
-| 3 | The harness repair, then re-recorded red evidence in which W6s and W6n c4 are red only for the absent module | port double; W6s, W6n | W6s: the module is absent, and a BEGIN on a leader whose self-check failed succeeds. W6n c4 is now classified like every other case (no compile error: the rs-raft tables exist from port creation) and is staged today | n/a |
-| 4 | Recommended: a database-layer probe (N6-1), layers pinned (N6-3), the S4c positive half (N6-4), RC2 with an intervening applied write (N6-5) | W6s, W6n, S4c, RC2 | W6s and W6n as above; S4c: `silentlyUnpersisted: true` and `phaseSafe: false`; RC2: the transaction commands are UNRECOGNISED (setup `HOST_FAILURE`) | see 0.6 |
-| 5 | Still owed: CDC exactly-once (receipt 8), the mirror sender on a reserved refusal, the real three-replica A1-A5 | unchanged (10.3) | n/a | n/a |
-
-### 0.4 Earlier rounds
-
-- **Round 5 closed:** round 6 judged R5-2 and every round-5 nit disposed, and
-  every R5-1 channel refused at its stated layer. The remainder of R5-1 is R6-1.
-- **Carried and accepted by round 6:** N2 (the harness digests only each
-  receipt's first file), N12, and N-H, whose consequence is R6-1 and is answered
-  here.
-- **History:** revision 6's section 0 remains the record for round 5, revision
-  5's for round 4, and revision 4's V-table for round 3.
+| 1 | W6r-b: the multi-row INTEGER PRIMARY KEY insert, committed on two replicas, refused `rowid_ceiling` with equal rows; `INSERT INTO t AS x (rowid, ...)` refused at `rowid_alias` on the wire; the owner's counterexample (existing max 2^63-2, then two automatic insertions) | W6r-b, W6r | W6r-b: both statements apply; the rowids of the inserted rows differ between the two replicas (random allocation). The four session cases on the INTEGER PRIMARY KEY leader all stage. W6r: the AS-alias insert is proposed | a before-statement guard (both statements start below the top); a guard that compares only with 2^63-1 (the owner's counterexample starts at 2^63-2); refusing every explicit integer key (the in-range key must stage) |
+| 2 | The kind owner on every prepare site, the lexer case and the N7-2 heads | W6p | 10 wire cases and the `executeLocalQuery` PRAGMA all prepare (9 are proposed, one fails to compile); the leader's flag is 1 | a deny-list of PRAGMA and DROP (ATTACH, CREATE TRIGGER, ANALYZE, `;PRAGMA` and the comment-terminator cases are measured); a JavaScript lexer that ends `--` at CR or U+2028; a kind check missing from `executeLocalQuery` |
+| 3 | F-DET: a red witness if closed, L11 if accepted | seam FDET (separate owner), L11 | the two replicas store different values | n/a (separate owner) |
+| 4 | The PREPARE dry-run ceiling half | W6r | the PREPARE is UNRECOGNISED | a staging-only ceiling |
+| 5 | Recommended: the backfill positive half, an aggregate probe, the RC2 converse | W6r, W6s, RC2 | W6r: the backfill update is proposed and applies today, while the rest of W6r is red; W6s: the module is absent; RC2: the applied-first sequence mirrors `replayed-r` twice | refusing every rowid reference (the backfill must still propose and apply); first- or last-occurrence de-duplication (RC2 measures both orders) |
+| 6 | Still owed: CDC exactly-once, the mirror sender, A1-A5 | unchanged (10.3), plus M1 | n/a | n/a |
 
 ### 0.5 The brief and every deviation (R16, R21)
 
 **Lead decisions** (recorded by the lead):
 
-- A-P, Q-Z, AA-AG and AH-AJ are as recorded in revisions 3-6.
-- **AK (R6-1):** the statement-kind layer is the single owner of what may be
-  prepared on the shared connection, on the query wire and at the committed
-  SQL apply; rowid: a pure-text rowid-alias rule on both write paths, a staging
-  ceiling guard at 2^62, a Leg A limit for order-dependent session statements,
-  WITHOUT ROWID as the schema owner's Leg B option; the premise of K as an
-  explicit list.
-- **AL (R6-2):** the port double opens the durable store as production does;
-  the self-check also probes `database` and `implicit_key`; the L4 version pin
-  corrected; all red evidence re-recorded.
-- **AM (nits):** W6n pins the refusing layer and adds the unlisted shapes; S4c
-  gets a positive half and a structural check; RC2 gets an intervening applied
-  write; the `unansweredWriteResult` default-branch scope; the seed engine's
-  CDC consumers; the 2.3 step-2 order.
+- A-P, Q-Z, AA-AG, AH-AJ and AK-AM are as recorded in revisions 3-7.
+- **AN (R7-1):** the post-statement ceiling, exact BigInt, at four sites; the
+  assignment rule handles `AS alias`; W6r-b with the owner's counterexample;
+  the backfill and the persisted cutover kept as positive witnesses.
+- **AO (R7-2):** `executeLocalQuery` and the CDC bootstrap head checks through
+  the kind owner; premise item 1's breakers with owners; F-DET not fixed in
+  TX1, limit L11, K conditional, an R17 finding with a separate owner's red
+  witness, and the owner choice; nits N7-1..N7-13.
+- **AP:** the owner decisions applied section by section (0.3).
 
-Revision 6's deviations 1-9 stand, except item 9 (N-H "recorded, not repaired"),
-which is superseded by AK. New in this revision:
+Revision 7's deviations 1-8 stand, except where noted. New in this revision:
 
-1. **Index DDL stays admitted on the sessionless path.** AK says schema changes
-   arrive only through their own committed command types. That holds for ALTER
-   TABLE (`MIGRATION_ALTER_TABLE`, `partition-service-entry-apply-base.js:740-748`,
-   `:818-830`) and CREATE TABLE (the table-creation owner), but not for
-   indexes. The index service sends `CREATE INDEX` and `DROP INDEX` through
-   `partition.executeQuery` (`index-service.js:258-270`, `:407-412`,
-   `:622-626`, `:704-707`), so they arrive as committed QUERY commands.
-   Refusing them would break index management on every partition. The kind
-   layer therefore admits exactly `CREATE INDEX`, `CREATE UNIQUE INDEX` and
-   `DROP INDEX` heads on the sessionless path and at the committed apply, and
-   never in a session. Moving index DDL to its own committed command type is
-   an owner decision (0.7). W6p pins both halves: a sessionless `DROP TABLE` is
-   refused, and the index DDL is still proposed.
-2. **On the ordinary write path the rowid-alias rule refuses assignment, not
-   every reference.** AK says to refuse any reference on both paths. On the
-   ordinary path that would refuse the schema-migration backfill, which writes
-   `UPDATE <table> SET <column> = ... WHERE <column> IS NULL AND rowid > ? AND
-   rowid <= ?` through the partition query path
-   (`migration-coordinator-stage-methods.js:626-631`,
-   `migration-coordinator.js:51`). The ordinary path therefore refuses an alias
-   only where it is assigned: in an INSERT or REPLACE column list, and as an
-   UPDATE or UPSERT SET target. A reference in a WHERE clause or a value reads a
-   rowid, which is deterministic while rowids are equal (premise item 1).
-   Assignment refusal plus the ceiling guard keep them equal. The session path
-   refuses every reference, as briefed.
-3. **The ceiling guard also runs at apply.** AK names a staging guard on the
-   leader. A leader check reads committed state, so two entries in flight pass
-   it: an explicit huge INTEGER PRIMARY KEY (a rowid assignment the text rule
-   cannot see), then an implicit one. The committed SQL apply and the PREPARE
-   dry run therefore run the same check before any statement that can
-   allocate a rowid. It is a deterministic function of premise state, and
-   refuses identically on every replica. W6r measures the apply half on two
-   followers.
-4. **The order-dependence limit is L9, not L8.** L8 already names the
-   self-certifying decision binding (2.4).
-5. **The L9 rules are stricter than the brief's wording, by default.** Writes
-   only:
-   - any LIMIT or OFFSET is refused, not only one "without ORDER BY on a unique
-     key". Proving the ORDER BY names a unique key of the right select core
-     needs name resolution that the text layer does not have;
-   - every subquery opened by `(SELECT` or `(WITH` that is not the operand of
-     IN or EXISTS is refused, derived tables included;
-   - aggregates are refused by opcode (`AggStep`, `AggValue`, `AggInverse`,
-     `AggFinal`), not by parsing result columns. That also covers floating-point
-     summation order and window frames.
+1. **The ordinary-path alias rule is positional, not an assignment parse.** AN
+   asks for an assignment rule that parses `AS alias`. I took the vet's
+   simplest safe form instead: on the ordinary path an alias token is refused
+   anywhere outside the top-level WHERE clause. It needs no grammar for `INTO
+   [schema.]name [AS alias] (`, quoted names or row-value targets, and it still
+   admits the backfill. The cost is that `SET x = rowid` (a value copy) is also
+   refused; no consumer sends it (derivation 3).
+2. **Two in-statement shapes are refused on INTEGER PRIMARY KEY tables, beyond
+   AN's post-check.** A post-statement check proves "no random allocation" only
+   if the table's maximum cannot fall during the statement. On an INTEGER
+   PRIMARY KEY table it can fall: an allocating statement can delete the top
+   row (REPLACE conflict resolution) or rekey it (`ON CONFLICT DO UPDATE SET
+   <key> = ...`) after a random allocation, and leave a final maximum below
+   2^62 on one replica only. In an allocating statement on such a table, those
+   two shapes are therefore refused, on both paths. Without them, an INSERT
+   only adds rows, so the maximum is monotonic and the final check sees every
+   intermediate maximum. TEXT-key tables need no such rule, because there no
+   statement can assign a rowid at all (the alias rule).
+3. **Transactions get an exact INTEGER PRIMARY KEY contract** (owner condition
+   1). In a session write on an INTEGER PRIMARY KEY table, the key's value must
+   be a bound param or an integer literal inside [-2^62, 2^62). A NULL, an
+   omitted key, an expression or a SELECT source is refused at
+   `implicit_key`. Ordinary writes keep automatic allocation (product
+   behaviour), under the post-statement check.
+4. **`SoftNull` is vetted into the supported population (116 opcodes).** Every
+   INSERT into an INTEGER PRIMARY KEY table compiles to it, and the owner
+   requires normal explicit integer keys to work. Vetting it is safe only
+   together with item 2, item 3 and the post-check. `NotFound` (a correlated
+   IN) and `Filter` (an IN over a non-key column) stay refused and are declared
+   in L7.
+5. **The execution envelope is carried, and checked on every replica.** The
+   owner asks for the compatibility envelope to be pinned for all replicas.
+   `PARTICIPANT_PREPARE` and `PARTICIPANT_DECISION` carry `executionEnvelope:
+   {sqliteVersion, sqliteSourceId, compileOptionsDigest,
+   classifierListVersion}`. A replica whose own envelope differs refuses to
+   apply the command as a host failure (environmental: nothing recorded,
+   applied index unchanged), and applies it once its build matches.
+   - Ordinary writes do not carry it. A mixed-build window for them is the
+     L11 class.
+   - The trade-off: during a rolling upgrade, an older replica stalls on the
+     first transaction command until it is upgraded. That is fail-closed by
+     design; L6 already requires no transaction across the cutover.
+6. **The statement-admission owner gets its own module.** The kind rule, the
+   rowid rules and the ceiling check move to
+   `src/partition/partition-statement-admission.js`. The session classifier
+   (`partition-transaction-determinism.js`) calls it. This answers N7-13: the
+   module that governs every statement on the connection is named for that.
+7. **The persisted two-participant migration is named, not built.** M1 lives
+   in `test/integration/seed-migration-cutover-persisted.integration.test.js`,
+   which does not exist yet; receipt 6 binds it the way receipts 2-4 bind
+   A1-A5. Building it needs the real system-table partitions; that is the
+   source lane's.
+8. **The F-DET witness sits in the seam file and is bound to no TX1 receipt.**
+   Its owner is the query engine (freeze `NOW()`/random before fanout) or the
+   partition apply (refuse). The witness has the partition-apply shape (two
+   replicas must store the same thing). Under the engine option, its owner
+   supplies an engine-level witness instead.
+9. **Revisions 6 and 7 still trip the documentation audit.** The audit reads a
+   grep character class followed by `(` as a broken local link
+   (`design-leg-a-v6-2026-10-10.md:1561`, `design-leg-a-v7-2026-10-10.md:1770`,
+   `:1828`). Those files are history and outside this revision's write scope.
+   Revision 8 writes the class as `[...]+(`, which does not parse as a link.
 
-   Session reads are exempt: a read changes no replicated state, and a value a
-   client writes back is a param.
-6. **The rowid-alias rule is a token rule, case-insensitive, over both bare and
-   quoted identifiers.** SQLite resolves a quoted `"rowid"` to the alias when no
-   real column has that name, so a quoted form is no escape. A census over
-   `src/` (`grep -rniE "\browid\b|_rowid_|\boid\b"`) finds no schema column so
-   named; the hits are the migration backfill, comments and JavaScript
-   identifiers.
-7. **The classifier witnesses moved to the sibling file.** W6n and W6s, and the
-   new W6p and W6r, keep the participant prefix `TX1 v3`. The participant file
-   was at 999 lines, and these four need about 160. The producer binds them
-   from the sibling under that prefix (receipt 3). A new test file would be the
-   clean split. It is outside this revision's write scope, so it is left to the
-   lead.
-8. **The S4c structural check is a source-text check.** No production module
-   exports the seed-hydration engine's construction. Under "extract-free", the
-   only available check reads `seed-cache-hydration-phase.js`. It requires that
-   the engine construction passes a gateway or a CDC service, or that the phase
-   calls `cdcQueryEngine.setCDCIntegrationService(`, or that the phase no longer
-   wires the migration owners on that engine. That is a text property, not
-   behaviour: limit stated in 11.1.
-
-### 0.6 Round-6 nits
+### 0.6 Round-7 nits
 
 | Nit | Disposition | Where |
 | --- | --- | --- |
-| N6-1 (self-check coverage) | Two more probes: `temp_schema_read` (`SELECT count(*) FROM temp.sqlite_master`), which must be refused at `database`, and `implicit_key_insert` (`INSERT INTO <table> (<a non-key column>) VALUES (NULL)`, classified only), which must be refused at `implicit_key`. A disabled `database` layer is caught however the temporary root pages fall: a collision admits the probe, no collision refuses it at `root_page`, and both are the wrong answer. W6s pins all seven | 3.3, W6s |
-| N6-2 (L4 version pin) | Corrected: the pin is the leader's. Followers on another SQLite build are covered for the cutover itself by the L6 drain, and not at all afterwards (premise item 4; limit L10) | 3.3, 11.3 |
-| N6-3 (W6n pins no layer) | Every answer carries `refusalLayer`, and W6n pins it for each of 24 cases. It adds `pragma_table_info`, `json_each`, a `sqlite_master` read, a `_partition_statement_outcomes` read and a `VALUES` head | 3.3, W6n |
-| N6-4 (S4c) | The positive half: through the same cutover driver, an engine with a recording gateway BEGINs, COMMITs and submits its `sql_transactions` row. The structural check: `phaseSafe` (0.5 item 8) | 11.1, S4c |
-| N6-5 (RC2) | An applied write sits between the decision and the re-parked entry, and the expected order is `['insert-c', 'reserved-r']`. An entryId de-duplicating cursor yields `['reserved-r', 'insert-c']` and stays red | 8.1, RC2 |
-| N6-6 (AD scope) | Section 7 now names every rejection that reaches `unansweredWriteResult`'s default branch | 7 |
-| N6-7 (the seed engine's CDC consumers) | Inventoried in 9.2 (revision-7 rows): no BEGIN reach. Multi-partition reach is bounded to system tables and is not proven empty | 9.2 |
-| N6-8 (2.3 step-2 order) | Re-ordered: a non-PREPARED row is `terminal` first | 2.3 |
-| N6-9 (log) | The lead's | n/a |
+| N7-1 (kind lexer) | SQLite's lexical rules are pinned with citations. W6p adds the CR and U+2028 comment-terminator cases | 3.3, W6p |
+| N7-2 (W6p deny-list) | W6p adds ATTACH, CREATE TRIGGER, ANALYZE, `;PRAGMA`, both lexer cases, unbound and foreign index DDL, and `executeLocalQuery` | W6p |
+| N7-3 (W6r gaps) | The backfill positive half (proposed, and applied on two followers), the quoted, `oid`, `_rowid_` and qualified forms, `AS alias`, and the PREPARE dry-run ceiling half | W6r |
+| N7-4 (index DDL scope) | Narrowed to `CREATE INDEX [IF NOT EXISTS] <name> ON <own table> (...)` and `DROP INDEX [IF EXISTS] <name>` of an index on the own table. `CREATE UNIQUE INDEX` is refused (no `src` file sends it) | 3.3, W6p |
+| N7-5 (L9 overclaims) | L9 names its three refused shapes and lists the admitted order-sensitive ones. It also says that L9b makes the admitted WITH-write head VALUES-only in practice | 3.3 |
+| N7-6 (undeclared false refusals) | `SoftNull` is vetted (0.5 item 4). `NotFound` and `Filter` are in L7 | 3.3, 11.3 |
+| N7-7 (apply-side checks change committed dispositions) | Justified from derivation 3: no sender of a refused head or of an alias outside WHERE exists. Added to L6 as the mixed-version disposition window; the envelope (0.5 item 5) closes it for transaction commands | 3.3, 11.3 |
+| N7-8 (self-check coverage) | Two probes added: `aggregate_insert` (refused at `row_order`) and `ceiling_insert` (refused at `rowid_ceiling`, inside a sentinel transaction) | 3.3, W6s |
+| N7-9 (RC2 last-occurrence de-dup) | RC2 measures both orders: refused-then-applied, and applied-then-replayed | 8.1, RC2 |
+| N7-10 (S4c brittleness) | `phaseSafe` is now a positive pattern: the setter call on the seed engine, positioned after both CDC branches. Renaming or reordering fails it, never passes it. S4d adds a behavioural check through the real phase | S4c, S4d |
+| N7-11 (port fidelity) | The 3.3 root-page table is labelled fixture-specific. The residue is recorded: the double opens the store unconditionally, and opens neither the peer-identity registry nor the lifecycle owner (`raft-rs-operation-port.js:163`, `:181-183`, `:204`) | 3.3 |
+| N7-12 (init-time index re-creation) | Premise item 2 names it: a `DROP INDEX` of a schema-declared index comes back on a restarted replica only (`system-table-schema-sql.js:42-53`, run at `partition-service-table-bootstrap.js:179-181`). Owner: the index owner. The narrowed index rule refuses a `DROP INDEX` of a schema-declared index | 3.3 |
+| N7-13 (owner placement) | Moved: `partition-statement-admission.js` (0.5 item 6) | 3.3 |
 
-### 0.7 Open owner and seam decisions (for the lead's report)
+### 0.7 Open decisions (after the owner record)
 
-- **Seam items A, B/S, C, C', D, E, F, G, H, U, V, T/AD, S4b and S4c:** all
-  recorded, none agreed. The query owner has not been present in any round.
-- **1PC:** option A (prepare-first, recommended) or option B.
-- **L5:** acceptance of the partition-granular conflict exposure as an R12
-  exposure.
-- **L3:** the reservation is unbounded without a recovering engine. Accept it,
-  or name a bound.
-- **Receipt 8:** a CDC cursor/retention owner, or a seal supersession.
-- **Seam V** versus the constraint `existing-owner-chain`.
-- **S4c:** option 1 or option 2' (11.1).
-- **Retirement of `partition_write_consensus_host_failure`** after AD.
-- **The classifier owner's acceptance** of the 115-opcode list.
-- **Index DDL (new, 0.5 item 1):** move `CREATE INDEX`/`DROP INDEX` to a
-  committed command type of their own (index-management and partition owners),
-  after which the kind layer refuses all DDL on the query wire.
-- **Rowid (new):** accept the alias rule, the ceiling guard and L9 for Leg A,
-  or choose WITHOUT ROWID partition tables (schema owner, Leg B).
-- **The upgrade census (new, L6):** before cutover, every partition table's max
-  rowid is below 2^62.
-- **SQLite upgrades under live transactions (new, L10):** an owner for a
-  version-skew gate, or acceptance as an exposure.
-- **The split of the sibling file (new, 0.5 item 7):** a dedicated classifier
-  witness file.
+The owner record settles every earlier seam and design choice. Still open:
+
+- **F-DET (L11):** the query owner freezes nondeterministic values before
+  fanout, or the partition apply refuses them, or the exposure is accepted as
+  stated in L11.
+- **Retirement of `partition_write_consensus_host_failure`** with AD (the
+  write-kernel owner).
+- **Index DDL as its own command type** (index-management and partition
+  owners). It is optional now that the rule is narrowed to the own table.
+- **The classifier owner's acceptance** of the 116-opcode supported population.
+- **A dedicated witness file** for the statement-admission witnesses (the
+  lead's).
+- **`partition-write-answer-consumers.test.js` F-aj flakiness:** its owner
+  (round 7 judged it unrelated to TX1).
 - **Shard census and `evidence/receipt.json`:** regenerated by the lead at
   commit.
-
 ## 1. Consumed surfaces (verified)
 
 Participant transaction owner, current behaviour to replace:
@@ -487,7 +497,7 @@ Two new committed command types replace the three legacy markers in
 
 - **`PARTICIPANT_PREPARE`**: `{type, entryId, sessionId, transactionId,
   participantId, commitMode, transactionEpoch, operationsText, validationText,
-  preparedDigest, timestamp, proposedBy, proposedAt}`.
+  preparedDigest, executionEnvelope, timestamp, proposedBy, proposedAt}`.
   - `operationsText` is the leader's `JSON.stringify` of the staged operations
     `[{entryId, sql, params}]`, each exactly the client's statement and params.
   - `validationText` is `JSON.stringify([["partition", partitionId,
@@ -496,11 +506,15 @@ Two new committed command types replace the three legacy markers in
   - `preparedDigest` is `sha256(operationsText + "\n" + validationText)`.
 - **`PARTICIPANT_DECISION`**: `{type, entryId, sessionId, transactionId,
   participantId, commitMode, transactionEpoch, decision, preparedDigest,
-  decisionText, decisionDigest, timestamp, proposedBy, proposedAt}`.
+  decisionText, decisionDigest, executionEnvelope, timestamp, proposedBy,
+  proposedAt}`.
   - `decisionText` is `JSON.stringify({transactionId, decision, participants:
     [[participantId, preparedDigest|null], ...sorted]})`.
   - `decisionDigest` is `sha256(decisionText)`.
   - It carries no operations.
+- **`executionEnvelope`** (revision 8, owner decision): `{sqliteVersion,
+  sqliteSourceId, compileOptionsDigest, classifierListVersion}`, stamped by the
+  leader. Every replica checks it first (3.3).
 - **Deterministic entryIds**: `${participantId}:prepare` and
   `${participantId}:decision:${decisionDigest}`. A retry joins the pending
   outcome (`partition-service-write-metrics-base.js:672-676`).
@@ -515,6 +529,11 @@ Two new committed command types replace the three legacy markers in
 for round-5 nit N-B; first match wins, every step a deterministic function of
 the committed prefix and the command bytes):
 
+0. (Revision 8) Execution envelope: the carried envelope must equal the
+   replica's own. A mismatch is the host failure
+   `participant_transaction_execution_envelope_mismatch`: nothing recorded, the
+   applied index unchanged, re-applied once the build matches (W20). The same
+   check runs first for a decision.
 1. Identity: an exact `participantId`. A mismatch is typed
    (`identity_mismatch`) with no row written.
 2. Existing row for this identity (looked up before the digest is judged;
@@ -543,8 +562,9 @@ the committed prefix and the command bytes):
    REFUSED row, cause `conflict`.
 7. Dry run of the operations in a nested `db.transaction` that throws a
    sentinel:
-   - (revision 7) before each operation that can allocate a rowid, the
-     ceiling guard of 3.3: at or above 2^62, a REFUSED row with cause
+   - (revisions 7 and 8) around each operation that can allocate a rowid, the
+     ceiling of 3.3 (R3): before it for legacy state, and after it as an exact
+     BigInt comparison. At or above 2^62, a REFUSED row with cause
      `rowid_ceiling`, identical on every replica;
    - a deterministic failure writes a REFUSED row, cause `statement_failed`;
    - an environmental failure is the host failure (nothing recorded).
@@ -578,6 +598,12 @@ decision from a fabricated one. Safety against an unauthorized terminal rests
 on seam C: only the coordinator sends decisions, and only after the
 insert-once decision record. The binding protects against mixing decisions and
 prepared contents, not against a forging coordinator.
+
+**Trust boundary (owner decision, revision 8).** Decision records are
+authoritative through the existing trusted coordinator route. A self-computed
+digest establishes content identity, not authentication, and not proof that an
+arbitrary caller owns the global decision. The participant does not add a
+second decision lookup during committed apply.
 
 ## 3. Isolation and the conflict rule
 
@@ -614,9 +640,12 @@ prepared contents, not against a forging coordinator.
   writes already lose them at the codec: a Buffer becomes an object at apply,
   and a BigInt fails to encode. The narrowing therefore aligns transactions
   with the replicated class.
-- **Bounds**: 256 operations, 1 MiB of encoded bytes, and 50 ms of replay work
-  checked after each statement (proposed new constants). Exceeding any is
-  `replay_budget_exceeded`.
+- **Bounds**: 256 operations and 1 MiB of encoded bytes (proposed new
+  constants). Exceeding either is `replay_budget_exceeded`. Revision 8 drops
+  the earlier "50 ms of replay work" clause (owner decision): a check made
+  after a synchronous statement finishes bounds nothing. No wall-clock bound
+  on an arbitrary statement is promised. The replay's cost is bounded only by
+  the admitted operations and bytes.
 - **Observer scope** is unchanged from revision 3:
   - no other reader sees staging;
   - `persistenceAdmission` (`raft-rs-durable-store.js:358-362`) never defers
@@ -696,7 +725,14 @@ write between its BEGIN and its PREPARE. Every read it made saw one committed
 prefix, so each partition is optimistically serializable. Aborts are
 partition-granular (limit L5, 3.6).
 
-### 3.3 Determinism: one fail-closed classifier over the whole program (decisions I, Q, AB, AH, AK)
+### 3.3 Determinism: one fail-closed classifier over the whole program (decisions I, Q, AB, AH, AK, AN, AO)
+
+**What this section claims (owner decision, revision 8).** The classifier does
+not prove determinism. It enforces a stated **supported SQL population** with
+default refusal. The opcode check enforces that contract; observing a new
+opcode never expands it. Each extension is an explicit act of the classifier
+owner, with its own argument. SQLite's bytecode is not an application API.
+
 
 - **One classifier, leader only.** It is owned by the new
   `src/partition/partition-transaction-determinism.js` and runs at staging, on
@@ -721,54 +757,111 @@ partition-granular (limit L5, 3.6).
   version it was vetted for, and the self-check compares it with
   `sqlite_version()`. Any other version fails the self-check, so an upgrade
   fails closed until the lists are re-vetted.
-- **One statement-kind owner on the shared connection (AK, revision 7).** The
-  statement-kind rule is a pure function of the SQL text. Nothing it refuses is
-  ever prepared or EXPLAINed on a partition's connection, because preparing a
-  flag PRAGMA already sets the flag (round 6 measured `afterPrepareOnly: 1` and
-  `afterExplainOnly: 1`). It runs in two places:
-  - **in the participant's `executeQuery`**
+- **One statement-admission owner on the shared connection (AK, AO; revision
+  8).** It is owned by the new `src/partition/partition-statement-admission.js`
+  (0.5 item 6). It holds the statement-kind rule, the rowid rules and the
+  rowid-ceiling check. The session classifier calls it as its first layers.
+  The kind rule is a pure function of the SQL text. Nothing it refuses is ever
+  prepared or EXPLAINed on a partition's connection: preparing a flag PRAGMA
+  already sets the flag (round 6 measured `afterPrepareOnly: 1` and
+  `afterExplainOnly: 1`), and EXPLAIN does not suppress prepare-time PRAGMA
+  effects (owner record). Every site that prepares SQL text on a partition
+  connection routes through it:
+  - **the participant's `executeQuery`**
     (`partition-service-write-metrics-base.js:52-131`), before any `prepare`,
-    for sessionless and session statements alike. It also replaces that
-    method's `startsWith(SELECT)` read/write split (`:64-67`), so the
-    connection has one statement-kind owner. The query wire
+    for sessionless and session statements alike. It replaces that method's
+    `startsWith(SELECT)` read/write split (`:64-67`). The query wire
     (`handleRemoteQuery`, `partition-service-entry-apply-base.js:749-758`) and
     every internal caller reach it there;
-  - **in the committed SQL apply**, for every type in
+  - **`executeLocalQuery`** (`partition-service-write-metrics-base.js:140-185`,
+    with its own split at `:153-156`), the unreplicated bootstrap path
+    (revision 8, R7-2). Its callers:
+    - the CDC bootstrap direct path (`cdc-bootstrap-direct-sql.js:95-100`, a
+      third head rule, and `:118-163`);
+    - `executeSystemTableRead` (`cdc-integration-service-local-system-table-routing.js:199-207`),
+      whose raw `partitionService.db.prepare(sql)` fallback (`:202-207`) is
+      replaced by a call through the owner;
+    - the seed partitions phase (`seed-partitions-phase.js:755`).
+
+    `executeLocalQuery` admits only the sessionless heads below; a refusal
+    returns `{success: false, failureCode: partition_write_statement_refused,
+    refusalLayer}`;
+  - **the committed SQL apply**, for every type in
     `PARTITION_COMMITTED_SQL_COMMAND_TYPES`
     (`partition-service-constants.js:173-181`), before the statement is
     prepared. An offending committed statement is recorded STATEMENT_FAILED
     with `failureCode: partition_write_statement_refused`. That is a
-    deterministic function of the command bytes, so it is identical on every
-    replica: the entry is consumed, the applied index advances, and `g` does
-    not move.
+    deterministic function of the command bytes and premise item 2, identical
+    on every replica: the entry is consumed, the applied index advances, and
+    `g` does not move.
+
+  The partition's own storage initialization (table creation, init-time
+  indexes, journal and synchronous PRAGMAs) stays explicit and separate: it is
+  code, not SQL text from a caller (owner condition 4).
+
+  **Lexical rules of the head (pinned to SQLite's own tokenizer, N7-1):**
+  - whitespace is SQLite's: tab, LF, FF and CR (`aiClass`,
+    `node_modules/better-sqlite3/deps/sqlite3/sqlite3.c:179855`), plus a UTF-8
+    BOM read as space (`:180854-180858`). Vertical tab and U+2028 are not
+    whitespace;
+  - a `--` comment ends only at LF (`:180567-180571`), never at CR or U+2028;
+  - a `/*` comment ends at the first `*/`, or at the end of the text
+    (`:180599-180607`);
+  - anything else before the head refuses: a `;`, a `(`, a BOM sequence that
+    is not a BOM, any other character.
 
   The admitted heads per path:
 
   | Path | Admitted heads |
   | --- | --- |
-  | session write | INSERT, UPDATE, DELETE, REPLACE; WITH when `Statement#readonly` is false |
+  | session write | INSERT, UPDATE, DELETE, REPLACE; WITH when `Statement#readonly` is false (VALUES-only in practice, because L9b refuses `AS (SELECT`) |
   | session read | SELECT; WITH when `readonly` and `reader` |
-  | sessionless `executeQuery` (query wire and internal callers) | SELECT, and WITH when `readonly` and `reader` (reads); INSERT, UPDATE, DELETE, REPLACE, and WITH when not `readonly` (writes); and index DDL: `CREATE INDEX`, `CREATE UNIQUE INDEX`, `DROP INDEX` (0.5 item 1) |
-  | committed QUERY/WRITE/INSERT/UPDATE/DELETE/UPSERT apply | the sessionless write heads, index DDL included |
+  | sessionless `executeQuery` and `executeLocalQuery` | SELECT, and WITH when `readonly` and `reader` (reads); INSERT, UPDATE, DELETE, REPLACE, and WITH when not `readonly` (writes); and index DDL of exactly two shapes (below) |
+  | committed QUERY/WRITE/INSERT/UPDATE/DELETE/UPSERT apply | the sessionless write heads, the two index-DDL shapes included |
   | committed `MIGRATION_ALTER_TABLE` apply | ALTER TABLE only |
 
-  Everything else is refused before any `prepare`: on the wire
-  `{success: false, failureCode: partition_write_statement_refused,
-  refusalLayer: statement_kind}`, with nothing proposed; at apply, as above.
+  **Index DDL, narrowed (N7-4).** The index service sends exactly two shapes
+  (`index-service.js:258`, `:407`, `:622-623`, `:704-706`):
+  - `CREATE INDEX [IF NOT EXISTS] <name> ON <own table> (<columns>)`, where
+    `<own table>` is the partition's table name;
+  - `DROP INDEX [IF EXISTS] <name>`, where the named index, if it exists,
+    belongs to the own table and is not declared by the schema
+    (`sqlite_master.tbl_name`, read at admission and at apply; premise item 2).
+
+  `CREATE UNIQUE INDEX` is refused (no `src` file sends it), and so is index
+  DDL on any other table. Index DDL itself is deterministic: SQLite refuses
+  `random()` and `datetime('now')` in expression and partial indexes (round 7).
+
+  Everything else is refused before any `prepare`:
+  - on the wire: `{success: false, failureCode:
+    partition_write_statement_refused, refusalLayer: statement_kind}`, with
+    nothing proposed;
+  - at apply: as above.
+
   The refusal touches no engine-routed statement: the engine forwards only
   SELECT, INSERT, UPDATE and DELETE to partitions
   (`sql-query-engine-statement-execution.js:497-546`). CREATE TABLE and ALTER
   TABLE go to their own owners, and BEGIN, COMMIT and ROLLBACK to the
-  coordinator. A WITH statement is prepared only after its head passes. A WITH
-  cannot be a PRAGMA, so its `prepare` has no connection side effect. W6p
-  witnesses both places.
+  coordinator.
+
+  **Apply-side checks and committed dispositions (N7-7).** Revision 5's
+  principle was that no classifier change ever changes the disposition of a
+  committed command. The apply-side kind, alias and ceiling checks do change it
+  across versions: in a mixed-version window, an entry that an old replica
+  applies is refused by a new one. Three things bound this:
+  - derivation 3 (9.2) finds no sender of a refused head, of an alias outside
+    WHERE, or of a statement at the ceiling, so no such entry is expected;
+  - transaction commands carry the execution envelope (0.5 item 5);
+  - L6 requires the drain and the census before the cutover. The window is
+    recorded in L6.
+
+  W6p witnesses every path.
 - **Layers of the session classifier, in order.** The first refusal wins and
   names its layer in the answer's `refusalLayer` (the witness vocabulary
   `V3.CLASSIFIER_LAYER`). Layers 2, 3, 8 and 11 apply to session writes only;
   the others apply to session reads too:
-  1. **Statement kind (`statement_kind`).** The rule above. The head is the
-     first keyword after leading whitespace and `--` or `/* */` comments,
-     case-insensitive. Cross-check: a write head whose statement is `readonly`,
+  1. **Statement kind (`statement_kind`).** The rule above, with the pinned
+     lexical rules. Cross-check: a write head whose statement is `readonly`,
      or a read head whose statement is not `readonly` or not a `reader`, is
      refused too. better-sqlite3 refuses more than one statement per `prepare`
      ("The supplied SQL string contains more than one statement", measured),
@@ -818,8 +911,9 @@ partition-granular (limit L5, 3.6).
        (`partition-service-core-base.js:83`), the field the partition's schema
        reader already uses (`partition-service-entry-apply-base.js:80-81`).
 
-     Measured on a fresh fixture leader, after the R6-2 repair and before any
-     commit:
+     Measured on a fresh fixture leader (the port double), after the R6-2
+     repair and before any commit. These numbers are fixture-specific (N7-11,
+     the premise notes below); production resolves them per classification:
 
      | Table | Root pages |
      | --- | --- |
@@ -849,10 +943,10 @@ partition-granular (limit L5, 3.6).
        under its own name, which is not on the list.
   10. **Implicit keys (`implicit_key`).** As in revision 5 (below).
   11. **Rowid ceiling (`rowid_ceiling`; state).** For a write that can allocate
-      a rowid (an INSERT or REPLACE head, UPSERT included, or a WITH write):
-      `SELECT max(rowid) FROM main.<table>`, read inside the c' transaction
-      after the replay, must be below 2^62 (the rowid rules below).
-- **The opcode allow-list: 115 opcodes, SQLite 3.49.2.** `Add`, `AddImm`,
+      a rowid: R3 below. The maximum is checked before the statement, and again
+      after it, inside the c' transaction, as an exact BigInt.
+- **The opcode allow-list: 116 opcodes, SQLite 3.49.2** (revision 8 adds
+  `SoftNull`; 0.5 item 4). `Add`, `AddImm`,
   `Affinity`, `AggFinal`, `AggInverse`, `AggStep`, `AggValue`, `And`,
   `BeginSubrtn`, `BitAnd`, `BitNot`, `BitOr`, `Blob`, `Cast`, `Clear`,
   `Close`, `CollSeq`, `Column`, `Compare`, `Concat`, `Copy`, `Count`,
@@ -868,7 +962,7 @@ partition-granular (limit L5, 3.6).
   `Remainder`, `ReopenIdx`, `ResetSorter`, `ResultRow`, `Return`, `Rewind`,
   `RowSetAdd`, `RowSetRead`, `RowSetTest`, `Rowid`, `SCopy`, `SeekGE`,
   `SeekGT`, `SeekLE`, `SeekLT`, `SeekRowid`, `Sequence`, `ShiftLeft`,
-  `ShiftRight`, `Sort`, `SorterData`, `SorterInsert`, `SorterNext`,
+  `ShiftRight`, `SoftNull`, `Sort`, `SorterData`, `SorterInsert`, `SorterNext`,
   `SorterOpen`, `SorterSort`, `String8`, `Subtract`, `Transaction`,
   `Variable`, `Yield`.
 
@@ -891,6 +985,15 @@ partition-granular (limit L5, 3.6).
     window frames.
 
   No admitted shape opened anything but database 0 and root pages 6 and 7.
+
+  **`SoftNull` (revision 8).** Every INSERT or REPLACE into an INTEGER PRIMARY
+  KEY table compiles to it: it marks the key register NULL before the key is
+  computed. The owner requires a normal explicit integer key to work in a
+  transaction. It is vetted into the population on this argument: the key's
+  value is constrained by R2, and allocation is excluded by R3. Without R2 and
+  R3 it would not be safe (round 7, R7-1). `NotFound` (a correlated IN) and
+  `Filter` (an IN over a non-key column) stay outside the population and are
+  declared in L7.
   `PureFunc` was not produced by the corpus. It is admitted only under the
   function-name layer, for an expression index or a generated column that a
   `MIGRATION_ALTER_TABLE` may add. A legitimate shape outside the corpus that
@@ -914,31 +1017,32 @@ partition-granular (limit L5, 3.6).
   | (revision 7) a `VALUES` head | n/a | statement_kind |
   | (revision 7, R6-1) `rowid` in a session write; LIMIT/OFFSET; a scalar subquery; an aggregate | text; text; text; `AggStep` | rowid_alias; row_order; row_order; row_order |
 
-- **Leader self-check (AH; revision 7 adds two probes, N6-1).** It runs when the
-  replica becomes leader, and in any case before the leader's first staged
-  statement (memoized per connection). The leader classifies seven fixed probes
+- **Leader self-check (AH; probes added in revisions 7 and 8).** It runs when
+  the replica becomes leader, and in any case before the leader's first staged
+  statement (memoized per connection). The leader classifies nine fixed probes
   on its own connection:
 
   | Probe | Must be |
   | --- | --- |
   | `random`: `SELECT random()` | refused at `function` |
-  | `raft_log_read`: `SELECT count(*) FROM _raft_rs_log` (present from group creation on every rs-raft partition, `raft-rs-runtime-owner.js:1652-1653`, `raft-rs-durable-store-constants.js:13-18`, `:35`) | refused at `root_page` |
+  | `raft_log_read`: `SELECT count(*) FROM _raft_rs_log` (present from group creation, `raft-rs-runtime-owner.js:1652-1653`) | refused at `root_page` |
   | `pragma_table_valued`: `SELECT page_count FROM pragma_page_count()` | refused at `opcode` |
   | `pragma_statement`: `PRAGMA page_count` | refused at `statement_kind` |
   | `temp_schema_read`: `SELECT count(*) FROM temp.sqlite_master` | refused at `database` |
   | `implicit_key_insert`: `INSERT INTO <table> (<a non-key column>) VALUES (NULL)`, classified only | refused at `implicit_key` |
+  | `aggregate_insert` (revision 8, N7-8): `INSERT INTO <table> (<key>, <column>) SELECT 'k', count(*) FROM <table> WHERE <column> IS NULL`, classified only | refused at `row_order` |
+  | `ceiling_insert` (revision 8, N7-8): an insert classified while a row at rowid 2^62 exists, inside a sentinel transaction that plants the row and rolls back | refused at `rowid_ceiling` |
   | `partition_table_read`: `SELECT count(*) FROM <table>` | admitted (the control) |
 
   Each negative probe exercises a different layer and must be refused at
   exactly that layer. A disabled layer therefore either admits its probe or
-  refuses it at a later layer, and both fail the self-check. For example, with
-  `database` disabled, `temp_schema_read` is admitted if a temporary root page
-  collides with the table's, and refused at `root_page` if not. The text layers
-  (`rowid_alias`, `row_order` text) are pure functions and have no probe.
+  refuses it at a later layer, and both fail the self-check. The text layers
+  (`rowid_alias`, the text part of `row_order`) are pure functions and have no
+  probe.
 
   These also fail the self-check:
   - a probe that does not compile;
-  - a `sqlite_version()` other than the vetted one.
+  - an execution envelope other than the vetted one.
 
   While it is failed:
   - BEGIN is refused `participant_transaction_determinism_self_check_failed`,
@@ -949,96 +1053,181 @@ partition-granular (limit L5, 3.6).
   classify?})`, which returns `{passed, cases: [{name, admitted, layer}]}` in
   the probe order above. The partition takes its self-check from the
   construction option `transactionDeterminismSelfCheck`, whose default is the
-  module's; the fixture injects a failing one to witness the refusal path.
+  module's.
 
-  **What the self-check does not cover (N6-2).** The version pin compares the
-  leader's binary with the list's vetted version. It runs on the leader only and
-  never compares followers. Premise item 4 below says what covers them.
-- **Rowid rules (AK, round-6 R6-1(a)).** Once a table's max rowid is 2^63-1,
-  every later `NewRowid` picks at random per replica. That breaks premise item
-  1 (round 6 measured rowids differing on two replicas, then an admitted LIMIT
-  statement PREPARED on one replica and REFUSED on the other). Three rules keep
-  the random fallback unreachable on every replicated write path:
-  - **The rowid-alias text rule.** It is a token rule, case-insensitive. Tokens
-    are read outside string literals (`'...'`, with `''` escapes), blob
-    literals and comments. Both bare and quoted identifiers (`"..."`, `[...]`,
-    `` `...` ``) count, because SQLite resolves a quoted `"rowid"` to the alias
-    when no real column has that name.
-    - Session writes: any `rowid`, `_rowid_` or `oid` token is refused,
-      `session_write_nondeterministic` with `refusalLayer: rowid_alias`.
-    - Ordinary writes (`executeQuery` and the committed apply): an alias is
-      refused only where it is assigned. That is the column list of an INSERT
-      or REPLACE (the parenthesised list after `INTO <name>`), and a SET target
-      of an UPDATE or UPSERT (the identifiers before `=` in the SET list, row
-      values `(a, rowid) = (...)` included). On the wire the answer is
-      `partition_write_statement_refused` with `refusalLayer: rowid_alias`; at
-      apply it is STATEMENT_FAILED with that code. A reference in WHERE or in
-      a value stays admitted: the schema-migration backfill writes `... WHERE
-      <column> IS NULL AND rowid > ? AND rowid <= ?` through this path
-      (`migration-coordinator-stage-methods.js:626-631`; 0.5 item 2).
+  The self-check runs on the leader; it never sees a follower's build. The
+  execution envelope (below) covers every replica.
+- **The execution compatibility envelope (owner decision; revision 8).**
+  `PARTICIPANT_PREPARE` and `PARTICIPANT_DECISION` carry `executionEnvelope:
+  {sqliteVersion, sqliteSourceId, compileOptionsDigest,
+  classifierListVersion}`:
+  - `sqliteVersion` is `sqlite_version()`;
+  - `sqliteSourceId` is `sqlite_source_id()`;
+  - `compileOptionsDigest` is the sha256 of `PRAGMA compile_options`, joined by
+    LF;
+  - `classifierListVersion` is the module's list version, `tx1-leg-a-1`.
+
+  The leader stamps its own envelope. **Every replica checks the carried
+  envelope against its own, before step 1 of 2.3 and before applying a
+  decision.** On a mismatch it refuses with
+  `participant_transaction_execution_envelope_mismatch` as a host failure:
+  environmental, nothing recorded, applied index unchanged. It applies the
+  command once its own build matches. This covers restored followers and
+  rolling upgrades alike: a replica never applies a transaction command under a
+  build the command was not staged on (W20).
+- **Rowid rules (AK, AN; owner rowid decision).** Random rowid allocation
+  happens only when a table's maximum rowid is 2^63-1 at the moment of
+  allocation (SQLite's documented NULL/ceiling behaviour). Round 6 showed that
+  one random allocation breaks premise item 1, and an admitted statement then
+  splits PREPARED/REFUSED. The rules below keep that moment unreachable on
+  every replicated write path. Each is owned by the statement-admission owner
+  and is deterministic.
+  - **R1, the alias rule (text).** It is a token rule, case-insensitive. Tokens
+    are read outside string literals (`'...'`, with `''` escapes), blob literals
+    and comments, under the pinned lexical rules. Bare and quoted identifiers
+    (`"..."`, `[...]`, `` `...` ``) both count: `SQLITE_DQS=0`
+    (`node_modules/better-sqlite3/deps/defines.gypi:17`) makes `"rowid"` an
+    identifier, and SQLite resolves it to the alias when no real column has
+    that name. Qualified forms (`main.t.rowid`, `t.oid`) tokenise to the alias.
+    - Session writes: any `rowid`, `_rowid_` or `oid` token is refused
+      (`refusalLayer: rowid_alias`).
+    - Ordinary writes (`executeQuery`, `executeLocalQuery`, the committed
+      apply): an alias token anywhere outside the top-level WHERE clause is
+      refused. The top-level WHERE clause runs from `WHERE` at parenthesis
+      depth 0 to the next `RETURNING`, `ORDER`, `LIMIT` or `ON CONFLICT` at
+      depth 0, or to the end. This refuses `INSERT INTO t AS x (rowid, ...)`
+      with no special parse (0.5 item 1). It admits the backfill's
+      `... WHERE <column> IS NULL AND rowid > ? AND rowid <= ?`
+      (`migration-coordinator-stage-methods.js:626-631`).
     - Reads are exempt.
-    - Census: `grep -rniE "\browid\b|_rowid_|\boid\b" src` finds no schema
-      column so named (0.5 item 6).
-  - **The rowid-ceiling guard (2^62).** It applies to a statement that can
-    allocate a rowid: an INSERT or REPLACE head (UPSERT included) or a WITH
-    write. It reads `SELECT max(rowid) FROM main.<table>`, an O(log n) read of
-    the table's last row:
-    - on the leader at staging: a session write, inside the c' transaction
-      after the replay (`session_write_nondeterministic`, `rowid_ceiling`); an
-      ordinary write, before it is proposed (`partition_write_statement_refused`,
-      `rowid_ceiling`, nothing proposed);
-    - at apply (0.5 item 3): before an allocating committed SQL statement, and
-      in the PREPARE dry run (step 7 of 2.3). A STATEMENT_FAILED outcome, or a
-      REFUSED row with cause `rowid_ceiling`, identical on every replica.
+  - **R2, the INTEGER PRIMARY KEY contract (owner condition 1).** On a table
+    whose key is an INTEGER PRIMARY KEY, the key is the rowid alias. The type
+    is read from `PRAGMA table_info` (`INT`, `BIGINT` and `INTEGER` keys
+    normalise to `INTEGER`, `table-creation-service-schema-derivation.js:38-41`).
+    - In a session write, the key's value must be a bound param or an integer
+      literal inside [-2^62, 2^62). A NULL, an omitted key, an expression or a
+      SELECT source is refused at `implicit_key` (0.5 item 3).
+    - Ordinary writes keep automatic allocation, under R3.
+    - In an allocating statement on such a table, on both paths: REPLACE
+      conflict resolution (a `REPLACE` head, `INSERT OR REPLACE`) and an `ON
+      CONFLICT ... DO UPDATE` that assigns the key are refused (0.5 item 2).
+      Partition tables declare no conflict clause of their own: the bootstrap
+      emits `<name> <type> PRIMARY KEY` only
+      (`partition-service-table-bootstrap.js:150-160`).
+  - **R3, the ceiling, post-statement (AN).**
+    - Which statements: those that can allocate a rowid: an INSERT or REPLACE
+      head (UPSERT included) or a WITH write.
+    - Before the statement (legacy state): `max(rowid)` of the own table at or
+      above 2^62 refuses at once.
+    - After the statement: `max(rowid)`, read with better-sqlite3's
+      `safeIntegers(true)` and compared as an exact BigInt, must be below 2^62.
+      Otherwise the statement's effects roll back and it is refused
+      `rowid_ceiling`.
+    - The four sites:
+      1. session staging (inside c', after the statement);
+      2. each operation of the PREPARE dry run (step 8 of 2.3: a REFUSED row
+         with cause `rowid_ceiling`);
+      3. each operation at COMMIT apply;
+      4. each ordinary committed SQL apply (STATEMENT_FAILED
+         `partition_write_statement_refused`).
 
-    2^62 leaves 2^62 - 1 allocations of headroom below 2^63 - 1, so `+1`
-    allocation cannot reach the fallback. An explicit INTEGER PRIMARY KEY is a
-    rowid assignment the text rule cannot see. It cannot pass the guard
-    unnoticed: the first allocating statement after it is refused everywhere.
-    AUTOINCREMENT tables never pick at random: they fail `SQLITE_FULL`,
-    deterministically.
-  - **The upgrade census (L6).** Before cutover, every partition table's max
-    rowid is below 2^62. Otherwise that partition refuses allocating writes
-    from the cutover on (fail-closed).
-  - **The Leg B alternative (the schema owner's option).** Create partition
-    tables WITHOUT ROWID. That removes both the alias and the fallback. It
-    changes table creation (`partition-service-table-bootstrap.js:146-190`),
-    the mirror replay cursor, and the backfill's rowid paging
-    (`migration-coordinator-stage-methods.js:415-416`, `:626-631`), so it is
-    not Leg A.
-- **Limit L9: order-dependent session writes are refused (AK).** These rules are
-  syntactic or program-level, chosen so they can be implemented exactly and so
-  they refuse by default:
-  - **L9a.** A LIMIT or OFFSET keyword token anywhere in a session write is
-    refused. This covers `DELETE ... LIMIT` and `UPDATE ... LIMIT`: this build
-    enables `SQLITE_ENABLE_UPDATE_DELETE_LIMIT`
-    (`node_modules/better-sqlite3/deps/defines.gypi:30`). It is stricter than
-    "without ORDER BY on a unique key" (0.5 item 5).
-  - **L9b.** A `(` immediately followed by `SELECT` or `WITH` opens a subquery.
-    Unless the token before the `(` is IN or EXISTS, it is refused. Scalar
-    subqueries return the first row in scan order. Derived tables are refused
-    too, by default.
+    On the leader, an ordinary write is also checked before it is proposed.
+  - **Why the post-check excludes random allocation throughout a statement
+    (owner condition 2).**
+    - Under R2 and R1, an allocating statement only adds rows; it never deletes
+      or rekeys the top row. So the table's maximum is non-decreasing during
+      the statement, and the final maximum is at least every intermediate one.
+    - A final maximum below 2^62 therefore means no allocation in the
+      statement ever saw a maximum of 2^63-1.
+    - Allocation by increment cannot climb the gap within a statement: a
+      database holds at most 4294967294 pages of at most 65536 bytes
+      (`sqlite3.c:14212`, `:14250`), about 2^48 bytes, so fewer than 2^48 rows.
+      The gap from 2^62 to 2^63-1 is about 2^62.
+    - The refusal is deterministic. The explicit top key (or the existing
+      maximum) is the same row on every replica, so every replica sees the same
+      maximum and refuses alike.
+    - The owner's counterexample, an existing maximum of 9223372036854775806
+      followed by two automatic insertions, is refused by the pre-check and by
+      the post-check (W6r-b). R3 never compares with 2^63-1 alone.
+  - **COMMIT never turns into a local abort (owner condition 3).** The COMMIT
+    applies the same operations, against the same frozen state, as the PREPARE
+    dry run. The reservation holds the table, and `g` is unchanged. So a
+    ceiling refusal at COMMIT is unreachable once the dry run passed, like
+    `commit_base_moved`. If a bug made it happen, it would be settled REFUSED
+    identically, with an alarm (6.2).
+  - **Existing and restored state, every ingress (owner condition 3).** Every
+    mutation ingress runs R1-R3 through the one owner:
+    - the committed SQL apply (ordinary writes, split mirror applies, the
+      migration backfill);
+    - transaction COMMIT;
+    - `executeLocalQuery`;
+    - the CDC bootstrap direct path.
+
+    Restored state (a snapshot install, an SN1 image) is not rekeyed. The
+    pre-check refuses allocating writes on a table whose maximum is at or above
+    2^62. L6 adds a census that every partition table's maximum is below 2^62
+    before the cutover. An image must preserve rowids (F-SNAP; VACUUM preserves
+    them on this build, round 6).
+  - **The owner's five rowid conditions, mapped:**
+
+    | # | Condition | Mechanism | Witness |
+    | --- | --- | --- | --- |
+    | 1 | Schema semantics for `rowid`, `_rowid_`, `oid`, shadowing columns and true INTEGER PRIMARY KEY aliases; keep a normal explicit non-null integer key within a declared exact range; refuse uncontrolled alias assignment, omitted/NULL alias allocation and unsafe expressions | R1 (bare, quoted and qualified forms; no shadowing column exists: the census in revision 7, 0.5 item 6); R2 (the key type from `table_info`; [-2^62, 2^62); NULL, omitted, expression and SELECT refused in transactions) | W6r (session and ordinary alias forms), W6r-b (the in-range key stages; NULL, out-of-range and omitted are refused) |
+    | 2 | No random allocation throughout a statement or batch, hidden keys of TEXT-key tables included; exact integers; a proved bound, or refusal before admission | R3 post-statement with exact BigInt; R2's monotonicity; the page-count bound | W6r-b (a top key then NULL on an INTEGER PRIMARY KEY table; two automatic insertions after 2^63-2 on a TEXT-key table) |
+    | 3 | Existing and restored state and every ingress through one owner; no silent rekey; COMMIT never becomes a local abort | the one owner on all ingress; the pre-check; the L6 census; the dry-run equivalence | W6r (dry-run half, apply half), W6p (`executeLocalQuery`) |
+    | 4 | Sessionless and session connection-state mutation closed before `db.prepare`; storage initialization separate | the kind owner on `executeQuery`, `executeLocalQuery` and the apply | W6p |
+    | 5 | The row-order-dependent mutation refused before proposal, or identical effects proven; positive normal-transaction controls | L9 refuses the reproduced shapes at staging; normal transactions stage (W6, W1a) | W6r (L9 cases), W6n (`upper(?)` stages), W6r-b (in-range key stages) |
+
+  - **WITHOUT ROWID** stays deferred (owner decision). It has its own key and
+    result differences, and the migration owner pages by rowid
+    (`migration-coordinator-stage-methods.js:415-416`, `:626-631`).
+- **Limit L9: three order-dependent shapes are refused in session writes (AK;
+  wording per N7-5).** These rules can be implemented exactly and refuse by
+  default:
+  - **L9a.** A LIMIT or OFFSET keyword token anywhere in a session write
+    (`DELETE ... LIMIT` and `UPDATE ... LIMIT` included; the build enables
+    `SQLITE_ENABLE_UPDATE_DELETE_LIMIT`, `defines.gypi:30`).
+  - **L9b.** A `(` immediately followed by `SELECT` or `WITH`, unless the token
+    before the `(` is IN or EXISTS: scalar subqueries, derived tables and CTE
+    bodies (`AS (SELECT`). So the admitted WITH-write head is VALUES-only in
+    practice.
   - **L9c.** An aggregate opcode (`AggStep`, `AggValue`, `AggInverse`,
-    `AggFinal`) is refused (layer 8). This covers:
-    - bare columns under aggregates (SQLite takes them from an arbitrary row);
-    - `group_concat` order;
-    - window frames;
-    - floating-point `sum`/`avg`/`total` summation order.
+    `AggFinal`): bare columns under aggregates, `group_concat` order, window
+    frames, floating-point summation order.
 
-  All three shapes compute identically while premise items 1-4 hold. L9 is
-  defence in depth against a premise break, such as a row-level rebuild that
-  renumbers rowids. Session reads are exempt: a read changes no replicated
-  state.
-- **The premise of K, stated (AK, round-6 class repair).** Identical command
-  bytes produce identical results on every replica only while this state is
-  equal on all of them:
+  L9 does not refuse every order-sensitive shape. These are admitted and are
+  order-sensitive when rows tie (round 7):
+  - `INSERT OR IGNORE`, `INSERT OR REPLACE` and UPSERT, each `... SELECT` with
+    duplicate keys;
+  - `UPDATE ... FROM` with several matching rows.
 
-  | # | State | Equal because | Owner | What would break it |
+  All of them, and the three refused shapes, compute identically while premise
+  items 1-4 hold. The owner's condition 5 is met for the reproduced shape: it
+  is refused before proposal. L9 is defence in depth against a premise break,
+  and does not claim completeness. Session reads are exempt: a read changes no
+  replicated state.
+- **The premise of K, stated (AK, AO).** Identical command bytes produce
+  identical results on every replica only while this state is equal on all of
+  them:
+
+  | # | State | Equal because | Owner | What breaks it, and its owner |
   | --- | --- | --- | --- | --- |
-  | 1 | application rows, including rowids | every change is a committed command applied in log order; no rowid is assigned (alias rule) and none is allocated at random (ceiling guard, at staging and at apply) | the write kernel and this classifier | a row-level rebuild that renumbers rowids (an SN1 image must copy pages or preserve rowids; VACUUM preserves them on this build, round 6); legacy state at or above 2^62 (the L6 census) |
-  | 2 | schema, including indexes | created at initialize from the partition's schema (`partition-service-table-bootstrap.js:146-190`, indexes at `:179-181`); changed only by committed `MIGRATION_ALTER_TABLE` and committed index DDL; init-time column upgrades (`:170-177`) are the same code on every replica | the partition bootstrap, migration and index owners | replicas on different releases with different init-time upgrades (a rolling upgrade: the L6 drain covers only the cutover) |
-  | 3 | connection flags | no PRAGMA is ever prepared on a partition connection from any wire or apply (the kind owner above). The partition's own PRAGMAs are journal and synchronous settings at init (`partition-service-raft-init-base.js:357-358`), the durable store's synchronous toggling (`raft-rs-durable-store.js:195-203`) and page-count reads (`partition-service-cdc-stream-base.js:673-676`); none changes a query result | the statement-kind owner | a future owner that sets a result-affecting PRAGMA on the connection |
-  | 4 | SQLite version and compile options | one pinned build per release (`package-lock.json:6703-6706`) | the release owner | replicas on different builds. The leader's self-check cannot see a follower's build (N6-2). The L6 drain covers the cutover itself (no transaction in flight across it); after the cutover, nothing in Leg A covers a SQLite upgrade under live transactions: limit L10 |
+  | 1 | application rows, including rowids | every change is a committed command applied in log order through the statement-admission owner; no rowid is assigned (R1), none is allocated at random (R2, R3) | the write kernel and the statement-admission owner | **F-DET** (L11): ordinary writes evaluate `random()`, `datetime('now')` and similar per replica; reachable through `NOW()` (`pg-function-registry.js:88-94`, `:174-175`); owner: the query engine or the partition apply (0.7). **The CDC bootstrap direct fan-out** writes every local initialized replica outside the log when the raft lane fails (`cdc-bootstrap-direct-sql.js:118-163`); owner: the CDC bootstrap owner (finding F-BOOT). **A row-level rebuild** that renumbers rowids; owner: the snapshot owner (F-SNAP). **Legacy state at or above 2^62**; owner: the cutover owner (the L6 census) |
+  | 2 | schema, including indexes | created at initialize from the partition's schema (`partition-service-table-bootstrap.js:146-190`); changed only by committed `MIGRATION_ALTER_TABLE` and committed index DDL on the own table; init-time column upgrades (`:170-177`) are the same code on every replica | the partition bootstrap, migration and index owners | **init-time index re-creation** (`system-table-schema-sql.js:42-53`, run at `partition-service-table-bootstrap.js:179-181`) happens at each replica's restart, not at a log position: a `DROP INDEX` of a schema-declared index would come back on a restarted replica only (N7-12; the narrowed rule refuses that drop). **Different init-time upgrades** on mixed releases (the L6 drain) |
+  | 3 | connection flags | no PRAGMA is prepared on a partition connection from any wire, `executeLocalQuery` or apply (the kind owner). The partition's own PRAGMAs are journal and synchronous settings at init (`partition-service-raft-init-base.js:357-358`), the durable store's synchronous toggling (`raft-rs-durable-store.js:195-203`) and page-count reads (`partition-service-cdc-stream-base.js:673-676`); none changes a query result | the statement-admission owner | a future owner that sets a result-affecting PRAGMA on the connection |
+  | 4 | SQLite version and compile options | the execution envelope, checked by every replica on every transaction command | the release owner; the participant apply | ordinary writes under a mixed build (the L11 class) |
+
+  **K is conditional on L11.** A transaction that reads or constrains rows
+  written by an ordinary write with a per-replica value can split
+  PREPARED/REFUSED. After a global COMMIT it can then answer `not_prepared` on
+  that follower, and NOT_COMMITTED after a leader change.
+
+  **Test-fixture note (N7-11).** The root-page table above was measured on the
+  port double. Production opens the durable store only when `lifecycle.active`
+  (`raft-rs-operation-port.js:204`). It also opens the peer-identity registry
+  (`:163`) and the lifecycle owner (`:181-183`) on the same database, which the
+  double does not. Root pages are resolved at each classification, so the
+  classifier does not depend on these numbers.
 - **Date/time functions are refused entirely in Leg A, whatever their
   arguments** (0.5 item 2). This covers `datetime()` and `unixepoch()` (which
   assume 'now' when the time-value is omitted), a bound param `'now'` in any
@@ -1142,7 +1331,17 @@ Tests: Property 1, 10 and 11 of `partition-transaction.property.test.js`
 | Reservation waiters (parked writers, volatile, leader only) | the decision apply's afterCommit re-admission; the writer's own deadline; leadership loss (`releasePendingCommittedWrites`) | a parked writer whose wake was missed waits at most to its own 30 s deadline | it holds no durable state; it is answered typed and retryable (unproposed), never applied twice: its entryId is unsettled |
 | Pending outcome map | settle of the outcome promise `cdc-stream-base.js:369-374` | none | joins retries of one entryId only |
 
-### 3.6 Contention: population, retry owner, budget (decision V; an R12 exposure)
+### 3.6 Contention: population, retry owner, budget (decision V; L5 accepted by the owner)
+
+**Owner decision (revision 8).** L5's typed predecision conflict is accepted
+for Leg A as an availability/concurrency trade-off, not an R12 exception. Row
+MVCC and predicate locking are not introduced. W16 now also requires
+uncontended success, and success after bounded interference has ended, so an
+always-conflicting implementation fails it. Repeated requests can starve under
+continuous writes. Finer granularity is a measured future choice, not an
+automatic TX2 requirement. Seam V (agreed): the whole statement-autocommit
+attempt is retried only after a definitive conflict or noncommitment.
+
 
 - **Population affected.**
   - Every explicit transaction.
@@ -1371,7 +1570,9 @@ failure (`raft-rs-runtime-owner.js:920-941`).
 
 K precisely:
 
-- On consistent replicas (premise items 1-4 of 3.3, revision 7) the PREPARE dry
+- **K is conditional on L11** (revision 8): ordinary writes with per-replica
+  values break premise item 1.
+- On consistent replicas (premise items 1-4 of 3.3) the PREPARE dry
   run and the COMMIT run the same allow-listed deterministic programs over the
   partition's own table (AB, AH, AK), against frozen committed state
   (the reservation, and `g`, which only application data moves). So a COMMIT-time failure is
@@ -1573,45 +1774,92 @@ until that owner builds a partition image. A checkpoint
 at index N then holds `g` exactly as applied at N, so a replica installed from
 it continues the same monotonic sequence.
 
-### 8.3 CDC (receipt 8 stays red)
+### 8.3 CDC: the durable obligation of receipt 8 (owner decision)
 
-v3 emits transaction CDC per operation from the decision's afterCommit on the
-leader, as ordinary writes do (`partition-service-entry-apply-base.js:1057-1072`),
-instead of from `commitTransaction` (`transaction-base.js:746-748`). Sequence
-numbers are in-process (`partition-cdc-delivery.js:215-219`) and the buffer is
-volatile (`cdc-event-buffer.js`); a crash after the data commit and before
-emission loses the event for ordinary writes and transactions alike. No CDC
-cursor/retention owner exists; receipt 8's CDC half stays red until one does.
+Receipt 8 stays sealed and stays red until this obligation exists. The owner
+record assigns it. The obligation is crash-surviving CDC, not a promise of
+globally exactly-once transport.
 
-### 8.4 Reservation bound (decision M), corrected
+**Today.** v3 emits transaction CDC per operation from the decision's
+afterCommit on the leader, as ordinary writes do
+(`partition-service-entry-apply-base.js:1057-1072`), instead of from
+`commitTransaction` (`transaction-base.js:746-748`). Sequence numbers are
+in-process (`partition-cdc-delivery.js:215-219`) and the buffer is volatile
+(`cdc-event-buffer.js`). A crash after the data commit and before emission
+loses the event, for ordinary writes and transactions alike. After-commit
+emission alone is insufficient.
 
-- The participant never calls the coordinator. The hold sweep only reports. A
-  PREPARED row is released only by an applied decision.
-- Who reaches the decision:
-  - normally, the coordinator's commit protocol;
-  - if the coordinator is lost, any SQL engine's recovery. Every engine loads
-    every `sql_transactions` row
+**Owners** (local partition lane):
+
+- the committed-entry atomic apply (`raft-rs-application-transaction-owner.js`,
+  `partition-service-entry-apply-base.js`);
+- `partition-cdc-generator.js`;
+- `partition-service-cdc-stream-base.js`;
+- `partition-cdc-delivery.js`;
+- coordinated with the retention and snapshot owners.
+
+The mirror replay cursor is not automatically this owner. Query owns
+coordinator decision recovery.
+
+**The obligation to specify before receipt 8 can be green:**
+
+1. **One recoverable durable obligation, written in the same application
+   transaction as the data change it describes.** It is recorded by the
+   committed-entry atomic apply, alongside the rows, the per-operation outcomes
+   and the applied index.
+2. **Stable event identity.** Each event is identified by its committed entry
+   and its operation ordinal (`txop:` for transaction operations, `entry:` for
+   ordinary writes), so a redelivered event carries the same identity.
+3. **No SQL rerun to reconstruct a notification.** Recovery reads the recorded
+   obligation; it never re-executes the statement.
+4. **No later row version read as an old event.** The obligation holds the
+   event's own payload, or an immutable reference to it, as of its commit.
+5. **No truncation of an owed event.** Log compaction and retention keep every
+   undelivered obligation.
+6. **Snapshots retain it.** A partition image carries the undelivered
+   obligations (F-SNAP).
+7. **Replay through the consumer de-duplication contract.** A lost delivery
+   acknowledgement may cause a replay. Consumers de-duplicate by the stable
+   identity.
+
+No seal supersession is selected.
+
+### 8.4 Reservation lifetime (decision M; L3 accepted by the owner)
+
+The owner accepts conservative reservation for Leg A as an
+availability/concurrency trade-off, **not an R12 exception**. Blocking is
+accepted while the recovery owner or the required quorum is unavailable.
+
+- **A PREPARED row is an obligation, not a lease.**
+  - The participant never calls the coordinator, and the hold sweep only
+    reports.
+  - A PREPARED row is released only by an applied decision. It never expires
+    into permission (W12d).
+- **A deadline bounds a caller's wait, never the obligation.** Writers on a
+  reserved partition are parked and released at their own 30 s deadline with
+  `partition_write_commit_deadline_exceeded`, retryable. That release ends a
+  wait; it does not release the reservation. Repeated requests can starve
+  under a long reservation; this is accepted.
+- **The discovery and re-entry obligation is retained.**
+  - Every engine loads every `sql_transactions` row
     (`sql-query-engine-transaction-recovery-methods.js:151-159`) and sweeps
     every 1000 ms (`distributed-transaction-coordinator-constants.js:46`).
-- Round 3 found the claimed bound false (V7), for two reasons:
-  - **FAILED after COMMITTING** is set (`distributed-transaction-protocol.js:396-398`)
-    and skipped by recovery (`distributed-transaction-recovery.js:297-306`,
-    `:404-410`), so PREPARED participants stay reserved forever. Seam items:
-    COMMITTING never becomes FAILED (S3), and recovery completes a decided
-    FAILED row (S4a).
-  - **The transaction row can be silently unpersisted**
-    (`sql-query-engine.js:115-117`). Seam item, narrowed by AF: an explicit
-    BEGIN or a multi-partition statement on an engine without a gateway is a
-    typed refusal; DIRECT_AUTOCOMMIT is unchanged (S4b, 2.1). The
-    seed-hydration engine's migration cutover is a live instance (S4c, 9.2).
-- With those seam items in place, the bound is: transaction budget 60 s
-  (`timeout-budget.js:20`) + one sweep + one participant round, while some
-  engine runs recovery with the control plane readable.
-- Otherwise the reservation is unbounded. Writers on that partition are parked
-  and released at their own 30 s deadline with
-  `partition_write_commit_deadline_exceeded`, retryable. This is a typed,
-  non-stalling R12 exposure, recorded. Removal drain
-  (`transaction-base.js:88-96`) waits on PREPARED rows for the same bound.
+  - The existing tracked startup recovery handoff is preserved.
+- **An eligible recovering engine returns and releases a PREPARED row by the
+  authoritative decision.**
+  - COMMITTING never becomes FAILED (S3).
+  - Recovery completes a FAILED row that has a decision (S4a).
+  - Concurrent recovery converges on the single durable decision (S8).
+  - The participant applies only a bound decision (W9), and keeps PREPARED
+    until then (W12d).
+- **No bound is promised.** The 60 s transaction budget plus one sweep plus
+  one participant round is the expected release time while some engine runs
+  recovery with the control plane readable. It is not a guarantee. The
+  removal drain (`transaction-base.js:88-96`) waits on PREPARED rows the same
+  way.
+- Round 3's two holes stay closed by the agreed seam: COMMITTING never becomes
+  FAILED (U), and the transaction row is never silently unpersisted (S4b; the
+  seed engine through S4c option 1).
 
 ## 9. Supersession inventory (run on this head)
 
@@ -1767,7 +2015,7 @@ retryability comment at `:47-56`.
 that cannot persist.** The greps:
 
 ```sh
-grep -rnE "['\"\`]{1}(BEGIN|START TRANSACTION|BEGIN TRANSACTION|BEGIN IMMEDIATE|BEGIN DEFERRED|COMMIT|END TRANSACTION)['\"\` ;]" src
+grep -rnE "['\"\`]+(BEGIN|START TRANSACTION|BEGIN TRANSACTION|BEGIN IMMEDIATE|BEGIN DEFERRED|COMMIT|END TRANSACTION)['\"\` ;]" src
 grep -rnE "transactionCoordinator\.(begin|commit)\(|\.beginTransaction\(" src
 grep -rn "new SQLQueryEngine(" src
 grep -rn "wireMigrationWorkflowOwners\|setCDCIntegrationService(" src
@@ -1825,7 +2073,7 @@ same way as revision 6's:
 
 ```sh
 grep -rn "partition\w*\.executeQuery(\|partitionService\w*\.executeQuery(\|service\.executeQuery(" src
-grep -rnE "['\"\`]{1}(CREATE (UNIQUE )?INDEX|DROP INDEX|DROP TABLE|CREATE TABLE|ALTER TABLE|PRAGMA|ATTACH|VACUUM|ANALYZE|REINDEX)" src
+grep -rnE "['\"\`]+(CREATE (UNIQUE )?INDEX|DROP INDEX|DROP TABLE|CREATE TABLE|ALTER TABLE|PRAGMA|ATTACH|VACUUM|ANALYZE|REINDEX)" src
 grep -rniE "\browid\b|_rowid_|\boid\b" src
 ```
 
@@ -1887,6 +2135,61 @@ grep -rnE "transactionCoordinator\??\.(begin|commit|enlistParticipants|executeWr
   seed engine before the handoff. The S4c owner decision (option 1) removes
   that window as well.
 
+Added in revision 8 (owner decisions and round 7; derived on e984cb8db).
+
+**Derivation 4: the ONE_PHASE_COMMIT fast path (prepare-first is final).**
+
+```sh
+grep -rn "ONE_PHASE_COMMIT" src test
+grep -rniE "ONE_PHASE_COMMIT|one-phase|1PC|one phase" architecture docs
+```
+
+| Site (file:line) | Today | Under prepare-first |
+| --- | --- | --- |
+| `src/constants/transactions.js:13` | defines `COMMIT_MODE.ONE_PHASE_COMMIT` | deleted with the fast path; a recovered legacy row carrying it is dispositioned by the L6 precondition |
+| `distributed-transaction-commit-mode.js:37` | selects ONE_PHASE_COMMIT for one participant that supports it | always TWO_PHASE_COMMIT |
+| `distributed-transaction-protocol.js:305`, `:369` | ONE_PHASE_COMMIT skips PREPARING | the branch is deleted |
+| `distributed-transaction-recovery.js:135`, `:141` | recovery treats a 1PC row specially | the branch is deleted, after the L6 disposition of legacy rows |
+| `test/query/distributed-transaction-coordinator.test.js:666`, `:847` | expects ONE_PHASE_COMMIT for one participant, and a 1PC recovery row | superseded: expects prepare-first (S7) |
+| `test/query/sql-query-engine-transaction-owned-commit-mode.test.js:116` | expects ONE_PHASE_COMMIT | superseded: TWO_PHASE_COMMIT |
+| `test/query/transaction-recovery-poison-row-attribution.test.js:50-65`, `:127-144`; `test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js:234`; `test/distributed/scenarios/transaction-recovery-poison-row-live.js:7`, `:61`, `:316`, `:353` | fixtures name ONE_PHASE_COMMIT | the fixtures name TWO_PHASE_COMMIT; the poison-row behaviour they witness is unchanged |
+| `architecture/postgres-wire.md:259`, `:273` | "One participant uses 1PC ..."; "1PC replay" | rewritten for prepare-first |
+| `architecture/images-distributed-public-seam.md:102` | "one-phase commit for" one coordinator | rewritten |
+| `architecture/overview.md:201`; `architecture/process-replication.md:351` | "1PC/2PC phase transitions"; "1PC/2PC phases" | rewritten: prepare-first two-phase only |
+| `docs/development/adversarial-risk-review-2026-10-10.md:151`, `:193` | "Leg A must cover one-phase transactions"; "one-phase replay" | historical review: kept, with a note that prepare-first covers single-participant transactions |
+
+**The kind owner's additional prepare sites (R7-2, derivation 3 extended).**
+
+```sh
+grep -rn "executeLocalQuery(" src
+grep -rn "\.db\.prepare(" src/cdc
+```
+
+| Caller (file:line) | What it sends | Under revision 8 |
+| --- | --- | --- |
+| `cdc-bootstrap-direct-sql.js:95-100`, `:118-163` | system-table DML on every local initialized replica, outside the log, when the raft lane fails | through the statement-admission owner (heads, R1-R3); the out-of-log write itself is finding F-BOOT |
+| `cdc-integration-service-local-system-table-routing.js:199-207` | reads through `executeLocalQuery`, else a raw `db.prepare` | through the owner; the raw fallback is replaced |
+| `seed-partitions-phase.js:755` | a SELECT of `config` | admitted (a read) |
+| `executeLocalQuery` with a PRAGMA (W6p) | runs it today, unreplicated | refused, `statement_kind` |
+
+**Retirement map for the revision-2 file (owner decision).** At TX1 cutover, the
+runnable file `test/partition/partition-transaction-replicated-apply.test.js`
+is retired explicitly. Its original bytes stay in Git (last changed by
+a9d45cf50), and its red evidence stays in `evidence/red-p1p2-original-1bd392159.tap`
+and `evidence/red-p1p2p3-v2-first-run.tap`. A retirement entry is appended to
+the quest log at that commit. Each test maps to stronger live witnesses:
+
+| Revision-2 test | Replaced by |
+| --- | --- |
+| P1: a pending commit exposes no row and resolves only after its marker is applied | W1a (PREPARE acknowledged only after its committed command applies; no staged row visible), W5a (no SQLite transaction during ACTIVE) |
+| P2: the committed `TRANSACTION_COMMIT` applies its operations, outcome and applied index on a replica that staged nothing | W1b (a replica that staged nothing reaches PREPARED, then COMMITTED), W2a, W2b (one application transaction) |
+| P3: a failing second statement applies nothing and records a typed outcome | W3a (a PREPARE whose operation fails is REFUSED identically and never applies) |
+| control: an ordinary committed write applies exactly once and advances the applied index | the sibling file's first control (unchanged) |
+| control: replaying a committed transaction marker applies nothing twice | W9 (a replayed bound decision answered from the rows; the first terminal stands), W12e (operation outcomes never collide with entry keys), and the real A4 |
+
+All four current files are inventoried (10.1). No still-valid unresolved red is
+skipped: every v3, seam and sibling red stays a gate.
+
 Unaffected after reading: `persistence-admission.test.js` (uses raw `BEGIN`,
 meaning unchanged), `partition-port-refusal-outcomes.test.js`,
 `snapshot-checkpoint-sqlite-payload.test.js`, `partition-transaction-handler.test.js`
@@ -1924,6 +2227,16 @@ imports: finding F-DEAD).
   measures `reverse_unordered_selects` = 1 on the leader afterwards). Every
   later statement on that connection, ordinary applies included, then runs
   under a setting the followers do not have.
+- F-DET, restated (revision 8, AO): L11 is its consequence. TX1 does not fix
+  it. The red witness `TX1 seam FDET` belongs to a separate owner: the query
+  engine (freeze `NOW()`/random to literals before fanout) or the partition
+  apply (refuse). It is bound to no TX1 receipt.
+- F-BOOT (revision 8, R7-2): the CDC bootstrap direct fan-out writes every
+  local initialized replica outside the log when the raft lane fails
+  (`cdc-bootstrap-direct-sql.js:118-163`). That breaks premise item 1 for
+  system tables in the earliest-bootstrap window. Owner: the CDC bootstrap
+  owner. TX1 routes its statements through the statement-admission owner, but
+  does not change the fan-out.
 - F-ROWID (revision 7, R6-1(a)): a committed write that assigns a rowid alias
   can move a table's max rowid to 2^63-1, after which `NewRowid` is random per
   replica. Today any ordinary write may do it. W6r witnesses the refusal.
@@ -1939,17 +2252,17 @@ imports: finding F-DEAD).
 
 ## 10. Witness ladder and receipts
 
-### 10.1 The witnesses on 6d24e3b4f
+### 10.1 The witnesses on e984cb8db
 
 Runs, each with `node --test --test-reporter=tap <file>`:
 
 | File | Exit | Tests | Fail | Pass |
 | --- | --- | --- | --- | --- |
-| participant file | 1 | 36 | 36 | 0 |
-| seam file | 1 | 12 | 12 | 0 |
-| replay-cursor sibling | 1 | 10 | 6 | 4 (controls) |
+| participant file | 1 | 37 | 37 | 0 |
+| seam file | 1 | 14 | 14 | 0 |
+| replay-cursor sibling | 1 | 11 | 7 | 4 (controls) |
 
-The output is in `evidence/red-v7-first-run.tap` (sha256 1074a41ad59d0d45...);
+The output is in `evidence/red-v8-first-run.tap` (sha256 5c46765cfbabbec1...);
 the file hashes are in its header. A second run of each file gave identical
 verdicts. Each red names its first
 differing facts.
@@ -1969,8 +2282,10 @@ differing facts.
 | W6 | `provisional` absent; no PREPARE proposed |
 | W6n (sibling file since revision 7; layers pinned) | all 24 classifier cases and the Buffer case are staged (`failureCode` and `refusalLayer` null); the PRAGMA case left `reverse_unordered_selects` = 1 on the leader (F-PRAGMA); no PREPARE proposed. Case c4 now reaches classification (the rs-raft tables exist from port creation, R6-2) |
 | W6s (sibling; seven probes) | the classifier module is absent (`module: 'absent'`, `passed`, `cases` and `admitAll` null); a BEGIN on a leader whose injected self-check fails succeeds (`success: true`, no `failureCode`) |
-| W6p (new, sibling) | the sessionless PRAGMA and DROP are proposed and stay pending; the leader's flag is 1 and the proposals are `PRAGMA, DROP, CREATE`; at apply, both commands apply on two replicas (flag 1, table dropped, outcomes `applied`) |
-| W6r (new, sibling) | all six session cases stage with no code; the ordinary alias insert and the ordinary insert at the ceiling are proposed (2) and pending; the session insert at the ceiling stages; at apply, the ordinary insert on a ceiling table applies on both followers (rows 1) |
+| W6p (revision 8: every path, 10 wire cases plus `executeLocalQuery`) | 9 wire cases are proposed and stay pending (the unique-index case on `_participant_transactions` fails to compile, which is not a refusal); `executeLocalQuery` runs the PRAGMA; the flag is 1; at apply the PRAGMA and the DROP both apply on two replicas. Revision 7's reason, kept for history: |
+| W6p (revision 7) | the sessionless PRAGMA and DROP are proposed and stay pending; the leader's flag is 1 and the proposals are `PRAGMA, DROP, CREATE`; at apply, both commands apply on two replicas (flag 1, table dropped, outcomes `applied`) |
+| W6r (revision 8: AS alias, quoted, `oid`, `_rowid_` and qualified forms, the backfill positive half, the dry-run half) | 10 session cases stage; the alias, AS-alias, backfill and ceiling ordinary writes are all proposed (the backfill is expected; the others are red); at apply the backfill applies (expected), the ceiling insert applies (red), and the dry-run PREPARE is UNRECOGNISED (red). Revision 7's reason, kept for history: |
+| W6r (revision 7) | all six session cases stage with no code; the ordinary alias insert and the ordinary insert at the ceiling are proposed (2) and pending; the session insert at the ceiling stages; at apply, the ordinary insert on a ceiling table applies on both followers (rows 1) |
 | W7a | the write is proposed at once (1); the raced write applied and settled |
 | W7b (extended) | proposed at once (1); the deadline answers `partition_write_outcome_unknown`; the later decision is UNRECOGNISED |
 | W11a, W11b, W11e | no PREPARE proposed; immediate LOCAL_STAGING success |
@@ -1991,6 +2306,14 @@ differing facts.
 | seam S3 | FAILED; 1 re-prepare |
 | seam S4a | no commit; still active |
 | seam S4b (narrowed; revision 6 adds the multi-partition and DIRECT halves) | the DIRECT_AUTOCOMMIT write succeeds (the positive half holds today); the explicit BEGIN and the STATEMENT_AUTOCOMMIT open both succeed silently (expect `TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE`) |
+| W6r-b (new, sibling) | on two INTEGER PRIMARY KEY replicas the top-key-then-NULL insert applies, and the allocated row's rowid differs between them (for example 1461968678065164757 and 1148980007400772355); on two TEXT-key replicas with an existing maximum of 2^63-2, both automatic insertions apply, and the second rowid is random per replica; all four session cases on the INTEGER PRIMARY KEY leader stage |
+| W6s (revision 8: nine probes) | the module is absent; a failing self-check still BEGINs |
+| W16 (revision 8: positive controls) | today's PREPARE answers carry no `state`, so `answersTyped` is false and both positives read `state: null` |
+| W20 (new) | the foreign-envelope and the matching PREPARE are both UNRECOGNISED |
+| RC2 (revision 8: both orders) | refused-first: setup `HOST_FAILURE`; applied-first: `['replayed-r', 'insert-c', 'replayed-r']` (F-MIR) |
+| seam S4c (revision 8: the setter after both branches) | `phaseSafe: false`, `silentlyUnpersisted: true`; the positive half holds |
+| seam S4d (new) | in both branches the seed engine does not hold the phase's CDC service and cannot persist; the migration owners are wired |
+| seam FDET (new, separate owner, unbound) | the two replicas store different `hex(randomblob(8))` values |
 | seam S4c (revision 7 adds the positive half and the structural check) | `{refusedTyped: false, silentlyUnpersisted: true, phaseSafe: false}`; the positive half holds today (BEGIN, COMMIT and the row submitted through a recording gateway) |
 | seam S5 | the request carries no identity |
 | seam S6 | no retained digest, index or term |
@@ -2002,7 +2325,8 @@ differing facts.
 Lint and ratchets:
 
 - `npx eslint` passes on all five touched JS files.
-- The participant file is 939 lines and the sibling 371. Duplication is
+- The participant file is 978 lines, the sibling 465, the seam file 437 and
+  the fixture 626. Duplication is
   measured in 10.4.
 
 **The port double (R6-2) and its consumers.** `createOperationPort` now opens
@@ -2033,11 +2357,11 @@ The participant witnesses' red reasons are unchanged by the repair: their 36
 | Receipt | Kind | Participant file | Seam file | Real file (absent) | Stays red until |
 | --- | --- | --- | --- | --- | --- |
 | no-speculative-visibility-before-consensus | subtest | W1a, W5a, W5b (3) | - | - | participant cutover |
-| replicated-prepare-committed-and-applied-on-every-replica | shell | W1a, W1b, W12c, W11a, W11b, W11c, W11d, W11e, W15 (9) | - | A1, A2, A3 (3) | cutover and A1-A3 |
-| commit-applies-operations-outcome-and-applied-index-atomically | shell | W1b, W2a, W2b, W2c, W3a, W3b, W3c, W4, W6, W13, W14, W17, W18, W19 (14), plus W6n, W6s, W6p, W6r (4) from the sibling file under the prefix `TX1 v3` | - | A5 (1) | cutover and A5 |
+| replicated-prepare-committed-and-applied-on-every-replica | shell | W1a, W1b, W12c, W11a, W11b, W11c, W11d, W11e, W15, W20 (10) | - | A1, A2, A3 (3) | cutover and A1-A3 |
+| commit-applies-operations-outcome-and-applied-index-atomically | shell | W1b, W2a, W2b, W2c, W3a, W3b, W3c, W4, W6, W13, W14, W17, W18, W19 (14), plus W6n, W6s, W6p, W6r, W6r-b (5) from the sibling file under the prefix `TX1 v3` | - | A5 (1) | cutover and A5 |
 | duplicate-and-conflicting-decisions-idempotent-or-refused | shell | W9, W12a, W12e, W10b (4) | W10a, W10c, S5 (3) | A4 (1) | both lanes and A4 |
 | exact-participant-outcome-no-transaction-is-not-committed | shell | W12b, W1b, W11f, W11e-ord, W11f-ord (5) | S2 (1) | - | both lanes, plus the kernel fix |
-| immutable-coordinator-decision-before-fanout | subtest | - | S1, S4b, S4c, S6, S7, S8 (6) | - | query lane and the seed-engine decision |
+| immutable-coordinator-decision-before-fanout | shell | - | S1, S4b, S4c, S4d, S6, S7, S8 (7) | M1 (1), in `test/integration/seed-migration-cutover-persisted.integration.test.js` (absent) | query lane, the seed setter and M1 |
 | no-rollback-after-commit-decision-and-no-prepared-erasure | shell | W9, W12d, W17 (3) | S1, S3, S4a (3) | - | both lanes |
 | recovery-and-cdc-survive-deadline-and-crash | absent | - | - | - | a CDC cursor/retention owner, or a seal supersession |
 
@@ -2056,7 +2380,11 @@ fails. That binds which tests run, not what they prove: round 5 measured that
 a file holding the five names with trivial bodies passes the real halves
 (nit N-F). The content of A1-A5 therefore rests on independent verification
 of that file when it lands. Every subset was counted on this head and selects
-exactly its declared number (3/9/14+4/4+3/5+1/6/3+3), all failing. The exact-count snippet was validated against the green
+exactly its declared number (3/10/14+5/4+3/5+1/7/3+3), all failing; the
+M1 half fails with `Cannot find module`. **These counts are current
+inventories, not seal thresholds** (owner decision): the exact-selection checks
+and the eight behavioural receipt ids are what binds. Not bound to any receipt:
+W7a, W7b, W16, RC1, RC2, the four controls, and the separate owner's FDET. The exact-count snippet was validated against the green
 controls in revision 4: 4 passes, 3 fails.
 
 **The real three-replica witnesses (decision AE).** They are named now in
@@ -2104,86 +2432,115 @@ still absent:
 
 ## 11. What remains for the query owner; the single cutover change set
 
-### 11.1 Seam items (falsifiers in the seam file; seam record revision-5 to revision-7 sections)
+### 11.1 Seam items: AGREED (owner record; falsifiers in the seam file)
 
-| Item | Seam obligation | Falsifier |
+Every item below is agreed by the cloud/query owner under the exact choices and
+qualifications of `owner-decisions-2026-10-10.md`. Where the earlier seam text
+disagrees with that record, the record controls.
+
+| Item | Agreed obligation (summary) | Falsifier |
 | --- | --- | --- |
-| A | identity on every request and answer; delivery key `{transactionId, partitionId, operation}` | S5 |
-| B/S | 128-bit random id; insert-once `sql_transactions` row (gateway `insert`) before fanout, with no coalescing key; re-mint only on the primary-key collision class | W10a, W10c (revision 6: the engine's row is an `insert` without a key) |
-| C | insert-once decision record before any fanout; every rollback path inserts ROLLBACK first | S1, S8 |
-| C' | after the decision, the client answer is in doubt (`commitPointReached: true` -> `TRANSACTION_OUTCOME_UNKNOWN`) | S1 |
-| D | outcome reads by identity; NOT_COMMITTED only from the participant's row | S2 |
-| E | PREPARE answers retained before deciding | S6 |
-| F | 1PC choice (option A falsifier pinned) | S7 |
-| G | concurrent recovery converges on one decision | S8 |
-| U | COMMITTING never becomes FAILED; recovery completes decided FAILED rows | S3, S4a |
-| S4b (AF) | without a gateway, an explicit BEGIN and a multi-partition statement are refused typed; DIRECT_AUTOCOMMIT is unchanged | S4b (all three halves) |
-| S4c (AI) | the seed-hydration engine's migration cutover (BEGIN..COMMIT over `tables-p1` and `schema_migration_partitions-p1`) persists its transaction row, or is not run on that engine. Owner decision: option 1, give the seed engine persistence (hand it the CDC service it creates at `seed-cache-hydration-phase.js:244-254` through `setCDCIntegrationService`, or a gateway), and extract its construction into a factory that S4c imports; option 2', wire the migration owners only on an engine that persists (drop `:235-238`), safe only if no production path sends ALTER TABLE through the seed engine (not proven, 9.2). Option 2 (DIRECT) is false. AF does not land without one of them. Revision 7 (N6-4): S4c's positive half drives the same cutover through an engine with a recording gateway (BEGIN, COMMIT, the row submitted). Its structural check `phaseSafe` reads the production phase's source, because no module exports the construction: the engine is given a gateway or CDC service (or `setCDCIntegrationService` is called on it), or the phase stops wiring the migration owners on it. That is a text property, not behaviour; option 1's factory would let S4c construct the engine through production code | S4c |
-| V | statement-autocommit retry of a durable `conflict` across the three call sites, within the 60 s budget | W16 (measurement); a retry witness lands with the query lane |
-| T/AD | the kernel answers UNKNOWN for may-be-committed writes (the answer keeps the replaced code in `cause`); the coordinator treats UNKNOWN as pending; the superseded assertions are the revision-6 rows of 9.2 | W11e, W11f, W11e-ord, W11f-ord |
-| H | register the coupled pair in `test/shards/impact-contracts.json` | gate |
+| A | canonical transaction and participant identity, mode and applicable epoch/digest on every request and response, session QUERY included; delivery keys bound to the exact transaction and operation | S5 |
+| B/S | a random 128-bit id; the initial `sql_transactions` row inserted once through the canonical gateway, without a coalescing key, before fanout; re-mint only on a confirmed id primary-key collision; uncertain insertion resolved by exact durable identity and content | W10a, W10c |
+| C, C' | one insert-once immutable decision; all positive PREPARE evidence retained before COMMIT; a bound ROLLBACK persisted before its fanout, a concurrent winner read and followed; after a durable COMMIT, timeouts yield an in-doubt answer and forward recovery, never rollback | S1, S8 |
+| D, E | exact PREPARE digest/index/term retained before deciding; exact durable terminal outcomes read; absence or PREPARED is UNKNOWN | S2, S6 |
+| F | prepare-first for one participant too; the ONE_PHASE_COMMIT fast path retired (11.2, derivation 4) | S7 |
+| G, U | concurrent recovering engines converge on the single durable decision; COMMITTING never becomes FAILED or re-prepared; recovery finishes legacy FAILED rows that have a decision | S3, S4a, S8 |
+| S4b | explicit BEGIN and multi-partition statement BEGIN require persistence before participant work; DIRECT_AUTOCOMMIT preserved | S4b |
+| S4c | option 1: `setCDCIntegrationService` on the seed SQL engine after CDC creation or upgrade and before migration execution or publication, through the existing setter; no `autoStartDistributedTransactionRecovery` flip; the refusal case kept | S4c (refusal case, positive half, the setter after both branches), S4d (both construction branches through the real phase), M1 (a persisted two-participant migration through the production composition; named, file absent) |
+| V | the whole statement-autocommit attempt retried only after a definitive conflict or noncommitment and any required abort disposition; one end-to-end budget; bounded attempts and backoff; no retry from UNKNOWN or after COMMIT; explicit transactions return the typed conflict | W16 (measurement and the two positive controls) plus query-owned retry and recovery witnesses |
+| T/AD | may-have-committed outcomes are UNKNOWN with the cause retained; definitive pre-admission refusals stay distinguishable; redelivery keeps the entry identity; AD may land on its own with its own acceptance and verification, and does not close TX1 | W11e, W11f, W11e-ord, W11f-ord |
+| H | the coupled coordinator/participant interaction and its discriminating witnesses registered through the existing impact-contract owner (`test/shards/impact-contracts.json`); generated metadata updated through its producers; no second protocol, coordinator or retry framework | gate |
 
-### 11.2 1PC
+**Trust boundary (owner record; 2.4).** Decision records are authoritative
+through the trusted coordinator route. A self-computed digest establishes
+content identity, not authentication. The committed apply does no second
+decision lookup.
 
-This is unchanged from revision 4:
+### 11.2 Single-participant transactions: prepare-first (FINAL)
 
-- **Option A, prepare-first (recommended):**
-  - supersedes `test/query/distributed-transaction-coordinator.test.js:646-673`
-    and `architecture/images-distributed-public-seam.md:102`;
-  - deletes `COMMIT_MODE.ONE_PHASE_COMMIT`, which changes three fixtures (9.2);
-  - falsifier: S7.
-- **Option B:**
-  - needs a quest supersession;
-  - relies on the AD kernel mapping, so that a committed command is never
-    answered as failed.
+Every coordinator-managed transaction prepares before its immutable COMMIT
+decision, a single participant included. The ONE_PHASE_COMMIT fast path, and
+its incompatible assertions and documents, are retired. Derivation 4 (9.2)
+inventories every site. DIRECT_AUTOCOMMIT stays the separate ordinary-write
+path. Falsifier: S7.
 
-### 11.3 The single cutover change set (lands together)
+### 11.3 The cutover change set and the landing gate
 
-The participant lane changes the files listed in revision 4, section 11.3,
-plus `src/partition/partition-transaction-determinism.js` (the whole-program
-classifier, the statement-kind owner, the rowid rules and the self-check, 3.3),
-its calls from `executeQuery` and from the committed SQL apply, and the
-partition construction option `transactionDeterminismSelfCheck`. The test side
-includes the port-double repair (R6-2). In the write kernel (`partition-write-kernel.js`,
-`partition-service-raft-write-commit.js`), the AD mapping can land earlier on
-its own.
+**Participant lane:**
+- the files listed in revision 4, section 11.3;
+- `src/partition/partition-statement-admission.js`: the statement-kind owner,
+  the rowid rules R1-R3 and the post-statement ceiling;
+- `src/partition/partition-transaction-determinism.js`: the session
+  classifier and the self-check;
+- their calls from `executeQuery`, `executeLocalQuery`, the CDC bootstrap
+  direct path, `executeSystemTableRead` and the committed SQL apply;
+- the execution envelope on transaction commands;
+- the construction option `transactionDeterminismSelfCheck`.
 
-The query lane changes the coordinator identity, the insert-once rows, the
-decision record, the protocol, recovery, the engine wire, the narrowed S4b and
-the statement-autocommit retry. The seed-engine decision (S4c) lands with S4b:
-its owner is the bootstrap/migration owner.
+The AD mapping in the write kernel (`partition-write-kernel.js`,
+`partition-service-raft-write-commit.js`) may land earlier on its own (0.1).
 
-**Landing gate**, in order:
+**Query lane:** the agreed seam items (11.1).
 
-1. all three witness files are green, except receipts that are still red by
-   design;
-2. the superseded tests (section 9.2, all revisions' rows) are rewritten;
-3. the shard census is regenerated for the new seam file and the earlier new
-   files;
-4. independent source verification;
-5. the real three-replica A1-A5.
+**Seed and CDC (local):**
+- the seed engine's setter call (S4c option 1);
+- the receipt-8 durable obligation (8.3).
 
-**Upgrade precondition (L6):** no in-flight transaction at cutover, and every
-partition table's max rowid below 2^62 (the census of 3.3).
+**Landing gate:** TX1 stays OPEN until, on the exact candidate:
+1. every sealed receipt is green; no receipt is exempted for being "red by
+   design";
+2. the superseded tests (9.2, all revisions' rows) are rewritten or retired
+   through the retirement map;
+3. the shard census and the generated metadata are regenerated through their
+   producers;
+4. the source is independently verified;
+5. the real three-replica A1-A5 and the persisted-migration M1 pass.
+
+**Upgrade precondition (L6):**
+- no in-flight transaction at cutover;
+- the disposition of retained legacy protocol work and log entries is proven,
+  and no old committed obligation is discarded;
+- every partition table's max rowid is below 2^62 (the pre-cutover census);
+- the mixed-version disposition window of the apply-side checks (3.3, N7-7) is
+  closed by the drain;
+- mixed-version safety is never assumed.
 
 **Limits:**
 
 - L1: no transaction mirroring.
-- L2: CDC is not durable.
-- L3: the reservation is unbounded without a recovering engine, and
-  single-partition writers are refused at each 30 s deadline meanwhile.
-- L4: local divergence, and allow-listed function semantics differing across
-  SQLite versions. The self-check's version pin is the leader's only (N6-2);
-  replicas on other builds fall under premise item 4 and L10. The int64
-  ceiling is no longer an L4 residual: the rowid rules of 3.3 close it.
-- L5: partition-granular conflicts, as an R12 exposure awaiting owner
-  acceptance.
-- L6: the upgrade drain.
-- L7: no date/time, random or unknown functions, no implicit keys, no
-  non-JSON params, no table but the partition's own, no virtual table or
-  pragma, and no opcode outside the vetted list in transactions.
-- L8: decision binding is self-certifying.
-- L9: order-dependent session writes are refused (LIMIT/OFFSET, non-IN/EXISTS
-  subqueries, aggregates; 3.3).
-- L10: a SQLite upgrade with transactions in flight is not covered after the
-  cutover (premise item 4).
+- L2: CDC is not durable until the receipt-8 obligation (8.3) exists.
+- L3: **accepted** (owner): the reservation lasts until the authoritative
+  decision is applied, however long recovery or quorum is unavailable. A
+  deadline bounds a caller's wait, not the obligation (8.4).
+- L4: local divergence of a single replica's storage; allow-listed function
+  semantics across SQLite builds are covered by the envelope.
+- L5: **accepted** (owner): partition-granular conflicts, as an
+  availability/concurrency trade-off, not an R12 exception. Finer granularity
+  is a measured future choice.
+- L6: the upgrade precondition above.
+- L7: no date/time, random or unknown functions; no implicit keys, and on
+  INTEGER PRIMARY KEY tables no key outside an explicit in-range integer; no
+  non-JSON params; no table but the partition's own; no virtual table or
+  pragma; no opcode outside the supported population. Declared false refusals
+  routed to the classifier owner: `NotFound` (a correlated IN) and `Filter`
+  (an IN over a non-key column).
+- L8: the decision binding is self-certifying; authority comes from the trusted
+  coordinator route (2.4).
+- L9: three order-dependent shapes are refused in session writes (3.3); the
+  admitted order-sensitive shapes are listed there.
+- L10 (reframed): a replica on a build other than the one that staged a
+  transaction command stalls on that command, as a host failure, until its
+  build matches. It never diverges. A rolling upgrade therefore pauses older
+  replicas at the first transaction command.
+- L11 (new, AO): ordinary writes with nondeterministic functions, reachable
+  through `NOW()`, can make replicas' rows differ (F-DET). K is conditional on
+  their absence: a later session PREPARE or COMMIT that reads or constrains
+  such rows can split PREPARED/REFUSED, or answer `not_prepared` on a follower
+  after a global COMMIT. TX1 does not fix ordinary-write nondeterminism. The
+  owner chooses one of:
+  - the query engine freezes `NOW()`/random to literals before fanout;
+  - the partition apply refuses them;
+  - the exposure is accepted as stated.
+
+  The seam file's FDET witness is red until one of the first two lands.
