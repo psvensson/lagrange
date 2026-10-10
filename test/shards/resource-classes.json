@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2315,
+    "ordinary": 2316,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2332,
-  "digest": "fnv1a32-e3d75956",
+  "censusSize": 2333,
+  "digest": "fnv1a32-e95a7d08",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1034,6 +1034,7 @@
     "test/integration/raft-leader-election.integration.test.js": "ordinary",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "ordinary",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "ordinary",
+    "test/integration/seed-migration-cutover-persisted.integration.test.js": "ordinary",
     "test/integration/seed-node-bootstrap.integration.test.js": "ordinary",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "ordinary",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "ordinary",
