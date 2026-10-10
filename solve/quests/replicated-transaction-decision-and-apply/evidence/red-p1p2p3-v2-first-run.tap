@@ -1,0 +1,85 @@
+TAP version 13
+# Subtest: TX1 P1: a pending commit exposes no row and resolves only after its marker is applied
+not ok 1 - TX1 P1: a pending commit exposes no row and resolves only after its marker is applied
+  ---
+  duration_ms: 31.491118
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply.test.js:134:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    no row is readable on the leader before the marker is committed and applied
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply.test.js:142:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: TX1 P2: the committed TRANSACTION_COMMIT applies its operations, outcome and applied index on a replica that staged nothing
+not ok 2 - TX1 P2: the committed TRANSACTION_COMMIT applies its operations, outcome and applied index on a replica that staged nothing
+  ---
+  duration_ms: 18.843117
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply.test.js:155:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a committed transaction marker must apply its operations on every replica
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply.test.js:166:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 P3: a transaction whose second statement fails applies nothing and records a typed outcome
+not ok 3 - TX1 P3: a transaction whose second statement fails applies nothing and records a typed outcome
+  ---
+  duration_ms: 13.92576
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply.test.js:179:1'
+  failureType: 'testCodeFailure'
+  error: 'a transaction that applied nothing is not recorded as COMMITTED'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'COMMITTED'
+  actual: 'COMMITTED'
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply.test.js:198:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: control: an ordinary committed write applies exactly once and advances the applied index
+ok 4 - control: an ordinary committed write applies exactly once and advances the applied index
+  ---
+  duration_ms: 14.126047
+  type: 'test'
+  ...
+# Subtest: control: replaying a committed transaction marker applies nothing twice
+ok 5 - control: replaying a committed transaction marker applies nothing twice
+  ---
+  duration_ms: 11.820816
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 2
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 712.575244
+EXIT=1

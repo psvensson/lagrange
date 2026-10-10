@@ -3,24 +3,24 @@
   "quest": "replicated-transaction-decision-and-apply",
   "status": "fail",
   "testFileDigests": {
-    "test/partition/partition-transaction-replicated-apply.test.js": "e13a899e07f25b397135adb43e9e7430fe2714a102d40ff32f46230dfaaf2cc4"
+    "test/partition/partition-transaction-replicated-apply.test.js": "629800851a413ec4b8d1909c1778f828e8aa2d4e675f234dc519341eb6bbfd03"
   },
-  "generatedAt": "2026-10-10T09:11:21.583Z",
+  "generatedAt": "2026-10-10T11:13:19.758Z",
   "receipts": [
     {
       "id": "no-speculative-visibility-before-consensus",
       "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 P1: a session commit exposes no rows before its marker is a committed entry$\" test/partition/partition-transaction-replicated-apply.test.js",
-      "detail": "the leader exposes no session row before its TRANSACTION_COMMIT marker is committed and applied",
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 P1: a pending commit exposes no row and resolves only after its marker is applied$\" test/partition/partition-transaction-replicated-apply.test.js",
+      "detail": "while the commit request is pending the marker is proposed, no session row is readable on the leader and the request has not resolved; it resolves after the marker is applied",
       "failure": "1 test(s) failed",
       "testFile": "test/partition/partition-transaction-replicated-apply.test.js"
     },
     {
       "id": "commit-applies-operations-outcome-and-applied-index-atomically",
       "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 P2: the committed TRANSACTION_COMMIT applies its operations on a replica that staged nothing$\" test/partition/partition-transaction-replicated-apply.test.js",
-      "detail": "a replica that staged nothing applies the committed marker's operations exactly once",
-      "failure": "1 test(s) failed",
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^(TX1 P2: the committed TRANSACTION_COMMIT applies its operations, outcome and applied index on a replica that staged nothing|TX1 P3: a transaction whose second statement fails applies nothing and records a typed outcome)$\" test/partition/partition-transaction-replicated-apply.test.js",
+      "detail": "a replica that staged nothing applies the committed marker's operations, COMMITTED outcome and applied index together; a failing transaction applies none of them and is not recorded COMMITTED",
+      "failure": "2 test(s) failed",
       "testFile": "test/partition/partition-transaction-replicated-apply.test.js"
     }
   ]
