@@ -518,3 +518,31 @@ function recordedLearnerFactIsValid(row, identity, encodedIdentity) {
   return stamp !== null && row.messageGroupLearnerStamp === JSON.stringify(stamp);
 }
 export {recordedLearnerFactIsValid};
+
+// The recorded fact's columns a current CREATE's admission CAS repeats, as the
+// [column, decoded field] pairs membershipRowWhere takes (rowToOperation keeps
+// each of these values exactly, so the decoded value is the column value).
+const RECORDED_LEARNER_FACT_COLUMNS = Object.freeze([
+  ['message_group_membership_identity', 'messageGroupMembershipIdentity'],
+  ['message_group_membership_phase', 'messageGroupMembershipPhase'],
+  ['message_group_membership_obligation_state', 'messageGroupMembershipObligationState'],
+  ['message_group_membership_permit', 'messageGroupMembershipPermit'],
+  ['message_group_learner_stamp', 'messageGroupLearnerStamp'],
+  ['message_group_voter_stamp', 'messageGroupVoterStamp'],
+  ['message_group_removal_stamp', 'messageGroupRemovalStamp']]);
+/** Current CREATE consumes the recorded fact like a new branch selection: the
+ * shared predicate first, then the still-outstanding UNKNOWN obligation. The
+ * answer is the decoded identity, the recorded stamp and permit, and the
+ * fact's exact membership columns as the basis the CREATE admission CAS and
+ * its MATERIALIZED advance repeat, so a later phase (a REMOVE selection)
+ * defeats them. Null when the row carries no such fact. Pure; not a grant. */
+function recordedLearnerCreateBasis(row) {
+  const identity = decodeMembershipIdentity(row?.messageGroupMembershipIdentity);
+  if (!identity || !recordedLearnerFactIsValid(row, identity, row.messageGroupMembershipIdentity) ||
+    row.messageGroupMembershipObligationState !== MEMBERSHIP_OBLIGATION.UNKNOWN) return null;
+  const where = Object.freeze(Object.fromEntries(
+    RECORDED_LEARNER_FACT_COLUMNS.map(([column, field]) => [column, row[field]])));
+  return Object.freeze({identity, where,
+    learnerStamp: row.messageGroupLearnerStamp, committedPermit: row.messageGroupMembershipPermit});
+}
+export {recordedLearnerCreateBasis};

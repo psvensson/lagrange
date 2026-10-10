@@ -45,6 +45,12 @@ const MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG = Object.freeze({
   UNREGISTERED_ROUTER:
     'Unregistered MessageGroupServiceHandler from message router',
   SHUTTING_DOWN: 'Shutting down MessageGroupServiceHandler',
+  CREATE_LEARNER_REFUSED:
+    'Message-group learner CREATE answered without physical work',
+  CREATE_LEARNER_ADMITTED:
+    'Message-group learner CREATE admitted one physical worker',
+  CREATE_LEARNER_WORKER_FENCED:
+    'Admitted message-group worker lost its boot before the physical call',
 });
 
 const MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
@@ -67,7 +73,32 @@ const MESSAGE_GROUP_SERVICE_HANDLER_WORKFLOW = Object.freeze({
   COMPLETION_STEPS: OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
 });
 
+// Typed answers of a message-group CREATE that carries a learner join package
+// and is refused or held before any physical work (FreshMG 6.B slice B1).
+// The existing admission owner's own error codes keep their names.
+const MESSAGE_GROUP_CREATE_REFUSAL = Object.freeze({
+  // No learner-join capability composed (every production root today): the
+  // composed createMessageGroupReplica opens a lone founder and is never used.
+  LEARNER_JOIN_CAPABILITY_UNAVAILABLE:
+    'message_group_create_learner_join_capability_unavailable',
+  JOIN_PACKAGE_INVALID: 'message_group_create_join_package_invalid',
+  LEARNER_FACT_UNAVAILABLE: 'message_group_create_learner_fact_unavailable',
+  LEARNER_FACT_NOT_RECORDED: 'message_group_create_learner_fact_not_recorded',
+  ADMISSION_RETAINED: 'message_group_create_admission_retained',
+  WORKER_NOT_ADMITTED: 'message_group_create_worker_not_admitted',
+});
+
+// The join route a learner CREATE carries: exactly these keys, a known kind.
+// It names where the worker joins from; the install step must still read the
+// leader's current descriptor at its own effect boundary.
+const MESSAGE_GROUP_JOIN_PACKAGE = Object.freeze({
+  KEYS: Object.freeze(['kind', 'groupId', 'replicaIdentity', 'peerId']),
+  KIND: Object.freeze({RAFT_LOG_OR_CHECKPOINT: 'raft_log_or_checkpoint'}),
+});
+
 export {
+  MESSAGE_GROUP_CREATE_REFUSAL,
+  MESSAGE_GROUP_JOIN_PACKAGE,
   MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS,
   MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG,
   MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG,

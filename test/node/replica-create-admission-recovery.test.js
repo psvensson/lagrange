@@ -25,6 +25,11 @@ import {
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {committedStampFor} from './replica-handler-bootstrap-stamps.js';
+import Database from 'better-sqlite3';
+import {REPLICA_OPERATIONS_SCHEMA} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {generateCreateTableSQL} from
+  '../../src/bootstrap/system-table-schema-sql.js';
 
 const tempDirs = [];
 
@@ -152,7 +157,7 @@ function gatewayFixture(cache, row, options = {}) {
           );
           return {success: true, rows: operation ? [operation] : []};
         }
-        if (params.length === 1) {
+        if (sql.includes('entity_type = ?')) {
           await options.snapshotBarrier;
           if (snapshotFailures > 0) {
             snapshotFailures -= 1;
@@ -160,6 +165,7 @@ function gatewayFixture(cache, row, options = {}) {
           }
           return {success: true, rows: operationRows.filter((candidate) =>
             candidate.target_node_id === params[0] &&
+              candidate.entity_type === params[1] &&
               candidate.create_admission_state !== null)};
         }
         return {success: true, rows: operationRows.filter((candidate) =>
@@ -216,9 +222,10 @@ function routedCreateRequest(row) {
 }
 
 async function createHandlerFixture({row, targetRow, additionalTargetRows = [],
-  gatewayOptions} = {}) {
+  gatewayOptions, authorityFor} = {}) {
   const cache = createCache([targetRow, ...additionalTargetRows]);
-  const authority = gatewayFixture(cache, row, gatewayOptions);
+  const authority = authorityFor ? authorityFor(cache) :
+    gatewayFixture(cache, row, gatewayOptions);
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'create-recovery-'));
   tempDirs.push(dataDir);
   let physicalStarts = 0;
@@ -270,7 +277,90 @@ function waitForCreateCompletion(handler) {
   });
 }
 
+// replica_operations on real SQL, so the startup scan's own predicate runs
+// (not a mock's reading of it); services rows stay on the lifecycle store.
+function sqlOperationsAuthority(cache, rows, bootIncarnation = 102) {
+  const lifecycle = createLifecycleControlPlaneGatewayForCache(cache);
+  const db = new Database(':memory:');
+  db.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
+  for (const row of rows) {
+    const columns = Object.keys(row);
+    db.prepare(`INSERT INTO replica_operations (${columns.join(', ')}) ` +
+      `VALUES (${columns.map(() => '?').join(', ')})`).run(...Object.values(row));
+  }
+  const gateway = {
+    async readAuthoritativeRows(tableName, sql, params = []) {
+      if (tableName === SYSTEM_TABLE_NAME.NODES) {
+        return {success: true, rows: [{node_id: rows[0].target_node_id,
+          boot_incarnation: bootIncarnation}]};
+      }
+      if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        return {success: true, rows: db.prepare(sql).all(...params)};
+      }
+      return lifecycle.readAuthoritativeRows(tableName, sql, params);
+    },
+    async updateSystemTableRow(tableName, where, data) {
+      if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        return {success: true, outcome: 'no_op'};
+      }
+      const set = Object.keys(data).map((column) => `${column} = ?`).join(', ');
+      const match = Object.keys(where).map((column) => `${column} IS ?`).join(' AND ');
+      const changes = db.prepare(`UPDATE replica_operations SET ${set} WHERE ${match}`)
+        .run(...Object.values(data), ...Object.values(where)).changes;
+      return {success: true, outcome: changes === 1 ? 'applied' : 'no_op'};
+    },
+    submitMutation: lifecycle.submitMutation,
+  };
+  const read = (operationId) => db.prepare(
+    'SELECT * FROM replica_operations WHERE operation_id = ?').get(operationId);
+  return {gateway, read, close: () => db.close()};
+}
+
+// A message-group REPLACE admission retained by an older boot (FreshMG B1).
+function messageGroupAdmissionRow(operationId, replicaId, state) {
+  return operationRow({operation_id: operationId, type: OperationType.REPLACE,
+    entity_type: 'message_group', entity_id: 'mg-1', partition_id: 'mg-1',
+    replica_id: replicaId, steps_history: '[]', create_admission_state: state});
+}
+
 describe('ReplicaHandler retained CREATE admission recovery', () => {
+  it('leaves older-boot message-group admissions untouched while it recovers a partition one',
+    async () => {
+      const partition = operationRow();
+      const admitted = messageGroupAdmissionRow('op-mg-admitted', 'mg-fresh-a',
+        CREATE_ADMISSION_STATE.ADMITTED);
+      const materialized = messageGroupAdmissionRow('op-mg-materialized',
+        'mg-fresh-m', CREATE_ADMISSION_STATE.MATERIALIZED);
+      let authority = null;
+      const fixture = await createHandlerFixture({row: partition,
+        targetRow: targetLifecycle(partition), authorityFor: (cache) => {
+          authority = sqlOperationsAuthority(cache, [partition, admitted, materialized]);
+          return authority;
+        }});
+      const before = [admitted, materialized].map(({operation_id: id}) =>
+        authority.read(id));
+      const completed = waitForCreateCompletion(fixture.handler);
+      fixture.handler.initialize();
+      await fixture.handler.awaitReplicaCreateAdmissionRecoveryBarrier();
+      await waitForPhysicalStart(fixture);
+      fixture.releaseFactory();
+      await completed;
+      assert.deepEqual([admitted, materialized].map(({operation_id: id}) =>
+        authority.read(id)), before,
+      'no takeover, advance or CLOSE of a message-group admission row');
+      for (const replicaId of ['mg-fresh-a', 'mg-fresh-m']) {
+        assert.equal(fixture.cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId) ?? null,
+          null, `no SERVICES row for ${replicaId}`);
+      }
+      assert.equal(fixture.physicalStarts(), 1, 'only the partition CREATE starts');
+      const recovered = authority.read(partition.operation_id);
+      assert.equal(recovered.create_admission_owner_incarnation, 102,
+        'the partition admission is still taken over (positive control)');
+      assert.equal(recovered.create_admission_state, CREATE_ADMISSION_STATE.ACTIVE);
+      await fixture.handler.shutdown();
+      authority.close();
+    });
+
   it('terminal-first routed CREATE performs no physical work', async () => {
     const row = operationRow({
       status: ReplicaStatus.FAILED,

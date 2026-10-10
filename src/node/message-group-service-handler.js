@@ -37,6 +37,12 @@ import {
 
 import {readMessageGroupLearnerAtRecipient} from
   './message-group-membership-recipient.js';
+import {ReplicaCreateAdmissionOwner} from './replica-create-admission-owner.js';
+import {
+  carriesLearnerJoinPackage,
+  handleMessageGroupLearnerCreate,
+  learnerCreateDependencies,
+} from './message-group-service-handler-create-admission.js';
 
 function isFunction(value) {
   return typeof value === 'function';
@@ -61,6 +67,14 @@ class MessageGroupServiceHandler extends EventEmitter {
    * @param {Function} [options.resolveLocalMessageGroupReplica]
    * @param {MessageGroupServiceRowOwner}
    *   [options.messageGroupServiceRowOwner]
+   * @param {Function} [options.joinMessageGroupReplicaAsLearner] - The
+   *   physical capability an admitted learner CREATE worker calls; no
+   *   production root composes it yet (the install slice supplies it).
+   * @param {Object} [options.replicaOperationRepository] - The operation
+   *   owner a learner CREATE reads its recorded fact through.
+   * @param {number} [options.ownerIncarnation] - This node's boot
+   *   incarnation, the CREATE admission owner's boot fence.
+   * @param {Function} [options.now] - Admission generation clock.
    */
   constructor(options = {}) {
     super();
@@ -88,6 +102,8 @@ class MessageGroupServiceHandler extends EventEmitter {
         systemTableWriter: this.controlPlaneSystemTableGateway,
       });
     this.messageRouter = options.messageRouter || null;
+    Object.assign(this, learnerCreateDependencies(options));
+    this.replicaCreateAdmissionOwner = null;
     this.rpcClient = null;
     this.registeredRouterHandler = null;
 
@@ -169,22 +185,28 @@ class MessageGroupServiceHandler extends EventEmitter {
   }
 
   /**
-   * CREATE_REPLICA for a message group is refused (owner decision
-   * 2026-10-04, raft-rs full cutover): no message-group replica is created
-   * on a dispatcher's word until the fresh-identity ADD path for message
-   * groups exists. The create this answered opened a GENESIS self-founder
-   * from the services rows that elected at once; under a reissued replica
-   * name it reused a raft id whose history the group holds elsewhere. The
-   * planner mints no such operation (UnifiedRebalancer
-   * .messageGroupMembershipChangeRefusal); this answer fails a stray or
-   * pre-upgrade dispatch closed. It opens nothing - no create or start, no
-   * services row, no tracked operation - and is answered ERROR, so the
-   * coordinator fails the operation once instead of retrying it. The
-   * executor half (createReplicaAsync) is what the fresh-identity ADD reuses.
+   * CREATE_REPLICA for a message group (owner decision 2026-10-04, raft-rs
+   * full cutover): no message-group replica is created on a dispatcher's
+   * word. The create this answered opened a GENESIS self-founder from the
+   * services rows that elected at once; under a reissued replica name it
+   * reused a raft id whose history the group holds elsewhere. A CREATE that
+   * carries a learner join package goes to the fresh-identity path (FreshMG
+   * slice B1, message-group-service-handler-create-admission.js): only a
+   * composed learner-join capability, the exact recorded learner fact, a
+   * bound package and the durable admission CAS start one physical worker,
+   * which never calls createMessageGroupReplica (a lone self-electing founder
+   * in every production root). Every other dispatch - stray or
+   * pre-upgrade, whatever topology it carries - is refused as before: it
+   * opens nothing (no create or start, no services row, no tracked
+   * operation) and is answered ERROR, so the coordinator fails the
+   * operation once instead of retrying it.
    * @param {Object} request - The CREATE_REPLICA payload.
-   * @return {Object} The typed refusal.
+   * @return {Promise<Object>} The handler response.
    */
-  handleCreateReplica(request) {
+  async handleCreateReplica(request) {
+    if (carriesLearnerJoinPackage(request)) {
+      return handleMessageGroupLearnerCreate(this, request);
+    }
     const reason =
       REBALANCER_SKIP_REASON.MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED;
     this.logger.warn(MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_REFUSED, {
@@ -286,6 +308,24 @@ class MessageGroupServiceHandler extends EventEmitter {
    */
   activateCreatedReplica(activation) {
     return activateCreatedMessageGroupReplica(this, activation);
+  }
+
+  /**
+   * The node's process-wide CREATE admission and sole-worker owner for this
+   * boot (shared with the partition handler), acquired on first use and
+   * released on shutdown.
+   * @return {ReplicaCreateAdmissionOwner}
+   */
+  getReplicaCreateAdmissionOwner() {
+    if (!this.replicaCreateAdmissionOwner) {
+      this.replicaCreateAdmissionOwner = ReplicaCreateAdmissionOwner.acquire({
+        gateway: this.controlPlaneSystemTableGateway,
+        nodeId: this.nodeId,
+        ownerIncarnation: this.ownerIncarnation,
+        now: this.now,
+      });
+    }
+    return this.replicaCreateAdmissionOwner;
   }
 
   hasInProgressReplicaRemoval(replicaId) {
@@ -678,6 +718,9 @@ class MessageGroupServiceHandler extends EventEmitter {
     );
     this.inProgressOperations.clear();
     this.localReplicas.clear();
+    // A queued admitted worker observes the released owner and stops.
+    ReplicaCreateAdmissionOwner.release(this.replicaCreateAdmissionOwner);
+    this.replicaCreateAdmissionOwner = null;
     this.removeAllListeners();
   }
 }

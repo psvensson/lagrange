@@ -82,9 +82,10 @@ export async function registerReplicaHandlerCreateAdmissionTests({
               return {success: true, rows:
                 operationRow.operation_id === params[0] ? [operationRow] : []};
             }
-            if (params.length === 1) {
+            if (sql.includes('entity_type = ?')) {
               return {success: true, rows:
                 operationRow.target_node_id === params[0] &&
+                operationRow.entity_type === params[1] &&
                 operationRow.create_admission_state ? [operationRow] : []};
             }
             return {success: true, rows:

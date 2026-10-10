@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 305,
+    "bootstrap-membership": 306,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2327,
-  "digest": "fnv1a32-1c7a1160",
+  "censusSize": 2328,
+  "digest": "fnv1a32-38ad11d6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7b5d2805",
+  "observationDigest": "fnv1a32-fe23ba38",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1148,6 +1148,7 @@
     "test/node/idempotent-operations.property.test.js": "bootstrap-membership",
     "test/node/lifecycle-readiness.test.js": "bootstrap-membership",
     "test/node/local-only-reconcile-activation-boundary.test.js": "bootstrap-membership",
+    "test/node/message-group-create-admission-recovery.test.js": "bootstrap-membership",
     "test/node/message-group-executor-activation-handler-boundary.test.js": "bootstrap-membership",
     "test/node/message-group-registration-redrive-owner.test.js": "bootstrap-membership",
     "test/node/message-group-service-handler-membership.test.js": "bootstrap-membership",
@@ -8055,6 +8056,23 @@
         "src/node/replica-transport-handler-identity.js"
       ]
     },
+    "test/node/message-group-create-admission-recovery.test.js": {
+      "files": [
+        "src/node/message-group-service-handler.js",
+        "src/node/replica-create-admission-evidence.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/replica-create-admission-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+        "test/test-helpers/learner-operation-fixture.js",
+        "test/test-helpers/message-group-create-fixture.js"
+      ]
+    },
     "test/node/message-group-executor-activation-handler-boundary.test.js": {
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
@@ -8073,11 +8091,19 @@
     },
     "test/node/message-group-service-handler-membership.test.js": {
       "files": [
+        "src/bootstrap/shared/message-group-service-handler-setup.js",
+        "src/node/message-group-service-handler.js",
+        "src/node/replica-create-admission-evidence.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
-        "src/raft/raft-rs-runtime-owner.js"
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/replica-create-admission-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "test/test-helpers/learner-operation-fixture.js",
+        "test/test-helpers/message-group-create-fixture.js"
       ]
     },
     "test/node/message-group-service-handler.test.js": {
@@ -8107,6 +8133,7 @@
     },
     "test/node/replica-create-admission-recovery.test.js": {
       "files": [
+        "src/bootstrap/system-table-schema-sql.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-status.js",

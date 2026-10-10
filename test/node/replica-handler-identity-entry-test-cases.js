@@ -130,10 +130,11 @@ export async function registerReplicaHandlerIdentityEntryTests({
           }
           const rows = [...operationRows.values()].filter((row) =>
             row.create_admission_state !== null &&
-            (params.length === 2 ?
+            (sql.includes('replica_id = ?') ?
               row.replica_id === params[0] &&
                 row.target_node_id === params[1] :
-              row.target_node_id === params[0]));
+              row.target_node_id === params[0] &&
+                row.entity_type === params[1]));
           return {success: true, rows: rows.map((row) => ({...row}))};
         }
         return lifecycleGateway.readAuthoritativeRows(
