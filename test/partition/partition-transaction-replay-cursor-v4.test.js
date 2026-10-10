@@ -381,6 +381,8 @@ test('TX1 v3 W6r-b: random rowid allocation is excluded throughout a statement: 
       commit(ipk, 'w6rb-upsert', upsertTargetWhere(1, 'NULL')),
       commit(ipk, 'w6rb-replace-one', REPLACE_SQL, [5, 'five']),
       commit(ipk, 'w6rb-replace-two', `${REPLACE_SQL}, (?, ?)`, [5, 'five-b', 6, 'six']),
+      // A canonical decimal string key, as the PostgreSQL wire binds it (round-9 R9-1).
+      commit(ipk, 'w6rb-replace-text', REPLACE_SQL, ['5', 'five-text']),
       commit(ipk, 'w6rb-replace-null', REPLACE_SQL, [null, 'null']),
       commit(ipk, 'w6rb-replace-omitted', `INSERT OR REPLACE INTO ${FIXTURE_TABLE} (value) ` +
         'VALUES (\'omitted\')')];
@@ -394,7 +396,8 @@ test('TX1 v3 W6r-b: random rowid allocation is excluded throughout a statement: 
         `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES ('a', 'x'), ('b', 'y')`));
       perReplica.push({applies, prepare, dryRun: await outcomeOf(ipk, dryRun, ['refusalCause']),
         ipk: {outcomes: outcomesOf(ipk, ['w6rb-ipk', 'w6rb-string', 'w6rb-upsert',
-          'w6rb-replace-one', 'w6rb-replace-two', 'w6rb-replace-null', 'w6rb-replace-omitted']),
+          'w6rb-replace-one', 'w6rb-replace-two', 'w6rb-replace-text', 'w6rb-replace-null',
+          'w6rb-replace-omitted']),
         rowids: rowidsOf(ipk)}, text: {outcome: statementOutcomeOf(text, 'w6rb-text'),
           rowids: rowidsOf(text)}});
     } finally {
@@ -409,29 +412,32 @@ test('TX1 v3 W6r-b: random rowid allocation is excluded throughout a statement: 
     for (const [sql, params] of [[INSERT_SQL, [5, 'five']], [INSERT_SQL, [null, 'null']],
       [INSERT_SQL, [2 ** 62, 'range']], [`INSERT INTO ${FIXTURE_TABLE} (value) VALUES (?)`,
         ['omitted']], [INSERT_SQL, [String(INT64_MAX), 'string']],
-      [REPLACE_SQL, [7, 'seven']]]) {
+      [REPLACE_SQL, [7, 'seven']], [INSERT_SQL, ['9', 'nine']], [INSERT_SQL, ['011', 'eleven']]]) {
       facts.session.push(pick(await send(leader, queryMessage(tx, sql, params)),
         ['success', 'failureCode', 'refusalLayer']));
     }
     facts.wire = [await answeredOrPending(leader.executeQuery(REPLACE_SQL, [8, 'eight'],
       {entryId: 'w6rb-wire-replace'})), await answeredOrPending(leader.executeQuery(
-      REPLACE_SQL, [null, 'null'], {entryId: 'w6rb-wire-null'}))];
+      REPLACE_SQL, [null, 'null'], {entryId: 'w6rb-wire-null'})),
+    await answeredOrPending(leader.executeQuery(REPLACE_SQL, ['10', 'ten'],
+      {entryId: 'w6rb-wire-text'}))];
   } finally {
     await shutdownAll(leader);
   }
   const statementFailed = refusedAtApply;
   const appliedOutcome = {outcome: 'applied', failureCode: null};
-  const replica = {applies: [null, null, null, null, null, null, null, null], prepare: null,
+  const replica = {applies: [null, null, null, null, null, null, null, null, null], prepare: null,
     dryRun: {...notCommitted(V3.STATE.REFUSED), refusalCause: V3.REFUSAL_CAUSE.ROWID_CEILING},
     ipk: {outcomes: [statementFailed, statementFailed, statementFailed, appliedOutcome,
-      appliedOutcome, statementFailed, statementFailed], rowids: ['5', '6']},
+      appliedOutcome, appliedOutcome, statementFailed, statementFailed], rowids: ['5', '6']},
     text: {outcome: refusedAtApply, rowids: [String(INT64_MAX - 1n)]}};
   const keyRefused = {success: false, failureCode: V3.CODE.SESSION_WRITE_NONDETERMINISTIC,
     refusalLayer: LAYER.IMPLICIT_KEY};
   const staged = {success: true, failureCode: null, refusalLayer: null};
   assert.deepEqual(facts, {perReplica: [replica, replica], session: [staged, keyRefused,
-    keyRefused, keyRefused, keyRefused, staged], wire: ['pending',
-    {failureCode: V3.CODE.WRITE_STATEMENT_REFUSED, refusalLayer: LAYER.ROWID_ALLOCATION}]},
+    keyRefused, keyRefused, keyRefused, staged, staged, keyRefused], wire: ['pending',
+    {failureCode: V3.CODE.WRITE_STATEMENT_REFUSED, refusalLayer: LAYER.ROWID_ALLOCATION},
+    'pending']},
   'the post-statement ceiling sees the top row on every replica alike; explicit keys work');
 });
 

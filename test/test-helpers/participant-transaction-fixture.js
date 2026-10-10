@@ -1,7 +1,7 @@
 /**
  * Shared fixture of the TX1 (quest replicated-transaction-decision-and-apply)
- * participant witnesses: the pinned revision-9 wire vocabulary, the canonical
- * committed commands of design-leg-a-v9-2026-10-10.md section 2 (with the
+ * participant witnesses: the pinned revision-10 wire vocabulary, the canonical
+ * committed commands of design-leg-a-v10-2026-10-10.md section 2 (with the
  * execution envelope every replica checks), the staging
  * classifier's refusal cases with the layer that must refuse each (section 3.3), controllable replicas, request
  * builders and measurements. The literals below are the
@@ -73,7 +73,6 @@ const V3 = Object.freeze({
       'participant_transaction_determinism_self_check_failed',
     // The query wire and the committed SQL apply (design v7 section 3.3).
     WRITE_STATEMENT_REFUSED: 'partition_write_statement_refused',
-    ENVELOPE_MISMATCH: 'participant_transaction_execution_envelope_mismatch',
   }),
   // The classifier layer that refused a statement (design v6 section 3.3).
   CLASSIFIER_LAYER: Object.freeze({
@@ -91,8 +90,9 @@ const V3 = Object.freeze({
     // shape that could lower the top key.
     ROWID_ALLOCATION: 'rowid_allocation',
   }),
-  // The host-failure reason of an envelope mismatch (design v9 3.3, R8-3).
-  ENVELOPE_MISMATCH_REASON: 'execution-envelope-mismatch',
+  // The participant's read surface for envelope diagnostics (design v10 3.3, R9-2): a
+  // mismatch is applied as carried and counted, never refused.
+  ENVELOPE_DIAGNOSTICS_READER: 'readTransactionEnvelopeDiagnostics',
   // The classifier owner to create (design v6 section 3.3).
   DETERMINISM_MODULE: '../../src/partition/partition-transaction-determinism.js',
   PARTITION_SCOPE: 'partition',
@@ -283,15 +283,20 @@ const DECLARED_INDEX_SCHEMA = Object.freeze({tableName: TABLE, columns: [
   {name: 'id', type: 'TEXT', primaryKey: true},
   {name: 'value', type: 'TEXT'},
 ], indices: [{name: DECLARED_INDEX, columns: ['value']}]});
-// Apply one committed command and return the typed facts of its failure (or null).
-function applyCommittedFailure(partition, command) {
-  try {
-    partition.controllablePort.commit(command);
+// The envelope diagnostics a replica recorded: how many applied transaction commands
+// carried an envelope other than its own build, and the last such command (null when the
+// surface is absent).
+function envelopeDiagnosticsOf(partition) {
+  const read = partition[V3.ENVELOPE_DIAGNOSTICS_READER];
+  if (typeof read !== 'function') {
     return null;
-  } catch (error) {
-    return {code: error?.code ?? null, reason: error?.reason ?? null,
-      carried: error?.detail?.carried ?? null, own: error?.detail?.own ?? null};
   }
+  const facts = read.call(partition);
+  const last = facts?.lastMismatch ?? null;
+  return {mismatchCount: facts?.mismatchCount ?? null, lastMismatch: last && {
+    commandType: last.commandType ?? null,
+    carried: last.carried?.classifierListVersion ?? null,
+    own: last.own?.classifierListVersion ?? null}};
 }
 function plantRowid(partition, rowid, id) {
   partition.db.prepare(`INSERT INTO ${TABLE} (rowid, id, value) VALUES (?, ?, ?)`)
@@ -588,7 +593,7 @@ export {
   prepareRound,
   DECLARED_INDEX,
   DECLARED_INDEX_SCHEMA,
-  applyCommittedFailure,
+  envelopeDiagnosticsOf,
   ENVELOPE,
   INT64_MAX,
   IPK_SCHEMA,

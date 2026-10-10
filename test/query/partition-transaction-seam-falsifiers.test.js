@@ -1,7 +1,7 @@
 /**
  * TX1 (quest replicated-transaction-decision-and-apply) seam falsifiers for the
  * query lane: the coordinator and engine obligations of seam-2026-10-10.md
- * (revision-4 to -8 sections) and design-leg-a-v9-2026-10-10.md section
+ * (revision-4 to -10 sections) and design-leg-a-v10-2026-10-10.md section
  * 11. They are recorded here, not repaired: the query owner owns the change, and
  * every falsifier is red on the sealed head. Moved out of the participant witness
  * file partition-transaction-replicated-apply-v3.test.js in revision 5.

@@ -1,6 +1,6 @@
 /**
  * TX1 (quest replicated-transaction-decision-and-apply, PR100 Leg A) participant
- * red witnesses for design revision 9 (design-leg-a-v9-2026-10-10.md, section
+ * red witnesses for design revision 10 (design-leg-a-v10-2026-10-10.md, section
  * 10). Siblings: test/query/partition-transaction-seam-falsifiers.test.js (query
  * lane) and partition-transaction-replay-cursor-v4.test.js (real rs-raft log; since
  * revision 6 the positive controls, since revision 7 the classifier witnesses W6n,
@@ -30,7 +30,7 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
 import {
-  COMMITTED, ENVELOPE, GENERATION_SQL, alterCommandOf, applyCommittedFailure, columnsOf,
+  COMMITTED, ENVELOPE, GENERATION_SQL, alterCommandOf, columnsOf, envelopeDiagnosticsOf,
   commitDecision, decidedOnTwoReplicas, prepareRound, INSERT_SQL, notCommitted,
   OTHER_ROW, PREPARED, REPLICAS, ROW, ROW_2, TABLE, UNKNOWN_ANSWER, UNKNOWN_FIELDS, V3,
   applyCommitted, awaitProposal, beginMessage, commitMessage, commitOrdinaryWrite,
@@ -471,45 +471,46 @@ test('TX1 v3 W16: contention is measured: under a concurrent writer every PREPAR
   'the rate is measured, not promised (design 3.6, L5); an always-conflicting rule fails');
 });
 
-test('TX1 v3 W20: a transaction command carries the execution envelope; a replica refuses a ' +
-  'PREPARE or COMMIT whose envelope differs in any field as a typed, visible host failure ' +
-  '(nothing recorded, applied index unchanged, every retry alike), in both upgrade directions',
-async () => {
+test('TX1 v3 W20: PREPARE and COMMIT carry the leader\'s execution envelope on the wire; a ' +
+  'replica applies a command whose envelope differs from its own build exactly as carried and ' +
+  'records a typed diagnostic, never a refusal or a stall', async () => {
   const tx = identityOf('a20e');
-  const fields = ['sqliteVersion', 'sqliteSourceId', 'compileOptionsDigest',
-    'classifierListVersion'];
-  const withEnvelope = (command, field, value) => ({...command,
-    executionEnvelope: {...command.executionEnvelope, [field]: value}});
+  const other = identityOf('a20m');
+  const older = (command) => ({...command, executionEnvelope: {sqliteVersion: 'other',
+    sqliteSourceId: 'other', compileOptionsDigest: 'other', classifierListVersion: 'tx1-leg-a-0'}});
   const perReplica = await onTwoReplicas(async (replica) => {
     const prepareCommand = prepareCommandOf(tx, [operationOf(ROW)], generationOf(replica));
-    const appliedBefore = durableAppliedIndex(replica);
-    const prepareFields = fields.map((field) =>
-      applyCommitted(replica, withEnvelope(prepareCommand, field, 'other')));
-    const afterForeign = {...(await outcomeOf(replica, tx)),
-      appliedAdvance: durableAppliedIndex(replica) - appliedBefore};
-    const matching = applyCommitted(replica, prepareCommand);
-    const decision = commitDecision(tx, prepareCommand);
-    // An entry stamped by an older build, met by this (upgraded) replica: it stays stalled,
-    // typed and visible; the remedy is the release-owner census (design v9 L10).
-    const older = withEnvelope(decision, 'classifierListVersion', 'tx1-leg-a-0');
-    const appliedAtDecision = durableAppliedIndex(replica);
-    const stalls = [applyCommittedFailure(replica, older), applyCommittedFailure(replica, older)];
-    const afterStall = {...(await outcomeOf(replica, tx)),
-      appliedAdvance: durableAppliedIndex(replica) - appliedAtDecision};
-    return {prepareFields, afterForeign, matching, stalls: stalls.map((stall) =>
-      ({...stall, carried: stall?.carried?.classifierListVersion ?? null,
-        own: stall?.own?.classifierListVersion ?? null})), afterStall,
-    decisionApply: applyCommitted(replica, decision), afterDecision: await outcomeOf(replica, tx)};
+    const applies = [applyCommitted(replica, older(prepareCommand))];
+    const afterPrepare = envelopeDiagnosticsOf(replica);
+    applies.push(applyCommitted(replica, older(commitDecision(tx, prepareCommand))),
+      applyCommitted(replica, prepareCommandOf(other, [operationOf(ROW_2)],
+        generationOf(replica))));
+    return {applies, outcome: await outcomeOf(replica, tx), rows: rowCount(replica),
+      afterPrepare, diagnostics: envelopeDiagnosticsOf(replica)};
   });
-  const stall = {code: V3.CODE.ENVELOPE_MISMATCH, reason: V3.ENVELOPE_MISMATCH_REASON,
-    carried: 'tx1-leg-a-0', own: ENVELOPE.classifierListVersion};
-  const expected = {prepareFields: fields.map(() => V3.CODE.ENVELOPE_MISMATCH),
-    afterForeign: {outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, state: V3.STATE.ABSENT,
-      appliedAdvance: 0}, matching: null, stalls: [stall, stall],
-    afterStall: {...PREPARED, appliedAdvance: 0}, decisionApply: null, afterDecision: COMMITTED};
-  assert.deepEqual(perReplica, [expected, expected],
-    'a replica never applies a transaction command under a build it was not staged on, and ' +
-    'never stalls silently');
+  const wireTx = identityOf('a20w');
+  const wire = {prepare: null, decision: null};
+  const {leader, proposed} = await stagedLeaderTransaction(wireTx, [ROW]);
+  try {
+    const prepare = track(send(leader, prepareMessage(wireTx)));
+    const prepareCommand = await awaitProposal(proposed, isPrepareCommand);
+    wire.prepare = prepareCommand?.executionEnvelope ?? null;
+    if (prepareCommand) {
+      applyCommitted(leader, prepareCommand);
+      track(send(leader, commitMessage(wireTx, (await prepare.promise)?.preparedDigest)));
+      wire.decision = (await awaitProposal(proposed, isDecisionCommand))?.executionEnvelope ??
+        null;
+    }
+  } finally {
+    await shutdownAll(leader);
+  }
+  const mismatch = (commandType, count) => ({mismatchCount: count, lastMismatch: {commandType,
+    carried: 'tx1-leg-a-0', own: ENVELOPE.classifierListVersion}});
+  const expected = {applies: [null, null, null], outcome: COMMITTED, rows: 1,
+    afterPrepare: mismatch(V3.PREPARE_COMMAND, 1), diagnostics: mismatch(V3.DECISION_COMMAND, 2)};
+  assert.deepEqual({perReplica, wire}, {perReplica: [expected, expected],
+    wire: {prepare: ENVELOPE, decision: ENVELOPE}},
+  'apply never classifies (AB): the envelope is evidence for the release owner, not a gate');
 });
 
 // --- W5: c' isolation throughout ACTIVE ---
