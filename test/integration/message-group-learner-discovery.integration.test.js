@@ -15,6 +15,8 @@ import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_DEBT_RECOVERY_OUTCOME as DEBT} fro
 import {DEBT_CENSUS, wakeMessageGroupMembershipDebtForRow} from
   '../../src/rebalancer/operation-workflow-message-group-membership-recovery.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import * as recordedRow from
+  '../../src/rebalancer/replica-operation-message-group-membership-authorization.js';
 import {recoverMessageGroupLearnerInline} from
   '../../src/rebalancer/operation-workflow-message-group-native-read.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -60,6 +62,24 @@ function assertNoEffect(fx, before, proposals) {
   assert.deepEqual(fx.f.row(), before, 'a refused or retained turn must not touch the row');
   assert.equal(fx.f.proposalCount(), proposals); assert.equal(fx.physical(), 0);
 }
+// Typed debt diagnoses by level: the event each log call carries.
+function captureLog(owner) {
+  const logged = {debug: [], info: [], warn: []};
+  owner.logger = {error() {}, debug: (_m, event) => logged.debug.push(event),
+    info: (_m, event) => logged.info.push(event), warn: (_m, event) => logged.warn.push(event)};
+  return logged;
+}
+function countCalls(target, method) {
+  let count = 0; const original = target[method].bind(target);
+  target[method] = (...args) => {
+    count += 1; return original(...args);
+  };
+  return () => count;
+}
+const updateRow = (fx, column, value) => fx.f.execute(
+  `UPDATE replica_operations SET ${column} = ? WHERE operation_id = ?`,
+  [value, fx.f.request.operationId]);
+const reencode = (encoded) => JSON.stringify(JSON.parse(encoded), null, 1);
 function discoveryFixture(t, options = {}) {
   return receiverFixture(t, {realLane: true, ...options});
 }
@@ -189,8 +209,9 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         'holder replacement changes only the claim and the three receipt columns');
       assert.equal(after.message_group_membership_phase, PHASE.LEARNER_COMMITTED);
       assert.equal(fx.f.proposalCount(), proposals); assert.equal(fx.physical(), 0);
-      const settled = await wakeRow(fx.owner, fx.f.row());
-      assert.deepEqual(settled, {outcome: DEBT.RECORDED, settled: true},
+      assert.equal(await wakeRow(fx.owner, fx.f.row()), null,
+        'a settled row\'s own replicated change owes no turn and wakes nothing');
+      assert.deepEqual(await sweep(fx.owner), summaryOf({settled: 1}),
         'the former holder reads the successor\'s receipt as settled, touching nothing');
       assert.equal(sourceDeliveries(), 0); assert.deepEqual(fx.f.row(), after);
     });
@@ -235,9 +256,11 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         'UPDATE replica_operations SET message_group_membership_phase = ? WHERE operation_id = ?',
         [PHASE.PROMOTION_IN_FLIGHT, fx.f.request.operationId]);
       const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
-      const deliveries = countDeliveries(fx.source);
-      const result = await wakeRow(fx.owner, fx.f.row());
-      assert.equal(result.outcome, DEBT.PHASE_NOT_OWNED);
+      const deliveries = countDeliveries(fx.source); const logged = captureLog(fx.owner);
+      assert.equal(await wakeRow(fx.owner, fx.f.row()), null,
+        'later-phase debt owes this owner no turn, so its replicated change wakes nothing');
+      assert.deepEqual(await sweep(fx.owner), summaryOf({retained: 1}));
+      assert.deepEqual(logged.debug.map((event) => event.outcome), [DEBT.PHASE_NOT_OWNED]);
       assert.equal(deliveries(), 0); assertNoEffect(fx, before, proposals);
     });
     await t.test('a hosted witness appearing in the replicated services rows wakes the lane holder',
@@ -252,6 +275,9 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         repository.queryAuthoritativeOperationByMessageGroupMembershipLane = (...args) => {
           laneReads += 1; return readLane(...args);
         };
+        // The owing row is listed first, so only the ACTIVE check keeps the
+        // stopped replica from waking the lane.
+        fx.f.cacheOperationRow();
         const stopped = fx.f.hostWitness(SUCCESSOR, fx.replicaId, 'stopped');
         fx.owner.handleObservedReplicaStateChange('services', 'insert', stopped);
         await settled(() => false, 20);
@@ -264,9 +290,14 @@ test('owned discovery recovers the exact learner outcome from membership debt by
           fx.f.row().message_group_membership_phase === PHASE.LEARNER_COMMITTED), true,
         'the services-row wake must drive the same algorithm to the recorded outcome');
         assertExactReceipt(fx, before, proposals); assert.equal(submissions(), 1);
+        // The cache still lists this group's lane holder as owing; a hosted row
+        // of another group must not read any lane on that hint.
+        await settled(() => false, 20); const lanesRead = laneReads;
         fx.owner.handleObservedReplicaStateChange('services', 'insert',
           {...row, group_id: 'another-group'});
         await settled(() => false, 20);
+        assert.equal(laneReads, lanesRead,
+          'an owing operation on another group\'s lane wakes no lane read for this group');
         assert.equal(submissions(), 1, 'a hosted row of another group wakes nothing here');
       });
     await t.test('a settled row is never re-adopted: no claim write, no witness, no log churn',
@@ -343,14 +374,12 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         assert.deepEqual(await sweep(fx.owner), summaryOf({recorded: 1}));
         fx.f.execute('UPDATE replica_operations SET message_group_learner_stamp = ? ' +
           'WHERE operation_id = ?', [JSON.stringify({forged: true}), fx.f.request.operationId]);
-        const forged = {...fx.f.row()}; const warnings = [];
-        fx.owner.logger = {debug() {}, info() {}, error() {},
-          warn: (...args) => warnings.push(args)};
-        const result = await wakeRow(fx.owner, fx.f.row());
-        assert.equal(result.outcome, DEBT.INVALID_ROW,
+        const forged = {...fx.f.row()}; const logged = captureLog(fx.owner);
+        assert.deepEqual(await sweep(fx.owner), summaryOf({refused: 1}),
           'an incoherent recorded stamp is not settled');
-        assert.equal(result.field, 'messageGroupLearnerStamp');
-        assert.equal(warnings.length, 1, 'owned repair is surfaced');
+        assert.equal(logged.warn.length, 1, 'owned repair is surfaced');
+        assert.equal(logged.warn[0].outcome, DEBT.INVALID_ROW);
+        assert.equal(logged.warn[0].field, 'messageGroupLearnerStamp');
         assert.deepEqual(fx.f.row(), forged); assert.equal(fx.physical(), 0);
       });
     await t.test('a census that throws is reported by the restart scan, which still completes',
@@ -388,5 +417,117 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         'a turn for another key cannot borrow this operation\'s lane');
       assert.equal(deliveries(), 0); assertNoEffect(fx, before, proposals);
       assert.equal(NODE, fx.owner.nodeId);
+    });
+    await t.test('D1: one recorded-row validity predicate serves discovery and the recorder; a ' +
+      'settled fact survives lease expiry and a foreign boot', async (t) => {
+      const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
+      assert.deepEqual(await sweep(fx.owner), summaryOf({recorded: 1}));
+      const recorded = {...fx.f.row()}; const identity = JSON.parse(fx.f.request.identity);
+      const valid = () => recordedRow.recordedLearnerFactIsValid(
+        fx.f.repository.rowToOperation(fx.f.row()), identity, fx.f.request.identity);
+      const defects = [
+        ['message_group_voter_stamp', recorded.message_group_learner_stamp],
+        ['message_group_removal_stamp', recorded.message_group_learner_stamp],
+        ['message_group_learner_stamp', reencode(recorded.message_group_learner_stamp)],
+        ['message_group_membership_permit', reencode(recorded.message_group_membership_permit)],
+        ['message_group_source_lifecycle_claim', JSON.stringify({
+          ...JSON.parse(recorded.message_group_source_lifecycle_claim), createAttemptToken: 'x'})],
+      ];
+      const deliveries = countDeliveries(fx.source);
+      for (const [column, value] of defects) {
+        updateRow(fx, column, value); const defective = {...fx.f.row()};
+        const logged = captureLog(fx.owner);
+        assert.deepEqual(await sweep(fx.owner), summaryOf({refused: 1}),
+          `discovery must not settle a recorded row with a defective ${column}`);
+        assert.equal(logged.warn[0]?.outcome, DEBT.INVALID_ROW, column);
+        assert.equal(logged.warn[0].field, 'messageGroupLearnerStamp', column);
+        assert.equal((await fx.owner.recoverMessageGroupLearnerOutcomeFromRecipient(
+          fx.f.request.operationId, witness(fx))).outcome, 'conflict',
+        `the recorder's readback must refuse the same defective ${column}`);
+        assert.equal(valid(), false, `the shared predicate refuses the defective ${column}`);
+        assert.deepEqual(fx.f.row(), defective, 'a defective record is never rewritten');
+        updateRow(fx, column, recorded[column]);
+      }
+      assert.deepEqual(fx.f.row(), recorded); assert.equal(valid(), true);
+      // The historical fact carries no live claim/lease/boot gate.
+      expireClaim(fx.f); const foreign = fx.f.repositoryFor(NODE);
+      foreign.membershipOwnerBootIncarnation = 2;
+      const restarted = workflowOwner({nodeId: NODE, repository: foreign,
+        messageRouter: fx.source, realLane: true, timeSource: fx.f.clock});
+      const claims = countCalls(foreign, 'claimMessageGroupMembershipOwner');
+      assert.equal(valid(), true, 'an expired lease does not unsettle a recorded fact');
+      assert.deepEqual(await sweep(restarted), summaryOf({settled: 1}),
+        'a settled fact is recognized after lease expiry under another boot incarnation');
+      assert.equal(claims(), 0); assert.equal(deliveries(), 0);
+      assert.deepEqual(fx.f.row(), recorded); assert.equal(fx.physical(), 0);
+    });
+    await t.test('D2: an invalid phase/permit pair is diagnosed before claim work, stays out of ' +
+      'the hint and keeps its debt', async (t) => {
+      const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
+      const inFlight = fx.f.row().message_group_membership_permit;
+      const committed = JSON.stringify({...JSON.parse(inFlight),
+        permitState: 'committed', proposalIndex: 2});
+      const pairs = [[PHASE.LEARNER_COMMITTED, inFlight], [PHASE.LEARNER_IN_FLIGHT, committed]];
+      expireClaim(fx.f); const deliveries = countDeliveries(fx.source);
+      const claims = countCalls(fx.owner.repository, 'claimMessageGroupMembershipOwner');
+      const proposals = fx.f.proposalCount();
+      for (const [phase, permit] of pairs) {
+        updateRow(fx, 'message_group_membership_phase', phase);
+        updateRow(fx, 'message_group_membership_permit', permit);
+        const before = {...fx.f.row()}; const logged = captureLog(fx.owner);
+        assert.deepEqual(await sweep(fx.owner), summaryOf({refused: 1}), phase);
+        assert.equal(claims(), 0, `an invalid ${phase} pair must not touch the claim`);
+        assert.deepEqual(logged.warn.map((event) => [event.outcome, event.field]),
+          [[DEBT.INVALID_ROW, 'messageGroupMembershipPermit']], 'a typed diagnosis');
+        fx.f.cacheOperationRow();
+        assert.deepEqual(await sweep(fx.owner, DEBT_CENSUS.CACHE_HINT),
+          {available: true, found: 0, recorded: 0, settled: 0, retained: 0, refused: 0},
+          'an invalid pair is not a periodic hint candidate');
+        assert.equal(await wakeRow(fx.owner, fx.f.row()), null,
+          'an invalid pair\'s own replicated change wakes nothing');
+        assertNoEffect(fx, before, proposals);
+        assert.equal(fx.f.row().message_group_membership_obligation_state, 'unknown',
+          'the durable debt is retained for the restart scan and its repair owner');
+      }
+      assert.equal(deliveries(), 0);
+    });
+    await t.test('D3: the services-row wake shares the sweep\'s hint filter: an owing operation ' +
+      'wakes, a settled one costs no read', async (t) => {
+      const fx = await discoveryFixture(t); const before = {...fx.f.row()};
+      const proposals = fx.f.proposalCount();
+      const laneReads = countCalls(fx.owner.repository,
+        'queryAuthoritativeOperationByMessageGroupMembershipLane');
+      const operationReads = () => fx.f.reads.filter((read) =>
+        read.table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS).length;
+      fx.f.cacheOperationRow();
+      const row = fx.f.hostWitness(SUCCESSOR, fx.replicaId);
+      fx.owner.handleObservedReplicaStateChange('services', 'insert', row);
+      assert.equal(await settled(() =>
+        fx.f.row().message_group_membership_phase === PHASE.LEARNER_COMMITTED), true,
+      'a hosted witness wakes the lane holder the replicated cache lists as owing');
+      assertExactReceipt(fx, before, proposals); assert.equal(laneReads(), 1);
+      fx.f.cacheOperationRow(); await settled(() => false, 20);
+      const reads = operationReads();
+      fx.owner.handleObservedReplicaStateChange('services', 'update', row);
+      await settled(() => false, 20);
+      assert.equal(laneReads(), 1, 'a lane whose operation owes no initial turn is not read');
+      assert.equal(await wakeRow(fx.owner, fx.f.row()), null,
+        'a settled operation row\'s own change wakes nothing');
+      assert.equal(operationReads(), reads, 'neither wake costs an authoritative read');
+    });
+    await t.test('without a replicated-operation cache boundary the services-row wake reads the ' +
+      'lane authoritatively', async (t) => {
+      const fx = await discoveryFixture(t); const before = {...fx.f.row()};
+      const proposals = fx.f.proposalCount(); const repository = fx.owner.repository;
+      repository.hasReplicaOperationCacheObservationBoundary = () => false;
+      const laneReads = countCalls(repository,
+        'queryAuthoritativeOperationByMessageGroupMembershipLane');
+      fx.owner.handleObservedReplicaStateChange('services', 'insert',
+        fx.f.hostWitness(SUCCESSOR, fx.replicaId));
+      assert.equal(await settled(() =>
+        fx.f.row().message_group_membership_phase === PHASE.LEARNER_COMMITTED), true,
+      'with no cache hint available the authoritative lane read decides and the debt is recorded');
+      assert.equal(laneReads(), 1, 'the no-boundary services wake reads the lane authoritatively');
+      assertExactReceipt(fx, before, proposals);
     });
   });

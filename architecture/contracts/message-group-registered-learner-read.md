@@ -84,14 +84,26 @@ message-group services row for a group whose lane holder owes one). Each turn:
    of every message-group operation whose obligation state is UNKNOWN, whatever
    its ordinary status (ordinary failure does not hide debt); the periodic sweep
    reads the replicated cache as a hint, so a cache listing no debt costs no
-   round trip. Every candidate is re-read authoritatively before any decision.
+   round trip. The periodic sweep and both replicated-row wakes share one hint
+   filter: a row owing an initial learner turn (in-flight phase and permit).
+   A services row reads its group's lane only when the cache lists such an
+   operation on that lane; a recorded, invalid or later-phase row costs no read.
+   When the repository has no replicated-operation cache observation boundary,
+   a services row falls back to the authoritative lane read.
+   Every candidate is re-read authoritatively before any decision.
 2. Holds the operation lane for one turn (coalesced wakeups do not inherit a
    turn; the debt waits for the next trigger).
 3. Recovers only the initial learner action (ADD_LEARNER, sequence 1, phase
    in-flight or committed); promotion and removal debt belong to later owners
-   and are reported, not touched. An initial action whose exact outcome is
-   already durable (committed phase, committed permit, learner stamp) is
-   settled for this owner: no claim is touched and no witness is asked.
+   and are reported, not touched. A phase/permit pair other than in-flight/
+   in-flight or committed/committed is INVALID_ROW (field: permit) before any
+   claim work. An initial action whose exact outcome is already durable is
+   settled for this owner: no claim is touched and no witness is asked. The
+   recorder owns the one pure validity predicate of that recorded fact (row
+   identity, committed initial permit, no voter/removal stamp, canonical permit
+   and stamp encodings, coherent learner stamp); discovery and the recorder's
+   readback both consume it. It carries no claim, lease or boot gate, so a
+   settled fact stays settled after its lease expires.
 4. Keeps a live local membership claim, waits on a live foreign one, and adopts
    an expired one through the existing claim CAS. Adoption is holder
    replacement, never a grant for a successor action.
@@ -109,7 +121,10 @@ RECORDED (new or settled), RETAINED (UNKNOWN/UNAVAILABLE/STALE_OWNER),
 NO_HOSTED_WITNESS, HELD_ELSEWHERE, CLAIM_REFUSED, PHASE_NOT_OWNED, LANE_BUSY,
 NOT_CURRENT, INVALID_ROW, INVALID_INPUT and CONFLICT are named states owned by
 the permit module. Only RECORDED means the exact outcome is durable; INVALID_ROW,
-INVALID_INPUT and CONFLICT are surfaced for owned repair. None of them dispatches
+INVALID_INPUT and CONFLICT are surfaced for owned repair. An INVALID_ROW keeps
+its UNKNOWN obligation untouched and is re-diagnosed (warn) by its reentry
+owner, the restart scan's authoritative census in OperationWorkflowOwner;
+no repair is automated here. None of them dispatches
 CREATE, promotion, removal, cleanup, a successor attempt or a lane release.
 The membership owner claim is bound to the process's issued boot incarnation,
 the one the router carries and the nodes row publishes.
