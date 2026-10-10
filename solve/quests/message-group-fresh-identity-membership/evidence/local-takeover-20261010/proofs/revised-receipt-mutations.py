@@ -24,7 +24,7 @@ def events_checked(helper, row, stdout, path, expected, required=None):
     assert not row['timedOut'] and row['cleanupComplete'], row
     events = helper.parse_events(stdout)
     tests = [x for x in events if x['type'] in ('test:pass', 'test:fail')]
-    assert len(tests) == 37, 'the complete recipient file must execute'
+    assert len(tests) == 45, 'the complete recipient file must execute'
     assert all(Path(x['file']).resolve() == path for x in tests)
     identities = Counter((x['name'], x.get('nesting')) for x in tests)
     if expected is not None:
@@ -32,7 +32,7 @@ def events_checked(helper, row, stdout, path, expected, required=None):
     totals = [x for x in events if x['type'] == 'test:summary' and x.get('file') is None]
     assert len(totals) == 1
     counts = totals[0]['counts']
-    assert counts['tests'] == 37
+    assert counts['tests'] == 45
     assert counts['cancelled'] == counts['skipped'] == counts['todo'] == 0
     assert not any(x.get('skip') or x.get('todo') for x in tests)
     failed = [x for x in tests if x['type'] == 'test:fail']
@@ -125,6 +125,33 @@ def main():
         'if (false && options.submissionIsCurrent !== undefined &&')],
       'async admission must recheck local lifetime adjacent to actual submission',
       'turnover during async admission must prevent submission'),
+     ('post-admission-receipt-lifetime',
+      'src/rebalancer/replica-operation-message-group-membership-authorization.js',
+      [('{beforeAttempt, submissionIsCurrent});', '{beforeAttempt});')],
+      'shutdown during asynchronous boot admission prevents the receipt submission',
+      'turnover during asynchronous admission must prevent the receipt submission'),
+     ('backoff-skipped',
+      'src/rebalancer/replica-operation-repository-mutation-gateway-methods.js',
+      [('        await this.waitForOperationPersistRetry(waitMs);\n      }\n    }\n\n    // Host-only submission admission',
+        '        if (false) await this.waitForOperationPersistRetry(waitMs);\n      }\n    }\n\n    // Host-only submission admission')],
+      'lease-expiry during retry backoff prevents a NEW receipt submission',
+      'the retry backoff must actually run before the second attempt'),
+     ('delivery-retirement',
+      'src/node/message-group-membership-recipient.js',
+      [('  return captured.current() ? answer : unavailable();', '  return answer;')],
+      'a retired delivery cannot carry a held native answer',
+      'a delivery retired during the read must not carry its answer'),
+     ('shutdown-retires-registration',
+      'src/node/message-group-service-handler.js',
+      [('  shutdown() {\n    this.unregisterFromRouter(this.messageRouter);', '  shutdown() {')],
+      'handler shutdown retires exactly its own registration',
+      'shutdown must unregister the handler it registered'),
+     ('previous-registration-kept',
+      'src/node/message-group-service-handler.js',
+      [('    this.unregisterFromRouter(this.messageRouter);\n    this.messageRouter = messageRouter;',
+        '    this.messageRouter = messageRouter;')],
+      're-registering on another router retires the previous registration first',
+      'the previous router must not keep a retired callback'),
      ('extra-receipt-effect',
       'src/rebalancer/replica-operation-message-group-membership-authorization.js',
       [('message_group_membership_permit = ?, message_group_learner_stamp = ?\n        WHERE ${basis.where}',
@@ -166,7 +193,7 @@ def main():
         row['accepted'] = True; results.append(row)
     finally:
         (out / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
-    print(json.dumps({'positiveCases': 37, 'mutationsDetected': len(cases),
+    print(json.dumps({'positiveCases': 45, 'mutationsDetected': len(cases),
                       'restoredPositive': True, 'diagnosticLoader': str(args.loader) if args.loader else None,
                       'lateReceiptPolicy': '20261009 safety-first ruling; bounded only', 'driverActivation': False}, indent=2))
 

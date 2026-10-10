@@ -48,24 +48,36 @@ function recordingRequestSnapshot(request) {
   // that a caller can replace while the owner waits for its existing lane.
   return Object.freeze(Object.fromEntries(keys.map((key) => [key, snapshot[key]])));
 }
-function withRecordingRecipient(owner, operationId, route, record) {
+const invalidAnswer = () => Object.freeze({outcome: OUTCOME.INVALID, operation: null});
+const refusedAnswer = () => Object.freeze({outcome: OUTCOME.UNAVAILABLE, operation: null});
+function selectRecordingRecipient(owner, operationId, route) {
   const recipient = copyStrictOwnDataRecord(route);
   if (!nonempty(operationId) || !nonempty(recipient?.nodeId) || !nonempty(recipient?.replicaId)) {
-    return Promise.resolve(Object.freeze({outcome: OUTCOME.INVALID, operation: null}));
+    return null;
   }
   const selected = Object.freeze({nodeId: recipient.nodeId, replicaId: recipient.replicaId});
   const epoch = owner.getOperationOwnershipFenceEpoch();
   const isCurrent = () => !owner.isShuttingDown &&
     epoch === owner.getOperationOwnershipFenceEpoch();
-  const refused = () => Object.freeze({outcome: OUTCOME.UNAVAILABLE, operation: null});
-  if (!isCurrent()) return Promise.resolve(refused());
+  return {selected, isCurrent};
+}
+// One recording turn inside an already-held operation lane.
+function recordingTurn(owner, turn, record) {
+  if (!turn.isCurrent()) return Promise.resolve(refusedAnswer());
+  return Promise.resolve(record((query) =>
+    readAtRecipient(owner, turn.selected, query, turn.isCurrent), turn.isCurrent))
+    .then((answer) => answer?.outcome ? answer : refusedAnswer());
+}
+function withRecordingRecipient(owner, operationId, route, record) {
+  const turn = selectRecordingRecipient(owner, operationId, route);
+  if (!turn) return Promise.resolve(invalidAnswer());
+  if (!turn.isCurrent()) return Promise.resolve(refusedAnswer());
   // Both explicit replay and restart reconstruction enter this same owned lane.
-  // An internal driver already holding it must use its existing inline discipline,
+  // An internal driver already holding it must use the inline entry below,
   // never recursively invoke this retained-lane entry point.
-  return owner.runRetainedOperationOwnerAction(operationId, () => {
-    if (!isCurrent()) return refused();
-    return record((query) => readAtRecipient(owner, selected, query, isCurrent), isCurrent);
-  }).then((answer) => answer?.outcome ? answer : refused());
+  return owner.runRetainedOperationOwnerAction(operationId,
+    () => recordingTurn(owner, turn, record))
+    .then((answer) => answer?.outcome ? answer : refusedAnswer());
 }
 function recordMessageGroupLearnerFromRecipient(owner, request, route) {
   const input = recordingRequestSnapshot(request);
@@ -77,4 +89,17 @@ function recoverMessageGroupLearnerFromRecipient(owner, operationId, route) {
   return withRecordingRecipient(owner, operationId, route, (read, isCurrent) =>
     owner.repository.recoverMessageGroupLearnerOutcome(operationId, read, isCurrent));
 }
-export {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient};
+/** Inline recovery for a reconcile turn that ALREADY holds this operation's
+ * lane (restart scan, periodic sweep, CDC wake). It never acquires the lane;
+ * a caller outside the lane is refused as INVALID instead of deadlocking.
+ */
+function recoverMessageGroupLearnerInline(owner, operationId, route) {
+  const turn = selectRecordingRecipient(owner, operationId, route);
+  if (!turn || owner.isOperationOwnerLaneHeld(operationId) !== true) {
+    return Promise.resolve(invalidAnswer());
+  }
+  return recordingTurn(owner, turn, (read, isCurrent) =>
+    owner.repository.recoverMessageGroupLearnerOutcome(operationId, read, isCurrent));
+}
+export {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient,
+  recoverMessageGroupLearnerInline};

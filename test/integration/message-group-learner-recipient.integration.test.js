@@ -1,129 +1,19 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {MessageRouter} from '../../src/transport/message-router.js';
-import {createRaftOperationPort} from '../../src/raft/raft-operation-port.js';
 import {MEMBERSHIP_PHASE as PHASE} from
   '../../src/rebalancer/replica-operation-message-group-membership-permit.js';
 import {RAFT_MEMBERSHIP_TRANSITION_REASON} from '../../src/raft/raft-operation-port-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {MessageGroupServiceHandler} from '../../src/node/message-group-service-handler.js';
-import {OperationWorkflowOwner} from '../../src/rebalancer/operation-workflow-owner.js';
-import {ReplicaOperationMessageType as TYPE, ReplicaOperationField as FIELD} from
+import {ReplicaOperationMessageType as TYPE} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE as PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
-import {fixture, FOUNDERS, GROUP, TARGET, NODE, SUCCESSOR} from
+import {FOUNDERS, GROUP, TARGET, NODE, SUCCESSOR} from
   '../test-helpers/learner-operation-fixture.js';
+import {address, payload, receiverFixture, record, heldNativeRead, assertNativeReadEntered,
+  assertExactReceipt, holdReceiptWrite, expireClaim, assertReceiptWriteEntered,
+  recoverReceipt, reconstructedOwner} from '../test-helpers/learner-recipient-fixture.js';
 
-const noLog = {debug() {}, info() {}, warn() {}, error() {}};
-const address = `${SUCCESSOR}/service/message-group-handler`;
-const immediate = () => new Promise((resolve) => setImmediate(resolve));
-
-async function connectRouters(t) {
-  // Existing in-process server/dial owners perform both IDENTIFY directions.
-  // No connection rows, primary socket or boot watermark is preinstalled.
-  const source = new MessageRouter({nodeId: NODE, bootIncarnation: 1,
-    inProcess: true, wsPort: 24271, nodeAddress: 'ws://127.0.0.1:24271'});
-  const recipient = new MessageRouter({nodeId: SUCCESSOR, bootIncarnation: 1,
-    inProcess: true, wsPort: 24272, nodeAddress: 'ws://127.0.0.1:24272'});
-  t.after(async () => {
-    await source.shutdown(); await recipient.shutdown();
-  });
-  await source.initialize({startServer: true});
-  await recipient.initialize({startServer: true});
-  await source.connectToNode(SUCCESSOR, 'ws://127.0.0.1:24272');
-  for (let tick = 0; tick < 20 &&
-    source.getCurrentPrimaryConnectionBootIncarnation(SUCCESSOR)?.bootIncarnation !== 1;
-    tick += 1) await immediate();
-  const outgoing = source.getCurrentPrimaryConnectionBootIncarnation(SUCCESSOR);
-  const incoming = recipient.getCurrentPrimaryConnectionBootIncarnation(NODE);
-  assert.equal(outgoing?.bootIncarnation, 1,
-    'the actual outbound router must receive its peer identity');
-  assert.equal(outgoing.nodeId, SUCCESSOR);
-  assert.equal(incoming?.bootIncarnation, 1,
-    'the actual incoming router must identify and adopt the dialed socket');
-  assert.equal(incoming.nodeId, NODE);
-  return {source, recipient};
-}
-function learnerQuery(f) {
-  const identity = JSON.parse(f.request.identity);
-  const permit = JSON.parse(f.request.permit);
-  return {purpose: PURPOSE.LEARNER_ACTION, groupId: GROUP,
-    action: {operationId: f.request.operationId, transitionIdentity: identity.transitionIdentity,
-      permitSequence: permit.permitSequence, stage: permit.permitStage,
-      replicaIdentity: identity.targetReplicaId, peerId: identity.targetPeerId}};
-}
-function payload(f, replicaId) {
-  return {[FIELD.TYPE]: TYPE.READ_COMMITTED_MEMBERSHIP,
-    [FIELD.ENTITY_TYPE]: SERVICE_TYPE.MESSAGE_GROUP, [FIELD.ENTITY_ID]: GROUP,
-    [FIELD.REPLICA_ID]: replicaId, [FIELD.MEMBERSHIP_QUERY]: learnerQuery(f)};
-}
-async function receiverFixture(t, {commit = true, dispatchTimeoutMs = 5000} = {}) {
-  const f = await fixture(t);
-  if (commit) {
-    assert.equal((await f.run()).reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
-    const peer = JSON.parse(f.request.identity).targetPeerId;
-    assert.ok(f.cluster.settle(() => FOUNDERS.every((id) =>
-      f.cluster.node(id).readStatus().confState.learners.includes(peer))));
-  }
-  const {source, recipient} = await connectRouters(t);
-  const replicaId = FOUNDERS.find((id) => id !== f.leader);
-  const native = f.cluster.node(replicaId);
-  const service = {nodeId: SUCCESSOR, replicaId, groupId: GROUP, raft: native};
-  let physical = 0;
-  const unexpectedPhysical = async () => {
-    physical += 1; throw new Error('no CREATE allowed');
-  };
-  const handler = new MessageGroupServiceHandler({nodeId: SUCCESSOR,
-    systemTableCache: {get: () => null}, cdcIntegrationService: {},
-    controlPlaneSystemTableGateway: f.gateway, createMessageGroupReplica: unexpectedPhysical,
-    startMessageGroupReplica: unexpectedPhysical, stopMessageGroupReplica: unexpectedPhysical,
-    resolveLocalMessageGroupReplica: (id) => id === replicaId ? service : null});
-  handler.initialize(); handler.registerWithRouter(recipient);
-  t.after(() => handler.shutdown());
-  let shuttingDown = false;
-  const owner = new OperationWorkflowOwner({nodeId: NODE, repository: f.repository,
-    messageRouter: source, logger: noLog, config: {}, stats: {},
-    replicaOperationDispatchTimeoutMs: dispatchTimeoutMs,
-    operationLane: {run: (_key, work) => work()}, getActualReplicaStatus: async () => null,
-    isShuttingDown: () => shuttingDown, isInitialized: () => false, timeSource: f.clock});
-  const deliver = (request) => source.deliver(address, request,
-    {targetNodeId: SUCCESSOR, deliveryPriority: 'critical', timeoutMs: 5000});
-  return {f, source, recipient, replicaId, native, service, handler, owner, deliver,
-    physical: () => physical, shutOwner: () => {
-      shuttingDown = true;
-    }};
-}
-function record(fx, request = fx.f.request, route = {nodeId: SUCCESSOR, replicaId: fx.replicaId}) {
-  assert.equal(typeof fx.owner.recordMessageGroupLearnerOutcomeFromRecipient, 'function',
-    'the workflow owner must provide its registered-recipient read capability');
-  return fx.owner.recordMessageGroupLearnerOutcomeFromRecipient(request, route);
-}
-async function heldNativeRead(fx) {
-  const entered = Promise.withResolvers();
-  const release = Promise.withResolvers();
-  const native = fx.native;
-  // A Proxy cannot replace a non-configurable frozen port method. This
-  // explicit scheduling wrapper uses the existing constructor and delegates
-  // every operation and every observation to the actual native port.
-  const proxy = createRaftOperationPort({...native,
-    readCommittedMembership: async (query) => {
-      const answer = await native.readCommittedMembership(query);
-      entered.resolve(); await release.promise; return answer;
-    },
-  });
-  // Scheduling-only wrapper: the actual native read supplies every answer.
-  fx.service.raft = proxy;
-  return {entered: entered.promise, release: release.resolve};
-}
-
-async function assertNativeReadEntered(held, pending) {
-  const entered = await Promise.race([
-    held.entered.then(() => true), pending.then(() => false),
-  ]);
-  assert.equal(entered, true,
-    'the actual native read must engage before delivery completes');
-}
 
 test('registered message-group recipient carries historical evidence to its workflow owner',
   {timeout: 30000}, async (t) => {
@@ -450,53 +340,77 @@ test('the owned learner command preserves submission and uncertainty boundaries'
   });
 
 
-// Supersedes ONLY the two commit-time expiry/boot refusal expectations in the
-// retained 20261009 package. See safety-first-ruling-20261009.md. That original
-// 2-pass/2-fail evidence is retained unchanged, not relabeled as this result.
-const RECEIPT_COLUMNS = Object.freeze(['message_group_membership_phase',
-  'message_group_membership_permit', 'message_group_learner_stamp']);
-function withoutReceipt(row) {
-  return Object.fromEntries(Object.entries(row).filter(([key]) => !RECEIPT_COLUMNS.includes(key)));
-}
-function assertExactReceipt(fx, before, proposals) {
-  const after = fx.f.row();
-  assert.deepEqual(withoutReceipt(after), withoutReceipt(before),
-    'late recording must change only the three historical receipt columns');
-  assert.equal(after.message_group_membership_phase, PHASE.LEARNER_COMMITTED);
-  const permit = JSON.parse(after.message_group_membership_permit);
-  assert.deepEqual(permit, {...JSON.parse(fx.f.request.permit),
-    permitState: 'committed', proposalIndex: 2},
-  'the receipt must preserve every original execution fence and sequence');
-  const stamp = JSON.parse(after.message_group_learner_stamp);
-  const identity = JSON.parse(fx.f.request.identity);
-  assert.equal(stamp.identities[identity.targetPeerId], identity.targetReplicaId);
-  assert.equal(stamp.learners.includes(identity.targetPeerId), true);
-  assert.equal(fx.f.proposalCount(), proposals, 'receipt recovery must not propose another action');
-  assert.equal(fx.physical(), 0, 'a historical receipt must not dispatch physical work');
-}
-function holdReceiptWrite(fx, t) {
-  const entered = Promise.withResolvers(); const release = Promise.withResolvers();
-  const execute = fx.f.gateway.executeQuery;
-  let submissions = 0;
-  fx.f.gateway.executeQuery = async (sql, ...args) => {
-    if (sql.includes('SET message_group_membership_phase = ?') &&
-      sql.includes('message_group_learner_stamp = ?')) {
-      submissions += 1; entered.resolve(); await release.promise;
+test('turnover during the receipt path\'s asynchronous admission starts no submission',
+  {timeout: 30000}, async (t) => {
+    for (const change of ['shutdown', 'fence-turnover', 'lease-expiry']) {
+      await t.test(`${change} during asynchronous boot admission prevents the receipt submission`,
+        async (t) => {
+          const fx = await receiverFixture(t); const before = {...fx.f.row()};
+          const proposals = fx.f.proposalCount();
+          let submissions = 0; const execute = fx.f.gateway.executeQuery;
+          fx.f.gateway.executeQuery = (sql, ...args) => {
+            if (String(sql).includes('SET message_group_membership_phase = ?') &&
+              String(sql).includes('message_group_learner_stamp = ?')) submissions += 1;
+            return execute(sql, ...args);
+          };
+          // The second canonical-boot read is the per-attempt admission inside
+          // the recorder; authority changes while that read is in flight.
+          let nodesReads = 0;
+          fx.f.pauseNodes(async () => {
+            nodesReads += 1;
+            if (nodesReads !== 2) return;
+            if (change === 'shutdown') fx.shutOwner();
+            else if (change === 'fence-turnover') fx.owner.bumpOperationOwnershipFenceEpoch();
+            else expireClaim(fx.f);
+          });
+          const result = await record(fx);
+          assert.ok(nodesReads >= 2, 'the per-attempt boot admission must engage on the owner path');
+          assert.equal(submissions, 0,
+            'turnover during asynchronous admission must prevent the receipt submission');
+          assert.notEqual(result.outcome, 'recorded');
+          assert.deepEqual(fx.f.row(), before);
+          assert.equal(fx.f.proposalCount(), proposals); assert.equal(fx.physical(), 0);
+        });
     }
-    return execute(sql, ...args);
-  };
-  t.after(release.resolve);
-  return {entered: entered.promise, release: release.resolve,
-    submissions: () => submissions};
-}
-function expireClaim(f) {
-  const expiresAt = JSON.parse(f.request.executionClaim).expiresAt;
-  f.clock.advance(expiresAt - f.clock.now() + 1);
-}
-async function assertReceiptWriteEntered(held, pending) {
-  assert.equal(await Promise.race([held.entered.then(() => true), pending.then(() => false)]),
-    true, 'the real receipt SQL submission must engage before the authority change');
-}
+  });
+
+test('the registered handler retires exactly its own registration',
+  {timeout: 30000}, async (t) => {
+    await t.test('handler shutdown retires exactly its own registration', async (t) => {
+      const fx = await receiverFixture(t); const before = {...fx.f.row()};
+      assert.equal(typeof fx.recipient.getRegisteredHandler(address), 'function');
+      fx.handler.shutdown();
+      assert.equal(fx.recipient.getRegisteredHandler(address), null,
+        'shutdown must unregister the handler it registered');
+      assert.equal((await record(fx)).outcome, 'unavailable');
+      assert.deepEqual(fx.f.row(), before); assert.equal(fx.physical(), 0);
+    });
+    await t.test('re-registering on another router retires the previous registration first',
+      async (t) => {
+        const fx = await receiverFixture(t);
+        const previous = fx.recipient.getRegisteredHandler(address);
+        fx.handler.registerWithRouter(fx.source);
+        assert.equal(fx.recipient.getRegisteredHandler(address), null,
+          'the previous router must not keep a retired callback');
+        assert.equal(typeof fx.source.getRegisteredHandler(address), 'function');
+        assert.notEqual(fx.source.getRegisteredHandler(address), previous);
+      });
+    await t.test('a retired delivery cannot carry a held native answer', async (t) => {
+      const fx = await receiverFixture(t); const before = {...fx.f.row()};
+      const held = await heldNativeRead(fx); t.after(held.release);
+      let current = true;
+      const invocation = Object.freeze({router: fx.recipient,
+        callback: fx.recipient.getRegisteredHandler(address)});
+      const pending = fx.handler.handleMessage(
+        {payload: payload(fx.f, fx.replicaId), correlationId: 'held'},
+        {nodeId: SUCCESSOR, isCurrent: () => current}, invocation);
+      await assertNativeReadEntered(held, pending);
+      current = false; held.release();
+      assert.equal((await pending).membership?.reason, 'learner-action-unavailable',
+        'a delivery retired during the read must not carry its answer');
+      assert.deepEqual(fx.f.row(), before); assert.equal(fx.physical(), 0);
+    });
+  });
 
 test('safety-first historical recording remains separate from permission for a next effect',
   {timeout: 30000}, async (t) => {
@@ -570,11 +484,15 @@ test('safety-first historical recording remains separate from permission for a n
         };
         fx.f.repository.isRetryableOperationPersistError = (answer) =>
           answer?.error === 'fixture retryable route unavailable';
+        let waits = 0;
         fx.f.repository.waitForOperationPersistRetry = async () => {
+          waits += 1;
           if (change === 'lease-expiry') expireClaim(fx.f);
           else fx.f.execute('UPDATE nodes SET boot_incarnation = ? WHERE node_id = ?', [2, NODE]);
         };
-        assert.notEqual((await record(fx)).outcome, 'recorded');
+        const result = await record(fx);
+        assert.equal(waits, 1, 'the retry backoff must actually run before the second attempt');
+        assert.notEqual(result.outcome, 'recorded');
         assert.equal(submissions, 1,
           'revoked claim or boot must prevent another submission after backoff');
         assert.deepEqual(fx.f.row(), before); assert.equal(fx.physical(), 0);
@@ -583,15 +501,6 @@ test('safety-first historical recording remains separate from permission for a n
   });
 
 
-const recoverReceipt = (fx) => fx.owner.recoverMessageGroupLearnerOutcomeFromRecipient(
-  fx.f.request.operationId, {nodeId: SUCCESSOR, replicaId: fx.replicaId});
-function reconstructedOwner(fx) {
-  return new OperationWorkflowOwner({nodeId: NODE, repository: fx.f.reopenOperations(),
-    messageRouter: fx.source, logger: noLog, config: {}, stats: {},
-    replicaOperationDispatchTimeoutMs: 5000,
-    operationLane: {run: (_key, work) => work()}, getActualReplicaStatus: async () => null,
-    isShuttingDown: () => false, isInitialized: () => false, timeSource: fx.f.clock});
-}
 test('restart recording reconstructs durable inputs without retaining the original request',
   {timeout: 30000}, async (t) => {
     await t.test('new workflow owner records by ID after native commit, without manual workflow progress', async (t) => {

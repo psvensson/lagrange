@@ -11,6 +11,8 @@ import {
   shutdownReplaceOwnerWake,
   wakeReplaceOwnersForReplicaRow,
 } from './operation-workflow-replace-owner-wake.js';
+import {reconcileMessageGroupMembershipDebt, wakeMessageGroupMembershipDebtForRow} from
+  './operation-workflow-message-group-membership-recovery.js';
 import {
   REPLACE_WAIT_REASON,
   clearAllReplaceOwnerState,
@@ -91,8 +93,21 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
       wakeReplaceOwnersForReplicaRow(this, record);
     }
+    // A row still owing a membership obligation, or a hosted witness for its
+    // group, re-enters the one debt algorithm; a failure here is logged and
+    // the debt waits for its next trigger.
+    wakeMessageGroupMembershipDebtForRow(this, tableName, cacheOperation, record)
+      .catch((error) => this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_DEBT_RETAINED,
+        {nodeId: this.nodeId, error: error?.message || String(error)}));
     return super.handleObservedReplicaStateChange(
       tableName, cacheOperation, record);
+  }
+
+  /** Census every operation still owing a membership obligation and recover
+   * the exact learner outcome through the existing recorder; nothing else. */
+  reconcileMessageGroupMembershipDebt() {
+    return reconcileMessageGroupMembershipDebt(this);
   }
 
   /**
@@ -376,6 +391,10 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         result.reconciled++;
       }
     }
+
+    // Membership debt outlives ordinary settlement, so the incomplete census
+    // above cannot see it; the restart scan is one of its named triggers.
+    result.membershipDebt = await this.reconcileMessageGroupMembershipDebt();
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED, {
       nodeId: this.nodeId,

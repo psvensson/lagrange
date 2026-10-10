@@ -9,6 +9,7 @@ import {
   handleRecovery,
   isPreSyncStep,
   reconcileRecoveryOperation,
+  reconcileMessageGroupMembershipDebt,
   reconcileSyncingOperation,
   getObservedReplicaStatusFromCache,
   getActualReplicaStatus,
@@ -95,6 +96,10 @@ class RebalanceCoordinatorRecoveryBudgetBindings {
 
   async reconcileRecoveryOperation(op) {
     return reconcileRecoveryOperation(this, op);
+  }
+
+  async reconcileMessageGroupMembershipDebt() {
+    return reconcileMessageGroupMembershipDebt(this);
   }
 
   async reconcileSyncingOperation(operation) {

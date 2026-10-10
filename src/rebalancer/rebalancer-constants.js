@@ -285,6 +285,13 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   RECOVERY_MARK_REMOVE_FAILED: 'Marked incomplete removal operation as failed during recovery',
   RECOVERY_PROCESS_ERROR: 'Error processing operation during recovery',
   RECOVERY_COMPLETED: 'Recovery process completed',
+  MEMBERSHIP_DEBT_SWEEP_UNAVAILABLE:
+    'Message-group membership debt census unavailable; debt retained until the next trigger',
+  MEMBERSHIP_DEBT_RECORDED: 'Message-group learner outcome recorded from durable debt',
+  MEMBERSHIP_DEBT_RETAINED:
+    'Message-group membership debt retained; recovery waits for its named prerequisite',
+  MEMBERSHIP_DEBT_REFUSED:
+    'Message-group membership debt recovery refused; owned repair required',
   RECOVERY_FAILED: 'Recovery process failed',
   RECONCILE_SYNCING: 'Reconciling SYNCING operation',
   RECONCILE_ACTIVE: 'Reconciled SYNCING operation to ACTIVE',

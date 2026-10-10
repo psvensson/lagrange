@@ -848,7 +848,7 @@
       ]
     },
     "message-group-registered-learner-read": {
-      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
+      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
       "owners": [
         "src/node/message-group-service-handler.js",
         "src/node/message-group-membership-recipient.js",
@@ -858,10 +858,13 @@
         "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
         "src/rebalancer/replica-operation-message-group-membership-authorization.js",
-        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
+        "src/rebalancer/operation-workflow-recovery-reconcile.js"
       ],
       "tests": [
-        "test/integration/message-group-learner-recipient.integration.test.js"
+        "test/integration/message-group-learner-recipient.integration.test.js",
+        "test/integration/message-group-learner-discovery.integration.test.js"
       ]
     }
   },
@@ -1668,7 +1671,7 @@
       ]
     },
     "message-group-registered-learner-read": {
-      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
+      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
       "endpoints": [
         {
           "id": "registered-native-recipient",
@@ -1686,13 +1689,16 @@
             "src/rebalancer/replica-operation-repository.js",
             "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
             "src/rebalancer/replica-operation-message-group-membership-authorization.js",
-            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+            "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
+            "src/rebalancer/operation-workflow-recovery-reconcile.js"
           ]
         }
       ],
       "contract": "message-group-registered-learner-read",
       "witnessTests": [
-        "test/integration/message-group-learner-recipient.integration.test.js"
+        "test/integration/message-group-learner-recipient.integration.test.js",
+        "test/integration/message-group-learner-discovery.integration.test.js"
       ]
     }
   }

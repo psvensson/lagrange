@@ -33,6 +33,13 @@ const PERMIT_KEYS = Object.freeze(['version', 'transitionIdentity',
 const CLAIM_KEYS = Object.freeze(['version', 'operationId', 'transitionIdentity',
   'ownerNodeId', 'ownerBootIncarnation', 'generation', 'expiresAt']);
 const CONFIG_KEYS = Object.freeze(['configurationKey', 'membershipGenerationIndex']);
+// Typed subsets of the record keys above: which keys are positive integers and
+// which are non-empty text. Each key is spelled once, in its owner list.
+const IDENTITY_INTEGER_KEYS = Object.freeze(['sourceCreatedAt']);
+const PERMIT_INTEGER_KEYS = Object.freeze(['membershipLeaseExpiresAt',
+  'proposerBootIncarnation', 'destinationBootIncarnation', 'leaderTerm']);
+const CLAIM_TEXT_KEYS = Object.freeze(['operationId', 'transitionIdentity', 'ownerNodeId']);
+const CLAIM_INTEGER_KEYS = Object.freeze(['ownerBootIncarnation', 'generation', 'expiresAt']);
 const text = (value) => typeof value === 'string' && value.length > 0;
 const integer = (value, minimum = 0) => Number.isSafeInteger(value) &&
   !Object.is(value, -0) && value >= minimum;
@@ -52,10 +59,10 @@ function parseRecord(encoded, keys) {
 }
 function decodeMembershipIdentity(encoded) {
   const value = parseRecord(encoded, IDENTITY_KEYS);
-  if (!value || !IDENTITY_KEYS.filter((key) => key !== 'sourceCreatedAt')
+  if (!value || !IDENTITY_KEYS.filter((key) => !IDENTITY_INTEGER_KEYS.includes(key))
     .every((key) => text(value[key])) || !integer(value.sourceCreatedAt, 1) ||
     value.sourceReplicaId === value.targetReplicaId ||
-    value.membershipLaneKey !== `message-group:${value.groupId}` ||
+    value.membershipLaneKey !== messageGroupMembershipLaneKey(value.groupId) ||
     deriveRaftRsPeerId(value.targetReplicaId) !== value.targetPeerId) return null;
   return Object.freeze(value);
 }
@@ -69,8 +76,7 @@ function decodeMembershipPermit(encoded) {
     'workflowOwnerFence', 'proposerNodeId', 'destinationNodeId',
     'replicaLifecycleIncarnation', 'replicaIdentity', 'peerId'];
   if (!strings.every((key) => text(value[key])) ||
-    !['membershipLeaseExpiresAt', 'proposerBootIncarnation',
-      'destinationBootIncarnation', 'leaderTerm'].every((key) => integer(value[key], 1)) ||
+    !PERMIT_INTEGER_KEYS.every((key) => integer(value[key], 1)) ||
     !integer(value.runtimeGeneration) ||
     deriveRaftRsPeerId(value.replicaIdentity) !== value.peerId) return null;
   const stamp = value.leaderConfigurationStamp;
@@ -83,8 +89,8 @@ function decodeMembershipPermit(encoded) {
 function decodeMembershipOwnerClaim(encoded) {
   const value = parseRecord(encoded, CLAIM_KEYS);
   if (!value || value.version !== 1 ||
-    !['operationId', 'transitionIdentity', 'ownerNodeId'].every((key) => text(value[key])) ||
-    !['ownerBootIncarnation', 'generation', 'expiresAt'].every((key) => integer(value[key], 1))) {
+    !CLAIM_TEXT_KEYS.every((key) => text(value[key])) ||
+    !CLAIM_INTEGER_KEYS.every((key) => integer(value[key], 1))) {
     return null;
   }
   return Object.freeze(value);
@@ -105,7 +111,14 @@ function membershipBranchSpec(branch) {
   }
   return null;
 }
+const MEMBERSHIP_LANE_KEY_PREFIX = 'message-group:';
+/** The one durable lane a group's membership obligations serialize on. */
+function messageGroupMembershipLaneKey(groupId) {
+  return `${MEMBERSHIP_LANE_KEY_PREFIX}${groupId}`;
+}
+
 export {MEMBERSHIP_PHASE, MEMBERSHIP_PERMIT_STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, membershipBranchSpec,
-  decodeMembershipOwnerClaim, membershipOwnerClaimFence};
+  decodeMembershipOwnerClaim, membershipOwnerClaimFence,
+  messageGroupMembershipLaneKey};

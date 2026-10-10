@@ -686,6 +686,7 @@ class RebalanceCoordinatorLifecycle {
       this.timeoutCheckInFlight = true;
       void this.checkTimeouts()
         .then(() => this.reconcileOrphanedOperations())
+        .then(() => this.reconcileMessageGroupMembershipDebt())
         .catch((error) => {
           this.logQueryOperationsFailure(error);
         })

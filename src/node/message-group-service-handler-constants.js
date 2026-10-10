@@ -16,6 +16,8 @@ const MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS = Object.freeze({
 
 const MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG = Object.freeze({
   INITIALIZING: 'Initializing MessageGroupServiceHandler',
+  LEFT_REGISTERED:
+    'MessageGroupServiceHandler could not retire its exact registration; the callback stays registered',
   MESSAGE_RECEIVED: 'MessageGroupServiceHandler received message',
   CREATE_REFUSED:
     'CREATE_REPLICA refused: message-group membership change unsupported until the fresh-identity ADD path exists',

@@ -166,6 +166,10 @@ export const SUBSYSTEM_RULES = Object.freeze([
 // semantic home differs from what their path implies. Each must name exactly
 // one live test and carry a reason, so a stale override fails like a dead rule.
 export const SUBSYSTEM_OVERRIDES = Object.freeze({
+  'test/integration/message-group-learner-discovery.integration.test.js': {
+    subsystem: SUBSYSTEM_TRANSPORT_MESSAGING,
+    reason: 'proves the owned discovery triggers (restart scan, sweep, replicated-row wake) driving the registered recipient read over real routers and the real lane; native and operation SQL provide the exact-action evidence',
+  },
   'test/integration/message-group-learner-recipient.integration.test.js': {
     subsystem: SUBSYSTEM_TRANSPORT_MESSAGING,
     reason: 'proves actual registered recipient and delivery lifetime to the operation owner; native and operation SQL provide the underlying exact-action evidence',

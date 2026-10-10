@@ -138,6 +138,10 @@ async function reconcileRecoveryOperation(coordinator, op) {
   return coordinator.workflowOwner.reconcileRecoveryOperation(op);
 }
 
+async function reconcileMessageGroupMembershipDebt(coordinator) {
+  return coordinator.workflowOwner.reconcileMessageGroupMembershipDebt();
+}
+
 async function reconcileSyncingOperation(coordinator, operation) {
   return coordinator.workflowOwner.reconcileSyncingOperation(operation);
 }
@@ -232,6 +236,7 @@ export {
   handleRecovery,
   isPreSyncStep,
   reconcileRecoveryOperation,
+  reconcileMessageGroupMembershipDebt,
   reconcileSyncingOperation,
   getObservedReplicaStatusFromCache,
   getActualReplicaStatus,

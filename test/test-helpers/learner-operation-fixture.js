@@ -81,10 +81,19 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
     return {success: true, outcome: changed.affectedRows === 1 ? 'applied' : 'no_op'};
   };
   const clock = new VirtualTimeSource({startMs: NOW});
+  // The service census the discovery owner reads for a hosted witness. Rows are
+  // route hints the test places explicitly; nothing here is committed evidence.
+  const serviceRows = [];
+  const systemTableCache = {get: () => null, getAll: () => [],
+    filter: (table, predicate) => table === 'services' ? serviceRows.filter(predicate) : []};
+  const hostWitness = (nodeId, replicaId, status = 'active') => {
+    serviceRows.push({service_id: replicaId, service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      group_id: GROUP, node_id: nodeId, replica_id: replicaId, status});
+    return serviceRows[serviceRows.length - 1];
+  };
   const repositoryFor = (nodeId) => new ReplicaOperationRepository({nodeId,
     membershipOwnerBootIncarnation: 1, timeSource: clock,
-    controlPlaneSystemTableGateway: gateway, logger: noLog,
-    systemTableCache: {get: () => null, getAll: () => [], filter: () => []},
+    controlPlaneSystemTableGateway: gateway, logger: noLog, systemTableCache,
     cdcIntegrationService: {waitForCacheUpdate: async () => {}},
     authoritativeVisibilityTimeoutMs: 0, authoritativeVisibilityRetryDelayMs: 0});
   const repository = repositoryFor(NODE);
@@ -132,7 +141,7 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
   const transport = await createServiceDeliveryFixture(t, NODE);
   let delivery = await transport.local();
   return {cluster, port, leader, repository, repositoryFor, clock, execute, reads,
-    request, receiver, observe, gateway, transport,
+    request, receiver, observe, gateway, transport, serviceRows, hostWitness,
     get db() {
       return db;
     },

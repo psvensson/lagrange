@@ -271,9 +271,12 @@ async (t) => {
   t.notMatch(read('src/bootstrap/phases/seed-cleanup-handler.js'),
     /ENTITY_TYPE\.MESSAGE_GROUP/u,
     'seed cleanup formats no message-group address for a raw removal');
+  // The handler retires exactly the callback it registered at its own fixed
+  // address (registered-learner-read contract): a successor registration at
+  // the same address survives an old handler's retirement.
   t.match(read('src/node/message-group-service-handler.js'),
-    /MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS\.HANDLER_ID\}`;\s+if \(isFunction\(messageRouter\.unregister\)\) \{\s+messageRouter\.unregister\(handlerAddress\);/u,
-    'the node-level service handler removes only its own fixed address');
+    /MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS\.HANDLER_ID\}`;[\s\S]{0,600}?const retired = isFunction\(messageRouter\.unregisterExact\) &&\s+messageRouter\.unregisterExact\(handlerAddress, registration\) === true;/u,
+    'the node-level service handler removes only its own fixed address, and only its own callback');
   const retirements = {
     'src/bootstrap/phases/create-message-group-replica-lifecycle.js':
       /await retireMessageGroupTransportHandler\(\{/gu,

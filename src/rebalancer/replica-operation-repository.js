@@ -163,6 +163,11 @@ const SQL = Object.freeze({
   SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE:
     'SELECT * FROM replica_operations WHERE ' +
       'message_group_membership_lane_key = ?',
+  // Every operation whose serialized membership obligation is unresolved,
+  // whatever its ordinary status: debt outlives ordinary settlement.
+  SELECT_MESSAGE_GROUP_MEMBERSHIP_DEBT_OPERATIONS:
+    'SELECT * FROM replica_operations WHERE entity_type = ? ' +
+      'AND message_group_membership_obligation_state = ?',
   SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations
     WHERE (source_node_id = ? OR target_node_id = ?)
     AND type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
@@ -570,7 +575,12 @@ class ReplicaOperationRepository {
   }
 }
 
-assignReplicaOperationRepositoryMessageGroupMembershipMethods(ReplicaOperationRepository);
+assignReplicaOperationRepositoryMessageGroupMembershipMethods(ReplicaOperationRepository, {
+  REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+  SERVICE_TYPE,
+  SQL,
+  isCoordinatorOwnedOperationType,
+});
 assignReplicaOperationRepositoryVisibilityMethods(ReplicaOperationRepository, {
   CONTROL_PLANE_PUBLICATION_STATUS,
   ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE,

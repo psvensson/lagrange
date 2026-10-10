@@ -11,13 +11,45 @@ import {claimMessageGroupMembershipOwner, settleMessageGroupMembershipNonAdmissi
 import {selectMessageGroupMembershipBranch, authorizeMessageGroupLearner,
   recordMessageGroupLearnerOutcome, recoverMessageGroupLearnerOutcome} from
   './replica-operation-message-group-membership-authorization.js';
+import {MEMBERSHIP_OBLIGATION} from './replica-operation-message-group-membership-permit.js';
+import {CONTROL_PLANE_READ_LEADER_MODE} from
+  '../control-plane/control-plane-system-table-gateway.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function assignReplicaOperationRepositoryMessageGroupMembershipMethods(
   ReplicaOperationRepository,
+  options = {},
 ) {
+  const {
+    REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+    SERVICE_TYPE,
+    SQL,
+    isCoordinatorOwnedOperationType,
+  } = options;
   class ReplicaOperationRepositoryMessageGroupMembershipMethods {
+    /** Authoritative census of operations still owing a membership obligation.
+     * Ordinary terminal rows are included: debt outlives settlement. The answer
+     * distinguishes an unavailable read from an empty census; it grants nothing.
+     * @return {Promise<{available: boolean, operations: Array}>}
+     */
+    async queryAuthoritativeMessageGroupMembershipDebtOperations() {
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_MESSAGE_GROUP_MEMBERSHIP_DEBT_OPERATIONS,
+        [SERVICE_TYPE.MESSAGE_GROUP, MEMBERSHIP_OBLIGATION.UNKNOWN],
+        {
+          ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
+          retryOnRetryableFailure: true,
+        },
+      );
+      if (result?.success !== true || !Array.isArray(result.rows)) {
+        return Object.freeze({available: false, operations: Object.freeze([])});
+      }
+      const operations = result.rows.map((row) => this.rowToOperation(row))
+        .filter((operation) => isCoordinatorOwnedOperationType(operation?.type));
+      return Object.freeze({available: true, operations: Object.freeze(operations)});
+    }
     /** Settle never-authorized terminal intent; no execution claim is acquired. */
     settleMessageGroupMembershipNonAdmission(request) {
       return settleMessageGroupMembershipNonAdmission(this, request);

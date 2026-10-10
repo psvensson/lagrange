@@ -72,14 +72,46 @@ A COMMITTED permit is accepted only for exact readback of a coherent recorded
 phase, never reconstituted as IN_FLIGHT. The proposal authorizer stays unchanged
 and rejects that committed input. Unavailable rows cannot be replaced by caches.
 
-The full ordinary driver still needs recurring discovery/reentry and initial
-learner action execution, followed by current CREATE through the existing
-leader descriptor/generation/sole-worker checks. The new recovery entry is not
-yet called by recurring reconciliation, and it must not be called recursively
-from another turn that already holds the same retained lane.
-These cannot be replaced by fixture-driven SENDING or a historical ADD receipt.
-No successor attempt is issued: absence of origin does not establish definitive
-predecessor fencing AND noncommitment. J1 forward recovery remains unchanged.
+## Owned discovery and reentry
+
+Three existing triggers converge on one algorithm, owned by OperationWorkflowOwner
+(operation-workflow-message-group-membership-recovery): the restart scan
+(handleRecovery), the periodic timeout/orphan sweep, and the replicated-row
+observer (a replica_operations row still owing its obligation, or an ACTIVE
+message-group services row for a group whose lane holder owes one). Each turn:
+
+1. Censuses debt through the repository's authoritative read of every
+   message-group operation whose obligation state is UNKNOWN, whatever its
+   ordinary status; ordinary failure does not hide debt.
+2. Holds the operation lane for one turn (coalesced wakeups do not inherit a
+   turn; the debt waits for the next trigger).
+3. Keeps a live local membership claim, waits on a live foreign one, and adopts
+   an expired one through the existing claim CAS. Adoption is holder
+   replacement, never a grant for a successor action.
+4. Recovers only the initial learner action (ADD_LEARNER, sequence 1, phase
+   in-flight or committed); promotion and removal debt belong to later owners
+   and are reported, not touched.
+5. Selects an explicitly hosted witness from the service census: an ACTIVE row
+   of another replica of the group, preferring the source, never the target the
+   operation has not created. The census is a route hint; the native answer at
+   the witness is the evidence. No hosted witness is a typed retained outcome
+   whose wake is the services row of a hosted replica.
+6. Calls the recorder's inline entry, which refuses any caller that does not
+   hold the lane; the retained-lane public entry stays for explicit callers.
+
+RECORDED, RETAINED (UNKNOWN/UNAVAILABLE/STALE_OWNER), NO_HOSTED_WITNESS,
+HELD_ELSEWHERE, CLAIM_REFUSED, PHASE_NOT_OWNED, LANE_BUSY, NOT_CURRENT,
+INVALID_ROW and CONFLICT are named states. Only RECORDED means the exact outcome
+is durable; INVALID_ROW and CONFLICT are surfaced for owned repair. None of them
+dispatches CREATE, promotion, removal, cleanup, a successor attempt or a lane
+release.
+
+The full ordinary driver still needs initial learner action execution, followed
+by current CREATE through the existing leader descriptor/generation/sole-worker
+checks. These cannot be replaced by fixture-driven SENDING or a historical ADD
+receipt. No successor attempt is issued: absence of origin does not establish
+definitive predecessor fencing AND noncommitment. J1 forward recovery remains
+unchanged.
 
 ## Required bounded proof
 
@@ -92,7 +124,12 @@ physical network or replicated-SQL failover claim.
 Prove ordinary remote success and no-effect replay; uncommitted UNKNOWN;
 payload-forged context refusal; wrong group/action/replica refusal; replacement
 of the actual handler registration or native port during a held real read;
-workflow shutdown; and continued CREATE/bootstrap-purpose refusal. Preserve
+workflow shutdown; and continued CREATE/bootstrap-purpose refusal. For discovery,
+prove recovery by operation ID alone from the restart scan, duplicate and stale
+wakeups on the real lane, no witness followed by a hosted witness, the target and
+a stopped replica never selected, ordinary-failed debt, holder replacement, lost
+SQL answer resolved by readback, later-phase debt untouched, the services-row
+wake, and the inline entry refusing outside the lane. Preserve
 exact row/debt and no proposal/physical-worker effects. Include permanent joint
 classification controls and preserve all existing process-loss/regression tests.
 Run new tests on the original source, then exact-source positive and named

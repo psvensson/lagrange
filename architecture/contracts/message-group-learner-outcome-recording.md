@@ -55,6 +55,24 @@ of the recorded phase does not rewrite its stamp or perform another native propo
 A current successor holder may recover the original result without altering the
 original issued attempt. Recording a historical fact is not new action issuance.
 
+## Submission admission and the late receipt
+
+The recorder takes the caller's local invocation-currentness predicate. Before
+EVERY submission, including each retry after backoff, it requires that predicate,
+a live local claim and a fresh canonical boot read; immediately before the gateway
+call it rechecks the synchronous predicate so that turnover during the asynchronous
+boot read cannot start a submission. These checks admit new work; they do not
+retract a command already inside the gateway. An already-submitted exact receipt
+may therefore commit late under the unchanged full row-CAS basis, changing only
+the learner phase, the committed permit and the learner stamp, as ruled in the
+[safety-first ruling](../../solve/quests/message-group-fresh-identity-membership/safety-first-ruling-20261009.md);
+the caller then reports UNKNOWN unless exact authoritative readback proves it.
+A COMMITTED permit supplied as recording input is readback-only: it matches an
+already-recorded coherent phase or is refused, and it never reaches the proposal
+authorizer or becomes IN_FLIGHT again. Recovery by operation ID reconstructs this
+input from the authoritative row; a missing or unreadable row is refused, never
+replaced by a cache or an earlier packet.
+
 The existing metadata-read currentness limit is not claimed globally solved.
 The checks and exact row CAS do not implement cross-group revocation or make a
 previously issued membership action disappear when a lease or socket expires.
@@ -107,8 +125,10 @@ parent actually sends SIGKILL. No writer close/finally sequence supplies recover
    membership debt survive while the exact historical learner phase is recorded.
 3. Operation recording committed but its SQL answer was not returned: the new
    process redelivers the original caller request and observes the recorded result.
-   This is exact request redelivery, NOT automatic scanning/reconstruction of an
-   already-recorded operation using only its now-committed permit representation.
+   That witness is exact request redelivery. Reconstruction from the authoritative
+   row alone, including a now-committed permit read back and never revived, is the
+   later recover-by-ID entry and its owned discovery; see the
+   [registered read contract](message-group-registered-learner-read.md).
 
 The reader uses a different logical node identity and an existing different
 voter's database. A still-live holder cannot be stolen; after advancing the

@@ -649,8 +649,19 @@ class MessageGroupServiceHandler extends EventEmitter {
       `${MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
       `${MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.HANDLER_ID}`;
 
-    if (isFunction(messageRouter.unregisterExact)) {
-      messageRouter.unregisterExact(handlerAddress, registration);
+    // Only an exact retirement of our own callback is a retirement. A router
+    // without the exact owner helper, or one holding a successor's callback,
+    // leaves nothing of ours registered to claim; say so instead of logging
+    // a retirement that did not happen.
+    const retired = isFunction(messageRouter.unregisterExact) &&
+      messageRouter.unregisterExact(handlerAddress, registration) === true;
+    if (!retired) {
+      this.logger.warn(
+        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.LEFT_REGISTERED,
+        {address: handlerAddress, nodeId: this.nodeId,
+          exactRetirementAvailable: isFunction(messageRouter.unregisterExact)},
+      );
+      return;
     }
 
     this.logger.info(
