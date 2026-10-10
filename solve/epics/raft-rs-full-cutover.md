@@ -49,6 +49,22 @@ PR115's `86d53bc79615a91ad70ff5b75b40ee091211519a` is an audit anchor.
 | SN1 | Current checkpoint/install owners and preserved catch-up work | Distinguish FreshMG membership image from full SQL-partition recovery; preserve application, transaction, HLC and replay state before truncation |
 | RS2 | Durable-store diagnostic lifetime | Small bounded journal correction, independent of the whole snapshot program; preferably before long soak runs |
 
+RS1 status 2026-10-10 (local owner, candidate 80632c7e4c7da43fc84139e82dc8f7f336dec720):
+the required-sync correction (9c0ccb2de, owner decision O4) is in the candidate and
+its four existing witnesses pass there with normal locked dependencies -
+`test/raft/raft-rs-backend/durable-commit-sync.test.js` (FULL sync on every
+must-sync Ready before any message leaves, measured on the real connection with the
+real core; snapshot Ready; persist failure rolls back and restores the level, nested
+refusal, no downgrade; lifecycle rows), `operation-port-ready-recovery.test.js`
+(Ready persistence failure after take_ready is a typed host failure that keeps
+identity and recovers), `durable-ready-loop.test.js` (durable commit index at or
+past every entry before apply; a record with applied past commit is refused on
+restart; configuration and applied index are one write; an apply fault leaves the
+pair agreeing) and `evidence-o1-restart-equivalence.test.js` (M4 restart points x
+restart classes converge, including applied behind the committed prefix). No second
+implementation and no blanket FULL. Process-kill coverage only: not a power-loss or
+storage-controller certification.
+
 The two transaction names added to `quests` are staged slots, not declared or
 sealed Quests. Reconcile the actual local work and
 [existing PR100 design](https://github.com/psvensson/lagrange/blob/daddead73ffeb8c348663695ac2f0eaa8873cf75/solve/changes/0-3-prepared-transactions-split-merge/design.md)
