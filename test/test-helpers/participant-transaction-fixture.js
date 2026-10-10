@@ -1,8 +1,9 @@
 /**
  * Shared fixture of the TX1 (quest replicated-transaction-decision-and-apply)
- * participant witnesses: the pinned revision-5 wire vocabulary, the canonical
- * committed commands of design-leg-a-v5-2026-10-10.md section 2, controllable
- * replicas, request builders and measurements. The literals below are the
+ * participant witnesses: the pinned revision-6 wire vocabulary, the canonical
+ * committed commands of design-leg-a-v6-2026-10-10.md section 2, the staging
+ * classifier's refusal cases (section 3.3), controllable replicas, request
+ * builders and measurements. The literals below are the
  * design's pinned values until their owners export them; the implementation
  * replaces them with owner imports without changing a value.
  */
@@ -65,7 +66,21 @@ const V3 = Object.freeze({
       'participant_transaction_session_write_nondeterministic',
     SESSION_WRITE_PARAM_UNSUPPORTED:
       'participant_transaction_session_write_param_unsupported',
+    DETERMINISM_SELF_CHECK_FAILED:
+      'participant_transaction_determinism_self_check_failed',
   }),
+  // The classifier layer that refused a statement (design v6 section 3.3).
+  CLASSIFIER_LAYER: Object.freeze({
+    STATEMENT_KIND: 'statement_kind',
+    COMPILE: 'compile',
+    OPCODE: 'opcode',
+    DATABASE: 'database',
+    ROOT_PAGE: 'root_page',
+    FUNCTION: 'function',
+    IMPLICIT_KEY: 'implicit_key',
+  }),
+  // The classifier owner to create (design v6 section 3.3).
+  DETERMINISM_MODULE: '../../src/partition/partition-transaction-determinism.js',
   PARTITION_SCOPE: 'partition',
   OPERATION_KEY_PREFIX: 'txop:',
   GENERATION_TABLE: '_partition_write_generation',
@@ -147,6 +162,38 @@ function ordinaryWriteOf(entryId, row, table = TABLE) {
     params: [row.id, row.value], timestamp: '', proposedBy: ELSEWHERE, proposedAt: 0};
 }
 
+function alterCommandOf(entryId, sql) {
+  return {type: PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE, entryId, sql, params: [],
+    timestamp: '', proposedBy: ELSEWHERE, proposedAt: 0};
+}
+const columnsOf = (partition) =>
+  partition.db.prepare(`PRAGMA table_info(${TABLE})`).all().map((column) => column.name);
+// A temporary table on the leader's own connection (a per-connection channel).
+const SCRATCH_TABLE = 'tx1_v3_scratch';
+// Session statements the staging classifier refuses, each with its params: the
+// function census (rev 4-5), and the channels of round-5 R5-1 that compile to
+// no function opcode (a table-valued pragma, dbstat, a replica-local rs-raft
+// table, a temporary table, PRAGMA statements).
+function classifierRefusalCases() {
+  const value = (expression) => `INSERT INTO ${TABLE} (id, value) VALUES (?, ${expression})`;
+  const select = (from) => `INSERT INTO ${TABLE} (id, value) SELECT ${from}`;
+  return [
+    [value('datetime(\'now\')'), ['n1']], [value('DATETIME(\'NOW\')'), ['n2']],
+    [value('datetime()'), ['n3']], [value('unixepoch()'), ['n4']],
+    [value('strftime(\'%s\')'), ['n5']], [value('datetime(?)'), ['n6', 'now']],
+    [value('datetime(?)'), ['n7', 'NOW']],
+    [value('datetime(\'2020-01-01\', ?)'), ['n8', 'localtime']],
+    [value('random()'), ['n9']], [value('hex(randomblob(4))'), ['n10']],
+    [value('sqlite_version()'), ['n11']], [`INSERT INTO ${TABLE} (value) VALUES (?)`, ['k']],
+    [select('?, page_count FROM pragma_page_count()'), ['c1']],
+    [select('?, file FROM pragma_database_list'), ['c2']],
+    [select('?, sum(pgsize) FROM dbstat'), ['c3']],
+    [select('?, \'x\' FROM _raft_rs_log LIMIT 1'), ['c4']],
+    [select(`id || ?, value FROM ${SCRATCH_TABLE}`), ['c5']],
+    ['PRAGMA page_count', []], ['PRAGMA reverse_unordered_selects = 1', []],
+  ];
+}
+
 function createReplica(replicaId, extra = {}) {
   return createControllablePartitionService({
     partitionId: PARTITION_ID,
@@ -162,6 +209,9 @@ function createReplica(replicaId, extra = {}) {
     ]},
     dbPath: extra.dbPath ?? ':memory:',
     ...(extra.timeSource ? {timeSource: extra.timeSource} : {}),
+    // The leader's determinism self-check, injectable (design v6 section 3.3).
+    ...(extra.determinismSelfCheck ?
+      {transactionDeterminismSelfCheck: extra.determinismSelfCheck} : {}),
   }, new ControllableConsensusPort());
 }
 async function startReplica(replicaId, extra) {
@@ -396,6 +446,10 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 
 export {
   COMMITTED,
+  SCRATCH_TABLE,
+  alterCommandOf,
+  classifierRefusalCases,
+  columnsOf,
   ELSEWHERE,
   GENERATION_SQL,
   PREPARED,

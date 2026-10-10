@@ -3,10 +3,10 @@
   "quest": "replicated-transaction-decision-and-apply",
   "status": "fail",
   "testFileDigests": {
-    "test/partition/partition-transaction-replicated-apply-v3.test.js": "369f5c836c82381c8aaa724b9cd6a624deff633d2ce1eb49b9880c51679499ae",
-    "test/query/partition-transaction-seam-falsifiers.test.js": "24de388315d53c39d1bbd3520457092d908525d0694687626de11c57514b4cc3"
+    "test/partition/partition-transaction-replicated-apply-v3.test.js": "7824e5af723a6d8ad14272a516b2d5bc22095f27cb21a81cadc0303e9d83e848",
+    "test/query/partition-transaction-seam-falsifiers.test.js": "e6dfd66976c1e0f213d07da753e78dba74ff88f70615be058597e4a4a6b14f29"
   },
-  "generatedAt": "2026-10-10T13:57:47.081Z",
+  "generatedAt": "2026-10-10T14:43:08.708Z",
   "receipts": [
     {
       "id": "no-speculative-visibility-before-consensus",
@@ -27,9 +27,9 @@
     {
       "id": "commit-applies-operations-outcome-and-applied-index-atomically",
       "passed": false,
-      "command": "out=$(env -u NODE_TEST_CONTEXT /home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern='^TX1 v3 (W1b|W2a|W2b|W2c|W3a|W3b|W3c|W4|W6|W6n|W13|W14|W17): .*$' test/partition/partition-transaction-replicated-apply-v3.test.js 2>&1) && printf '%s\\n' \"$out\" | grep -qx '# tests 13' && printf '%s\\n' \"$out\" | grep -qx '# fail 0' && printf '%s\\n' \"$out\" | grep -qx '# skipped 0' && printf '%s\\n' \"$out\" | grep -qx '# todo 0' && out=$(env -u NODE_TEST_CONTEXT /home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern='^TX1 (A5): .*$' test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js 2>&1) && printf '%s\\n' \"$out\" | grep -qx '# tests 1' && printf '%s\\n' \"$out\" | grep -qx '# fail 0' && printf '%s\\n' \"$out\" | grep -qx '# skipped 0' && printf '%s\\n' \"$out\" | grep -qx '# todo 0'",
-      "detail": "the decision applies operations, per-operation outcomes, the state transition, the write generation and the applied index in one application transaction; committed PREPAREs apply as carried; control rows never move the generation; plus the real A5 crash boundaries",
-      "failure": "Command failed: /bin/sh -c out=$(env -u NODE_TEST_CONTEXT /home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern='^TX1 v3 (W1b|W2a|W2b|W2c|W3a|W3b|W3c|W4|W6|W6n|W13|W14|W17): .*$' test/partition/partition-transaction-replicated-apply-v3.test.js 2>&1) && printf '%s\\n' \"$out\" | grep -qx '# tests 13' && printf '%s\\n' \"$out\" | grep -qx '# fail 0' && printf '%s\\n' \"$out\" | grep -qx '# skipped 0' && printf '%s\\n' \"$out\" | grep -qx '# todo 0' && out=$(env -u NODE_TEST_CONTEXT /home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern='^TX1 (A5): .*$' test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js 2>&1) && printf '%s\\n' \"$out\" | grep -qx '# tests 1' && printf '%s\\n' \"$out\" | grep -qx '# fail 0' && printf '%s\\n' \"$out\" | grep -qx '# skipped 0' && printf '%s\\n' \"$out\" | grep -qx '# todo 0'",
+      "command": "out=$(env -u NODE_TEST_CONTEXT /home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern='^TX1 v3 (W1b|W2a|W2b|W2c|W3a|W3b|W3c|W4|W6|W6n|W6s|W13|W14|W17|W18|W19): .*$' test/partition/partition-transaction-replicated-apply-v3.test.js 2>&1) && printf '%s\\n' \"$out\" | grep -qx '# tests 16' && printf '%s\\n' \"$out\" | grep -qx '# fail 0' && printf '%s\\n' \"$out\" | grep -qx '# skipped 0' && printf '%s\\n' \"$out\" | grep -qx '# todo 0' && out=$(env -u NODE_TEST_CONTEXT /home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern='^TX1 (A5): .*$' test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js 2>&1) && printf '%s\\n' \"$out\" | grep -qx '# tests 1' && printf '%s\\n' \"$out\" | grep -qx '# fail 0' && printf '%s\\n' \"$out\" | grep -qx '# skipped 0' && printf '%s\\n' \"$out\" | grep -qx '# todo 0'",
+      "detail": "the decision applies operations, per-operation outcomes, the state transition, the write generation and the applied index in one application transaction; committed PREPAREs apply as carried; the staging classifier admits only allow-listed programs over the partition table and proves itself at leader start; control rows, a reserved schema change and a zero-operation decision never move the generation; plus the real A5 crash boundaries",
+      "failure": "Command failed: /bin/sh -c out=$(env -u NODE_TEST_CONTEXT /home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern='^TX1 v3 (W1b|W2a|W2b|W2c|W3a|W3b|W3c|W4|W6|W6n|W6s|W13|W14|W17|W18|W19): .*$' test/partition/partition-transaction-replicated-apply-v3.test.js 2>&1) && printf '%s\\n' \"$out\" | grep -qx '# tests 16' && printf '%s\\n' \"$out\" | grep -qx '# fail 0' && printf '%s\\n' \"$out\" | grep -qx '# skipped 0' && printf '%s\\n' \"$out\" | grep -qx '# todo 0' && out=$(env -u NODE_TEST_CONTEXT /home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern='^TX1 (A5): .*$' test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js 2>&1) && printf '%s\\n' \"$out\" | grep -qx '# tests 1' && printf '%s\\n' \"$out\" | grep -qx '# fail 0' && printf '%s\\n' \"$out\" | grep -qx '# skipped 0' && printf '%s\\n' \"$out\" | grep -qx '# todo 0'",
       "testFile": "test/partition/partition-transaction-replicated-apply-v3.test.js"
     },
     {
@@ -51,9 +51,9 @@
     {
       "id": "immutable-coordinator-decision-before-fanout",
       "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 seam (S1|S4b|S6|S7|S8): .*$\" test/query/partition-transaction-seam-falsifiers.test.js",
-      "detail": "the decision is inserted once before fanout from retained PREPARE answers, transaction state is never silently unpersisted, single-participant transactions prepare first, concurrent recovery converges on one decision (query lane)",
-      "failure": "5 test(s) failed",
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 seam (S1|S4b|S4c|S6|S7|S8): .*$\" test/query/partition-transaction-seam-falsifiers.test.js",
+      "detail": "the decision is inserted once before fanout from retained PREPARE answers, transaction state is never silently unpersisted (the migration cutover included), single-participant transactions prepare first, concurrent recovery converges on one decision (query lane)",
+      "failure": "6 test(s) failed",
       "testFile": "test/query/partition-transaction-seam-falsifiers.test.js"
     },
     {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// TX1 (PR100 Leg A) receipts, design revision 5 (design-leg-a-v5-2026-10-10.md
+// TX1 (PR100 Leg A) receipts, design revision 6 (design-leg-a-v6-2026-10-10.md
 // section 10.2). The eight sealed receipt ids are unchanged; the CDC receipt
 // recovery-and-cdc-survive-deadline-and-crash stays deliberately absent (no CDC
 // cursor/retention owner exists, and a receipt bound only to the deadline and
@@ -11,7 +11,10 @@
 // - the participant witnesses (controllable port);
 // - the query-lane seam falsifiers;
 // - the real three-replica rs-raft witnesses PR100 A1-A5, named now in a file
-//   that does not exist yet, so receipts 2, 3 and 4 stay red until it does.
+//   that does not exist yet, so receipts 2, 3 and 4 stay red until it does. The
+//   names and exact counts bind which tests run; what A1-A5 actually prove rests
+//   on independent verification (a file holding the five names with trivial
+//   bodies would pass the real halves).
 // A receipt drawing on one file is a subtest receipt (the harness's exact-count
 // rule); a receipt drawing on several files is a shell receipt that applies the
 // same rule (exactly N selected, none failed, skipped or todo) to each file.
@@ -49,13 +52,15 @@ const RECEIPT = Object.freeze([
     'carries the BEGIN-time base, survives restart as a durable row, and answers UNKNOWN ' +
     'whenever it may still commit; plus the real three-replica A1-A3'],
   ['commit-applies-operations-outcome-and-applied-index-atomically', [
-    [PARTICIPANT, ['W1b', 'W2a', 'W2b', 'W2c', 'W3a', 'W3b', 'W3c', 'W4', 'W6', 'W6n', 'W13',
-      'W14', 'W17']],
+    [PARTICIPANT, ['W1b', 'W2a', 'W2b', 'W2c', 'W3a', 'W3b', 'W3c', 'W4', 'W6', 'W6n', 'W6s',
+      'W13', 'W14', 'W17', 'W18', 'W19']],
     [REAL, ['A5']]],
   'the decision applies operations, per-operation outcomes, the state transition, the write ' +
     'generation and the applied index in one application transaction; committed PREPAREs ' +
-    'apply as carried; control rows never move the generation; plus the real A5 crash ' +
-    'boundaries'],
+    'apply as carried; the staging classifier admits only allow-listed programs over the ' +
+    'partition table and proves itself at leader start; control rows, a reserved schema ' +
+    'change and a zero-operation decision never move the generation; plus the real A5 ' +
+    'crash boundaries'],
   ['duplicate-and-conflicting-decisions-idempotent-or-refused', [
     [PARTICIPANT, ['W9', 'W12a', 'W12e', 'W10b']],
     [SEAM, ['W10a', 'W10c', 'S5']],
@@ -69,9 +74,10 @@ const RECEIPT = Object.freeze([
   'an outcome read answers UNKNOWN from absence or PREPARED and a terminal state only from ' +
     'its durable row; a write that may still commit is answered UNKNOWN by the write kernel; ' +
     'a NO_TRANSACTION commit miss is resolved by an outcome read'],
-  ['immutable-coordinator-decision-before-fanout', [[SEAM, ['S1', 'S4b', 'S6', 'S7', 'S8']]],
-    'the decision is inserted once before fanout from retained PREPARE answers, transaction ' +
-    'state is never silently unpersisted, single-participant transactions prepare first, ' +
+  ['immutable-coordinator-decision-before-fanout', [[SEAM, ['S1', 'S4b', 'S4c', 'S6', 'S7',
+    'S8']]],
+  'the decision is inserted once before fanout from retained PREPARE answers, transaction ' +
+    'state is never silently unpersisted (the migration cutover included), single-participant transactions prepare first, ' +
     'concurrent recovery converges on one decision (query lane)'],
   ['no-rollback-after-commit-decision-and-no-prepared-erasure', [
     [PARTICIPANT, ['W9', 'W12d', 'W17']],

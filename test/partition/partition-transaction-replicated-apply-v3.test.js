@@ -1,14 +1,15 @@
 /**
  * TX1 (quest replicated-transaction-decision-and-apply, PR100 Leg A) participant
- * red witnesses for design revision 5 (design-leg-a-v5-2026-10-10.md, section
+ * red witnesses for design revision 6 (design-leg-a-v6-2026-10-10.md, section
  * 10). Siblings: test/query/partition-transaction-seam-falsifiers.test.js (query
- * lane) and partition-transaction-replay-cursor-v4.test.js (real rs-raft log);
- * fixture: test/test-helpers/participant-transaction-fixture.js. The revision-2
+ * lane) and partition-transaction-replay-cursor-v4.test.js (real rs-raft log and,
+ * since revision 6, the positive controls); fixture:
+ * test/test-helpers/participant-transaction-fixture.js. The revision-2
  * file partition-transaction-replicated-apply.test.js is superseded history.
  * Consensus is driven by the test while a request is pending; each witness
  * measures every fact before one deepEqual. Red on the sealed head through the
- * old participant behaviour or a new-surface UNRECOGNISED command; the controls
- * are green. The controllable port proves scheduling and the application
+ * old participant behaviour, a new-surface UNRECOGNISED command or the absent
+ * classifier owner. The controllable port proves scheduling and the application
  * transaction, not durable persistence (A1-A5 are bound by the producer).
  */
 import assert from 'node:assert/strict';
@@ -28,7 +29,8 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
 import {
-  COMMITTED, GENERATION_SQL, commitDecision, decidedOnTwoReplicas, INSERT_SQL, notCommitted,
+  COMMITTED, GENERATION_SQL, SCRATCH_TABLE, alterCommandOf, classifierRefusalCases, columnsOf,
+  commitDecision, decidedOnTwoReplicas, INSERT_SQL, notCommitted,
   OTHER_ROW, PREPARED, REPLICAS, ROW, ROW_2, TABLE, UNKNOWN_ANSWER, UNKNOWN_FIELDS, V3,
   applyCommitted, awaitProposal, beginMessage, commitMessage, commitOrdinaryWrite,
   decisionCommandOf, durableAppliedIndex, generationOf, hasEntryId, identityOf,
@@ -278,30 +280,89 @@ test('TX1 v3 W4: a committed write after the transaction\'s base refuses its PRE
     'first committer wins at PREPARE apply, and the reservation keeps COMMIT infallible');
 });
 
-test('TX1 v3 W17: a foreign TOMBSTONE and a digest_invalid PREPARE applied while T1 is PREPARED ' +
-  'move no generation, and T1\'s COMMIT then applies COMMITTED on every replica', async () => {
-  const first = identityOf('a17');
-  const tombstoned = identityOf('a17-t');
-  const forged = identityOf('a17-f');
+test('TX1 v3 W17: a foreign TOMBSTONE, a foreign COMMIT for an absent transaction and two ' +
+  'digest_invalid PREPAREs (foreign and same-identity) applied while T1 is PREPARED move no ' +
+  'generation and stall nothing; T1\'s COMMIT then applies on every replica', async () => {
+  const [first, tombstoned, forged, absent] = ['a17', 'a17-t', 'a17-f', 'a17-a'].map(
+    (id) => identityOf(id));
   const perReplica = await onTwoReplicas(async (replica) => {
     const prepareCommand = prepareCommandOf(first, [operationOf(ROW)], generationOf(replica));
     const prepareApply = applyCommitted(replica, prepareCommand);
-    const tombstone = applyCommitted(replica,
-      decisionCommandOf(tombstoned, V3.DECISION.ROLLBACK, null));
-    const invalid = applyCommitted(replica, {...prepareCommandOf(forged, [operationOf(ROW_2)],
+    const generations = [generationOf(replica)];
+    const appliedBefore = durableAppliedIndex(replica);
+    const forgedOf = (identity) => ({...prepareCommandOf(identity, [operationOf(ROW_2)],
       generationOf(replica)), preparedDigest: sha256('not the carried bytes')});
+    const controls = [applyCommitted(replica,
+      decisionCommandOf(tombstoned, V3.DECISION.ROLLBACK, null)),
+    applyCommitted(replica, decisionCommandOf(absent, V3.DECISION.COMMIT, sha256('absent'))),
+    applyCommitted(replica, forgedOf(forged)), applyCommitted(replica, forgedOf(first))];
+    generations.push(generationOf(replica));
+    const reserved = {...(await outcomeOf(replica, first)), digestKept: (await send(replica,
+      txMessage(PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME, first)))?.preparedDigest ===
+      prepareCommand.preparedDigest, appliedAdvance: durableAppliedIndex(replica) - appliedBefore};
     const decisionApply = applyCommitted(replica, commitDecision(first, prepareCommand));
-    return {prepareApply, tombstone, invalid, decisionApply,
+    generations.push(generationOf(replica));
+    return {prepareApply, controls, reserved, decisionApply, generations,
       outcomes: [await outcomeOf(replica, first), await outcomeOf(replica, tombstoned),
-        await outcomeOf(replica, forged, ['refusalCause'])],
+        await outcomeOf(replica, absent), await outcomeOf(replica, forged, ['refusalCause'])],
       rows: [rowCount(replica, ROW.id), rowCount(replica, ROW_2.id)]};
   });
-  const expected = {prepareApply: null, tombstone: null, invalid: null, decisionApply: null,
-    outcomes: [COMMITTED, notCommitted(V3.STATE.ROLLED_BACK),
+  const expected = {prepareApply: null, controls: [null, null, null, null],
+    reserved: {...PREPARED, digestKept: true, appliedAdvance: 4}, decisionApply: null,
+    generations: [0, 0, 1], outcomes: [COMMITTED, notCommitted(V3.STATE.ROLLED_BACK),
+      {outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, state: V3.STATE.ABSENT},
       {...notCommitted(V3.STATE.REFUSED), refusalCause: V3.REFUSAL_CAUSE.DIGEST_INVALID}],
     rows: [1, 0]};
   assert.deepEqual(perReplica, [expected, expected],
-    'control rows never move the generation, so a decided COMMIT is never refused');
+    'control rows never move the generation, and a same-identity forgery never collides');
+});
+
+test('TX1 v3 W18: a MIGRATION_ALTER_TABLE applied while T1 is PREPARED is reserved_refused ' +
+  '(no schema change, outcome or generation); T1\'s COMMIT applies, then the redelivered ' +
+  'ALTER applies', async () => {
+  const tx = identityOf('a18');
+  const alter = alterCommandOf('w18-alter', `ALTER TABLE ${TABLE} ADD COLUMN extra TEXT`);
+  const schemaOf = (replica) => ({columns: columnsOf(replica),
+    statement: statementState(replica, alter.entryId), generation: generationOf(replica)});
+  const perReplica = await onTwoReplicas(async (replica) => {
+    const prepareCommand = prepareCommandOf(tx, [operationOf(ROW)], generationOf(replica));
+    const facts = {prepareApply: applyCommitted(replica, prepareCommand)};
+    const appliedBefore = durableAppliedIndex(replica);
+    facts.alterApply = applyCommitted(replica, alter);
+    facts.whileReserved = {...schemaOf(replica),
+      appliedAdvance: durableAppliedIndex(replica) - appliedBefore};
+    facts.decisionApply = applyCommitted(replica, commitDecision(tx, prepareCommand));
+    facts.committed = {...(await outcomeOf(replica, tx)), rows: rowCount(replica)};
+    facts.redelivered = applyCommitted(replica, alter);
+    facts.after = schemaOf(replica);
+    return facts;
+  });
+  const expected = {prepareApply: null, alterApply: null,
+    whileReserved: {columns: ['id', 'value'], statement: 'unsettled', generation: 0,
+      appliedAdvance: 1}, decisionApply: null, committed: {...COMMITTED, rows: 1},
+    redelivered: null, after: {columns: ['id', 'value', 'extra'], statement: 'settled',
+      generation: 2}};
+  assert.deepEqual(perReplica, [expected, expected],
+    'a schema change is an application-data change: the reservation holds it like a write');
+});
+
+test('TX1 v3 W19: a zero-operation COMMIT decision changes no application data and moves no ' +
+  'generation', async () => {
+  const tx = identityOf('a19');
+  const perReplica = await onTwoReplicas(async (replica) => {
+    const warmUp = applyCommitted(replica, ordinaryWriteOf('w19-warm-up', OTHER_ROW));
+    const generations = [generationOf(replica)];
+    const prepareCommand = prepareCommandOf(tx, [], generations[0]);
+    const applies = [applyCommitted(replica, prepareCommand),
+      applyCommitted(replica, commitDecision(tx, prepareCommand))];
+    generations.push(generationOf(replica));
+    return {warmUp, applies, outcome: await outcomeOf(replica, tx), generations,
+      txop: transactionOperationOutcomes(replica)};
+  });
+  const expected = {warmUp: null, applies: [null, null], outcome: COMMITTED,
+    generations: [1, 1], txop: 0};
+  assert.deepEqual(perReplica, [expected, expected],
+    'g counts application-data changes, so a decision that applies no operation leaves it');
 });
 
 test('TX1 v3 W13: an intervening write is detected even after the statement-outcome rows are ' +
@@ -509,39 +570,64 @@ test('TX1 v3 W6: staged replies are provisional; the PREPARE carries the client\
   }
 });
 
-test('TX1 v3 W6n: the staging classifier refuses by default: every date/time function, ' +
-  'random values, unknown functions, implicit keys and non-JSON params never reach the PREPARE',
-async () => {
+test('TX1 v3 W6n: the staging classifier refuses by default: date/time, random and unknown ' +
+  'functions, implicit keys, non-JSON params, and replica-local state read through no function ' +
+  '(pragmas, dbstat, rs-raft and temporary tables, PRAGMA statements) never stage', async () => {
   const tx = identityOf('a11n');
   const {leader, proposed} = await startLeader();
   try {
+    leader.db.exec(`CREATE TEMP TABLE ${SCRATCH_TABLE} (id TEXT, value TEXT)`);
     await send(leader, beginMessage(tx));
-    const value = (expression) => `INSERT INTO test_table (id, value) VALUES (?, ${expression})`;
     const refusals = [];
-    for (const [sql, params] of [
-      [value('datetime(\'now\')'), ['n1']], [value('DATETIME(\'NOW\')'), ['n2']],
-      [value('datetime()'), ['n3']], [value('unixepoch()'), ['n4']],
-      [value('strftime(\'%s\')'), ['n5']], [value('datetime(?)'), ['n6', 'now']],
-      [value('datetime(?)'), ['n7', 'NOW']],
-      [value('datetime(\'2020-01-01\', ?)'), ['n8', 'localtime']],
-      [value('random()'), ['n9']], [value('hex(randomblob(4))'), ['n10']],
-      [value('sqlite_version()'), ['n11']], ['INSERT INTO test_table (value) VALUES (?)', ['k']],
-    ]) {
+    for (const [sql, params] of classifierRefusalCases()) {
       refusals.push(pick(await send(leader, queryMessage(tx, sql, params)), ['failureCode']));
     }
     const blob = pick(await send(leader, queryMessage(tx, INSERT_SQL, ['n12', Buffer.from('b')])),
       ['failureCode']);
-    const allowed = await send(leader, queryMessage(tx, value('upper(?)'), ['up', 'x']));
+    const allowed = await send(leader, queryMessage(tx,
+      'INSERT INTO test_table (id, value) VALUES (?, upper(?))', ['up', 'x']));
     await send(leader, queryMessage(tx, INSERT_SQL, [ROW.id, ROW.value]));
     track(send(leader, prepareMessage(tx)));
     const prepareCommand = await awaitProposal(proposed, isPrepareCommand);
     assert.deepEqual({refusals, blob, allowed: allowed?.success === true,
+      reverseUnorderedSelects: leader.db.pragma('reverse_unordered_selects', {simple: true}),
       sealedOperations: prepareCommand ? JSON.parse(prepareCommand.operationsText).length : null},
-    {refusals: refusals.map(() => ({failureCode: V3.CODE.SESSION_WRITE_NONDETERMINISTIC})),
-      blob: {failureCode: V3.CODE.SESSION_WRITE_PARAM_UNSUPPORTED}, allowed: true,
-      sealedOperations: 2}, 'only allow-listed deterministic functions with JSON scalars stage');
+    {refusals: classifierRefusalCases().map(() =>
+      ({failureCode: V3.CODE.SESSION_WRITE_NONDETERMINISTIC})),
+    blob: {failureCode: V3.CODE.SESSION_WRITE_PARAM_UNSUPPORTED}, allowed: true,
+    reverseUnorderedSelects: 0, sealedOperations: 2},
+    'only allow-listed programs over the partition\'s own table with JSON scalars stage');
   } finally {
     await shutdownAll(leader);
+  }
+});
+
+test('TX1 v3 W6s: the leader\'s self-check refuses random(), an rs-raft table read, a ' +
+  'table-valued pragma and a PRAGMA statement, each at its own layer; a failed self-check ' +
+  'refuses every transaction, typed', async () => {
+  const layer = V3.CLASSIFIER_LAYER;
+  const determinism = await import(V3.DETERMINISM_MODULE).catch(() => null);
+  const {leader} = await startLeader();
+  const failing = await startLeader({determinismSelfCheck: () => ({passed: false, cases: []})});
+  try {
+    const selfCheck = (classify) => determinism?.runDeterminismSelfCheck?.(leader.db,
+      {tableName: TABLE, ...(classify ? {classify} : {})}) ?? null;
+    const passing = selfCheck();
+    const facts = {module: determinism ? 'present' : 'absent', passed: passing?.passed ?? null,
+      cases: passing?.cases?.map((entry) => pick(entry, ['name', 'admitted', 'layer'])) ?? null,
+      admitAll: selfCheck(() => ({admitted: true, layer: null}))?.passed ?? null,
+      begin: pick(await send(failing.leader, beginMessage(identityOf('a11s'))),
+        ['success', 'failureCode'])};
+    const refused = (name, at) => ({name, admitted: false, layer: at});
+    assert.deepEqual(facts, {module: 'present', passed: true, cases: [
+      refused('random', layer.FUNCTION), refused('raft_log_read', layer.ROOT_PAGE),
+      refused('pragma_table_valued', layer.OPCODE),
+      refused('pragma_statement', layer.STATEMENT_KIND),
+      {name: 'partition_table_read', admitted: true, layer: null}], admitAll: false,
+    begin: {success: false, failureCode: V3.CODE.DETERMINISM_SELF_CHECK_FAILED}},
+    'each layer is proven live on the running binary before the leader stages anything');
+  } finally {
+    await shutdownAll(leader, failing.leader);
   }
 });
 
@@ -909,83 +995,5 @@ test('TX1 v3 W12e: a transaction operation\'s outcome never occupies an ordinary
       'per-operation outcomes are keyed by (participant, ordinal), not by entryId');
   } finally {
     await shutdownAll(follower);
-  }
-});
-
-// --- positive controls (green on the sealed head) ---
-test('control: an ordinary committed write applies exactly once and advances the applied index',
-  async () => {
-    const {leader, proposed} = await startLeader();
-    try {
-      const appliedBefore = durableAppliedIndex(leader);
-      const pending = leader.insertData(TABLE, {...ROW});
-      const entry = await awaitProposal(proposed, isOrdinaryWrite);
-      assert.ok(entry, 'the write is proposed while its request is pending');
-      assert.equal(rowCount(leader), 0, 'an ordinary write is not visible before its commit');
-      leader.controllablePort.commit(entry);
-      assert.equal((await pending).success, true, 'the proposer is answered after application');
-      assert.equal(rowCount(leader), 1, 'the committed write applies once');
-      assert.equal(durableAppliedIndex(leader), appliedBefore + 1, 'the applied index advances');
-    } finally {
-      await shutdownAll(leader);
-    }
-  });
-
-test('control: a planted applied-state failure leaves an ordinary write unapplied, unrecorded ' +
-  'and the applied index unchanged', async () => {
-  const replica = await startReplica(REPLICAS[1]);
-  try {
-    const appliedBefore = durableAppliedIndex(replica);
-    plantAppliedStateFailure(replica.db);
-    const failed = applyCommitted(replica, ordinaryWriteOf('control-planted', ROW));
-    removeAppliedStateFailure(replica.db);
-    assert.deepEqual({failed, rows: rowCount(replica),
-      statement: statementState(replica, 'control-planted'),
-      appliedAdvance: durableAppliedIndex(replica) - appliedBefore},
-    {failed: 'SQLITE_CONSTRAINT_TRIGGER', rows: 0, statement: 'unsettled', appliedAdvance: 0},
-    'the statement and its outcome row roll back with the applied state');
-  } finally {
-    await shutdownAll(replica);
-  }
-});
-
-test('control: a single-replica storage failure on an ordinary write is the host failure: ' +
-  'nothing recorded, applied index unchanged', async () => {
-  const replica = await startReplica(REPLICAS[1]);
-  try {
-    const appliedBefore = durableAppliedIndex(replica);
-    plantStorageFault(replica.db);
-    const failed = applyCommitted(replica, ordinaryWriteOf('control-storage', ROW));
-    removeStorageFault(replica.db);
-    const facts = {failed, statement: statementState(replica, 'control-storage'),
-      appliedAdvance: durableAppliedIndex(replica) - appliedBefore};
-    facts.redelivered = applyCommitted(replica, ordinaryWriteOf('control-storage', ROW));
-    facts.rows = rowCount(replica);
-    assert.deepEqual(facts, {failed: 'partition_committed_statement_environment_failed',
-      statement: 'unsettled', appliedAdvance: 0, redelivered: null, rows: 1},
-    'an environmental failure fails the application closed and re-applies once');
-  } finally {
-    await shutdownAll(replica);
-  }
-});
-
-test('control: an ordinary write carries its SQL verbatim and answers the lastInsertRowid of ' +
-  'its own committed apply (the class transaction operations inherit)', async () => {
-  const {leader, proposed} = await startLeader();
-  try {
-    const pending = leader.executeQuery(INSERT_SQL, [ROW.id, ROW.value],
-      {entryId: 'control-parity'});
-    const entry = await awaitProposal(proposed, hasEntryId('control-parity'));
-    assert.deepEqual({sql: entry?.sql, params: entry?.params},
-      {sql: INSERT_SQL, params: [ROW.id, ROW.value]}, 'the entry carries the statement verbatim');
-    leader.controllablePort.commit(entry);
-    const answer = await pending;
-    const appliedRowid = leader.db.prepare('SELECT rowid AS rowid FROM test_table WHERE id = ?')
-      .get(ROW.id).rowid;
-    assert.deepEqual({rowid: answer.lastInsertRowid === appliedRowid,
-      statement: statementState(leader, 'control-parity')}, {rowid: true, statement: 'settled'},
-    'the answer is the apply\'s own result and its outcome row is settled for a replay');
-  } finally {
-    await shutdownAll(leader);
   }
 });

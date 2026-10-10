@@ -1,7 +1,7 @@
 /**
  * TX1 (quest replicated-transaction-decision-and-apply) seam falsifiers for the
  * query lane: the coordinator and engine obligations of seam-2026-10-10.md
- * (revision-4 and revision-5 sections) and design-leg-a-v5-2026-10-10.md section
+ * (revision-4, -5 and -6 sections) and design-leg-a-v6-2026-10-10.md section
  * 11. They are recorded here, not repaired: the query owner owns the change, and
  * every falsifier is red on the sealed head. Moved out of the participant witness
  * file partition-transaction-replicated-apply-v3.test.js in revision 5.
@@ -22,8 +22,11 @@ import {
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {resolveParticipantCommitMiss} from
   '../../src/query/distributed/distributed-transaction-protocol.js';
+import {createMigrationWorkflowOwners} from '../../src/migration/migration-composition.js';
 import {EPOCH, identityOf, pick} from '../test-helpers/participant-transaction-fixture.js';
 
+const NO_PERSISTENCE = 'TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE';
+const QUIET = Object.freeze({info() {}, warn() {}, error() {}, debug() {}});
 const PRIMARY_KEY_COLLISION = Object.freeze({code: 'SQLITE_CONSTRAINT_PRIMARYKEY',
   message: 'UNIQUE constraint failed: sql_transactions.transaction_id'});
 
@@ -99,12 +102,25 @@ test('TX1 seam W10c: BEGIN persists the identity insert-once before any fanout, 
       insertOnce: calls.map((call) => call.insertOnce),
       remintedDistinct: calls.length === 2 && calls[0].id !== calls[1].id};
   };
+  // The engine's own persistence of the row, through a gateway that records it.
+  const submitted = [];
+  const engine = new SQLQueryEngine({autoStartDistributedTransactionRecovery: false,
+    controlPlaneSystemTableGateway: {supportsMutationSubmission: () => true,
+      submitMutation: async (mutation, options) => {
+        submitted.push({tableName: mutation.tableName, operation: mutation.operation,
+          coalescingKey: options?.coalescingKey ?? null});
+        return {success: true};
+      }}});
+  await engine.transactionCoordinator.begin('w10c-key');
   const facts = {collision: await beginWith(PRIMARY_KEY_COLLISION),
-    otherError: await beginWith({code: 'GATEWAY_UNAVAILABLE', message: 'gateway down'})};
+    otherError: await beginWith({code: 'GATEWAY_UNAVAILABLE', message: 'gateway down'}),
+    engineRow: submitted.find((entry) => entry.tableName === 'sql_transactions') ?? null};
   assert.deepEqual(facts, {
     collision: {success: true, attempts: 2, insertOnce: [true, true], remintedDistinct: true},
-    otherError: {success: false, attempts: 1, insertOnce: [true], remintedDistinct: false}},
-  'only the sql_transactions primary-key collision class re-mints');
+    otherError: {success: false, attempts: 1, insertOnce: [true], remintedDistinct: false},
+    engineRow: {tableName: 'sql_transactions', operation: 'insert', coalescingKey: null}},
+  'only the sql_transactions primary-key collision class re-mints, and the insert-once row ' +
+  'carries no coalescing key a pending UPSERT could replace (sql-query-engine.js:142-144)');
 });
 
 // --- the decision (seams C, C', U, G) ---
@@ -214,14 +230,59 @@ test('TX1 seam S2: a two-phase NO_TRANSACTION commit miss is resolved by an outc
     'protocol.js resolveParticipantCommitMiss must read the participant outcome');
 });
 
-test('TX1 seam S4b: an engine that cannot persist transaction state refuses an explicit BEGIN, ' +
-  'typed, before any fanout', async () => {
+test('TX1 seam S4b: an engine that cannot persist transaction state refuses an explicit BEGIN ' +
+  'and a multi-partition statement, typed, before any fanout, and still runs a single-partition ' +
+  'DIRECT_AUTOCOMMIT write', async () => {
   const engine = new SQLQueryEngine({autoStartDistributedTransactionRecovery: false});
-  const begun = await engine.transactionCoordinator.begin('s4b')
-    .catch((error) => ({success: false, errorCode: error?.code ?? error?.message}));
-  assert.deepEqual(pick(begun, ['success', 'errorCode']), {success: false,
-    errorCode: 'TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE'},
+  const openFor = async (sessionId, partitions) => {
+    const transaction = await engine.openWriteTransaction(sessionId, {operationId: sessionId,
+      partitionStatements: new Map(partitions.map((partition) => [partition, {}]))});
+    const result = await engine.executeWriteTransaction(transaction, () => ({}),
+      async () => ({success: true}));
+    return {ownership: transaction.ownership, success: result?.success === true,
+      errorCode: transaction.failure?.errorCode ?? transaction.failure?.code ?? null};
+  };
+  const facts = {direct: await openFor('s4b-direct', ['p1']),
+    begin: pick(await engine.transactionCoordinator.begin('s4b')
+      .catch((error) => ({success: false, errorCode: error?.code ?? error?.message})),
+    ['success', 'errorCode']),
+    multiPartition: await openFor('s4b-multi', ['p1', 'p2'])};
+  assert.deepEqual(facts, {direct: {ownership: 'DIRECT_AUTOCOMMIT', success: true,
+    errorCode: null}, begin: {success: false, errorCode: NO_PERSISTENCE},
+  multiPartition: {ownership: 'STATEMENT_AUTOCOMMIT', success: false,
+    errorCode: NO_PERSISTENCE}},
   'sql-query-engine.js:115-117 skips persistence silently; DIRECT_AUTOCOMMIT stays unaffected');
+});
+
+test('TX1 seam S4c: the schema-migration cutover BEGIN on an engine built like the ' +
+  'seed-hydration engine is refused typed or persisted, never run with its row unpersisted',
+async () => {
+  // seed-cache-hydration-phase.js:220-234: no gateway, no CDC service.
+  const engine = new SQLQueryEngine({migrationAutoWire: false,
+    autoStartDistributedTransactionRecovery: false, unrefRetryDelayTimers: true});
+  const control = [];
+  // The cutover's own statements reach the engine; its two row UPDATEs (tables-p1 and
+  // schema_migration_partitions-p1) are answered without routing.
+  const sqlCore = {executeQuery: async (sql, params, options) => {
+    if (!/^(BEGIN|COMMIT|ROLLBACK)$/u.test(sql)) {
+      return {success: true, rows: []};
+    }
+    const answer = await engine.executeQuery(sql, params, options);
+    control.push({sql, success: answer?.success === true,
+      errorCode: answer?.errorCode ?? answer?.code ?? null});
+    return answer;
+  }};
+  const {migrationCoordinator} = createMigrationWorkflowOwners({sqlCore, systemTableCache: {},
+    transactionCoordinator: engine.transactionCoordinator, logger: QUIET, now: () => 1});
+  await migrationCoordinator.executeCutoverTransaction({migration_id: 'm-s4c', table_id: 't-s4c',
+    target_schema: '{"schema":{}}'}, [{partition_id: 'p-s4c'}]).catch(() => null);
+  const begin = control.find((entry) => entry.sql === 'BEGIN') ?? null;
+  const persists = engine.canPersistDistributedTransactionState();
+  assert.deepEqual({refusedTyped: begin?.success === false && begin.errorCode === NO_PERSISTENCE,
+    silentlyUnpersisted: begin?.success === true && !persists},
+  {refusedTyped: !persists, silentlyUnpersisted: false},
+  'migration-coordinator-stage-methods.js:507/542 runs BEGIN..COMMIT through executeQuery; ' +
+  'the seed engine has no persistence (sql-query-engine-transaction-recovery-methods.js:168-174)');
 });
 
 test('TX1 seam S5: every participant request carries the transaction identity (seam A)',
