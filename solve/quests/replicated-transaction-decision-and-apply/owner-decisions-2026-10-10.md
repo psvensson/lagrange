@@ -5,6 +5,10 @@ documentClass: planning
 
 # TX1 owner decisions and bounded continuation
 
+Current continuation: see [Implementation follow-up after design acceptance](#implementation-follow-up-after-design-acceptance).
+The earlier checkpoint and review instructions below remain the historical
+basis; they do not require repeating the now-accepted design review.
+
 Decision date: 2026-10-10. Reviewed published head
 `6d24e3b4f0b64212e05ce0b66668d67dc82ba812`. The operator asked the cloud lead
 to resolve the local client's blockers. **The cloud/query lane agrees the seam
@@ -215,3 +219,123 @@ comparison. Final-candidate canonical/changed-discovery proof remains required.
    Continue CREATE, ordered successor, transfer/promotion/cleanup, then TX2,
    RS2/SN1 and physical acceptance in the existing dependency order. This record
    does not turn design review or preservation into completion of those units.
+
+## Implementation follow-up after design acceptance
+
+Reviewed published TX1 head `ae708f353d3f16494a8eb80c23c4e14a60cea87a` and
+FreshMG head `be466cdc3d10b5f5abf2883e2990d232036434dd` against the operator's
+latest report. Revision 10's bounded ACCEPT is recorded at `31a08a7ba`;
+AD is committed at `f5d538139`, S4c merged at `ba5417535`, and FreshMG B1
+committed at `6046cdf81`. Those approvals retain their recorded limits. The
+reported admission increment 2 and CREATE B2 are not published at these heads;
+this follow-up is not their verification. Continue those two active units.
+
+### F-DET/L11: close the state-divergence dependency
+
+**Do not accept ordinary-write nondeterminism as an exposure for a completed
+TX1 claim.** Revision 10's L11 explicitly admits that it invalidates the
+equal-state premise of PREPARE/COMMIT. An inherited origin explains why AD did
+not repair it; it does not discharge the transaction dependency.
+
+The query lane owns evaluating supported generated values once into the exact
+logical operation carried to replicas and retained across retries. Preserve
+their specified SQL semantics: replacing an arbitrary per-row random expression
+with one scalar is not a valid general remedy. The local statement-admission
+owner refuses unsupported stateful, replica-local or otherwise unrepresentable
+raw forms before proposal. Do not introduce a replica-local semantic refusal
+after a valid PREPARE/global COMMIT. No second SQL compiler, state mirror or
+coordinator is authorized by this ruling.
+
+Keep the existing FDET witness and prove the composed path: an ordinary write
+cannot seed different replica rows followed by a transaction that reads or
+constrains those rows and splits its participant disposition. Prospective guards
+also do not repair already-divergent data. Use a demonstrably coherent initial
+or restored state for the proof; retain any existing-state repair obligation.
+
+### Execution envelope: diagnostics and the supported release boundary
+
+Accept diagnostic handling of a classifier-list difference only insofar as
+committed apply does not reclassify and execution semantics are unchanged.
+**A diagnostic plus an unimplemented release obligation is not proof of
+cross-build compatibility.** Do not restore the permanent apply stall to
+paper over this gap.
+
+For this implementation, prove the supported behavior on the same approved
+SQLite build, compile options and apply semantics on every replica. Do not
+claim an execution-changing rolling upgrade is supported until its release
+owner has measured the necessary boundary or proved semantic compatibility.
+The release sequence is pause admission first, drain accepted work and replay,
+switch, verify the eligible replica population, then resume. For incompatible
+SQLite/compile-option/apply-rule changes, the pause covers all application
+mutation ingress, not only BEGIN: ordinary writes in a mixed-build window can
+leave divergent rows for later transactions. Include retained logs, snapshots
+and offline/rejoining replicas in the compatibility disposition. If the
+existing deployment machinery cannot establish this, keep that rolling-upgrade
+mode unsupported; do not build a new upgrade orchestrator inside TX1.
+
+### Two retained obligations from AD need their existing owners
+
+The source verification measured a host-failure UNKNOWN being re-driven under
+two participant entryIds through the real engine/coordinator/CDC path on both
+baseline and candidate (revision 10 section 0.0.11). Preserve AD's bounded
+approval and route the repair through query, identity and CDC consumers now.
+Retain typed outcome and logical identity end to end; uncertainty must not
+silently become a fresh logical mutation. A discriminating witness should
+exercise the full caller chain, a committed write with a lost answer and a
+non-idempotent effect, then assert one effect across retry/restart. The existing
+two-ID measurement alone does not prove that a duplicate data effect occurred.
+
+Returning COMMITTED after a post-commit side-effect failure is the truthful
+write answer. Logging a failed split/merge mirror enqueue does not complete
+that remaining obligation. The existing mirror/replay/retention owner must
+retain a replayable source and prevent cutover/source retirement from outrunning
+it; recover under backpressure without re-executing the original SQL. Treat
+this as a required topology-safety dependency before claiming that path, not as
+a reason to reclassify an already-applied write as uncommitted. Receipt 8's CDC
+obligation remains separately required under its existing owners.
+
+### Finish admission increment 2, then exercise the participant lifecycle
+
+Let the current independent review finish. Its committed-state precheck must
+not bypass the durable store's USER_TRANSACTION_OPEN protection, commit or
+rollback another session, or become a second authoritative state model. Early
+observations remain hints where the authoritative committed-apply check decides.
+Retire temporary staging accommodations as the accepted isolation owner lands.
+
+The last_insert_rowid rollback discovery concerns durable results as well as
+rows: SQLite [retains that connection value after rollback](https://www.sqlite.org/c3ref/last_insert_rowid.html),
+and the current committed outcome owner records and replays it. Require the
+intended stable result contract after both ceiling rollback and speculative
+replay rollback, including subsequent UPDATE/DELETE, ignored/no-op INSERT and
+successful INSERT. Do not green the witness by discarding every insert result.
+
+After this bounded admission unit, advance the accepted ACTIVE isolation,
+durable generation/reservation, replicated PREPARE, and atomic decision/apply
+path toward a real three-replica transaction. The query lane should implement
+the already-agreed identity, initial persistence, immutable decision, wire and
+forward recovery half concurrently if it is not already active. S4c's query
+half remains outstanding. Do not let local admission hardening substitute for
+the missing coordinator implementation or receipt 8.
+
+### FreshMG B2 and proof scheduling
+
+The [published B1 design](https://github.com/psvensson/lagrange/blob/be466cdc3d10b5f5abf2883e2990d232036434dd/solve/quests/message-group-fresh-identity-membership/design-create-b1-2026-10-10.md)
+deliberately stops before production learner install/open. B2 must install
+validated existing-group learner state through the current snapshot/consensus
+owners, never wrap the lone-founder/genesis/campaign path. Order removal and
+ordinary terminal settlement against install/open after MATERIALIZED; an
+earlier re-read alone cannot close that race. A positive production-composition
+witness ends with the exact non-voting learner applying a subsequent committed
+group entry. Preserve entity-scoped recovery, exact generation and one worker
+under retry/restart. ACTIVE publication, promotion, source retirement and full
+replacement keep their existing later proofs.
+
+Keep concurrent dependency installations isolated. Use existing focused and
+impact-selected proof for bounded attempts; run broad required proof at a
+coherent integration boundary or when the changed owner requires it, without
+weakening the landing/publisher gate. Regenerate shared metadata from the
+combined source. Log-only commits do not require repeating unchanged-input
+component proof; the canonical pass at `6bceca1a2` predates B1/B2 source and
+cannot certify them. Attribute each red to its particular branch, selection
+and measured parent; serial success alone leaves causality unresolved. There
+is no branch-independent count of twelve remaining failures.
