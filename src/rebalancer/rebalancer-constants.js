@@ -292,6 +292,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
     'Message-group membership debt retained; recovery waits for its named prerequisite',
   MEMBERSHIP_DEBT_REFUSED:
     'Message-group membership debt recovery refused; owned repair required',
+  MEMBERSHIP_WRITE_UNCERTAIN:
+    'Message-group membership write answered with an error; its outcome is resolved by exact readback, not assumed',
   RECOVERY_FAILED: 'Recovery process failed',
   RECONCILE_SYNCING: 'Reconciling SYNCING operation',
   RECONCILE_ACTIVE: 'Reconciled SYNCING operation to ACTIVE',

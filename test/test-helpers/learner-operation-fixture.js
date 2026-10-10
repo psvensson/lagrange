@@ -84,8 +84,12 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
   // The service census the discovery owner reads for a hosted witness. Rows are
   // route hints the test places explicitly; nothing here is committed evidence.
   const serviceRows = [];
+  // Replicated operation rows the periodic sweep may read as its hint; the
+  // test lists a row explicitly (a copy of the durable row at that moment).
+  const operationRows = [];
+  const cacheTables = {services: serviceRows, replica_operations: operationRows};
   const systemTableCache = {get: () => null, getAll: () => [],
-    filter: (table, predicate) => table === 'services' ? serviceRows.filter(predicate) : []};
+    filter: (table, predicate) => (cacheTables[table] || []).filter(predicate)};
   const hostWitness = (nodeId, replicaId, status = 'active') => {
     serviceRows.push({service_id: replicaId, service_type: SERVICE_TYPE.MESSAGE_GROUP,
       group_id: GROUP, node_id: nodeId, replica_id: replicaId, status});
@@ -142,6 +146,11 @@ async function fixture(t, {issue = true, permitChanges = {}, nativeTimeSource = 
   let delivery = await transport.local();
   return {cluster, port, leader, repository, repositoryFor, clock, execute, reads,
     request, receiver, observe, gateway, transport, serviceRows, hostWitness,
+    operationRows,
+    cacheOperationRow: () => {
+      operationRows.length = 0;
+      operationRows.push(db.prepare('SELECT * FROM replica_operations WHERE operation_id = ?').get(O));
+    },
     get db() {
       return db;
     },

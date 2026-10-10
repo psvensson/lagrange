@@ -23,6 +23,8 @@ import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_OBLIGATION, MEMBERSHIP_PERMIT_STAT
   messageGroupMembershipLaneKey} from './replica-operation-message-group-membership-permit.js';
 import {observeMembershipOperation} from
   './replica-operation-message-group-membership-owner-claim.js';
+import {recordedLearnerIsCoherent} from
+  './replica-operation-message-group-membership-authorization.js';
 import {operationCarriesMessageGroupMembership} from
   './replica-operation-message-group-membership-fields.js';
 import {REBALANCE_COORDINATOR_LOG_MSG as LOG} from './rebalancer-constants.js';
@@ -48,6 +50,7 @@ const DEBT_ROW_FIELD = Object.freeze({
   DEBT: 'messageGroupMembershipObligationState',
   IDENTITY: 'messageGroupMembershipIdentity',
   CLAIM: 'messageGroupMembershipOwnerClaim',
+  STAMP: 'messageGroupLearnerStamp',
 });
 /** The census a trigger starts from: the authoritative read (restart scan) or
  * the replicated cache as a hint (periodic sweep). Every candidate is re-read
@@ -98,12 +101,18 @@ function initialLearnerPermit(operation) {
     permit.permitSequence === 1 &&
     INITIAL_LEARNER_PHASES.has(operation.messageGroupMembershipPhase) ? permit : null;
 }
-// An initial action whose exact outcome is already durable owes this owner
-// nothing more: no claim is touched and no witness is asked.
-function learnerOutcomeSettled(operation, permit) {
+// An initial action whose outcome is already recorded owes this owner nothing
+// more once the record is coherent: no claim is touched and no witness asked.
+// A committed phase whose record is not coherent is surfaced, never settled.
+function learnerOutcomeRecorded(operation, permit) {
   return operation.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
-    permit.permitState === MEMBERSHIP_PERMIT_STATE.COMMITTED &&
-    operation.messageGroupLearnerStamp !== null;
+    permit.permitState === MEMBERSHIP_PERMIT_STATE.COMMITTED;
+}
+// What the hint stage can tell from a cached row without any round trip: an
+// initial learner action still unrecorded owes this owner a turn.
+function owesInitialLearnerTurn(operation) {
+  const permit = initialLearnerPermit(operation);
+  return permit !== null && !learnerOutcomeRecorded(operation, permit);
 }
 function claimIsLive(repository, claim) {
   return claim.expiresAt > repository.timeSource.now();
@@ -139,7 +148,9 @@ function classifyRecorderAnswer(owner, operationId, recovered, witness) {
     return answer(DEBT.INVALID_INPUT, {witness, recorder: recovered.outcome});
   }
   if (RETAINED_RECORDER_OUTCOMES.has(recovered.outcome)) {
-    if (recovered.outcome === RECORDER.UNAVAILABLE) {
+    // A witness that did not answer, or has not applied the action yet, is
+    // rotated out for the next turn; another hosted replica may have.
+    if (recovered.outcome !== RECORDER.STALE_OWNER) {
       rotation.set(operationId, (rotation.get(operationId) || 0) + 1);
     }
     return answer(DEBT.RETAINED, {witness, recorder: recovered.outcome, wake: WAKE.NEXT_TRIGGER});
@@ -159,7 +170,11 @@ async function recoverMessageGroupMembershipDebtInline(owner, operation, laneTur
   }
   const permit = initialLearnerPermit(operation);
   if (!permit) return answer(DEBT.PHASE_NOT_OWNED, {phase: operation.messageGroupMembershipPhase});
-  if (learnerOutcomeSettled(operation, permit)) return answer(DEBT.RECORDED, {settled: true});
+  if (learnerOutcomeRecorded(operation, permit)) {
+    return recordedLearnerIsCoherent(operation, identity) ?
+      answer(DEBT.RECORDED, {settled: true}) :
+      answer(DEBT.INVALID_ROW, {field: DEBT_ROW_FIELD.STAMP});
+  }
   if (owner.isShuttingDown) return answer(DEBT.NOT_CURRENT);
   const held = await holdMembershipClaim(repository, operation, identity);
   if (held.outcome !== CLAIM_HELD) return held;
@@ -196,14 +211,19 @@ async function recoverAndLog(owner, operation) {
   logDebtOutcome(owner, operation, result);
   return result;
 }
-// The replicated cache as a hint of which operations may owe debt: no round
-// trip, and the turn re-reads every candidate's row authoritatively.
+// The replicated cache as a hint of which operations may owe this owner a turn:
+// no round trip, and the turn re-reads every candidate's row authoritatively.
+// Rows whose initial action is already recorded, or whose debt belongs to a
+// later owner, are not candidates, so a settled row costs nothing per sweep.
 function cacheHintCandidateIds(repository) {
   const rows = repository.filterReplicaOperationRowsFromCache((row) =>
     row?.entity_type === SERVICE_TYPE.MESSAGE_GROUP &&
     row.message_group_membership_obligation_state === MEMBERSHIP_OBLIGATION.UNKNOWN) || [];
-  return {available: true, ids: rows.map((row) => row.operation_id)
-    .filter((id) => typeof id === OPERATION_WORKFLOW_OWNER_LITERAL.STRING)};
+  const ids = rows.map((row) => repository.rowToOperation(row))
+    .filter((operation) => operation && owesInitialLearnerTurn(operation))
+    .map((operation) => operation.operationId)
+    .filter((id) => typeof id === OPERATION_WORKFLOW_OWNER_LITERAL.STRING);
+  return {available: true, ids};
 }
 // The authoritative census; an unreadable census is reported, never guessed.
 async function authoritativeCandidateIds(repository) {
