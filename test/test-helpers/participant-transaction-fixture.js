@@ -1,7 +1,7 @@
 /**
  * Shared fixture of the TX1 (quest replicated-transaction-decision-and-apply)
- * participant witnesses: the pinned revision-4 wire vocabulary, the canonical
- * committed commands of design-leg-a-v4-2026-10-10.md section 2, controllable
+ * participant witnesses: the pinned revision-5 wire vocabulary, the canonical
+ * committed commands of design-leg-a-v5-2026-10-10.md section 2, controllable
  * replicas, request builders and measurements. The literals below are the
  * design's pinned values until their owners export them; the implementation
  * replaces them with owner imports without changing a value.
@@ -19,7 +19,9 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
-import {COMMIT_MODE} from '../../src/constants/transactions.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
+import {COMMIT_MODE, PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
 import {
   ControllableConsensusPort,
   createControllablePartitionService,
@@ -51,7 +53,7 @@ const V3 = Object.freeze({
   REFUSAL_CAUSE: Object.freeze({
     CONFLICT: 'conflict',
     STATEMENT_FAILED: 'statement_failed',
-    NONDETERMINISTIC: 'nondeterministic',
+    DIGEST_INVALID: 'digest_invalid',
   }),
   CODE: Object.freeze({
     DECISION_BINDING_REQUIRED: 'participant_transaction_decision_binding_required',
@@ -318,8 +320,87 @@ async function stagedLeaderTransaction(identity, rows, extra) {
   return {leader, proposed, begun, staged};
 }
 
+
+const UNKNOWN_ANSWER = Object.freeze({success: false,
+  outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
+  failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN});
+const UNKNOWN_FIELDS = Object.freeze(['success', 'outcome', 'failureCode']);
+const COMMITTED = Object.freeze({outcome: PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
+  state: V3.STATE.COMMITTED});
+const PREPARED = Object.freeze({outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
+  state: V3.STATE.PREPARED});
+const notCommitted = (state) => ({outcome: PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED, state});
+
+// Run `measure(replica)` on two fresh follower replicas and return both facts.
+async function onTwoReplicas(measure) {
+  const replicas = [await startReplica(REPLICAS[1]), await startReplica(REPLICAS[2])];
+  try {
+    const perReplica = [];
+    for (const replica of replicas) {
+      perReplica.push(await measure(replica));
+    }
+    return perReplica;
+  } finally {
+    await shutdownAll(...replicas);
+  }
+}
+// Record `selectSql` (one row) inside every rs-raft applied-state write of the
+// same application transaction, into tx1_v3_probe.
+function probeAppliedStateWrite(db, columns, selectSql) {
+  db.exec(`CREATE TABLE tx1_v3_probe (${columns.join(', ')})`);
+  for (const event of ['INSERT', 'UPDATE']) {
+    db.exec(`CREATE TRIGGER tx1_v3_probe_${event.toLowerCase()} AFTER ${event} ON ` +
+      `_raft_rs_applied_state BEGIN INSERT INTO tx1_v3_probe (${columns.join(', ')}) ` +
+      `${selectSql}; END`);
+  }
+  return () => db.prepare('SELECT * FROM tx1_v3_probe').all();
+}
+const GENERATION_SQL =
+  `(SELECT generation FROM ${V3.GENERATION_TABLE} WHERE singleton = 1)`;
+// A PREPARE request left pending on a staged leader; `interrupt(leader,
+// command)` runs once the PREPARE is proposed; the answer is then observed.
+async function pendingPrepareAnswer(extra, interrupt) {
+  const tx = identityOf(`a11-${extra?.label ?? 'x'}`);
+  const {leader, proposed} = await stagedLeaderTransaction(tx, [ROW], extra);
+  try {
+    const prepare = track(send(leader, prepareMessage(tx)));
+    const prepareCommand = await awaitProposal(proposed, isPrepareCommand);
+    const settledBefore = prepare.settled;
+    const interruption = prepareCommand ? interrupt(leader, prepareCommand) : null;
+    await settleTicks();
+    return {prepareProposed: prepareCommand !== null, settledBefore, interruption,
+      answer: prepare.settled ? pick(prepare.value, UNKNOWN_FIELDS) : null};
+  } finally {
+    await shutdownAll(leader);
+  }
+}
+
+const commitDecision = (tx, prepareCommand) =>
+  decisionCommandOf(tx, V3.DECISION.COMMIT, prepareCommand.preparedDigest);
+// Apply a hand-built PREPARE and its COMMIT decision on two replicas.
+async function decidedOnTwoReplicas(tx, operations, setup) {
+  return onTwoReplicas(async (replica) => {
+    const setupApply = setup ? applyCommitted(replica, setup) : null;
+    const prepareCommand = prepareCommandOf(tx, operations, generationOf(replica));
+    const appliedBefore = durableAppliedIndex(replica);
+    const prepareApply = applyCommitted(replica, prepareCommand);
+    const afterPrepare = await outcomeOf(replica, tx, ['refusalCause']);
+    const decisionApply = applyCommitted(replica, commitDecision(tx, prepareCommand));
+    return {setupApply, prepareApply, afterPrepare, decisionApply,
+      afterDecision: await outcomeOf(replica, tx), rows: rowCount(replica),
+      values: replica.db.prepare('SELECT value FROM test_table WHERE id = ?').all(ROW.id)
+        .map((row) => row.value),
+      appliedAdvance: durableAppliedIndex(replica) - appliedBefore};
+  });
+}
+
 export {
+  COMMITTED,
   ELSEWHERE,
+  GENERATION_SQL,
+  PREPARED,
+  UNKNOWN_ANSWER,
+  UNKNOWN_FIELDS,
   EPOCH,
   INSERT_SQL,
   OTHER_ROW,
@@ -341,6 +422,12 @@ export {
   generationOf,
   hasEntryId,
   identityOf,
+  notCommitted,
+  commitDecision,
+  decidedOnTwoReplicas,
+  onTwoReplicas,
+  pendingPrepareAnswer,
+  probeAppliedStateWrite,
   isDecisionCommand,
   isOrdinaryWrite,
   isPrepareCommand,

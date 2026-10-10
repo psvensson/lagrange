@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2036,
+    "unit": 2037,
     "integration": 86,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2331,
-  "digest": "fnv1a32-1ad36386",
+  "censusSize": 2332,
+  "digest": "fnv1a32-686982aa",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1403,6 +1403,7 @@
     "test/query/partition-callback-dispatcher.test.js": "unit",
     "test/query/partition-callback-integration.test.js": "unit",
     "test/query/partition-resolver.test.js": "unit",
+    "test/query/partition-transaction-seam-falsifiers.test.js": "unit",
     "test/query/partition-transparency.property.test.js": "unit",
     "test/query/partition-write-answer-consumers.test.js": "unit",
     "test/query/payload-hash-determinism.property.test.js": "unit",

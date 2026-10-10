@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 268,
-    "query-sql": 172,
+    "query-sql": 173,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 146,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2331,
-  "digest": "fnv1a32-e1917b07",
+  "censusSize": 2332,
+  "digest": "fnv1a32-04acb224",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-854a3af6",
+  "observationDigest": "fnv1a32-ec083ef4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1422,6 +1422,7 @@
     "test/query/partition-callback-dispatcher.test.js": "query-sql",
     "test/query/partition-callback-integration.test.js": "query-sql",
     "test/query/partition-resolver.test.js": "query-sql",
+    "test/query/partition-transaction-seam-falsifiers.test.js": "query-sql",
     "test/query/partition-transparency.property.test.js": "query-sql",
     "test/query/partition-write-answer-consumers.test.js": "query-sql",
     "test/query/payload-hash-determinism.property.test.js": "query-sql",
@@ -8752,6 +8753,7 @@
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-mirror-replay-cursor.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-operation-port.js",
@@ -8766,7 +8768,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-write-kernel.js",
-        "src/query/distributed/distributed-transaction-protocol.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -9156,6 +9157,21 @@
         "src/query/sql-request.js",
         "src/runtime/runtime-startup-wiring.js",
         "src/wasm-service/query-budget-constants.js"
+      ]
+    },
+    "test/query/partition-transaction-seam-falsifiers.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-transaction-protocol.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/query/partition-write-answer-consumers.test.js": {
