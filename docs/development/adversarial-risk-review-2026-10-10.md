@@ -11,6 +11,43 @@ local agent. This record does not certify an implementation. The linked epics
 and Quest logs own execution state; this page owns the dated recommendation
 inventory and its reasoning.
 
+## Checkpoint correction - takeover at 9c19760
+
+The follow-up review inspected
+`9c19760aca5306bd400336f9ad15750167151022` on
+`takeover/rs-raft-safety-first-20261010`. The local agent incorporated the original
+planning commit as `1733e7da7`. This section updates execution advice; the earlier
+audit anchors and findings below remain historical evidence.
+
+- FreshMG step 1 retains its recorded independent approval at
+  `a66bef3f7f511c824da1832be263aa246c47204e`. Only two Quest-log appends separate
+  that subject from `9c19760`; source and test bytes are identical. The approval
+  excludes CREATE/promotion, physical acceptance and the TX1 red witness.
+- The reported canonical pass is on `80632c7e4c7da43fc84139e82dc8f7f336dec720`.
+  Later discovery/authorization source and tests changed. Finish one bounded
+  proof of the intended final candidate, including the changed discovery suite
+  outside the canonical selection. Retain original failures and the complete
+  per-failure cone dispositions through the existing evidence owner. Local
+  report paths and a recorded hash are references, not independently inspected
+  raw evidence in this follow-up.
+- RS1 is recorded as verified, not a new repair. Its relevant Raft code and four
+  witness files did not change after the measured subject; log appends alone do
+  not require rerunning them. The recorded proof remains process-kill coverage.
+- TX1 is now sealed and OPEN. Its design vet says REVISE. The next new unit is
+  the design and witness revision in the [local handoff](../../solve/epics/raft-rs-full-cutover/local-priorities-2026-10-10.md#3-next-new-safety-unit-transaction-leg-a-then-leg-b),
+  before participant implementation. Repair witness scheduling and atomicity
+  coverage under the existing eight receipts; revise sealed meaning explicitly
+  only when the promise itself changes.
+- FreshMG R4-D1/D2/D3 belong to one bounded follow-up before the next effect
+  activation. Share immutable recorded-row validity, preserve durable invalid
+  debt, and filter periodic and CDC hints consistently. Historical validity must
+  not depend on an expired execution lease.
+- Correction to this review's own workflow verification: the earlier planning
+  edit raised always-load to 361. The steering audit reported that count but
+  exited zero; its budget is enforced by the existing steering tests. The local
+  agent's `9986da272` fold restores 360 without losing the routes. Use those
+  budget assertions for future steering edits.
+
 ## Basis and execution authority
 
 Three independent reviews challenged runtime/recovery, proof/workflow, and
