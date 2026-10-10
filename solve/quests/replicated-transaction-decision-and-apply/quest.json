@@ -1,0 +1,50 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replicated-transaction-decision-and-apply",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A partition transaction is the same transaction on every replica: PREPARE ends speculative staging and is acknowledged only after the participant group has committed and applied a replicated PREPARE command carrying exact identity, epoch, deterministic operations and conflict evidence; COMMIT applies those operations, the immutable terminal outcome and the applied index in one application transaction through the existing committed-entry owner, idempotently under replay and refusing conflicting content or outcome reversal; ROLLBACK terminalizes without applying; no staged row is readable before consensus; the participant answers exact durable outcomes so that NO_TRANSACTION or a missing session is never read as COMMITTED; the coordinator persists one immutable decision before COMMIT fanout and no timeout, lost answer or expiry can select rollback after it or erase PREPARED; recovery and CDC obligations survive the request deadline and a crash after data commit. One-phase and two-phase transactions are both covered.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replicated-transaction-decision-and-apply/evidence/receipt.json",
+      "requiredReceipts": [
+        "no-speculative-visibility-before-consensus",
+        "replicated-prepare-committed-and-applied-on-every-replica",
+        "commit-applies-operations-outcome-and-applied-index-atomically",
+        "duplicate-and-conflicting-decisions-idempotent-or-refused",
+        "exact-participant-outcome-no-transaction-is-not-committed",
+        "immutable-coordinator-decision-before-fanout",
+        "no-rollback-after-commit-decision-and-no-prepared-erasure",
+        "recovery-and-cdc-survive-deadline-and-crash"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owner-chain",
+      "statement": "The participant transaction owner, the committed-entry application owner, the rs-raft durable store and the DistributedTransactionCoordinator keep their authorities; no second transaction protocol, coordinator, ledger or retry framework is introduced."
+    },
+    {
+      "id": "coordinator-seam-agreed-first",
+      "statement": "The coordinator decision record, its fanout and its recovery belong to the query lane; this unit changes them only under an agreed seam recorded in seam-2026-10-10.md, and records their falsifiers otherwise."
+    },
+    {
+      "id": "no-weakened-fault-cases",
+      "statement": "Raft durability, transaction budgets, split/merge safety floors and routing failure behaviour are not weakened; a timeout or expiry grants no permission."
+    },
+    {
+      "id": "red-before-green",
+      "statement": "Every load-bearing invariant has a witness that is red on the baseline and green on the candidate; the controllable-port witnesses are the first red, and three-replica real rs-raft witnesses are required before closure."
+    },
+    {
+      "id": "serialized-shared-owners",
+      "statement": "Edits to the partition service and the rs-raft runtime are serialized with the FreshMG unit; no two concurrent writers to a shared owner."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Every source attempt requires independent verification newer than the attempt recorded with verifier subagent:<id> before landing."
+    }
+  ],
+  "sealedAt": "df51b799acdb224253fdb3548ebdf8471d692f5b"
+}

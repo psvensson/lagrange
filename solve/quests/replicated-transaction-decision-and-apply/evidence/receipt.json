@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "replicated-transaction-decision-and-apply",
+  "status": "fail",
+  "testFileDigests": {
+    "test/partition/partition-transaction-replicated-apply.test.js": "e13a899e07f25b397135adb43e9e7430fe2714a102d40ff32f46230dfaaf2cc4"
+  },
+  "generatedAt": "2026-10-10T09:11:21.583Z",
+  "receipts": [
+    {
+      "id": "no-speculative-visibility-before-consensus",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 P1: a session commit exposes no rows before its marker is a committed entry$\" test/partition/partition-transaction-replicated-apply.test.js",
+      "detail": "the leader exposes no session row before its TRANSACTION_COMMIT marker is committed and applied",
+      "failure": "1 test(s) failed",
+      "testFile": "test/partition/partition-transaction-replicated-apply.test.js"
+    },
+    {
+      "id": "commit-applies-operations-outcome-and-applied-index-atomically",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 P2: the committed TRANSACTION_COMMIT applies its operations on a replica that staged nothing$\" test/partition/partition-transaction-replicated-apply.test.js",
+      "detail": "a replica that staged nothing applies the committed marker's operations exactly once",
+      "failure": "1 test(s) failed",
+      "testFile": "test/partition/partition-transaction-replicated-apply.test.js"
+    }
+  ]
+}

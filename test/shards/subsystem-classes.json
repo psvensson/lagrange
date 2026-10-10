@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 167,
+    "storage-partition": 168,
     "storage-raft": 119,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2327,
-  "digest": "fnv1a32-1c7a1160",
+  "censusSize": 2328,
+  "digest": "fnv1a32-d9fceb2f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-523126da",
+  "observationDigest": "fnv1a32-3b186325",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1299,6 +1299,7 @@
     "test/partition/partition-splitting-trigger.property.test.js": "storage-partition",
     "test/partition/partition-sql-parser.test.js": "storage-partition",
     "test/partition/partition-transaction-handler.test.js": "storage-partition",
+    "test/partition/partition-transaction-replicated-apply.test.js": "storage-partition",
     "test/partition/partition-transaction.property.test.js": "storage-partition",
     "test/partition/partition-transition-projection.test.js": "storage-partition",
     "test/partition/partition-unreadable-durable-record.test.js": "storage-partition",
@@ -8740,6 +8741,18 @@
       "files": [
         "examples/service-data-affinity/lagrange-loader.js",
         "src/partition/partition-split-merge-manager.js"
+      ]
+    },
+    "test/partition/partition-transaction-replicated-apply.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/partition-transaction.property.test.js": {
