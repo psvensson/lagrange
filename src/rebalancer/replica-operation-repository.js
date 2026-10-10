@@ -19,7 +19,7 @@ import {claimMessageGroupMembershipOwner, settleMessageGroupMembershipNonAdmissi
   './replica-operation-message-group-membership-owner-claim.js';
 import {v4 as uuidv4} from 'uuid';
 import {selectMessageGroupMembershipBranch, authorizeMessageGroupLearner,
-  recordMessageGroupLearnerOutcome} from
+  recordMessageGroupLearnerOutcome, recoverMessageGroupLearnerOutcome} from
   './replica-operation-message-group-membership-authorization.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
@@ -598,8 +598,15 @@ class ReplicaOperationRepository {
     return authorizeMessageGroupLearner(this, request);
   }
   /** Record an exact recovered learner fact; never dispatch membership work. */
-  recordMessageGroupLearnerOutcome(request, readCommittedLearner) {
-    return recordMessageGroupLearnerOutcome(this, request, readCommittedLearner);
+  recordMessageGroupLearnerOutcome(request, readCommittedLearner, isInvocationCurrent) {
+    return recordMessageGroupLearnerOutcome(this, request, readCommittedLearner,
+      isInvocationCurrent);
+  }
+
+  /** Recover a learner receipt by operation ID using durable inputs, not a saved packet. */
+  recoverMessageGroupLearnerOutcome(operationId, readCommittedLearner, isInvocationCurrent) {
+    return recoverMessageGroupLearnerOutcome(this, operationId, readCommittedLearner,
+      isInvocationCurrent);
   }
 
   /** Select a durable membership branch; never directly dispatches Raft. */

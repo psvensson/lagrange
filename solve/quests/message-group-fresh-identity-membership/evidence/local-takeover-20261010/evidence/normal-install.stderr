@@ -1,0 +1,8 @@
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@napi-rs/lzma@1.5.1',
+npm warn EBADENGINE   required: { node: '^22.20 || ^24.12 || >=25' },
+npm warn EBADENGINE   current: { node: 'v22.16.0', npm: '10.9.2' }
+npm warn EBADENGINE }
+npm error code ENOTCACHED
+npm error request to https://registry.npmjs.org/zod/-/zod-4.3.6.tgz failed: cache mode is 'only-if-cached' but no cached response is available.
+npm error A complete log of this run can be found in: /home/oai/.npm/_logs/2026-10-10T05_39_29_209Z-debug-0.log

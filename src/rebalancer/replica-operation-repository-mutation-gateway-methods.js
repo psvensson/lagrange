@@ -86,11 +86,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         );
         let result = null;
         try {
-          result = await this.controlPlaneSystemTableGateway.executeQuery(
-            sql,
-            params,
-            queryOptions,
-          );
+          result = await this.runAdmittedOperationMutationAttempt(options, () =>
+            this.controlPlaneSystemTableGateway.executeQuery(sql, params, queryOptions));
         } catch (error) {
           result = error;
         }
@@ -123,6 +120,27 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         );
         await this.waitForOperationPersistRetry(waitMs);
       }
+    }
+
+    // Host-only submission admission, matching the canonical mutation ingress.
+    // A synchronous lifetime predicate is checked without an intervening await;
+    // asynchronous policy callers retain their existing beforeAttempt semantics.
+    // This is NOT a commit-time fence for an already-submitted replicated write.
+    async runAdmittedOperationMutationAttempt(options, invoke) {
+      if (typeof options.beforeAttempt === 'function') {
+        const admission = options.beforeAttempt();
+        if (admission !== true && await admission !== true) {
+          return {success: false, admissionRefused: true};
+        }
+      }
+      // Async admission may have yielded. This last synchronous host check is
+      // adjacent to invoke(), and never travels in the query/wire options.
+      if (options.submissionIsCurrent !== undefined &&
+        (typeof options.submissionIsCurrent !== 'function' ||
+          options.submissionIsCurrent() !== true)) {
+        return {success: false, admissionRefused: true};
+      }
+      return invoke();
     }
 
     bindPriorMutationDeliveryAttemptResult(failureResult) {
@@ -267,23 +285,21 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       fallback,
       retryAttempt,
     ) {
-      if (typeof options.beforeAttempt === 'function' &&
-          await options.beforeAttempt() !== true) {
-        return {success: false, admissionRefused: true};
-      }
-      const queryOptions = this.buildOperationMutationQueryOptions(
-        options,
-        retryAttempt,
-      );
-      try {
-        return await this.executeReplicaOperationGatewayMutation(
-          mutation,
-          queryOptions,
-          fallback,
+      return this.runAdmittedOperationMutationAttempt(options, async () => {
+        const queryOptions = this.buildOperationMutationQueryOptions(
+          options,
+          retryAttempt,
         );
-      } catch (error) {
-        return error;
-      }
+        try {
+          return await this.executeReplicaOperationGatewayMutation(
+            mutation,
+            queryOptions,
+            fallback,
+          );
+        } catch (error) {
+          return error;
+        }
+      });
     }
 
     async executeReplicaOperationGatewayMutation(

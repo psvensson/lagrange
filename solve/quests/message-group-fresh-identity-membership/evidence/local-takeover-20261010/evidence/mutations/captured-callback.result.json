@@ -1,0 +1,17 @@
+{
+  "name": "captured-callback",
+  "command": [
+    "node",
+    "--no-warnings",
+    "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+    "--test",
+    "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+    "test/integration/message-group-learner-recipient.integration.test.js"
+  ],
+  "exit": 1,
+  "timedOut": false,
+  "cleanupComplete": true,
+  "sourceSha256": "ed53d859745e7a752bcda45d6e9854a6622446adddafc3bdd2258eb6d7335f3b",
+  "processGroupId": 1570,
+  "wallMs": 1693.486
+}

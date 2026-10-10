@@ -1,0 +1,8 @@
+syntax OK src/node/message-group-membership-recipient.js
+syntax OK src/node/message-group-service-handler.js
+syntax OK src/rebalancer/operation-workflow-message-group-native-read.js
+syntax OK src/rebalancer/operation-workflow-owner.js
+syntax OK src/rebalancer/replica-operation-message-group-membership-authorization.js
+syntax OK src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
+syntax OK src/rebalancer/replica-operation-repository.js
+syntax OK test/integration/message-group-learner-recipient.integration.test.js

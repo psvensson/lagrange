@@ -1,0 +1,17 @@
+{
+  "name": "extra-receipt-effect",
+  "command": [
+    "node",
+    "--no-warnings",
+    "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+    "--test",
+    "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+    "test/integration/message-group-learner-recipient.integration.test.js"
+  ],
+  "exit": 1,
+  "timedOut": false,
+  "cleanupComplete": true,
+  "sourceSha256": "2e80c7059baacdec296364e1f50472eb63624596a131f65ce60c0974680d69a7",
+  "processGroupId": 1805,
+  "wallMs": 1634.672
+}

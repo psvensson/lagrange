@@ -1,0 +1,3 @@
+Initial retry-fixture apparatus did not advance virtual clock and returned retryable failure forever.
+Command was terminated; original subprocess exit was not retained. No negative proof credit.
+Corrected retry fixtures allow an erroneous second submission to finish at the real SQL owner, then assert submission count.

@@ -49,16 +49,34 @@ A registration, socket/router lifetime or native port replacement while the
 read is pending must invalidate the old invocation. A later fresh invocation
 can recover the unchanged issued action. No delivery failure cancels that action.
 
-The remaining PR113 finding 4231684822 about lease/boot changes during an awaited
-operation-row mutation remains OPEN. This route does not make independent group
-reads and writes globally atomic and does not claim commit-time lease revocation.
-Do not unpark CREATE or recurring ordinary dispatch on the strength of this
-historical-read increment. Record and review the eventual commit authority at
-its existing writer owner rather than adding another metadata reread loop.
+The historical-recording interpretation of PR113 finding 4231684822 is narrowly
+superseded by the operator-authorized
+[safety-first ruling](../../solve/quests/message-group-fresh-identity-membership/safety-first-ruling-20261009.md).
+An already-submitted exact receipt may commit after expiry/boot/lifetime change
+when the full row-CAS basis is unchanged. It must alter only the three receipt
+columns; it neither refreshes execution permission nor permits a next effect.
+Competing claim or terminal/phase changes remain ordered by the existing row CAS.
+This is not atomic revocation across different Raft groups. The original failed
+strict-refusal evidence is retained under its original requirement.
 
-The full ordinary driver still needs owned discovery/reentry and original-request
-reconstruction after a committed permit, initial learner action execution, and
-current CREATE using the existing leader descriptor/generation/sole-worker checks.
+Before EVERY new submission, including retries, the existing repository samples
+canonical boot authority; immediately before the gateway call it checks local
+invocation lifetime and claim expiry without another asynchronous wait. These
+host checks do not purport to retract a previously submitted command. Their
+callbacks are local-only and are never serialized into the write options.
+
+The workflow now also has recoverMessageGroupLearnerOutcomeFromRecipient: supply
+only an operation ID and an explicitly selected witness. In its retained owner
+lane, the repository reconstructs recording inputs from the authoritative row.
+A COMMITTED permit is accepted only for exact readback of a coherent recorded
+phase, never reconstituted as IN_FLIGHT. The proposal authorizer stays unchanged
+and rejects that committed input. Unavailable rows cannot be replaced by caches.
+
+The full ordinary driver still needs recurring discovery/reentry and initial
+learner action execution, followed by current CREATE through the existing
+leader descriptor/generation/sole-worker checks. The new recovery entry is not
+yet called by recurring reconciliation, and it must not be called recursively
+from another turn that already holds the same retained lane.
 These cannot be replaced by fixture-driven SENDING or a historical ADD receipt.
 No successor attempt is issued: absence of origin does not establish definitive
 predecessor fencing AND noncommitment. J1 forward recovery remains unchanged.

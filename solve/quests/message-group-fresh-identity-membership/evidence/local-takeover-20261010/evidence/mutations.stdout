@@ -1,0 +1,8 @@
+{
+  "positiveCases": 37,
+  "mutationsDetected": 12,
+  "restoredPositive": true,
+  "diagnosticLoader": "/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+  "lateReceiptPolicy": "20261009 safety-first ruling; bounded only",
+  "driverActivation": false
+}

@@ -1,0 +1,12 @@
+
+> lagrange-server@0.2.6 commands
+> node scripts/list-commands.js
+
+# Useful Commands
+
+## Quest Workflow
+
+- `npm run solve:start -- --id <quest>` - Seal a quest against a red probe.
+- `npm run solve:note -- --id <quest> --attempt "<what changed>"` - Record an attempt, finding, verification or blocked entry.
+- `npm run solve:probe -- --id <quest>` - Measure the doneWhen probe.
+- `npm run solve:land -- --id <quest>` - Land the quest: guards, npm test, commit; never push.

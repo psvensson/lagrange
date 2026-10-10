@@ -1,0 +1,17 @@
+{
+  "name": "post-admission-lifetime",
+  "command": [
+    "node",
+    "--no-warnings",
+    "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+    "--test",
+    "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+    "test/integration/message-group-learner-recipient.integration.test.js"
+  ],
+  "exit": 1,
+  "timedOut": false,
+  "cleanupComplete": true,
+  "sourceSha256": "efa5c0015da9e261f89e40bf8b12375a0a163416b1a1817a93d8ea85431a2fe0",
+  "processGroupId": 1782,
+  "wallMs": 1712.039
+}

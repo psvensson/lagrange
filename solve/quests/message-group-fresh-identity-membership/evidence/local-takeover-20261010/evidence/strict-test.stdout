@@ -1,0 +1,8 @@
+
+> lagrange-server@0.2.6 test:metrics:scoped:strict
+> node scripts/check-scoped-ratchets.js --strict test/integration/message-group-learner-recipient.integration.test.js
+
+
+Cyclomatic complexity
+
+Cognitive complexity

@@ -137,7 +137,7 @@ class MessageGroupServiceHandler extends EventEmitter {
     }
   }
 
-  async handleMessage(envelope, delivery) {
+  async handleMessage(envelope, delivery, invocation) {
     const {payload, correlationId} = envelope;
     const type = payload?.[ReplicaOperationField.TYPE];
 
@@ -148,7 +148,7 @@ class MessageGroupServiceHandler extends EventEmitter {
 
     let response;
     if (type === ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP) {
-      response = await readMessageGroupLearnerAtRecipient(this, payload, delivery);
+      response = await readMessageGroupLearnerAtRecipient(this, payload, delivery, invocation);
     } else if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
       response = await this.handleCreateReplica(payload);
     } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
@@ -600,6 +600,9 @@ class MessageGroupServiceHandler extends EventEmitter {
       );
       return;
     }
+    // Retire only our own previous registration; an address may already
+    // belong to a successor handler.
+    this.unregisterFromRouter(this.messageRouter);
     this.messageRouter = messageRouter;
 
     const handlerAddress =
@@ -611,16 +614,20 @@ class MessageGroupServiceHandler extends EventEmitter {
       this.rpcClient = options.rpcClient;
     }
 
-    const routerHandler = async (envelope, delivery) => {
-      const response = await this.handleMessage(envelope, delivery);
-      if (this.rpcClient && response.correlationId) {
-        this.rpcClient.handleResponse(
+    const handler = this;
+    async function routerHandler(envelope, delivery) {
+      // Bind the callback actually invoked, not a later registration observed
+      // after MessageRouter has queued this delivery in a microtask.
+      const invocation = Object.freeze({router: messageRouter, callback: routerHandler});
+      const response = await handler.handleMessage(envelope, delivery, invocation);
+      if (handler.rpcClient && response.correlationId) {
+        handler.rpcClient.handleResponse(
           response.correlationId,
           response,
         );
       }
       return {acknowledged: true, ...response};
-    };
+    }
 
     this.registeredRouterHandler = routerHandler;
     messageRouter.register(handlerAddress, routerHandler);
@@ -632,18 +639,18 @@ class MessageGroupServiceHandler extends EventEmitter {
   }
 
   unregisterFromRouter(messageRouter) {
+    if (!messageRouter || messageRouter !== this.messageRouter) return;
+    const registration = this.registeredRouterHandler;
+    if (typeof registration !== 'function') return;
     this.registeredRouterHandler = null;
-    if (!messageRouter) {
-      return;
-    }
 
     const handlerAddress =
       `${this.nodeId}/` +
       `${MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
       `${MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.HANDLER_ID}`;
 
-    if (isFunction(messageRouter.unregister)) {
-      messageRouter.unregister(handlerAddress);
+    if (isFunction(messageRouter.unregisterExact)) {
+      messageRouter.unregisterExact(handlerAddress, registration);
     }
 
     this.logger.info(
@@ -653,7 +660,7 @@ class MessageGroupServiceHandler extends EventEmitter {
   }
 
   shutdown() {
-    this.registeredRouterHandler = null;
+    this.unregisterFromRouter(this.messageRouter);
     this.logger.info(
       MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.SHUTTING_DOWN,
       {nodeId: this.nodeId},

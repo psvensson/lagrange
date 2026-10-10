@@ -1,0 +1,2 @@
+Original complete attachment SHA256: 9e6ee95d25ef8db3440cff378f08baec798137e7d771a832622944b70367cbf6
+This handoff retains the current patch, all current diagnostic outputs, proof tools, adapters and old authority test. Redundant before/after file copies are represented by apply-check.json and real Git objects. The older nested prerequisite ZIP remains in the original attached archive; it is not copied into this directory. No evidence result is relabeled.

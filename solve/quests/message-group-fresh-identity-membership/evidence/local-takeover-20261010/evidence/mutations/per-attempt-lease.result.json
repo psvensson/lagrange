@@ -1,0 +1,17 @@
+{
+  "name": "per-attempt-lease",
+  "command": [
+    "node",
+    "--no-warnings",
+    "--experimental-loader=/mnt/data/continuation-20261010/previous/diagnostic/native-loader.mjs",
+    "--test",
+    "--test-reporter=/mnt/data/continuation-20261010/proofs/report-diagnostic.mjs",
+    "test/integration/message-group-learner-recipient.integration.test.js"
+  ],
+  "exit": 1,
+  "timedOut": false,
+  "cleanupComplete": true,
+  "sourceSha256": "38d8995f0ac4429bbf11bc8af0303e2c62d96c56d9e55d3101e8e4e39c649375",
+  "processGroupId": 1759,
+  "wallMs": 1726.542
+}

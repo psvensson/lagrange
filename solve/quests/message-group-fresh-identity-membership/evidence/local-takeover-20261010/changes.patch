@@ -1,0 +1,1479 @@
+diff --git a/architecture/contracts/message-group-registered-learner-read.md b/architecture/contracts/message-group-registered-learner-read.md
+index 33d1bf1..4ce258a 100644
+--- a/architecture/contracts/message-group-registered-learner-read.md
++++ b/architecture/contracts/message-group-registered-learner-read.md
+@@ -49,16 +49,34 @@ A registration, socket/router lifetime or native port replacement while the
+ read is pending must invalidate the old invocation. A later fresh invocation
+ can recover the unchanged issued action. No delivery failure cancels that action.
+ 
+-The remaining PR113 finding 4231684822 about lease/boot changes during an awaited
+-operation-row mutation remains OPEN. This route does not make independent group
+-reads and writes globally atomic and does not claim commit-time lease revocation.
+-Do not unpark CREATE or recurring ordinary dispatch on the strength of this
+-historical-read increment. Record and review the eventual commit authority at
+-its existing writer owner rather than adding another metadata reread loop.
+-
+-The full ordinary driver still needs owned discovery/reentry and original-request
+-reconstruction after a committed permit, initial learner action execution, and
+-current CREATE using the existing leader descriptor/generation/sole-worker checks.
++The historical-recording interpretation of PR113 finding 4231684822 is narrowly
++superseded by the operator-authorized
++[safety-first ruling](../../solve/quests/message-group-fresh-identity-membership/safety-first-ruling-20261009.md).
++An already-submitted exact receipt may commit after expiry/boot/lifetime change
++when the full row-CAS basis is unchanged. It must alter only the three receipt
++columns; it neither refreshes execution permission nor permits a next effect.
++Competing claim or terminal/phase changes remain ordered by the existing row CAS.
++This is not atomic revocation across different Raft groups. The original failed
++strict-refusal evidence is retained under its original requirement.
++
++Before EVERY new submission, including retries, the existing repository samples
++canonical boot authority; immediately before the gateway call it checks local
++invocation lifetime and claim expiry without another asynchronous wait. These
++host checks do not purport to retract a previously submitted command. Their
++callbacks are local-only and are never serialized into the write options.
++
++The workflow now also has recoverMessageGroupLearnerOutcomeFromRecipient: supply
++only an operation ID and an explicitly selected witness. In its retained owner
++lane, the repository reconstructs recording inputs from the authoritative row.
++A COMMITTED permit is accepted only for exact readback of a coherent recorded
++phase, never reconstituted as IN_FLIGHT. The proposal authorizer stays unchanged
++and rejects that committed input. Unavailable rows cannot be replaced by caches.
++
++The full ordinary driver still needs recurring discovery/reentry and initial
++learner action execution, followed by current CREATE through the existing
++leader descriptor/generation/sole-worker checks. The new recovery entry is not
++yet called by recurring reconciliation, and it must not be called recursively
++from another turn that already holds the same retained lane.
+ These cannot be replaced by fixture-driven SENDING or a historical ADD receipt.
+ No successor attempt is issued: absence of origin does not establish definitive
+ predecessor fencing AND noncommitment. J1 forward recovery remains unchanged.
+diff --git a/solve/quests/message-group-fresh-identity-membership/evidence/invocation-submission-fences-20261009-local.md b/solve/quests/message-group-fresh-identity-membership/evidence/invocation-submission-fences-20261009-local.md
+new file mode 100644
+index 0000000..3ccdb8a
+--- /dev/null
++++ b/solve/quests/message-group-fresh-identity-membership/evidence/invocation-submission-fences-20261009-local.md
+@@ -0,0 +1,199 @@
++---
++audience: development
++documentClass: current
++---
++
++# Recipient invocation and write-submission fencing
++
++## Verdict and exact scope
++
++Local implementation against PR #114's runtime at
++`d3d947f2d98ca9ea03f1cae91403ff551ee4d18d`.
++
++**Invocation/submission prerequisites: implemented and tested diagnostically.
++Strict commit-authority gate: FAIL. Recurring driver/current CREATE activation:
++NOT IMPLEMENTED. Publication: NOT PERFORMED in this session.**
++
++This is an author implementation and self-review, not independent approval.
++The correction does not reinterpret the sealed authority contract, refresh a
++membership permit, authorize a successor action, release membership debt, or
++merge anything to main. The required failing tests are retained as failures.
++
++## Existing-owner changes
++
++1. The message-group handler passes the identity of the callback and router
++   actually invoked, as a host-only third argument. The recipient no longer
++   reads a successor registration and attributes it to a retired callback.
++2. Handler retirement uses the existing exact-identity unregister operation.
++   Retiring an old handler cannot erase a successor at the same address;
++   an old router cannot clear a replacement registration.
++3. The workflow uses its normalized dispatch timeout and existing retained
++   operation lane. It snapshots the encoded request and selected recipient
++   before waiting, rejecting accessors/proxies through the existing utility.
++4. The workflow epoch and shutdown predicate continue beyond transport
++   completion into the repository observation and pre-submission boundary.
++5. Both existing mutation retry forms reuse one local admission helper. A
++   synchronous true check invokes the gateway without an intervening await;
++   asynchronous admission retains its previous meaning. The callback does not
++   become a query option or a network authority claim.
++6. An invalidated invocation cannot begin a new submission or re-arm a later
++   attempt. After any submission has begun, invalidation remains UNKNOWN:
++   the system cannot honestly claim that a command already at another owner
++   did not commit.
++
++These address the schedules described by PR #114 review comments 4232724094,
++4232724164, 4232724212, and the pre-submission portion of 4232724252. Review
++threads were not resolved remotely. The stronger after-submission authority
++requirement is not covered by those corrections.
++
++The six changed production modules remain subordinate to the existing handler,
++workflow, repository and mutation-gateway owners. There is no new store,
++coordinator, durable authority field, public wire field, retry timer or queue.
++The existing impact contract now includes the actual repository authorization
++and gateway participants; its import-graph seal still needs the normal producer.
++
++## Tests and exact failure attribution
++
++The existing recipient file retains its original eight leaf cases plus parent,
++and adds twelve leaf cases under two parents. All **23 Node test entries** pass
++on the final source. Counts include parent entries; they are not individual
++assert() calls.
++
++The new schedules exercise retired callbacks queued by actual router dispatch,
++exact retirement, configured timeout, owner shutdown/epoch turnover while the
++post-delivery boot read is held, retry backoff, retained-lane entry, immutable
++inputs while queued, lost authority after submission, and synchronous versus
++asynchronous admission semantics.
++
++The initial eight new boundary cases fail on the original runtime: the retained
++run reports 9 passed and 9 failed (eight failing leaves and their parent), with
++no cancellations, skips or todos. This is separate from the initial diagnostic
++adapter's prototype mismatch, which is preserved but is not credited as a
++source-failure proof.
++
++Eight isolated mutations are each detected at an exact named test and actual
++ERR_ASSERTION message: callback identity, exact unregister, configured timeout,
++recorder invocation predicate, per-attempt admission, UNKNOWN after submission,
++retained lane, and queued input snapshot. Source is restored after each run.
++The restored complete 23-entry file passes. The checker requires the same test
++selection, complete summaries, and zero cancellations/skips/todos. An unrelated
++error or a test title printed by a passing test cannot earn mutation credit.
++
++The final stable source also passes the native/recording file (54 entries), the
++actual SIGKILL fixture file (4 entries), and the ordinary handler file (7 tests
++and one suite). The resulting **88 passing Node test entries across four files**
++are diagnostic results, not the earlier canonical 313-entry measurement.
++
++## The commit-authority gate is still red
++
++`diagnostic/commit-authority-required.mjs` asks the existing owners to record a
++real native learner action, then holds the actual operation-SQL submission.
++The native action is genuinely applied before the interruption is introduced.
++
++| Required schedule | Final result |
++|---|---|
++| Lease expires before the held gateway write executes; operation row otherwise unchanged | FAIL: learner phase advances |
++| Canonical boot changes before the held gateway write executes; operation row otherwise unchanged | FAIL: learner phase advances |
++| Successor claim changes the authoritative row before old write executes | PASS: old write loses; successor records without reproposal |
++| Live unopposed holder records actual native result | PASS |
++
++Both failed cases fail this exact assertion:
++
++`commit-authority gate: revoked authority must not advance the operation row`
++
++Their caller result is UNKNOWN; that correctly preserves uncertainty but does
++not reverse the actual write. The action being recorded is real, not forged.
++No new membership proposal or physical CREATE is performed by the schedule.
++
++This gate reports **2 pass / 2 fail**, exit 1, with zero cancellations/skips.
++It is NOT relabeled as an expected negative and NOT omitted from the canonical
++script. An earlier test setup mistake used an incorrect string for PROPOSED;
++that first attempt is retained separately and is not the engaged gate result.
++
++## Why the correction stops here
++
++The replica-operations row fences competing row changes. Time expiry and the
++canonical nodes row are different inputs. A callback before remote submission
++cannot make them atomic with a later replicated write. Nor may replicated SQL
++application read each replica's wall clock or an eventually updated cache and
++still claim deterministic application of one committed command.
++
++The next authority increment must explicitly define and implement the ordering
++between historical recording, durable revocation and takeover at the existing
++writer/authority boundary. Under the present strict rule, both failing schedules
++must become nonmutating refusals while the live and successor controls remain
++positive. Then extend that proof through the real replicated gateway, not only
++the local fixture.
++
++A narrower generation-fenced historical-fact contract could instead allow a
++late, exact receipt while forbidding every later side effect without new
++current authority. That is a possible contract decision, NOT the implemented
++rule and NOT permission to delete the two failing tests. It requires an explicit
++ruling and complete consumer proof. This package does not adopt it.
++
++The recurring driver remains disconnected. Its next integration must enter
++through the existing operation owner, discover/reconstruct the durable action,
++call the registered recipient and recorder, and cross current CREATE's own
++native descriptor, generation and sole-worker checks. Do not call the public
++retained-lane facade recursively while already holding its identical lane;
++use the existing owner-internal execution discipline for that future caller.
++No new independent reconciliation loop is justified by this patch.
++
++Missing evidence, holder expiry, or a disconnected socket does not prove that a
++predecessor never committed. Ordered successor issuance requires definitive
++fencing AND noncommitment. J1 forward recovery after promotion authorization
++remains unchanged.
++
++## Execution substrate and failed validations
++
++The final local runs use Node v22.16.0 and the explicitly supplied diagnostic
++loader. It substitutes real node:sqlite for better-sqlite3, returns ordinary row
++objects to match the driver's interface, supplies the fixed fixture config only
++after independent schema validation, and adapts logging/uuid/in-process ws setup.
++The native Raft implementation, router, repository SQL and tested code are real.
++These are not normal locked-dependency, physical-network or power-loss results.
++
++Normal installation failed with npm ENOTCACHED for zod-4.3.6, along with a locked
++package Node-version warning. Normal classified execution stops on missing
++`tap-parser`. ESLint is absent and import-graph refresh lacks dependency-cruiser.
++A broader diagnostic neighbor run also failed on unsupported adapter methods,
++missing tap and alternate configurations rejected by the deliberately narrow
++config adapter. It is preserved as 114 pass / 52 fail, not attributed wholesale
++to the source correction and not reported green.
++
++Syntax checks and the scoped file-size ratchet passed. The file-size output
++still names one inherited oversized source file; it is not a universal size or
++full-static approval. Existing primary/resource/subsystem classifications pass
++all three actual checks (2,326 files), since this extends an existing selected
++file. The updated impact registry also passes its actual checker (58 contracts
++and 29 coupled pairs). No generated import-graph seal was fabricated or baseline raised.
++
++Probe invocations of both diagnostic runners refuse before mutation/output
++creation and leave source unchanged. Worker groups and stdout/stderr are owned
++by the retained existing process helper; timeout does not count as proof.
++
++## Provenance and preservation
++
++The workspace was reconstructed from the retained PR111 source archive and the
++recording, process-loss and recipient patches. Its local Git HEAD is a synthetic
++reconstruction identifier, not an upstream commit. Every changed production
++preimage, the changed existing test and the impact-contract preimage were matched
++to their live GitHub blob IDs at the exact PR114 head. The patch is against those
++bytes; it does not replay the previously attached recipient package.
++
++No remote write, Actions dispatch, merge, or release operation succeeded in
++this session. The current connector exposes read actions; the ordinary Git
++remote attempt fails DNS. This is a limitation of this execution, not a claim
++that the project's established push/Actions route does not exist.
++
++The package contains an apply-checked patch, before/after files, reproduction
++scripts, raw evidence and a verified SHA256 manifest. Normal verification is
++`diagnostic/verify-canonical.sh <isolated-patched-checkout> <new-absolute-output>`.
++It uses normal dependencies and the existing runner, retains nonzero outcomes,
++and neither pushes nor provisions infrastructure. The strict authority gate is
++expected to remain red on this exact patch; that is an unresolved requirement,
++not a passing expected-failure test.
++
++Original full-lab FAIL, timing debt, independent review, complete change-impact
++and static proof, physical replacement/restart/off-seed acceptance and final
++main/A1-v13 compatibility remain open.
+diff --git a/solve/quests/message-group-fresh-identity-membership/evidence/safety-first-recording-20261010-local.md b/solve/quests/message-group-fresh-identity-membership/evidence/safety-first-recording-20261010-local.md
+new file mode 100644
+index 0000000..a31db19
+--- /dev/null
++++ b/solve/quests/message-group-fresh-identity-membership/evidence/safety-first-recording-20261010-local.md
+@@ -0,0 +1,191 @@
++# Safety-first learner receipt continuation — 2026-10-10
++
++## Status
++
++Implemented locally against the runtime in upstream commit
++`60a60b2a6461d6fd9fa0f6f96fd3e25aa94651e4` (PR #114).
++The remote head was read through GitHub and its one-commit difference from
++`d3d947f2d98ca9ea03f1cae91403ff551ee4d18d` was confirmed to contain only the
++published safety-first policy documents. The runtime in those heads is identical.
++
++This is a local implementation and adversarial self-review, not an independent
++approval, a GitHub publication, a completed recurring driver, or CREATE activation.
++The local Git HEAD is a synthetic reconstruction marker, NOT an upstream commit.
++Apply the packaged patch to a new exact-upstream checkout, never push that synthetic
++history. The earlier invocation package need not be applied first.
++
++## Implemented owner interaction
++
++The six-module invocation prerequisite correction is preserved and composed:
++actual invoked callback/router identity, exact handler retirement, configured
++read timeout, retained operation-lane serialization, captured immutable inputs,
++and invocation lifetime continuing through observation and submission. An old
++callback cannot borrow its replacement's registration or unregister a successor.
++
++The new work does two things in the existing owners:
++
++1. Every NEW historical-receipt submission, including retries, samples canonical
++   boot through the repository's existing authority. After that asynchronous
++   admission, the existing mutation gateway performs a final synchronous
++   invocation/lease check adjacent to its call into the gateway. Its host-only
++   `submissionIsCurrent` check is not serialized into query options. No new
++   timer, queue, durable store, workflow, or cross-group protocol is introduced.
++2. `OperationWorkflowOwner.recoverMessageGroupLearnerOutcomeFromRecipient` accepts
++   an operation ID and explicit witness route. Inside the same retained lane it
++   asks `ReplicaOperationRepository.recoverMessageGroupLearnerOutcome` to construct
++   read/record inputs from the authoritative operation row. It no longer needs the
++   original request packet after a lost SQL answer or reconstruction. A COMMITTED
++   permit is readback-only and must match a coherent already-recorded phase. It
++   is never rewritten to IN_FLIGHT; initial action authorization still rejects it.
++
++The common recorder owns exact action and stamp validation, current claim and
++ordinary settlement checks, and its full-row conditional update. Recovery by ID
++uses that same algorithm rather than another receipt validator. The explicitly
++selected witness is still required; there is no default to the uncreated target.
++
++## Revised late-receipt contract
++
++The published safety-first ruling explicitly supersedes only the old requirement
++that expiry/boot change alone must make an already-submitted exact historical
++receipt fail to commit. Tests in the existing recipient integration file now
++exercise the revised obligations:
++
++- A real, exact receipt can commit late only under the unchanged row-CAS basis.
++  Every column outside the three declared receipt columns is compared; the
++  original permit fences and sequence, ordinary history, claims and debt remain.
++- The obsolete caller returns UNKNOWN and performs no later proposal or physical
++  operation. A new invocation with revoked authority cannot report current success.
++- When receipt wins first, a successor claim can adopt the row and recognize the
++  original result without native reread, new receipt write, or another proposal.
++- When the successor claim wins first, the older receipt CAS loses without
++  overwriting the claim, and the successor can still record the original result.
++- Lease expiry or boot revocation during backoff prevents another submission.
++  A local lifetime change while asynchronous admission completes also prevents it.
++- Recovery without native application remains UNKNOWN, then records the same
++  action once it really commits. Missing/unavailable operation rows cannot be
++  replaced by cached data or the previous caller's packet.
++
++These are not cross-group commit-time revocation guarantees. No clock or cache
++is consulted nondeterministically during replicated application. A proposal,
++role-only membership observation, uncertain result or historical ADD receipt
++still grants no CREATE, promotion, cleanup, lane release, or successor action.
++
++The earlier `commit-authority-required.mjs` and all original evidence are retained
++unchanged in the prior package. Re-executing that old criterion on this source
++still returns **2 pass / 2 fail**, with the two original intended refusal
++assertions failing. That result is not relabeled green. Its acceptance criterion
++has an explicit successor; the new tests exercise the same schedules with the
++new write-set, ordering, uncertainty and no-next-effect obligations.
++
++## Measured results
++
++All measurements below are LOCAL DIAGNOSTICS, using the retained explicit loader.
++
++| File | Node test entries passed |
++| --- | ---: |
++| Registered recipient, submission, late receipt, and request reconstruction | 37 |
++| Existing native/operation recording integration | 54 |
++| Actual SIGKILL process-loss integration | 4 |
++| Existing ordinary message-group handler | 7 |
++| Total | 102 |
++
++These counts include parent entries where Node reports them; they are not counts
++of individual assert calls. Each run completed with zero cancelled/skipped/todo
++entries. The original eight recipient leaves and prior invocation tests remain.
++
++Twelve isolated source mutations were detected at the named failing leaf and its
++actual ERR_ASSERTION message: captured callback, exact unregister, configured
++budget, post-delivery invocation lifetime, uncertainty after submission, retained
++lane, immutable queued inputs, per-attempt boot, per-attempt lease, post-admission
++local lifetime, an extra receipt write effect, and refusal to recognize a coherent
++already-committed recording input. Every mutation restored the original source;
++the complete 37-entry positive passed again. No arbitrary failing title, setup
++failure, timeout or cancellation earned proof credit.
++
++The first new retry test accidentally returned the retryable fixture error on
++every attempt without advancing its virtual clock. It was terminated, is retained,
++and receives NO negative-proof credit. The corrected test permits an incorrectly
++submitted second attempt to finish, so the actual assertion detects resubmission.
++The first bounded result also counted a claim UPDATE as a receipt submission
++because the claim's WHERE clause contains a learner-stamp predicate. The observation
++now requires the specific receipt SET clause as well. That apparatus error and
++its output are retained; the two genuine retry-admission failures were then fixed
++in source. The final suite passes with exact submission counting.
++
++## Fidelity and gates
++
++The loader uses real `node:sqlite` in place of `better-sqlite3`, plus the previously
++disclosed narrow configuration/logging/uuid/in-process-socket adapters. Native
++operation ports, repository SQL, handlers, router dispatch and gateway code are
++real. The OS process-loss regression runs; the new owner reconstruction tests
++close/reopen resources in one process. These are NOT normal locked-dependency,
++physical network, replicated-SQL failover, power-loss, or distributed SQL/CDC
++acceptance. Diagnostic durations are not performance claims or classified budgets.
++
++Syntax checks, the existing impact-contract registry check (58 contracts / 29
++coupled pairs), the three actual classification checks (2,326 files), and scoped
++file-size checking pass. The touched owner and repository files already exceeded
++800 lines at the upstream runtime; no thresholds were raised or new oversized
++module introduced. This scoped check is not the complete global gate.
++
++Normal dependency preparation failed on missing cached zod. The locked optional
++native dependency also warned about this container's Node 22.16.0 being too old.
++Strict test complexity could not load ESLint. Metadata refresh completed its first
++three producers, then stopped on missing dependency-cruiser; no import-graph seal
++was fabricated. No normal dependency, lint, strict-complexity, full-change-impact,
++or canonical timing success is claimed. The canonical script requires normal
++npm dependencies and MUST NOT use the diagnostic loader.
++
++The normal Solver note command was attempted but could not load a dependency;
++its command/output/exit are retained. This nonterminal report records the attempt
++without claiming that the canonical Quest log was successfully updated.
++
++## Consumer audit and remaining activation boundary
++
++A source search of the learner stamp and phase identified schema/row translation,
++ordinary persistence, the initial learner observer, claim/settlement predicates,
++and the branch-selection/receipt owner as direct consumers. The initial learner
++observer requires the in-flight phase and absent stamps; a committed recording
++input is explicitly rejected by the proposal authorizer. The branch-selection
++owner still requires its separate next permit, holder and native execution fences.
++The handler's CREATE safety refusal remains in place, and every new recovery
++case observes zero physical callbacks and no new membership proposal.
++
++This is a source-bound direct-consumer census, NOT a complete transitive or live
++CDC-to-effect certification. The dependency graph producer is unavailable here.
++The source therefore does NOT activate recurring discovery, automatic REPLACE
++progression, current CREATE, promotion, or cleanup. Merely wiring a successful
++receipt return into those effects would violate the ruling.
++
++The next integration is to call the ID-based recovery entry from existing owned
++reentry/discovery, not to add a second loop. Existing observed-progress retries
++already hold the operation lane: their internal continuation must not recursively
++call this public retained-lane facade. Route discovery must use existing service
++metadata as hints and real native observations as evidence. Prove stale wakeups,
++repeated events, missing witnesses, recovery after a recorded permit, and existing
++membership debt after ordinary failure before adding current physical effects.
++
++Current CREATE then needs its positive real-owner path and negative old-descriptor,
++later REMOVE, terminal/generation replacement and sole-worker proofs. The current
++blanket refusal is not a completed positive CREATE proof. Ordered successor work
++still requires both authoritative predecessor fencing and noncommitment; missing
++history never grants reissue. J1 forward recovery remains unchanged.
++
++## Preservation
++
++The original prerequisite ZIP, its 183 verified manifest members, and its old gate
++are preserved. The correction applies to its eight exact original preimages;
++the additional operation-workflow-owner preimage was independently matched to
++GitHub blob `0b2df9f0842c7c2b0490529460a7ec34ca04b693`, and the registered-read
++contract to blob `33d1bf146a62dc83010bcee366f69a8b0e0e0119`. The latter contract now
++points explicitly to the ruling and describes current submission/recovery scope.
++
++The supplied patch includes the previous invocation correction plus this increment.
++It does not replay older product branches. The original local report is retained
++as historical evidence; this report is the current additive continuation.
++No GitHub source/ref/workflow write succeeded for this increment. CLI Git failed
++DNS and the current discovered connector exposes reads. This does not claim that
++the project's previously working write/Actions route never existed.
++
++Main, original full-lab FAIL, numerical timing debt, physical replacement/seed-loss,
++independent source review and final exact-main/A1-v13 obligations remain unchanged.
+diff --git a/src/node/message-group-membership-recipient.js b/src/node/message-group-membership-recipient.js
+index 7722002..547625c 100644
+--- a/src/node/message-group-membership-recipient.js
++++ b/src/node/message-group-membership-recipient.js
+@@ -18,9 +18,11 @@ const unavailable = () => Object.freeze({kind: KIND.REFUSED, reason: REASON.UNAV
+ const invalid = () => Object.freeze({kind: KIND.REFUSED, reason: REASON.INVALID});
+ const nonempty = (value) => typeof value === 'string' && value.length > 0;
+ 
+-function captureRecipient(handler, replicaId, delivery) {
+-  const router = handler.messageRouter;
+-  const registration = handler.registeredRouterHandler;
++function captureRecipient(handler, replicaId, delivery, invocation) {
++  // This pair is captured by registerWithRouter and never comes from payload.
++  // Re-reading the handler's current pair here would revive a retired callback.
++  const router = invocation?.router;
++  const registration = invocation?.callback;
+   const isCurrent = delivery?.isCurrent;
+   const address = `${handler.nodeId}/${ADDRESS.SERVICE_SEGMENT}/${ADDRESS.HANDLER_ID}`;
+   const service = handler.resolveActiveReplicaService(replicaId);
+@@ -48,10 +50,10 @@ function recipientQuery(request) {
+   return {replicaId, groupId,
+     query: Object.freeze({...normalized.query, purpose: PURPOSE.LEARNER_ACTION})};
+ }
+-async function readOrigin(handler, request, delivery) {
++async function readOrigin(handler, request, delivery, invocation) {
+   const input = recipientQuery(request);
+   if (!input) return invalid();
+-  const captured = captureRecipient(handler, input.replicaId, delivery);
++  const captured = captureRecipient(handler, input.replicaId, delivery, invocation);
+   if (!captured) return unavailable();
+   if (captured.service.groupId !== input.groupId ||
+     captured.service.replicaId !== input.replicaId || captured.service.nodeId !== handler.nodeId) {
+@@ -62,10 +64,10 @@ async function readOrigin(handler, request, delivery) {
+   // that answer must not cross into the workflow's next observation.
+   return captured.current() ? answer : unavailable();
+ }
+-async function readMessageGroupLearnerAtRecipient(handler, request, delivery) {
++async function readMessageGroupLearnerAtRecipient(handler, request, delivery, invocation) {
+   let membership;
+   try {
+-    membership = await readOrigin(handler, request, delivery);
++    membership = await readOrigin(handler, request, delivery, invocation);
+   } catch {
+     membership = unavailable();
+   }
+diff --git a/src/node/message-group-service-handler.js b/src/node/message-group-service-handler.js
+index eccbda9..f9da871 100644
+--- a/src/node/message-group-service-handler.js
++++ b/src/node/message-group-service-handler.js
+@@ -137,7 +137,7 @@ class MessageGroupServiceHandler extends EventEmitter {
+     }
+   }
+ 
+-  async handleMessage(envelope, delivery) {
++  async handleMessage(envelope, delivery, invocation) {
+     const {payload, correlationId} = envelope;
+     const type = payload?.[ReplicaOperationField.TYPE];
+ 
+@@ -148,7 +148,7 @@ class MessageGroupServiceHandler extends EventEmitter {
+ 
+     let response;
+     if (type === ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP) {
+-      response = await readMessageGroupLearnerAtRecipient(this, payload, delivery);
++      response = await readMessageGroupLearnerAtRecipient(this, payload, delivery, invocation);
+     } else if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
+       response = await this.handleCreateReplica(payload);
+     } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
+@@ -600,6 +600,9 @@ class MessageGroupServiceHandler extends EventEmitter {
+       );
+       return;
+     }
++    // Retire only our own previous registration; an address may already
++    // belong to a successor handler.
++    this.unregisterFromRouter(this.messageRouter);
+     this.messageRouter = messageRouter;
+ 
+     const handlerAddress =
+@@ -611,16 +614,20 @@ class MessageGroupServiceHandler extends EventEmitter {
+       this.rpcClient = options.rpcClient;
+     }
+ 
+-    const routerHandler = async (envelope, delivery) => {
+-      const response = await this.handleMessage(envelope, delivery);
+-      if (this.rpcClient && response.correlationId) {
+-        this.rpcClient.handleResponse(
++    const handler = this;
++    async function routerHandler(envelope, delivery) {
++      // Bind the callback actually invoked, not a later registration observed
++      // after MessageRouter has queued this delivery in a microtask.
++      const invocation = Object.freeze({router: messageRouter, callback: routerHandler});
++      const response = await handler.handleMessage(envelope, delivery, invocation);
++      if (handler.rpcClient && response.correlationId) {
++        handler.rpcClient.handleResponse(
+           response.correlationId,
+           response,
+         );
+       }
+       return {acknowledged: true, ...response};
+-    };
++    }
+ 
+     this.registeredRouterHandler = routerHandler;
+     messageRouter.register(handlerAddress, routerHandler);
+@@ -632,18 +639,18 @@ class MessageGroupServiceHandler extends EventEmitter {
+   }
+ 
+   unregisterFromRouter(messageRouter) {
++    if (!messageRouter || messageRouter !== this.messageRouter) return;
++    const registration = this.registeredRouterHandler;
++    if (typeof registration !== 'function') return;
+     this.registeredRouterHandler = null;
+-    if (!messageRouter) {
+-      return;
+-    }
+ 
+     const handlerAddress =
+       `${this.nodeId}/` +
+       `${MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
+       `${MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.HANDLER_ID}`;
+ 
+-    if (isFunction(messageRouter.unregister)) {
+-      messageRouter.unregister(handlerAddress);
++    if (isFunction(messageRouter.unregisterExact)) {
++      messageRouter.unregisterExact(handlerAddress, registration);
+     }
+ 
+     this.logger.info(
+@@ -653,7 +660,7 @@ class MessageGroupServiceHandler extends EventEmitter {
+   }
+ 
+   shutdown() {
+-    this.registeredRouterHandler = null;
++    this.unregisterFromRouter(this.messageRouter);
+     this.logger.info(
+       MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.SHUTTING_DOWN,
+       {nodeId: this.nodeId},
+diff --git a/src/rebalancer/operation-workflow-message-group-native-read.js b/src/rebalancer/operation-workflow-message-group-native-read.js
+index 4dbb355..c5442a1 100644
+--- a/src/rebalancer/operation-workflow-message-group-native-read.js
++++ b/src/rebalancer/operation-workflow-message-group-native-read.js
+@@ -4,6 +4,7 @@
+  * This does not issue a permit, advance ordinary workflow, or admit CREATE.
+  */
+ import {SERVICE_TYPE} from '../constants/service.js';
++import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+ import {COMMITTED_LEARNER_ACTION_KIND as KIND,
+   COMMITTED_LEARNER_ACTION_REASON as REASON} from '../raft/raft-committed-membership-constants.js';
+ import {ReplicaOperationField as FIELD, ReplicaOperationMessageType as TYPE,
+@@ -16,14 +17,13 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
+ import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+   '../transport/transport-semantic-outcome.js';
+ 
+-const {OPERATION_WORKFLOW_OWNER_LITERAL, REPLICA_OPERATION_DISPATCH_TIMEOUT_MS} =
+-  OPERATION_WORKFLOW_OWNER_SHARED;
++const {OPERATION_WORKFLOW_OWNER_LITERAL} = OPERATION_WORKFLOW_OWNER_SHARED;
+ const unavailable = () => Object.freeze({kind: KIND.REFUSED, reason: REASON.UNAVAILABLE});
+ const invalid = () => Object.freeze({kind: KIND.REFUSED, reason: REASON.INVALID});
+ const nonempty = (value) => typeof value === 'string' && value.length > 0;
+ 
+-async function readAtRecipient(owner, recipient, query) {
+-  if (owner.isShuttingDown) return unavailable();
++async function readAtRecipient(owner, recipient, query, isCurrent) {
++  if (!isCurrent()) return unavailable();
+   const address = `${recipient.nodeId}/${ADDRESS.SERVICE_SEGMENT}/${ADDRESS.HANDLER_ID}`;
+   try {
+     const result = classifyTransportDeliveryOutcome(await owner.messageRouter.deliver(address, {
+@@ -31,8 +31,8 @@ async function readAtRecipient(owner, recipient, query) {
+       [FIELD.ENTITY_TYPE]: SERVICE_TYPE.MESSAGE_GROUP, [FIELD.ENTITY_ID]: query.groupId,
+       [FIELD.REPLICA_ID]: recipient.replicaId, [FIELD.MEMBERSHIP_QUERY]: query,
+     }, {targetNodeId: recipient.nodeId, deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
+-      timeoutMs: REPLICA_OPERATION_DISPATCH_TIMEOUT_MS}));
+-    if (owner.isShuttingDown || !isDeliveredTransportDeliveryOutcome(result) ||
++      timeoutMs: owner.replicaOperationDispatchTimeoutMs}));
++    if (!isCurrent() || !isDeliveredTransportDeliveryOutcome(result) ||
+       result.noHandler === true) return unavailable();
+     if (result.status !== STATUS.COMPLETED || result.nodeId !== recipient.nodeId) return invalid();
+     return result[FIELD.MEMBERSHIP];
+@@ -40,16 +40,41 @@ async function readAtRecipient(owner, recipient, query) {
+     return unavailable();
+   }
+ }
+-function recordMessageGroupLearnerFromRecipient(owner, request, route) {
+-  const {nodeId, replicaId} = route || {};
+-  if (!nonempty(nodeId) || !nonempty(replicaId)) {
++function recordingRequestSnapshot(request) {
++  const snapshot = copyStrictOwnDataRecord(request);
++  const keys = ['operationId', 'identity', 'permit', 'executionClaim'];
++  if (!snapshot || !keys.every((key) => nonempty(snapshot[key]))) return null;
++  // All retained inputs are immutable encoded records. Do not retain an object
++  // that a caller can replace while the owner waits for its existing lane.
++  return Object.freeze(Object.fromEntries(keys.map((key) => [key, snapshot[key]])));
++}
++function withRecordingRecipient(owner, operationId, route, record) {
++  const recipient = copyStrictOwnDataRecord(route);
++  if (!nonempty(operationId) || !nonempty(recipient?.nodeId) || !nonempty(recipient?.replicaId)) {
+     return Promise.resolve(Object.freeze({outcome: OUTCOME.INVALID, operation: null}));
+   }
+-  if (owner.isShuttingDown) {
+-    return Promise.resolve(Object.freeze({outcome: OUTCOME.UNAVAILABLE, operation: null}));
+-  }
+-  const recipient = Object.freeze({nodeId, replicaId});
+-  return owner.repository.recordMessageGroupLearnerOutcome(request,
+-    (query) => readAtRecipient(owner, recipient, query));
++  const selected = Object.freeze({nodeId: recipient.nodeId, replicaId: recipient.replicaId});
++  const epoch = owner.getOperationOwnershipFenceEpoch();
++  const isCurrent = () => !owner.isShuttingDown &&
++    epoch === owner.getOperationOwnershipFenceEpoch();
++  const refused = () => Object.freeze({outcome: OUTCOME.UNAVAILABLE, operation: null});
++  if (!isCurrent()) return Promise.resolve(refused());
++  // Both explicit replay and restart reconstruction enter this same owned lane.
++  // An internal driver already holding it must use its existing inline discipline,
++  // never recursively invoke this retained-lane entry point.
++  return owner.runRetainedOperationOwnerAction(operationId, () => {
++    if (!isCurrent()) return refused();
++    return record((query) => readAtRecipient(owner, selected, query, isCurrent), isCurrent);
++  }).then((answer) => answer?.outcome ? answer : refused());
++}
++function recordMessageGroupLearnerFromRecipient(owner, request, route) {
++  const input = recordingRequestSnapshot(request);
++  if (!input) return Promise.resolve(Object.freeze({outcome: OUTCOME.INVALID, operation: null}));
++  return withRecordingRecipient(owner, input.operationId, route, (read, isCurrent) =>
++    owner.repository.recordMessageGroupLearnerOutcome(input, read, isCurrent));
++}
++function recoverMessageGroupLearnerFromRecipient(owner, operationId, route) {
++  return withRecordingRecipient(owner, operationId, route, (read, isCurrent) =>
++    owner.repository.recoverMessageGroupLearnerOutcome(operationId, read, isCurrent));
+ }
+-export {recordMessageGroupLearnerFromRecipient};
++export {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient};
+diff --git a/src/rebalancer/operation-workflow-owner.js b/src/rebalancer/operation-workflow-owner.js
+index 0b2df9f..3f4cf55 100644
+--- a/src/rebalancer/operation-workflow-owner.js
++++ b/src/rebalancer/operation-workflow-owner.js
+@@ -428,7 +428,7 @@ function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
+   return normalizedSnapshot;
+ }
+ 
+-import {recordMessageGroupLearnerFromRecipient} from
++import {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient} from
+   './operation-workflow-message-group-native-read.js';
+ 
+ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
+@@ -459,6 +459,11 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
+     return recordMessageGroupLearnerFromRecipient(this, request, recipient);
+   }
+ 
++  /** Restart entry: the repository reconstructs the receipt input from durable state. */
++  recoverMessageGroupLearnerOutcomeFromRecipient(operationId, recipient) {
++    return recoverMessageGroupLearnerFromRecipient(this, operationId, recipient);
++  }
++
+   selectOperationWorkflowOwnerAdapterSnapshotOperation(
+     operationInput,
+     context = OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT,
+diff --git a/src/rebalancer/replica-operation-message-group-membership-authorization.js b/src/rebalancer/replica-operation-message-group-membership-authorization.js
+index cf76546..331898b 100644
+--- a/src/rebalancer/replica-operation-message-group-membership-authorization.js
++++ b/src/rebalancer/replica-operation-message-group-membership-authorization.js
+@@ -1,3 +1,4 @@
++import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+ /** One operation-row CAS selects promotion or pre-promotion abandonment.
+  * This is a repository operation, not another workflow or runtime authority.
+  * RECORDED means an exact durable intent exists; it is not a dispatch grant.
+@@ -157,12 +158,15 @@ async function selectMessageGroupMembershipBranch(repository, request) {
+ }
+ export {selectMessageGroupMembershipBranch};
+ 
+-function initialLearnerPermitMatches(permit, identity) {
++function initialLearnerActionMatches(permit, identity) {
+   return permit.permitStage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER &&
+-    permit.permitState === STATE.IN_FLIGHT && permit.permitSequence === 1 &&
+-    permit.proposalIndex === null && permit.transitionIdentity === identity.transitionIdentity &&
++    permit.permitSequence === 1 && permit.transitionIdentity === identity.transitionIdentity &&
+     permit.replicaIdentity === identity.targetReplicaId && permit.peerId === identity.targetPeerId;
+ }
++function initialLearnerPermitMatches(permit, identity) {
++  return initialLearnerActionMatches(permit, identity) &&
++    permit.permitState === STATE.IN_FLIGHT && permit.proposalIndex === null;
++}
+ function membershipPermitMatchesHolder(repository, permit, claim, identity) {
+   return membershipClaimIsLocalAndLive(repository, claim, identity) &&
+     permit.workflowOwnerNodeId === claim.ownerNodeId &&
+@@ -254,10 +258,17 @@ export {authorizeMessageGroupLearner};
+ // Record recovered fact, never issue an action. The host supplies the existing
+ // native read port as a capability, not wire/payload-provided receipt bytes.
+ function learnerRecordingInput(request) {
+-  const executionClaim = request?.executionClaim;
+-  const input = decodeInitialLearnerRequest(request);
++  const data = copyStrictOwnDataRecord(request);
++  if (!data) return null;
++  const {operationId, identity: encodedIdentity, permit: encodedPermit, executionClaim} = data;
++  const identity = decodeMembershipIdentity(encodedIdentity);
++  const permit = decodeMembershipPermit(encodedPermit);
+   const claim = decodeMembershipOwnerClaim(executionClaim);
+-  return input && claim ? {...input, executionClaim, claim} : null;
++  if (!identity || identity.operationId !== operationId || !permit || !claim ||
++    !initialLearnerActionMatches(permit, identity)) return null;
++  // This read/record-only input may already be COMMITTED after a lost answer.
++  // Never rewrite it as IN_FLIGHT or pass it to the proposal authorizer.
++  return {operationId, encodedIdentity, encodedPermit, identity, permit, executionClaim, claim};
+ }
+ function recordingSettlementAllowed(repository, row) {
+   if (!repository.isOperationTerminal(row)) return row.completedAt === null;
+@@ -352,45 +363,72 @@ function recordingBasisRefusal(repository, row, input) {
+   if (!membershipClaimIsLocalAndLive(repository, input.claim, input.identity)) {
+     return OUTCOME.STALE_OWNER;
+   }
++  if (input.permit.permitState === STATE.COMMITTED) {
++    return exactRecordedLearner(row, input) ? null : OUTCOME.CONFLICT;
++  }
+   return recordedLearnerIntent(row, input.encodedPermit) || exactRecordedLearner(row, input) ?
+     null : OUTCOME.CONFLICT;
+ }
+-async function recordObservedLearner(repository, row, input, evidence) {
++async function recordObservedLearner(repository, row, input, evidence, isCurrent) {
+   const basis = membershipRowWhere(row);
++  const submissionIsCurrent = () => isCurrent() &&
++    membershipClaimIsLocalAndLive(repository, input.claim, input.identity);
++  // A retry is a NEW submission, even when it retains the logical write ID.
++  // Sample boot authority through its owner each time; after that await the
++  // gateway checks local invocation/lease again immediately before submission.
++  const beforeAttempt = async () => submissionIsCurrent() &&
++    await membershipBootIsCurrent(repository);
+   try {
+     await repository.executeOperationMutationWithRetry(
+       `UPDATE replica_operations SET message_group_membership_phase = ?,
+         message_group_membership_permit = ?, message_group_learner_stamp = ?
+         WHERE ${basis.where}`,
+-      [PHASE.LEARNER_COMMITTED, evidence.committedPermit, evidence.stamp, ...basis.params]);
++      [PHASE.LEARNER_COMMITTED, evidence.committedPermit, evidence.stamp, ...basis.params],
++      {beforeAttempt, submissionIsCurrent});
+   } catch {
+     // COMMIT may have succeeded. Only exact owner readback settles that answer.
+   }
+-  if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNKNOWN);
++  // A write already submitted may have committed even if the invocation dies.
++  // No host callback purports to revoke a command already inside another owner.
++  if (!isCurrent() || !await membershipBootIsCurrent(repository)) return result(OUTCOME.UNKNOWN);
+   const after = await observeMembershipOperation(repository, input.operationId);
+-  if (!after.available) return result(OUTCOME.UNKNOWN);
++  if (!isCurrent() || !after.available) return result(OUTCOME.UNKNOWN);
+   const recorded = recordingBasisRefusal(repository, after.row, input) === null &&
+     after.row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
+     after.row.messageGroupMembershipPermit === evidence.committedPermit &&
+     after.row.messageGroupLearnerStamp === evidence.stamp;
+   return result(recorded ? OUTCOME.RECORDED : OUTCOME.UNKNOWN, after.row);
+ }
+-function finishLearnerRecording(repository, row, input, evidence) {
++function finishLearnerRecording(repository, row, input, evidence, isCurrent) {
++  if (!isCurrent()) return result(OUTCOME.UNAVAILABLE);
+   const refusal = recordingBasisRefusal(repository, row, input);
+   if (refusal !== null) return result(refusal, row);
+   if (exactRecordedLearner(row, input)) return result(OUTCOME.RECORDED, row);
+   // An already-recorded observation cannot regress back into an in-flight row.
+   if (evidence === null) return result(OUTCOME.CONFLICT, row);
+-  return recordObservedLearner(repository, row, input, evidence);
++  return recordObservedLearner(repository, row, input, evidence, isCurrent);
+ }
+ /** Advance only the membership phase after actual, exact native observation.
+  * The same-row CAS includes immutable identity, prior permit, holder, phase,
+  * terminal status/step/time and every membership stamp. Ordinary progress,
+  * membership debt/lane, reservations and physical CREATE remain untouched.
+  */
+-async function recordMessageGroupLearnerOutcome(repository, request, readCommittedLearner) {
++async function recordMessageGroupLearnerOutcome(repository, request, readCommittedLearner,
++  isInvocationCurrent) {
+   const input = learnerRecordingInput(request);
+-  if (!input || typeof readCommittedLearner !== 'function') return result(OUTCOME.INVALID);
++  if (!input || typeof readCommittedLearner !== 'function' ||
++    (isInvocationCurrent !== undefined && typeof isInvocationCurrent !== 'function')) {
++    return result(OUTCOME.INVALID);
++  }
++  const isCurrent = () => {
++    try {
++      return !repository.isShuttingDownRequested() &&
++        (isInvocationCurrent === undefined || isInvocationCurrent() === true);
++    } catch {
++      return false;
++    }
++  };
++  if (!isCurrent()) return result(OUTCOME.UNAVAILABLE);
+   const before = await observeMembershipOperation(repository, input.operationId);
+   if (!before.available) return result(OUTCOME.UNAVAILABLE);
+   const initialRefusal = recordingBasisRefusal(repository, before.row, input);
+@@ -403,6 +441,26 @@ async function recordMessageGroupLearnerOutcome(repository, request, readCommitt
+   // across an await. Use the actual final row as the exact conditional basis.
+   const current = await observeMembershipOperation(repository, input.operationId);
+   if (!current.available) return result(OUTCOME.UNAVAILABLE);
+-  return finishLearnerRecording(repository, current.row, input, evidence);
++  return finishLearnerRecording(repository, current.row, input, evidence, isCurrent);
+ }
+ export {recordMessageGroupLearnerOutcome};
++
++
++/** Reconstruct only recording inputs from the authoritative operation owner.
++ * No original caller packet is needed after restart or a lost write answer.
++ * The ordinary action-issuance decoder still accepts only IN_FLIGHT permits.
++ */
++async function recoverMessageGroupLearnerOutcome(repository, operationId, readCommittedLearner,
++  isInvocationCurrent) {
++  if (typeof operationId !== 'string' || operationId.length === 0) return result(OUTCOME.INVALID);
++  const observed = await observeMembershipOperation(repository, operationId);
++  if (!observed.available) return result(OUTCOME.UNAVAILABLE);
++  const row = observed.row;
++  if (!row) return result(OUTCOME.CONFLICT);
++  return recordMessageGroupLearnerOutcome(repository, {
++    operationId, identity: row.messageGroupMembershipIdentity,
++    permit: row.messageGroupMembershipPermit,
++    executionClaim: row.messageGroupMembershipOwnerClaim,
++  }, readCommittedLearner, isInvocationCurrent);
++}
++export {recoverMessageGroupLearnerOutcome};
+diff --git a/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js b/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
+index a4bc02d..9210f19 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
+@@ -86,11 +86,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
+         );
+         let result = null;
+         try {
+-          result = await this.controlPlaneSystemTableGateway.executeQuery(
+-            sql,
+-            params,
+-            queryOptions,
+-          );
++          result = await this.runAdmittedOperationMutationAttempt(options, () =>
++            this.controlPlaneSystemTableGateway.executeQuery(sql, params, queryOptions));
+         } catch (error) {
+           result = error;
+         }
+@@ -125,6 +122,27 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
+       }
+     }
+ 
++    // Host-only submission admission, matching the canonical mutation ingress.
++    // A synchronous lifetime predicate is checked without an intervening await;
++    // asynchronous policy callers retain their existing beforeAttempt semantics.
++    // This is NOT a commit-time fence for an already-submitted replicated write.
++    async runAdmittedOperationMutationAttempt(options, invoke) {
++      if (typeof options.beforeAttempt === 'function') {
++        const admission = options.beforeAttempt();
++        if (admission !== true && await admission !== true) {
++          return {success: false, admissionRefused: true};
++        }
++      }
++      // Async admission may have yielded. This last synchronous host check is
++      // adjacent to invoke(), and never travels in the query/wire options.
++      if (options.submissionIsCurrent !== undefined &&
++        (typeof options.submissionIsCurrent !== 'function' ||
++          options.submissionIsCurrent() !== true)) {
++        return {success: false, admissionRefused: true};
++      }
++      return invoke();
++    }
++
+     bindPriorMutationDeliveryAttemptResult(failureResult) {
+       return {
+         ...(failureResult && typeof failureResult === 'object' ?
+@@ -267,23 +285,21 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
+       fallback,
+       retryAttempt,
+     ) {
+-      if (typeof options.beforeAttempt === 'function' &&
+-          await options.beforeAttempt() !== true) {
+-        return {success: false, admissionRefused: true};
+-      }
+-      const queryOptions = this.buildOperationMutationQueryOptions(
+-        options,
+-        retryAttempt,
+-      );
+-      try {
+-        return await this.executeReplicaOperationGatewayMutation(
+-          mutation,
+-          queryOptions,
+-          fallback,
++      return this.runAdmittedOperationMutationAttempt(options, async () => {
++        const queryOptions = this.buildOperationMutationQueryOptions(
++          options,
++          retryAttempt,
+         );
+-      } catch (error) {
+-        return error;
+-      }
++        try {
++          return await this.executeReplicaOperationGatewayMutation(
++            mutation,
++            queryOptions,
++            fallback,
++          );
++        } catch (error) {
++          return error;
++        }
++      });
+     }
+ 
+     async executeReplicaOperationGatewayMutation(
+diff --git a/src/rebalancer/replica-operation-repository.js b/src/rebalancer/replica-operation-repository.js
+index 2f7aadb..5c88795 100644
+--- a/src/rebalancer/replica-operation-repository.js
++++ b/src/rebalancer/replica-operation-repository.js
+@@ -19,7 +19,7 @@ import {claimMessageGroupMembershipOwner, settleMessageGroupMembershipNonAdmissi
+   './replica-operation-message-group-membership-owner-claim.js';
+ import {v4 as uuidv4} from 'uuid';
+ import {selectMessageGroupMembershipBranch, authorizeMessageGroupLearner,
+-  recordMessageGroupLearnerOutcome} from
++  recordMessageGroupLearnerOutcome, recoverMessageGroupLearnerOutcome} from
+   './replica-operation-message-group-membership-authorization.js';
+ import {resolveTimeSource} from '../time/time-source.js';
+ import {
+@@ -598,8 +598,15 @@ class ReplicaOperationRepository {
+     return authorizeMessageGroupLearner(this, request);
+   }
+   /** Record an exact recovered learner fact; never dispatch membership work. */
+-  recordMessageGroupLearnerOutcome(request, readCommittedLearner) {
+-    return recordMessageGroupLearnerOutcome(this, request, readCommittedLearner);
++  recordMessageGroupLearnerOutcome(request, readCommittedLearner, isInvocationCurrent) {
++    return recordMessageGroupLearnerOutcome(this, request, readCommittedLearner,
++      isInvocationCurrent);
++  }
++
++  /** Recover a learner receipt by operation ID using durable inputs, not a saved packet. */
++  recoverMessageGroupLearnerOutcome(operationId, readCommittedLearner, isInvocationCurrent) {
++    return recoverMessageGroupLearnerOutcome(this, operationId, readCommittedLearner,
++      isInvocationCurrent);
+   }
+ 
+   /** Select a durable membership branch; never directly dispatches Raft. */
+diff --git a/test/integration/message-group-learner-recipient.integration.test.js b/test/integration/message-group-learner-recipient.integration.test.js
+index 041b04c..6a1fd5f 100644
+--- a/test/integration/message-group-learner-recipient.integration.test.js
++++ b/test/integration/message-group-learner-recipient.integration.test.js
+@@ -58,7 +58,7 @@ function payload(f, replicaId) {
+     [FIELD.ENTITY_TYPE]: SERVICE_TYPE.MESSAGE_GROUP, [FIELD.ENTITY_ID]: GROUP,
+     [FIELD.REPLICA_ID]: replicaId, [FIELD.MEMBERSHIP_QUERY]: learnerQuery(f)};
+ }
+-async function receiverFixture(t, {commit = true} = {}) {
++async function receiverFixture(t, {commit = true, dispatchTimeoutMs = 5000} = {}) {
+   const f = await fixture(t);
+   if (commit) {
+     assert.equal((await f.run()).reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
+@@ -84,6 +84,7 @@ async function receiverFixture(t, {commit = true} = {}) {
+   let shuttingDown = false;
+   const owner = new OperationWorkflowOwner({nodeId: NODE, repository: f.repository,
+     messageRouter: source, logger: noLog, config: {}, stats: {},
++    replicaOperationDispatchTimeoutMs: dispatchTimeoutMs,
+     operationLane: {run: (_key, work) => work()}, getActualReplicaStatus: async () => null,
+     isShuttingDown: () => shuttingDown, isInitialized: () => false, timeSource: f.clock});
+   const deliver = (request) => source.deliver(address, request,
+@@ -224,3 +225,436 @@ test('registered message-group recipient carries historical evidence to its work
+       assert.equal(fx.physical(), 0);
+     });
+   });
++
++
++// These interleavings are local scheduling controls over the actual registered
++// recipient/native reader. They do not claim cross-Raft-group commit fencing.
++test('learner driver invocation is fenced through its submission boundary',
++  {timeout: 30000}, async (t) => {
++    await t.test('a callback captured before re-registration cannot borrow its successor identity', async (t) => {
++      const fx = await receiverFixture(t);
++      const before = {...fx.f.row()};
++      const inbound = fx.recipient.handleServiceMessage.bind(fx.recipient);
++      let intercepted = false;
++      fx.recipient.handleServiceMessage = (...args) => {
++        fx.recipient.handleServiceMessage = inbound;
++        inbound(...args); // Captures the old callback; invocation is a microtask.
++        const old = fx.recipient.getRegisteredHandler(address);
++        fx.handler.registerWithRouter(fx.recipient);
++        assert.notEqual(fx.recipient.getRegisteredHandler(address), old);
++        intercepted = true;
++      };
++      const result = await record(fx);
++      assert.equal(intercepted, true, 'the actual inbound dispatch must engage');
++      assert.equal(result.outcome, 'unavailable',
++        'a retired captured callback must not borrow its replacement registration');
++      assert.deepEqual(fx.f.row(), before);
++      assert.equal((await record(fx)).outcome, 'recorded', 'a fresh callback must still recover');
++      assert.equal(fx.physical(), 0);
++    });
++    await t.test('retiring an old handler cannot unregister the current handler', async (t) => {
++      const fx = await receiverFixture(t);
++      const successor = async () => ({successor: true});
++      fx.recipient.register(address, successor);
++      fx.handler.unregisterFromRouter(fx.recipient);
++      assert.equal(fx.recipient.getRegisteredHandler(address) === successor, true,
++        'retirement must leave the exact successor callback registered');
++      fx.handler.registerWithRouter(fx.recipient);
++      assert.equal((await record(fx)).outcome, 'recorded');
++      const current = fx.recipient.getRegisteredHandler(address);
++      fx.handler.unregisterFromRouter(fx.recipient);
++      assert.equal(fx.recipient.getRegisteredHandler(address), null,
++        'the current owner must still be able to retire its own callback');
++      assert.equal(typeof current, 'function');
++    });
++    await t.test('a late unregister on the previous router cannot clear the new registration', async (t) => {
++      const fx = await receiverFixture(t);
++      const current = fx.recipient.getRegisteredHandler(address);
++      fx.handler.unregisterFromRouter(fx.source);
++      assert.equal(fx.handler.registeredRouterHandler === current, true,
++        'a different router must not retire this registration');
++      assert.equal((await record(fx)).outcome, 'recorded');
++    });
++    await t.test('recipient delivery uses the workflow owner configured timeout', async (t) => {
++      const fx = await receiverFixture(t, {dispatchTimeoutMs: 1234});
++      const deliver = fx.source.deliver.bind(fx.source);
++      let timeout;
++      fx.source.deliver = (target, message, options) => {
++        timeout = options.timeoutMs;
++        return deliver(target, message, options);
++      };
++      assert.equal((await record(fx)).outcome, 'recorded');
++      assert.equal(timeout, 1234, 'recipient delivery must use the owner configured timeout');
++    });
++    for (const invalidation of ['shutdown', 'fence-turnover']) {
++      await t.test(`${invalidation} after native delivery prevents a new recording submission`, async (t) => {
++        const fx = await receiverFixture(t); const before = {...fx.f.row()};
++        const entered = Promise.withResolvers(); const release = Promise.withResolvers();
++        t.after(release.resolve);
++        fx.f.pauseNodes(async () => { entered.resolve(); await release.promise; });
++        let writes = 0; const execute = fx.f.gateway.executeQuery;
++        fx.f.gateway.executeQuery = (...args) => { writes += 1; return execute(...args); };
++        const pending = record(fx);
++        assert.equal(await Promise.race([entered.promise.then(() => true),
++          pending.then(() => false)]), true, 'the post-delivery boot read must engage');
++        if (invalidation === 'shutdown') fx.shutOwner();
++        else fx.owner.bumpOperationOwnershipFenceEpoch();
++        release.resolve();
++        assert.equal((await pending).outcome, 'unavailable',
++          'an invalidated driver invocation cannot start a recording write');
++        assert.equal(writes, 0, 'no SQL mutation may be submitted after invalidation');
++        assert.deepEqual(fx.f.row(), before); assert.equal(fx.physical(), 0);
++      });
++    }
++    await t.test('owner invalidation during write backoff prevents resubmission', async (t) => {
++      const fx = await receiverFixture(t); const before = {...fx.f.row()};
++      const execute = fx.f.gateway.executeQuery; let attempts = 0; let waits = 0;
++      fx.f.gateway.executeQuery = (...args) => {
++        attempts += 1;
++        if (attempts === 1) return Promise.resolve({success: false,
++          error: 'query_admission_deferred', reasonCode: 'transport_backpressure',
++          retryAfterMs: 250, deferRetry: true});
++        return execute(...args);
++      };
++      fx.f.repository.waitForOperationPersistRetry = async () => {
++        waits += 1; fx.owner.bumpOperationOwnershipFenceEpoch();
++      };
++      const result = await record(fx);
++      assert.equal(waits, 1, 'the existing mutation retry owner must engage');
++      assert.equal(attempts, 1, 'an obsolete invocation must not submit another write attempt');
++      assert.equal(result.outcome, 'unknown', 'a previously submitted write retains uncertainty');
++      assert.deepEqual(fx.f.row(), before); assert.equal(fx.physical(), 0);
++    });
++    await t.test('recording enters the existing retained operation lane before reading', async (t) => {
++      const fx = await receiverFixture(t);
++      const entered = Promise.withResolvers(); const release = Promise.withResolvers();
++      t.after(release.resolve); let enteredFactory = false;
++      fx.owner.operationWorkflowRunExclusive = async (key, work) => {
++        assert.equal(key, fx.owner.getOperationOwnerSingleFlightKey(fx.f.request.operationId));
++        entered.resolve(); await release.promise;
++        enteredFactory = true; return work();
++      };
++      let reads = 0; const deliver = fx.source.deliver.bind(fx.source);
++      fx.source.deliver = (...args) => { reads += 1; return deliver(...args); };
++      const pending = record(fx);
++      assert.equal(await Promise.race([entered.promise.then(() => true),
++        pending.then(() => false)]), true, 'the existing operation lane must be entered');
++      assert.equal(reads, 0, 'no recipient read may precede the retained lane turn');
++      fx.owner.bumpOperationOwnershipFenceEpoch(); release.resolve();
++      assert.equal((await pending).outcome, 'unavailable', 'a stale queued turn must refuse');
++      assert.equal(enteredFactory, true); assert.equal(reads, 0);
++    });
++  });
++
++
++test('the owned learner command preserves submission and uncertainty boundaries',
++  {timeout: 30000}, async (t) => {
++    await t.test('queued recording snapshots encoded request and recipient without invoking accessors', async (t) => {
++      const fx = await receiverFixture(t);
++      const entered = Promise.withResolvers(); const release = Promise.withResolvers();
++      t.after(release.resolve);
++      fx.owner.operationWorkflowRunExclusive = async (_key, work) => {
++        entered.resolve(); await release.promise; return work();
++      };
++      const request = {...fx.f.request};
++      const route = {nodeId: SUCCESSOR, replicaId: fx.replicaId};
++      const pending = record(fx, request, route);
++      assert.equal(await Promise.race([entered.promise.then(() => true),
++        pending.then(() => false)]), true, 'snapshot control must enter the actual lane');
++      request.identity = 'replaced'; request.permit = 'replaced';
++      request.executionClaim = 'replaced'; request.operationId = 'replaced';
++      route.nodeId = 'unrelated'; route.replicaId = TARGET;
++      release.resolve();
++      assert.equal((await pending).outcome, 'recorded',
++        'the waiting command must retain its original immutable input');
++      let getterReads = 0;
++      const accessor = {...fx.f.request};
++      Object.defineProperty(accessor, 'operationId', {enumerable: true,
++        get() { getterReads += 1; return fx.f.request.operationId; }});
++      assert.equal((await record(fx, accessor)).outcome, 'invalid');
++      assert.equal(getterReads, 0, 'boundary capture must not invoke caller accessors');
++    });
++    await t.test('an already-submitted write stays UNKNOWN after invocation retirement', async (t) => {
++      const fx = await receiverFixture(t); const before = {...fx.f.row()};
++      const execute = fx.f.gateway.executeQuery;
++      const entered = Promise.withResolvers(); const release = Promise.withResolvers();
++      t.after(release.resolve); let attempts = 0;
++      fx.f.gateway.executeQuery = async (...args) => {
++        attempts += 1; entered.resolve(); await release.promise; return execute(...args);
++      };
++      const pending = record(fx);
++      assert.equal(await Promise.race([entered.promise.then(() => true),
++        pending.then(() => false)]), true, 'the mutation must enter the actual gateway');
++      fx.owner.bumpOperationOwnershipFenceEpoch(); release.resolve();
++      assert.equal((await pending).outcome, 'unknown',
++        'retirement cannot turn a submitted write into definite noncommitment');
++      assert.equal(attempts, 1);
++      assert.equal(fx.f.row().message_group_membership_phase, PHASE.LEARNER_COMMITTED);
++      assert.equal(fx.f.row().message_group_membership_owner_claim,
++        before.message_group_membership_owner_claim);
++      assert.equal(fx.f.row().message_group_membership_obligation_state,
++        before.message_group_membership_obligation_state);
++      const proposals = fx.f.proposalCount();
++      assert.equal((await record(fx)).outcome, 'recorded');
++      assert.equal(attempts, 1, 'new invocation must recognize the exact result without rewriting');
++      assert.equal(fx.f.proposalCount(), proposals); assert.equal(fx.physical(), 0);
++    });
++    await t.test('a synchronous submission guard adds no extra microtask or wire authority', async (t) => {
++      const fx = await receiverFixture(t); let current = true; let attempts = 0;
++      const execute = fx.f.gateway.executeQuery;
++      fx.f.gateway.executeQuery = (sql, params, options) => {
++        attempts += 1;
++        assert.equal(current, true, 'synchronous admission must reach submission without an await');
++        assert.equal(Object.hasOwn(options, 'beforeAttempt'), false,
++          'the host-only callback must not enter query options');
++        return execute(sql, params, options);
++      };
++      const result = await fx.f.repository.executeOperationMutationWithRetry(
++        'UPDATE replica_operations SET updated_at = updated_at WHERE operation_id = ?',
++        [fx.f.request.operationId], {beforeAttempt: () => {
++          queueMicrotask(() => { current = false; }); return current;
++        }});
++      assert.equal(result.success, true); assert.equal(attempts, 1);
++    });
++    await t.test('asynchronous existing admission still settles before a mutation attempt', async (t) => {
++      const fx = await receiverFixture(t); const before = {...fx.f.row()};
++      const entered = Promise.withResolvers(); const release = Promise.withResolvers();
++      t.after(release.resolve); let attempts = 0;
++      const execute = fx.f.gateway.executeQuery;
++      fx.f.gateway.executeQuery = (...args) => { attempts += 1; return execute(...args); };
++      const pending = fx.f.repository.executeOperationMutationWithRetry(
++        'UPDATE replica_operations SET updated_at = updated_at WHERE operation_id = ?',
++        [fx.f.request.operationId], {beforeAttempt: async () => {
++          entered.resolve(); await release.promise; return false;
++        }});
++      assert.equal(await Promise.race([entered.promise.then(() => true),
++        pending.then(() => false)]), true, 'the existing asynchronous admission must engage');
++      assert.equal(attempts, 0); release.resolve();
++      assert.equal((await pending).admissionRefused, true);
++      assert.equal(attempts, 0); assert.deepEqual(fx.f.row(), before);
++    });
++  });
++
++
++// Supersedes ONLY the two commit-time expiry/boot refusal expectations in the
++// retained 20261009 package. See safety-first-ruling-20261009.md. That original
++// 2-pass/2-fail evidence is retained unchanged, not relabeled as this result.
++const RECEIPT_COLUMNS = Object.freeze(['message_group_membership_phase',
++  'message_group_membership_permit', 'message_group_learner_stamp']);
++function withoutReceipt(row) {
++  return Object.fromEntries(Object.entries(row).filter(([key]) => !RECEIPT_COLUMNS.includes(key)));
++}
++function assertExactReceipt(fx, before, proposals) {
++  const after = fx.f.row();
++  assert.deepEqual(withoutReceipt(after), withoutReceipt(before),
++    'late recording must change only the three historical receipt columns');
++  assert.equal(after.message_group_membership_phase, PHASE.LEARNER_COMMITTED);
++  const permit = JSON.parse(after.message_group_membership_permit);
++  assert.deepEqual(permit, {...JSON.parse(fx.f.request.permit),
++    permitState: 'committed', proposalIndex: 2},
++  'the receipt must preserve every original execution fence and sequence');
++  const stamp = JSON.parse(after.message_group_learner_stamp);
++  const identity = JSON.parse(fx.f.request.identity);
++  assert.equal(stamp.identities[identity.targetPeerId], identity.targetReplicaId);
++  assert.equal(stamp.learners.includes(identity.targetPeerId), true);
++  assert.equal(fx.f.proposalCount(), proposals, 'receipt recovery must not propose another action');
++  assert.equal(fx.physical(), 0, 'a historical receipt must not dispatch physical work');
++}
++function holdReceiptWrite(fx, t) {
++  const entered = Promise.withResolvers(); const release = Promise.withResolvers();
++  const execute = fx.f.gateway.executeQuery;
++  let submissions = 0;
++  fx.f.gateway.executeQuery = async (sql, ...args) => {
++    if (sql.includes('SET message_group_membership_phase = ?') &&
++      sql.includes('message_group_learner_stamp = ?')) {
++      submissions += 1; entered.resolve(); await release.promise;
++    }
++    return execute(sql, ...args);
++  };
++  t.after(release.resolve);
++  return {entered: entered.promise, release: release.resolve,
++    submissions: () => submissions};
++}
++function expireClaim(f) {
++  const expiresAt = JSON.parse(f.request.executionClaim).expiresAt;
++  f.clock.advance(expiresAt - f.clock.now() + 1);
++}
++async function assertReceiptWriteEntered(held, pending) {
++  assert.equal(await Promise.race([held.entered.then(() => true), pending.then(() => false)]),
++    true, 'the real receipt SQL submission must engage before the authority change');
++}
++
++test('safety-first historical recording remains separate from permission for a next effect',
++  {timeout: 30000}, async (t) => {
++    for (const change of ['lease-expiry', 'canonical-boot-revocation']) {
++      await t.test(`${change} after submission permits only the exact late receipt`, async (t) => {
++        const fx = await receiverFixture(t); const before = {...fx.f.row()};
++        const proposals = fx.f.proposalCount(); const held = holdReceiptWrite(fx, t);
++        const pending = record(fx); await assertReceiptWriteEntered(held, pending);
++        if (change === 'lease-expiry') expireClaim(fx.f);
++        else fx.f.execute('UPDATE nodes SET boot_incarnation = ? WHERE node_id = ?', [2, NODE]);
++        held.release();
++        assert.equal((await pending).outcome, 'unknown',
++          'an obsolete caller must not report current success from its late write');
++        assertExactReceipt(fx, before, proposals);
++        const durable = {...fx.f.row()};
++        assert.notEqual((await record(fx)).outcome, 'recorded',
++          'a new invocation under revoked authority cannot claim current recording success');
++        assert.equal(held.submissions(), 1, 'the obsolete invocation must not submit again');
++        assert.deepEqual(fx.f.row(), durable);
++        assert.equal(fx.physical(), 0);
++      });
++    }
++    await t.test('receipt-first then holder takeover recovers without rewriting the action', async (t) => {
++      const fx = await receiverFixture(t); const before = {...fx.f.row()};
++      const proposals = fx.f.proposalCount(); const held = holdReceiptWrite(fx, t);
++      const pending = record(fx); await assertReceiptWriteEntered(held, pending);
++      expireClaim(fx.f); held.release(); assert.equal((await pending).outcome, 'unknown');
++      assertExactReceipt(fx, before, proposals);
++      const successor = fx.f.repositoryFor(SUCCESSOR);
++      const claimed = await successor.claimMessageGroupMembershipOwner({
++        operationId: fx.f.request.operationId, identity: fx.f.request.identity,
++        expectedClaim: fx.f.request.executionClaim});
++      assert.equal(claimed.outcome, 'recorded'); const adopted = {...fx.f.row()};
++      let reads = 0;
++      const answer = await successor.recordMessageGroupLearnerOutcome(
++        {...fx.f.request, executionClaim: claimed.claim}, async (query) => {
++          reads += 1; return fx.native.readCommittedMembership(query);
++        });
++      assert.equal(answer.outcome, 'recorded'); assert.equal(reads, 0);
++      assert.deepEqual(fx.f.row(), adopted, 'replay under the successor must not rewrite history');
++      assert.equal(held.submissions(), 1); assert.equal(fx.f.proposalCount(), proposals);
++      assert.equal(fx.physical(), 0);
++    });
++    await t.test('claim-first defeats the stale receipt and the successor still makes progress', async (t) => {
++      const fx = await receiverFixture(t); const held = holdReceiptWrite(fx, t);
++      const proposals = fx.f.proposalCount(); const pending = record(fx);
++      await assertReceiptWriteEntered(held, pending); expireClaim(fx.f);
++      const successor = fx.f.repositoryFor(SUCCESSOR);
++      const claimed = await successor.claimMessageGroupMembershipOwner({
++        operationId: fx.f.request.operationId, identity: fx.f.request.identity,
++        expectedClaim: fx.f.request.executionClaim});
++      assert.equal(claimed.outcome, 'recorded'); const adopted = {...fx.f.row()};
++      held.release(); assert.equal((await pending).outcome, 'unknown');
++      assert.deepEqual(fx.f.row(), adopted, 'a winning successor claim must defeat the stale receipt CAS');
++      assert.equal((await successor.recordMessageGroupLearnerOutcome(
++        {...fx.f.request, executionClaim: claimed.claim},
++        (query) => fx.native.readCommittedMembership(query))).outcome, 'recorded');
++      assertExactReceipt(fx, adopted, proposals);
++    });
++    for (const change of ['lease-expiry', 'canonical-boot-revocation']) {
++      await t.test(`${change} during retry backoff prevents a NEW receipt submission`, async (t) => {
++        const fx = await receiverFixture(t); const before = {...fx.f.row()};
++        let submissions = 0;
++        const execute = fx.f.gateway.executeQuery;
++        fx.f.gateway.executeQuery = async (...args) => {
++          submissions += 1;
++          // Permit a wrongly submitted retry to finish so omission is an
++          // assertion failure, never a timeout or an unbounded diagnostic loop.
++          if (submissions > 1) return execute(...args);
++          return {success: false, error: 'fixture retryable route unavailable'};
++        };
++        fx.f.repository.isRetryableOperationPersistError = (answer) =>
++          answer?.error === 'fixture retryable route unavailable';
++        fx.f.repository.waitForOperationPersistRetry = async () => {
++          if (change === 'lease-expiry') expireClaim(fx.f);
++          else fx.f.execute('UPDATE nodes SET boot_incarnation = ? WHERE node_id = ?', [2, NODE]);
++        };
++        assert.notEqual((await record(fx)).outcome, 'recorded');
++        assert.equal(submissions, 1,
++          'revoked claim or boot must prevent another submission after backoff');
++        assert.deepEqual(fx.f.row(), before); assert.equal(fx.physical(), 0);
++      });
++    }
++  });
++
++
++const recoverReceipt = (fx) => fx.owner.recoverMessageGroupLearnerOutcomeFromRecipient(
++  fx.f.request.operationId, {nodeId: SUCCESSOR, replicaId: fx.replicaId});
++function reconstructedOwner(fx) {
++  return new OperationWorkflowOwner({nodeId: NODE, repository: fx.f.reopenOperations(),
++    messageRouter: fx.source, logger: noLog, config: {}, stats: {},
++    replicaOperationDispatchTimeoutMs: 5000,
++    operationLane: {run: (_key, work) => work()}, getActualReplicaStatus: async () => null,
++    isShuttingDown: () => false, isInitialized: () => false, timeSource: fx.f.clock});
++}
++test('restart recording reconstructs durable inputs without retaining the original request',
++  {timeout: 30000}, async (t) => {
++    await t.test('new workflow owner records by ID after native commit, without manual workflow progress', async (t) => {
++      const fx = await receiverFixture(t); const before = {...fx.f.row()};
++      const proposals = fx.f.proposalCount(); fx.shutOwner(); fx.owner = reconstructedOwner(fx);
++      assert.equal((await recoverReceipt(fx)).outcome, 'recorded');
++      assertExactReceipt(fx, before, proposals);
++    });
++    await t.test('reconstruction after SQL-answer loss consumes the committed permit without reviving it', async (t) => {
++      const fx = await receiverFixture(t); const held = holdReceiptWrite(fx, t);
++      const pending = record(fx); await assertReceiptWriteEntered(held, pending);
++      fx.owner.bumpOperationOwnershipFenceEpoch(); held.release();
++      assert.equal((await pending).outcome, 'unknown');
++      const recorded = {...fx.f.row()}; const proposals = fx.f.proposalCount();
++      fx.shutOwner(); fx.owner = reconstructedOwner(fx);
++      let deliveries = 0; const deliver = fx.source.deliver.bind(fx.source);
++      fx.source.deliver = (...args) => { deliveries += 1; return deliver(...args); };
++      assert.equal((await recoverReceipt(fx)).outcome, 'recorded',
++        'reconstruction must accept the exact already-committed receipt without an original packet');
++      assert.equal(deliveries, 0); assert.equal(held.submissions(), 1);
++      assert.deepEqual(fx.f.row(), recorded); assert.equal(fx.f.proposalCount(), proposals);
++      const authorization = await fx.owner.repository.authorizeMessageGroupLearner({
++        operationId: fx.f.request.operationId, identity: recorded.message_group_membership_identity,
++        permit: recorded.message_group_membership_permit});
++      assert.equal(authorization.outcome, 'invalid',
++        'a committed recording input must never become a new executable permit');
++      assert.equal(fx.physical(), 0);
++    });
++    await t.test('recovery with no applied origin waits and later records the SAME action', async (t) => {
++      const fx = await receiverFixture(t, {commit: false}); const before = {...fx.f.row()};
++      assert.equal((await recoverReceipt(fx)).outcome, 'unknown');
++      assert.deepEqual(fx.f.row(), before); assert.equal(fx.f.proposalCount(), 0);
++      assert.equal((await fx.f.run()).reason, RAFT_MEMBERSHIP_TRANSITION_REASON.PROPOSED);
++      const target = JSON.parse(fx.f.request.identity).targetPeerId;
++      assert.ok(fx.f.cluster.settle(() => FOUNDERS.every((id) =>
++        fx.f.cluster.node(id).readStatus().confState.learners.includes(target))));
++      assert.equal((await recoverReceipt(fx)).outcome, 'recorded');
++      assertExactReceipt(fx, before, 1);
++    });
++    await t.test('missing or unreadable authoritative row cannot be reconstructed from caches', async (t) => {
++      const fx = await receiverFixture(t); const before = {...fx.f.row()};
++      const route = {nodeId: SUCCESSOR, replicaId: fx.replicaId};
++      assert.equal((await fx.owner.recoverMessageGroupLearnerOutcomeFromRecipient(
++        'missing-operation', route)).outcome, 'conflict');
++      fx.f.failReads('replica_operations');
++      assert.equal((await recoverReceipt(fx)).outcome, 'unavailable');
++      assert.deepEqual(fx.f.row(), before); assert.equal(fx.physical(), 0);
++    });
++  });
++
++
++test('async admission must recheck local lifetime adjacent to actual submission',
++  {timeout: 30000}, async (t) => {
++    const fx = await receiverFixture(t); let current = true; let submissions = 0;
++    const execute = fx.f.gateway.executeQuery;
++    fx.f.gateway.executeQuery = (...args) => { submissions += 1; return execute(...args); };
++    const response = await fx.f.repository.executeOperationMutationWithRetry(
++      'UPDATE replica_operations SET updated_at = updated_at WHERE operation_id = ?',
++      [fx.f.request.operationId], {beforeAttempt: async () => {
++        queueMicrotask(() => { current = false; }); return true;
++      }, submissionIsCurrent: () => current});
++    assert.equal(response.admissionRefused, true,
++      'turnover during async admission must prevent submission');
++    assert.equal(submissions, 0);
++  });
++
++test('committed permit with missing recorded phase cannot be reused as an in-flight recording',
++  {timeout: 30000}, async (t) => {
++    const fx = await receiverFixture(t); assert.equal((await recoverReceipt(fx)).outcome, 'recorded');
++    fx.f.execute(`UPDATE replica_operations SET message_group_membership_phase = ?,
++      message_group_learner_stamp = NULL WHERE operation_id = ?`,
++    [PHASE.LEARNER_IN_FLIGHT, fx.f.request.operationId]);
++    const inconsistent = {...fx.f.row()}; let deliveries = 0;
++    const deliver = fx.source.deliver.bind(fx.source);
++    fx.source.deliver = (...args) => { deliveries += 1; return deliver(...args); };
++    assert.equal((await recoverReceipt(fx)).outcome, 'conflict',
++      'a committed permit is readback-only and must not authorize new recording');
++    assert.deepEqual(fx.f.row(), inconsistent); assert.equal(deliveries, 0);
++    assert.equal(fx.physical(), 0);
++  });
+diff --git a/test/shards/impact-contracts.json b/test/shards/impact-contracts.json
+index 071e910..6dec36e 100644
+--- a/test/shards/impact-contracts.json
++++ b/test/shards/impact-contracts.json
+@@ -846,14 +846,16 @@
+       ]
+     },
+     "message-group-registered-learner-read": {
+-      "description": "Actual registered message-group recipient binds router delivery, local service/port lifetime and exact native evidence to the existing workflow owner recorder. No ordinary staging, CREATE, proposal, or successor authority.",
++      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
+       "owners": [
+         "src/node/message-group-service-handler.js",
+         "src/node/message-group-membership-recipient.js",
+         "src/rebalancer/operation-workflow-owner.js",
+         "src/rebalancer/operation-workflow-message-group-native-read.js",
+         "src/rebalancer/replica-operation-constants.js",
+-        "src/rebalancer/replica-operation-repository.js"
++        "src/rebalancer/replica-operation-repository.js",
++        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
++        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+       ],
+       "tests": [
+         "test/integration/message-group-learner-recipient.integration.test.js"
+@@ -1661,7 +1663,7 @@
+       ]
+     },
+     "message-group-registered-learner-read": {
+-      "description": "Actual registered message-group recipient binds router delivery, local service/port lifetime and exact native evidence to the existing workflow owner recorder. No ordinary staging, CREATE, proposal, or successor authority.",
++      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
+       "endpoints": [
+         {
+           "id": "registered-native-recipient",
+@@ -1676,7 +1678,9 @@
+             "src/rebalancer/operation-workflow-owner.js",
+             "src/rebalancer/operation-workflow-message-group-native-read.js",
+             "src/rebalancer/replica-operation-constants.js",
+-            "src/rebalancer/replica-operation-repository.js"
++            "src/rebalancer/replica-operation-repository.js",
++            "src/rebalancer/replica-operation-message-group-membership-authorization.js",
++            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+           ]
+         }
+       ],

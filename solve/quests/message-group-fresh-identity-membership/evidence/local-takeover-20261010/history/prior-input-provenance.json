@@ -1,0 +1,27 @@
+{
+  "inputs": [
+    {
+      "file": "freshmg-recording-source-37940092309.zip",
+      "sha256": "d6850f9768c99aa0ba29bee5537049b18e766ae511d0bd8e8c612de387c38e95",
+      "matchesRetainedActionsDigest": null
+    },
+    {
+      "file": "freshmg-learner-recording-37943949068.zip",
+      "sha256": "247ef4b56d34aa3278abdf1085f63db6e38780a7d115ba0a3cec76b7e0218d7d",
+      "matchesRetainedActionsDigest": true
+    },
+    {
+      "file": "freshmg-learner-process-37948946816.zip",
+      "sha256": "368e36ecbee8f1c1d9e97c2ff6564cdfc358b569ee3e936673f290acfd3a3b6d",
+      "matchesRetainedActionsDigest": true
+    },
+    {
+      "file": "registered-learner-gate-37963538484.zip",
+      "sha256": "8340d6508677080d32210fee946d66bec57cbbb79dbdca150e5218cf1b02dc0d",
+      "matchesRetainedActionsDigest": true
+    }
+  ],
+  "sourceArchiveCommit": "16bcff35bc44d2c6c6151cfb29d35fa7a4b4325a",
+  "reconstruction": "Three retained incremental patches over the source tar; unrelated solve evidence excluded. Synthetic local HEAD is not an upstream commit.",
+  "sourceBases": "All eight changed existing preimages verified against live GitHub at exact upstream head."
+}
