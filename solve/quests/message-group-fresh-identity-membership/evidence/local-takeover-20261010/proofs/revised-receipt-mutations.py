@@ -71,8 +71,10 @@ def main():
       'a retired captured callback must not borrow its replacement registration'),
      ('exact-unregister',
       'src/node/message-group-service-handler.js',
-      [('messageRouter.unregisterExact(handlerAddress, registration);',
-        'messageRouter.unregister(handlerAddress);')],
+      [('isFunction(messageRouter.unregisterExact) &&\n'
+        '      messageRouter.unregisterExact(handlerAddress, registration) === true;',
+        'isFunction(messageRouter.unregister) &&\n'
+        '      (messageRouter.unregister(handlerAddress), true);')],
       'retiring an old handler cannot unregister the current handler',
       'retirement must leave the exact successor callback registered'),
      ('configured-budget',
@@ -83,8 +85,8 @@ def main():
       'recipient delivery must use the owner configured timeout'),
      ('recording-invocation',
       'src/rebalancer/operation-workflow-message-group-native-read.js',
-      [('return record((query) => readAtRecipient(owner, selected, query, isCurrent), isCurrent);',
-        'return record((query) => readAtRecipient(owner, selected, query, isCurrent));')],
+      [('readAtRecipient(owner, turn.selected, query, turn.isCurrent), turn.isCurrent))',
+        'readAtRecipient(owner, turn.selected, query, turn.isCurrent)))')],
       'fence-turnover after native delivery prevents a new recording submission',
       'an invalidated driver invocation cannot start a recording write'),
      ('submitted-is-unknown',
@@ -95,8 +97,10 @@ def main():
       'retirement cannot turn a submitted write into definite noncommitment'),
      ('retained-owner-lane',
       'src/rebalancer/operation-workflow-message-group-native-read.js',
-      [('return owner.runRetainedOperationOwnerAction(operationId, () => {',
-        'return Promise.resolve().then(() => {')],
+      [('return owner.runRetainedOperationOwnerAction(operationId,\n'
+        '    () => recordingTurn(owner, turn, record))',
+        'return Promise.resolve().then(\n'
+        '    () => recordingTurn(owner, turn, record))')],
       'recording enters the existing retained operation lane before reading',
       'the existing operation lane must be entered'),
      ('queued-input-snapshot',
