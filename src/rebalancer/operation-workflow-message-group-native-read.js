@@ -90,12 +90,15 @@ function recoverMessageGroupLearnerFromRecipient(owner, operationId, route) {
     owner.repository.recoverMessageGroupLearnerOutcome(operationId, read, isCurrent));
 }
 /** Inline recovery for a reconcile turn that ALREADY holds this operation's
- * lane (restart scan, periodic sweep, CDC wake). It never acquires the lane;
- * a caller outside the lane is refused as INVALID instead of deadlocking.
+ * lane (restart scan, periodic sweep, CDC wake). It never acquires the lane.
+ * The caller passes the lane turn the operation lane handed its factory; a
+ * turn for another key, no turn, or a lane nobody holds is refused as INVALID
+ * instead of deadlocking or borrowing someone else's turn.
  */
-function recoverMessageGroupLearnerInline(owner, operationId, route) {
+function recoverMessageGroupLearnerInline(owner, operationId, route, laneTurn) {
   const turn = selectRecordingRecipient(owner, operationId, route);
-  if (!turn || owner.isOperationOwnerLaneHeld(operationId) !== true) {
+  if (!turn || owner.isOperationOwnerLaneHeld(operationId) !== true ||
+    laneTurn?.ownerKey !== owner.getOperationOwnerSingleFlightKey(operationId)) {
     return Promise.resolve(invalidAnswer());
   }
   return recordingTurn(owner, turn, (read, isCurrent) =>

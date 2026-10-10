@@ -351,6 +351,10 @@ class RebalanceCoordinatorLifecycle {
       options.repository ||
       new ReplicaOperationRepository({
         nodeId: this.nodeId,
+        // The membership owner claim is bound to this process's issued boot
+        // incarnation, the one the router carries and the nodes row publishes.
+        membershipOwnerBootIncarnation:
+          options.bootIncarnation ?? this.messageRouter?.bootIncarnation ?? null,
         systemTableCache: this.systemTableCache,
         cdcIntegrationService: this.cdcIntegrationService,
         controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,

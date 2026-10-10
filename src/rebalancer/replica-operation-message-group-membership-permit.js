@@ -18,6 +18,13 @@ const MEMBERSHIP_AUTHORIZATION_OUTCOME = Object.freeze({RECORDED: 'recorded',
   INVALID: 'invalid', STALE_OWNER: 'stale_owner'});
 const MEMBERSHIP_OBLIGATION = Object.freeze({INTENT_RECORDED: 'intent_recorded',
   UNKNOWN: 'unknown'});
+/** Typed outcomes of one membership-debt reconciliation turn. Only RECORDED
+ * means the exact learner outcome is durable; every other state keeps the debt. */
+const MEMBERSHIP_DEBT_RECOVERY_OUTCOME = Object.freeze({
+  RECORDED: 'recorded', RETAINED: 'retained', NO_HOSTED_WITNESS: 'no_hosted_witness',
+  HELD_ELSEWHERE: 'held_elsewhere', CLAIM_REFUSED: 'claim_refused',
+  PHASE_NOT_OWNED: 'phase_not_owned', INVALID_ROW: 'invalid_row', INVALID_INPUT: 'invalid_input',
+  CONFLICT: 'conflict', NOT_CURRENT: 'not_current', LANE_BUSY: 'lane_busy'});
 const PERMIT_VERSION = 2;
 const MAX_RECORD_BYTES = 16384;
 const IDENTITY_KEYS = Object.freeze(['operationId', 'groupId',
@@ -121,4 +128,5 @@ export {MEMBERSHIP_PHASE, MEMBERSHIP_PERMIT_STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, membershipBranchSpec,
   decodeMembershipOwnerClaim, membershipOwnerClaimFence,
-  messageGroupMembershipLaneKey};
+  messageGroupMembershipLaneKey,
+  MEMBERSHIP_DEBT_RECOVERY_OUTCOME};

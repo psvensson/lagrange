@@ -80,31 +80,39 @@ Three existing triggers converge on one algorithm, owned by OperationWorkflowOwn
 observer (a replica_operations row still owing its obligation, or an ACTIVE
 message-group services row for a group whose lane holder owes one). Each turn:
 
-1. Censuses debt through the repository's authoritative read of every
-   message-group operation whose obligation state is UNKNOWN, whatever its
-   ordinary status; ordinary failure does not hide debt.
+1. Censuses debt: the restart scan reads the repository's authoritative census
+   of every message-group operation whose obligation state is UNKNOWN, whatever
+   its ordinary status (ordinary failure does not hide debt); the periodic sweep
+   reads the replicated cache as a hint, so a cache listing no debt costs no
+   round trip. Every candidate is re-read authoritatively before any decision.
 2. Holds the operation lane for one turn (coalesced wakeups do not inherit a
    turn; the debt waits for the next trigger).
-3. Keeps a live local membership claim, waits on a live foreign one, and adopts
+3. Recovers only the initial learner action (ADD_LEARNER, sequence 1, phase
+   in-flight or committed); promotion and removal debt belong to later owners
+   and are reported, not touched. An initial action whose exact outcome is
+   already durable (committed phase, committed permit, learner stamp) is
+   settled for this owner: no claim is touched and no witness is asked.
+4. Keeps a live local membership claim, waits on a live foreign one, and adopts
    an expired one through the existing claim CAS. Adoption is holder
    replacement, never a grant for a successor action.
-4. Recovers only the initial learner action (ADD_LEARNER, sequence 1, phase
-   in-flight or committed); promotion and removal debt belong to later owners
-   and are reported, not touched.
-5. Selects an explicitly hosted witness from the service census: an ACTIVE row
-   of another replica of the group, preferring the source, never the target the
-   operation has not created. The census is a route hint; the native answer at
-   the witness is the evidence. No hosted witness is a typed retained outcome
-   whose wake is the services row of a hosted replica.
-6. Calls the recorder's inline entry, which refuses any caller that does not
-   hold the lane; the retained-lane public entry stays for explicit callers.
+5. Selects an explicitly hosted witness from the service census: ACTIVE rows
+   of other replicas of the group, the source first, never the target the
+   operation has not created; a witness that did not answer rotates out for the
+   next turn. The census is a route hint; the native answer at the witness is
+   the evidence. No hosted witness is a typed retained outcome whose wake is the
+   services row of a hosted replica.
+6. Calls the recorder's inline entry with the lane turn the operation lane
+   handed it; the entry refuses a missing turn, a turn for another key, or a
+   lane nobody holds. The retained-lane public entry stays for explicit callers.
 
-RECORDED, RETAINED (UNKNOWN/UNAVAILABLE/STALE_OWNER), NO_HOSTED_WITNESS,
-HELD_ELSEWHERE, CLAIM_REFUSED, PHASE_NOT_OWNED, LANE_BUSY, NOT_CURRENT,
-INVALID_ROW and CONFLICT are named states. Only RECORDED means the exact outcome
-is durable; INVALID_ROW and CONFLICT are surfaced for owned repair. None of them
-dispatches CREATE, promotion, removal, cleanup, a successor attempt or a lane
-release.
+RECORDED (new or settled), RETAINED (UNKNOWN/UNAVAILABLE/STALE_OWNER),
+NO_HOSTED_WITNESS, HELD_ELSEWHERE, CLAIM_REFUSED, PHASE_NOT_OWNED, LANE_BUSY,
+NOT_CURRENT, INVALID_ROW, INVALID_INPUT and CONFLICT are named states owned by
+the permit module. Only RECORDED means the exact outcome is durable; INVALID_ROW,
+INVALID_INPUT and CONFLICT are surfaced for owned repair. None of them dispatches
+CREATE, promotion, removal, cleanup, a successor attempt or a lane release.
+The membership owner claim is bound to the process's issued boot incarnation,
+the one the router carries and the nodes row publishes.
 
 The full ordinary driver still needs initial learner action execution, followed
 by current CREATE through the existing leader descriptor/generation/sole-worker

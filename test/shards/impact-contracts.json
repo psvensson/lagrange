@@ -860,11 +860,15 @@
         "src/rebalancer/replica-operation-message-group-membership-authorization.js",
         "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
         "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
-        "src/rebalancer/operation-workflow-recovery-reconcile.js"
+        "src/rebalancer/operation-workflow-recovery-reconcile.js",
+        "src/rebalancer/rebalance-coordinator-lifecycle.js",
+        "src/rebalancer/rebalance-coordinator-recovery-budget-bindings.js",
+        "src/rebalancer/rebalance-coordinator-recovery-helper.js"
       ],
       "tests": [
         "test/integration/message-group-learner-recipient.integration.test.js",
-        "test/integration/message-group-learner-discovery.integration.test.js"
+        "test/integration/message-group-learner-discovery.integration.test.js",
+        "test/rebalancer/coordinator-timeout-check-serialization.test.js"
       ]
     }
   },
@@ -1691,14 +1695,18 @@
             "src/rebalancer/replica-operation-message-group-membership-authorization.js",
             "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
             "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
-            "src/rebalancer/operation-workflow-recovery-reconcile.js"
+            "src/rebalancer/operation-workflow-recovery-reconcile.js",
+            "src/rebalancer/rebalance-coordinator-lifecycle.js",
+            "src/rebalancer/rebalance-coordinator-recovery-budget-bindings.js",
+            "src/rebalancer/rebalance-coordinator-recovery-helper.js"
           ]
         }
       ],
       "contract": "message-group-registered-learner-read",
       "witnessTests": [
         "test/integration/message-group-learner-recipient.integration.test.js",
-        "test/integration/message-group-learner-discovery.integration.test.js"
+        "test/integration/message-group-learner-discovery.integration.test.js",
+        "test/rebalancer/coordinator-timeout-check-serialization.test.js"
       ]
     }
   }
