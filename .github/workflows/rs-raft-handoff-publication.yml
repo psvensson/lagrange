@@ -1,0 +1,53 @@
+name: rs-raft handoff preservation
+on:
+  push:
+    branches: [ops/rs-raft-handoff-publication-20261010]
+    paths: [.github/workflows/rs-raft-handoff-publication.yml]
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-handoff-publication-20261010
+  cancel-in-progress: false
+jobs:
+  preserve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          path: carrier
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 60a60b2a6461d6fd9fa0f6f96fd3e25aa94651e4
+          path: candidate
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Verify original bytes and preserve WIP on a new branch
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          python3 ../carrier/scripts/quest-evidence/handoff-20261010/publish.py \
+            ../carrier/scripts/quest-evidence/handoff-20261010 "$PWD" \
+            "$GITHUB_WORKSPACE/publication-evidence"
+      - name: Retain status on success or failure
+        if: always()
+        working-directory: candidate
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/publication-evidence"
+          git status --porcelain > "$GITHUB_WORKSPACE/publication-evidence/final-status.txt"
+          git diff --binary > "$GITHUB_WORKSPACE/publication-evidence/uncommitted.patch"
+          echo 'Publication and byte verification only; no canonical tests, approval, driver activation or main merge.' > "$GITHUB_WORKSPACE/publication-evidence/scope.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-local-handoff-${{ github.run_id }}-${{ github.run_attempt }}
+          path: publication-evidence/
+          retention-days: 14
+          if-no-files-found: error
