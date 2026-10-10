@@ -5,6 +5,7 @@ import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
  */
 import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {ReplicaStatus} from './replica-status.js';
+import {REBALANCE_COORDINATOR_LOG_MSG} from './rebalancer-constants.js';
 import {committedStampOfAnswer, validateBootstrapMembershipStamp} from
   '../raft/raft-committed-membership-stamp.js';
 import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../raft/raft-operation-port-constants.js';
@@ -27,6 +28,13 @@ import {observeMembershipOperation, membershipRowIdentityMatches,
   './replica-operation-message-group-membership-owner-claim.js';
 
 const result = (outcome, operation = null) => Object.freeze({outcome, operation});
+// A membership write whose answer was an error is neither committed nor lost:
+// the caller resolves it by exact authoritative readback. The error is named
+// here so an uncertain write is never silent.
+function noteUncertainMembershipWrite(repository, operationId, error) {
+  repository.logger?.debug?.(REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_WRITE_UNCERTAIN,
+    {nodeId: repository.nodeId, operationId, error: error?.message || String(error)});
+}
 function priorLearnerStamp(row, identity, prior) {
   try {
     const stamp = committedStampOfAnswer(JSON.parse(row.messageGroupLearnerStamp));
@@ -137,8 +145,9 @@ async function selectMessageGroupMembershipBranch(repository, request) {
   // retrying this same CAS or its competing branch is safe on the same basis.
   try {
     await repository.executeOperationMutationWithRetry(branchSelectionSql(settlement), params);
-  } catch {
+  } catch (error) {
     // The exact authoritative read below resolves an uncertain write result.
+    noteUncertainMembershipWrite(repository, operationId, error);
   }
   const after = await observeMembershipOperation(repository, operationId);
   if (!after.available) return result(OUTCOME.UNKNOWN);
@@ -213,8 +222,9 @@ async function persistInitialLearnerIntent(repository, row, claim, input) {
         message_group_membership_permit = ?, message_group_membership_obligation_state = ?
         WHERE ${basis.where}`,
       [PHASE.LEARNER_IN_FLIGHT, encodedPermit, MEMBERSHIP_OBLIGATION.UNKNOWN, ...basis.params]);
-  } catch {
+  } catch (error) {
     // An unknown write may still commit. Only exact owner readback resolves it.
+    noteUncertainMembershipWrite(repository, operationId, error);
   }
   const after = await observeMembershipOperation(repository, operationId);
   if (!after.available) return result(OUTCOME.UNKNOWN);
@@ -385,8 +395,9 @@ async function recordObservedLearner(repository, row, input, evidence, isCurrent
         WHERE ${basis.where}`,
       [PHASE.LEARNER_COMMITTED, evidence.committedPermit, evidence.stamp, ...basis.params],
       {beforeAttempt, submissionIsCurrent});
-  } catch {
+  } catch (error) {
     // COMMIT may have succeeded. Only exact owner readback settles that answer.
+    noteUncertainMembershipWrite(repository, input.operationId, error);
   }
   // A write already submitted may have committed even if the invocation dies.
   // No host callback purports to revoke a command already inside another owner.
@@ -464,3 +475,17 @@ async function recoverMessageGroupLearnerOutcome(repository, operationId, readCo
   }, readCommittedLearner, isInvocationCurrent);
 }
 export {recoverMessageGroupLearnerOutcome};
+
+/** Whether a row's recorded learner outcome is coherent: a COMMITTED initial
+ * ADD_LEARNER permit with an integer proposal index and a learner stamp that
+ * names this transition's source voter and target learner at or past that
+ * index. Pure; no claim, no boot read. A row that fails this is surfaced for
+ * owned repair rather than treated as settled debt. */
+function recordedLearnerIsCoherent(row, identity) {
+  const permit = decodeMembershipPermit(row?.messageGroupMembershipPermit);
+  return permit !== null && permit.permitState === STATE.COMMITTED &&
+    initialLearnerActionMatches(permit, identity) &&
+    row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
+    priorLearnerStamp(row, identity, permit) !== null;
+}
+export {recordedLearnerIsCoherent};

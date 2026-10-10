@@ -314,6 +314,58 @@ test('owned discovery recovers the exact learner outcome from membership debt by
       assert.ok(emitted.length > 0, 'the scan still reaches its completion event');
       assertExactReceipt(fx, before, proposals);
     });
+    await t.test('the periodic sweep reads the replicated cache as its hint and re-reads only ' +
+      'what the cache lists', async (t) => {
+      const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
+      const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
+      const operationReads = () => fx.f.reads.filter((read) =>
+        read.table === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS).length;
+      const readsBefore = operationReads();
+      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(),
+        {available: true, found: 0, recorded: 0, settled: 0, retained: 0, refused: 0},
+        'the default census is the cache hint');
+      assert.equal(operationReads(), readsBefore,
+        'a cache listing no debt costs no authoritative operation read');
+      fx.f.cacheOperationRow();
+      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(),
+        summaryOf({recorded: 1}), 'a listed debt row is re-read and recovered');
+      assert.ok(operationReads() > readsBefore, 'the listed candidate is read authoritatively');
+      assertExactReceipt(fx, before, proposals);
+      fx.f.cacheOperationRow(); const readsAfter = operationReads();
+      assert.deepEqual(await fx.owner.reconcileMessageGroupMembershipDebt(),
+        {available: true, found: 0, recorded: 0, settled: 0, retained: 0, refused: 0},
+        'a listed row whose initial action is recorded is not a candidate');
+      assert.equal(operationReads(), readsAfter, 'a settled row costs no read per sweep');
+    });
+    await t.test('a committed phase with an incoherent record is surfaced, never settled',
+      async (t) => {
+        const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
+        assert.deepEqual(await sweep(fx.owner), summaryOf({recorded: 1}));
+        fx.f.execute('UPDATE replica_operations SET message_group_learner_stamp = ? ' +
+          'WHERE operation_id = ?', [JSON.stringify({forged: true}), fx.f.request.operationId]);
+        const forged = {...fx.f.row()}; const warnings = [];
+        fx.owner.logger = {debug() {}, info() {}, error() {},
+          warn: (...args) => warnings.push(args)};
+        const result = await wakeRow(fx.owner, fx.f.row());
+        assert.equal(result.outcome, DEBT.INVALID_ROW,
+          'an incoherent recorded stamp is not settled');
+        assert.equal(result.field, 'messageGroupLearnerStamp');
+        assert.equal(warnings.length, 1, 'owned repair is surfaced');
+        assert.deepEqual(fx.f.row(), forged); assert.equal(fx.physical(), 0);
+      });
+    await t.test('a census that throws is reported by the restart scan, which still completes',
+      async (t) => {
+        const fx = await discoveryFixture(t);
+        fx.owner.reconcileReservations = async () => ({expired: 0, orphansReleased: 0});
+        const emitted = []; fx.owner.emitter = {emit: (...args) => emitted.push(args[0])};
+        fx.owner.repository.queryAuthoritativeMessageGroupMembershipDebtOperations = async () => {
+          throw new Error('fixture: census unavailable');
+        };
+        const result = await fx.owner.handleRecovery();
+        assert.deepEqual(result.membershipDebt,
+          {available: false, error: 'fixture: census unavailable'});
+        assert.ok(emitted.length > 0, 'the scan reaches its completion event');
+      });
     await t.test('the inline recorder refuses a caller that does not hold the lane', async (t) => {
       const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
       const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
