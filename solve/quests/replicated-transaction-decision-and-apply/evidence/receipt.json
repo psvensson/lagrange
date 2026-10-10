@@ -3,25 +3,65 @@
   "quest": "replicated-transaction-decision-and-apply",
   "status": "fail",
   "testFileDigests": {
-    "test/partition/partition-transaction-replicated-apply.test.js": "629800851a413ec4b8d1909c1778f828e8aa2d4e675f234dc519341eb6bbfd03"
+    "test/partition/partition-transaction-replicated-apply-v3.test.js": "00d4bcd14759d049a8c92e493835be34bd58e6900631e2adafc1dc69f15622e1"
   },
-  "generatedAt": "2026-10-10T11:13:19.758Z",
+  "generatedAt": "2026-10-10T12:24:37.278Z",
   "receipts": [
     {
       "id": "no-speculative-visibility-before-consensus",
       "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 P1: a pending commit exposes no row and resolves only after its marker is applied$\" test/partition/partition-transaction-replicated-apply.test.js",
-      "detail": "while the commit request is pending the marker is proposed, no session row is readable on the leader and the request has not resolved; it resolves after the marker is applied",
-      "failure": "1 test(s) failed",
-      "testFile": "test/partition/partition-transaction-replicated-apply.test.js"
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 v3 (W1a|W5a|W5b): .*$\" test/partition/partition-transaction-replicated-apply-v3.test.js",
+      "detail": "no staged row is readable before the decision applies; no SQLite transaction is open during ACTIVE; a request without a transactionId is never absorbed into a session",
+      "failure": "3 test(s) failed",
+      "testFile": "test/partition/partition-transaction-replicated-apply-v3.test.js"
+    },
+    {
+      "id": "replicated-prepare-committed-and-applied-on-every-replica",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 v3 (W1a|W1b|W12c|W11a|W11b|W11c): .*$\" test/partition/partition-transaction-replicated-apply-v3.test.js",
+      "detail": "PREPARE is acknowledged only after its committed command applies on every replica, survives restart as a durable row, and answers UNKNOWN at the deadline or on leader loss",
+      "failure": "6 test(s) failed",
+      "testFile": "test/partition/partition-transaction-replicated-apply-v3.test.js"
     },
     {
       "id": "commit-applies-operations-outcome-and-applied-index-atomically",
       "passed": false,
-      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^(TX1 P2: the committed TRANSACTION_COMMIT applies its operations, outcome and applied index on a replica that staged nothing|TX1 P3: a transaction whose second statement fails applies nothing and records a typed outcome)$\" test/partition/partition-transaction-replicated-apply.test.js",
-      "detail": "a replica that staged nothing applies the committed marker's operations, COMMITTED outcome and applied index together; a failing transaction applies none of them and is not recorded COMMITTED",
-      "failure": "2 test(s) failed",
-      "testFile": "test/partition/partition-transaction-replicated-apply.test.js"
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 v3 (W1b|W2a|W2b|W3a|W3b|W4|W6): .*$\" test/partition/partition-transaction-replicated-apply-v3.test.js",
+      "detail": "the decision applies operations, outcome row, state and applied index in one application transaction; a planted failure inside it leaves nothing; refusals are identical on every replica; a single-replica storage failure records nothing",
+      "failure": "7 test(s) failed",
+      "testFile": "test/partition/partition-transaction-replicated-apply-v3.test.js"
+    },
+    {
+      "id": "duplicate-and-conflicting-decisions-idempotent-or-refused",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 v3 (W9|W12a|W12e|W10b): .*$\" test/partition/partition-transaction-replicated-apply-v3.test.js",
+      "detail": "unbound or foreign-digest terminals are refused, a late PREPARE after a tombstone is refused terminal, entry keys and transaction identities never collide",
+      "failure": "4 test(s) failed",
+      "testFile": "test/partition/partition-transaction-replicated-apply-v3.test.js"
+    },
+    {
+      "id": "exact-participant-outcome-no-transaction-is-not-committed",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 v3 (W12b|W1b|seam S2): .*$\" test/partition/partition-transaction-replicated-apply-v3.test.js",
+      "detail": "an outcome read answers UNKNOWN from absence or PREPARED and a terminal state only from its durable row; a NO_TRANSACTION commit miss is resolved by an outcome read",
+      "failure": "3 test(s) failed",
+      "testFile": "test/partition/partition-transaction-replicated-apply-v3.test.js"
+    },
+    {
+      "id": "immutable-coordinator-decision-before-fanout",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 v3 (seam S1): .*$\" test/partition/partition-transaction-replicated-apply-v3.test.js",
+      "detail": "once COMMITTING, an exceeded budget never rolls a participant back (query lane)",
+      "failure": "1 test(s) failed",
+      "testFile": "test/partition/partition-transaction-replicated-apply-v3.test.js"
+    },
+    {
+      "id": "no-rollback-after-commit-decision-and-no-prepared-erasure",
+      "passed": false,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^TX1 v3 (W9|W12d|seam S1): .*$\" test/partition/partition-transaction-replicated-apply-v3.test.js",
+      "detail": "a bound ROLLBACK after COMMITTED cannot reverse it; the hold sweep keeps PREPARED; no timeout selects rollback after the decision",
+      "failure": "3 test(s) failed",
+      "testFile": "test/partition/partition-transaction-replicated-apply-v3.test.js"
     }
   ]
 }

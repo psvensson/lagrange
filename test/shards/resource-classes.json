@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2311,
+    "ordinary": 2313,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2328,
-  "digest": "fnv1a32-77ec344a",
+  "censusSize": 2330,
+  "digest": "fnv1a32-873f419a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1279,6 +1279,7 @@
     "test/partition/partition-splitting-trigger.property.test.js": "ordinary",
     "test/partition/partition-sql-parser.test.js": "ordinary",
     "test/partition/partition-transaction-handler.test.js": "ordinary",
+    "test/partition/partition-transaction-replicated-apply-v3.test.js": "ordinary",
     "test/partition/partition-transaction-replicated-apply.test.js": "ordinary",
     "test/partition/partition-transaction.property.test.js": "ordinary",
     "test/partition/partition-transition-projection.test.js": "ordinary",
@@ -2080,6 +2081,7 @@
     "test/scripts/publish-head.test.js": "ordinary",
     "test/scripts/push-gate-change-proof.test.js": "ordinary",
     "test/scripts/push-gate-unused-files-reachability.test.js": "ordinary",
+    "test/scripts/quest-evidence-harness-expected-tests.test.js": "ordinary",
     "test/scripts/release-content-digest.test.js": "ordinary",
     "test/scripts/release-notes.test.js": "ordinary",
     "test/scripts/release-npm-package.test.js": "ordinary",

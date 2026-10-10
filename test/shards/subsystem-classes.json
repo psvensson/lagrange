@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 168,
+    "storage-partition": 169,
     "storage-raft": 119,
-    "test-infrastructure": 142,
+    "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2328,
-  "digest": "fnv1a32-d9fceb2f",
+  "censusSize": 2330,
+  "digest": "fnv1a32-e88aed1b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3bf83488",
+  "observationDigest": "fnv1a32-735fe350",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1299,6 +1299,7 @@
     "test/partition/partition-splitting-trigger.property.test.js": "storage-partition",
     "test/partition/partition-sql-parser.test.js": "storage-partition",
     "test/partition/partition-transaction-handler.test.js": "storage-partition",
+    "test/partition/partition-transaction-replicated-apply-v3.test.js": "storage-partition",
     "test/partition/partition-transaction-replicated-apply.test.js": "storage-partition",
     "test/partition/partition-transaction.property.test.js": "storage-partition",
     "test/partition/partition-transition-projection.test.js": "storage-partition",
@@ -2100,6 +2101,7 @@
     "test/scripts/publish-head.test.js": "test-infrastructure",
     "test/scripts/push-gate-change-proof.test.js": "test-infrastructure",
     "test/scripts/push-gate-unused-files-reachability.test.js": "test-infrastructure",
+    "test/scripts/quest-evidence-harness-expected-tests.test.js": "test-infrastructure",
     "test/scripts/release-content-digest.test.js": "test-infrastructure",
     "test/scripts/release-notes.test.js": "test-infrastructure",
     "test/scripts/release-npm-package.test.js": "test-infrastructure",
@@ -8744,6 +8746,20 @@
         "src/partition/partition-split-merge-manager.js"
       ]
     },
+    "test/partition/partition-transaction-replicated-apply-v3.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-transaction-protocol.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/partition-transaction-replicated-apply.test.js": {
       "files": [
         "src/partition/partition-service-constants.js",
@@ -13504,6 +13520,11 @@
         "package.json",
         "scripts/checks/push-gate-unused-files.js",
         "scripts/solve.js"
+      ]
+    },
+    "test/scripts/quest-evidence-harness-expected-tests.test.js": {
+      "files": [
+        "scripts/quest-evidence/harness-runtime.js"
       ]
     },
     "test/scripts/release-content-digest.test.js": {

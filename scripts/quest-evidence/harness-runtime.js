@@ -63,6 +63,7 @@ const PASSED_REASON = 'passed';
 const MULTIPLE_TESTS_FAILURE_PREFIX = 'the pattern selected ';
 const MULTIPLE_TESTS_FAILURE_SUFFIX =
   ' tests; anchor it to one or set allowMultiple';
+const EXPECTED_TESTS_FAILURE_INFIX = ' tests, expected exactly ';
 const OUTPUT_FLAG = '--output';
 const OUTPUT_FLAG_ASSIGNMENT_PREFIX = `${OUTPUT_FLAG}=`;
 const ARGV_COMMAND_OFFSET = 2;
@@ -120,6 +121,9 @@ function runReceipt(receipt) {
 // nothing exits 0, so a typo would go green. The TAP summary is parsed and
 // the receipt fails on zero selected tests (and on more than one unless the
 // receipt sets allowMultiple), on any failing test, and on a non-zero exit.
+// A receipt with an integer `expectedTests` fails unless the pattern selects
+// exactly that many tests: a renamed or dropped witness cannot pass as a
+// smaller subset of the alternation it was declared with.
 function subtestCommand(receipt) {
   return `${process.execPath} ${TEST_REPORTER_ARGUMENT} ` +
     `${TEST_NAME_PATTERN_FLAG}=${JSON.stringify(receipt.testNamePattern)} ` +
@@ -134,15 +138,19 @@ function classifySubtestSummary(receipt, stdout) {
   const tests = count(TAP_TESTS_LINE);
   const failed = count(TAP_FAIL_LINE);
   const zeroSelected = !Number.isInteger(tests) || tests === 0;
-  const tooMany = tests > 1 && receipt.allowMultiple !== true;
+  const exact = Number.isInteger(receipt.expectedTests);
+  const tooMany = !exact && tests > 1 && receipt.allowMultiple !== true;
+  const countMismatch = exact && tests !== receipt.expectedTests;
   const anyFailed = !Number.isInteger(failed) || failed > 0;
   // A skipped or todo test ran nothing: the classified runner fails closed
   // on those, and this lane must not be weaker than it.
   const skippedOrTodo = count(TAP_SKIPPED_LINE) > 0 || count(TAP_TODO_LINE) > 0;
   const reason = zeroSelected ? ZERO_TESTS_FAILURE :
     tooMany ? `${MULTIPLE_TESTS_FAILURE_PREFIX}${tests}${MULTIPLE_TESTS_FAILURE_SUFFIX}` :
-      anyFailed ? `${failed}${TESTS_FAILED_SUFFIX}` :
-        skippedOrTodo ? SKIPPED_OR_TODO_FAILURE : PASSED_REASON;
+      countMismatch ? `${MULTIPLE_TESTS_FAILURE_PREFIX}${tests}` +
+        `${EXPECTED_TESTS_FAILURE_INFIX}${receipt.expectedTests}` :
+        anyFailed ? `${failed}${TESTS_FAILED_SUFFIX}` :
+          skippedOrTodo ? SKIPPED_OR_TODO_FAILURE : PASSED_REASON;
   return {passed: reason === PASSED_REASON, reason};
 }
 
@@ -226,6 +234,7 @@ function runShellReceipt(receipt) {
  *   timeout, so a hang is a failure) instead of a focused test file; a
  *   receipt with `testNamePattern` (anchored ^...$) runs exactly one named
  *   test of `testFile` through node:test and fails on zero selected tests
+ *   (or, with an integer `expectedTests`, on any other selected count)
  * @return {void} exits non-zero when any receipt command fails
  */
 function runQuestEvidenceHarness(options) {
