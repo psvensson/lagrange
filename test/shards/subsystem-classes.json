@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 305,
+    "bootstrap-membership": 306,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2332,
-  "digest": "fnv1a32-04acb224",
+  "censusSize": 2333,
+  "digest": "fnv1a32-e1d57f1f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c1807087",
+  "observationDigest": "fnv1a32-fc82d7c7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1054,6 +1054,7 @@
     "test/integration/raft-leader-election.integration.test.js": "storage-raft",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
+    "test/integration/seed-migration-cutover-persisted.integration.test.js": "bootstrap-membership",
     "test/integration/seed-node-bootstrap.integration.test.js": "bootstrap-membership",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "bootstrap-membership",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "services-runtime",
@@ -7508,6 +7509,12 @@
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": {
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/integration/seed-migration-cutover-persisted.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/query/distributed/distributed-transaction-coordinator.js"
       ]
     },
     "test/integration/seed-node-bootstrap.integration.test.js": {
