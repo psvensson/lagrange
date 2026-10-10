@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// TX1 (PR100 Leg A) receipts, design revision 6 (design-leg-a-v6-2026-10-10.md
+// TX1 (PR100 Leg A) receipts, design revision 7 (design-leg-a-v7-2026-10-10.md
 // section 10.2). The eight sealed receipt ids are unchanged; the CDC receipt
 // recovery-and-cdc-survive-deadline-and-crash stays deliberately absent (no CDC
 // cursor/retention owner exists, and a receipt bound only to the deadline and
@@ -8,7 +8,10 @@
 //
 // Every receipt names its witnesses with an exact expected count per file, so
 // a renamed or dropped witness cannot pass as a subset:
-// - the participant witnesses (controllable port);
+// - the participant witnesses (controllable port), including the statement
+//   classifier witnesses W6n, W6s, W6p and W6r, which live in the replay-cursor
+//   sibling file under the participant prefix (the participant file is at
+//   jscpd's 1000-line cap);
 // - the query-lane seam falsifiers;
 // - the real three-replica rs-raft witnesses PR100 A1-A5, named now in a file
 //   that does not exist yet, so receipts 2, 3 and 4 stay red until it does. The
@@ -26,6 +29,8 @@ const OUTPUT_FILE_SEGMENTS = Object.freeze([
 const PATH_JOINER = '/';
 const PARTICIPANT = Object.freeze({file:
   'test/partition/partition-transaction-replicated-apply-v3.test.js', prefix: 'TX1 v3'});
+const CLASSIFIER = Object.freeze({file:
+  'test/partition/partition-transaction-replay-cursor-v4.test.js', prefix: 'TX1 v3'});
 const SEAM = Object.freeze({file: 'test/query/partition-transaction-seam-falsifiers.test.js',
   prefix: 'TX1 seam'});
 const REAL = Object.freeze({file:
@@ -52,13 +57,16 @@ const RECEIPT = Object.freeze([
     'carries the BEGIN-time base, survives restart as a durable row, and answers UNKNOWN ' +
     'whenever it may still commit; plus the real three-replica A1-A3'],
   ['commit-applies-operations-outcome-and-applied-index-atomically', [
-    [PARTICIPANT, ['W1b', 'W2a', 'W2b', 'W2c', 'W3a', 'W3b', 'W3c', 'W4', 'W6', 'W6n', 'W6s',
-      'W13', 'W14', 'W17', 'W18', 'W19']],
+    [PARTICIPANT, ['W1b', 'W2a', 'W2b', 'W2c', 'W3a', 'W3b', 'W3c', 'W4', 'W6', 'W13', 'W14',
+      'W17', 'W18', 'W19']],
+    [CLASSIFIER, ['W6n', 'W6s', 'W6p', 'W6r']],
     [REAL, ['A5']]],
   'the decision applies operations, per-operation outcomes, the state transition, the write ' +
     'generation and the applied index in one application transaction; committed PREPAREs ' +
     'apply as carried; the staging classifier admits only allow-listed programs over the ' +
-    'partition table and proves itself at leader start; control rows, a reserved schema ' +
+    'partition table and proves itself at leader start; nothing but an admitted head is ' +
+    'prepared on the shared connection; no replicated write assigns a rowid or reaches the ' +
+    'rowid ceiling; control rows, a reserved schema ' +
     'change and a zero-operation decision never move the generation; plus the real A5 ' +
     'crash boundaries'],
   ['duplicate-and-conflicting-decisions-idempotent-or-refused', [

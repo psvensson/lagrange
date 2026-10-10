@@ -28,7 +28,7 @@
   "censusSize": 2332,
   "digest": "fnv1a32-04acb224",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ec083ef4",
+  "observationDigest": "fnv1a32-c6f82a2c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8752,7 +8752,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-mirror-replay-cursor.js",
-        "src/partition/partition-service-constants.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -9161,6 +9160,7 @@
     },
     "test/query/partition-transaction-seam-falsifiers.test.js": {
       "files": [
+        "src/bootstrap/phases/seed-cache-hydration-phase.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-write-kernel.js",

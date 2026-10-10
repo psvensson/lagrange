@@ -1,12 +1,13 @@
 /**
  * TX1 (quest replicated-transaction-decision-and-apply) seam falsifiers for the
  * query lane: the coordinator and engine obligations of seam-2026-10-10.md
- * (revision-4, -5 and -6 sections) and design-leg-a-v6-2026-10-10.md section
+ * (revision-4 to -7 sections) and design-leg-a-v7-2026-10-10.md section
  * 11. They are recorded here, not repaired: the query owner owns the change, and
  * every falsifier is red on the sealed head. Moved out of the participant witness
  * file partition-transaction-replicated-apply-v3.test.js in revision 5.
  */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -254,15 +255,11 @@ test('TX1 seam S4b: an engine that cannot persist transaction state refuses an e
   'sql-query-engine.js:115-117 skips persistence silently; DIRECT_AUTOCOMMIT stays unaffected');
 });
 
-test('TX1 seam S4c: the schema-migration cutover BEGIN on an engine built like the ' +
-  'seed-hydration engine is refused typed or persisted, never run with its row unpersisted',
-async () => {
-  // seed-cache-hydration-phase.js:220-234: no gateway, no CDC service.
-  const engine = new SQLQueryEngine({migrationAutoWire: false,
-    autoStartDistributedTransactionRecovery: false, unrefRetryDelayTimers: true});
+// Drive the real executeCutoverTransaction through `engine`: its BEGIN, COMMIT and ROLLBACK
+// reach the engine; its two row UPDATEs (tables-p1 and schema_migration_partitions-p1)
+// are answered without routing. Returns the control statements' answers.
+async function cutoverThrough(engine) {
   const control = [];
-  // The cutover's own statements reach the engine; its two row UPDATEs (tables-p1 and
-  // schema_migration_partitions-p1) are answered without routing.
   const sqlCore = {executeQuery: async (sql, params, options) => {
     if (!/^(BEGIN|COMMIT|ROLLBACK)$/u.test(sql)) {
       return {success: true, rows: []};
@@ -276,11 +273,42 @@ async () => {
     transactionCoordinator: engine.transactionCoordinator, logger: QUIET, now: () => 1});
   await migrationCoordinator.executeCutoverTransaction({migration_id: 'm-s4c', table_id: 't-s4c',
     target_schema: '{"schema":{}}'}, [{partition_id: 'p-s4c'}]).catch(() => null);
-  const begin = control.find((entry) => entry.sql === 'BEGIN') ?? null;
+  return (statement) => control.find((entry) => entry.sql === statement) ?? null;
+}
+// The seed construction (seed-cache-hydration-phase.js:220-234), copied: no gateway, no CDC.
+const SEED_ENGINE_OPTIONS = Object.freeze({migrationAutoWire: false,
+  autoStartDistributedTransactionRecovery: false, unrefRetryDelayTimers: true});
+
+test('TX1 seam S4c: the schema-migration cutover on the seed-hydration engine is refused typed ' +
+  'or persisted, never run with its row unpersisted; with persistence it commits and submits ' +
+  'its row; the production phase gives the engine persistence or does not wire the cutover',
+async () => {
+  const engine = new SQLQueryEngine(SEED_ENGINE_OPTIONS);
+  const seed = await cutoverThrough(engine);
   const persists = engine.canPersistDistributedTransactionState();
+  const submitted = [];
+  const withGateway = await cutoverThrough(new SQLQueryEngine({...SEED_ENGINE_OPTIONS,
+    controlPlaneSystemTableGateway: {supportsMutationSubmission: () => true,
+      submitMutation: async (mutation) => {
+        submitted.push(mutation.tableName);
+        return {success: true};
+      }}}));
+  // Extract-free structural check over the production phase (design v7 11.1, N6-4).
+  const phase = fs.readFileSync('src/bootstrap/phases/seed-cache-hydration-phase.js', 'utf8');
+  const construction = phase.slice(phase.indexOf('const cdcQueryEngine = new SQLQueryEngine('),
+    phase.indexOf('wireMigrationWorkflowOwners({'));
+  const phaseGivesPersistence = /controlPlaneSystemTableGateway|cdcIntegrationService:/u
+    .test(construction) || /cdcQueryEngine\.setCDCIntegrationService\(/u.test(phase);
+  const phaseWiresCutover = /wireMigrationWorkflowOwners\(\{\s*sqlCore: cdcQueryEngine/u.test(phase);
+  const begin = seed('BEGIN');
   assert.deepEqual({refusedTyped: begin?.success === false && begin.errorCode === NO_PERSISTENCE,
-    silentlyUnpersisted: begin?.success === true && !persists},
-  {refusedTyped: !persists, silentlyUnpersisted: false},
+    silentlyUnpersisted: begin?.success === true && !persists,
+    withPersistence: {begin: withGateway('BEGIN')?.success ?? null,
+      commit: withGateway('COMMIT')?.success ?? null,
+      rowSubmitted: submitted.includes('sql_transactions')},
+    phaseSafe: phaseGivesPersistence || !phaseWiresCutover},
+  {refusedTyped: !persists, silentlyUnpersisted: false,
+    withPersistence: {begin: true, commit: true, rowSubmitted: true}, phaseSafe: true},
   'migration-coordinator-stage-methods.js:507/542 runs BEGIN..COMMIT through executeQuery; ' +
   'the seed engine has no persistence (sql-query-engine-transaction-recovery-methods.js:168-174)');
 });

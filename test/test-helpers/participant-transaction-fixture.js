@@ -1,8 +1,8 @@
 /**
  * Shared fixture of the TX1 (quest replicated-transaction-decision-and-apply)
- * participant witnesses: the pinned revision-6 wire vocabulary, the canonical
- * committed commands of design-leg-a-v6-2026-10-10.md section 2, the staging
- * classifier's refusal cases (section 3.3), controllable replicas, request
+ * participant witnesses: the pinned revision-7 wire vocabulary, the canonical
+ * committed commands of design-leg-a-v7-2026-10-10.md section 2, the staging
+ * classifier's refusal cases with the layer that must refuse each (section 3.3), controllable replicas, request
  * builders and measurements. The literals below are the
  * design's pinned values until their owners export them; the implementation
  * replaces them with owner imports without changing a value.
@@ -68,6 +68,8 @@ const V3 = Object.freeze({
       'participant_transaction_session_write_param_unsupported',
     DETERMINISM_SELF_CHECK_FAILED:
       'participant_transaction_determinism_self_check_failed',
+    // The query wire and the committed SQL apply (design v7 section 3.3).
+    WRITE_STATEMENT_REFUSED: 'partition_write_statement_refused',
   }),
   // The classifier layer that refused a statement (design v6 section 3.3).
   CLASSIFIER_LAYER: Object.freeze({
@@ -78,6 +80,9 @@ const V3 = Object.freeze({
     ROOT_PAGE: 'root_page',
     FUNCTION: 'function',
     IMPLICIT_KEY: 'implicit_key',
+    ROWID_ALIAS: 'rowid_alias',
+    ROW_ORDER: 'row_order',
+    ROWID_CEILING: 'rowid_ceiling',
   }),
   // The classifier owner to create (design v6 section 3.3).
   DETERMINISM_MODULE: '../../src/partition/partition-transaction-determinism.js',
@@ -170,28 +175,66 @@ const columnsOf = (partition) =>
   partition.db.prepare(`PRAGMA table_info(${TABLE})`).all().map((column) => column.name);
 // A temporary table on the leader's own connection (a per-connection channel).
 const SCRATCH_TABLE = 'tx1_v3_scratch';
-// Session statements the staging classifier refuses, each with its params: the
-// function census (rev 4-5), and the channels of round-5 R5-1 that compile to
-// no function opcode (a table-valued pragma, dbstat, a replica-local rs-raft
-// table, a temporary table, PRAGMA statements).
+// Session statements the staging classifier refuses, each with its params and
+// the layer that must refuse it: the function census (rev 4-5), the channels of
+// round-5 R5-1 that compile to no function opcode, and the round-6 unlisted
+// shapes (N6-3).
 function classifierRefusalCases() {
+  const L = V3.CLASSIFIER_LAYER;
   const value = (expression) => `INSERT INTO ${TABLE} (id, value) VALUES (?, ${expression})`;
   const select = (from) => `INSERT INTO ${TABLE} (id, value) SELECT ${from}`;
+  const fn = (expression, params) => [value(expression), params, L.FUNCTION];
   return [
-    [value('datetime(\'now\')'), ['n1']], [value('DATETIME(\'NOW\')'), ['n2']],
-    [value('datetime()'), ['n3']], [value('unixepoch()'), ['n4']],
-    [value('strftime(\'%s\')'), ['n5']], [value('datetime(?)'), ['n6', 'now']],
-    [value('datetime(?)'), ['n7', 'NOW']],
-    [value('datetime(\'2020-01-01\', ?)'), ['n8', 'localtime']],
-    [value('random()'), ['n9']], [value('hex(randomblob(4))'), ['n10']],
-    [value('sqlite_version()'), ['n11']], [`INSERT INTO ${TABLE} (value) VALUES (?)`, ['k']],
-    [select('?, page_count FROM pragma_page_count()'), ['c1']],
-    [select('?, file FROM pragma_database_list'), ['c2']],
-    [select('?, sum(pgsize) FROM dbstat'), ['c3']],
-    [select('?, \'x\' FROM _raft_rs_log LIMIT 1'), ['c4']],
-    [select(`id || ?, value FROM ${SCRATCH_TABLE}`), ['c5']],
-    ['PRAGMA page_count', []], ['PRAGMA reverse_unordered_selects = 1', []],
+    fn('datetime(\'now\')', ['n1']), fn('DATETIME(\'NOW\')', ['n2']), fn('datetime()', ['n3']),
+    fn('unixepoch()', ['n4']), fn('strftime(\'%s\')', ['n5']), fn('datetime(?)', ['n6', 'now']),
+    fn('datetime(?)', ['n7', 'NOW']), fn('datetime(\'2020-01-01\', ?)', ['n8', 'localtime']),
+    fn('random()', ['n9']), fn('hex(randomblob(4))', ['n10']), fn('sqlite_version()', ['n11']),
+    [`INSERT INTO ${TABLE} (value) VALUES (?)`, ['k'], L.IMPLICIT_KEY],
+    [select('?, page_count FROM pragma_page_count()'), ['c1'], L.OPCODE],
+    [select('?, file FROM pragma_database_list'), ['c2'], L.OPCODE],
+    [select('?, sum(pgsize) FROM dbstat'), ['c3'], L.OPCODE],
+    [select('?, \'x\' FROM _raft_rs_log'), ['c4'], L.ROOT_PAGE],
+    [select(`id || ?, value FROM ${SCRATCH_TABLE}`), ['c5'], L.DATABASE],
+    ['PRAGMA page_count', [], L.STATEMENT_KIND],
+    ['PRAGMA reverse_unordered_selects = 1', [], L.STATEMENT_KIND],
+    [select(`?, name FROM pragma_table_info('${TABLE}')`), ['u1'], L.OPCODE],
+    [select('? || key, value FROM json_each(\'[1]\')'), ['u2'], L.OPCODE],
+    [select('?, name FROM sqlite_master'), ['u3'], L.ROOT_PAGE],
+    [select('?, outcome FROM _partition_statement_outcomes'), ['u4'], L.ROOT_PAGE],
+    ['VALUES (?, \'v\')', ['u5'], L.STATEMENT_KIND],
   ];
+}
+// Rowid-alias, order-dependent and ceiling cases of round-6 R6-1 (design v7 3.3).
+const ROWID_CEILING = 2n ** 62n;
+function rowidRefusalCases() {
+  const L = V3.CLASSIFIER_LAYER;
+  return [
+    [`INSERT INTO ${TABLE} (rowid, id, value) VALUES (9223372036854775807, ?, ?)`, ['top', 'T'],
+      L.ROWID_ALIAS],
+    [`UPDATE ${TABLE} SET rowid = ? WHERE id = ?`, [7, 'p'], L.ROWID_ALIAS],
+    [`INSERT INTO ${TABLE} (id, value) SELECT value, 'x' FROM ${TABLE} WHERE id <> ? LIMIT 1`,
+      ['top'], L.ROW_ORDER],
+    [`DELETE FROM ${TABLE} WHERE id <> ? LIMIT 1`, ['top'], L.ROW_ORDER],
+    [`INSERT INTO ${TABLE} (id, value) SELECT ?, group_concat(id) FROM ${TABLE}`, ['gc'],
+      L.ROW_ORDER],
+    [`UPDATE ${TABLE} SET value = (SELECT value FROM ${TABLE} WHERE id <> ?) WHERE id = ?`,
+      ['top', 'q'], L.ROW_ORDER],
+  ];
+}
+// Plant a row at the rowid ceiling directly on a replica's own connection.
+function plantRowidCeiling(partition) {
+  partition.db.prepare(`INSERT INTO ${TABLE} (rowid, id, value) VALUES (?, ?, ?)`)
+    .run(ROWID_CEILING, 'ceiling', 'c');
+}
+const statementOutcomeOf = (partition, entryId) =>
+  pick(readCommittedStatementOutcome(partition, `entry:${entryId}`), ['outcome', 'failureCode']);
+const connectionFlag = (partition) =>
+  partition.db.pragma('reverse_unordered_selects', {simple: true});
+const tableExists = (partition) => partition.db
+  .prepare('SELECT COUNT(*) AS count FROM sqlite_master WHERE name = ?').get(TABLE).count;
+function committedQueryOf(entryId, sql) {
+  return {type: PARTITION_SERVICE_OPERATION.QUERY, entryId, sql, params: [], timestamp: '',
+    proposedBy: ELSEWHERE, proposedAt: 0};
 }
 
 function createReplica(replicaId, extra = {}) {
@@ -446,7 +489,14 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 
 export {
   COMMITTED,
+  ROWID_CEILING,
   SCRATCH_TABLE,
+  committedQueryOf,
+  connectionFlag,
+  plantRowidCeiling,
+  rowidRefusalCases,
+  statementOutcomeOf,
+  tableExists,
   alterCommandOf,
   classifierRefusalCases,
   columnsOf,

@@ -1,9 +1,10 @@
 /**
  * TX1 (quest replicated-transaction-decision-and-apply, PR100 Leg A) participant
- * red witnesses for design revision 6 (design-leg-a-v6-2026-10-10.md, section
+ * red witnesses for design revision 7 (design-leg-a-v7-2026-10-10.md, section
  * 10). Siblings: test/query/partition-transaction-seam-falsifiers.test.js (query
- * lane) and partition-transaction-replay-cursor-v4.test.js (real rs-raft log and,
- * since revision 6, the positive controls); fixture:
+ * lane) and partition-transaction-replay-cursor-v4.test.js (real rs-raft log; since
+ * revision 6 the positive controls, since revision 7 the classifier witnesses W6n,
+ * W6s, W6p and W6r); fixture:
  * test/test-helpers/participant-transaction-fixture.js. The revision-2
  * file partition-transaction-replicated-apply.test.js is superseded history.
  * Consensus is driven by the test while a request is pending; each witness
@@ -29,7 +30,7 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
 import {
-  COMMITTED, GENERATION_SQL, SCRATCH_TABLE, alterCommandOf, classifierRefusalCases, columnsOf,
+  COMMITTED, GENERATION_SQL, alterCommandOf, columnsOf,
   commitDecision, decidedOnTwoReplicas, INSERT_SQL, notCommitted,
   OTHER_ROW, PREPARED, REPLICAS, ROW, ROW_2, TABLE, UNKNOWN_ANSWER, UNKNOWN_FIELDS, V3,
   applyCommitted, awaitProposal, beginMessage, commitMessage, commitOrdinaryWrite,
@@ -567,67 +568,6 @@ test('TX1 v3 W6: staged replies are provisional; the PREPARE carries the client\
     'transaction operations are evaluated at apply exactly like ordinary replicated writes');
   } finally {
     await shutdownAll(leader);
-  }
-});
-
-test('TX1 v3 W6n: the staging classifier refuses by default: date/time, random and unknown ' +
-  'functions, implicit keys, non-JSON params, and replica-local state read through no function ' +
-  '(pragmas, dbstat, rs-raft and temporary tables, PRAGMA statements) never stage', async () => {
-  const tx = identityOf('a11n');
-  const {leader, proposed} = await startLeader();
-  try {
-    leader.db.exec(`CREATE TEMP TABLE ${SCRATCH_TABLE} (id TEXT, value TEXT)`);
-    await send(leader, beginMessage(tx));
-    const refusals = [];
-    for (const [sql, params] of classifierRefusalCases()) {
-      refusals.push(pick(await send(leader, queryMessage(tx, sql, params)), ['failureCode']));
-    }
-    const blob = pick(await send(leader, queryMessage(tx, INSERT_SQL, ['n12', Buffer.from('b')])),
-      ['failureCode']);
-    const allowed = await send(leader, queryMessage(tx,
-      'INSERT INTO test_table (id, value) VALUES (?, upper(?))', ['up', 'x']));
-    await send(leader, queryMessage(tx, INSERT_SQL, [ROW.id, ROW.value]));
-    track(send(leader, prepareMessage(tx)));
-    const prepareCommand = await awaitProposal(proposed, isPrepareCommand);
-    assert.deepEqual({refusals, blob, allowed: allowed?.success === true,
-      reverseUnorderedSelects: leader.db.pragma('reverse_unordered_selects', {simple: true}),
-      sealedOperations: prepareCommand ? JSON.parse(prepareCommand.operationsText).length : null},
-    {refusals: classifierRefusalCases().map(() =>
-      ({failureCode: V3.CODE.SESSION_WRITE_NONDETERMINISTIC})),
-    blob: {failureCode: V3.CODE.SESSION_WRITE_PARAM_UNSUPPORTED}, allowed: true,
-    reverseUnorderedSelects: 0, sealedOperations: 2},
-    'only allow-listed programs over the partition\'s own table with JSON scalars stage');
-  } finally {
-    await shutdownAll(leader);
-  }
-});
-
-test('TX1 v3 W6s: the leader\'s self-check refuses random(), an rs-raft table read, a ' +
-  'table-valued pragma and a PRAGMA statement, each at its own layer; a failed self-check ' +
-  'refuses every transaction, typed', async () => {
-  const layer = V3.CLASSIFIER_LAYER;
-  const determinism = await import(V3.DETERMINISM_MODULE).catch(() => null);
-  const {leader} = await startLeader();
-  const failing = await startLeader({determinismSelfCheck: () => ({passed: false, cases: []})});
-  try {
-    const selfCheck = (classify) => determinism?.runDeterminismSelfCheck?.(leader.db,
-      {tableName: TABLE, ...(classify ? {classify} : {})}) ?? null;
-    const passing = selfCheck();
-    const facts = {module: determinism ? 'present' : 'absent', passed: passing?.passed ?? null,
-      cases: passing?.cases?.map((entry) => pick(entry, ['name', 'admitted', 'layer'])) ?? null,
-      admitAll: selfCheck(() => ({admitted: true, layer: null}))?.passed ?? null,
-      begin: pick(await send(failing.leader, beginMessage(identityOf('a11s'))),
-        ['success', 'failureCode'])};
-    const refused = (name, at) => ({name, admitted: false, layer: at});
-    assert.deepEqual(facts, {module: 'present', passed: true, cases: [
-      refused('random', layer.FUNCTION), refused('raft_log_read', layer.ROOT_PAGE),
-      refused('pragma_table_valued', layer.OPCODE),
-      refused('pragma_statement', layer.STATEMENT_KIND),
-      {name: 'partition_table_read', admitted: true, layer: null}], admitAll: false,
-    begin: {success: false, failureCode: V3.CODE.DETERMINISM_SELF_CHECK_FAILED}},
-    'each layer is proven live on the running binary before the leader stages anything');
-  } finally {
-    await shutdownAll(leader, failing.leader);
   }
 });
 
