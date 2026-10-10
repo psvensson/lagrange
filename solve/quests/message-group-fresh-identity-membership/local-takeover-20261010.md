@@ -11,6 +11,12 @@ Existing epic: `raft-rs-full-cutover`.
 Handoff branch: `handoff/rs-raft-safety-first-20261010`.
 Parent: `60a60b2a6461d6fd9fa0f6f96fd3e25aa94651e4` (PR114).
 
+Continuation: the [adversarial priority handoff](../../epics/raft-rs-full-cutover/local-priorities-2026-10-10.md)
+now gives the next work order. If you are already running or ahead of this
+published handoff, preserve your actual current work and reconcile its evidence;
+do not restart from the original base instructions below. Their source and
+verification requirements remain relevant to the original preserved patch.
+
 You are the capable local implementation owner taking over from the cloud agent.
 Start from the exact published handoff SHA supplied with this document, not an
 old local integration tree or an earlier attachment. All twelve changed files,

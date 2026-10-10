@@ -27,6 +27,8 @@ and [`docs/steering/`](../steering/)). Zoning rules:
   the generated human capabilities and limitations page
 - [product-roadmap.md](product-roadmap.md) — cross-edition planning visibility;
   not an implementation source for the AGPL repository
+- [adversarial-risk-review-2026-10-10.md](adversarial-risk-review-2026-10-10.md) -
+  reviewed codebase risks, final priorities, existing work owners and local handoff
 
 The human-facing product direction is in the root
 [roadmap](../../roadmap.md). The detailed AGPL implementation-scope authority

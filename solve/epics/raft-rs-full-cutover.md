@@ -12,6 +12,8 @@ quests:
   - public-binding-two-partition-harness
   - cutover-transition-authority-review
   - message-group-fresh-identity-membership
+  - replicated-transaction-decision-and-apply
+  - transaction-topology-admission-barrier
 authorizes:
   - architecture
   - docs
@@ -26,6 +28,41 @@ authorizes:
 ---
 
 # Raft-rs full cutover
+
+## Adversarial priorities and local continuation (2026-10-10)
+
+The operator requested an adversarial review of the codebase recommendations,
+durable tracking and specific instructions for the already-running capable
+local agent. The [final review](../../docs/development/adversarial-risk-review-2026-10-10.md)
+owns the recommendation inventory; the [local handoff](raft-rs-full-cutover/local-priorities-2026-10-10.md)
+owns the immediate work order. This supersedes the October 8 cloud execution
+assignment, while preserving its technical constraints and historical evidence.
+Inspect and preserve the actual local HEAD and work before applying the plan;
+PR115's `86d53bc79615a91ad70ff5b75b40ee091211519a` is an audit anchor.
+
+| Risk | Existing owner or staged unit | Required next action |
+| --- | --- | --- |
+| RS1 | Durable store / runtime Ready owner | Verify the already-present required-sync correction and restart replay on the actual candidate; no second implementation or blanket FULL policy |
+| MG1 | Sealed `message-group-fresh-identity-membership` | Finish current canonical verification, then ordinary discovery/reentry, CREATE and full replacement/recovery; keep its eight receipts and positive-progress controls |
+| TX1 | Prospective `replicated-transaction-decision-and-apply`, PR100 Leg A | Next new safety boundary: coordinate query and local participant owners; durable PREPARE, replicated operations, exact outcomes and immutable coordinator decision for 1PC/2PC |
+| TX2 | Prospective `transaction-topology-admission-barrier`, PR100 Leg B | After TX1, order admission/drain against cutover and preserve frozen terminal routes through restart; no participant remapping |
+| SN1 | Current checkpoint/install owners and preserved catch-up work | Distinguish FreshMG membership image from full SQL-partition recovery; preserve application, transaction, HLC and replay state before truncation |
+| RS2 | Durable-store diagnostic lifetime | Small bounded journal correction, independent of the whole snapshot program; preferably before long soak runs |
+
+The two transaction names added to `quests` are staged slots, not declared or
+sealed Quests. Reconcile the actual local work and
+[existing PR100 design](https://github.com/psvensson/lagrange/blob/daddead73ffeb8c348663695ac2f0eaa8873cf75/solve/changes/0-3-prepared-transactions-split-merge/design.md)
+before creating them against meaningful red witnesses. This does not widen the
+FreshMG seal, reopen historical transaction/snapshot Quests, or change this
+epic's sealed final oracle. The transaction slots track adjacent safety work;
+their relation to a particular release/cutover claim must be explicit before
+execution, not inferred as a new terminal requirement for an old Quest.
+
+The separate query lane keeps A1/A2 and its existing 0.3 feature scope. Correct
+stale A1 pointers through that owner; do not certify compatibility against an
+intermediate cutover. Source changes remain independently reviewed. Safety,
+physical fault-domain proof, source-own absence, exact-generation cleanup and
+membership/reservation debt retain their existing owners and acceptance bars.
 
 ## Contract-first continuation (2026-10-08)
 

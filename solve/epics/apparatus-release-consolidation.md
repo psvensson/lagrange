@@ -33,6 +33,8 @@ quests:
   - fleet-capability-discovery
   - test-placement
   - lab-readiness-by-dependency-graph
+  - candidate-review-evidence-binding
+  - retry-outcome-release-acceptance
 authorizes:
   - scripts
   - test
@@ -51,6 +53,44 @@ authorizes:
 ---
 
 # Apparatus and release consolidation
+
+## Adversarial reconciliation (2026-10-10)
+
+The [final codebase risk review](../../docs/development/adversarial-risk-review-2026-10-10.md)
+records the current findings, adversarial limits and source identities. Reuse
+this open epic for WF1-WF6, DOC1 and CX1-CX3; no new governance epic is needed.
+The September 13 no-new-scripts/workflows rule remains in force. Extend existing
+owners and tests; preserve all terminal Quest history and current gates.
+
+| Risk | Staged work | Activation and acceptance |
+| --- | --- | --- |
+| WF1 | `candidate-review-evidence-binding` | Narrow v2 successor to the newly found review/receipt gap; bind candidate plus relevant proof inputs, measurement identity and final integration SHA without conflating them |
+| WF2 | `retry-outcome-release-acceptance` | Prospective successor to solved `land-retry-parity`; keep original failures and rerun context, distinguish clean/retried/failed/incomplete, and refuse an unexplained correctness failure as release-clean |
+| WF3, WF6 | Existing `workflow-budget` slot | Consolidate actual integrated-candidate status and unfinished corpus obligations; separately design any future trend-storage migration with durable retention and consumer proof |
+| WF4, WF5 | Existing proof/harness and verification-template owners | Run behavioral attempts, validate their bound receipts with read-only probes, and extend existing invariant tests rather than add per-iteration checkers |
+| DOC1 | Existing `public-claims-match-shipped-bytes` slot | Correct snapshot status through capability JSON, producer/checker, generated page and architecture together; current code/evidence must invalidate obsolete claims |
+| CX1, CX2 | Code-style owner and existing `ratchet-realignment` slot | Reduce actual mutation authority when touching owners; keep size gates/one-way ratchets until an explicitly measured replacement or bounded allowance is accepted |
+| CX3 | Query/platform trust-boundary owner | Prospective scope decision only; do not remove A1-v13's sealed intrinsic-defense requirements |
+
+The two new names in `quests` are prospective slots. Create actual bounded
+Quests when their owner has the executable red witnesses; this planning update
+does not seal or prove them. Do not absorb WF1-WF3 into the differently scoped
+open `single-metric-production` Quest, reopen `proof-authority-integrity`, or
+restore the retired Solver. The old content-addressed page is now explicitly
+historical rather than evidence of active v2 enforcement.
+
+The September 13 host-budget diagnosis remains evidence about that measured
+failure. Its broad sentence equating a timeout/empty publication with a budget
+problem is not sufficient diagnosis for a new failure. Inspect first-failure
+evidence and actual source/environment before classification. Stricter retry
+and trend-storage acceptance changes require explicit successor work; the
+solved contracts and historical records are not rewritten.
+
+The authored operations guide is qualified now. Canonical capability JSON and
+generated prose remain an open DOC1 repair, not a completed capability or a
+reason to postpone correcting the claim until implementation. Workflow repairs
+support the next product proof; they are not a pretext to block all runtime work
+on a broad apparatus rewrite.
 
 The September 2026 reviews (6th and 12th) produced a list of improvements.
 solve-v2 delivered the quest-system half; this epic holds everything still
