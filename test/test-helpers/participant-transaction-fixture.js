@@ -1,7 +1,7 @@
 /**
  * Shared fixture of the TX1 (quest replicated-transaction-decision-and-apply)
- * participant witnesses: the pinned revision-8 wire vocabulary, the canonical
- * committed commands of design-leg-a-v8-2026-10-10.md section 2 (with the
+ * participant witnesses: the pinned revision-9 wire vocabulary, the canonical
+ * committed commands of design-leg-a-v9-2026-10-10.md section 2 (with the
  * execution envelope every replica checks), the staging
  * classifier's refusal cases with the layer that must refuse each (section 3.3), controllable replicas, request
  * builders and measurements. The literals below are the
@@ -87,7 +87,12 @@ const V3 = Object.freeze({
     ROWID_ALIAS: 'rowid_alias',
     ROW_ORDER: 'row_order',
     ROWID_CEILING: 'rowid_ceiling',
+    // R2 on the ordinary path (design v9 3.3): a statement that can allocate a key in a
+    // shape that could lower the top key.
+    ROWID_ALLOCATION: 'rowid_allocation',
   }),
+  // The host-failure reason of an envelope mismatch (design v9 3.3, R8-3).
+  ENVELOPE_MISMATCH_REASON: 'execution-envelope-mismatch',
   // The classifier owner to create (design v6 section 3.3).
   DETERMINISM_MODULE: '../../src/partition/partition-transaction-determinism.js',
   PARTITION_SCOPE: 'partition',
@@ -271,6 +276,22 @@ function kindRefusalCases() {
     'CREATE UNIQUE INDEX tx1_unique ON _participant_transactions(state)',
     'CREATE INDEX tx1_foreign ON _partition_statement_outcomes(outcome)',
   ];
+}
+// A schema whose table declares an index (an init-time index, round-7 N7-12).
+const DECLARED_INDEX = 'tx1_declared_value';
+const DECLARED_INDEX_SCHEMA = Object.freeze({tableName: TABLE, columns: [
+  {name: 'id', type: 'TEXT', primaryKey: true},
+  {name: 'value', type: 'TEXT'},
+], indices: [{name: DECLARED_INDEX, columns: ['value']}]});
+// Apply one committed command and return the typed facts of its failure (or null).
+function applyCommittedFailure(partition, command) {
+  try {
+    partition.controllablePort.commit(command);
+    return null;
+  } catch (error) {
+    return {code: error?.code ?? null, reason: error?.reason ?? null,
+      carried: error?.detail?.carried ?? null, own: error?.detail?.own ?? null};
+  }
 }
 function plantRowid(partition, rowid, id) {
   partition.db.prepare(`INSERT INTO ${TABLE} (rowid, id, value) VALUES (?, ?, ?)`)
@@ -471,6 +492,24 @@ async function stagedLeaderTransaction(identity, rows, extra) {
 }
 
 
+// Stage one row in `tx`, optionally commit an interfering write, then PREPARE.
+async function prepareRound(leader, proposed, tx, interfere) {
+  await send(leader, beginMessage(tx));
+  await send(leader, queryMessage(tx, INSERT_SQL, [`${tx.transactionId}-row`, 'staged']));
+  if (interfere) {
+    await commitOrdinaryWrite(leader, proposed, `${tx.transactionId}-w`,
+      {id: `${tx.transactionId}-w`, value: 'writer'});
+  }
+  const prepare = track(send(leader, prepareMessage(tx)));
+  const command = await awaitProposal(proposed,
+    (entry) => isPrepareCommand(entry) && entry.transactionId === tx.transactionId);
+  if (command) {
+    applyCommitted(leader, command);
+  }
+  await settleTicks();
+  return prepare.settled ? prepare.value : null;
+}
+
 const UNKNOWN_ANSWER = Object.freeze({success: false,
   outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
   failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN});
@@ -546,6 +585,10 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 
 export {
   COMMITTED,
+  prepareRound,
+  DECLARED_INDEX,
+  DECLARED_INDEX_SCHEMA,
+  applyCommittedFailure,
   ENVELOPE,
   INT64_MAX,
   IPK_SCHEMA,

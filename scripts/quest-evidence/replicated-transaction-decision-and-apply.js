@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// TX1 (PR100 Leg A) receipts, design revision 8 (design-leg-a-v8-2026-10-10.md
+// TX1 (PR100 Leg A) receipts, design revision 9 (design-leg-a-v9-2026-10-10.md
 // section 10.2). The eight sealed receipt ids are unchanged; the CDC receipt
 // recovery-and-cdc-survive-deadline-and-crash stays deliberately absent (no CDC
 // cursor/retention owner exists, and a receipt bound only to the deadline and

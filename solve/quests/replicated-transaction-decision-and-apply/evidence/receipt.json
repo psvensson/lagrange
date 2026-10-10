@@ -3,10 +3,10 @@
   "quest": "replicated-transaction-decision-and-apply",
   "status": "fail",
   "testFileDigests": {
-    "test/partition/partition-transaction-replicated-apply-v3.test.js": "09eceadf4b28bdfb6f9ed1dd25b983e8ac5218792c032f2442fa723e3934b9e7",
-    "test/query/partition-transaction-seam-falsifiers.test.js": "a56e6cdf1ca0aa36aa128f200e4f1105a6cc5cab8879bebfbeca76013c58321f"
+    "test/partition/partition-transaction-replicated-apply-v3.test.js": "91ee76306bceb7c07c86f5d5c06dc5d1ac21c5919f9e3dbaa2a0b9bbd397aa5f",
+    "test/query/partition-transaction-seam-falsifiers.test.js": "7601c7d10bc8cc7a70f209f1cd4c4c626aa405aeb3d7768cf9adb97b812970a3"
   },
-  "generatedAt": "2026-10-10T16:16:40.210Z",
+  "generatedAt": "2026-10-10T16:57:04.141Z",
   "receipts": [
     {
       "id": "no-speculative-visibility-before-consensus",

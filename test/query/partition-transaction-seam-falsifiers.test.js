@@ -1,7 +1,7 @@
 /**
  * TX1 (quest replicated-transaction-decision-and-apply) seam falsifiers for the
  * query lane: the coordinator and engine obligations of seam-2026-10-10.md
- * (revision-4 to -8 sections) and design-leg-a-v8-2026-10-10.md section
+ * (revision-4 to -8 sections) and design-leg-a-v9-2026-10-10.md section
  * 11. They are recorded here, not repaired: the query owner owns the change, and
  * every falsifier is red on the sealed head. Moved out of the participant witness
  * file partition-transaction-replicated-apply-v3.test.js in revision 5.
@@ -285,7 +285,8 @@ const SEED_ENGINE_OPTIONS = Object.freeze({migrationAutoWire: false,
 
 test('TX1 seam S4c: the schema-migration cutover on the seed-hydration engine is refused typed ' +
   'or persisted, never run with its row unpersisted; with persistence it commits and submits ' +
-  'its row; the production phase calls the setter on its engine after both CDC branches',
+  'its row; the production phase calls the setter on its engine after both CDC branches, ' +
+  'with no await in between, before it publishes the engine to the partitions',
 async () => {
   const engine = new SQLQueryEngine(SEED_ENGINE_OPTIONS);
   const seed = await cutoverThrough(engine);
@@ -304,13 +305,16 @@ async () => {
   const setter = phase.search(/cdcQueryEngine\.setCDCIntegrationService\(\s*cdcIntegrationService\s*\)/u);
   const bothBranches = Math.max(phase.indexOf('CDCIntegrationSetup.createForNormal('),
     phase.indexOf('CDCIntegrationSetup.upgrade('));
+  // ... and before the composition is published to the partitions (round-8 N8-4).
+  const wiring = phase.indexOf('partition.sqlQueryEngine = cdcQueryEngine');
   const begin = seed('BEGIN');
   assert.deepEqual({refusedTyped: begin?.success === false && begin.errorCode === NO_PERSISTENCE,
     silentlyUnpersisted: begin?.success === true && !persists,
     withPersistence: {begin: withGateway('BEGIN')?.success ?? null,
       commit: withGateway('COMMIT')?.success ?? null,
       rowSubmitted: submitted.includes('sql_transactions')},
-    phaseSafe: bothBranches > 0 && setter > bothBranches},
+    phaseSafe: bothBranches > 0 && setter > bothBranches && setter < wiring &&
+      !/\bawait\b/u.test(phase.slice(bothBranches, setter))},
   {refusedTyped: !persists, silentlyUnpersisted: false,
     withPersistence: {begin: true, commit: true, rowSubmitted: true}, phaseSafe: true},
   'migration-coordinator-stage-methods.js:507/542 runs BEGIN..COMMIT through executeQuery; ' +
@@ -321,6 +325,13 @@ async () => {
 // engine holds; `existing` selects the CDC upgrade branch, null the creation branch.
 async function seedPhaseEngine(existing) {
   const partition = {};
+  // What the engine held when the phase published it to the partition (round-8 N8-4).
+  let atPublication = null;
+  Object.defineProperty(partition, 'sqlQueryEngine', {configurable: true, enumerable: true,
+    get: () => atPublication?.engine ?? null,
+    set: (engine) => {
+      atPublication = {engine, service: engine?.cdcIntegrationService ?? null};
+    }});
   let cdc = existing;
   const d = {getLogger: () => QUIET, getConfig: () => ({}), getNodeId: () => 'node-s4d',
     getPartitionServices: () => new Map([['p-s4d', partition]]),
@@ -342,18 +353,20 @@ async function seedPhaseEngine(existing) {
   await phase.phaseCacheHydration();
   const engine = partition.sqlQueryEngine;
   return {holdsPhaseService: Boolean(cdc) && engine?.cdcIntegrationService === cdc,
+    heldAtPublication: Boolean(cdc) && atPublication?.service === cdc,
     persists: engine?.canPersistDistributedTransactionState() === true,
     migrationWired: Boolean(engine?.migrationCoordinator)};
 }
 
 test('TX1 seam S4d: the production seed-hydration phase gives its SQL engine the CDC service it ' +
-  'created or upgraded, so the engine persists transaction state, with the migration owners ' +
-  'still wired (both construction branches)', async () => {
+  'created or upgraded before publishing the engine, so the engine persists transaction ' +
+  'state, with the migration owners still wired (both construction branches)', async () => {
   const upgraded = {nodeId: 'node-s4d', setSqlQueryEngine() {}, setSystemTableCache() {},
     setCacheMutationTarget() {}, setPartitionServicesProvider() {}, setMessageRouter() {},
     setEpochManager() {}, upsertSystemTableRow: async () => ({success: true})};
   const facts = {created: await seedPhaseEngine(null), upgraded: await seedPhaseEngine(upgraded)};
-  const wired = {holdsPhaseService: true, persists: true, migrationWired: true};
+  const wired = {holdsPhaseService: true, heldAtPublication: true, persists: true,
+    migrationWired: true};
   assert.deepEqual(facts, {created: wired, upgraded: wired},
     'seed-cache-hydration-phase.js:220-254 builds the engine, then the CDC service, and never ' +
     'hands the service to the engine');
@@ -418,7 +431,7 @@ test('TX1 seam S6: each participant\'s PREPARE answer (digest, index, term) is r
 });
 
 test('TX1 seam S7: a single-participant transaction prepares before its decision (seam F, ' +
-  'option A; replaced if the query owner chooses option B)', async () => {
+  'prepare-first, agreed and final)', async () => {
   const order = [];
   const coordinator = new DistributedTransactionCoordinator({
     beginParticipant: async () => {},

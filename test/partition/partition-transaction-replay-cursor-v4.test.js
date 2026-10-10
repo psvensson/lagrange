@@ -48,6 +48,8 @@ import {
   generationOf,
   INT64_MAX,
   IPK_SCHEMA,
+  DECLARED_INDEX,
+  DECLARED_INDEX_SCHEMA,
   kindRefusalCases,
   notCommitted,
   operationOf,
@@ -238,17 +240,20 @@ test('TX1 v3 W6s: the leader\'s self-check refuses random(), an rs-raft table re
 
 test('TX1 v3 W6p: one statement-kind owner runs before any prepare on every path: unadmitted ' +
   'heads (PRAGMA, DROP, ATTACH, CREATE TRIGGER, ANALYZE, a leading `;`, comment-terminator ' +
-  'tricks, unbound or foreign index DDL) on the query wire and through executeLocalQuery ' +
+  'tricks, unbound or foreign index DDL, a schema-declared DROP INDEX) on the query wire, ' +
+  'through executeQuery directly and through executeLocalQuery ' +
   'propose and change nothing; own-table index DDL still proposes; a committed PRAGMA or DROP ' +
   'is refused identically at apply', async () => {
-  const {leader, proposed} = await startLeader();
+  const {leader, proposed} = await startLeader({schema: DECLARED_INDEX_SCHEMA});
   try {
     const wire = (sql) => send(leader, {type: PARTITION_SERVICE_MESSAGE_TYPE.QUERY, sql,
       params: []});
     const facts = {wire: []};
-    for (const sql of kindRefusalCases()) {
+    for (const sql of [...kindRefusalCases(), `DROP INDEX ${DECLARED_INDEX}`]) {
       facts.wire.push(await answeredOrPending(wire(sql)));
     }
+    facts.direct = await answeredOrPending(
+      leader.executeQuery('PRAGMA reverse_unordered_selects = 1', []));
     facts.local = await answeredOrPending(
       leader.executeLocalQuery('PRAGMA reverse_unordered_selects = 1', []));
     facts.index = await answeredOrPending(leader.executeQuery(
@@ -269,14 +274,20 @@ test('TX1 v3 W6p: one statement-kind owner runs before any prepare on every path
       failureCode: V3.CODE.WRITE_STATEMENT_REFUSED};
     const applied = {applies: [null, null], flag: 0, table: 1,
       outcomes: [refusedAtApply, refusedAtApply]};
-    assert.deepEqual(facts, {wire: kindRefusalCases().map(() => refusedKind),
-      local: refusedKind, index: 'pending',
+    assert.deepEqual(facts, {wire: [...kindRefusalCases(), 'declared'].map(() => refusedKind),
+      direct: refusedKind, local: refusedKind, index: 'pending',
       leader: {flag: 0, table: 1, proposed: ['CREATE']}, applied: [applied, applied]},
     'nothing but an admitted head is ever prepared on the shared connection, on any path');
   } finally {
     await shutdownAll(leader);
   }
 });
+
+// An upsert whose conflict-target WHERE precedes a rowid assignment (round-8 R8-2).
+const upsertTargetWhere = (first, second) => `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES ` +
+  `(${first}, 'top'), (${second}, 'new'), (${first}, 'low') ON CONFLICT (id) WHERE 1 DO UPDATE ` +
+  `SET rowid = CASE WHEN excluded.value = 'top' THEN ${INT64_MAX} ELSE 5 END`;
+const REPLACE_SQL = `INSERT OR REPLACE INTO ${FIXTURE_TABLE} (id, value) VALUES (?, ?)`;
 
 test('TX1 v3 W6r: rowid-alias writes (bare, quoted, oid, _rowid_, qualified, AS-aliased), ' +
   'order-dependent session writes and writes at the rowid ceiling are refused typed on the ' +
@@ -300,6 +311,7 @@ async () => {
     facts.ordinaryAsAlias = await ordinarySql(`INSERT INTO ${FIXTURE_TABLE} AS x (rowid, id, ` +
       'value) VALUES (?, ?, ?)', [7, 'as', 'v'], 'w6r-as');
     facts.backfill = await ordinarySql(BACKFILL_SQL, [0, 100], 'w6r-backfill');
+    facts.upsert = await ordinarySql(upsertTargetWhere('\'a\'', '\'n\''), [], 'w6r-upsert');
     plantRowidCeiling(leader);
     facts.sessionCeiling = await session(INSERT_SQL, [ROW.id, ROW.value]);
     facts.ordinaryCeiling = await ordinarySql(INSERT_SQL, [OTHER_ROW.id, OTHER_ROW.value],
@@ -310,11 +322,15 @@ async () => {
     facts.applied = await onTwoReplicas(async (replica) => {
       const backfill = applyCommitted(replica, {...committedQueryOf('w6r-bf', BACKFILL_SQL),
         params: [0, 100]});
+      applyCommitted(replica, ordinaryWriteOf('w6r-a', {id: 'a', value: 'x'}));
+      const upsert = [applyCommitted(replica, committedQueryOf('w6r-up',
+        upsertTargetWhere('\'a\'', '\'n\''))), statementOutcomeOf(replica, 'w6r-up').outcome,
+      rowidsOf(replica)];
       plantRowidCeiling(replica);
       const apply = applyCommitted(replica, ordinaryWriteOf('w6r-apply', ROW));
       const prepare = applyCommitted(replica, prepareCommandOf(dryRun,
         [operationOf(ROW_2)], generationOf(replica)));
-      return {backfill: [backfill, statementOutcomeOf(replica, 'w6r-bf').outcome], apply,
+      return {backfill: [backfill, statementOutcomeOf(replica, 'w6r-bf').outcome], upsert, apply,
         outcome: statementOutcomeOf(replica, 'w6r-apply'), rows: rowCount(replica, ROW.id),
         prepare, dryRun: await outcomeOf(replica, dryRun, ['refusalCause'])};
     });
@@ -322,12 +338,14 @@ async () => {
       refusalLayer: layer});
     const ordinary = (layer) => ({failureCode: V3.CODE.WRITE_STATEMENT_REFUSED,
       refusalLayer: layer});
-    const applied = {backfill: [null, 'applied'], apply: null, outcome: {outcome: 'statement_failed',
-      failureCode: V3.CODE.WRITE_STATEMENT_REFUSED}, rows: 0, prepare: null,
-    dryRun: {...notCommitted(V3.STATE.REFUSED), refusalCause: V3.REFUSAL_CAUSE.ROWID_CEILING}};
+    const applied = {backfill: [null, 'applied'], upsert: [null, 'statement_failed', ['1']],
+      apply: null, outcome: {outcome: 'statement_failed',
+        failureCode: V3.CODE.WRITE_STATEMENT_REFUSED}, rows: 0, prepare: null,
+      dryRun: {...notCommitted(V3.STATE.REFUSED), refusalCause: V3.REFUSAL_CAUSE.ROWID_CEILING}};
     assert.deepEqual(facts, {session: rowidRefusalCases().map(([, , layer]) =>
       nondeterministic(layer)), ordinaryAlias: ordinary(LAYER.ROWID_ALIAS),
     ordinaryAsAlias: ordinary(LAYER.ROWID_ALIAS), backfill: 'pending',
+    upsert: ordinary(LAYER.ROWID_ALIAS),
     sessionCeiling: nondeterministic(LAYER.ROWID_CEILING),
     ordinaryCeiling: ordinary(LAYER.ROWID_CEILING), proposed: ['w6r-backfill'],
     applied: [applied, applied]},
@@ -339,50 +357,82 @@ async () => {
 });
 
 test('TX1 v3 W6r-b: random rowid allocation is excluded throughout a statement: an insert that ' +
-  'assigns the top key and then allocates, and two automatic insertions after an existing ' +
-  'maximum of 2^63-2, are refused identically at apply; in a transaction an INTEGER PRIMARY ' +
-  'KEY takes an explicit in-range integer and nothing else', async () => {
+  'assigns the top key and then allocates, two automatic insertions after an existing maximum ' +
+  'of 2^63-2, a string-param top key, a conflict-target-WHERE rowid upsert and a REPLACE that ' +
+  'allocates are refused identically at apply, and so is a carried PREPARE that does it; ' +
+  'explicit-key REPLACE still applies; in a transaction an INTEGER PRIMARY KEY takes an ' +
+  'explicit in-range integer and nothing else', async () => {
   const refusedAtApply = {outcome: 'statement_failed',
     failureCode: V3.CODE.WRITE_STATEMENT_REFUSED};
+  const outcomesOf = (replica, entryIds) => entryIds.map((entryId) =>
+    statementOutcomeOf(replica, entryId));
+  const dryRun = identityOf('a11rb-dry');
   const perReplica = [];
   for (const replicaId of [REPLICAS[1], REPLICAS[2]]) {
     const ipk = await startReplica(replicaId, {schema: IPK_SCHEMA});
     const text = await startReplica(replicaId);
     try {
-      const topThenAllocate = applyCommitted(ipk, committedQueryOf('w6rb-ipk',
-        `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES (${INT64_MAX}, 'top'), (NULL, 'x')`));
+      const commit = (replica, entryId, sql, params = []) =>
+        applyCommitted(replica, {...committedQueryOf(entryId, sql), params});
+      const applies = [commit(ipk, 'w6rb-ipk',
+        `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES (${INT64_MAX}, 'top'), (NULL, 'x')`),
+      commit(ipk, 'w6rb-string', `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES (?, 'top'), ` +
+        '(NULL, \'x\')', [String(INT64_MAX)]),
+      commit(ipk, 'w6rb-upsert', upsertTargetWhere(1, 'NULL')),
+      commit(ipk, 'w6rb-replace-one', REPLACE_SQL, [5, 'five']),
+      commit(ipk, 'w6rb-replace-two', `${REPLACE_SQL}, (?, ?)`, [5, 'five-b', 6, 'six']),
+      commit(ipk, 'w6rb-replace-null', REPLACE_SQL, [null, 'null']),
+      commit(ipk, 'w6rb-replace-omitted', `INSERT OR REPLACE INTO ${FIXTURE_TABLE} (value) ` +
+        'VALUES (\'omitted\')')];
+      const prepare = applyCommitted(ipk, prepareCommandOf(dryRun, [
+        {entryId: 'op-top', sql: `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES (${INT64_MAX}, ` +
+          '\'top\')', params: []},
+        {entryId: 'op-null', sql: `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES (NULL, 'x')`,
+          params: []}], generationOf(ipk)));
       plantRowid(text, INT64_MAX - 1n, 'near-top');
-      const twoAutomatic = applyCommitted(text, committedQueryOf('w6rb-text',
+      applies.push(commit(text, 'w6rb-text',
         `INSERT INTO ${FIXTURE_TABLE} (id, value) VALUES ('a', 'x'), ('b', 'y')`));
-      perReplica.push({topThenAllocate, ipk: {outcome: statementOutcomeOf(ipk, 'w6rb-ipk'),
-        rowids: rowidsOf(ipk)}, twoAutomatic, text: {outcome: statementOutcomeOf(text,
-        'w6rb-text'), rowids: rowidsOf(text)}});
+      perReplica.push({applies, prepare, dryRun: await outcomeOf(ipk, dryRun, ['refusalCause']),
+        ipk: {outcomes: outcomesOf(ipk, ['w6rb-ipk', 'w6rb-string', 'w6rb-upsert',
+          'w6rb-replace-one', 'w6rb-replace-two', 'w6rb-replace-null', 'w6rb-replace-omitted']),
+        rowids: rowidsOf(ipk)}, text: {outcome: statementOutcomeOf(text, 'w6rb-text'),
+          rowids: rowidsOf(text)}});
     } finally {
       await shutdownAll(ipk, text);
     }
   }
   const tx = identityOf('a11rb');
   const {leader} = await startLeader({schema: IPK_SCHEMA});
-  let session = null;
+  const facts = {perReplica, session: []};
   try {
     await send(leader, beginMessage(tx));
-    session = [];
     for (const [sql, params] of [[INSERT_SQL, [5, 'five']], [INSERT_SQL, [null, 'null']],
       [INSERT_SQL, [2 ** 62, 'range']], [`INSERT INTO ${FIXTURE_TABLE} (value) VALUES (?)`,
-        ['omitted']]]) {
-      session.push(pick(await send(leader, queryMessage(tx, sql, params)),
+        ['omitted']], [INSERT_SQL, [String(INT64_MAX), 'string']],
+      [REPLACE_SQL, [7, 'seven']]]) {
+      facts.session.push(pick(await send(leader, queryMessage(tx, sql, params)),
         ['success', 'failureCode', 'refusalLayer']));
     }
+    facts.wire = [await answeredOrPending(leader.executeQuery(REPLACE_SQL, [8, 'eight'],
+      {entryId: 'w6rb-wire-replace'})), await answeredOrPending(leader.executeQuery(
+      REPLACE_SQL, [null, 'null'], {entryId: 'w6rb-wire-null'}))];
   } finally {
     await shutdownAll(leader);
   }
-  const replica = {topThenAllocate: null, ipk: {outcome: refusedAtApply, rowids: []},
-    twoAutomatic: null, text: {outcome: refusedAtApply, rowids: [String(INT64_MAX - 1n)]}};
+  const statementFailed = refusedAtApply;
+  const appliedOutcome = {outcome: 'applied', failureCode: null};
+  const replica = {applies: [null, null, null, null, null, null, null, null], prepare: null,
+    dryRun: {...notCommitted(V3.STATE.REFUSED), refusalCause: V3.REFUSAL_CAUSE.ROWID_CEILING},
+    ipk: {outcomes: [statementFailed, statementFailed, statementFailed, appliedOutcome,
+      appliedOutcome, statementFailed, statementFailed], rowids: ['5', '6']},
+    text: {outcome: refusedAtApply, rowids: [String(INT64_MAX - 1n)]}};
   const keyRefused = {success: false, failureCode: V3.CODE.SESSION_WRITE_NONDETERMINISTIC,
     refusalLayer: LAYER.IMPLICIT_KEY};
-  assert.deepEqual({perReplica, session}, {perReplica: [replica, replica], session: [
-    {success: true, failureCode: null, refusalLayer: null}, keyRefused, keyRefused,
-    keyRefused]}, 'the post-statement ceiling sees the top row on every replica alike');
+  const staged = {success: true, failureCode: null, refusalLayer: null};
+  assert.deepEqual(facts, {perReplica: [replica, replica], session: [staged, keyRefused,
+    keyRefused, keyRefused, keyRefused, staged], wire: ['pending',
+    {failureCode: V3.CODE.WRITE_STATEMENT_REFUSED, refusalLayer: LAYER.ROWID_ALLOCATION}]},
+  'the post-statement ceiling sees the top row on every replica alike; explicit keys work');
 });
 
 // --- positive controls (green on the sealed head; moved here from the participant file in

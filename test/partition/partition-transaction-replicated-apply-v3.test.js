@@ -1,6 +1,6 @@
 /**
  * TX1 (quest replicated-transaction-decision-and-apply, PR100 Leg A) participant
- * red witnesses for design revision 8 (design-leg-a-v8-2026-10-10.md, section
+ * red witnesses for design revision 9 (design-leg-a-v9-2026-10-10.md, section
  * 10). Siblings: test/query/partition-transaction-seam-falsifiers.test.js (query
  * lane) and partition-transaction-replay-cursor-v4.test.js (real rs-raft log; since
  * revision 6 the positive controls, since revision 7 the classifier witnesses W6n,
@@ -30,8 +30,8 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
 import {
-  COMMITTED, GENERATION_SQL, alterCommandOf, columnsOf,
-  commitDecision, decidedOnTwoReplicas, INSERT_SQL, notCommitted,
+  COMMITTED, ENVELOPE, GENERATION_SQL, alterCommandOf, applyCommittedFailure, columnsOf,
+  commitDecision, decidedOnTwoReplicas, prepareRound, INSERT_SQL, notCommitted,
   OTHER_ROW, PREPARED, REPLICAS, ROW, ROW_2, TABLE, UNKNOWN_ANSWER, UNKNOWN_FIELDS, V3,
   applyCommitted, awaitProposal, beginMessage, commitMessage, commitOrdinaryWrite,
   decisionCommandOf, durableAppliedIndex, generationOf, hasEntryId, identityOf,
@@ -437,24 +437,6 @@ test('TX1 v3 W15: the proposed PREPARE carries the BEGIN-time base, and its appl
   }
 });
 
-// Stage one row in `tx`, optionally commit an interfering write, then PREPARE.
-async function prepareRound(leader, proposed, tx, interfere) {
-  await send(leader, beginMessage(tx));
-  await send(leader, queryMessage(tx, INSERT_SQL, [`${tx.transactionId}-row`, 'staged']));
-  if (interfere) {
-    await commitOrdinaryWrite(leader, proposed, `${tx.transactionId}-w`,
-      {id: `${tx.transactionId}-w`, value: 'writer'});
-  }
-  const prepare = track(send(leader, prepareMessage(tx)));
-  const command = await awaitProposal(proposed,
-    (entry) => isPrepareCommand(entry) && entry.transactionId === tx.transactionId);
-  if (command) {
-    applyCommitted(leader, command);
-  }
-  await settleTicks();
-  return prepare.settled ? prepare.value : null;
-}
-
 test('TX1 v3 W16: contention is measured: under a concurrent writer every PREPARE answer is ' +
   'typed (PREPARED, or refused `conflict`) and the abort rate is reported; uncontended, and ' +
   'after bounded interference has ended, the PREPARE succeeds', async (t) => {
@@ -489,25 +471,45 @@ test('TX1 v3 W16: contention is measured: under a concurrent writer every PREPAR
   'the rate is measured, not promised (design 3.6, L5); an always-conflicting rule fails');
 });
 
-test('TX1 v3 W20: a transaction command carries the execution envelope; a replica on another ' +
-  'build refuses it as a host failure (nothing recorded, applied index unchanged) and applies ' +
-  'it once its envelope matches', async () => {
+test('TX1 v3 W20: a transaction command carries the execution envelope; a replica refuses a ' +
+  'PREPARE or COMMIT whose envelope differs in any field as a typed, visible host failure ' +
+  '(nothing recorded, applied index unchanged, every retry alike), in both upgrade directions',
+async () => {
   const tx = identityOf('a20e');
+  const fields = ['sqliteVersion', 'sqliteSourceId', 'compileOptionsDigest',
+    'classifierListVersion'];
+  const withEnvelope = (command, field, value) => ({...command,
+    executionEnvelope: {...command.executionEnvelope, [field]: value}});
   const perReplica = await onTwoReplicas(async (replica) => {
     const prepareCommand = prepareCommandOf(tx, [operationOf(ROW)], generationOf(replica));
     const appliedBefore = durableAppliedIndex(replica);
-    const foreign = applyCommitted(replica, {...prepareCommand,
-      executionEnvelope: {...prepareCommand.executionEnvelope, sqliteVersion: '0.0.0'}});
+    const prepareFields = fields.map((field) =>
+      applyCommitted(replica, withEnvelope(prepareCommand, field, 'other')));
     const afterForeign = {...(await outcomeOf(replica, tx)),
       appliedAdvance: durableAppliedIndex(replica) - appliedBefore};
-    return {foreign, afterForeign, matching: applyCommitted(replica, prepareCommand),
-      afterMatching: await outcomeOf(replica, tx)};
+    const matching = applyCommitted(replica, prepareCommand);
+    const decision = commitDecision(tx, prepareCommand);
+    // An entry stamped by an older build, met by this (upgraded) replica: it stays stalled,
+    // typed and visible; the remedy is the release-owner census (design v9 L10).
+    const older = withEnvelope(decision, 'classifierListVersion', 'tx1-leg-a-0');
+    const appliedAtDecision = durableAppliedIndex(replica);
+    const stalls = [applyCommittedFailure(replica, older), applyCommittedFailure(replica, older)];
+    const afterStall = {...(await outcomeOf(replica, tx)),
+      appliedAdvance: durableAppliedIndex(replica) - appliedAtDecision};
+    return {prepareFields, afterForeign, matching, stalls: stalls.map((stall) =>
+      ({...stall, carried: stall?.carried?.classifierListVersion ?? null,
+        own: stall?.own?.classifierListVersion ?? null})), afterStall,
+    decisionApply: applyCommitted(replica, decision), afterDecision: await outcomeOf(replica, tx)};
   });
-  const expected = {foreign: V3.CODE.ENVELOPE_MISMATCH,
+  const stall = {code: V3.CODE.ENVELOPE_MISMATCH, reason: V3.ENVELOPE_MISMATCH_REASON,
+    carried: 'tx1-leg-a-0', own: ENVELOPE.classifierListVersion};
+  const expected = {prepareFields: fields.map(() => V3.CODE.ENVELOPE_MISMATCH),
     afterForeign: {outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, state: V3.STATE.ABSENT,
-      appliedAdvance: 0}, matching: null, afterMatching: PREPARED};
+      appliedAdvance: 0}, matching: null, stalls: [stall, stall],
+    afterStall: {...PREPARED, appliedAdvance: 0}, decisionApply: null, afterDecision: COMMITTED};
   assert.deepEqual(perReplica, [expected, expected],
-    'a replica never applies a transaction command under a build it was not vetted for');
+    'a replica never applies a transaction command under a build it was not staged on, and ' +
+    'never stalls silently');
 });
 
 // --- W5: c' isolation throughout ACTIVE ---
@@ -694,6 +696,8 @@ test('TX1 v3 W9: an unbound ROLLBACK and a COMMIT with a foreign digest are refu
       decisionCommandOf(tx, V3.DECISION.COMMIT, foreign));
     facts.afterRefusals = await outcomeOf(leader, tx);
     facts.commitApply = applyCommitted(leader, commitDecision(tx, prepareCommand));
+    facts.duplicateCommit = [applyCommitted(leader, commitDecision(tx, prepareCommand)),
+      rowCount(leader), transactionOperationOutcomes(leader)];
     facts.reversalApply = applyCommitted(leader,
       decisionCommandOf(tx, V3.DECISION.ROLLBACK, prepareCommand.preparedDigest));
     facts.final = await outcomeOf(leader, tx);
@@ -702,7 +706,8 @@ test('TX1 v3 W9: an unbound ROLLBACK and a COMMIT with a foreign digest are refu
       unboundRollback: {success: false, failureCode: V3.CODE.DECISION_BINDING_REQUIRED},
       foreignDigestCommit: {success: false, failureCode: V3.CODE.DECISION_DIGEST_MISMATCH},
       proposedByRefusals: 0, foreignDigestApply: null, afterRefusals: PREPARED,
-      commitApply: null, reversalApply: null, final: COMMITTED, rows: 1},
+      commitApply: null, duplicateCommit: [null, 1, 1], reversalApply: null, final: COMMITTED,
+      rows: 1},
     'only the bound decision terminalizes, and the first applied terminal stands');
   } finally {
     await shutdownAll(leader);
