@@ -495,6 +495,56 @@ finding, not introduced by AD; the mirror enqueue
 at capacity after commit leaves the committed delta unmirrored (limit L1 class);
 a held-group propose refusal is answered UNKNOWN (conservative).
 
+### 0.0.12 Lead record from the increment-2 source verification (2026-10-11)
+
+The statement-admission owner's independent verification (quest log, verifier
+subagent:ad9cf46de3adf7901) found three divergence channels in the first
+attempt's SQL reading (single-quoted names in name positions, the first mention
+of a duplicated INTEGER PRIMARY KEY column where SQLite takes the last, and
+compound VALUES sources), a `PRAGMA optimize` reachable through an admitted
+read via the `pragma_optimize` table-valued function, and a retry answered by
+the ceiling pre-check before the settled-outcome lookup. The corrective
+attempt reads names as SQLite 3.49.2 does (a new names module), follows the
+last-mention rule, treats anything after the VALUES rows other than ON
+CONFLICT / RETURNING / `;` / end as SELECT-sourced, answers a settled entryId
+from its outcome row before any admission rule, and adds three text rules on
+every ordinary path, reads included:
+
+- `statement_function`: any `pragma_` name, `fts3_tokenizer`, `load_extension`
+  (closes the pre-existing heap-pointer leak through an admitted SELECT);
+- `statement_table`: INSERT/REPLACE/UPDATE/DELETE and WITH-headed writes may
+  target only the partition's own table (closes the pre-existing hole that
+  ordinary DML could write `_raft_rs_*` and `_partition_statement_outcomes`);
+  sender inventory: the index service, CDC routed writes, the CDC bootstrap
+  direct path, the migration backfill and the split/merge copies all write
+  their own partition's table; `handleSystemTableWrite` has no sender;
+- `statement_conflict`: `OR ROLLBACK` is refused (it ends the apply's SQLite
+  transaction and breaks its atomicity; pre-existing, HIGH).
+
+These three restrictions are Leg A refusals of unproved raw statement forms
+under the owner record ("Leg A may explicitly refuse unproved raw statement
+forms before admission"); they are declared in the admission constants and
+belong in the query contract's documented restrictions (query owner).
+
+Explicit supersessions added to the 9.2 inventory (meaning kept, statement
+changed, because a write to a table other than the partition's own is now a
+typed refusal before SQLite):
+
+| Test | Was | Now |
+| --- | --- | --- |
+| `test/partition/committed-statement-outcome.test.js` F-i | `INSERT INTO statement_outcome_missing_table` asserting /no such table/ | a missing-column insert on the own table asserting /no column named missing_column/ (still a deterministic schema error, consumed and reported) |
+| `test/partition/partition-service-write-commit.test.js` "a failed statement ... is a consumed outcome" | `INSERT INTO missing_table` | `INSERT INTO test_table (missing_column)`, regex matched |
+| `test/partition/partition-service-transactions-query-routing.test.js` | the partition's own table differed from the table the test writes | the partition is created with `tableName: 'test_data'`, the written table |
+
+L6 dispositions added: non-own and missing-table committed writes are refused
+typed at apply; committed SELECT / read-only WITH entries (HEAD proposed
+CTE reads as writes) are refused at apply, outcome rows only. Routed (R17):
+rowid precision above 2^53 in answers; a sessionless caller can enter the
+session path by naming an active sessionId (closed by the c' increment);
+migration ALTER proposed with no pre-check and admitting any table (migration
+owner); the index service ignores `success:false` answers; R2 and DROP INDEX
+reads see uncommitted session schema until c'.
+
 ## 1. Consumed surfaces (verified)
 
 Participant transaction owner, current behaviour to replace:

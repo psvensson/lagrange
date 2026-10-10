@@ -70,8 +70,10 @@ const DB_FILE = 'partition.sqlite';
 const TABLE_NAME = 'statement_outcome_rows';
 const INSERT_SQL = `INSERT INTO ${TABLE_NAME} (id, value) VALUES (?, ?)`;
 const SELECT_ROW_SQL = `SELECT id, value FROM ${TABLE_NAME} WHERE id = ?`;
-const MISSING_TABLE_INSERT_SQL =
-  'INSERT INTO statement_outcome_missing_table (id) VALUES (?)';
+// A schema error on the partition's own table (a write to any other table is
+// refused by the statement-admission owner before SQLite reads it).
+const MISSING_COLUMN_INSERT_SQL =
+  `INSERT INTO ${TABLE_NAME} (missing_column) VALUES (?)`;
 const TEST_TIMEOUT_MS = 30000;
 // Inputs: the SQLite result codes an environmental failure carries (the
 // SQLite library's own names; better-sqlite3 reports extended codes).
@@ -733,7 +735,7 @@ test('F-i: a schema error is a deterministic statement failure: consumed ' +
     const partition = await open();
     const failed = await partition.applyWrite({
       type: PARTITION_SERVICE_OPERATION.INSERT,
-      sql: MISSING_TABLE_INSERT_SQL,
+      sql: MISSING_COLUMN_INSERT_SQL,
       params: ['z'],
       entryId: 'entry-missing-table',
     });
@@ -741,7 +743,7 @@ test('F-i: a schema error is a deterministic statement failure: consumed ' +
     const consumed = record.applied.find((entry) =>
       entry.entryId === 'entry-missing-table');
     assert.equal(failed.success, false, 'the schema error is reported');
-    assert.match(String(failed.error), /no such table/u,
+    assert.match(String(failed.error), /no column named missing_column/u,
       'the reported error is the statement\'s own');
     assert.ok(consumed !== undefined && consumed.index <= record.appliedIndex,
       'the entry is consumed');

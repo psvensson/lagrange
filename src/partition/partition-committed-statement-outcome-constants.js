@@ -1,7 +1,9 @@
 // The vocabulary of the committed-statement outcome owner
 // (partition-committed-statement-outcome.js): its durable outcome table, the
-// named state of an entry key's record, and which statement failures are
-// deterministic.
+// named state of an entry key's record, which statement failures are
+// deterministic, and which result an applied statement retains (a pure rule,
+// here so the statement-admission owner can apply it without an import
+// cycle).
 
 // The durable record of every committed statement's terminal outcome, owned
 // by the partition's committed-entry application. One row per committed
@@ -109,7 +111,37 @@ const PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS = Object.freeze(new Set([
   'TypeError',
 ]));
 
+/**
+ * The result an applied committed statement retains in its outcome row and
+ * answers with: its affected-row count, and its last insert rowid only when
+ * the statement inserted rows - it is of an inserting kind (an INSERT or
+ * REPLACE head, a WITH-headed one included; UPSERT commands render as one)
+ * and changed at least one row. The connection's last insert rowid is
+ * connection state: after a statement that inserted nothing (an UPDATE, a
+ * DELETE, index DDL, an ALTER, an INSERT whose every row was ignored, a DO
+ * NOTHING, an empty SELECT source) it is whatever last inserted on the
+ * connection - an rs-raft log append on the shared connection, an
+ * unreplicated local write, a rolled-back allocation - which differs between
+ * replicas; such a statement retains and answers null, so the row and the
+ * answer are the same on every replica. Residual, with no sender in src: an
+ * upsert whose every row took its DO UPDATE path changed rows without
+ * inserting one, and retains the connection's value.
+ * @param {{changes: number, lastInsertRowid: *}} info - The statement's run
+ *   info.
+ * @param {{insertsRows: boolean}} kind - Whether the statement is of an
+ *   inserting kind (read from its head by the statement-admission owner).
+ * @return {{changes: number, lastInsertRowid: *}} The retained result.
+ */
+function committedStatementResult(info, {insertsRows}) {
+  return {
+    changes: info.changes,
+    lastInsertRowid: insertsRows === true && info.changes > 0 ?
+      info.lastInsertRowid : null,
+  };
+}
+
 export {
+  committedStatementResult,
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
   PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
   PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS,

@@ -751,6 +751,11 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   ADDRESS_PARTS_MIN: 1,
 });
 
+// The statement-admission owner's log (partition-statement-admission.js).
+const PARTITION_STATEMENT_ADMISSION_LOG_MSG = Object.freeze({
+  STATEMENT_REFUSED: 'Partition statement refused by the statement-admission owner',
+});
+
 export {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
@@ -784,5 +789,6 @@ export {
   PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
+  PARTITION_STATEMENT_ADMISSION_LOG_MSG,
   PARTITION_TRANSACTION_PREPARED_STATE,
 };

@@ -46,6 +46,10 @@ import {
   PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {
+  PARTITION_STATEMENT_REFUSAL_CODE,
+  refusalLayerFieldOf,
+} from './partition-statement-admission-constants.js';
 
 const {
   PARTITION_SERVICE_ERROR_MSG,
@@ -113,8 +117,8 @@ function readCommittedStatementOutcome(service, entryKey) {
  * transaction.
  * @param {Object} service - The partition (its `db`).
  * @param {Object} outcome - {entryKey, outcome, index, term, error, result};
- *   `error` only for STATEMENT_FAILED, `result` (the statement's
- *   {changes, lastInsertRowid}) only for APPLIED.
+ *   `error` only for STATEMENT_FAILED, `result` (the statement's retained
+ *   {changes, lastInsertRowid}, committedStatementResult) only for APPLIED.
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
   term, error = null, result = null}) {
@@ -178,6 +182,11 @@ function sqlitePrimaryCode(error) {
  * @return {boolean} Whether the failure is the statement's own outcome.
  */
 function isDeterministicStatementFailure(error, db) {
+  // The statement-admission owner's refusal is a function of the command
+  // bytes and the replicated schema and rows: every replica refuses alike.
+  if (error?.code === PARTITION_STATEMENT_REFUSAL_CODE) {
+    return true;
+  }
   const primaryCode = sqlitePrimaryCode(error);
   if (primaryCode !== null) {
     return PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES.has(primaryCode);
@@ -244,6 +253,8 @@ function answerSettledStatement(service, {recorded, command}) {
     success: false,
     error: recorded.failureMessage,
     failureCode: recorded.failureCode,
+    // The statement-admission owner's refusal layer, read from the record.
+    ...refusalLayerFieldOf(recorded.failureCode, recorded.failureMessage),
     committed: true,
     outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
     ...settledAt,
@@ -316,6 +327,7 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
     success: false,
     error: error.message,
     failureCode: failureCodeOf(error),
+    ...refusalLayerFieldOf(failureCodeOf(error), String(error.message)),
     committed: true,
     outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
     ...identity,

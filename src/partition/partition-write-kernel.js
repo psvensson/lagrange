@@ -142,7 +142,8 @@ function isReroutableWriteFailureCode(code, {carriesEntryId = false} = {}) {
 // cause of an unknown outcome (outcomeUnknownAnswer) is not among them: it is
 // the kernel's own, and the leader logs it with the entry where it answers.
 // A hop carries what every classifier decides on - the code and the entryId
-// a re-delivery is made under.
+// a re-delivery is made under - and, for a statement the statement-admission
+// owner refused, the rule that refused it (`refusalLayer`).
 const TYPED_WRITE_ANSWER_FIELDS = Object.freeze([
   'failureCode',
   'entryId',
@@ -151,6 +152,7 @@ const TYPED_WRITE_ANSWER_FIELDS = Object.freeze([
   'committed',
   'outcome',
   'spentWait',
+  'refusalLayer',
 ]);
 
 /**

@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 170,
+    "storage-partition": 171,
     "storage-raft": 119,
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2333,
-  "digest": "fnv1a32-e1d57f1f",
+  "censusSize": 2334,
+  "digest": "fnv1a32-fe99f988",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fc82d7c7",
+  "observationDigest": "fnv1a32-73d457d9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1299,6 +1299,7 @@
     "test/partition/partition-split-routing.test.js": "storage-partition",
     "test/partition/partition-splitting-trigger.property.test.js": "storage-partition",
     "test/partition/partition-sql-parser.test.js": "storage-partition",
+    "test/partition/partition-statement-admission.test.js": "storage-partition",
     "test/partition/partition-transaction-handler.test.js": "storage-partition",
     "test/partition/partition-transaction-replay-cursor-v4.test.js": "storage-partition",
     "test/partition/partition-transaction-replicated-apply-v3.test.js": "storage-partition",
@@ -8756,6 +8757,19 @@
       "files": [
         "examples/service-data-affinity/lagrange-loader.js",
         "src/partition/partition-split-merge-manager.js"
+      ]
+    },
+    "test/partition/partition-statement-admission.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/partition-transaction-replay-cursor-v4.test.js": {

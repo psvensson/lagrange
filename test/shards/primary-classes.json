@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2037,
+    "unit": 2038,
     "integration": 87,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2333,
-  "digest": "fnv1a32-c0001e5e",
+  "censusSize": 2334,
+  "digest": "fnv1a32-2f525a29",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1280,6 +1280,7 @@
     "test/partition/partition-split-routing.test.js": "unit",
     "test/partition/partition-splitting-trigger.property.test.js": "unit",
     "test/partition/partition-sql-parser.test.js": "unit",
+    "test/partition/partition-statement-admission.test.js": "unit",
     "test/partition/partition-transaction-handler.test.js": "unit",
     "test/partition/partition-transaction-replay-cursor-v4.test.js": "unit",
     "test/partition/partition-transaction-replicated-apply-v3.test.js": "unit",

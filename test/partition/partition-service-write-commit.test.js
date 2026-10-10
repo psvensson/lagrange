@@ -424,11 +424,13 @@ test(
       const failed = await partition.applyWrite({
         type: 'INSERT',
         entryId: 'statement-failed-entry',
-        sql: 'INSERT INTO missing_table (id) VALUES (?)',
+        // A schema error on the own table (a write to any other table is
+        // refused by the statement-admission owner before SQLite reads it).
+        sql: 'INSERT INTO test_table (missing_column) VALUES (?)',
         params: ['never'],
       });
       t.equal(failed.success, false, 'the failed statement reports failure');
-      t.match(failed.error, /missing_table/,
+      t.match(failed.error, /missing_column/,
         'the failure carries the statement error');
       t.equal(failed.partitionId, partition.partitionId);
       t.ok(Number.isSafeInteger(failed.logIndex),

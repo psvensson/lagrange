@@ -29,6 +29,7 @@ import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
   pickTypedWriteAnswer,
 } from './partition-write-kernel.js';
+import {runCommittedPartitionStatement} from './partition-statement-admission.js';
 
 const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
   DEADLINE_MS: 'resultDeadlineMs',
@@ -70,7 +71,6 @@ const {
   SYSTEM_TABLE_NAME,
   isRaftRsTransportEnvelope,
 } = PARTITION_SERVICE_SHARED;
-
 
 class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase {
   ensureReplicaOperationsTableColumns() {
@@ -1029,7 +1029,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         }
         let info;
         try {
-          info = this.db.prepare(command.sql).run(...(command.params || []));
+          info = runCommittedPartitionStatement(this, command);
         } catch (error) {
           return settleFailedCommittedStatement(this, {
             error, command, entryKey, index, term, identity, afterCommit,

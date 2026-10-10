@@ -1,6 +1,8 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
+import {readAdmittedPartitionRows} from
+  '../partition/partition-statement-admission.js';
 
 const {
   CDC_INTEGRATION_SERVICE_LITERAL,
@@ -200,11 +202,8 @@ function executeSystemTableRead(partitionService, sql, params = []) {
     return partitionService.executeLocalQuery(sql, params);
   }
   if (typeof partitionService?.db?.prepare === 'function') {
-    const stmt = partitionService.db.prepare(sql);
-    return {
-      success: true,
-      rows: stmt.all(...params),
-    };
+    // Only a read the statement-admission owner admits is prepared here.
+    return readAdmittedPartitionRows(partitionService, sql, params);
   }
   if (typeof partitionService?.executeQuery === 'function') {
     return partitionService.executeQuery(sql, params);
