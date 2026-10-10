@@ -358,10 +358,15 @@ async function loneLeaderCase(partitionId, extraOptions) {
     const failed = await insert(partition, 'row-1', 'full', 'entry-full');
     assert.equal(failed.success, false,
       `the write is not acknowledged (${JSON.stringify(failed)})`);
-    assert.ok(String(failed.error).startsWith(
+    // AD: the entry may be in the log, so the answer is the unknown outcome
+    // and the environmental failure is its cause.
+    assert.equal(failed.failureCode,
+      partitionWriteKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL?.OUTCOME_UNKNOWN,
+      `the write's outcome is not known (${JSON.stringify(failed)})`);
+    assert.ok(String(failed.cause?.error).startsWith(
       PARTITION_SERVICE_ERROR_MSG.COMMITTED_STATEMENT_ENVIRONMENT_FAILED),
-    `the failure is the typed environmental outcome (${failed.error})`);
-    assert.ok(String(failed.error).includes(SQLITE_FULL),
+    `its cause is the typed environmental outcome (${failed.cause?.error})`);
+    assert.ok(String(failed.cause?.error).includes(SQLITE_FULL),
       'it carries the SQLite code the host raised');
     assert.equal(durableRecordOf(dbPath, partitionId).appliedIndex,
       appliedBefore, 'the failed entry is not consumed');
@@ -887,15 +892,16 @@ test('F-aa: a lone leader whose store cannot append a proposal is ' +
           'no retry was acknowledged');
       });
     await t.test('F-ae: every answer is typed - the host failure of a ' +
-      'proposal with its phase, a held group\'s recovery with its retry',
+      'proposal as an unknown outcome with its phase, a held group\'s ' +
+      'recovery with its retry',
     () => {
       const hostFailures = answers.filter((answer) =>
-        answer.failureCode === REFUSAL.CONSENSUS_HOST_FAILURE);
+        answer.failureCode === REFUSAL.OUTCOME_UNKNOWN);
       const held = answers.filter((answer) =>
         answer.failureCode === REFUSAL.CONSENSUS_RECOVERY_REQUIRED);
-      assert.ok(typeof REFUSAL.CONSENSUS_HOST_FAILURE === 'string' &&
+      assert.ok(typeof REFUSAL.OUTCOME_UNKNOWN === 'string' &&
         hostFailures.length >= 1, 'the proposal the host failed is ' +
-        `answered with its typed code (${JSON.stringify(answers[0])})`);
+        `answered as an unknown outcome (${JSON.stringify(answers[0])})`);
       assert.equal(hostFailures.length + held.length, answers.length,
         'every answer carries one of the two typed codes');
       for (const answer of hostFailures) {
@@ -1028,12 +1034,13 @@ test('F-z: a pending write released when its leader stops leading is ' +
       assert.equal(a.entryId, 'fz-A', 'A\'s answer names its entryId');
       assert.equal(a.partitionId, partitionId, 'and its partition');
     });
-    await t.test('B\'s persistence failure carries a failure code and the ' +
-      'port\'s consensus fields', () => {
+    await t.test('B\'s persistence failure is an unknown outcome with its ' +
+      'entryId and the port\'s consensus fields', () => {
       assert.equal(b.success, false, 'B is not acknowledged');
-      assert.ok(typeof REFUSAL.CONSENSUS_HOST_FAILURE === 'string' &&
-        b.failureCode === REFUSAL.CONSENSUS_HOST_FAILURE,
-      `B carries the typed host failure (${JSON.stringify(b)})`);
+      assert.ok(typeof REFUSAL.OUTCOME_UNKNOWN === 'string' &&
+        b.failureCode === REFUSAL.OUTCOME_UNKNOWN,
+      `B's outcome is not known to this replica (${JSON.stringify(b)})`);
+      assert.equal(b.entryId, 'fz-B', 'B\'s answer names its entryId');
       assert.deepEqual({phase: b.consensus?.phase,
         retryable: b.consensus?.retryable}, {
         phase: runtimeConstants.RUNTIME_PHASE.READY_PERSISTENCE,

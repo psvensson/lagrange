@@ -28,7 +28,7 @@
   "censusSize": 2332,
   "digest": "fnv1a32-04acb224",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c6f82a2c",
+  "observationDigest": "fnv1a32-c1807087",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3691,7 +3691,9 @@
     },
     "test/control-plane/control-plane-error-classification.test.js": {
       "files": [
-        "src/partition/partition-service-constants.js",
+        "src/bootstrap/shared/retryable-control-plane-write.js",
+        "src/cdc/cdc-integration-service-shared.js",
+        "src/control-plane/control-plane-write-identity.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
         "src/raft/raft-operation-port-constants.js",
@@ -8419,6 +8421,7 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/partition/partition-service-constants.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",

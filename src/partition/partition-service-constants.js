@@ -516,6 +516,11 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   MERGE_REPLICATION_WRITE_RETAINED_AFTER_FAILURE:
     'Partition merge mirror FAILED; acknowledged write retained in the ' +
     'undelivered queue instead of being dropped',
+  COMMITTED_WRITE_SIDE_EFFECT_FAILED:
+    'Committed write side effect failed after its commit; the write is ' +
+    'answered as committed',
+  WRITE_OUTCOME_UNKNOWN_CAUSE:
+    'Write answered with an unknown outcome; its cause stays on this replica',
   REDIRECTING_WRITE_TO_LEADER: 'Redirecting write to leader',
   APPLYING_COMMITTED_ENTRY: 'Applying committed entry',
   TRANSACTION_COMMIT_APPLIED: 'Transaction commit entry applied',

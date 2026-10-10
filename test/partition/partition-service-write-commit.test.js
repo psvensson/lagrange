@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   afterEach,
   beforeEach,
@@ -5,6 +8,7 @@ import {
 } from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {LOGGING_DEFAULT} from '../../src/logging/logging-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
@@ -22,8 +26,10 @@ import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {ERRORS} from '../../src/constants/errors.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {RAFT_OPERATION_OUTCOME} from
@@ -868,3 +874,216 @@ test('PartitionService rejects multi-replica leader writes when Raft is not lead
 
     await partition.shutdown();
   });
+
+// AD witnesses on a leader of a three-replica group whose port the test
+// drives: the test commits (and so applies) the proposed entry itself.
+const AD_INSERT_SQL = 'INSERT INTO test_table (id, value) VALUES (?, ?)';
+const AD_PLANTED_FAULT = 'ad planted storage fault';
+const AD_PLANTED_SIDE_EFFECT_FAILURE = 'ad planted post-commit side-effect ' +
+  'failure';
+
+async function controllableLeader(id) {
+  const partition = createPartition(id, [`${id}-r1`, `${id}-r2`, `${id}-r3`]);
+  await partition.initialize();
+  partition.role = 'leader';
+  partition.isLeader = true;
+  partition.leaderId = partition.replicaId;
+  partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+  const proposals = [];
+  partition.controllablePort.setProposeHandler(async (entry) => {
+    proposals.push({...entry});
+  });
+  return {partition, proposals};
+}
+
+function adWrite(partition, id, entryId) {
+  return partition.applyWrite({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: AD_INSERT_SQL,
+    params: [id, 'value'],
+    entryId,
+  });
+}
+
+async function awaitProposedEntry(proposals, entryId) {
+  for (let turn = 0; turn < 100; turn += 1) {
+    const entry = proposals.find((proposed) => proposed.entryId === entryId);
+    if (entry !== undefined) {
+      return entry;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return null;
+}
+
+// The real logger at its default level, writing every record it emits to a
+// file the test reads back (one JSON record per line): what a default
+// deployment observes, not the call a logger received.
+function emittingLoggerAtDefaultLevel() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ad-emitted-log-'));
+  const logFile = path.join(directory, 'node.log');
+  LoggingService.resetInstance();
+  const logging = LoggingService.getInstance();
+  logging.initialize({logFile});
+  return {
+    level: logging.level,
+    emitted: (message) => (fs.existsSync(logFile) ?
+      fs.readFileSync(logFile, 'utf8').split('\n')
+        .filter((line) => line.length > 0)
+        .map((line) => JSON.parse(line))
+        .filter((record) => record.msg === message) : []),
+    dispose: () => fs.rmSync(directory, {recursive: true, force: true}),
+  };
+}
+
+function captureLog(partition, level, message) {
+  const captured = [];
+  const log = partition.logger[level].bind(partition.logger);
+  partition.logger[level] = (logged, fields) => {
+    if (logged === message) {
+      captured.push(fields);
+    }
+    return log(logged, fields);
+  };
+  return captured;
+}
+
+// Commits the proposed entry through the port, its leader's own database
+// failing every insert into the table environmentally (a throwing trigger):
+// what the application threw, by its code.
+function commitWithEnvironmentalFault(partition, entry) {
+  partition.db.function('ad_storage_fault', () => {
+    throw new Error(AD_PLANTED_FAULT);
+  });
+  partition.db.exec('CREATE TRIGGER ad_storage_fault AFTER INSERT ON ' +
+    'test_table BEGIN SELECT ad_storage_fault(); END');
+  try {
+    partition.controllablePort.commit(entry);
+    return null;
+  } catch (error) {
+    return error?.code ?? error?.message;
+  } finally {
+    partition.db.exec('DROP TRIGGER IF EXISTS ad_storage_fault');
+  }
+}
+
+test('AD: a write whose own committed apply fails environmentally is ' +
+  'answered an unknown outcome under its entryId, its cause the ' +
+  'environmental failure, and the leader emits that cause at the default ' +
+  'log level', async (t) => {
+  const logging = emittingLoggerAtDefaultLevel();
+  t.teardown(logging.dispose);
+  t.equal(logging.level, LOGGING_DEFAULT.LEVEL,
+    'setup: the logger runs at its default level');
+  const {partition, proposals} = await controllableLeader('ad-env');
+  const pending = adWrite(partition, 'row-env', 'ad-env-1');
+  const entry = await awaitProposedEntry(proposals, 'ad-env-1');
+  const applied = commitWithEnvironmentalFault(partition, entry);
+  const answer = await pending;
+  t.equal(applied,
+    PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED,
+    'setup: the leader\'s own apply failed environmentally');
+  t.same({
+    success: answer.success,
+    failureCode: answer.failureCode,
+    entryId: answer.entryId,
+    partitionId: answer.partitionId,
+    error: answer.error,
+    causeCode: answer.cause?.failureCode,
+  }, {
+    success: false,
+    failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+    entryId: 'ad-env-1',
+    partitionId: 'ad-env',
+    error: ERRORS.WRITE_OUTCOME_UNKNOWN_AFTER_FAILURE,
+    causeCode:
+      PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED,
+  }, `an unknown outcome under its entryId (${JSON.stringify(answer)})`);
+  t.ok(String(answer.cause?.error).startsWith(
+    PARTITION_SERVICE_ERROR_MSG.COMMITTED_STATEMENT_ENVIRONMENT_FAILED) &&
+    String(answer.cause?.error).includes(AD_PLANTED_FAULT),
+  `its cause is the environmental failure's text (${answer.cause?.error})`);
+  t.same(logging.emitted(PARTITION_SERVICE_LOG_MSG.WRITE_OUTCOME_UNKNOWN_CAUSE)
+    .map((record) => ({partitionId: record.partitionId,
+      entryId: record.entryId, cause: record.cause})),
+  [{partitionId: 'ad-env', entryId: 'ad-env-1', cause: {...answer.cause}}],
+  'the leader emits the cause with the entry at the default level');
+  await partition.shutdown();
+});
+
+// AD (owner reading): the cause of an unknown outcome is the kernel's own; a
+// remote answer carries what every classifier decides on - the code and the
+// entryId a re-delivery is made under - and the leader logs the cause.
+test('AD: a remote write whose own committed apply fails environmentally is ' +
+  'answered across the hop by its code and entryId, and its cause is ' +
+  'emitted on the leader at the default log level', async (t) => {
+  const logging = emittingLoggerAtDefaultLevel();
+  t.teardown(logging.dispose);
+  t.equal(logging.level, LOGGING_DEFAULT.LEVEL,
+    'setup: the logger runs at its default level');
+  const {partition, proposals} = await controllableLeader('ad-remote');
+  const pending = partition.handleRemoteQuery({sql: AD_INSERT_SQL,
+    params: ['row-remote', 'value'], entryId: 'ad-remote-1'});
+  const entry = await awaitProposedEntry(proposals, 'ad-remote-1');
+  const applied = commitWithEnvironmentalFault(partition, entry);
+  const envelope = await pending;
+  t.equal(applied,
+    PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED,
+    'setup: the leader\'s own apply failed environmentally');
+  t.same({
+    success: envelope.success,
+    failureCode: envelope.failureCode,
+    entryId: envelope.entryId,
+  }, {
+    success: false,
+    failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+    entryId: 'ad-remote-1',
+  }, `the envelope carries the code and the entryId (${
+    JSON.stringify(envelope)})`);
+  t.equal(Object.hasOwn(envelope, 'cause'), false,
+    'the cause does not cross the hop');
+  const emitted = logging.emitted(
+    PARTITION_SERVICE_LOG_MSG.WRITE_OUTCOME_UNKNOWN_CAUSE);
+  t.same(emitted.map((record) => ({entryId: record.entryId,
+    causeCode: record.cause?.failureCode})), [{entryId: 'ad-remote-1',
+    causeCode:
+      PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED}],
+  'the leader emits the cause with the entry at the default level');
+  t.ok(String(emitted[0]?.cause?.error).includes(AD_PLANTED_FAULT),
+    'the emitted cause carries the environmental failure\'s text');
+  await partition.shutdown();
+});
+
+// AD: a committed write's side effects (its mirror delta, size update and
+// split evaluation) are not its answer: one that throws after the commit is
+// logged with the entry, and the write is answered as committed.
+test('AD: a committed write whose side effect throws after its commit is ' +
+  'answered committed, its row applied and the failure logged with its ' +
+  'entry', async (t) => {
+  const {partition, proposals} = await controllableLeader('ad-side-effect');
+  const warnings = captureLog(partition, 'warn',
+    PARTITION_SERVICE_LOG_MSG.COMMITTED_WRITE_SIDE_EFFECT_FAILED);
+  const applySideEffects = partition.applyWriteSideEffectPlan.bind(partition);
+  let planted = false;
+  partition.applyWriteSideEffectPlan = async (plan) => {
+    if (!planted) {
+      planted = true;
+      throw new Error(AD_PLANTED_SIDE_EFFECT_FAILURE);
+    }
+    return applySideEffects(plan);
+  };
+  const pending = adWrite(partition, 'row-side-effect', 'ad-side-effect-1');
+  const entry = await awaitProposedEntry(proposals, 'ad-side-effect-1');
+  partition.controllablePort.commit(entry);
+  const answer = await pending;
+  t.same({success: answer.success, failureCode: answer.failureCode ?? null},
+    {success: true, failureCode: null},
+    `the committed write is answered committed (${JSON.stringify(answer)})`);
+  t.equal(partition.db.prepare('SELECT value FROM test_table WHERE id = ?')
+    .get('row-side-effect')?.value, 'value', 'its row is applied');
+  t.same(warnings.map((logged) => ({entryId: logged?.entryId,
+    error: logged?.error})), [{entryId: 'ad-side-effect-1',
+    error: AD_PLANTED_SIDE_EFFECT_FAILURE}],
+  'the side effect\'s failure is logged with the entry');
+  await partition.shutdown();
+});

@@ -52,6 +52,8 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import * as partitionConstants from
   '../../src/partition/partition-service-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {RUNTIME_PHASE} from
@@ -772,16 +774,22 @@ test('F-i: an environmental SQLite failure is never consumed as a failed ' +
       `the write is not acknowledged (${JSON.stringify(busy)})`);
     assert.equal(busy.deferRetry === true, false,
       'an environmental failure is not a user-transaction deferral');
-    assert.ok(String(busy.error).startsWith(
+    // AD: the entry was proposed and may be in the log, so the write kernel
+    // answers its outcome unknown under its entryId; the environmental
+    // failure is the answer's cause.
+    assert.equal(busy.failureCode, PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+      `AD: the answer is the unknown outcome (${JSON.stringify(busy)})`);
+    assert.equal(busy.entryId, 'entry-busy', 'AD: under the write\'s entryId');
+    assert.ok(String(busy.cause?.error).startsWith(
       PARTITION_SERVICE_ERROR_MSG.COMMITTED_STATEMENT_ENVIRONMENT_FAILED),
-    `the failure names the environmental statement outcome (${busy.error})`);
-    assert.ok(String(busy.error).includes(ENVIRONMENTAL_SQLITE_CODE),
-      'the failure carries the SQLite code the host raised');
-    // F-ae: the environmental answer carries its typed code and the port's
-    // consensus fields, as every other refused write does.
-    assert.equal(busy.failureCode,
+    `the cause names the environmental statement outcome (${busy.cause?.error})`);
+    assert.ok(String(busy.cause?.error).includes(ENVIRONMENTAL_SQLITE_CODE),
+      'the cause carries the SQLite code the host raised');
+    // F-ae: the cause carries the environmental failure's typed code, and the
+    // answer the port's consensus fields, as every other refused write does.
+    assert.equal(busy.cause?.failureCode,
       PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED,
-      `F-ae: the answer carries the environmental failure code (${
+      `F-ae: the cause carries the environmental failure code (${
         JSON.stringify(busy)})`);
     assert.deepEqual({phase: busy.consensus?.phase,
       retryable: busy.consensus?.retryable}, {
@@ -812,4 +820,83 @@ test('F-i: an environmental SQLite failure is never consumed as a failed ' +
       .map((row) => row.outcome), [PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED],
     'the recovered apply recorded its outcome once');
   });
+});
+
+// AD on a real three-replica group: the leader's own committed apply fails
+// environmentally after the quorum committed the entry. The pending write is
+// rejected by that apply (not by a proposal refusal), so the write kernel's
+// rejected-write builder answers it: an unknown outcome under the write's
+// entryId, its cause the environmental failure with the host's SQLite code.
+test('AD: on a three-replica group, the leader\'s own environmental apply ' +
+  'failure after the quorum commit answers the write as an unknown outcome ' +
+  'under its entryId, its cause the environmental failure',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({
+    node: {id: 'statement-outcome-group'},
+    raft: {
+      heartbeatIntervalMs: 20,
+      electionTimeoutMinMs: 150,
+      electionTimeoutMaxMs: 300,
+    },
+  });
+  LoggingService.getInstance().initialize({level: 'error'});
+  const partitionId = 'ad-group';
+  const members = [['ad-group-r1', 'node-1'], ['ad-group-r2', 'node-2'],
+    ['ad-group-r3', 'node-3']];
+  const group = await formAdmittedGroup({
+    partitionId,
+    members,
+    tempPrefix: TEMP_PREFIX,
+    serviceOptions: partitionOptions(partitionId, null),
+    budgetMs: GROUP_BUDGET_MS,
+  });
+  const leader = group.services[0];
+  const prepare = leader.db.prepare.bind(leader.db);
+  try {
+    const setup = await insert(leader, 'row-0', 'setup', 'ad-setup');
+    assert.equal(setup.success, true, 'setup: the group serves a write');
+    assert.equal(await group.waitFor(() => members.every((member) =>
+      rowOf(group.dbFileOf(member), 'row-0') !== null)), true,
+    'setup: every replica of the group applied the write');
+    // Input: the leader's own database answers the statement with an
+    // environmental failure; the followers' databases do not.
+    leader.db.prepare = (sql) => {
+      if (sql === INSERT_SQL) {
+        throw new Database.SqliteError(
+          ENVIRONMENTAL_SQLITE_MESSAGE, ENVIRONMENTAL_SQLITE_CODE);
+      }
+      return prepare(sql);
+    };
+    const answer = await insert(leader, 'row-1', 'busy', 'ad-busy');
+    leader.db.prepare = prepare;
+    assert.deepEqual({
+      success: answer.success,
+      failureCode: answer.failureCode,
+      entryId: answer.entryId,
+      partitionId: answer.partitionId,
+      causeCode: answer.cause?.failureCode,
+    }, {
+      success: false,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+      entryId: 'ad-busy',
+      partitionId,
+      causeCode:
+        PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED,
+    }, `the write's outcome is not known, under its entryId (${
+      JSON.stringify(answer)})`);
+    assert.ok(String(answer.cause?.error).startsWith(
+      PARTITION_SERVICE_ERROR_MSG.COMMITTED_STATEMENT_ENVIRONMENT_FAILED) &&
+      String(answer.cause?.error).includes(ENVIRONMENTAL_SQLITE_CODE),
+    `its cause is the environmental failure with the SQLite code (${
+      answer.cause?.error})`);
+    assert.equal(Object.hasOwn(answer, 'consensus'), false, 'it is the ' +
+      'rejected write\'s answer, not a proposal refusal: the proposal was ' +
+      'accepted and the quorum committed it');
+  } finally {
+    leader.db.prepare = prepare;
+    await group.dispose();
+    resetEnvironment();
+  }
 });

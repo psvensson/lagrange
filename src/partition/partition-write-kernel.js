@@ -23,14 +23,18 @@ const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
 // replica does not lead (another replica leads, or the write was released
 // before it was handed to consensus); its group is held by its host failure
 // (the port's typed recovery outcome), or that recovery waits for a user
-// session open on the replica's connection; the port's host failed while it
-// proposed the write; the write was handed to consensus and released before
-// consensus answered it (its replica stopped leading, its commit deadline
-// passed, its service shut down) or the core failed while it proposed it, so
-// its outcome is not known to this replica (a retry with the same entryId is
-// idempotent); or it was not proposed - the port refused its proposal, its
-// proposal queue was at capacity (retry after the queue's retryAfterMs), its
-// service shut down or its commit deadline passed before it was handed over.
+// session open on the replica's connection; the write was handed to
+// consensus and released before consensus answered it (its replica stopped
+// leading, its commit deadline passed, its service shut down), or the core or
+// the port's host failed while it proposed it, or its own committed apply
+// failed, so its outcome is not known to this replica (a retry with the same
+// entryId is idempotent); or it was not proposed - the port refused its
+// proposal, its proposal queue was at capacity (retry after the queue's
+// retryAfterMs), its service shut down or its commit deadline passed before
+// it was handed over. CONSENSUS_HOST_FAILURE is not a code the kernel
+// answers with: it names the cause of the unknown outcome of a write whose
+// proposal the port's host failed (outcomeUnknownAnswer); its retirement is
+// the owner's open decision.
 const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   NOT_LEADER: 'partition_write_not_leader',
   CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
@@ -46,14 +50,17 @@ const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
 // The answers of a write that did not fail for good: a caller may retry it -
 // route it again to the current leader, or here once the state it names has
-// passed. A host failure while proposing is not among them: its retryability
-// is the port's, and the caller decides. An unknown outcome is among them,
-// but it is routed again only by a caller that re-proposes the write under
-// its own entryId: the retry is then idempotent (the write's outcome row
-// answers it), while a re-proposal under a fresh id may apply it twice. The
-// errors owner lists each code's text for the callers that receive only a
-// text (isRetryableWriteError); the unknown outcome's text is never routed
-// again (REROUTABLE_WRITE_ERROR_FRAGMENTS), since a text carries no entryId.
+// passed. An unknown outcome is among them - a write that may be in the log:
+// released after it was handed to consensus, or answered by a host failure
+// while proposing or by an environmental failure of its own committed apply
+// (each answered OUTCOME_UNKNOWN, its own code and text kept as the cause, so
+// CONSENSUS_HOST_FAILURE is not an answer of the kernel) - but it is routed
+// again only by a caller that re-proposes the write under its own entryId:
+// the retry is then idempotent (the write's outcome row answers it), while a
+// re-proposal under a fresh id may apply it twice. The errors owner lists
+// each code's text for the callers that receive only a text
+// (isRetryableWriteError); the unknown outcome's text is never routed again
+// (REROUTABLE_WRITE_ERROR_FRAGMENTS), since a text carries no entryId.
 const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
   REFUSAL.NOT_LEADER,
   REFUSAL.CONSENSUS_RECOVERY_REQUIRED,
@@ -131,7 +138,11 @@ function isReroutableWriteFailureCode(code, {carriesEntryId = false} = {}) {
 // index, the consensus state that answered it, whether a committed statement
 // failed - and, from the redelivery owner, the wait it spent on an unknown
 // outcome. Every hop between the partition and the write's caller carries
-// them as they are (R07: a typed outcome never degrades to its text).
+// them as they are (R07: a typed outcome never degrades to its text). The
+// cause of an unknown outcome (outcomeUnknownAnswer) is not among them: it is
+// the kernel's own, and the leader logs it with the entry where it answers.
+// A hop carries what every classifier decides on - the code and the entryId
+// a re-delivery is made under.
 const TYPED_WRITE_ANSWER_FIELDS = Object.freeze([
   'failureCode',
   'entryId',
@@ -161,8 +172,9 @@ function pickTypedWriteAnswer(answer) {
 
 /**
  * Whether a write answer says its write's outcome is not known: it was handed
- * to consensus and may commit whatever this answer says. Only a re-delivery
- * under the answer's own entryId resolves it.
+ * to consensus, or failed on this replica while it was proposed or applied,
+ * and may commit whatever this answer says. Only a re-delivery under the
+ * answer's own entryId resolves it.
  * @param {*} answer - A write answer.
  * @return {boolean} Whether it is the typed unknown outcome.
  */
@@ -386,31 +398,47 @@ function buildReleasedPendingWriteAnswer({entryId, proposal, logIndex},
   };
 }
 
-// A host failure while proposing: the environmental failure of the write's
-// own application keeps that failure's code and text, any other is
-// CONSENSUS_HOST_FAILURE.
+// The answer of a write that may have committed: it was proposed, and what
+// answered it does not prove it absent from the log, so its outcome is not
+// known here (a re-delivery under its entryId is idempotent). Its cause keeps
+// the code and text of what answered it; it stays with this answer (no hop
+// carries it, TYPED_WRITE_ANSWER_FIELDS). The text of a write that failed on
+// this replica while it was proposed or applied is never retried by a caller
+// that holds only the text (ERRORS.WRITE_OUTCOME_UNKNOWN_AFTER_FAILURE).
+function outcomeUnknownAnswer(cause,
+  error = ERRORS.WRITE_OUTCOME_UNKNOWN_AFTER_FAILURE) {
+  return {
+    error,
+    failureCode: REFUSAL.OUTCOME_UNKNOWN,
+    cause: Object.freeze({...cause}),
+  };
+}
+
+// A host failure while proposing may leave the entry in the log: an unknown
+// outcome whose cause is the environmental failure of the write's own
+// application (its code and text, with the host's SQLite code) or, for any
+// other host failure, CONSENSUS_HOST_FAILURE with the port's text.
 function hostFailureProposalAnswer(refusal, rejection) {
   const environmental = rejection?.code ===
     PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED;
-  return environmental ?
+  return outcomeUnknownAnswer(environmental ?
     {error: rejection.message, failureCode: rejection.code} :
-    {error: refusal.message, failureCode: REFUSAL.CONSENSUS_HOST_FAILURE};
+    {error: refusal.message, failureCode: REFUSAL.CONSENSUS_HOST_FAILURE});
 }
 
 // What each port outcome of a refused proposal answers: a host failure (as
 // hostFailureProposalAnswer types it); a core refusal - the proposal never
 // entered consensus; a core failure - the core failed while it held the
-// proposal, so the write's outcome is not known here.
+// proposal, so the write's outcome is not known here (its cause is the port's
+// text; its own text is a released write's, as before).
 const PROPOSAL_REFUSAL_ANSWER = Object.freeze({
   [RAFT_OPERATION_OUTCOME.HOST_FAILURE]: hostFailureProposalAnswer,
   [RAFT_OPERATION_OUTCOME.CORE_REFUSED]: (refusal) => ({
     error: `${ERRORS.WRITE_CONSENSUS_REFUSED}: ${refusal.raftResult.reason}`,
     failureCode: REFUSAL.CONSENSUS_REFUSED,
   }),
-  [RAFT_OPERATION_OUTCOME.CORE_FATAL]: () => ({
-    error: ERRORS.WRITE_OUTCOME_UNKNOWN,
-    failureCode: REFUSAL.OUTCOME_UNKNOWN,
-  }),
+  [RAFT_OPERATION_OUTCOME.CORE_FATAL]: (refusal) => outcomeUnknownAnswer(
+    {error: refusal.message}, ERRORS.WRITE_OUTCOME_UNKNOWN),
 });
 
 // The answer of a proposal its proposal queue refused at capacity: nothing
@@ -449,6 +477,24 @@ function buildPartitionWriteProposalRefusal(refusal, rejection,
       phase: port.phase,
       retryable: port.retryable === true,
     },
+    partitionId,
+    entryId,
+  };
+}
+
+// The answer of a proposed write whose pending answer was rejected neither by
+// its proposal's refusal nor by its release: its own committed apply failed
+// environmentally, or its committed command was not recognised. Its entry may
+// be in the log, so its outcome is not known here; the cause keeps the
+// rejection's code (when it carries one) and text.
+function buildRejectedProposedWriteAnswer(rejection, {partitionId, entryId}) {
+  const code = rejection?.code;
+  return {
+    success: false,
+    ...outcomeUnknownAnswer({
+      ...(typeof code === 'string' ? {failureCode: code} : {}),
+      error: rejection?.message || String(rejection),
+    }),
     partitionId,
     entryId,
   };
@@ -510,6 +556,7 @@ export {
   buildPartitionWriteLeadershipRefusal,
   buildPartitionWriteProposalRefusal,
   buildPartitionWriteSideEffectPlan,
+  buildRejectedProposedWriteAnswer,
   buildReleasedPendingWriteAnswer,
   isAppliedWithUnknownCount,
   isHeldByHostFailure,
