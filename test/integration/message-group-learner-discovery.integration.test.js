@@ -10,11 +10,11 @@
  */
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {MEMBERSHIP_PHASE as PHASE} from
+import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_DEBT_RECOVERY_OUTCOME as DEBT} from
   '../../src/rebalancer/replica-operation-message-group-membership-permit.js';
-import {MEMBERSHIP_DEBT_RECOVERY_OUTCOME as DEBT, recoverMessageGroupMembershipDebtOperation,
-  wakeMessageGroupMembershipDebtForRow} from
+import {DEBT_CENSUS, wakeMessageGroupMembershipDebtForRow} from
   '../../src/rebalancer/operation-workflow-message-group-membership-recovery.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {recoverMessageGroupLearnerInline} from
   '../../src/rebalancer/operation-workflow-message-group-native-read.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -40,8 +40,15 @@ function countDeliveries(router) {
   };
   return () => count;
 }
-const sweep = (owner) => owner.reconcileMessageGroupMembershipDebt();
-const operationOf = (fx) => fx.f.repository.rowToOperation(fx.f.row());
+// The periodic sweep reads the replicated cache as its hint; the restart scan
+// reads the authoritative census. Both are production entries.
+const sweep = (owner, census = DEBT_CENSUS.AUTHORITATIVE) =>
+  owner.reconcileMessageGroupMembershipDebt(census);
+// The replicated-row wake is the per-operation production entry.
+const wakeRow = (owner, row) => wakeMessageGroupMembershipDebtForRow(
+  owner, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'update', row);
+const summaryOf = (fields) => ({available: true, found: 1, recorded: 0, settled: 0,
+  retained: 0, refused: 0, ...fields});
 const witness = (fx) => ({nodeId: SUCCESSOR, replicaId: fx.replicaId});
 async function settled(predicate, ticks = 500) {
   for (let tick = 0; tick < ticks && !predicate(); tick += 1) {
@@ -65,14 +72,17 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
         const submissions = countReceiptSubmissions(fx);
         assert.deepEqual(await sweep(fx.owner),
-          {available: true, found: 1, recorded: 1, retained: 0, refused: 0},
+          summaryOf({recorded: 1}),
           'the restart-scan census must find the debt row and record its exact outcome');
         assertExactReceipt(fx, before, proposals); assert.equal(submissions(), 1);
         const deliveries = countDeliveries(fx.source);
-        assert.deepEqual(await sweep(fx.owner),
-          {available: true, found: 1, recorded: 1, retained: 0, refused: 0});
+        assert.deepEqual(await sweep(fx.owner), summaryOf({settled: 1}),
+          'a row whose exact outcome is durable owes this owner nothing more');
         assert.equal(deliveries(), 0, 'an already-recorded outcome must not be read again');
         assert.equal(submissions(), 1, 'an already-recorded outcome must not be written again');
+        assert.deepEqual(await sweep(fx.owner, DEBT_CENSUS.CACHE_HINT),
+          {available: true, found: 0, recorded: 0, settled: 0, retained: 0, refused: 0},
+          'the periodic sweep reads the replicated cache as its hint; an empty cache costs nothing');
         assert.equal((await fx.owner.recoverMessageGroupLearnerOutcomeFromRecipient(
           fx.f.request.operationId, witness(fx))).outcome, 'recorded',
         'the retained-lane entry must still work on the real coalescing lane');
@@ -82,7 +92,7 @@ test('owned discovery recovers the exact learner outcome from membership debt by
       'recovery proceed', async (t) => {
       const fx = await discoveryFixture(t); const before = {...fx.f.row()};
       const proposals = fx.f.proposalCount(); const deliveries = countDeliveries(fx.source);
-      const recover = () => recoverMessageGroupMembershipDebtOperation(fx.owner, operationOf(fx));
+      const recover = () => wakeRow(fx.owner, fx.f.row());
       assert.equal((await recover()).outcome, DEBT.NO_HOSTED_WITNESS,
         'an empty service census names no witness');
       fx.f.hostWitness(SUCCESSOR, fx.replicaId, 'stopped');
@@ -95,9 +105,9 @@ test('owned discovery recovers the exact learner outcome from membership debt by
       assert.equal(deliveries(), 0, 'no witness means no native request anywhere');
       assertNoEffect(fx, before, proposals);
       assert.deepEqual(await sweep(fx.owner),
-        {available: true, found: 1, recorded: 0, retained: 1, refused: 0});
+        summaryOf({retained: 1}));
       fx.f.hostWitness(SUCCESSOR, fx.replicaId);
-      const recovered = await recoverMessageGroupMembershipDebtOperation(fx.owner, operationOf(fx));
+      const recovered = await wakeRow(fx.owner, fx.f.row());
       assert.equal(recovered.outcome, DEBT.RECORDED);
       assert.deepEqual(recovered.witness, witness(fx),
         'the hosted non-target replica is the witness');
@@ -112,8 +122,8 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         const row = fx.f.row();
         const outcomes = await Promise.all([
           sweep(fx.owner), sweep(fx.owner),
-          recoverMessageGroupMembershipDebtOperation(fx.owner, operationOf(fx)),
-          wakeMessageGroupMembershipDebtForRow(fx.owner, 'replica_operations', 'update', row),
+          wakeRow(fx.owner, fx.f.row()),
+          wakeRow(fx.owner, row),
         ]);
         assertExactReceipt(fx, before, proposals);
         assert.equal(deliveries(), 1, 'concurrent wakeups must share one native read');
@@ -123,9 +133,8 @@ test('owned discovery recovers the exact learner outcome from membership debt by
             JSON.stringify(outcome));
         }
         assert.equal(outcomes[0].recorded + outcomes[0].retained, 1);
-        assert.equal((await wakeMessageGroupMembershipDebtForRow(fx.owner, 'replica_operations',
-          'update', {...fx.f.row(), message_group_membership_obligation_state: 'intent_recorded'})),
-        null, 'a row without debt wakes nothing');
+        assert.equal((await wakeRow(fx.owner, {...fx.f.row(), message_group_membership_obligation_state: 'intent_recorded'})),
+          null, 'a row without debt wakes nothing');
       });
     await t.test('ordinary failure keeps the debt; the sweep records the exact outcome without ' +
       'reopening it', async (t) => {
@@ -135,7 +144,7 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         fx.f.request.operationId]);
       const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
       assert.deepEqual(await sweep(fx.owner),
-        {available: true, found: 1, recorded: 1, retained: 0, refused: 0},
+        summaryOf({recorded: 1}),
         'a terminal row that still owes its obligation must be found by the debt census');
       assertExactReceipt(fx, before, proposals);
       const after = fx.f.row();
@@ -145,19 +154,31 @@ test('owned discovery recovers the exact learner outcome from membership debt by
       assert.equal(after.message_group_membership_obligation_state, 'unknown',
         'recording the learner outcome never releases the membership obligation');
     });
-    await t.test('holder replacement: a successor adopts the expired claim and records; the old ' +
-      'holder waits', async (t) => {
+    await t.test('holder replacement: a live successor claim holds the old owner off; an ' +
+      'expired one is adopted and recorded', async (t) => {
       const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
       const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
-      expireClaim(fx.f);
-      const successor = workflowOwner({nodeId: SUCCESSOR, repository: fx.f.repositoryFor(SUCCESSOR),
-        messageRouter: fx.recipient, realLane: true, timeSource: fx.f.clock});
       const sourceDeliveries = countDeliveries(fx.source);
-      assert.deepEqual(await sweep(successor),
-        {available: true, found: 1, recorded: 1, retained: 0, refused: 0});
+      // A successor takes the expired claim through the existing claim CAS.
+      expireClaim(fx.f);
+      const successorRepository = fx.f.repositoryFor(SUCCESSOR);
+      const claimed = await successorRepository.claimMessageGroupMembershipOwner({
+        operationId: fx.f.request.operationId, identity: fx.f.request.identity,
+        expectedClaim: fx.f.request.executionClaim});
+      assert.equal(claimed.outcome, 'recorded');
+      const held = await wakeRow(fx.owner, fx.f.row());
+      assert.equal(held.outcome, DEBT.HELD_ELSEWHERE,
+        'the former holder must not act on a live successor claim');
+      assert.equal(held.holder, SUCCESSOR); assert.equal(sourceDeliveries(), 0);
+      assert.equal(fx.f.row().message_group_membership_phase, PHASE.LEARNER_IN_FLIGHT);
+      // The successor's own claim lapses too; its sweep adopts the next generation.
+      fx.f.clock.advance(JSON.parse(claimed.claim).expiresAt - fx.f.clock.now() + 1);
+      const successor = workflowOwner({nodeId: SUCCESSOR, repository: successorRepository,
+        messageRouter: fx.recipient, realLane: true, timeSource: fx.f.clock});
+      assert.deepEqual(await sweep(successor), summaryOf({recorded: 1}));
       const after = fx.f.row();
       const claim = JSON.parse(after.message_group_membership_owner_claim);
-      assert.equal(claim.ownerNodeId, SUCCESSOR); assert.equal(claim.generation, 2,
+      assert.equal(claim.ownerNodeId, SUCCESSOR); assert.equal(claim.generation, 3,
         'adoption is the existing claim CAS taking the next generation');
       const unchanged = (row) => {
         const rest = withoutReceipt(row);
@@ -168,18 +189,17 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         'holder replacement changes only the claim and the three receipt columns');
       assert.equal(after.message_group_membership_phase, PHASE.LEARNER_COMMITTED);
       assert.equal(fx.f.proposalCount(), proposals); assert.equal(fx.physical(), 0);
-      const stale = await recoverMessageGroupMembershipDebtOperation(fx.owner, operationOf(fx));
-      assert.equal(stale.outcome, DEBT.HELD_ELSEWHERE,
-        'the former holder must not act on a live successor claim');
-      assert.equal(stale.holder, SUCCESSOR); assert.equal(sourceDeliveries(), 0);
-      assert.deepEqual(fx.f.row(), after);
+      const settled = await wakeRow(fx.owner, fx.f.row());
+      assert.deepEqual(settled, {outcome: DEBT.RECORDED, settled: true},
+        'the former holder reads the successor\'s receipt as settled, touching nothing');
+      assert.equal(sourceDeliveries(), 0); assert.deepEqual(fx.f.row(), after);
     });
     await t.test('shutdown starts no recording work and keeps the debt', async (t) => {
       const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
       const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
       const deliveries = countDeliveries(fx.source); fx.shutOwner();
       assert.deepEqual(await sweep(fx.owner),
-        {available: false, found: 0, recorded: 0, retained: 0, refused: 0});
+        {available: false, found: 0, recorded: 0, settled: 0, retained: 0, refused: 0});
       assert.equal(deliveries(), 0); assertNoEffect(fx, before, proposals);
     });
     await t.test('a lost SQL answer stays UNKNOWN; the next sweep resolves it by readback alone',
@@ -195,15 +215,15 @@ test('owned discovery recovers the exact learner outcome from membership debt by
           }
           return answer;
         };
-        const lost = await recoverMessageGroupMembershipDebtOperation(fx.owner, operationOf(fx));
+        const lost = await wakeRow(fx.owner, fx.f.row());
         assert.equal(lost.outcome, DEBT.RETAINED); assert.equal(lost.recorder, 'unknown',
           'a lost answer with no readback is UNKNOWN, never success or noncommitment');
         assert.equal(submissions(), 1);
         assert.equal(fx.f.row().message_group_membership_phase, PHASE.LEARNER_COMMITTED,
           'the lost answer had in fact committed');
         fx.f.failReads(null); const deliveries = countDeliveries(fx.source);
-        assert.deepEqual(await sweep(fx.owner),
-          {available: true, found: 1, recorded: 1, retained: 0, refused: 0});
+        assert.deepEqual(await sweep(fx.owner), summaryOf({settled: 1}),
+          'the committed receipt is read back as settled debt');
         assert.equal(deliveries(), 0, 'readback of the committed receipt needs no native request');
         assert.equal(submissions(), 1, 'readback must not write again');
         assertExactReceipt(fx, before, proposals);
@@ -216,7 +236,7 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         [PHASE.PROMOTION_IN_FLIGHT, fx.f.request.operationId]);
       const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
       const deliveries = countDeliveries(fx.source);
-      const result = await recoverMessageGroupMembershipDebtOperation(fx.owner, operationOf(fx));
+      const result = await wakeRow(fx.owner, fx.f.row());
       assert.equal(result.outcome, DEBT.PHASE_NOT_OWNED);
       assert.equal(deliveries(), 0); assertNoEffect(fx, before, proposals);
     });
@@ -225,7 +245,7 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         const fx = await discoveryFixture(t); const before = {...fx.f.row()};
         const proposals = fx.f.proposalCount(); const submissions = countReceiptSubmissions(fx);
         assert.deepEqual(await sweep(fx.owner),
-          {available: true, found: 1, recorded: 0, retained: 1, refused: 0});
+          summaryOf({retained: 1}));
         let laneReads = 0; const repository = fx.owner.repository;
         const readLane = repository.queryAuthoritativeOperationByMessageGroupMembershipLane
           .bind(repository);
@@ -249,12 +269,71 @@ test('owned discovery recovers the exact learner outcome from membership debt by
         await settled(() => false, 20);
         assert.equal(submissions(), 1, 'a hosted row of another group wakes nothing here');
       });
+    await t.test('a settled row is never re-adopted: no claim write, no witness, no log churn',
+      async (t) => {
+        const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
+        assert.deepEqual(await sweep(fx.owner), summaryOf({recorded: 1}));
+        const recorded = {...fx.f.row()}; expireClaim(fx.f);
+        let claimWrites = 0; const execute = fx.f.gateway.executeQuery;
+        fx.f.gateway.executeQuery = (sql, ...args) => {
+          if (String(sql).includes('message_group_membership_owner_claim = ?')) claimWrites += 1;
+          return execute(sql, ...args);
+        };
+        const deliveries = countDeliveries(fx.source); const summaries = [];
+        for (let cycle = 0; cycle < 3; cycle += 1) summaries.push(await sweep(fx.owner));
+        assert.equal(claimWrites, 0, 'an expired claim on a settled row is not re-adopted');
+        assert.deepEqual(summaries, summaries.map(() => summaryOf({settled: 1})));
+        assert.equal(deliveries(), 0); assert.deepEqual(fx.f.row(), recorded);
+        assert.equal(JSON.parse(fx.f.row().message_group_membership_owner_claim).generation, 1);
+      });
+    await t.test('an unreachable hosted source does not starve recovery: the witness rotates',
+      async (t) => {
+        const fx = await discoveryFixture(t); const before = {...fx.f.row()};
+        const proposals = fx.f.proposalCount();
+        // The source replica is hosted on a node whose handler never registered.
+        fx.f.hostWitness(NODE, fx.f.leader); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
+        const first = await wakeRow(fx.owner, fx.f.row());
+        assert.equal(first.outcome, DEBT.RETAINED, 'the source is preferred but unreachable');
+        assert.deepEqual(first.witness, {nodeId: NODE, replicaId: fx.f.leader});
+        assert.equal(first.recorder, 'unavailable');
+        const second = await wakeRow(fx.owner, fx.f.row());
+        assert.equal(second.outcome, DEBT.RECORDED, 'the next turn asks another hosted replica');
+        assert.deepEqual(second.witness, witness(fx));
+        assertExactReceipt(fx, before, proposals);
+      });
+    await t.test('the restart scan recovers debt from the authoritative census alone', async (t) => {
+      const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
+      const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
+      // The reservation owner is not part of this fixture; the restart scan's
+      // last step is stubbed so the scan can run to its summary.
+      fx.owner.reconcileReservations = async () => ({expired: 0, orphansReleased: 0});
+      const emitted = []; fx.owner.emitter = {emit: (...args) => emitted.push(args[0])};
+      const result = await fx.owner.handleRecovery();
+      assert.deepEqual(result.membershipDebt, summaryOf({recorded: 1}),
+        'handleRecovery must census and recover membership debt with the authoritative read');
+      assert.ok(emitted.length > 0, 'the scan still reaches its completion event');
+      assertExactReceipt(fx, before, proposals);
+    });
     await t.test('the inline recorder refuses a caller that does not hold the lane', async (t) => {
       const fx = await discoveryFixture(t); fx.f.hostWitness(SUCCESSOR, fx.replicaId);
       const before = {...fx.f.row()}; const proposals = fx.f.proposalCount();
       const deliveries = countDeliveries(fx.source);
+      const ownerKey = fx.owner.getOperationOwnerSingleFlightKey(fx.f.request.operationId);
       assert.equal((await recoverMessageGroupLearnerInline(fx.owner, fx.f.request.operationId,
-        witness(fx))).outcome, 'invalid', 'the inline entry never acquires or bypasses the lane');
+        witness(fx), {ownerKey})).outcome, 'invalid',
+      'the inline entry never acquires or bypasses the lane');
+      // Someone else holds this operation's lane; a turn for another key must
+      // not be able to borrow it.
+      const borrowed = await fx.owner.operationWorkflowRunExclusive(ownerKey, async () => {
+        // The lane registers its holder after the factory returns; yield so the
+        // nested turn below really runs while this operation's lane is held.
+        await settled(() => false, 1);
+        assert.equal(fx.owner.isOperationOwnerLaneHeld(fx.f.request.operationId), true);
+        return fx.owner.operationWorkflowRunExclusive('other-key', (turn) =>
+          recoverMessageGroupLearnerInline(fx.owner, fx.f.request.operationId, witness(fx), turn));
+      });
+      assert.equal(borrowed.outcome, 'invalid',
+        'a turn for another key cannot borrow this operation\'s lane');
       assert.equal(deliveries(), 0); assertNoEffect(fx, before, proposals);
       assert.equal(NODE, fx.owner.nodeId);
     });

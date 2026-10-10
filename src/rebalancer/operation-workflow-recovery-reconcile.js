@@ -11,7 +11,8 @@ import {
   shutdownReplaceOwnerWake,
   wakeReplaceOwnersForReplicaRow,
 } from './operation-workflow-replace-owner-wake.js';
-import {reconcileMessageGroupMembershipDebt, wakeMessageGroupMembershipDebtForRow} from
+import {DEBT_CENSUS, reconcileMessageGroupMembershipDebt,
+  wakeMessageGroupMembershipDebtForRow} from
   './operation-workflow-message-group-membership-recovery.js';
 import {
   REPLACE_WAIT_REASON,
@@ -106,8 +107,21 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
 
   /** Census every operation still owing a membership obligation and recover
    * the exact learner outcome through the existing recorder; nothing else. */
-  reconcileMessageGroupMembershipDebt() {
-    return reconcileMessageGroupMembershipDebt(this);
+  reconcileMessageGroupMembershipDebt(census = DEBT_CENSUS.CACHE_HINT) {
+    return reconcileMessageGroupMembershipDebt(this, census);
+  }
+
+  /** The restart scan reads the authoritative census (a restart must not
+   * trust the cache); a failure there is reported and the scan still finishes. */
+  async reconcileMembershipDebtOnRecovery() {
+    try {
+      return await this.reconcileMessageGroupMembershipDebt(DEBT_CENSUS.AUTHORITATIVE);
+    } catch (error) {
+      const failure = {available: false, error: error?.message || String(error)};
+      this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_DEBT_SWEEP_UNAVAILABLE,
+        {nodeId: this.nodeId, error: failure.error});
+      return failure;
+    }
   }
 
   /**
@@ -394,7 +408,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
 
     // Membership debt outlives ordinary settlement, so the incomplete census
     // above cannot see it; the restart scan is one of its named triggers.
-    result.membershipDebt = await this.reconcileMessageGroupMembershipDebt();
+    result.membershipDebt = await this.reconcileMembershipDebtOnRecovery();
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED, {
       nodeId: this.nodeId,

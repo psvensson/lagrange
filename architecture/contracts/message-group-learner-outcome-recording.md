@@ -66,7 +66,10 @@ retract a command already inside the gateway. An already-submitted exact receipt
 may therefore commit late under the unchanged full row-CAS basis, changing only
 the learner phase, the committed permit and the learner stamp, as ruled in the
 [safety-first ruling](../../solve/quests/message-group-fresh-identity-membership/safety-first-ruling-20261009.md);
-the caller then reports UNKNOWN unless exact authoritative readback proves it.
+the caller then reports UNKNOWN unless it is still current and exact authoritative
+readback proves the receipt; an obsolete caller reports UNKNOWN even when the
+receipt committed. The synchronous recheck covers the local invocation lifetime
+and the live local claim.
 A COMMITTED permit supplied as recording input is readback-only: it matches an
 already-recorded coherent phase or is refused, and it never reaches the proposal
 authorizer or becomes IN_FLIGHT again. Recovery by operation ID reconstructs this
