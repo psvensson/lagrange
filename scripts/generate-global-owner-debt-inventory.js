@@ -286,6 +286,11 @@ function adjacentTestsFor(boundary, importGraph) {
     .slice(0, CHILD_LIMITS.adjacentTests);
 }
 
+function exceedsChildPathscope(paths) {
+  return paths.length > CHILD_LIMITS.pathCount ||
+    new Set(paths.map(ownerAreaForPath)).size > CHILD_LIMITS.ownerAreas;
+}
+
 function candidateFor(boundary, lane, importGraph) {
   const prefix = lane === OWNER_DEBT.laneM4c ?
     'test-structure-burndown' : 'owner-complexity';
@@ -300,15 +305,22 @@ function candidateFor(boundary, lane, importGraph) {
     boundary.structuralTargetsInternal : [];
   const pathscope = [...new Set([
     ...engagementPaths,
-    ...adjacentTestsFor(boundary, importGraph),
     `scripts/run-${questId}-scenarios.js`,
     `solve/quests/${questId}.json`,
-  ])].sort();
-  const ownerAreas = [...new Set(pathscope.map(ownerAreaForPath))].sort();
-  if (pathscope.length > CHILD_LIMITS.pathCount ||
-      ownerAreas.length > CHILD_LIMITS.ownerAreas) {
+  ])];
+  if (exceedsChildPathscope(pathscope)) {
     throw new Error(`${questId} exceeds the bounded child pathscope`);
   }
+  // Adjacent tests are a convenience, not the engagement. Admit them in their
+  // sorted order only while the bounded child stays within its own limits, so
+  // a boundary whose debt shrank (and whose importer set reshuffled) still
+  // yields a bounded child instead of an unrepresentable one.
+  for (const test of adjacentTestsFor(boundary, importGraph)) {
+    if (pathscope.includes(test) || exceedsChildPathscope([...pathscope, test])) continue;
+    pathscope.push(test);
+  }
+  pathscope.sort();
+  const ownerAreas = [...new Set(pathscope.map(ownerAreaForPath))].sort();
   return {
     lane,
     questId,

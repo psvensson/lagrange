@@ -1,5 +1,3 @@
-import {observeMessageGroupLearnerAuthorization} from
-  './replica-operation-message-group-learner-observation.js';
 /**
  * ReplicaOperationRepository — SQL/cache reads and writes, row <-> operation
  * translation for replica_operations.
@@ -15,12 +13,7 @@ import {observeMessageGroupLearnerAuthorization} from
  * - replica status observation (cache + authoritative)
  * - entity service row lookups
  */
-import {claimMessageGroupMembershipOwner, settleMessageGroupMembershipNonAdmission} from
-  './replica-operation-message-group-membership-owner-claim.js';
 import {v4 as uuidv4} from 'uuid';
-import {selectMessageGroupMembershipBranch, authorizeMessageGroupLearner,
-  recordMessageGroupLearnerOutcome, recoverMessageGroupLearnerOutcome} from
-  './replica-operation-message-group-membership-authorization.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
   INITIAL_PARTITION_IDS,
@@ -85,6 +78,11 @@ import {
   isCoordinatorOwnedOperationType,
   resolveReplicaOperationSemanticPhase,
 } from './replica-status.js';
+import {
+  assignReplicaOperationRepositoryMessageGroupMembershipMethods,
+} from './replica-operation-repository-message-group-membership-methods.js';
+import {buildControlPlaneFailurePayload, cloneControlPlaneFailureParticipants} from
+  './replica-operation-repository-control-plane-failure.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
 import {REPLICA_OPERATION_INSERT_SQL} from
   './replica-operation-repository-constants.js';
@@ -296,55 +294,6 @@ function shouldDeferReplicaOperationOwnerRead(participation) {
   return (
     participation?.reasonCode === CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY
   );
-}
-function buildControlPlaneFailurePayload(nodeId, resultOrError) {
-  const participantFailures = Array.isArray(resultOrError?.participantFailures) ?
-    resultOrError.participantFailures
-      .filter((entry) => entry && typeof entry === 'object')
-      .slice(0, NUM.THREE) :
-    [];
-  const firstFailedParticipant =
-    resultOrError?.firstFailedParticipant &&
-    typeof resultOrError.firstFailedParticipant === 'object' ?
-      resultOrError.firstFailedParticipant :
-      participantFailures.length > 0 ?
-        participantFailures[0] :
-        null;
-  return {
-    error: resultOrError?.error || resultOrError?.message || null,
-    nodeId,
-    code: getControlPlaneErrorCode(resultOrError) || null,
-    retryAfterMs: getControlPlaneRetryAfterMs(resultOrError),
-    reasonCode:
-      typeof resultOrError?.reasonCode === 'string' ? resultOrError.reasonCode : null,
-    participationKind:
-      typeof resultOrError?.participationKind === 'string' ?
-        resultOrError.participationKind :
-        null,
-    tableName:
-      typeof resultOrError?.tableName === 'string' ?
-        resultOrError.tableName :
-        typeof firstFailedParticipant?.failedTable === 'string' ?
-          firstFailedParticipant.failedTable :
-          null,
-    participantFailures,
-    firstFailedParticipant,
-  };
-}
-function cloneControlPlaneFailureParticipants(resultOrError) {
-  const participantFailures = Array.isArray(resultOrError?.participantFailures) ?
-    resultOrError.participantFailures
-      .filter((entry) => entry && typeof entry === 'object')
-      .map((entry) => ({...entry})) :
-    [];
-  const firstFailedParticipant =
-    resultOrError?.firstFailedParticipant &&
-    typeof resultOrError.firstFailedParticipant === 'object' ?
-      {...resultOrError.firstFailedParticipant} :
-      participantFailures.length > 0 ?
-        participantFailures[0] :
-        null;
-  return {participantFailures, firstFailedParticipant};
 }
 const CONTROL_PLANE_QUERY_OPTIONS = Object.freeze({
   ...buildControlPlaneQueryOptions(),
@@ -580,40 +529,6 @@ class ReplicaOperationRepository {
         REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS;
     this._shuttingDown = false;
   }
-  /** Settle never-authorized terminal intent; no execution claim is acquired. */
-  settleMessageGroupMembershipNonAdmission(request) {
-    return settleMessageGroupMembershipNonAdmission(this, request);
-  }
-
-  /** Claim membership recovery ownership; no action authorization is created. */
-  claimMessageGroupMembershipOwner(request) {
-    return claimMessageGroupMembershipOwner(this, request);
-  }
-  /** Observe exact issued learner intent for a bound runtime recipient. */
-  observeMessageGroupLearnerAuthorization(request, receiver) {
-    return observeMessageGroupLearnerAuthorization(this, request, receiver);
-  }
-  /** Record initial learner intent; runtime and CREATE admission remain separate. */
-  authorizeMessageGroupLearner(request) {
-    return authorizeMessageGroupLearner(this, request);
-  }
-  /** Record an exact recovered learner fact; never dispatch membership work. */
-  recordMessageGroupLearnerOutcome(request, readCommittedLearner, isInvocationCurrent) {
-    return recordMessageGroupLearnerOutcome(this, request, readCommittedLearner,
-      isInvocationCurrent);
-  }
-
-  /** Recover a learner receipt by operation ID using durable inputs, not a saved packet. */
-  recoverMessageGroupLearnerOutcome(operationId, readCommittedLearner, isInvocationCurrent) {
-    return recoverMessageGroupLearnerOutcome(this, operationId, readCommittedLearner,
-      isInvocationCurrent);
-  }
-
-  /** Select a durable membership branch; never directly dispatches Raft. */
-  selectMessageGroupMembershipBranch(request) {
-    return selectMessageGroupMembershipBranch(this, request);
-  }
-
   /**
    * Signal that the owning rebalance coordinator is shutting down. The
    * authoritative read-retry and operation-persist-retry loops check this and
@@ -655,6 +570,7 @@ class ReplicaOperationRepository {
   }
 }
 
+assignReplicaOperationRepositoryMessageGroupMembershipMethods(ReplicaOperationRepository);
 assignReplicaOperationRepositoryVisibilityMethods(ReplicaOperationRepository, {
   CONTROL_PLANE_PUBLICATION_STATUS,
   ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE,

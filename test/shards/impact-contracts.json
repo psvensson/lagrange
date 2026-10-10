@@ -784,6 +784,7 @@
       "description": "The existing repository observes exact issued ADD_LEARNER intent and current host-bound holder/recipient facts; the group-admission owner consumes that observation before reserving the permanent peer identity and invoking the semantic port. The native runtime alone decides term/configuration/lifecycle/generation freshness and proposes. This does not authenticate transport, settle the operation from a proposal reply, or grant CREATE.",
       "owners": [
         "src/rebalancer/replica-operation-repository.js",
+        "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
         "src/rebalancer/replica-operation-message-group-learner-observation.js",
         "src/rebalancer/replica-operation-message-group-membership-owner-claim.js",
         "src/raft/raft-rs-group-membership-admission.js",
@@ -837,7 +838,8 @@
       "owners": [
         "src/raft/raft-rs-committed-membership-read.js",
         "src/rebalancer/replica-operation-message-group-membership-authorization.js",
-        "src/rebalancer/replica-operation-repository.js"
+        "src/rebalancer/replica-operation-repository.js",
+        "src/rebalancer/replica-operation-repository-message-group-membership-methods.js"
       ],
       "tests": [
         "test/integration/message-group-learner-runtime-authorization.integration.test.js",
@@ -854,6 +856,7 @@
         "src/rebalancer/operation-workflow-message-group-native-read.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-repository.js",
+        "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
         "src/rebalancer/replica-operation-message-group-membership-authorization.js",
         "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
       ],
@@ -1560,6 +1563,7 @@
           "id": "durable-operation-observation",
           "owners": [
             "src/rebalancer/replica-operation-repository.js",
+            "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
             "src/rebalancer/replica-operation-message-group-learner-observation.js",
             "src/rebalancer/replica-operation-message-group-membership-owner-claim.js"
           ]
@@ -1651,7 +1655,8 @@
           "id": "durable-operation-recording",
           "owners": [
             "src/rebalancer/replica-operation-message-group-membership-authorization.js",
-            "src/rebalancer/replica-operation-repository.js"
+            "src/rebalancer/replica-operation-repository.js",
+            "src/rebalancer/replica-operation-repository-message-group-membership-methods.js"
           ]
         }
       ],
@@ -1679,6 +1684,7 @@
             "src/rebalancer/operation-workflow-message-group-native-read.js",
             "src/rebalancer/replica-operation-constants.js",
             "src/rebalancer/replica-operation-repository.js",
+            "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
             "src/rebalancer/replica-operation-message-group-membership-authorization.js",
             "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
           ]

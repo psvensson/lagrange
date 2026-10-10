@@ -291,9 +291,13 @@ test('learner driver invocation is fenced through its submission boundary',
         const fx = await receiverFixture(t); const before = {...fx.f.row()};
         const entered = Promise.withResolvers(); const release = Promise.withResolvers();
         t.after(release.resolve);
-        fx.f.pauseNodes(async () => { entered.resolve(); await release.promise; });
+        fx.f.pauseNodes(async () => {
+          entered.resolve(); await release.promise;
+        });
         let writes = 0; const execute = fx.f.gateway.executeQuery;
-        fx.f.gateway.executeQuery = (...args) => { writes += 1; return execute(...args); };
+        fx.f.gateway.executeQuery = (...args) => {
+          writes += 1; return execute(...args);
+        };
         const pending = record(fx);
         assert.equal(await Promise.race([entered.promise.then(() => true),
           pending.then(() => false)]), true, 'the post-delivery boot read must engage');
@@ -311,9 +315,11 @@ test('learner driver invocation is fenced through its submission boundary',
       const execute = fx.f.gateway.executeQuery; let attempts = 0; let waits = 0;
       fx.f.gateway.executeQuery = (...args) => {
         attempts += 1;
-        if (attempts === 1) return Promise.resolve({success: false,
-          error: 'query_admission_deferred', reasonCode: 'transport_backpressure',
-          retryAfterMs: 250, deferRetry: true});
+        if (attempts === 1) {
+          return Promise.resolve({success: false,
+            error: 'query_admission_deferred', reasonCode: 'transport_backpressure',
+            retryAfterMs: 250, deferRetry: true});
+        }
         return execute(...args);
       };
       fx.f.repository.waitForOperationPersistRetry = async () => {
@@ -335,7 +341,9 @@ test('learner driver invocation is fenced through its submission boundary',
         enteredFactory = true; return work();
       };
       let reads = 0; const deliver = fx.source.deliver.bind(fx.source);
-      fx.source.deliver = (...args) => { reads += 1; return deliver(...args); };
+      fx.source.deliver = (...args) => {
+        reads += 1; return deliver(...args);
+      };
       const pending = record(fx);
       assert.equal(await Promise.race([entered.promise.then(() => true),
         pending.then(() => false)]), true, 'the existing operation lane must be entered');
@@ -370,7 +378,9 @@ test('the owned learner command preserves submission and uncertainty boundaries'
       let getterReads = 0;
       const accessor = {...fx.f.request};
       Object.defineProperty(accessor, 'operationId', {enumerable: true,
-        get() { getterReads += 1; return fx.f.request.operationId; }});
+        get() {
+          getterReads += 1; return fx.f.request.operationId;
+        }});
       assert.equal((await record(fx, accessor)).outcome, 'invalid');
       assert.equal(getterReads, 0, 'boundary capture must not invoke caller accessors');
     });
@@ -412,7 +422,9 @@ test('the owned learner command preserves submission and uncertainty boundaries'
       const result = await fx.f.repository.executeOperationMutationWithRetry(
         'UPDATE replica_operations SET updated_at = updated_at WHERE operation_id = ?',
         [fx.f.request.operationId], {beforeAttempt: () => {
-          queueMicrotask(() => { current = false; }); return current;
+          queueMicrotask(() => {
+            current = false;
+          }); return current;
         }});
       assert.equal(result.success, true); assert.equal(attempts, 1);
     });
@@ -421,7 +433,9 @@ test('the owned learner command preserves submission and uncertainty boundaries'
       const entered = Promise.withResolvers(); const release = Promise.withResolvers();
       t.after(release.resolve); let attempts = 0;
       const execute = fx.f.gateway.executeQuery;
-      fx.f.gateway.executeQuery = (...args) => { attempts += 1; return execute(...args); };
+      fx.f.gateway.executeQuery = (...args) => {
+        attempts += 1; return execute(...args);
+      };
       const pending = fx.f.repository.executeOperationMutationWithRetry(
         'UPDATE replica_operations SET updated_at = updated_at WHERE operation_id = ?',
         [fx.f.request.operationId], {beforeAttempt: async () => {
@@ -594,7 +608,9 @@ test('restart recording reconstructs durable inputs without retaining the origin
       const recorded = {...fx.f.row()}; const proposals = fx.f.proposalCount();
       fx.shutOwner(); fx.owner = reconstructedOwner(fx);
       let deliveries = 0; const deliver = fx.source.deliver.bind(fx.source);
-      fx.source.deliver = (...args) => { deliveries += 1; return deliver(...args); };
+      fx.source.deliver = (...args) => {
+        deliveries += 1; return deliver(...args);
+      };
       assert.equal((await recoverReceipt(fx)).outcome, 'recorded',
         'reconstruction must accept the exact already-committed receipt without an original packet');
       assert.equal(deliveries, 0); assert.equal(held.submissions(), 1);
@@ -633,11 +649,15 @@ test('async admission must recheck local lifetime adjacent to actual submission'
   {timeout: 30000}, async (t) => {
     const fx = await receiverFixture(t); let current = true; let submissions = 0;
     const execute = fx.f.gateway.executeQuery;
-    fx.f.gateway.executeQuery = (...args) => { submissions += 1; return execute(...args); };
+    fx.f.gateway.executeQuery = (...args) => {
+      submissions += 1; return execute(...args);
+    };
     const response = await fx.f.repository.executeOperationMutationWithRetry(
       'UPDATE replica_operations SET updated_at = updated_at WHERE operation_id = ?',
       [fx.f.request.operationId], {beforeAttempt: async () => {
-        queueMicrotask(() => { current = false; }); return true;
+        queueMicrotask(() => {
+          current = false;
+        }); return true;
       }, submissionIsCurrent: () => current});
     assert.equal(response.admissionRefused, true,
       'turnover during async admission must prevent submission');
@@ -652,7 +672,9 @@ test('committed permit with missing recorded phase cannot be reused as an in-fli
     [PHASE.LEARNER_IN_FLIGHT, fx.f.request.operationId]);
     const inconsistent = {...fx.f.row()}; let deliveries = 0;
     const deliver = fx.source.deliver.bind(fx.source);
-    fx.source.deliver = (...args) => { deliveries += 1; return deliver(...args); };
+    fx.source.deliver = (...args) => {
+      deliveries += 1; return deliver(...args);
+    };
     assert.equal((await recoverReceipt(fx)).outcome, 'conflict',
       'a committed permit is readback-only and must not authorize new recording');
     assert.deepEqual(fx.f.row(), inconsistent); assert.equal(deliveries, 0);
