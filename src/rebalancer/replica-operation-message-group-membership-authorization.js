@@ -303,12 +303,12 @@ function committedLearnerPermit(input, index) {
   return JSON.stringify({...input.permit, permitState: STATE.COMMITTED,
     proposalIndex: Number(index)});
 }
+// The shared historical-fact predicate, plus this request's binding: the
+// recorded permit is exactly the requested action committed at its index.
 function exactRecordedLearner(row, input) {
   const permit = decodeMembershipPermit(row.messageGroupMembershipPermit);
-  return row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
-    permit?.permitState === STATE.COMMITTED &&
-    row.messageGroupMembershipPermit === committedLearnerPermit(input, permit.proposalIndex) &&
-    priorLearnerStamp(row, input.identity, permit) !== null;
+  return recordedLearnerFactIsValid(row, input.identity, input.encodedIdentity) &&
+    row.messageGroupMembershipPermit === committedLearnerPermit(input, permit.proposalIndex);
 }
 function originalLearnerOriginMatches(origin, input, query) {
   return origin !== INVALID_COMMITTED_LEARNER_ADMISSION &&
@@ -405,7 +405,7 @@ async function recordObservedLearner(repository, row, input, evidence, isCurrent
   const after = await observeMembershipOperation(repository, input.operationId);
   if (!isCurrent() || !after.available) return result(OUTCOME.UNKNOWN);
   const recorded = recordingBasisRefusal(repository, after.row, input) === null &&
-    after.row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
+    recordedLearnerFactIsValid(after.row, input.identity, input.encodedIdentity) &&
     after.row.messageGroupMembershipPermit === evidence.committedPermit &&
     after.row.messageGroupLearnerStamp === evidence.stamp;
   return result(recorded ? OUTCOME.RECORDED : OUTCOME.UNKNOWN, after.row);
@@ -476,16 +476,25 @@ async function recoverMessageGroupLearnerOutcome(repository, operationId, readCo
 }
 export {recoverMessageGroupLearnerOutcome};
 
-/** Whether a row's recorded learner outcome is coherent: a COMMITTED initial
- * ADD_LEARNER permit with an integer proposal index and a learner stamp that
- * names this transition's source voter and target learner at or past that
- * index. Pure; no claim, no boot read. A row that fails this is surfaced for
- * owned repair rather than treated as settled debt. */
-function recordedLearnerIsCoherent(row, identity) {
+/** The one validity predicate of a recorded initial learner fact, shared by
+ * discovery's settled-row classification and the recorder's replay/readback.
+ * It judges only the immutable historical record: the row's identity columns,
+ * the committed phase with a COMMITTED initial ADD_LEARNER permit of this
+ * transition, no voter or removal stamp (the learner phase allows neither),
+ * canonical permit and stamp encodings, and a learner stamp naming this
+ * transition's source voter and target learner at or past the proposal index.
+ * Pure: no claim, lease, boot or clock read, so a settled fact stays settled
+ * after its lease expired or its owner restarted. The recorder's live write
+ * gate stays in the recorder. A row that fails this is surfaced for owned
+ * repair, never treated as settled debt. */
+function recordedLearnerFactIsValid(row, identity, encodedIdentity) {
   const permit = decodeMembershipPermit(row?.messageGroupMembershipPermit);
-  return permit !== null && permit.permitState === STATE.COMMITTED &&
-    initialLearnerActionMatches(permit, identity) &&
-    row.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
-    priorLearnerStamp(row, identity, permit) !== null;
+  if (permit === null || !membershipRowIdentityMatches(row, identity, encodedIdentity) ||
+    row.messageGroupMembershipPhase !== PHASE.LEARNER_COMMITTED ||
+    permit.permitState !== STATE.COMMITTED || !initialLearnerActionMatches(permit, identity) ||
+    row.messageGroupVoterStamp !== null || row.messageGroupRemovalStamp !== null ||
+    row.messageGroupMembershipPermit !== JSON.stringify(permit)) return false;
+  const stamp = priorLearnerStamp(row, identity, permit);
+  return stamp !== null && row.messageGroupLearnerStamp === JSON.stringify(stamp);
 }
-export {recordedLearnerIsCoherent};
+export {recordedLearnerFactIsValid};
