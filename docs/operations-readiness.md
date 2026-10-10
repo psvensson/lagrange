@@ -53,25 +53,30 @@ preserve structured retry or wait outcomes from long-running cluster changes.
 
 ## Replica recovery
 
-Each SQLite-backed partition is a Raft group. The active recovery path includes:
+Each SQLite-backed partition is a Raft group. Checkpoint, transfer and install
+components exist, but the selected backend does not yet provide the complete
+automatic bounded-recovery path previously described here.
 
-- leader-created checkpoints;
-- bulk snapshot transfer;
-- atomic snapshot installation;
-- follower recreation and resumed log application; and
-- proof-gated compaction of the committed SQLite log prefix.
+Reviewed on 2026-10-10 against shared main
+`ef3c7b1911b72b55da446b31cf914afec42e82af` and the pending local continuation
+`86d53bc79615a91ad70ff5b75b40ee091211519a`: the
+[partition snapshot cadence](https://github.com/psvensson/lagrange/blob/86d53bc79615a91ad70ff5b75b40ee091211519a/src/partition/partition-snapshot-cadence.js)
+reports `COMMITTED_LOG_UNSUPPORTED`. The pending
+[message-group replica image](https://github.com/psvensson/lagrange/blob/86d53bc79615a91ad70ff5b75b40ee091211519a/src/raft/snapshot-checkpoint-store.js)
+preserves consensus/peer identity and deliberately scrubs application tables;
+it is not a SQL-partition recovery image or a user backup.
 
-This bounds SQLite partition-log growth and allows a follower whose required
-prefix was compacted to rebuild from a snapshot.
+Do not rely on bounded SQL-partition log growth, automatic rebuild after a
+compacted prefix, or complete ordinary message-group replacement until those
+paths have been demonstrated on the actual integrated version. The generated
+capability page's active snapshot/compaction labels require correction; they
+are not operational evidence for these reviewed sources.
 
-Important remaining limitations:
-
-- message-group logs remain in memory, grow without the same compaction path,
-  and recover by full replay;
-- learner promotion is time-based and safety-count-based, not based on measured
-  follower progress; and
-- no public RTO is stated for a replica of a given size on named hardware and
-  network links.
+Recovery evidence must preserve application rows, transaction/outcome state,
+clock and applied boundaries, exact replica identity and the remaining replay
+obligations. Progress-based learner/transfer foundations in pending work do not
+by themselves demonstrate the complete replacement operation. No public RTO is
+stated for a replica of a given size on named hardware and network links.
 
 A pilot should wipe and rebuild one non-leader replica under foreground load,
 then reconcile every acknowledged write against an independent oracle.
