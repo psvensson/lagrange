@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2037,
-    "integration": 86,
+    "integration": 87,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2332,
-  "digest": "fnv1a32-686982aa",
+  "censusSize": 2333,
+  "digest": "fnv1a32-c0001e5e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1035,6 +1035,7 @@
     "test/integration/raft-leader-election.integration.test.js": "integration",
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "integration",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "integration",
+    "test/integration/seed-migration-cutover-persisted.integration.test.js": "integration",
     "test/integration/seed-node-bootstrap.integration.test.js": "integration",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "integration",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "integration",
