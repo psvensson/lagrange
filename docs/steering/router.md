@@ -39,8 +39,7 @@ is owned by `npm run audit:doc-audience`, not by this table.
 | verifying someone else's change | [`verification-templates/`](../development/verification-templates/INDEX.md) |
 | runtime, control-plane or partition behaviour | [`runtime-contracts.md`](../../architecture/runtime-contracts.md) |
 | workflow authority, permits, recovery or a new state store | [`authority-and-recovery.md`](../../architecture/contracts/authority-and-recovery.md) |
-| current contract-first cutover continuation | [`contract-first-2026-10-08.md`](../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md) |
-| selecting the next risk-reduction unit or continuing the local handoff | [`adversarial-risk-review-2026-10-10.md`](../development/adversarial-risk-review-2026-10-10.md), including its local execution handoff and existing owner destinations |
+| current cutover continuation, or selecting the next risk-reduction unit | [`contract-first-2026-10-08.md`](../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md), then [`adversarial-risk-review-2026-10-10.md`](../development/adversarial-risk-review-2026-10-10.md) with its local execution handoff |
 | code style, file size, naming | [`code-style.md`](../development/code-style.md) |
 | recording, closing or auditing a quest's artifacts | [`quest-artifacts.md`](../development/quest-artifacts.md), [`quest-lifecycle.md`](../development/quest-lifecycle.md), [`quest-closure.md`](../development/quest-closure.md), [`quest-validators.md`](../development/quest-validators.md), [`quest-subagents.md`](../development/quest-subagents.md) |
 | proposing or changing roadmap policy | [`roadmap-policy.md`](../development/roadmap-policy.md) |
