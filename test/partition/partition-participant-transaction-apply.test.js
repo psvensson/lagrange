@@ -40,7 +40,8 @@ import {
   durableAppliedIndex, generationOf, hasEntryId, identityOf, isDecisionCommand,
   isPrepareCommand, notCommitted, onTwoReplicas, operationOf, ordinaryWriteOf,
   originCommandOf, originOf, outcomeOf, pick, plantAppliedStateFailure, prepareCommandOf,
-  prepareMessage, queryMessage, removeAppliedStateFailure, rowCount, send, settleTicks,
+  prepareMessage, queryMessage, removeAppliedStateFailure, resumeFixtureParticipantAdmission,
+  rowCount, send, settleTicks,
   sha256, shutdownAll, startLeader, startReplica, statementOutcomeOf, statementState,
   temporaryDbPath, track, transactionOperationOutcomes, txMessage,
 } from '../test-helpers/participant-transaction-fixture.js';
@@ -504,6 +505,7 @@ test('TX1 inc3 origin: until the generation origin has applied on the leader a B
     facts.again = pick(await enableParticipantTransactionAdmission(leader),
       ['success', 'alreadyEnabled', 'originIndex']);
     facts.proposed = proposed.map((entry) => entry.type);
+    await resumeFixtureParticipantAdmission(leader);
     facts.beginAfter = pick(await send(leader, beginMessage(tx)), ['success', 'state']);
     assert.deepEqual(facts, {begin: {success: false, failureCode: CODE.ORIGIN_PENDING},
       stagingOpen: false, answeredBeforeApply: false, originApply: null,

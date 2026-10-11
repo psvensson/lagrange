@@ -85,8 +85,11 @@ import {
   recordPartitionWriteOrigin,
   updateParticipantTransactionDecided,
 } from './partition-participant-transaction-store.js';
+import {applyParticipantReleaseCommand} from
+  './partition-participant-release-apply.js';
 import {
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
+  PARTICIPANT_RELEASE_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_DECISION as DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
@@ -622,6 +625,16 @@ const PARTICIPANT_COMMAND_APPLIERS = Object.freeze({
   [COMMAND.PREPARE]: applyParticipantPrepare,
   [COMMAND.DECISION]: applyParticipantDecision,
   [COMMAND.GENERATION_ORIGIN]: applyGenerationOrigin,
+  [COMMAND.ADMISSION_PAUSE]: applyParticipantReleaseCommand,
+  [COMMAND.RELEASE_RESERVE]: applyParticipantReleaseCommand,
+  [COMMAND.RELEASE_PUBLISH_CLAIM]: applyParticipantReleaseCommand,
+  [COMMAND.RELEASE_RECORD_SHARE]: applyParticipantReleaseCommand,
+  [COMMAND.RELEASE_FINALIZE]: applyParticipantReleaseCommand,
+  [COMMAND.RELEASE_DISPATCH]: applyParticipantReleaseCommand,
+  [COMMAND.RELEASE_RETIRE]: applyParticipantReleaseCommand,
+  [COMMAND.ADMISSION_RESUME]: applyParticipantReleaseCommand,
+  [COMMAND.RELEASE_RECORD_RECEIPT]: applyParticipantReleaseCommand,
+  [COMMAND.RELEASE_CONFIRM]: applyParticipantReleaseCommand,
 });
 
 function applyParticipantCommand(service, committed) {
@@ -652,7 +665,8 @@ function applyParticipantCommand(service, committed) {
  */
 function applyCommittedTransactionCommand(service, committed) {
   const {command} = committed;
-  const applied = PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(command.type) ?
+  const applied = [...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+    ...PARTICIPANT_RELEASE_COMMAND_TYPES].includes(command.type) ?
     applyParticipantCommand(service, committed) :
     applyLegacyTransactionMarker(service, committed);
   committed.afterCommit(() => service.emit(
