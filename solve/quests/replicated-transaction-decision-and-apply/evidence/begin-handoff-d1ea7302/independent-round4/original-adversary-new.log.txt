@@ -1,0 +1,146 @@
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'bad-row' }
+BEGIN TRANSACTION { sessionId: 'bad-row' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'getter' }
+BEGIN TRANSACTION { sessionId: 'getter' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+Protocol session mapped to tenant/policy { sessionId: 'post-tag', tenantId: 'default' }
+Executing SqlRequest via SqlCore {
+  sessionId: 'post-tag',
+  tenantId: 'default',
+  executionMode: 'sql_statement'
+}
+SqlCore.executeRequest dispatching {
+  executionMode: 'sql_statement',
+  statement: 'BEGIN',
+  sessionId: 'post-tag'
+}
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'post-tag' }
+BEGIN TRANSACTION { sessionId: 'post-tag' }
+SqlCore.executeRequest complete { executionMode: 'sql_statement', success: true }
+metrics.query.dispatch {
+  executionMode: 'sql_statement',
+  totalDurationMs: 1,
+  success: true,
+  sessionId: 'post-tag'
+}
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+Protocol session mapped to tenant/policy { sessionId: 'close-before-tag', tenantId: 'default' }
+Executing SqlRequest via SqlCore {
+  sessionId: 'close-before-tag',
+  tenantId: 'default',
+  executionMode: 'sql_statement'
+}
+SqlCore.executeRequest dispatching {
+  executionMode: 'sql_statement',
+  statement: 'BEGIN',
+  sessionId: 'close-before-tag'
+}
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'close-before-tag' }
+BEGIN TRANSACTION { sessionId: 'close-before-tag' }
+SqlCore.executeRequest complete { executionMode: 'sql_statement', success: false }
+metrics.query.dispatch {
+  executionMode: 'sql_statement',
+  totalDurationMs: 1,
+  success: false,
+  sessionId: 'close-before-tag'
+}
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+{
+  "invalidAdvancedMutableRow": {
+    "result": {
+      "success": false,
+      "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+      "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+      "transactionId": "1fb774384a38398ad6c6c0175a7e1502",
+      "timeoutDeadline": 1791749778569,
+      "deferRetry": true,
+      "retryable": true,
+      "statementType": "BEGIN_TRANSACTION"
+    },
+    "diagnostics": {
+      "attachmentCount": 0,
+      "operationCount": 0,
+      "recordBytes": 1089,
+      "recordCount": 1,
+      "roles": {
+        "SERVER_RECOVERY_ONLY": 1
+      },
+      "totalBytes": 1089
+    }
+  },
+  "accessorArrayReadback": {
+    "result": {
+      "success": false,
+      "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+      "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+      "transactionId": "ef19aeb0dc96ba32fd3fe6329c7540c1",
+      "timeoutDeadline": 1791749778572,
+      "deferRetry": true,
+      "retryable": true,
+      "statementType": "BEGIN_TRANSACTION"
+    },
+    "getterCalls": 0
+  },
+  "expiredRetry": {
+    "first": {
+      "success": false,
+      "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+      "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+      "transactionId": "82a6e09f1a5fbbb22aa59cb5a6333872",
+      "timeoutDeadline": 10,
+      "deferRetry": true,
+      "retryable": true
+    },
+    "retry": {
+      "success": false,
+      "error": "Transaction recovery state is incomplete or incompatible",
+      "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+      "transactionId": "82a6e09f1a5fbbb22aa59cb5a6333872",
+      "deferRetry": true
+    },
+    "active": null,
+    "writes": 2
+  },
+  "sweepPrefixStarvation": {
+    "first": 2,
+    "sixteenth": 2,
+    "seventeenth": 1
+  },
+  "postTagAcceptanceFailure": {
+    "messageTypes": [
+      "C"
+    ],
+    "socketDestroyed": true,
+    "creationState": "SERVER_RECOVERY_ONLY",
+    "sessionClosed": true
+  },
+  "closeBeforeTag": {
+    "messageTypes": [
+      "E"
+    ],
+    "socketDestroyed": false,
+    "creationState": "SERVER_RECOVERY_ONLY",
+    "sessionClosed": true
+  },
+  "accessorConfiguration": {
+    "accepted": false,
+    "getterCalls": 0
+  },
+  "shutdownDuringDirectBegin": {
+    "result": {
+      "success": false,
+      "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+      "errorCode": "TRANSACTION_CREATION_UNCERTAIN"
+    },
+    "active": null,
+    "diagnostics": {
+      "attachmentCount": 0,
+      "operationCount": 0,
+      "recordBytes": 0,
+      "recordCount": 0,
+      "roles": {},
+      "totalBytes": 0
+    }
+  }
+}

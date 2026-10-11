@@ -1,0 +1,28 @@
+FAIL old: malformed row retains debt
+FAIL old: array accessor never executes
+FAIL old: original expiry refuses ACTIVE
+FAIL old: rotation reaches seventeenth
+FAIL old: post-tag failure closes with only C
+FAIL old: DTC configuration getter refused
+FAIL old: direct shutdown refuses success
+PASS old: close retains server debt
+PASS new: malformed row retains debt
+PASS new: array accessor never executes
+PASS new: original expiry refuses ACTIVE
+PASS new: rotation reaches seventeenth
+PASS new: post-tag failure closes with only C
+PASS new: DTC configuration getter refused
+PASS new: direct shutdown refuses success
+PASS new: close retains server debt
+FAIL current: B2-1 advanced recovery must reread after availability returns
+FAIL current: B2-2 advanced handoff retains live consumer slot
+FAIL current: B2-3 charged envelope covers retained-reference lower bound
+FAIL current: B2-4 admitted full pool can reenter when transport returns
+FAIL current: B2-5 spent control turn cannot accept new success
+FAIL current: B2-6 late completion cannot rewrite restored workflow after shutdown
+FAIL current: B2-7a unavailable sweep advances backoff
+FAIL current: B2-7b expired pending cohort respects configured turn cap
+FAIL current: B2-8 SQLQueryEngine config accessor refused without execution
+FAIL current: B2-1b expired success claim must return current disposition and reenter recovery
+PASS retry-first: missing progress preserves durable COMMIT and exact fanout
+PASS sweep-first: missing progress preserves durable COMMIT and exact fanout

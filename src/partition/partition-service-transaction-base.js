@@ -14,6 +14,7 @@ import {
 } from './partition-service-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {sweepParticipantTransactionHolds} from './partition-participant-transaction-session.js';
+import {fenceLegacyTransactionRequest} from './partition-participant-transaction-legacy-fence.js';
 
 const TRANSACTION_HOLD_WAIT = Object.freeze({
   wait: 'TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS',
@@ -587,6 +588,12 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         };
       }
       throw new Error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE);
+    }
+    const fenced = fenceLegacyTransactionRequest(this,
+      {operation: PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
+        sessionId: transactionSessionId, transactionEpoch});
+    if (fenced !== undefined) {
+      return fenced;
     }
     if (this.removalServingAdmissionFenced === true) {
       const error = new Error(

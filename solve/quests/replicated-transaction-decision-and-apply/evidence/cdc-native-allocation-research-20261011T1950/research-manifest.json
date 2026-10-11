@@ -1,0 +1,85 @@
+{
+  "utc": "2026-10-11T19:48:48.747062+00:00",
+  "runtimeObserved": {
+    "execPath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+    "node": "v22.23.2",
+    "versions": {
+      "node": "22.23.2",
+      "acorn": "8.16.0",
+      "ada": "2.9.2",
+      "amaro": "1.1.8",
+      "ares": "1.34.6",
+      "brotli": "1.1.0",
+      "cjs_module_lexer": "2.2.0",
+      "cldr": "48.0",
+      "icu": "78.2",
+      "llhttp": "9.4.3",
+      "modules": "127",
+      "napi": "10",
+      "nbytes": "0.1.3",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.69.0",
+      "openssl": "3.5.7",
+      "simdjson": "4.5.0",
+      "simdutf": "6.4.2",
+      "sqlite": "3.51.3",
+      "tz": "2026a",
+      "undici": "6.28.0",
+      "unicode": "17.0",
+      "uv": "1.51.0",
+      "uvwasi": "0.0.23",
+      "v8": "12.4.254.21-node.56",
+      "zlib": "1.3.1-e00f703",
+      "zstd": "1.5.7"
+    },
+    "platform": "linux",
+    "arch": "x64",
+    "executableSha256": "3517c2df0b2f8cd7f422b4b8450ef81c6889f08eb03e281d6de9079b15e6a327"
+  },
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/src/stream_base.cc",
+      "retained": "node-stream-base.cc.txt",
+      "sha256": "45233b2cf039ee054224b1bb8cedbf880f601a57ac4bb95cca91eb96c1b3bc65",
+      "bytes": 28256
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/src/stream_wrap.cc",
+      "retained": "node-stream-wrap.cc.txt",
+      "sha256": "c149ccb502e1b38c3a82215416b51211bd23f9bd717420f7617ab74937b02788",
+      "bytes": 13087
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/src/env.cc",
+      "retained": "node-env.cc.txt",
+      "sha256": "92169078cfdad22010ebe7d617358ccbff3698a62d43a3d131b6bbfdf9196f3d",
+      "bytes": 85253
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/src/node_http_parser.cc",
+      "retained": "node-http-parser.cc.txt",
+      "sha256": "3d14287fd0a73d4e1aec41ca9352af8663cb7790a92784a799dbeaef41476bd7",
+      "bytes": 42567
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/LICENSE",
+      "retained": "node-LICENSE.txt",
+      "sha256": "c738ae413cf561f174e34f6961f8ca458aae2369a73640dda6234c629b98bcc4",
+      "bytes": 145485
+    },
+    {
+      "url": "https://raw.githubusercontent.com/libuv/libuv/v1.51.0/src/unix/stream.c",
+      "retained": "libuv-unix-stream.c.txt",
+      "sha256": "dac76e73caef1d01c7122f5d42f5e2d0a06b6a60bf4d83d26849d03aec805733",
+      "bytes": 41252
+    }
+  ],
+  "scope": [
+    "READ-ONLY RESEARCH, not approval, measured aggregate bound, or new supported-runtime policy.",
+    "Linux libuv1.51.0 uv__read invokes allocation callback with64KiB; Node stream wrapper forwards suggested_size; env managed buffer allocates requested BackingStore.",
+    "Short native reads can coexist with exact-nread compacted BackingStore before prior backing store scope ends. Queue, parser, HTTPhead, fragmentation and close overlap remain to be bounded.",
+    "HTTP parser has fixed64KiB buffer, possible alternate allocation, and current-buffer copy at upgrade; all must enter actual envelope.",
+    "Package engines>=22.12.0 unchanged; source-profile assumptions may not silently narrow supported runtime/platform scope.",
+    "No private field mutation, raw parser, source correction or new retry/resource owner authorized by this research."
+  ]
+}
