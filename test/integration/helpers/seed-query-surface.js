@@ -8,7 +8,6 @@
 
 import {BootstrapAPI} from '../../../src/bootstrap/bootstrap-api.js';
 import {NodeService} from '../../../src/node/node-service.js';
-import {SQLQueryEngine} from '../../../src/query/sql-query-engine.js';
 
 /**
  * Build the seed's query engine and BootstrapAPI. The API is returned before
@@ -16,20 +15,21 @@ import {SQLQueryEngine} from '../../../src/query/sql-query-engine.js';
  * @param {Object} bootstrapService - The seed's BootstrapService.
  * @param {Object} bootstrapResult - What its bootstrap() returned.
  * @param {{seedNodeId: string, seedWsPort: number}} seed - The seed identity.
- * @return {{systemTableCache: Object, sqlQueryEngine: SQLQueryEngine,
+ * @return {{systemTableCache: Object, sqlQueryEngine: Object,
  *   seedApi: BootstrapAPI, start: Function}} The surface and its start.
  */
 export function createSeedQuerySurface(bootstrapService, bootstrapResult,
   {seedNodeId, seedWsPort}) {
   const seedAddress = `ws://localhost:${seedWsPort}`;
   const systemTableCache = NodeService.getInstance().getSystemTableCache();
-  const sqlQueryEngine = new SQLQueryEngine({
-    systemCache: systemTableCache,
-    messageRouter: bootstrapResult.messageRouter,
-    cdcIntegrationService: bootstrapService.cdcIntegrationService,
-    nodeId: seedNodeId,
-    rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
-  });
+  // Seed bootstrap acquires its SQL owner before registration and carries the
+  // same instance through hydration. Test query surfaces must attach that
+  // owner to BootstrapAPI rather than replace it after cutover release.
+  const sqlQueryEngine = bootstrapService.sqlQueryEngine ||
+    bootstrapService.cdcIntegrationService?.sqlQueryEngine || null;
+  if (!sqlQueryEngine) {
+    throw new Error('Bootstrapped seed did not publish its SQL query engine');
+  }
   const seedApi = new BootstrapAPI({
     seedNodeId,
     seedNodeAddress: seedAddress,

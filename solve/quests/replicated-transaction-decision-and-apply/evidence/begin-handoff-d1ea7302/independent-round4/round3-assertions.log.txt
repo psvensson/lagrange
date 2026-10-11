@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round4-independent/evaluate-round3.py", line 27, in <module>
+    x={r['name']:r for r in read('round3-interactions.json')['results']};r=x['known-advanced-then-insert-applied-replay'];check('B3-1 advanced authority cannot become accepted ACTIVE on old INSERT replay',not r['accepted']);check('B3-1 witness preserves exact INSERT bytes key and durable COMMIT',r['writeTrace'][0]['mutation']==r['writeTrace'][1]['mutation'] and r['writeTrace'][0]['idempotencyKey']==r['writeTrace'][1]['idempotencyKey'] and r['before']['durable']==r['after']['durable'])
+IndexError: list index out of range

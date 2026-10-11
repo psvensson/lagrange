@@ -58,6 +58,9 @@ import {
   PARTITION_STATEMENT_ADMISSION_LOG_MSG,
 } from './partition-service-constants.js';
 import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {assertTransactionSchemaWriteEnforced} from
+  '../query/distributed/distributed-transaction-schema-enforcement.js';
+import {readPartitionWriteOrigin} from './partition-participant-transaction-store.js';
 import {
   hasRollbackResolution,
   namesRefusedFunction,
@@ -373,6 +376,8 @@ function runAdmittedPartitionStatement(service, admission, params = []) {
  * @return {{changes: number, lastInsertRowid: *}} The statement's result.
  */
 function runCommittedPartitionStatement(service, command) {
+  assertTransactionSchemaWriteEnforced(service.db, service.tableName,
+    readPartitionWriteOrigin(service.db) !== null);
   const params = command.params || [];
   const path = command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ?
     PATH.MIGRATION : PATH.COMMITTED;
