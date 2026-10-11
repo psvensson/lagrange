@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2052,
+    "unit": 2054,
     "integration": 92,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2353,
-  "digest": "fnv1a32-36dd47c2",
+  "censusSize": 2355,
+  "digest": "fnv1a32-06c9c122",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1498,6 +1498,8 @@
     "test/query/strategy-selector.test.js": "unit",
     "test/query/streaming-aggregation.property.test.js": "unit",
     "test/query/table-creation-service.test.js": "unit",
+    "test/query/transaction-begin-source-adversarial.test.js": "unit",
+    "test/query/transaction-begin-uncertain-handoff.test.js": "unit",
     "test/query/transaction-coordinator-participant-protocol.test.js": "unit",
     "test/query/transaction-coordinator-settlement.test.js": "unit",
     "test/query/transaction-evidence-binding-production.test.js": "unit",
