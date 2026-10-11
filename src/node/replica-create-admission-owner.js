@@ -19,11 +19,11 @@ import {
   adoptReplicaCreateAdmissionGeneration,
   reserveReplicaCreateAdmissionGeneration,
 } from './replica-create-admission-evidence.js';
-import {claimReplicaCreateDurablePhysicalWorker,
+import {NO_ADMISSION_BASIS, claimReplicaCreateDurablePhysicalWorker,
   commitReplicaCreateSnapshotInstall, releaseReplicaCreatePhysicalWorker,
   requireReplicaCreateRotationWorkerClaim,
-  revalidateReplicaCreatePhysicalWorker, runReplicaCreateExclusive,
-  advanceReplicaCreatePhysicalWorker,
+  revalidateReplicaCreatePhysicalWorker, rowMatchesAdmissionBasis,
+  runReplicaCreateExclusive, advanceReplicaCreatePhysicalWorker,
   snapshotReplicaCreateInstallAuthority} from
   './replica-create-process-owner.js';
 import {closeReplicaCreateAdmissionForLifecycle} from
@@ -71,9 +71,6 @@ const CREATE_ADMISSION_REQUEST_FIELD = Object.freeze({
   ATTEMPT_TOKEN: 'attemptToken',
 });
 const processOwnerRegistry = new Map();
-// A caller's admission basis: exact columns it read that must still hold at
-// this owner's CAS. None by default, so the partition path is unchanged.
-const NO_ADMISSION_BASIS = Object.freeze({});
 
 function admissionError(code, operationId, message) {
   const error = new Error(message || `${code}: ${operationId}`);
@@ -151,11 +148,6 @@ function rowMatchesRequest(row, request) {
     row.partition_id === request.partitionId &&
     row.replica_id === request.replicaId &&
     row.target_node_id === request.targetNodeId;
-}
-
-function rowMatchesAdmissionBasis(row, basis) {
-  return Object.entries(basis).every(([column, value]) =>
-    (row?.[column] ?? null) === value);
 }
 
 function rowMatchesAdmission(row, request, basis = NO_ADMISSION_BASIS) {
@@ -342,8 +334,10 @@ class ReplicaCreateAdmissionOwner {
       this, claim, expectedEvidence);
   }
 
-  async commitSnapshotInstall(claim, mutation) {
-    return commitReplicaCreateSnapshotInstall(this, claim, mutation);
+  async commitSnapshotInstall(claim, mutation,
+    admissionBasis = NO_ADMISSION_BASIS) {
+    return commitReplicaCreateSnapshotInstall(
+      this, claim, mutation, admissionBasis);
   }
 
   releasePhysicalWorker(claim) {

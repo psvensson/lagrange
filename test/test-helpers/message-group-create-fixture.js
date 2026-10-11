@@ -109,7 +109,8 @@ function createPayload(f, {join = {}, admission = {}, ...changes} = {}) {
  * The production-composed createMessageGroupReplica (a lone founder in
  * production) only counts; the learner-join stub asserts the real admission
  * and the exact live worker claim before it records an effect. `learnerJoin:
- * false` composes the production capability set; `blockCreate` holds the
+ * false` composes the production capability set, a function composes that
+ * real capability instead of the stub (slice B2); `blockCreate` holds the
  * worker and `failCreate` makes it throw. */
 function createHandler(t, f, {nodeId = SUCCESSOR, bootIncarnation = 1, gateway,
   blockCreate = false, failCreate = false, learnerJoin = true} = {}) {
@@ -145,7 +146,8 @@ function createHandler(t, f, {nodeId = SUCCESSOR, bootIncarnation = 1, gateway,
     controlPlaneSystemTableGateway: gateway ?? hookedGateway(f).gateway,
     replicaOperationRepository: f.repositoryFor(nodeId),
     executorOutcomeEmitter: {emitOutcome: (...outcome) => outcomes.push(outcome)},
-    ...(learnerJoin ? {joinMessageGroupReplicaAsLearner: joinAsLearner} : {}),
+    ...(learnerJoin ? {joinMessageGroupReplicaAsLearner:
+      typeof learnerJoin === 'function' ? learnerJoin : joinAsLearner} : {}),
     createMessageGroupReplica: async (options) => {
       calls.push(['genesis-create', options]);
       return {created: true};

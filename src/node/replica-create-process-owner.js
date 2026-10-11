@@ -9,6 +9,15 @@ const SNAPSHOT_INSTALL_MUTATION_SYNC_ERROR =
 const ASYNC_FUNCTION_NAME = 'AsyncFunction';
 const CLOSED_ADMISSION_STATE = 'CLOSED';
 const CREATE_ADMISSION_DEFERRED = 'REPLICA_CREATE_ADMISSION_DEFERRED';
+// A caller's admission basis: exact columns it read that must still hold at
+// this owner's row check (the admission CAS, its advances and the install
+// commit). None by default, so the partition path is unchanged.
+const NO_ADMISSION_BASIS = Object.freeze({});
+
+function rowMatchesAdmissionBasis(row, basis) {
+  return Object.entries(basis).every(([column, value]) =>
+    (row?.[column] ?? null) === value);
+}
 
 function matchesPhysicalWorkerOwner(owner, evidence) {
   return evidence?.ownerIncarnation === owner.ownerIncarnation;
@@ -177,16 +186,28 @@ function snapshotReplicaCreateInstallAuthority(owner, claim,
   return replicaCreateInstallAuthority(evidence);
 }
 
-async function commitReplicaCreateSnapshotInstall(owner, claim, mutation) {
+async function commitReplicaCreateSnapshotInstall(owner, claim, mutation,
+  admissionBasis = NO_ADMISSION_BASIS) {
   if (!await revalidateReplicaCreatePhysicalWorker(owner, claim) ||
       typeof mutation !== 'function' ||
       mutation.constructor.name === ASYNC_FUNCTION_NAME) return false;
   const evidence = replicaCreatePhysicalWorkerEvidence(claim);
   const authority = replicaCreateInstallAuthority(evidence);
   if (!isReplicaCreateInstallAuthority(authority)) return false;
-  const row = await owner.readOperation(authority.operationId);
+  // The boot fence is read BEFORE the operation row, so the row read is the
+  // last await: the authority, this owner's incarnation and the caller's
+  // basis (a message-group learner's recorded fact, an open operation, the
+  // MATERIALIZED admission) are checked on it and the swap runs
+  // synchronously. The partition path shares this order. A newer boot acts on
+  // the admission only after its takeover rewrites the owner incarnation, so
+  // a takeover recorded while the row read is in flight is seen; a bare boot
+  // change leaves this effect the sole worker.
   await owner.requireCurrentBootIncarnation();
-  if (!rowMatchesSnapshotInstallAuthority(row, authority)) return false;
+  const row = await owner.readOperation(authority.operationId);
+  if (!rowMatchesSnapshotInstallAuthority(row, authority) ||
+      nullableSafeInteger(row?.create_admission_owner_incarnation) !==
+        owner.ownerIncarnation ||
+      !rowMatchesAdmissionBasis(row, admissionBasis)) return false;
   // No await is permitted after the authoritative read. Cleanup consults the
   // active claim, and rotation requires the exact row to have advanced.
   return runReplicaCreatePhysicalCommit(owner, claim, evidence, () => {
@@ -222,6 +243,7 @@ function hasReplicaCreatePhysicalWorkerForGeneration(owner, generation) {
 }
 
 export {
+  NO_ADMISSION_BASIS,
   advanceReplicaCreatePhysicalWorker,
   claimReplicaCreateDurablePhysicalWorker,
   claimReplicaCreatePhysicalWorker,
@@ -231,6 +253,7 @@ export {
   requireReplicaCreateRotationWorkerClaim,
   revalidateReplicaCreatePhysicalWorker,
   replicaCreatePhysicalWorkerEvidence,
+  rowMatchesAdmissionBasis,
   runReplicaCreatePhysicalCommit,
   runReplicaCreateExclusive,
   snapshotReplicaCreateInstallAuthority,

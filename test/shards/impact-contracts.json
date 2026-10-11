@@ -890,6 +890,28 @@
         "test/node/message-group-create-admission-recovery.test.js",
         "test/node/replica-create-admission-recovery.test.js"
       ]
+    },
+    "message-group-learner-join": {
+      "description": "A recorded message-group learner joins its existing group only through the learner-join capability composed from a host in the handler setup (no production root composes one): the leader replica's BOOTSTRAP-purpose committed membership names the exact learner and an origin-bearing raft-rs image is sealed at that configuration; the target refuses a present generation, binds the descriptor and the image to the recorded fact (exact group, cluster, learner, committed origin bytes; never older than the fact), installs through the CREATE admission owner whose commit re-requires the fact columns, an open operation and the MATERIALIZED admission on its authoritative row read, opens a MessageGroupService from the installed image alone (joining, elections deferred, durable-record bootstrap, never a founder) and answers RUNNING only after the group's current leader acknowledges it caught up. No CREATE_ACTIVE, services row, promotion or successor.",
+      "owners": [
+        "src/message-group/message-group-learner-join.js",
+        "src/message-group/message-group-learner-join-constants.js",
+        "src/message-group/message-group-service-state.js",
+        "src/message-group/message-group-consensus-port.js",
+        "src/bootstrap/shared/message-group-service-handler-setup.js",
+        "src/node/message-group-service-handler-create-admission.js",
+        "src/node/message-group-service-handler-constants.js",
+        "src/node/replica-create-admission-owner.js",
+        "src/node/replica-create-process-owner.js",
+        "src/raft/snapshot-install.js",
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js"
+      ],
+      "tests": [
+        "test/node/message-group-learner-join.test.js",
+        "test/node/message-group-service-handler-membership.test.js",
+        "test/node/message-group-create-admission-recovery.test.js",
+        "test/message-group/message-group-fresh-learner-snapshot.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1758,6 +1780,39 @@
         "test/node/message-group-service-handler-membership.test.js",
         "test/node/message-group-create-admission-recovery.test.js",
         "test/node/replica-create-admission-recovery.test.js"
+      ]
+    },
+    "message-group-learner-join": {
+      "description": "A recorded message-group learner joins its existing group only through the learner-join capability composed from a host in the handler setup (no production root composes one): the leader replica's BOOTSTRAP-purpose committed membership names the exact learner and an origin-bearing raft-rs image is sealed at that configuration; the target refuses a present generation, binds the descriptor and the image to the recorded fact (exact group, cluster, learner, committed origin bytes; never older than the fact), installs through the CREATE admission owner whose commit re-requires the fact columns, an open operation and the MATERIALIZED admission on its authoritative row read, opens a MessageGroupService from the installed image alone (joining, elections deferred, durable-record bootstrap, never a founder) and answers RUNNING only after the group's current leader acknowledges it caught up. No CREATE_ACTIVE, services row, promotion or successor.",
+      "endpoints": [
+        {
+          "id": "leader-join-descriptor-and-learner-open",
+          "owners": [
+            "src/message-group/message-group-learner-join.js",
+            "src/message-group/message-group-learner-join-constants.js",
+            "src/message-group/message-group-service-state.js",
+            "src/message-group/message-group-consensus-port.js",
+            "src/bootstrap/shared/message-group-service-handler-setup.js"
+          ]
+        },
+        {
+          "id": "fact-bound-install-and-admitted-worker",
+          "owners": [
+            "src/node/message-group-service-handler-create-admission.js",
+            "src/node/message-group-service-handler-constants.js",
+            "src/node/replica-create-admission-owner.js",
+            "src/node/replica-create-process-owner.js",
+            "src/raft/snapshot-install.js",
+            "src/rebalancer/replica-operation-message-group-membership-authorization.js"
+          ]
+        }
+      ],
+      "contract": "message-group-learner-join",
+      "witnessTests": [
+        "test/node/message-group-learner-join.test.js",
+        "test/node/message-group-service-handler-membership.test.js",
+        "test/node/message-group-create-admission-recovery.test.js",
+        "test/message-group/message-group-fresh-learner-snapshot.test.js"
       ]
     }
   }

@@ -33,6 +33,8 @@ import {
 } from './replica-create-admission-owner.js';
 import {buildMessageGroupCreateFailureOptions} from
   './message-group-create-activation.js';
+import {MESSAGE_GROUP_LEARNER_JOIN_OUTCOME as JOIN_OUTCOME} from
+  '../message-group/message-group-learner-join-constants.js';
 import {
   MESSAGE_GROUP_CREATE_REFUSAL as REFUSAL,
   MESSAGE_GROUP_JOIN_PACKAGE as JOIN_PACKAGE,
@@ -51,6 +53,11 @@ const FACT_NOT_RECORDED = Object.freeze({
 // The worker starts only for an operation still open at the MATERIALIZED
 // advance: a terminal settlement after admission leaves no physical work.
 const OPEN_OPERATION = Object.freeze({completed_at: null});
+// The learner's install commits only on a row that still holds the fact, an
+// open operation and this MATERIALIZED admission (slice B2): a REMOVE
+// selection or a terminal settlement after MATERIALIZED defeats it there.
+const MATERIALIZED_ADMISSION = Object.freeze({
+  create_admission_state: CREATE_ADMISSION_STATE.MATERIALIZED});
 
 /**
  * The handler's learner-CREATE dependencies: the learner-join capability the
@@ -155,6 +162,24 @@ async function fencedWorkerIsCurrent(handler, owner, claim, evidence) {
   }
 }
 
+// The learner-join answer's fields a log line carries.
+const LEARNER_JOIN_REPORT_FIELDS = Object.freeze(['outcome', 'leaderReplicaId', 'term',
+  'commitIndex', 'matchIndex']);
+
+// The learner-join capability's answer: RUNNING only after the group's
+// leader acknowledged the learner caught up. Neither answer is CREATE_ACTIVE:
+// a learner is no voter, so no success outcome or services row follows here.
+function reportLearnerJoin(handler, evidence, joined) {
+  const fields = {operationId: evidence.operationId, replicaId: evidence.replicaId,
+    nodeId: handler.nodeId, ...Object.fromEntries(LEARNER_JOIN_REPORT_FIELDS.map(
+      (field) => [field, joined?.[field] ?? null]))};
+  if (joined?.outcome === JOIN_OUTCOME.RUNNING) {
+    handler.logger.info(LOG.CREATE_LEARNER_RUNNING, fields);
+  } else {
+    handler.logger.warn(LOG.CREATE_LEARNER_NOT_RUNNING, fields);
+  }
+}
+
 async function runAdmittedWorker(handler, owner, worker) {
   const {claim, evidence, replicaOptions} = worker;
   const {operationId, replicaId} = evidence;
@@ -164,7 +189,8 @@ async function runAdmittedWorker(handler, owner, worker) {
         {operationId, replicaId, nodeId: handler.nodeId});
       return;
     }
-    await handler.joinMessageGroupReplicaAsLearner(replicaOptions);
+    reportLearnerJoin(handler, evidence,
+      await handler.joinMessageGroupReplicaAsLearner(replicaOptions));
   } catch (error) {
     handler.emitExecutorOutcome(
       EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_FAILED, operationId,
@@ -201,10 +227,13 @@ function learnerReplicaOptions(handler, owner, admitted) {
     createAdmissionOwner: owner,
     createAdmissionEvidence: evidence,
     createPhysicalWorkerClaim: claim,
+    createAdmissionBasis: Object.freeze({...basis.where, ...OPEN_OPERATION,
+      ...MATERIALIZED_ADMISSION}),
     messageGroupLearnerJoin: Object.freeze({
       identity: basis.identity,
       learnerStamp: basis.learnerStamp,
       committedPermit: basis.committedPermit,
+      learnerOrigin: basis.learnerOrigin,
       joinPackage,
     }),
   });

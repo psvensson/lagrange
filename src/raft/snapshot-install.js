@@ -490,12 +490,17 @@ function swapPreparedInstall(checkpointsRoot, replicaDbPath, marker,
   return true;
 }
 
+// A fresh-create image commits only through the CREATE admission owner: the
+// swap runs on that owner's authoritative operation-row read, which also
+// re-requires the caller's admission basis (options.createAdmissionBasis, the
+// columns a message-group learner's recorded fact and open admission hold).
 async function commitPreparedInstall(options, marker, raftRsImage) {
   const swap = (authority = null) => swapPreparedInstall(
     options.checkpointsRoot, options.replicaDbPath, marker, raftRsImage,
     authority);
   return raftRsImage ? options.createAdmissionOwner.commitSnapshotInstall(
-    options.createPhysicalWorkerClaim, swap) : swap();
+    options.createPhysicalWorkerClaim, swap, options.createAdmissionBasis) :
+    swap();
 }
 
 /**

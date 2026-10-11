@@ -51,6 +51,10 @@ const MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG = Object.freeze({
     'Message-group learner CREATE admitted one physical worker',
   CREATE_LEARNER_WORKER_FENCED:
     'Admitted message-group worker lost its boot before the physical call',
+  CREATE_LEARNER_RUNNING:
+    'Message-group learner joined and acknowledged caught up by the group leader',
+  CREATE_LEARNER_NOT_RUNNING:
+    'Message-group learner join answered without a running learner',
 });
 
 const MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG = Object.freeze({

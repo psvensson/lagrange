@@ -54,16 +54,33 @@ function filesMatching(pattern, {outsideRaft = false} = {}) {
 }
 
 test('T7: the committed-membership read has exactly three callers outside ' +
-  'src/raft - the bootstrap read, the REPLACE completion witness and a ' +
-  'message group\'s witness read of its own configuration', () => {
+  'src/raft - the bootstrap read, the REPLACE completion witness and the ' +
+  'message-group consensus port\'s one reader of any purpose', () => {
   assert.deepEqual(filesMatching(
     /RAFT_OPERATION\.READ_COMMITTED_MEMBERSHIP|\.readCommittedMembership\(/u,
     {outsideRaft: true}), [
     // R3: a message-group replica reads its applied ConfState only through
-    // its own port's witness read.
+    // its own port's witness read. FreshMG B2: the same one reader serves a
+    // leader replica's BOOTSTRAP-purpose answer to the learner-join
+    // descriptor producer, and a joining learner's witness of itself.
     'src/message-group/message-group-consensus-port.js',
     'src/node/replica-handler-committed-membership-methods.js',
     'src/partition/partition-service-raft-membership-administration.js',
+  ]);
+});
+
+test('T7: the BOOTSTRAP purpose (leader only, never joint, identities ' +
+  'resolved) has exactly two askers outside src/raft', () => {
+  // The message-group reader takes any purpose, so the reader census above
+  // cannot see a new BOOTSTRAP asker behind it; a third asker turns this red.
+  assert.deepEqual(filesMatching(
+    /COMMITTED_MEMBERSHIP_READ_PURPOSE\.BOOTSTRAP\b|\bpurpose:\s*['"`]bootstrap['"`]/u,
+    {outsideRaft: true}), [
+    // FreshMG B2: the learner-join descriptor producer on the group leader.
+    'src/message-group/message-group-learner-join.js',
+    // The remote read's handler: a hosted partition replica answers the
+    // bootstrap read (or the retirement read) of its group.
+    'src/node/replica-handler-committed-membership-methods.js',
   ]);
 });
 
@@ -85,7 +102,13 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
   'and the GENESIS founding sets of the provisioner and the seed', () => {
   assert.deepEqual(filesMatching(/\bcommittedStampOfAnswer\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
-  ['src/rebalancer/committed-membership-bootstrap-read.js']);
+  [
+    // FreshMG B2: a fresh message-group learner's join descriptor is its
+    // group leader's COMMITTED answer, re-validated by the target, and the
+    // learner and the acknowledging leader are judged on committed answers.
+    'src/message-group/message-group-learner-join.js',
+    'src/rebalancer/committed-membership-bootstrap-read.js',
+  ]);
   assert.deepEqual(filesMatching(/\bgenesisStamp\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
   [
@@ -104,6 +127,9 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
   [
     'src/bootstrap/shared/durable-rejoin-partition-restore-planner.js',
+    // FreshMG B2: a fresh message-group learner opens from its installed
+    // image alone (a snapshot-install replacement of a fresh identity).
+    'src/message-group/message-group-learner-join.js',
     // V1a: a snapshot install's replacement reopens from its record.
     'src/raft/snapshot-catchup.js',
   ],
@@ -117,6 +143,10 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     /BOOTSTRAP_MEMBERSHIP\b|\bbootstrapMembership\b|bootstrap_membership/u), [
     // Producers.
     'src/message-group/message-group-consensus-port.js',
+    // FreshMG B2: a fresh learner's durable-record bootstrap, handed by the
+    // learner-join capability to the replica, which carries it to its port.
+    'src/message-group/message-group-learner-join.js',
+    'src/message-group/message-group-service-state.js',
     // R4: the WASM service replica's genesis founding set (see above).
     'src/wasm-service/wasm-service-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',

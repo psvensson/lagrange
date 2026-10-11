@@ -532,10 +532,12 @@ const RECORDED_LEARNER_FACT_COLUMNS = Object.freeze([
   ['message_group_removal_stamp', 'messageGroupRemovalStamp']]);
 /** Current CREATE consumes the recorded fact like a new branch selection: the
  * shared predicate first, then the still-outstanding UNKNOWN obligation. The
- * answer is the decoded identity, the recorded stamp and permit, and the
- * fact's exact membership columns as the basis the CREATE admission CAS and
- * its MATERIALIZED advance repeat, so a later phase (a REMOVE selection)
- * defeats them. Null when the row carries no such fact. Pure; not a grant. */
+ * answer is the decoded identity, the recorded stamp and permit, the fact's
+ * exact membership columns as the basis the CREATE admission CAS, its
+ * MATERIALIZED advance and the learner install repeat, so a later phase (a
+ * REMOVE selection) defeats them, and the exact committed origin bytes the
+ * native ADD_LEARNER left (recordedLearnerOrigin). Null when the row carries
+ * no such fact. Pure; not a grant. */
 function recordedLearnerCreateBasis(row) {
   const identity = decodeMembershipIdentity(row?.messageGroupMembershipIdentity);
   if (!identity || !recordedLearnerFactIsValid(row, identity, row.messageGroupMembershipIdentity) ||
@@ -543,6 +545,20 @@ function recordedLearnerCreateBasis(row) {
   const where = Object.freeze(Object.fromEntries(
     RECORDED_LEARNER_FACT_COLUMNS.map(([column, field]) => [column, row[field]])));
   return Object.freeze({identity, where,
-    learnerStamp: row.messageGroupLearnerStamp, committedPermit: row.messageGroupMembershipPermit});
+    learnerStamp: row.messageGroupLearnerStamp, committedPermit: row.messageGroupMembershipPermit,
+    learnerOrigin: recordedLearnerOrigin(identity,
+      decodeMembershipPermit(row.messageGroupMembershipPermit))});
 }
 export {recordedLearnerCreateBasis};
+
+/** The exact committed origin of a recorded learner, in the native owner's own
+ * encoding: the recorder records a permit only when the original action's
+ * origin matched this action at its proposal index and leader term
+ * (originalLearnerOriginMatches, committedLearnerPermit), so every replica that
+ * applied the ADD_LEARNER, and every image sealed after it, carries exactly
+ * these bytes beside the learner's reservation. Pure. */
+function recordedLearnerOrigin(identity, permit) {
+  const action = learnerOutcomeQuery({operationId: identity.operationId, identity, permit}).action;
+  return encodeCommittedLearnerAdmission({groupId: identity.groupId,
+    index: String(permit.proposalIndex), term: String(permit.leaderTerm), context: action});
+}

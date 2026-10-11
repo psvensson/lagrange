@@ -95,9 +95,10 @@ function messageGroupConsensusRequest(service) {
     [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: service.unifiedAddress,
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: service.replicaIds,
     // The founders a replica without a durable record opens from; a
-    // replica with one reopens from that record alone.
+    // replica with one reopens from that record alone. A replica handed its
+    // own bootstrap (a fresh learner: its installed image only) opens from it.
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
-      genesisStamp(service.replicaIds),
+      service.bootstrapMembership ?? genesisStamp(service.replicaIds),
     // A replica that joins an existing group under that stamp holds no
     // founder's history: with no record it is refused (O4).
     [RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP]:
@@ -186,17 +187,22 @@ async function leadLoneMessageGroup(service) {
 
 /**
  * This replica's own committed configuration, read through its port's one
- * committed-membership read (a witness read: what this replica applied,
- * whether it leads or not).
- * @param {Object} service - The message-group replica.
+ * committed-membership read: by default a witness read (what this replica
+ * applied, whether it leads or not); the BOOTSTRAP purpose asks a replica
+ * that leads for the configuration a new learner joins (the native owner
+ * refuses it anywhere but on the leader, for a joint configuration and for
+ * an unreserved identity).
+ * @param {Object} service - The message-group replica ({raft}).
+ * @param {string} [purpose] - A COMMITTED_MEMBERSHIP_READ_PURPOSE.
  * @return {Object} The port's frozen COMMITTED or REFUSED answer.
  */
-function readMessageGroupCommittedMembership(service) {
+function readMessageGroupCommittedMembership(service,
+  purpose = COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS) {
   const read = service.raft?.[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP];
   if (typeof read !== 'function') {
     return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.NOT_HOSTED);
   }
-  return read({purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS});
+  return read({purpose});
 }
 
 /**

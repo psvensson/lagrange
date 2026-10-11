@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 306,
+    "bootstrap-membership": 307,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2328,
-  "digest": "fnv1a32-38ad11d6",
+  "censusSize": 2329,
+  "digest": "fnv1a32-581cf2c0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fe23ba38",
+  "observationDigest": "fnv1a32-ae48ccc8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1150,6 +1150,7 @@
     "test/node/local-only-reconcile-activation-boundary.test.js": "bootstrap-membership",
     "test/node/message-group-create-admission-recovery.test.js": "bootstrap-membership",
     "test/node/message-group-executor-activation-handler-boundary.test.js": "bootstrap-membership",
+    "test/node/message-group-learner-join.test.js": "bootstrap-membership",
     "test/node/message-group-registration-redrive-owner.test.js": "bootstrap-membership",
     "test/node/message-group-service-handler-membership.test.js": "bootstrap-membership",
     "test/node/message-group-service-handler.test.js": "bootstrap-membership",
@@ -8081,6 +8082,32 @@
         "src/rebalancer/executor-outcome-constants.js"
       ]
     },
+    "test/node/message-group-learner-join.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-service-handler-setup.js",
+        "src/message-group/message-group-consensus-port.js",
+        "src/message-group/message-group-learner-join.js",
+        "src/node/message-group-service-handler.js",
+        "src/node/replica-create-admission-evidence.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-committed-membership-context.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-checkpoint-constants.js",
+        "src/raft/snapshot-install-constants.js",
+        "src/raft/snapshot-transfer.js",
+        "src/rebalancer/replica-create-admission-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit.js",
+        "test/test-helpers/learner-operation-fixture.js",
+        "test/test-helpers/message-group-create-fixture.js",
+        "test/test-helpers/message-group-learner-join-fixture.js"
+      ]
+    },
     "test/node/message-group-registration-redrive-owner.test.js": {
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
@@ -9485,6 +9512,8 @@
         "src/constants/fields.js",
         "src/control-plane/replica-dispatch-readiness-capture.js",
         "src/message-group/message-group-consensus-port.js",
+        "src/message-group/message-group-learner-join.js",
+        "src/message-group/message-group-service-state.js",
         "src/node/replica-handler-committed-membership-methods.js",
         "src/node/replica-handler-create-admission-methods.js",
         "src/node/replica-handler-create-methods.js",

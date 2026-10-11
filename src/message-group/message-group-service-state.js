@@ -307,6 +307,12 @@ class MessageGroupService extends EventEmitter {
     // it opened: the port steps nothing until the durable row write releases
     // this (the identity-record window, verifier N3 / F1).
     this.identityRecorded = options.identityRecorded ?? null;
+    // What the port opens the group from when this replica holds no durable
+    // record: unsupplied (undefined), the GENESIS stamp of the hint list (a
+    // founder); a fresh learner joins from its installed image alone (the
+    // durable-record bootstrap), so without that image it is refused, never
+    // founded. The consensus request decides between the two.
+    this.bootstrapMembership = options.bootstrapMembership;
     this.deferElectionUntilJoinConvergence =
       options.deferElectionUntilJoinConvergence === true;
     this.deferElection =
