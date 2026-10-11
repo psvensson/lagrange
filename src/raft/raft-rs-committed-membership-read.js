@@ -25,8 +25,9 @@ import {
   RAFT_RS_LEARNER_ORIGIN_COVERAGE,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
 } from './raft-rs-peer-identity-constants.js';
-import {INVALID_COMMITTED_LEARNER_ADMISSION,
-  canonicalMembershipActionContext, decodeCommittedLearnerAdmission} from
+import {INVALID_COMMITTED_LEARNER_ADMISSION, INVALID_COMMITTED_PROMOTION_ADMISSION,
+  canonicalMembershipActionContext, decodeCommittedLearnerAdmission,
+  decodeCommittedPromotionAdmission} from
   './raft-rs-committed-membership-context.js';
 import {ROLE_LEADER} from './raft-rs-runtime-owner-constants.js';
 
@@ -234,23 +235,24 @@ function promotionTargetView(group, status, action) {
   return {voter,
     learner: resolved && !voter && sortedIds(confState.learners).includes(action.peerId)};
 }
-// The target's retained learner origin is this transition's learner action,
-// earlier in the transition than the queried promotion attempt.
-function learnerOriginBindsPromotion(origin, query) {
-  const {context} = origin;
-  const action = query.action;
-  return origin.groupId === query.groupId && context.operationId === action.operationId &&
-    context.transitionIdentity === action.transitionIdentity &&
-    context.replicaIdentity === action.replicaIdentity && context.peerId === action.peerId &&
-    context.permitSequence < action.permitSequence;
+function promotionFactRefusal(fact, origin, encodedOrigin, query, status) {
+  if (fact === INVALID_COMMITTED_PROMOTION_ADMISSION || origin === null ||
+      encodedOrigin !== fact.learnerAdmission) return ACTION_REASON.CORRUPT;
+  if (fact.groupId !== query.groupId || Object.keys(query.action).some((key) =>
+    fact.context[key] !== query.action[key])) return ACTION_REASON.MISMATCH;
+  if (BigInt(fact.index) > BigInt(status.appliedIndex) ||
+      BigInt(fact.index) > BigInt(status.commitIndex) ||
+      BigInt(fact.index) > BigInt(status.membershipGenerationIndex) ||
+      BigInt(fact.term) > BigInt(status.term)) return ACTION_REASON.BEYOND_APPLIED;
+  return null;
 }
 // The transition's PROMOTE (FreshMG 6.C slice C2) has committed at this
 // replica when its applied configuration names the target a voter. A promotion
-// retains no origin of its own: the receipt is the target's learner origin,
-// which binds the voter to this transition's fresh learner; which attempt of
-// the promotion committed is the operation owner's (one in-flight attempt per
-// transition, the ordered successor rule). A replica holding the target as a
-// learner vouches that no promotion of it is in its applied history: a
+// retains one immutable apply-owned fact beside the target's learner origin.
+// The fact binds the voter to this transition's fresh learner and identifies
+// the exact committed attempt and historical configuration. A replica holding
+// the target as a learner with no fact vouches that no promotion of it is in
+// its applied history: a
 // committed promotion makes it a voter, and only the transition's later
 // branches, which wait for the promotion's recorded outcome, change that. A
 // target held otherwise (absent, unresolved, a voter without that origin)
@@ -262,13 +264,19 @@ function answerCommittedPromotionAction(group, status, query) {
   if (origin === INVALID_COMMITTED_LEARNER_ADMISSION) {
     return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.CORRUPT);
   }
-  const view = promotionTargetView(group, status, query.action);
-  if (view.voter && origin !== null && learnerOriginBindsPromotion(origin, query)) {
+  const encodedFact = group.readPromotionAdmission(query.action.replicaIdentity);
+  if (encodedFact !== null) {
+    const fact = decodeCommittedPromotionAdmission(encodedFact);
+    const refusal = promotionFactRefusal(fact, origin, evidence.encoded, query, status);
+    if (refusal !== null) return learnerActionAnswer(ACTION_KIND.REFUSED, refusal);
     return learnerActionAnswer(ACTION_KIND.COMMITTED, ACTION_REASON.APPLIED,
-      {receipt: origin, observedAppliedIndex: status.appliedIndex,
+      {receipt: origin, promotionFact: fact, observedAppliedIndex: status.appliedIndex,
         membership: answerCommittedMembership(group, status,
           COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS)});
   }
+  const view = promotionTargetView(group, status, query.action);
+  // A current voter without its immutable apply-owned promotion fact proves
+  // neither which attempt committed nor its historical configuration.
   return learnerActionAnswer(ACTION_KIND.UNRESOLVED, ACTION_REASON.NOT_RECORDED,
     {observation: absenceObservation(status, view.learner)});
 }

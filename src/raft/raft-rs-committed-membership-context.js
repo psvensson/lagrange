@@ -4,6 +4,7 @@ import {
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
 } from './raft-operation-port-constants.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
+import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 import {deriveRaftRsPeerId} from './raft-rs-peer-identity.js';
 
 const CONTEXT_ENCODING = 'base64';
@@ -238,12 +239,171 @@ function learnerAdmissionMatchesReservation(encoded, reservation, boundary) {
     BigInt(origin.term) <= BigInt(boundary.appliedTerm);
 }
 
+const PROMOTION_FACT_VERSION = 1;
+const PROMOTION_FACT_KEYS = Object.freeze([
+  'version', 'groupId', 'index', 'term', 'context', 'learnerAdmission', 'before', 'after']);
+const PROMOTION_BEFORE_KEYS = Object.freeze([
+  'configurationKey', 'membershipGenerationIndex']);
+const PROMOTION_AFTER_KEYS = Object.freeze([
+  'voters', 'votersOutgoing', 'learners', 'learnersNext',
+  'configurationKey', 'membershipGenerationIndex']);
+const INVALID_COMMITTED_PROMOTION_ADMISSION = Object.freeze({kind: 'invalid-promotion-fact'});
+const PROMOTION_FACT_ERROR = 'invalid committed promotion fact';
+
+function exactRecord(value, keys) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) ||
+      learnerIsProxy(value)) return false;
+  const descriptors = learnerOwnDescriptors(value);
+  const ownKeys = learnerOwnKeys(descriptors);
+  return ownKeys.length === keys.length && keys.every((key) => {
+    const descriptor = descriptors[key];
+    return descriptor && Object.hasOwn(descriptor, LEARNER_CONTEXT_DATA_VALUE) &&
+      descriptor.enumerable === true;
+  });
+}
+
+function canonicalPeerIds(value) {
+  if (!Array.isArray(value) || learnerIsProxy(value)) throw new Error(PROMOTION_FACT_ERROR);
+  const ids = value.map((peerId) => {
+    if (typeof peerId !== 'string' || !/^[1-9][0-9]*$/.test(peerId)) {
+      throw new Error(PROMOTION_FACT_ERROR);
+    }
+    return peerId;
+  });
+  if (new Set(ids).size !== ids.length) throw new Error(PROMOTION_FACT_ERROR);
+  const ordered = [...ids].sort((left, right) =>
+    left.length - right.length || left.localeCompare(right));
+  if (ordered.some((peerId, index) => peerId !== ids[index])) {
+    throw new Error(PROMOTION_FACT_ERROR);
+  }
+  return Object.freeze(ordered);
+}
+
+function canonicalPromotionBoundary(value, keys, roles = false) {
+  if (!exactRecord(value, keys) || typeof value.configurationKey !== 'string' ||
+      !positiveDecimal(value.membershipGenerationIndex)) {
+    throw new Error(PROMOTION_FACT_ERROR);
+  }
+  if (!roles) {
+    return Object.freeze({configurationKey: value.configurationKey,
+      membershipGenerationIndex: value.membershipGenerationIndex});
+  }
+  const voters = canonicalPeerIds(value.voters);
+  const votersOutgoing = canonicalPeerIds(value.votersOutgoing);
+  const learners = canonicalPeerIds(value.learners);
+  const learnersNext = canonicalPeerIds(value.learnersNext);
+  const confState = {voters, votersOutgoing, learners, learnersNext, autoLeave: false};
+  if (voters.length === 0 || votersOutgoing.length !== 0 || learnersNext.length !== 0 ||
+      new Set([...voters, ...learners]).size !== voters.length + learners.length ||
+      raftRsConfStateKey(confState) !== value.configurationKey) {
+    throw new Error(PROMOTION_FACT_ERROR);
+  }
+  return Object.freeze({voters, votersOutgoing, learners, learnersNext,
+    configurationKey: value.configurationKey,
+    membershipGenerationIndex: value.membershipGenerationIndex});
+}
+
+function samePeers(left, right) {
+  return left.length === right.length && left.every((peer, index) => peer === right[index]);
+}
+
+function promotionOriginMatches(fact, learnerOrigin) {
+  return learnerOrigin.groupId === fact.groupId &&
+    learnerOrigin.context.operationId === fact.context.operationId &&
+    learnerOrigin.context.transitionIdentity === fact.context.transitionIdentity &&
+    learnerOrigin.context.replicaIdentity === fact.context.replicaIdentity &&
+    learnerOrigin.context.peerId === fact.context.peerId &&
+    learnerOrigin.context.permitSequence < fact.context.permitSequence;
+}
+
+function promotionChronologyIsValid(fact, learnerOrigin) {
+  return BigInt(learnerOrigin.index) <= BigInt(fact.before.membershipGenerationIndex) &&
+    BigInt(learnerOrigin.term) <= BigInt(fact.term) &&
+    BigInt(fact.before.membershipGenerationIndex) < BigInt(fact.index) &&
+    fact.after.membershipGenerationIndex === fact.index;
+}
+
+function validatePromotionDelta(fact, learnerOrigin) {
+  const target = fact.context.peerId;
+  const before = fact.before;
+  const after = fact.after;
+  if (fact.context.stage !== RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE ||
+      !promotionOriginMatches(fact, learnerOrigin) ||
+      !promotionChronologyIsValid(fact, learnerOrigin) ||
+      !after.voters.includes(target) || after.learners.includes(target) ||
+      before.configurationKey === after.configurationKey) {
+    throw new Error(PROMOTION_FACT_ERROR);
+  }
+  const reversedVoters = after.voters.filter((peer) => peer !== target);
+  const reversedLearners = [...after.learners, target].sort((left, right) =>
+    left.length - right.length || left.localeCompare(right));
+  if (raftRsConfStateKey({voters: reversedVoters, votersOutgoing: [],
+    learners: reversedLearners, learnersNext: [], autoLeave: false}) !==
+      before.configurationKey ||
+      !samePeers(after.voters, [...reversedVoters, target].sort((left, right) =>
+        left.length - right.length || left.localeCompare(right)))) {
+    throw new Error(PROMOTION_FACT_ERROR);
+  }
+}
+
+function canonicalPromotionFact(value) {
+  if (!exactRecord(value, PROMOTION_FACT_KEYS) || value.version !== PROMOTION_FACT_VERSION ||
+      typeof value.groupId !== 'string' || value.groupId.length === 0 ||
+      !positiveDecimal(value.index) || !positiveDecimal(value.term) ||
+      typeof value.learnerAdmission !== 'string') {
+    throw new Error(PROMOTION_FACT_ERROR);
+  }
+  const context = canonicalMembershipActionContext(value.context);
+  const learnerOrigin = decodeCommittedLearnerAdmission(value.learnerAdmission);
+  if (learnerOrigin === INVALID_COMMITTED_LEARNER_ADMISSION) {
+    throw new Error(PROMOTION_FACT_ERROR);
+  }
+  const fact = Object.freeze({version: PROMOTION_FACT_VERSION,
+    groupId: value.groupId, index: value.index, term: value.term, context,
+    learnerAdmission: value.learnerAdmission,
+    before: canonicalPromotionBoundary(value.before, PROMOTION_BEFORE_KEYS),
+    after: canonicalPromotionBoundary(value.after, PROMOTION_AFTER_KEYS, true)});
+  validatePromotionDelta(fact, learnerOrigin);
+  return fact;
+}
+
+function encodeCommittedPromotionAdmission(value) {
+  return JSON.stringify(canonicalPromotionFact(value));
+}
+
+function decodeCommittedPromotionAdmission(encoded) {
+  try {
+    const value = canonicalPromotionFact(JSON.parse(encoded));
+    return encodeCommittedPromotionAdmission(value) === encoded ? value :
+      INVALID_COMMITTED_PROMOTION_ADMISSION;
+  } catch {
+    return INVALID_COMMITTED_PROMOTION_ADMISSION;
+  }
+}
+
+function promotionAdmissionMatchesReservation(encoded, reservation, boundary) {
+  if (encoded === undefined) return true;
+  const fact = decodeCommittedPromotionAdmission(encoded);
+  return fact !== INVALID_COMMITTED_PROMOTION_ADMISSION &&
+    fact.groupId === boundary.groupId &&
+    fact.context.replicaIdentity === reservation.replicaIdentity &&
+    fact.context.peerId === reservation.peerId &&
+    fact.learnerAdmission === reservation.learnerAdmission &&
+    BigInt(fact.index) <= BigInt(boundary.membershipGenerationIndex) &&
+    BigInt(fact.index) <= BigInt(boundary.appliedIndex) &&
+    BigInt(fact.term) <= BigInt(boundary.appliedTerm);
+}
+
 export {
   INVALID_COMMITTED_LEARNER_ADMISSION,
+  INVALID_COMMITTED_PROMOTION_ADMISSION,
   canonicalMembershipActionContext,
   encodeCommittedLearnerAdmission,
   decodeCommittedLearnerAdmission,
+  decodeCommittedPromotionAdmission,
+  encodeCommittedPromotionAdmission,
   learnerAdmissionMatchesReservation,
+  promotionAdmissionMatchesReservation,
   COMMITTED_MEMBERSHIP_CONTEXT_ERROR,
   committedMembershipChangeType,
   committedMembershipContext,
