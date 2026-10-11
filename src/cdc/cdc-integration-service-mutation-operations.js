@@ -2,6 +2,10 @@ import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.j
 import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
 import {hydrateCdcPropagatedTablesFromAuthority} from
   './cdc-integration-service-authoritative-catchup.js';
+import {acquireWitnessedCdcSourceScope, acquireWitnessedCdcSourceScopes} from
+  './cdc-source-scope-reconciliation.js';
+import {reconcileCompleteCdcCoverage} from
+  './cdc-complete-coverage-reconcile.js';
 
 // Import delete and upsert mutation helpers
 import {
@@ -74,6 +78,18 @@ const CDC_INTEGRATION_SERVICE_MUTATION_OPERATIONS_CONSTRUCTOR = 'constructor';
  * statistics/primary-key accessors.
  */
 class CDCIntegrationServiceMutationOperations {
+  acquireWitnessedCdcSourceScope(request = {}) {
+    return acquireWitnessedCdcSourceScope(this, request);
+  }
+
+  acquireWitnessedCdcSourceScopes(request = {}) {
+    return acquireWitnessedCdcSourceScopes(this, request);
+  }
+
+  reconcileCompleteCdcCoverage(request = {}) {
+    return reconcileCompleteCdcCoverage(this, request);
+  }
+
   /**
    * Catch-up hydration of all CDC-propagated tables from the authoritative
    * owner path (CL-014: closes the bootstrap-snapshot ->

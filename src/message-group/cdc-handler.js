@@ -16,6 +16,12 @@ import {
 } from '../cache/system-cache-key-descriptor.js';
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {buildEventIdentity} from '../partition/cdc-event-buffer.js';
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {
+  CDC_SOURCE_ORDER,
+  applyOrderedCdcSourceEvent,
+} from '../cache/system-table-cache-cdc-source-order.js';
 
 const LOCAL_STR_CDCHANDLER_REQUIRES_A_SYSTEMTABLECACHE = 'CDCHandler requires a SystemTableCache';
 const LOCAL_NUM_ONE_HUNDRED = 100;
@@ -61,6 +67,7 @@ class CDCEvent {
     sourcePartition = null,
     causeId = null,
     receivedAtMs = undefined,
+    identity = {},
   ) {
     this.tableName = tableName;
     this.operation = operation;
@@ -68,6 +75,9 @@ class CDCEvent {
     this.timestamp = timestamp;
     this.sourcePartition = sourcePartition;
     this.causeId = causeId;
+    Object.assign(this, copyCdcEventMetadata({
+      ...identity, timestamp, sourcePartition, causeId,
+    }));
     this.receivedAt =
       Number.isFinite(receivedAtMs) ? receivedAtMs : Date.now();
   }
@@ -258,6 +268,7 @@ class CDCHandler extends EventEmitter {
         event.sourcePartition,
         event.causeId,
         this.timeSource.now(),
+        event,
       );
 
     const {tableName} = cdcEvent;
@@ -318,6 +329,7 @@ class CDCHandler extends EventEmitter {
         event.sourcePartition,
         event.causeId,
         this.timeSource.now(),
+        event,
       );
 
     const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
@@ -476,12 +488,25 @@ class CDCHandler extends EventEmitter {
     }
 
     try {
+      const sourceOrder = applyOrderedCdcSourceEvent(this.cache, event, {
+        causeId, cdcObservedAtMs: receivedAt,
+      });
+      if ([CDC_SOURCE_ORDER.BACKPRESSURE, CDC_SOURCE_ORDER.CONFLICT,
+        CDC_SOURCE_ORDER.PROVENANCE_INVALID].includes(sourceOrder.state)) {
+        const error = new Error(
+          `CDC source ordering refused event: ${sourceOrder.state}`);
+        error.code = sourceOrder.state;
+        error.retryAfterMs = sourceOrder.retryAfterMs;
+        throw error;
+      }
+      const sourceNoop = sourceOrder.state === CDC_SOURCE_ORDER.COVERED ||
+        sourceOrder.state === CDC_SOURCE_ORDER.STALE;
       // Canonical CDC apply path: all steady-state cache mutations flow here.
       // See architecture.md: Sanctioned direct applySystemTableChange call sites.
-      this.cache.applySystemTableChange(tableName, operation, data, {
-        causeId,
-        cdcObservedAtMs: receivedAt,
-      });
+      if (!sourceNoop && sourceOrder.state === CDC_SOURCE_ORDER.LEGACY) {
+        this.cache.applySystemTableChange(tableName, operation, data, {
+          causeId, cdcObservedAtMs: receivedAt});
+      }
 
       // Track successful delivery to cache
       if (this.cdcPipelineMetrics) {
@@ -621,6 +646,9 @@ class CDCHandler extends EventEmitter {
    * @private
    */
   generateEventId(event) {
+    if (Object.hasOwn(event, 'eventKey')) {
+      return buildEventIdentity(event);
+    }
     return `${event.tableName}:${event.operation}:${event.getKey()}:${event.timestamp}`;
   }
 

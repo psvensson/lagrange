@@ -30,14 +30,29 @@ import {
   pickTypedWriteAnswer,
 } from './partition-write-kernel.js';
 import {runCommittedPartitionStatement} from './partition-statement-admission.js';
-import {advancePartitionWriteGeneration, isPartitionReserved} from
+import {advancePartitionWriteGeneration, isPartitionReserved, readPartitionWriteOrigin} from
   './partition-participant-transaction-store.js';
+import {assertTransactionSchemaWriteEnforced, coordinatorTableSchemaRefusal} from
+  '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
   './partition-participant-transaction-apply.js';
+import {requestCoordinatorSettlement, applyCoordinatorSettlement} from
+  './partition-coordinator-settlement.js';
+import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
+import {ensureSqlTransactionsDecisionColumns} from
+  './partition-coordinator-table-columns.js';
 import {answerParticipantSessionQuery, routeParticipantTransactionRequest} from
   './partition-participant-transaction-request.js';
+import {
+  applyCdcAcknowledgementCommand,
+  isCdcCommandType,
+  recordCommittedStatementCdc,
+} from './partition-cdc-obligation.js';
 import {QUERY_RESULT_REQUEST_FIELD} from '../query/query-result-budget.js';
 import {findParticipantSession} from './partition-participant-transaction-session.js';
+import {CDC_COVERAGE_QUERY_FIELD, CDC_COVERAGE_REQUEST_MODE,
+  CDC_COVERAGE_RESPONSE_STATE} from '../cdc/cdc-coverage-protocol.js';
+import {CDC_COVERAGE_REFUSAL} from './partition-cdc-source-coverage.js';
 const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
   OBSERVED: 'observed',
@@ -46,6 +61,25 @@ const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
 });
+
+function invalidCdcCoverageRequest(partitionId) {
+  return {acknowledged: true, success: false,
+    state: CDC_COVERAGE_RESPONSE_STATE.REFUSED,
+    reason: CDC_COVERAGE_REFUSAL.IDENTITY_INVALID,
+    deferRetry: false, partitionId};
+}
+
+function cdcCoverageResponse(coverage, partitionId, readAuthorityWitness) {
+  const successfulStates = new Set([
+    CDC_COVERAGE_RESPONSE_STATE.CANCELLED,
+    CDC_COVERAGE_RESPONSE_STATE.CHUNK,
+    CDC_COVERAGE_RESPONSE_STATE.COMPLETE,
+    CDC_COVERAGE_RESPONSE_STATE.OFFER,
+  ]);
+  return {acknowledged: true,
+    success: successfulStates.has(coverage?.state),
+    ...coverage, partitionId, readAuthorityWitness};
+}
 
 const {
   ERRORS,
@@ -244,6 +278,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         {tableName: this.tableName, partitionId: this.partitionId},
       );
     }
+    // The coordinator's insert-once decision record (TX1 seam C): the
+    // participant vocabulary names the columns and their DDL.
+    ensureSqlTransactionsDecisionColumns(this);
   }
   /**
    * Handle incoming transport message.
@@ -315,7 +352,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     if (!servingRequest || this.removalServingAdmissionFenced !== true) {
       return {allowed: true, servingRequest};
     }
-    if (payload.type === PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION) {
+    if (payload.type === PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION ||
+        payload.type === COORDINATOR_SETTLEMENT_TYPE) {
       return {allowed: true, servingRequest};
     }
     const sessionId =
@@ -339,6 +377,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     case PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE:
     case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
     case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
+    case COORDINATOR_SETTLEMENT_TYPE:
       return true;
     default:
       return false;
@@ -369,6 +408,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       return this.handleRemoteQuery(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
       return this.handleTransactionMessage(payload);
+    case COORDINATOR_SETTLEMENT_TYPE:
+      return requestCoordinatorSettlement(this, payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION:
       return this.handleStartSplitReplication(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION:
@@ -691,6 +732,42 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       };
     }
     const isWriteOperation = this.isWriteQuery(sql);
+    if (payload[CDC_COVERAGE_QUERY_FIELD.COMPLETE] === true) {
+      const expectedSql = `SELECT * FROM ${this.tableName}`;
+      const requestedCoverageMode =
+        payload[CDC_COVERAGE_QUERY_FIELD.MODE] ??
+        CDC_COVERAGE_REQUEST_MODE.PAGE;
+      const validCoverageRequest = !isWriteOperation && sql === expectedSql &&
+        Array.isArray(params) && params.length === 0 &&
+        Object.values(CDC_COVERAGE_REQUEST_MODE).includes(
+          requestedCoverageMode) &&
+        typeof payload[CDC_COVERAGE_QUERY_FIELD.EXPECTED_SCOPE_ID] ===
+          'string' &&
+        payload[CDC_COVERAGE_QUERY_FIELD.EXPECTED_SCOPE_ID].length > 0;
+      if (!validCoverageRequest) {
+        return invalidCdcCoverageRequest(this.partitionId);
+      }
+      const coverageOptions = {
+        expectedScopeId:
+          payload[CDC_COVERAGE_QUERY_FIELD.EXPECTED_SCOPE_ID],
+        pageStart: payload[CDC_COVERAGE_QUERY_FIELD.PAGE_START],
+        mode: requestedCoverageMode,
+        requestId: payload[CDC_COVERAGE_QUERY_FIELD.REQUEST_ID],
+        targetNodeId: payload[CDC_COVERAGE_QUERY_FIELD.TARGET_NODE_ID],
+        targetLifecycleId:
+          payload[CDC_COVERAGE_QUERY_FIELD.TARGET_LIFECYCLE_ID],
+        reconcileGenerationId:
+          payload[CDC_COVERAGE_QUERY_FIELD.RECONCILE_GENERATION_ID],
+        deadlineMs: payload[CDC_COVERAGE_QUERY_FIELD.DEADLINE_MS],
+        transferId: payload[CDC_COVERAGE_QUERY_FIELD.TRANSFER_ID],
+        chunkOrdinal: payload[CDC_COVERAGE_QUERY_FIELD.CHUNK_ORDINAL],
+      };
+      const coverage = coverageOptions.mode === CDC_COVERAGE_REQUEST_MODE.PAGE ?
+        await this.readCompleteCdcCoverage(coverageOptions) :
+        this.handleCdcCoverageTransferRequest(coverageOptions);
+      return cdcCoverageResponse(coverage, this.partitionId,
+        this.buildRemoteReadAuthorityWitness(false));
+    }
     if (isWriteOperation) {
       const epochRejection = this.rejectStalePartitionEpochWrite(
         payload[QUERY_PAYLOAD_FIELD_EXPECTED_PARTITION_VERSION],
@@ -822,6 +899,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
   async executeMigrationAlterQuery(sql, params = [], options = {}) {
     if (!sql) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.MIGRATION_ALTER_MISSING_SQL);
+    }
+    const protectedSchema = coordinatorTableSchemaRefusal(this.tableName);
+    if (protectedSchema !== null) {
+      return {...protectedSchema, partitionId: this.partitionId};
     }
     this.registerMigrationDefaultFromAlterSql(sql);
     return this.proposeWrite({
@@ -1015,8 +1096,15 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       partitionId: this.partitionId,
       commandType,
     });
+    if (commandType === COORDINATOR_SETTLEMENT_TYPE) {
+      return applyCoordinatorSettlement(this, {command, index, term,
+        afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
+        afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
+    }
     if (isCommittedSqlCommandType(commandType)) {
       if (command.sql) {
+        assertTransactionSchemaWriteEnforced(this.db, this.tableName,
+          readPartitionWriteOrigin(this.db) !== null);
         const entryKey = this.getCommittedEntryKey(command);
         const identity = this.buildCommittedWriteIdentity(command, index, term);
         const afterCommit = (effect) =>
@@ -1051,6 +1139,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           term,
           result: info,
         });
+        recordCommittedStatementCdc(this, {command, index, term, afterCommit},
+          {entryKey, result: info});
         advancePartitionWriteGeneration(this.db);
         if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
           afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
@@ -1062,24 +1152,13 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
             lastInsertRowid: info.lastInsertRowid,
             ...identity,
           });
-          if (this.isLeader) {
-            this.trackPendingCDCEvent(
-              this.generateCDCEvent({
-                ...command,
-                changes: info.changes,
-              }).catch((err) => {
-                if (this.isShutdown) {
-                  return;
-                }
-                this.logger.error(
-                  PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED,
-                  {partitionId: this.partitionId, error: err.message},
-                );
-              }),
-            );
-          }
         });
       }
+    } else if (isCdcCommandType(commandType)) {
+      // The CDC delivery owner's committed acknowledgement: its owner.
+      return applyCdcAcknowledgementCommand(this, {command, index, term,
+        afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
+        afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
     } else {
       // A transaction command (participant, or a legacy marker): its owner.
       return applyCommittedTransactionCommand(this, {command, index, term,

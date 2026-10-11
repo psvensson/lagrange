@@ -8,6 +8,8 @@ import {
   retireReplicaTransportHandler,
 } from '../node/replica-transport-handler-identity.js';
 import {endReplicaLeadershipTenure} from '../raft/replica-leadership-state.js';
+import {retireCdcCoverageTransferOwner} from
+  '../cdc/cdc-coverage-transfer-owner.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -150,6 +152,7 @@ class PartitionServiceLifecycleMethods {
    */
   async shutdown() {
     this.isShutdown = true;
+    retireCdcCoverageTransferOwner(this);
     this.leaderActivationGate.shutdown();
     this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
       partitionId: this.partitionId,

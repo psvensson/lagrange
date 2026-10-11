@@ -1,3 +1,4 @@
+import {copyCdcEvent} from '../../cdc/cdc-event-envelope.js';
 import {assertCritical} from '../../utils/assert.js';
 import {CDCIntegrationSetup} from '../shared/cdc-integration-setup.js';
 import {LatencyTopologySetup} from '../shared/latency-topology-setup.js';
@@ -171,9 +172,7 @@ class SeedRuntimeBridgeOwner {
       BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING,
     );
     return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      tableName: cdcEvent.tableName,
-      operation: cdcEvent.operation,
-      data: cdcEvent.data,
+      ...copyCdcEvent(cdcEvent),
       sourceMessageGroupService: messageGroupService,
     });
   }
