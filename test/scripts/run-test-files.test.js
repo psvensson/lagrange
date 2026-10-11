@@ -13,6 +13,7 @@ import {
   readBoundedOutput,
   filterTestFiles,
   parseOptions,
+  resolveTapTimeout,
   retryFailedOnce,
   runTestFiles,
 } from '../../scripts/run-test-files.js';
@@ -29,6 +30,11 @@ const RUNAWAY_DIRECTIVE_FIXTURE =
   `${FIXTURE_DIRECTORY}/tap-runaway-directive.fixture.mjs`;
 const FAILS_ONCE_FIXTURE = `${FIXTURE_DIRECTORY}/fails-once.fixture.mjs`;
 const HANGS_FIXTURE = `${FIXTURE_DIRECTORY}/hangs.fixture.mjs`;
+const TWO_TOP_LEVEL_TIMED_FIXTURE =
+  `${FIXTURE_DIRECTORY}/tap-two-top-level-timed.fixture.mjs`;
+const NESTED_TIMED_FIXTURE = `${FIXTURE_DIRECTORY}/tap-nested-timed.fixture.mjs`;
+const FILE_LEVEL_TIMEOUT_FIXTURE =
+  `${FIXTURE_DIRECTORY}/tap-file-level-timeout.fixture.mjs`;
 
 describe('run-test-files', () => {
   const temporaryDirectories = [];
@@ -632,5 +638,104 @@ describe('per-file result ledger', () => {
     const {ledgerFile, resultsDirectory} = await scratch();
     await runTestFiles([TAP_PASS_FIXTURE], {jobs: 1, print: false, resultsDirectory});
     assert.equal(fs.existsSync(ledgerFile), false);
+  });
+});
+
+// tap arms ONE root timer per file - TAP_TIMEOUT seconds, 30 by default - and
+// a top-level test's {timeout: N} cannot extend it: when the root timer fires
+// the test running at that moment dies with `expired: TAP`. Lifting the root
+// budget to the LARGEST declaration therefore made every file with several
+// timed top-level tests share one test's budget (ledger S1, 2026-10-11:
+// three 120s tests under one 120s root timer), and leaving it unscaled made
+// the bootstrap-heavy files expire only on the x2.1 lab host (S2). The
+// derivation is held here rule by rule, against fixtures that are parsed, not
+// run - except the first, which runs to show the mechanism the rules rest on.
+describe('TAP root budget derivation', () => {
+  const DEFAULT_KILL_BUDGET_MS = 600000;
+  const temporaryDirectories = [];
+
+  afterEach(async () => {
+    await Promise.all(temporaryDirectories.splice(0).map((directory) =>
+      rm(directory, {recursive: true, force: true})));
+  });
+
+  const resolve = (fixture, env = {}, budgetMs = DEFAULT_KILL_BUDGET_MS) =>
+    resolveTapTimeout(path.resolve(fixture), env, budgetMs);
+
+  async function runUnder(env) {
+    const resultsDirectory = await mkdtemp(path.join(tmpdir(), 'run-test-files-root-'));
+    temporaryDirectories.push(resultsDirectory);
+    const summary = await runTestFiles([TWO_TOP_LEVEL_TIMED_FIXTURE],
+      {env, jobs: 1, print: false, resultsDirectory});
+    return summary.results[0];
+  }
+
+  it('one root timer per file: a root budget shorter than two top-level tests expires the second', async () => {
+    const expired = await runUnder({TAP_TIMEOUT: '1'});
+    assert.equal(expired.ok, false);
+    assert.match(expired.output, /^ok 1 - first top-level test/mu,
+      'the first 700ms test fits inside the 1s root budget');
+    assert.match(expired.output, /expired: TAP/u,
+      'the second dies when the ROOT timer fires, inside its own 40s declaration');
+    assert.match(expired.output, /^not ok 2 - second top-level test/mu);
+
+    const derived = await runUnder({});
+    assert.equal(derived.ok, true, JSON.stringify(derived.reasons));
+    assert.match(derived.output, /^ok 1 - first top-level test/mu);
+    assert.match(derived.output, /^ok 2 - second top-level test/mu,
+      'under the derived budget both run');
+  });
+
+  it('sums the top-level declarations instead of taking the largest', () => {
+    assert.equal(resolve(TWO_TOP_LEVEL_TIMED_FIXTURE), '80',
+      'two 40s top-level tests share one root timer and need 80s, not 40s');
+  });
+
+  it('does not count nested subtests, which run inside their parent', () => {
+    assert.equal(resolve(NESTED_TIMED_FIXTURE), '40',
+      'one 40s parent with two 40s subtests needs 40s, not 120s');
+  });
+
+  it('never exports less than a file-level t.setTimeout', () => {
+    assert.equal(resolve(FILE_LEVEL_TIMEOUT_FIXTURE), '100',
+      'tap honours the 100s file-level call as its root timer; the export keeps step');
+  });
+
+  it('scales the root budget by the machine factor the runner already records', () => {
+    assert.equal(resolve(TWO_TOP_LEVEL_TIMED_FIXTURE,
+      {LAGRANGE_TEST_MACHINE_FACTOR: '2.1'}), '168',
+    '80s of declarations on a x2.1 host is 168s of wall clock');
+    assert.equal(resolve(TWO_TOP_LEVEL_TIMED_FIXTURE,
+      {LAGRANGE_TEST_MACHINE_FACTOR: 'fast'}), '80',
+    'a non-numeric factor is the reference machine');
+  });
+
+  it('stays below the per-file kill so tap reports its expiry before the runner kills', () => {
+    const killBudgetMs = 60000;
+    const bounded = resolve(TWO_TOP_LEVEL_TIMED_FIXTURE, {}, killBudgetMs);
+    assert.equal(bounded, '54', '80s of declarations under a 60s kill is bounded');
+    assert.ok(Number(bounded) * 1000 < killBudgetMs,
+      'the root timer fires, and reports, before the kill');
+    assert.equal(resolve(TWO_TOP_LEVEL_TIMED_FIXTURE, {}, 100000), '80',
+      'a kill budget with room leaves the derivation alone');
+  });
+
+  it('an explicit caller TAP_TIMEOUT wins outright', () => {
+    assert.equal(resolve(TWO_TOP_LEVEL_TIMED_FIXTURE, {TAP_TIMEOUT: '7'}), '7');
+    assert.equal(resolve(TWO_TOP_LEVEL_TIMED_FIXTURE,
+      {LAGRANGE_TEST_MACHINE_FACTOR: '2.1', TAP_TIMEOUT: '7', TAP_TIMEOUT_FLOOR: '120'}),
+    '7', 'over the factor and the floor alike');
+  });
+
+  it('keeps the lane floor as a floor: it raises, never cuts, and is not scaled', () => {
+    assert.equal(resolve(TWO_TOP_LEVEL_TIMED_FIXTURE, {TAP_TIMEOUT_FLOOR: '120'}), '120',
+      '80s of declarations under a 120s floor runs at the floor');
+    assert.equal(resolve(TWO_TOP_LEVEL_TIMED_FIXTURE,
+      {LAGRANGE_TEST_MACHINE_FACTOR: '2.1', TAP_TIMEOUT_FLOOR: '120'}), '168',
+    'a derivation above the floor keeps its budget');
+    assert.equal(resolve(TAP_PASS_FIXTURE), undefined,
+      'a file with no declaration is left to tap\'s default');
+    assert.equal(resolve(TAP_PASS_FIXTURE, {TAP_TIMEOUT_FLOOR: '120'}), '120',
+      'and is raised by the floor alone');
   });
 });
