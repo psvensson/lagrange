@@ -15,6 +15,8 @@ import {
   STORAGE_LOG_MSG,
   STORAGE_SUBSYSTEM,
 } from './storage-constants.js';
+import {readDataDirectoryProcessOwnerEvidence} from
+  './data-directory-process-owner.js';
 
 /**
  * DataDirectoryManager handles persistent storage directory operations.
@@ -55,7 +57,7 @@ class DataDirectoryManager {
    * Creates the data directory if it doesn't exist and validates writability.
    * @throws {Error} If the data directory is not writable.
    */
-  initialize() {
+  configure() {
     if (this.initialized) {
       return;
     }
@@ -71,9 +73,21 @@ class DataDirectoryManager {
 
     // Resolve to absolute path
     this.dataDir = path.resolve(this.dataDir);
+  }
 
-    // Create data directory if it doesn't exist
-    this.ensureDirectoryExists(this.dataDir);
+  initialize(options = {}) {
+    if (this.initialized) {
+      return;
+    }
+    this.configure();
+
+    const processOwner = options.processOwner || null;
+    if (processOwner === null) {
+      this.ensureDirectoryExists(this.dataDir);
+    } else if (readDataDirectoryProcessOwnerEvidence(
+      processOwner, this.dataDir) === null) {
+      throw new Error(`Data directory process owner is invalid: ${this.dataDir}`);
+    }
 
     // Validate directory is writable
     this.validateWritable(this.dataDir);
@@ -129,7 +143,7 @@ class DataDirectoryManager {
    * @return {string} The data directory path.
    */
   getDataDir() {
-    if (!this.initialized) {
+    if (!this.initialized && this.dataDir === null) {
       throw new Error(STORAGE_ERROR_MSG.NOT_INITIALIZED);
     }
     return this.dataDir;

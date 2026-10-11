@@ -1,0 +1,25 @@
+{
+  "model": "activation-cycle-round13-design-feasibility",
+  "ceiling": "deterministic supplied-fact model; no production Raft or SQLite import",
+  "observationCount": 12,
+  "observations": {
+    "capturedCandidateSurvivesPreSubmitCrash": true,
+    "submittedUnknownRedrivesExactCandidate": true,
+    "successorCandidateOnlyAfterCommittedStale": true,
+    "committedClaimOwnsHistoryAndExactCandidate": true,
+    "staleEnvelopeCanCarrySameImmutableSupersession": true,
+    "supersessionBeforePauseMakesDelayedPauseInert": true,
+    "pauseBeforeSupersessionClosesExactPause": true,
+    "lostSupersessionAnswerReplaysExactEntry": true,
+    "threeSameHistoryCyclesRetireDelayedAWithoutChangingC": true,
+    "equalOrdinalDifferentHistoryRemainsHeld": true,
+    "targetMutationAndSuccessorPublicationRetainDebt": true,
+    "authenticSnapshotPreservesHistoryAndMissingHistoryHolds": true
+  },
+  "retained": {
+    "uncertainClaimEntryId": "6b20a0694f54209d16cb95738e6e7296d99a6359d078b34b56a6a56bd0e482ed",
+    "supersessionEntryId": "faab36d31b96736a051149bcc496c80323356b04423f54f3e2affa8eda19fd30",
+    "controlHistoryId": "4e132adc96c3adccadf86d5265b390209b59ad8db41a69bc6a31f02b8504e7af",
+    "closedThroughCycleOrdinal": 3
+  }
+}

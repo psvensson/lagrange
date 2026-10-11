@@ -407,6 +407,54 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
       );
     });
 
+  it('defers recovery on a provisional engine and activates the final engine once',
+    async () => {
+      let provisionalActivationCount = 0;
+      let finalActivationCount = 0;
+      const provisionalEngine = {
+        activateDistributedTransactionRecovery() {
+          provisionalActivationCount += 1;
+        },
+      };
+      const finalEngine = {
+        activateDistributedTransactionRecovery() {
+          finalActivationCount += 1;
+          return Promise.resolve({failed: 0});
+        },
+      };
+      const owner = new StartupRuntimeHandoffOwner({
+        delegates: {
+          isDistributedTransactionRecoveryAvailable: () => true,
+          activateDistributedTransactionRecovery: () =>
+            owner.sqlQueryEngine.activateDistributedTransactionRecovery(),
+        },
+      });
+
+      const provisional = attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine: provisionalEngine,
+        systemTableCache: null,
+        activateDistributedTransactionRecovery: false,
+      });
+      assert.strictEqual(provisional, null);
+      assert.strictEqual(owner.sqlQueryEngine, provisionalEngine);
+      assert.strictEqual(provisionalActivationCount, 0);
+      assert.strictEqual(owner.getDistributedTransactionRecoverySnapshot().state,
+        'not_started');
+
+      const final = attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine: finalEngine,
+        systemTableCache: null,
+      });
+      await final;
+      assert.strictEqual(owner.sqlQueryEngine, finalEngine);
+      assert.strictEqual(provisionalActivationCount, 0);
+      assert.strictEqual(finalActivationCount, 1);
+      assert.strictEqual(owner.getDistributedTransactionRecoverySnapshot().state,
+        'completed');
+    });
+
   it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.rebalanceDependencies,
     () => {
       const systemTableCache = {

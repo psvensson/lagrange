@@ -40,6 +40,7 @@ import {
 } from './partition-service-constants.js';
 import {
   PARTICIPANT_TRANSACTION_ADMISSION_CODE,
+  PARTICIPANT_RELEASE_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_MESSAGE,
 } from './partition-participant-transaction-constants.js';
@@ -67,6 +68,7 @@ const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
   TRANSACTION_OWNER: 'transaction-owner',
   CDC_DELIVERY_OWNER: PARTITION_CDC_OBLIGATION_ORIGIN.CDC_DELIVERY_OWNER,
   COORDINATOR_OWNER: 'coordinator-owner',
+  PARTICIPANT_RELEASE_OWNER: 'participant-release-owner',
 });
 
 // What a refused write is answered with.
@@ -136,7 +138,11 @@ function sqlCommandRefusal(command) {
 }
 
 function participantCommandRefusal(command, origin) {
-  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER) {
+  const releaseCommand = PARTICIPANT_RELEASE_COMMAND_TYPES.includes(command.type);
+  const expectedOrigin = releaseCommand ?
+    PARTITION_COMMITTED_COMMAND_ORIGIN.PARTICIPANT_RELEASE_OWNER :
+    PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER;
+  if (origin !== expectedOrigin) {
     return refused(PARTICIPANT_TRANSACTION_ADMISSION_CODE.ORIGIN_REFUSED,
       PARTICIPANT_TRANSACTION_MESSAGE.ORIGIN_REFUSED);
   }
@@ -171,7 +177,8 @@ function commandRefusalByKind(command, origin) {
   if (PARTITION_CDC_COMMAND_TYPES.includes(command.type)) {
     return cdcCommandRefusal(command, origin);
   }
-  return PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(command.type) ?
+  return [...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+    ...PARTICIPANT_RELEASE_COMMAND_TYPES].includes(command.type) ?
     participantCommandRefusal(command, origin) : sqlCommandRefusal(command);
 }
 
