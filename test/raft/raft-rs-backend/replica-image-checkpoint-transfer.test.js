@@ -11,26 +11,45 @@ import {createSqliteStateMachineCheckpoint, readCheckpoint} from
   '../../../src/raft/snapshot-checkpoint-store.js';
 import {RAFT_CHECKPOINT_CREATION_OUTCOME} from
   '../../../src/raft/snapshot-checkpoint-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
+import {COMMITTED_LEARNER_ACTION_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE} from
+  '../../../src/raft/raft-committed-membership-constants.js';
+import {committedStampOfAnswer, durableRecordBootstrap} from
+  '../../../src/raft/raft-committed-membership-stamp.js';
+import {RAFT_MEMBERSHIP_TRANSITION_STAGE, RAFT_OPERATION,
+  RAFT_OPERATION_OUTCOME} from '../../../src/raft/raft-operation-port-constants.js';
 import {RaftRsDurableStore} from
   '../../../src/raft/raft-rs-durable-store.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
+import {RaftRsReplicaLifecycleOwner} from
+  '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {encodeCommittedLearnerAdmission, encodeCommittedPromotionAdmission} from
+  '../../../src/raft/raft-rs-committed-membership-context.js';
+import {raftRsConfStateKey} from '../../../src/raft/raft-rs-conf-state-key.js';
 import {removeSnapshotInstallArtifactsForGeneration, requestSnapshotInstall,
-  recoverPendingSnapshotInstall} from
+  recoverPendingSnapshotInstall, resolvePendingSnapshotInstall} from
   '../../../src/raft/snapshot-install.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME,
   RAFT_SNAPSHOT_INSTALL_REJECTION, RAFT_SNAPSHOT_INSTALL_DIRNAME,
+  RAFT_SNAPSHOT_INSTALL_MARKER_KIND,
   RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
+  RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
   RAFT_SNAPSHOT_INSTALL_STAGING_FILE} from
   '../../../src/raft/snapshot-install-constants.js';
 import {CREATE_ADMISSION_ERROR_CODE, ReplicaCreateAdmissionOwner} from
   '../../../src/node/replica-create-admission-owner.js';
 import {OperationType} from '../../../src/rebalancer/replica-status.js';
+import {PartitionNodeCluster} from './partition-node-cluster.js';
 
 const GROUP = 'mg-checkpoint-owner-red';
 const FOUNDERS = Object.freeze(['mg-red-a', 'mg-red-b', 'mg-red-c']);
 const TARGET = 'mg-red-fresh-d';
 const REMOVED = 'mg-red-removed-z';
+const LATER_GROUP = 'mg-promotion-image-later-learner';
+const HISTORICAL_TARGET = 'mg-promoted-a';
+const LATER_LEARNER = 'mg-later-b';
 const APPLIED_INDEX = '12';
 const APPLIED_TERM = '4';
 const MEMBERSHIP_GENERATION = '9';
@@ -94,10 +113,11 @@ function admissionRepository() {
 
 function admissionFixture({terminal = false, operationId = 'fresh-mg-install',
   attemptToken = 'attempt-fresh-mg', now = 20,
-  repository = admissionRepository(), owner = null} = {}) {
+  repository = admissionRepository(), owner = null, groupId = GROUP,
+  replicaId = TARGET} = {}) {
   const row = {operation_id: operationId, type: OperationType.REPLACE,
-    entity_type: 'message-group', entity_id: GROUP, partition_id: GROUP,
-    replica_id: TARGET, target_node_id: 'node-d', workflow_step: 'SENDING',
+    entity_type: 'message-group', entity_id: groupId, partition_id: groupId,
+    replica_id: replicaId, target_node_id: 'node-d', workflow_step: 'SENDING',
     updated_at: 11, completed_at: terminal ? 12 : null,
     create_admission_state: null, create_admission_token: null,
     create_admission_replica_created_at: null,
@@ -112,13 +132,49 @@ function admissionFixture({terminal = false, operationId = 'fresh-mg-install',
   const fixtureOwner = owner || ownerAt(repository.currentBootIncarnation());
   const request = {operationId: row.operation_id,
     operationType: row.type, entityType: row.entity_type,
-    entityId: GROUP, partitionId: GROUP, replicaId: TARGET,
+    entityId: groupId, partitionId: groupId, replicaId,
     admissionToken: `admission-${operationId}`, attemptToken,
     attemptSeq: 1, workflowUpdatedAt: 11};
   return {owner: fixtureOwner, ownerAt, repository, request, row,
     setBootIncarnation(value) {
       repository.setBootIncarnation(value);
     }};
+}
+
+function managedTransition(cluster, leader, replicaIdentity, stage, sequence) {
+  const status = cluster.node(leader).readStatus();
+  const request = {operationId: `image-${replicaIdentity}`,
+    transitionIdentity: `image-transition-${replicaIdentity}`,
+    permitSequence: sequence, stage, replicaIdentity,
+    peerAddress: cluster.addressOf(replicaIdentity),
+    replicaLifecycleIncarnation: status.lifecycleIncarnation,
+    runtimeGeneration: status.runtimeGeneration, leaderTerm: status.term,
+    leaderConfigurationStamp: {configurationKey: status.configurationKey,
+      membershipGenerationIndex: status.membershipGenerationIndex}};
+  if (stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE) {
+    const target = cluster.node(replicaIdentity).readStatus();
+    request.targetStatusObservation = Object.fromEntries([
+      'replicaIdentity', 'peerId', 'configurationKey',
+      'membershipGenerationIndex', 'term', 'runtimeGeneration',
+      'lifecycleIncarnation',
+    ].map((field) => [field, target[field]]));
+  }
+  return cluster.node(leader)[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
+    request, () => true);
+}
+
+function registerReplicaOn(cluster, replicaIds, replicaIdentity) {
+  for (const replicaId of replicaIds) {
+    new RaftRsPeerIdentityRegistry(cluster.replica(replicaId).db)
+      .registerReplica(replicaIdentity);
+  }
+}
+
+function settledRole(cluster, replicaIds, replicaIdentity, role) {
+  const peerId = cluster.raftPeerIdOf(replicaIdentity);
+  return cluster.settle(() => replicaIds.every((replicaId) =>
+    cluster.node(replicaId).readStatus().confState[role].includes(peerId)),
+  {rounds: 600});
 }
 
 async function withRenameFault(options, work) {
@@ -148,6 +204,36 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       const voters = FOUNDERS.map((replica) => registry.registerReplica(replica));
       const targetPeer = registry.registerReplica(TARGET);
       const removedPeer = registry.registerReplica(REMOVED);
+      const ordered = (ids) => [...ids].sort((left, right) =>
+        left.length - right.length || left.localeCompare(right));
+      const learnerAdmission = encodeCommittedLearnerAdmission({groupId: GROUP,
+        index: '7', term: APPLIED_TERM, context: {operationId: 'fresh-mg-install',
+          transitionIdentity: 'fresh-mg-transition', permitSequence: 1,
+          stage: 'add-learner', replicaIdentity: TARGET, peerId: targetPeer}});
+      const beforeConf = {voters: ordered(voters), votersOutgoing: [],
+        learners: [targetPeer], learnersNext: [], autoLeave: false};
+      const afterConf = {voters: ordered([...voters, targetPeer]), votersOutgoing: [],
+        learners: [], learnersNext: [], autoLeave: false};
+      const promotionAdmission = encodeCommittedPromotionAdmission({version: 1,
+        groupId: GROUP, index: '8', term: APPLIED_TERM,
+        context: {operationId: 'fresh-mg-install',
+          transitionIdentity: 'fresh-mg-transition', permitSequence: 2,
+          stage: 'promote', replicaIdentity: TARGET, peerId: targetPeer},
+        learnerAdmission, before: {configurationKey: raftRsConfStateKey(beforeConf),
+          membershipGenerationIndex: '7'},
+        after: {voters: afterConf.voters, votersOutgoing: afterConf.votersOutgoing,
+          learners: afterConf.learners, learnersNext: afterConf.learnersNext,
+          configurationKey: raftRsConfStateKey(afterConf),
+          membershipGenerationIndex: '8'}});
+      db.transaction(() => {
+        registry.recordCommittedLearnerAdmission(TARGET, learnerAdmission);
+        registry.recordCommittedPromotionAdmission(TARGET, promotionAdmission);
+      })();
+      const sourceLifecycle = new RaftRsReplicaLifecycleOwner({db,
+        groupId: GROUP, peerId: voters[0], replicaIdentity: FOUNDERS[0],
+        mintIncarnation: () => 'source-incarnation'});
+      t.equal(sourceLifecycle.incarnation, 'source-incarnation',
+        'the producer begins with an authentic source lifecycle row');
       const store = new RaftRsDurableStore(db);
       store.putAppliedState(GROUP, APPLIED_INDEX, {
         voters,
@@ -200,6 +286,23 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       const sealed = readCheckpoint({checkpointDir: path.join(root,
         'checkpoints', APPLIED_INDEX), expectedIdentity: identity()});
       t.equal(sealed.outcome, 'valid', 'the sealed replica image validates');
+      const sealedPayload = new Database(path.join(root, 'checkpoints',
+        APPLIED_INDEX, 'payload.db'), {readonly: true});
+      try {
+        t.equal(sealedPayload.prepare(`SELECT 1 FROM sqlite_master
+          WHERE type = 'table' AND name = '_raft_rs_replica_lifecycle'`)
+        .get(), undefined,
+        'the producer lifecycle row is scrubbed from the transferable image');
+      } finally {
+        sealedPayload.close();
+      }
+      t.equal(created.descriptor.payloadVersion, 3,
+        'promotion-bearing images use the versioned historical-fact contract');
+      const sealedTarget = created.descriptor.raftRs.peerReservations.find(
+        ({replicaIdentity}) => replicaIdentity === TARGET);
+      t.equal(sealedTarget.learnerAdmission, learnerAdmission);
+      t.equal(sealedTarget.promotionAdmission, promotionAdmission,
+        'the descriptor retains the exact immutable PROMOTE bytes');
       t.equal(Object.isFrozen(created.descriptor.raftRs.confState.learners),
         true, 'the built descriptor deeply freezes ConfState member arrays');
       const malformedCases = [
@@ -208,6 +311,49 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         }],
         ['noncanonical generation', (descriptor) => {
           descriptor.raftRs.membershipGenerationIndex = '09';
+        }],
+        ['promotion beyond applied boundary', (descriptor) => {
+          const reservation = descriptor.raftRs.peerReservations.find(
+            ({replicaIdentity}) => replicaIdentity === TARGET);
+          const fact = JSON.parse(reservation.promotionAdmission);
+          fact.index = String(Number(descriptor.raftRs.appliedIndex) + 1);
+          fact.after.membershipGenerationIndex = fact.index;
+          reservation.promotionAdmission = JSON.stringify(fact);
+        }],
+        ['promotion for another group', (descriptor) => {
+          const reservation = descriptor.raftRs.peerReservations.find(
+            ({replicaIdentity}) => replicaIdentity === TARGET);
+          const fact = JSON.parse(reservation.promotionAdmission);
+          fact.groupId = 'another-message-group';
+          reservation.promotionAdmission = JSON.stringify(fact);
+        }],
+        ['promotion for another target', (descriptor) => {
+          const reservation = descriptor.raftRs.peerReservations.find(
+            ({replicaIdentity}) => replicaIdentity === TARGET);
+          const fact = JSON.parse(reservation.promotionAdmission);
+          fact.context.replicaIdentity = REMOVED;
+          fact.context.peerId = removedPeer;
+          reservation.promotionAdmission = JSON.stringify(fact);
+        }],
+        ['promotion origin after its before boundary', (descriptor) => {
+          const reservation = descriptor.raftRs.peerReservations.find(
+            ({replicaIdentity}) => replicaIdentity === TARGET);
+          const fact = JSON.parse(reservation.promotionAdmission);
+          const origin = JSON.parse(fact.learnerAdmission);
+          origin.index = fact.index;
+          reservation.learnerAdmission = JSON.stringify(origin);
+          fact.learnerAdmission = reservation.learnerAdmission;
+          reservation.promotionAdmission = JSON.stringify(fact);
+        }],
+        ['promotion origin from a later term', (descriptor) => {
+          const reservation = descriptor.raftRs.peerReservations.find(
+            ({replicaIdentity}) => replicaIdentity === TARGET);
+          const fact = JSON.parse(reservation.promotionAdmission);
+          const origin = JSON.parse(fact.learnerAdmission);
+          origin.term = String(Number(fact.term) + 1);
+          reservation.learnerAdmission = JSON.stringify(origin);
+          fact.learnerAdmission = reservation.learnerAdmission;
+          reservation.promotionAdmission = JSON.stringify(fact);
         }],
       ];
       for (const [name, mutate] of malformedCases) {
@@ -230,6 +376,30 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         t.equal(fs.existsSync(malformedTarget), false,
           `${name} performs no physical target mutation`);
       }
+      const erasedRoot = path.join(root, 'promotion-erased-from-payload');
+      const erasedGeneration = path.join(erasedRoot, APPLIED_INDEX);
+      fs.cpSync(path.join(root, 'checkpoints', APPLIED_INDEX), erasedGeneration,
+        {recursive: true});
+      const erasedPayload = path.join(erasedGeneration, 'payload.db');
+      const erasedDb = new Database(erasedPayload);
+      erasedDb.prepare('UPDATE raft_rs_peer_identity SET promotion_admission = NULL ' +
+        'WHERE replica_identity = ?').run(TARGET);
+      erasedDb.close();
+      const erasedDescriptorFile = path.join(erasedGeneration, 'checkpoint.json');
+      const erasedDescriptor = JSON.parse(fs.readFileSync(erasedDescriptorFile, 'utf8'));
+      const erasedBytes = fs.readFileSync(erasedPayload);
+      erasedDescriptor.payloadByteLength = erasedBytes.length;
+      erasedDescriptor.payloadDigest = sha256Digest(erasedBytes);
+      writeAtomicDurable(erasedDescriptorFile, erasedDescriptor);
+      const erasedTarget = path.join(root, 'promotion-erased-target.db');
+      const erased = await requestSnapshotInstall({replicaDbPath: erasedTarget,
+        checkpointsRoot: erasedRoot, generationIndex: Number(APPLIED_INDEX),
+        expectedIdentity: identity(), expectedReplicaIdentity: TARGET,
+        expectedPeerId: targetPeer});
+      t.equal(erased.reason, RAFT_SNAPSHOT_INSTALL_REJECTION.CHECKPOINT_INVALID,
+        'a digest-matched payload cannot erase its described promotion fact');
+      t.equal(fs.existsSync(erasedTarget), false,
+        'erased authentic history performs no target mutation');
       for (const invalidPeerId of ['0', '7', '01']) {
         const forgedRoot = path.join(root, `forged-${invalidPeerId}`);
         const generation = path.join(forgedRoot, APPLIED_INDEX);
@@ -302,9 +472,134 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
           targetPeer);
         t.equal(new RaftRsPeerIdentityRegistry(targetDb).raftPeerIdOf(REMOVED),
           removedPeer, 'removed permanent reservations survive the image');
+        t.equal(new RaftRsPeerIdentityRegistry(targetDb)
+          .committedLearnerAdmission(TARGET), learnerAdmission);
+        t.equal(new RaftRsPeerIdentityRegistry(targetDb)
+          .committedPromotionAdmission(TARGET), promotionAdmission,
+        'install retains the authentic historical PROMOTE fact');
+        const receiverLifecycle = targetDb.prepare(`SELECT state, incarnation
+          FROM _raft_rs_replica_lifecycle
+          WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`)
+          .get(GROUP, targetPeer, TARGET);
+        t.equal(receiverLifecycle?.state, 'active',
+          'staging creates one ACTIVE receiver lifecycle row');
+        t.ok(typeof receiverLifecycle?.incarnation === 'string' &&
+          receiverLifecycle.incarnation.length > 0 &&
+          receiverLifecycle.incarnation !== sourceLifecycle.incarnation,
+        'the receiver mints a distinct local incarnation');
       } finally {
         targetDb.close();
       }
+
+      const replayRoot = path.join(root, 'reconstructed-retry');
+      fs.cpSync(path.join(root, 'checkpoints', APPLIED_INDEX),
+        path.join(replayRoot, APPLIED_INDEX), {recursive: true});
+      const replayTarget = path.join(root, 'reconstructed-retry.db');
+      const replayAdmission = admissionFixture({
+        operationId: 'reconstructed-retry-install',
+        attemptToken: 'reconstructed-retry-attempt', now: 30,
+      });
+      const replayEvidence = await replayAdmission.owner.claim(
+        replayAdmission.request);
+      const replayClaim = await replayAdmission.owner.claimPhysicalWorker(
+        replayEvidence);
+      const replayRead = replayAdmission.owner.readOperation.bind(
+        replayAdmission.owner);
+      replayAdmission.owner.readOperation = async () => {
+        throw Object.assign(new Error('commit authority temporarily unavailable'),
+          {code: 'OWNER_RPC_REQUIRED'});
+      };
+      await t.rejects(requestSnapshotInstall({replicaDbPath: replayTarget,
+        checkpointsRoot: replayRoot, generationIndex: Number(APPLIED_INDEX),
+        expectedIdentity: identity(), expectedReplicaIdentity: TARGET,
+        expectedPeerId: targetPeer,
+        createAdmissionOwner: replayAdmission.owner,
+        createAdmissionEvidence: replayEvidence,
+        createPhysicalWorkerClaim: replayClaim}), {code: 'OWNER_RPC_REQUIRED'},
+      'authority loss after reconstruction retains the exact staging attempt');
+      const replayMarker = path.join(replayRoot,
+        RAFT_SNAPSHOT_INSTALL_DIRNAME, RAFT_SNAPSHOT_INSTALL_MARKER_FILE);
+      t.equal(JSON.parse(fs.readFileSync(replayMarker, 'utf8')).state, 'staging',
+        'the reconstructed retry remains at the pre-swap STAGING boundary');
+      replayAdmission.owner.readOperation = replayRead;
+      const replayStaging = path.join(replayRoot,
+        RAFT_SNAPSHOT_INSTALL_DIRNAME, RAFT_SNAPSHOT_INSTALL_STAGING_FILE);
+      const replayDb = new Database(replayStaging);
+      const originalPromotion = replayDb.prepare(`SELECT promotion_admission
+        FROM raft_rs_peer_identity WHERE replica_identity = ?`).pluck()
+        .get(TARGET);
+      replayDb.prepare(`UPDATE raft_rs_peer_identity
+        SET promotion_admission = ? WHERE replica_identity = ?`)
+        .run(`${originalPromotion}-mutated`, TARGET);
+      replayDb.close();
+      const mutatedReplay = await requestSnapshotInstall({
+        replicaDbPath: replayTarget, checkpointsRoot: replayRoot,
+        generationIndex: Number(APPLIED_INDEX), expectedIdentity: identity(),
+        expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
+        createAdmissionOwner: replayAdmission.owner,
+        createAdmissionEvidence: replayEvidence,
+        createPhysicalWorkerClaim: replayClaim});
+      t.equal(mutatedReplay.outcome,
+        RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT,
+      'replay refuses a reconstructed reservation with changed PROMOTE bytes');
+      const repairedReplayDb = new Database(replayStaging);
+      repairedReplayDb.prepare(`UPDATE raft_rs_peer_identity
+        SET promotion_admission = ? WHERE replica_identity = ?`)
+        .run(originalPromotion, TARGET);
+      repairedReplayDb.close();
+      const replayedInstall = await requestSnapshotInstall({
+        replicaDbPath: replayTarget, checkpointsRoot: replayRoot,
+        generationIndex: Number(APPLIED_INDEX), expectedIdentity: identity(),
+        expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
+        createAdmissionOwner: replayAdmission.owner,
+        createAdmissionEvidence: replayEvidence,
+        createPhysicalWorkerClaim: replayClaim});
+      t.equal(replayedInstall.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+        'same-attempt retry replays reconstructed bytes without source digest rejection');
+
+      const rawRoot = path.join(root, 'raw-staging-recovery');
+      fs.cpSync(path.join(root, 'checkpoints', APPLIED_INDEX),
+        path.join(rawRoot, APPLIED_INDEX), {recursive: true});
+      const rawTarget = path.join(root, 'raw-staging-recovery.db');
+      const rawAdmission = admissionFixture({
+        operationId: 'raw-staging-recovery-install',
+        attemptToken: 'raw-staging-recovery-attempt', now: 35,
+      });
+      const rawEvidence = await rawAdmission.owner.claim(rawAdmission.request);
+      const rawClaim = await rawAdmission.owner.claimPhysicalWorker(rawEvidence);
+      const rawAuthority = rawAdmission.owner.snapshotInstallAuthority(
+        rawClaim, rawEvidence);
+      const rawInstallDir = path.join(rawRoot,
+        RAFT_SNAPSHOT_INSTALL_DIRNAME);
+      fs.mkdirSync(rawInstallDir, {recursive: true});
+      const rawMarker = path.join(rawInstallDir,
+        RAFT_SNAPSHOT_INSTALL_MARKER_FILE);
+      const rawStaging = path.join(rawInstallDir,
+        RAFT_SNAPSHOT_INSTALL_STAGING_FILE);
+      writeAtomicDurable(rawMarker, {state: 'staging',
+        installId: 'raw-copy-before-binding',
+        generationIndex: Number(APPLIED_INDEX),
+        rejectionReason: RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
+        kind: RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FRESH_CREATE,
+        createAuthority: rawAuthority, preInstallDigest: 'absent'});
+      fs.copyFileSync(path.join(rawRoot, APPLIED_INDEX, 'payload.db'), rawStaging);
+      const unauthorisedRaw = resolvePendingSnapshotInstall({
+        replicaDbPath: rawTarget, checkpointsRoot: rawRoot});
+      t.equal(unauthorisedRaw.outcome,
+        RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT,
+      'boot without current CREATE authority cannot adopt authentic raw staging');
+      t.equal(fs.existsSync(rawStaging), true,
+        'the authority refusal retains authentic raw staging for owner recovery');
+      const rawRecovered = await recoverPendingSnapshotInstall({
+        replicaDbPath: rawTarget, checkpointsRoot: rawRoot,
+        createAdmissionOwner: rawAdmission.owner,
+        createAdmissionEvidence: rawEvidence,
+        createPhysicalWorkerClaim: rawClaim});
+      t.equal(rawRecovered.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+        'current CREATE owner reconstructs and installs a raw copied payload');
+      t.equal(fs.existsSync(rawTarget), true,
+        'raw-copy recovery reaches the physical receiver path');
+
       const terminalRoot = path.join(root, 'terminal-restart');
       fs.cpSync(path.join(root, 'checkpoints', APPLIED_INDEX),
         path.join(terminalRoot, APPLIED_INDEX), {recursive: true});
@@ -567,3 +862,143 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       fs.rmSync(root, {recursive: true, force: true});
     }
   });
+
+test('a later learner installed from an authentic v3 image can lead and read an earlier ' +
+  'promotion at its exact historical position', async (t) => {
+  const founders = ['image-founder-a', 'image-founder-b', 'image-founder-c'];
+  const cluster = new PartitionNodeCluster({partitionId: LATER_GROUP,
+    replicaIds: founders});
+  try {
+    cluster.tickers = [founders[0]];
+    t.ok(cluster.settle(() => cluster.leaderReplicaId() !== null),
+      'the source group elects a leader');
+    let leader = cluster.leaderReplicaId();
+
+    registerReplicaOn(cluster, founders, HISTORICAL_TARGET);
+    const added = managedTransition(cluster, leader, HISTORICAL_TARGET,
+      RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER, 1);
+    t.equal(added.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'managed ADD_LEARNER is accepted');
+    const historicalPeer = new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
+      .raftPeerIdOf(HISTORICAL_TARGET);
+    t.ok(cluster.settle(() => founders.every((replicaId) =>
+      cluster.node(replicaId).readStatus().confState.learners.includes(historicalPeer))),
+    'the historical target is durably a learner');
+    const joinStamp = committedStampOfAnswer(cluster.node(leader)
+      .readCommittedMembership({purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP}));
+    t.ok(joinStamp, 'the real leader supplies the log-only join stamp');
+    cluster.addReplica(HISTORICAL_TARGET, founders, {
+      [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: joinStamp,
+      [RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP]: true,
+    });
+    const withHistorical = [...founders, HISTORICAL_TARGET];
+    cluster.tickers = withHistorical;
+    t.ok(cluster.settle(() => {
+      leader = cluster.leaderReplicaId();
+      if (leader === null) return false;
+      const source = cluster.node(leader).readStatus();
+      const target = cluster.node(HISTORICAL_TARGET).readStatus();
+      return target.term === source.term &&
+        target.configurationKey === source.configurationKey &&
+        target.appliedIndex >= source.commitIndex &&
+        source.followerProgress[cluster.addressOf(HISTORICAL_TARGET)] >=
+          source.commitIndex;
+    }, {rounds: 600}), 'the first learner catches up through the real ports');
+    const promoted = managedTransition(cluster, leader, HISTORICAL_TARGET,
+      RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE, 2);
+    t.equal(promoted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      `managed PROMOTE is accepted: ${JSON.stringify(promoted)}`);
+    t.ok(settledRole(cluster, withHistorical, HISTORICAL_TARGET, 'voters'),
+      'the original learner is promoted everywhere');
+    const sourceFact = new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
+      .committedPromotionAdmission(HISTORICAL_TARGET);
+    t.ok(sourceFact, 'native apply retains the exact original promotion fact');
+
+    registerReplicaOn(cluster, withHistorical, LATER_LEARNER);
+    const laterAdded = managedTransition(cluster, leader, LATER_LEARNER,
+      RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER, 1);
+    t.equal(laterAdded.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'the later learner is added after the original promotion');
+    const laterPeer = new RaftRsPeerIdentityRegistry(cluster.replica(leader).db)
+      .raftPeerIdOf(LATER_LEARNER);
+    t.ok(cluster.settle(() => withHistorical.every((replicaId) =>
+      cluster.node(replicaId).readStatus().confState.learners.includes(laterPeer))),
+    'the image boundary names the later target as a learner');
+
+    const boundary = cluster.node(leader).readStatus();
+    const checkpointsRoot = path.join(cluster.directory, 'later-checkpoints');
+    const checkpointIdentity = {clusterId: 'promotion-history-image-cluster',
+      raftGroupId: LATER_GROUP, entity: {kind: 'message-group', id: LATER_GROUP},
+      membershipEpoch: boundary.membershipGenerationIndex};
+    const created = await createSqliteStateMachineCheckpoint({
+      db: cluster.replica(leader).db, identity: checkpointIdentity,
+      checkpointsRoot, raftRsGroupId: LATER_GROUP});
+    t.equal(created.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
+      'the real source seals the later learner image');
+    t.ok(created.descriptor.raftRs.appliedIndex > JSON.parse(sourceFact).index,
+      'the installed boundary j is strictly after the original promotion k');
+    const admission = admissionFixture({operationId: 'later-learner-install',
+      groupId: LATER_GROUP, replicaId: LATER_LEARNER});
+    const evidence = await admission.owner.claim(admission.request);
+    const physicalClaim = await admission.owner.claimPhysicalWorker(evidence);
+    const installed = await requestSnapshotInstall({
+      replicaDbPath: cluster.dbFileOf(LATER_LEARNER), checkpointsRoot,
+      generationIndex: Number(created.descriptor.raftRs.appliedIndex),
+      expectedIdentity: checkpointIdentity, expectedReplicaIdentity: LATER_LEARNER,
+      expectedPeerId: laterPeer, createAdmissionOwner: admission.owner,
+      createAdmissionEvidence: evidence, createPhysicalWorkerClaim: physicalClaim});
+    t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+      'the real CREATE owner installs the authentic v3 image');
+
+    cluster.addReplica(LATER_LEARNER, founders, {
+      [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: durableRecordBootstrap(),
+      [RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP]: true,
+    });
+    const all = [...withHistorical, LATER_LEARNER];
+    cluster.tickers = all;
+    t.ok(cluster.settle(() => {
+      leader = cluster.leaderReplicaId();
+      if (leader === null) return false;
+      const source = cluster.node(leader).readStatus();
+      const later = cluster.node(LATER_LEARNER).readStatus();
+      return later.term === source.term &&
+        later.configurationKey === source.configurationKey &&
+        later.appliedIndex >= source.commitIndex &&
+        source.followerProgress[cluster.addressOf(LATER_LEARNER)] >=
+          source.commitIndex;
+    }, {rounds: 600}),
+    'the installed later learner opens from the image and catches up');
+    const laterPromoted = managedTransition(cluster, leader, LATER_LEARNER,
+      RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE, 2);
+    t.equal(laterPromoted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'the installed learner is promoted by the native turn');
+    t.ok(settledRole(cluster, all, LATER_LEARNER, 'voters'),
+      'the later learner becomes a voter everywhere');
+    const transfer = cluster.node(leader).transferLeadership({
+      successor: 'named', replicaIdentity: LATER_LEARNER});
+    t.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'leadership transfer to the image-created replica is accepted');
+    cluster.tickers = [LATER_LEARNER];
+    t.ok(cluster.settle(() => cluster.leaderReplicaId() === LATER_LEARNER &&
+      cluster.node(LATER_LEARNER).readStatus().currentTermApplied === true,
+    {rounds: 600}), 'the later replica leads and applies its own term');
+
+    const retained = new RaftRsPeerIdentityRegistry(
+      cluster.replica(LATER_LEARNER).db).committedPromotionAdmission(HISTORICAL_TARGET);
+    t.equal(retained, sourceFact,
+      'producer, install, open and leadership preserve the exact fact bytes');
+    const fact = JSON.parse(sourceFact);
+    const read = cluster.node(LATER_LEARNER).readCommittedMembership({
+      purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION,
+      groupId: LATER_GROUP, action: fact.context});
+    t.equal(read.kind, COMMITTED_LEARNER_ACTION_KIND.COMMITTED,
+      'the later leader answers the original PROMOTE action');
+    t.same(read.promotionFact, fact,
+      'the answer names the original k/term/configuration delta');
+    t.equal(read.receipt.context.stage,
+      RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
+      'the unchanged original ADD origin remains bound to the promotion fact');
+  } finally {
+    cluster.dispose();
+  }
+});

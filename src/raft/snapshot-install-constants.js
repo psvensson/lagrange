@@ -47,6 +47,16 @@ const RAFT_SNAPSHOT_INSTALL_OUTCOME = Object.freeze({
   INSTALL_STATE_CONFLICT: 'install_state_conflict',
 });
 
+// Private staging-operation outcomes consumed by the install owner. Defined
+// with the install vocabulary so the operation and its sole consumer cannot
+// drift on the reconstruction boundary.
+const RAFT_RS_SNAPSHOT_STAGING_OUTCOME = Object.freeze({
+  INITIALIZED: 'STAGED_INITIALIZED',
+  REPLAY: 'STAGED_REPLAY',
+  DEFERRED: 'DEFERRED',
+  CONFLICT: 'CONFLICT',
+});
+
 // Typed rejection reasons recorded in the marker.
 const RAFT_SNAPSHOT_INSTALL_REJECTION = Object.freeze({
   STAGING_LOST: 'staging_lost',
@@ -96,6 +106,7 @@ export {
   RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
   RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
+  RAFT_RS_SNAPSHOT_STAGING_OUTCOME,
   RAFT_SNAPSHOT_INSTALL_REJECTION,
   RAFT_SNAPSHOT_INSTALL_STAGING_FILE,
   RAFT_SNAPSHOT_INSTALL_STATE,

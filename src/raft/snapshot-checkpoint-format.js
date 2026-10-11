@@ -15,13 +15,15 @@ import {
   RAFT_CHECKPOINT_PAYLOAD_VERSION,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
   RAFT_RS_CHECKPOINT_ADMITTED_PEER_FIELDS,
+  RAFT_RS_CHECKPOINT_PROMOTED_PEER_FIELDS,
   RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS,
   RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS,
   RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS,
   RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS,
   RAFT_RS_CHECKPOINT_REASON,
 } from './snapshot-checkpoint-constants.js';
-import {learnerAdmissionMatchesReservation} from './raft-rs-committed-membership-context.js';
+import {learnerAdmissionMatchesReservation, promotionAdmissionMatchesReservation} from
+  './raft-rs-committed-membership-context.js';
 import {validatedRaftRsPeerIdentityReservations} from
   './raft-rs-peer-identity.js';
 
@@ -123,14 +125,20 @@ function validRaftRsConfState(confState) {
 
 function validRaftRsReservationShapes(reservations) {
   return Array.isArray(reservations) &&
-    reservations.every((reservation) =>
-      exactKeys(reservation, reservation?.learnerAdmission === undefined ?
-        RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS :
-        RAFT_RS_CHECKPOINT_ADMITTED_PEER_FIELDS) &&
+    reservations.every((reservation) => {
+      const fields = reservation?.promotionAdmission === undefined ?
+        (reservation?.learnerAdmission === undefined ?
+          RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS :
+          RAFT_RS_CHECKPOINT_ADMITTED_PEER_FIELDS) :
+        RAFT_RS_CHECKPOINT_PROMOTED_PEER_FIELDS;
+      return exactKeys(reservation, fields) &&
       isNonEmptyString(reservation.replicaIdentity) &&
       isDecimalInteger(reservation.peerId) &&
       (reservation.learnerAdmission === undefined ||
-        typeof reservation.learnerAdmission === 'string')) &&
+        typeof reservation.learnerAdmission === 'string') &&
+      (reservation.promotionAdmission === undefined ||
+        typeof reservation.promotionAdmission === 'string');
+    }) &&
     unique(reservations.map(({replicaIdentity}) => replicaIdentity)) &&
     unique(reservations.map(({peerId}) => peerId));
 }
@@ -146,7 +154,9 @@ function validRaftRsDescriptor(raftRs) {
     validRaftRsReservationShapes(raftRs.peerReservations) &&
     validPeerReservations(raftRs.peerReservations) &&
     raftRs.peerReservations.every((reservation) => learnerAdmissionMatchesReservation(
-      reservation.learnerAdmission, reservation, raftRs));
+      reservation.learnerAdmission, reservation, raftRs) &&
+      promotionAdmissionMatchesReservation(
+        reservation.promotionAdmission, reservation, raftRs));
 }
 
 function raftRsDescriptorMatchesEnvelope(descriptor) {

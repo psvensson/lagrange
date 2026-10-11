@@ -16,7 +16,10 @@ import * as progress from '../../src/raft/learner-promotion-progress.js';
 import {RAFT_MEMBERSHIP_TRANSITION_REASON as REASON, RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME, RAFT_MEMBERSHIP_AUTHORIZATION_REASON as AUTHORIZATION} from
   '../../src/raft/raft-operation-port-constants.js';
-import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
+import {deriveRaftRsPeerId, RaftRsPeerIdentityRegistry} from
+  '../../src/raft/raft-rs-peer-identity.js';
+import {RAFT_RS_PEER_IDENTITY_ERROR_MSG} from
+  '../../src/raft/raft-rs-peer-identity-constants.js';
 import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_DEBT_RECOVERY_OUTCOME as DEBT,
   decodeMembershipIdentity} from
   '../../src/rebalancer/replica-operation-message-group-membership-permit.js';
@@ -28,7 +31,9 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {committedStampOfAnswer} from '../../src/raft/raft-committed-membership-stamp.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {fixture, FOUNDERS, NODE, O, SUCCESSOR, TARGET} from
+import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {fixture, FOUNDERS, GROUP, NODE, O, SUCCESSOR, TARGET} from
   '../test-helpers/learner-operation-fixture.js';
 import {BRANCH_CAS, PERMIT_COLUMN, TARGET_PEER, VOTER_RECEIPT, catchUpRoute, caughtUp,
   countDeliveries, countWrites, leaderOf, otherFounder, promotionEntrySequences, promotionWorld,
@@ -58,10 +63,51 @@ async function removeLearnerNatively(f) {
   assert.ok(f.cluster.settle(() => FOUNDERS.every((id) => !f.cluster.node(id).readStatus()
     .confState.learners.map(String).includes(TARGET_PEER))), 'every founder applied the REMOVE');
 }
+/** Reserve and commit one unrelated learner through the native membership port. */
+async function addUnrelatedLearnerNatively(f, replicaIdentity) {
+  const peerId = deriveRaftRsPeerId(replicaIdentity);
+  for (const id of FOUNDERS) {
+    f.cluster.replica(id).db.prepare('INSERT INTO raft_rs_peer_identity ' +
+      '(replica_identity, raft_peer_id) VALUES (?, ?)').run(replicaIdentity, peerId);
+  }
+  const added = await f.cluster.node(leaderOf(f)).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.ADD_LEARNER, replicaIdentity});
+  assert.equal(added.outcome, RAFT_OPERATION_OUTCOME.CORE_OK, JSON.stringify(added));
+  assert.ok(f.cluster.settle(() => FOUNDERS.every((id) => f.cluster.node(id).readStatus()
+    .confState.learners.map(String).includes(peerId))),
+  'every founder applied the unrelated learner');
+  return {peerId, proposalIndex:
+    f.cluster.node(leaderOf(f)).readStatus().membershipGenerationIndex};
+}
+function settleConfChangeAdmission(f) {
+  assert.ok(f.cluster.settle(() =>
+    f.cluster.node(leaderOf(f)).readStatus().confChangePending === false),
+  'the leader clears its applied configuration change before the next proposal');
+}
+/** Remove one unrelated peer through the native membership port. */
+async function removeUnrelatedPeerNatively(f, replicaIdentity, peerId) {
+  const removed = await f.cluster.node(leaderOf(f)).proposeConfChange({
+    type: RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER, replicaIdentity});
+  assert.equal(removed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK, JSON.stringify(removed));
+  assert.ok(f.cluster.settle(() => FOUNDERS.every((id) => {
+    const state = f.cluster.node(id).readStatus().confState;
+    return !state.voters.map(String).includes(peerId) &&
+      !state.learners.map(String).includes(peerId);
+  })), 'every founder applied the unrelated removal');
+  return f.cluster.node(leaderOf(f)).readStatus().membershipGenerationIndex;
+}
 async function recordedLearnerFact(f) {
   const operation = await f.repository.queryAuthoritativeOperationById(O);
   const identity = decodeMembershipIdentity(operation.messageGroupMembershipIdentity);
   return recordedLearnerFactIsValid(operation, identity, operation.messageGroupMembershipIdentity);
+}
+async function settleFailedAfterPromotionAuthorization(f) {
+  const row = await f.repository.queryAuthoritativeOperationById(O);
+  await f.repository.persistOperationUpdate({...row, status: ReplicaStatus.FAILED,
+    workflowStep: WORKFLOW_STEP.FAILED, completedAt: f.clock.now() + 1,
+    updatedAt: f.clock.now() + 1}, {confirmPersistence: false,
+    disableSystemWriteSession: true, returnDisposition: true,
+    expectedWorkflowStep: row.workflowStep, terminalTransition: true});
 }
 
 test('the predicate owner\'s exact entry never grants a synthetic 0/0; the raw predicate ' +
@@ -130,8 +176,9 @@ async (t) => {
   assert.deepEqual(fx.permit(), {...promotion, permitState: 'committed',
     proposalIndex: proposed.proposalIndex}, 'the recorded permit is the promotion, committed');
   const voter = JSON.parse(f.row().message_group_voter_stamp);
-  assert.ok(voter.voters.includes(TARGET_PEER) && voter.identities[TARGET_PEER] === TARGET,
-    'the voter stamp names the target a voter under its own identity');
+  assert.ok(voter.after.voters.includes(TARGET_PEER) &&
+    voter.context.replicaIdentity === TARGET && voter.context.peerId === TARGET_PEER,
+  'the voter fact names the target promotion under its own identity');
   const reads = countDeliveries(fx.source);
   assert.equal((await fx.recordVoter(otherFounder(f))).outcome, 'recorded',
     'the promotion outcome is settled: exact replay');
@@ -290,6 +337,52 @@ test('a stale promotion permit after a leader change is refused at both leaders 
   }
 });
 
+test('J1 FAILED-forward: an already authorized PROMOTE on an exact ordinary FAILED row keeps ' +
+  'UNKNOWN debt and issues only its newer-term NONCOMMITTED successor', {timeout: 60000},
+async (t) => {
+  const fx = await promotionWorld(t); const {f} = fx;
+  assert.equal((await fx.select()).outcome, 'recorded');
+  const predecessor = fx.permit();
+  await settleFailedAfterPromotionAuthorization(f);
+  const failed = {...f.row()};
+  assert.deepEqual([failed.status, failed.workflow_step,
+    failed.message_group_membership_obligation_state],
+  [ReplicaStatus.FAILED, WORKFLOW_STEP.FAILED, 'unknown']);
+  assert.ok(failed.completed_at > 0, 'ordinary failure is durably completed');
+  const fencing = otherFounder(f);
+  transferLeadership(f, fencing);
+  assert.equal((await fx.recordVoter(fencing)).outcome, 'noncommitted',
+    'the newer-term leader proves the authorized attempt cannot commit');
+  assert.equal((await fx.issueSuccessor(fencing)).outcome, 'recorded');
+  const successor = fx.permit();
+  assert.deepEqual([successor.permitSequence, successor.permitStage,
+    successor.leaderTerm], [predecessor.permitSequence + 1, 'promote',
+    f.cluster.node(fencing).readStatus().term]);
+  assert.deepEqual(withoutColumns(f.row(), [PERMIT_COLUMN]),
+    withoutColumns(failed, [PERMIT_COLUMN]),
+    'successor issuance changes only the permit on the exact FAILED row');
+  assert.equal(await caughtUp(fx, fencing), true);
+  const proposed = await fx.propose(fencing);
+  assert.equal(proposed.reason, REASON.PROPOSED, JSON.stringify(proposed));
+  assert.ok(votersEverywhere(f));
+  assert.equal((await fx.recordVoter(fencing)).outcome, 'recorded');
+  assert.deepEqual(fx.permit(), {...successor, permitState: 'committed',
+    proposalIndex: proposed.proposalIndex});
+  assert.deepEqual([f.row().status, f.row().workflow_step,
+    f.row().message_group_membership_obligation_state],
+  [ReplicaStatus.FAILED, WORKFLOW_STEP.FAILED, 'unknown'],
+  'forward recovery does not resurrect status or abandon the membership debt');
+});
+
+test('J1 FAILED-forward cannot issue the initial PROMOTE after ordinary settlement',
+  {timeout: 30000}, async (t) => {
+    const fx = await promotionWorld(t); const {f} = fx;
+    await settleFailedAfterPromotionAuthorization(f);
+    const before = {...f.row()};
+    assert.equal((await fx.select()).outcome, 'conflict');
+    assert.deepEqual(f.row(), before, 'settlement cannot be used to start promotion work');
+  });
+
 test('a leader of a newer term is promotion authority once it applied an entry of its own term: ' +
   'the selection binds its fences, its native turn proposes and the voter stamp is recorded',
 {timeout: 30000}, async (t) => {
@@ -358,6 +451,133 @@ test('lost answers: a lost proposal answer and a lost voter-stamp answer are bot
     proposalIndex: entry.index}, 'the exact outcome is the committed PROMOTE entry');
   assert.equal((await fx.recordVoter(otherFounder(f))).outcome, 'recorded');
   assert.equal(lost, 1, 'a settled fact is never written again');
+});
+
+test('H1: an unrelated membership change after PROMOTE and a founder restart preserve the ' +
+  'exact historical promotion index instead of relabeling the current configuration',
+{timeout: 60000}, async (t) => {
+  const fx = await promotionWorld(t); const {f} = fx;
+  assert.equal((await fx.select()).outcome, 'recorded');
+  const promotion = fx.permit();
+  const promoted = await fx.propose();
+  assert.equal(promoted.reason, REASON.PROPOSED, JSON.stringify(promoted));
+  settleConfChangeAdmission(f);
+  const beforeDrift = f.cluster.node(leaderOf(f)).readStatus();
+  const {proposalIndex: driftIndex} = await addUnrelatedLearnerNatively(f,
+    'post-promotion-unrelated-learner');
+  const witness = otherFounder(f);
+  const oldPort = f.cluster.node(witness);
+  const reopened = f.cluster.restart(witness);
+  assert.notEqual(reopened.node, oldPort, 'the witness is reconstructed from durable state');
+  fx.bindFounder(witness);
+  const current = reopened.node.readStatus();
+  assert.ok(current.membershipGenerationIndex >= driftIndex &&
+    current.membershipGenerationIndex > promoted.proposalIndex,
+  'the restarted witness exposes the later current configuration');
+  const recorded = await fx.recordVoter(witness);
+  assert.equal(recorded.outcome, 'recorded', JSON.stringify(recorded));
+  const fact = JSON.parse(f.row().message_group_voter_stamp);
+  assert.equal(fact.index, String(promoted.proposalIndex),
+    'the receipt retains the PROMOTE index');
+  assert.equal(fact.after.membershipGenerationIndex, String(promoted.proposalIndex));
+  assert.equal(fact.after.configurationKey, beforeDrift.configurationKey,
+    'the fact retains the configuration produced by PROMOTE');
+  assert.deepEqual(fx.permit(), {...promotion, permitState: 'committed',
+    proposalIndex: promoted.proposalIndex});
+  assert.notEqual(current.configurationKey, fact.after.configurationKey,
+    'current membership remains separate from the historical promotion fact');
+});
+
+test('H2: an unrelated ADD then REMOVE returns to the promotion configuration key but cannot ' +
+  'ABA the receipt index or membership generation', {timeout: 60000}, async (t) => {
+  const fx = await promotionWorld(t); const {f} = fx;
+  assert.equal((await fx.select()).outcome, 'recorded');
+  const promotion = fx.permit();
+  const promoted = await fx.propose();
+  assert.equal(promoted.reason, REASON.PROPOSED, JSON.stringify(promoted));
+  settleConfChangeAdmission(f);
+  const atPromotion = f.cluster.node(leaderOf(f)).readStatus();
+  const unrelated = 'aba-unrelated-learner';
+  const {peerId, proposalIndex: addIndex} = await addUnrelatedLearnerNatively(f, unrelated);
+  settleConfChangeAdmission(f);
+  const removeIndex = await removeUnrelatedPeerNatively(f, unrelated, peerId);
+  const current = f.cluster.node(leaderOf(f)).readStatus();
+  assert.equal(current.configurationKey, atPromotion.configurationKey,
+    'the current configuration key has returned to Ck');
+  assert.ok(current.membershipGenerationIndex >= removeIndex && removeIndex > addIndex &&
+    addIndex > promoted.proposalIndex, 'the current generation records the ABA path');
+  assert.equal((await fx.recordVoter(otherFounder(f))).outcome, 'recorded');
+  const fact = JSON.parse(f.row().message_group_voter_stamp);
+  assert.deepEqual([fact.index, fact.after.membershipGenerationIndex,
+    fact.after.configurationKey], [String(promoted.proposalIndex),
+    String(promoted.proposalIndex), atPromotion.configurationKey],
+  'the receipt is the exact historical promotion fact, not the later equal configuration');
+  assert.deepEqual(fx.permit(), {...promotion, permitState: 'committed',
+    proposalIndex: promoted.proposalIndex});
+  assert.ok(current.membershipGenerationIndex > fx.permit().proposalIndex,
+    'the committed permit still points at k rather than the later generation');
+});
+
+test('the native apply transaction commits the PROMOTE fact and ConfState together: an injected ' +
+  'applied-state failure leaves neither side visible', {timeout: 60000}, async (t) => {
+  const fx = await promotionWorld(t); const {f} = fx;
+  assert.equal((await fx.select()).outcome, 'recorded');
+  const leader = leaderOf(f);
+  const db = f.cluster.replica(leader).db;
+  const before = f.cluster.node(leader).readStatus();
+  db.exec(`CREATE TRIGGER fail_promotion_apply BEFORE UPDATE ON _raft_rs_applied_state
+    WHEN EXISTS (SELECT 1 FROM raft_rs_peer_identity WHERE promotion_admission IS NOT NULL)
+    BEGIN SELECT RAISE(ABORT, 'promotion apply rollback witness'); END`);
+  t.after(() => {
+    if (db.open) db.exec('DROP TRIGGER IF EXISTS fail_promotion_apply');
+  });
+  const proposed = await fx.propose(leader);
+  assert.equal(proposed.reason, REASON.PROPOSED, JSON.stringify(proposed));
+  assert.ok(f.cluster.settle(() =>
+    f.cluster.node(leader).readStatus().outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE),
+  'the injected native application failure engages');
+  const reservation = db.prepare('SELECT promotion_admission FROM raft_rs_peer_identity ' +
+    'WHERE replica_identity = ?').get(TARGET);
+  assert.equal(reservation.promotion_admission, null,
+    'the failed transaction leaves no historical promotion fact');
+  const applied = db.prepare('SELECT applied_index, voters, learners FROM _raft_rs_applied_state ' +
+    'WHERE group_id = ?').get(GROUP);
+  assert.equal(Number(applied.applied_index), before.appliedIndex,
+    'the applied boundary rolls back with the fact');
+  assert.equal(JSON.parse(applied.voters).includes(TARGET_PEER), false);
+  assert.equal(JSON.parse(applied.learners).includes(TARGET_PEER), true,
+    'the pre-promotion learner ConfState remains durable');
+});
+
+test('the retained PROMOTE fact is immutable: identical replay is a no-op and a conflicting ' +
+  'overwrite aborts its enclosing transaction', {timeout: 60000}, async (t) => {
+  const fx = await promotionWorld(t); const {f} = fx;
+  assert.equal((await fx.select()).outcome, 'recorded');
+  assert.equal((await fx.propose()).reason, REASON.PROPOSED);
+  assert.ok(votersEverywhere(f));
+  const db = f.cluster.replica(leaderOf(f)).db;
+  const registry = new RaftRsPeerIdentityRegistry(db);
+  const encoded = registry.committedPromotionAdmission(TARGET);
+  assert.notEqual(encoded, null, 'the real native apply retains the promotion fact');
+  const changes = () => db.prepare('SELECT total_changes() AS n').get().n;
+  const before = changes();
+  db.transaction(() => registry.recordCommittedPromotionAdmission(TARGET, encoded))();
+  assert.equal(changes(), before, 'identical replay performs no SQL update');
+  const fact = JSON.parse(encoded);
+  const conflicting = JSON.stringify({...fact,
+    context: {...fact.context, operationId: 'conflicting-promotion'}});
+  db.exec('CREATE TABLE promotion_rollback_probe (value INTEGER)');
+  db.exec('INSERT INTO promotion_rollback_probe VALUES (0)');
+  assert.throws(() => db.transaction(() => {
+    db.exec('UPDATE promotion_rollback_probe SET value = 1');
+    registry.recordCommittedPromotionAdmission(TARGET, conflicting);
+  })(), {message: RAFT_RS_PEER_IDENTITY_ERROR_MSG.PROMOTION_ADMISSION_CONFLICT});
+  assert.equal(db.prepare('SELECT value FROM promotion_rollback_probe').get().value, 0,
+    'the conflicting fact aborts the whole transaction');
+  assert.equal(registry.committedPromotionAdmission(TARGET), encoded,
+    'conflict cannot replace the original bytes');
+  assert.throws(() => registry.recordCommittedPromotionAdmission(TARGET, encoded),
+    {message: RAFT_RS_PEER_IDENTITY_ERROR_MSG.PROMOTION_ADMISSION_TRANSACTION});
 });
 
 test('process loss between selection and proposal: the restarted holder re-selects nothing, ' +
@@ -530,7 +750,8 @@ test('an unresolved learner attempt holds the group\'s lane: while its holder ow
 });
 
 test('the voter stamp is only the exact committed outcome: a stamp still naming a learner, a ' +
-  'configuration changed beyond the promotion, another transition\'s origin, a moved applied ' +
+  'promotion fact whose member delta contradicts the current permit, another transition\'s ' +
+  'origin, a moved applied ' +
   'index or a malformed observation is refused; absence is UNKNOWN unless fenced; nothing is ' +
   'written until the real committed answer', {timeout: 30000}, async (t) => {
   const fx = await promotionWorld(t); const {f} = fx;
@@ -574,8 +795,9 @@ test('the voter stamp is only the exact committed outcome: a stamp still naming 
   const cases = [
     ['a stamp still naming the target a learner', {...committed, membership: learnerStamp,
       observedAppliedIndex: learnerStamp.appliedIndex}, 'conflict'],
-    ['a configuration changed beyond the promotion', {...committed, membership: narrowed},
-      'conflict'],
+    ['a promotion fact whose member delta contradicts the current permit', {...committed,
+      promotionFact: {...committed.promotionFact, after: {...committed.promotionFact.after,
+        voters: narrowed.voters, configurationKey: narrowed.configurationKey}}}, 'conflict'],
     ['another transition\'s learner origin', {...committed, receipt: {...committed.receipt,
       context: {...committed.receipt.context, operationId: 'another-operation'}}}, 'conflict'],
     ['a moved applied index', {...committed, observedAppliedIndex:
