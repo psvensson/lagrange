@@ -1,0 +1,31 @@
+PASS malformed row retains debt
+PASS row array accessor never executes
+PASS original expiry refuses ACTIVE
+PASS post-tag failure destroys with only C
+PASS DTC configuration getter refused
+PASS direct shutdown refuses success
+PASS close retains exact server debt
+PASS advanced recovery rereads after availability returns
+PASS accepted advanced handoff retains live slot
+PASS engine getter refused without execution
+PASS injected spent control turn refuses
+PASS delayed real timer cannot accept spent turn
+PASS shutdown census cannot reinstall or rewrite object
+PASS typed uncertainty advances backoff
+PASS expired pending cohort respects cap
+PASS expired claim reenters recovery
+PASS retry-first missing progress redrives exact COMMIT
+PASS retry-first advanced disposition retains same record and live slot
+PASS sweep-first missing progress redrives exact COMMIT
+PASS sweep-first advanced disposition retains same record and live slot
+PASS same current exact cap admits retry
+PASS 65000 byte pool refuses 20000 byte session before INSERT
+PASS legitimate backoff expiry rotates to every member
+FAIL B3-1 advanced authority cannot become accepted ACTIVE on old INSERT replay
+PASS B3-1 witness preserves exact INSERT bytes key and durable COMMIT
+FAIL B3-2 retry-first live session can consume initial-row result after caller expiry
+FAIL B3-2 sweep-first live session can consume initial-row result after caller expiry
+FAIL B3-3 unexpired live claim survives unrelated sweep
+FAIL B3-3 actual pgwire queued sweep preserves BEGIN acceptance
+FAIL B3-4 canonical envelope covers actual field lower bound
+24/30 current assertions pass; 6 failures in four grouped findings

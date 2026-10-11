@@ -1,0 +1,13 @@
+FAIL B4-1a advanced retry uses current pre-FIFO turn budget
+PASS advanced expired-control control keeps exact identity and no new INSERT
+FAIL B4-1b explicit consumer retirement preserves advanced recovery obligation
+PASS advanced retirement control keeps exact INSERT key and durable COMMIT unchanged
+FAIL B4-2 existing sweep reconciles live unknown outcome when evidence returns
+PASS live unknown positive control same-session retry sees returned evidence
+FAIL B4-3 retry-first timer then uncertain completion retains live entitlement
+PASS timer retry-first control retains original server debt after uncertain completion
+FAIL B4-3 sweep-first timer then uncertain completion retains live entitlement
+PASS timer sweep-first control retains original server debt after uncertain completion
+FAIL B4-4 envelope covers observed persistence projection and original budget
+PASS resource witness observes distinct live roots without VM layout assumptions
+6/12 extension assertions pass; 6 failures in four grouped findings

@@ -1,0 +1,20 @@
+import {pathToFileURL} from 'node:url';
+const root=process.argv[2],imp=p=>import(pathToFileURL(root+'/'+p));
+const {SQLQueryEngine}=await imp('src/query/sql-query-engine.js');
+const bc=await imp('src/query/distributed/distributed-begin-consumer.js');
+const {buildDecisionRecord,participantIdOf}=await imp('src/partition/partition-participant-transaction-bytes.js');
+const {participantSetTextOf}=await imp('src/query/distributed/distributed-transaction-participant-manifest.js');
+async function run(order){
+ let initial,durable,visible=false;const mutations=[],reads=[],commitEmissions=[],rollbackEmissions=[];
+ const gateway={supportsMutationSubmission:()=>true,async submitMutation(m,options){mutations.push({mutation:m,deadline:options?.timeoutBudget?.deadlineMs??null});if(m.operation==='insert'){initial??={...m.row};durable??={...m.row};return {success:false,error:'Message timeout'};}if(m.tableName==='sql_transactions'){if(m.whereClause&&Object.entries(m.whereClause).some(([k,v])=>durable[k]!==v))return {success:true,completionState:'observed_state_changed'};durable={...durable,...m.data};}return {success:true,completionState:'applied'};},async readAuthoritativeRows(table,sql,params,options){reads.push({table,params,deadline:options?.timeoutBudget?.deadlineMs??null});return visible?{success:true,rows:table==='sql_transactions'?[{...durable}]:[]}:{success:false,error:'authoritative_row_source_unavailable'};},async updateSystemTableRow(table,key,data){mutations.push({legacyUpdate:{table,key,data}});if(table==='sql_transactions')durable={...durable,...data};return {success:true};}};
+ const e=new SQLQueryEngine({autoStartDistributedTransactionRecovery:false,controlPlaneSystemTableGateway:gateway}),c=e.transactionCoordinator;
+ const session='advanced-'+order,consumer=bc.createDistributedBeginConsumer(bc.DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,session),options={sessionId:session};bc.attachDistributedBeginConsumer(options,consumer);
+ const first=await e.executeQuery('BEGIN',[],options),original=c.transactionsBySession.get(session);
+ const snapshot=()=>{const tx=c.transactionsBySession.get(session);return {sameRecord:tx===original,recordCount:c.getTransactionCreationDiagnostics().recordCount,recordBytes:c.getTransactionCreationDiagnostics().recordBytes,roles:c.getTransactionCreationDiagnostics().roles,creationState:tx?.transactionCreationState??null,consumerRetained:tx?.transactionCreationConsumer===consumer,participantIds:tx?[...tx.participants.keys()]:[],decision:tx?.decision??null,admission:c.transactionCreationAdmission(session),durable:{...durable}};};
+ const before=snapshot(),decision=buildDecisionRecord(initial.transaction_id,'COMMIT',[[participantIdOf(initial.transaction_id,'partition-x'),'digest-x']]);durable={...initial,status:'COMMITTING',participant_set_state:'FROZEN',participant_set_text:participantSetTextOf(initial.transaction_id,['partition-x']),commit_mode:'TWO_PHASE_COMMIT',frozen_participant_count:1,decision:decision.decision,decision_text:decision.decisionText,decision_digest:decision.decisionDigest};visible=true;
+ let sweep=null,retry;if(order==='sweep-first')sweep=await c.runRecoverySweep();const beforeRetry=snapshot();retry=await e.executeQuery('BEGIN',[],options);const afterRetry=snapshot();
+ c.commitParticipant=async(session,partition,identity)=>commitEmissions.push({session,partition,identity});c.rollbackParticipant=async(...args)=>rollbackEmissions.push(args);
+ const replay=await c.resumeRecoveredTransactions();const afterReplay=snapshot();const out={order,first,before,beforeRetry,retry,afterRetry,sweep,replay,afterReplay,commitEmissions,rollbackEmissions,mutations,reads};await e.shutdown();return out;
+}
+const results=[];for(const order of ['retry-first','sweep-first']){try{results.push(await run(order));}catch(error){results.push({order,error:error.stack});}}
+console.log('RESULTS_START');console.log(JSON.stringify(results,null,2));

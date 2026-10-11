@@ -1,0 +1,6 @@
+import json,pathlib
+p=pathlib.Path(__file__).parent
+for stem,marker in [('semantic-probes-final','SEMANTIC_RESULTS_START\n'),('advanced-orderings','RESULTS_START\n')]:
+ text=(p/(stem+'.log')).read_text();value=json.loads(text.split(marker,1)[1]);(p/(stem+'.json')).write_text(json.dumps(value,indent=2)+'\n')
+for version in ['old','new']:
+ stem='original-adversary-'+version;text=(p/(stem+'.log')).read_text();start=text.index('{\n  "invalidAdvancedMutableRow"');value=json.loads(text[start:]);(p/(stem+'.json')).write_text(json.dumps(value,indent=2)+'\n')

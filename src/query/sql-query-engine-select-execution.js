@@ -10,6 +10,8 @@ import {buildControlPlaneReadAuthority} from
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {coordinatorTableParticipantRefusal} from
+  './distributed/distributed-transaction-participant-admission.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
@@ -85,6 +87,44 @@ const {
   isRetryableControlPlaneError,
 } = SQL_QUERY_ENGINE_SHARED;
 
+// Preserve the same request identity and caller budget on every read branch.
+function selectRequestOptions(queryOptions, sessionId, transactionRead) {
+  return {
+    sessionId: transactionRead ? sessionId : null,
+    transactionIdentity: transactionRead?.identity,
+    timeoutMs: queryOptions.timeoutMs,
+    timeoutBudget: queryOptions.timeoutBudget || null,
+    cancellationToken: queryOptions.cancellationToken || null,
+    resultMaxBytes: queryOptions.budgets?.RESULT_MAX_BYTES,
+    resultMaxRows: queryOptions.budgets?.RESULT_MAX_ROWS,
+  };
+}
+
+function fromlessSelectResult(first, partitionId) {
+  if (!first || !first.success) {
+    return {
+      success: false,
+      error: first?.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
+      errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
+    };
+  }
+
+  return {
+    success: true,
+    rows: first.rows || [],
+    count: first.rows?.length || 0,
+    partitions: [partitionId],
+    tableName: null,
+    distributedPlan: null,
+    distributedDiagnostics: null,
+    distributedMetrics: {
+      planningDurationMs: 0,
+      executionDurationMs: 0,
+      fanout: null,
+      mergeDurationMs: 0,
+    },
+  };
+}
 class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
   /**
    * Create one control-plane timeout budget.
@@ -220,16 +260,31 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     queryOptions = {},
     rawSql = null,
   ) {
+    if (!sessionId) {
+      return this.executeSelectOwned(ast, params, sessionId, queryOptions, rawSql);
+    }
+    // Capture the admitted identity before waiting for the request lane. A
+    // later BEGIN on a reused session cannot adopt this earlier read.
+    const expected = queryOptions.expectedTransactionId ??
+      this.transactionCoordinator.getTransaction(sessionId)?.transactionId;
+    return this.transactionCoordinator.executeReadStatement(sessionId,
+      expected, (transactionRead) => this.executeSelectOwned(ast, params,
+        sessionId, queryOptions, rawSql, transactionRead));
+  }
+
+  async executeSelectOwned(ast, params, sessionId, queryOptions, rawSql,
+    transactionRead = null) {
     // FROM-less SELECT (e.g., SELECT 1, SELECT 1+1) — route to any
     // available partition and let SQLite evaluate the expression.
     if (!ast.from) {
-      return this.executeFromlessSelect(ast, params, sessionId);
+      return this.executeFromlessSelect(ast, params, sessionId, queryOptions,
+        transactionRead);
     }
 
     const tableName = ast.from.name;
     const tableInfo = this.getTableInfo(tableName);
     const dualWriteMode = this.isDualWriteModeActiveForTable(tableInfo);
-    const authoritativeLocalResult =
+    const authoritativeLocalResult = transactionRead ? null :
       await this.tryExecuteAuthoritativeSystemTableSelect(
         tableName,
         ast,
@@ -279,7 +334,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       this.isSystemTable(tableName) &&
       routingReadinessDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    const preferLeader =
+    const preferLeader = transactionRead ? true :
       typeof queryOptions?.preferLeader === 'boolean' ?
         queryOptions.preferLeader :
         (this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect);
@@ -302,6 +357,13 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       }
     }
 
+    if (transactionRead) {
+      const allParticipants = Array.from(distributedPlan.tablePlans.values())
+        .flatMap((plan) => plan.partitions);
+      const enlisted = await transactionRead.enlist(allParticipants);
+      if (enlisted.success !== true) return enlisted;
+    }
+
     // Execute on resolved partitions
     const executionStartTimeMs = Date.now();
     const deliveryPriority = this.resolveRoutedDeliveryPriority(
@@ -316,16 +378,12 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       partitionIds,
       params,
       {
+        ...selectRequestOptions(queryOptions, sessionId, transactionRead),
         preferLeader,
         preferSameLatencyGroup,
         deliveryPriority,
         distributedPlan,
         routingReadinessDimension,
-        timeoutMs: queryOptions.timeoutMs,
-        timeoutBudget: queryOptions.timeoutBudget || null,
-        cancellationToken: queryOptions.cancellationToken || null,
-        resultMaxBytes: queryOptions.budgets?.RESULT_MAX_BYTES,
-        resultMaxRows: queryOptions.budgets?.RESULT_MAX_ROWS,
       },
     );
     const executionDurationMs = Date.now() - executionStartTimeMs;
@@ -619,7 +677,8 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
    * @return {Promise<Object>} Query result.
    * @private
    */
-  async executeFromlessSelect(ast, params, _sessionId) {
+  async executeFromlessSelect(ast, params, sessionId, queryOptions,
+    transactionRead) {
     const allPartitions = this.systemCache?.getAll?.(TABLES.PARTITIONS) || [];
     if (allPartitions.length === 0) {
       return {
@@ -629,7 +688,14 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       };
     }
 
-    const targetPartitionId = allPartitions[0].partition_id;
+    const target = transactionRead ? allPartitions.find((partition) =>
+      !coordinatorTableParticipantRefusal(partition.table_name)) : allPartitions[0];
+    if (!target) return coordinatorTableParticipantRefusal(allPartitions[0].table_name);
+    const targetPartitionId = target.partition_id;
+    if (transactionRead) {
+      const enlisted = await transactionRead.enlist([targetPartitionId]);
+      if (enlisted.success !== true) return enlisted;
+    }
     const cols = ast.columns.map((col) =>
       this.queryExecutor.buildColumnSQL(col),
     );
@@ -641,37 +707,15 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       params,
       null,
       true,
-      false,
+      Boolean(transactionRead),
       false,
       {
+        ...selectRequestOptions(queryOptions, sessionId, transactionRead),
         routingReadinessDimension: this.defaultRoutingReadinessDimension,
       },
     );
 
-    const first = results[0];
-    if (!first || !first.success) {
-      return {
-        success: false,
-        error: first?.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
-        errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
-      };
-    }
-
-    return {
-      success: true,
-      rows: first.rows || [],
-      count: first.rows?.length || 0,
-      partitions: [targetPartitionId],
-      tableName: null,
-      distributedPlan: null,
-      distributedDiagnostics: null,
-      distributedMetrics: {
-        planningDurationMs: 0,
-        executionDurationMs: 0,
-        fanout: null,
-        mergeDurationMs: 0,
-      },
-    };
+    return fromlessSelectResult(results[0], targetPartitionId);
   }
 
   isRetryableControlPlaneMutationFailure(error) {

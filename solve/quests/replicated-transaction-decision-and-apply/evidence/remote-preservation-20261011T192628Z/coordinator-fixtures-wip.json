@@ -1,0 +1,23 @@
+{
+  "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-coordinator-fixtures-20261011",
+  "worktreeHead": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "base": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "snapshot": "09e010ea13c378ec573597389fee8edd7bbac04f",
+  "tree": "6b5c3385a33822019ecd4cdeb6c5c418d215edce",
+  "callerBefore": {
+    "head": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "branch": "refs/heads/fix/rs-raft-coordinator-fixtures-20261011",
+    "indexSha256": "48d4c1b40a714b5fce163120de3fc0534cfcdfc6ab3ac45145da4376a14fd895",
+    "statusSha256": "407018e9d983ad2b1b6899adeeec490acd416e0e43fc2e249bbcffe2dceb3289",
+    "dirtyContentSha256": "fb8b178891631c1e4d1e801eb30fb547818b6b728028f9b1c747631cc3bf24c5",
+    "dirtyPathCount": 1
+  },
+  "callerAfter": {
+    "head": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "branch": "refs/heads/fix/rs-raft-coordinator-fixtures-20261011",
+    "indexSha256": "48d4c1b40a714b5fce163120de3fc0534cfcdfc6ab3ac45145da4376a14fd895",
+    "statusSha256": "407018e9d983ad2b1b6899adeeec490acd416e0e43fc2e249bbcffe2dceb3289",
+    "dirtyContentSha256": "fb8b178891631c1e4d1e801eb30fb547818b6b728028f9b1c747631cc3bf24c5",
+    "dirtyPathCount": 1
+  }
+}
