@@ -1,0 +1,35 @@
+{
+  "scope": "Unreviewed local startup diagnostics; unchanged oracle interrupted after first later-phase product failure; no successful full production oracle or recovery claim",
+  "artifacts": [
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/test-output/continuation-20261011/startup-activation/wip-source-manifest.sha256",
+      "retained": "wip-source-manifest.sha256.txt",
+      "sha256": "87101c77c73bffdb5b3a0201bd4e4d9127bfdb878a52624f1500d863fc22c5a6",
+      "bytes": 2667
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/test-output/continuation-20261011/startup-activation/startdiag.mjs",
+      "retained": "startdiag.mjs.txt",
+      "sha256": "ce2635bfec3139359c2096b4346907cea1e5e75f75258d301092e9eb91ab52ca",
+      "bytes": 720
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/test-output/continuation-20261011/startup-activation/startdiag-success.log",
+      "retained": "startdiag-success.log.txt",
+      "sha256": "9ade99981906bdd6dd72a2cd55d65b34b1515cfcbc81ab84384e7903579ce475",
+      "bytes": 630406
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/test-output/continuation-20261011/startup-activation/release-topology-pending.log",
+      "retained": "release-topology-pending.log.txt",
+      "sha256": "0eb7456fd69e4f7aa2805b13b5bb055fbf2e039f9992a3c37155b5a1b8ad30a7",
+      "bytes": 74968
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/test-output/continuation-20261011/startup-activation/pgwire-command-tag-real-engine-interrupted-after-first-product-failure.tap.log",
+      "retained": "pgwire-command-tag-real-engine-interrupted-after-first-product-failure.tap.log.txt",
+      "sha256": "9f157e05c4f7b5fd7f9021b7241537d982267b8a5efb30da6ad713a5e7268923",
+      "bytes": 3981
+    }
+  ]
+}
