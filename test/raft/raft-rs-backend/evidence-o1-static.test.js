@@ -86,11 +86,14 @@ test('enumerations: the stamp kinds and bootstrap sources are the two ' +
   assertClassifies('READ_PURPOSE', COMMITTED_MEMBERSHIP_READ_PURPOSE, {
     // A retirement read is a bootstrap read that also refuses a pending
     // configuration change (a retiring group's frozen member set).
-    leaderOnly: ['BOOTSTRAP', 'RETIREMENT'], anyReplica: ['WITNESS'],
+    leaderOnly: ['BOOTSTRAP', 'RETIREMENT'],
+    anyReplica: ['WITNESS', 'LEARNER_ACTION'],
   });
   assertClassifies('ANSWER_FIELD', COMMITTED_MEMBERSHIP_ANSWER_FIELD, {
-    configuration: ['VOTERS', 'VOTERS_OUTGOING', 'LEARNERS', 'IDENTITIES'],
-    label: ['APPLIED_INDEX', 'COMMIT_INDEX', 'TERM', 'LEADER_ID'],
+    configuration: ['VOTERS', 'VOTERS_OUTGOING', 'LEARNERS', 'LEARNERS_NEXT',
+      'IDENTITIES', 'CONFIGURATION_KEY'],
+    label: ['APPLIED_INDEX', 'COMMIT_INDEX', 'TERM', 'LEADER_ID',
+      'MEMBERSHIP_GENERATION_INDEX'],
     gate: ['GATE_OPEN'],
     kind: ['KIND'],
   });
@@ -101,7 +104,8 @@ test('enumerations: every refusal of the boundary is decided at one named ' +
   assertClassifies('REFUSAL', COMMITTED_MEMBERSHIP_REFUSAL, {
     // Answered by the read (the port, from its recorded observation).
     portRead: ['NOT_LEADER', 'JOINT', 'IDENTITY_UNRESOLVED', 'HELD',
-      'NOT_HOSTED', 'CONF_CHANGE_PENDING'],
+      'NOT_HOSTED', 'CONF_CHANGE_PENDING',
+      'CONFIGURATION_GENERATION_UNAVAILABLE'],
     // Thrown by the creation owner before anything is persisted.
     creationOwner: ['MEMBERSHIP_UNREADABLE'],
     // Thrown by the target's handler on arrival.

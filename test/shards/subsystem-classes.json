@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 167,
-    "storage-raft": 119,
+    "storage-raft": 120,
     "test-infrastructure": 142,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2333,
-  "digest": "fnv1a32-1c16158d",
+  "censusSize": 2334,
+  "digest": "fnv1a32-793c0222",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-230b2cb4",
+  "observationDigest": "fnv1a32-80f08bc1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1592,6 +1592,7 @@
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js": "storage-raft",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/snapshot-staging-lifecycle-operation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/stampless-opening-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": "storage-raft",
@@ -7315,6 +7316,7 @@
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-committed-membership-context.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -7362,6 +7364,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-transfer.js",
@@ -9602,6 +9605,7 @@
         "src/message-group/message-group-consensus-port.js",
         "src/message-group/message-group-learner-join.js",
         "src/message-group/message-group-service-state.js",
+        "src/node/message-group-membership-recipient.js",
         "src/node/replica-handler-committed-membership-methods.js",
         "src/node/replica-handler-create-admission-methods.js",
         "src/node/replica-handler-create-methods.js",
@@ -9628,6 +9632,7 @@
         "src/rebalancer/operation-workflow-replace-witness.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
         "src/rebalancer/replica-operation-message-group-promotion.js",
         "src/rebalancer/replica-operation-progress.js",
         "src/rebalancer/replica-operation-repository-row-methods.js",
@@ -10051,6 +10056,8 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-snapshot-staging-lifecycle-operation.js",
+        "src/raft/snapshot-install.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ],
       "directories": [
@@ -10064,6 +10071,7 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -10209,8 +10217,17 @@
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": {
       "files": [
         "src/node/replica-create-admission-owner.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-committed-membership-context.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-checkpoint-constants.js",
         "src/raft/snapshot-checkpoint-store.js",
         "src/raft/snapshot-install-constants.js",
@@ -10287,6 +10304,13 @@
       ],
       "directories": [
         "src"
+      ]
+    },
+    "test/raft/raft-rs-backend/snapshot-staging-lifecycle-operation.test.js": {
+      "files": [
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-snapshot-staging-lifecycle-operation.js",
+        "src/raft/snapshot-install-constants.js"
       ]
     },
     "test/raft/raft-rs-backend/stampless-opening-refusal.test.js": {
