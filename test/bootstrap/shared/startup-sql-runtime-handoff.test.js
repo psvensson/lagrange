@@ -7,6 +7,8 @@ import {
 import {StartupRuntimeHandoffOwner} from
   '../../../src/bootstrap/owners/startup-runtime-handoff-owner.js';
 import {SQLQueryEngine} from '../../../src/query/sql-query-engine.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../../src/control-plane/control-plane-readiness-constants.js';
 
 const STARTUP_SQL_RUNTIME_HANDOFF_SUITE = 'startup-sql-runtime-handoff';
 const STARTUP_SQL_RUNTIME_HANDOFF_TEST = Object.freeze({
@@ -427,8 +429,24 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
         nodeId: 'joining-node',
         messageRouter,
       });
+      let attachedRebalanceCoordinator = null;
+      let attachedPartitionProvisioner = null;
+      let attachedReadinessDimension = null;
+      const provisionResult = Object.freeze({kind: 'provisioned'});
       const sqlQueryEngine = {
         setCDCIntegrationService() {},
+        setRebalanceCoordinator(coordinator) {
+          attachedRebalanceCoordinator = coordinator;
+        },
+        setTablePartitionProvisioner(provisioner) {
+          attachedPartitionProvisioner = provisioner;
+        },
+        setDefaultRoutingReadinessDimension(readinessDimension) {
+          attachedReadinessDimension = readinessDimension;
+        },
+        provisionInitialTablePartition(context) {
+          return {context, ...provisionResult};
+        },
       };
       const tablePolicyService = {};
       let coordinatorSync = null;
@@ -463,6 +481,17 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
       });
 
       assert.strictEqual(coordinatorSync.sqlQueryEngine, sqlQueryEngine);
+      assert.strictEqual(attachedRebalanceCoordinator, rebalanceCoordinator);
+      assert.strictEqual(typeof attachedPartitionProvisioner, 'function');
+      const provisionContext = {partitionId: 'table-p1'};
+      assert.deepStrictEqual(attachedPartitionProvisioner(provisionContext), {
+        context: provisionContext,
+        ...provisionResult,
+      });
+      assert.strictEqual(
+        attachedReadinessDimension,
+        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      );
       assert.strictEqual(coordinatorSync.cdcIntegrationService, cdcIntegrationService);
       assert.strictEqual(coordinatorSync.systemTableCache, systemTableCache);
       assert.strictEqual(coordinatorSync.messageRouter, messageRouter);

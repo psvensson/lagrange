@@ -1,0 +1,43 @@
+{
+  "subjectDesignSha256": "997318ab70d6ce4c8409e20e5d7b2f1ea307f364a530ac875775c85c6cad5590",
+  "reviewSha256": "0833f5d03a7373d370a75780f663557c9ad49550e50c9b5957a98c6e9ead0098",
+  "reviewer": "subagent:/root/review_checkpoint_composition",
+  "verdict": "REVISE_DESIGN",
+  "findings": [
+    "D18",
+    "D19",
+    "D20"
+  ],
+  "files": [
+    {
+      "path": "navigation-0e9/.github/workflows/ci.yml",
+      "bytes": 12789,
+      "sha256": "943215be8b45c3a1e20dde418e79e2031415f135a4c06bc57c4779f97f4ce73b"
+    },
+    {
+      "path": "navigation-0e9/.github/workflows/release.yml",
+      "bytes": 23173,
+      "sha256": "54202a54725f89fc73d1b5d840361ad2ac7f4b34f715e468cc05572c6173dc14"
+    },
+    {
+      "path": "navigation-0e9/Dockerfile",
+      "bytes": 2451,
+      "sha256": "bb5cbb06a85ab66942ffd4abcfcb36b7a13785d0c94cb2f71d237161a764e1a4"
+    },
+    {
+      "path": "navigation-0e9/package.json",
+      "bytes": 19906,
+      "sha256": "0b21e4c76c1c566ecf10f99e71e8307ab178e27efc591082ce33f98c1e3d1e91"
+    },
+    {
+      "path": "navigation.json",
+      "bytes": 8731,
+      "sha256": "1143aa130b672354b6ad39bf6575319d4e70b164033cda1f8a2534cd1c941bca"
+    },
+    {
+      "path": "subject-997318ab.md",
+      "bytes": 132521,
+      "sha256": "997318ab70d6ce4c8409e20e5d7b2f1ea307f364a530ac875775c85c6cad5590"
+    }
+  ]
+}
