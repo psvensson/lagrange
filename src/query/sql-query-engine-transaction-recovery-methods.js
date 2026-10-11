@@ -220,6 +220,13 @@ class SQLQueryEngineTransactionRecoveryMethods
     if (coalescingKey.length > 0) {
       mutationOptions.coalescingKey = coalescingKey;
     }
+    if (typeof options?.idempotencyKey === LOCAL_STR_STRING &&
+        options.idempotencyKey.length > 0) {
+      mutationOptions.idempotencyKey = options.idempotencyKey;
+    }
+    if (options?.timeoutBudget) {
+      mutationOptions.timeoutBudget = options.timeoutBudget;
+    }
     return mutationOptions;
   }
 }

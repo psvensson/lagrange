@@ -49,7 +49,7 @@ function restoredParticipants(tx, pairs, rows) {
   }));
 }
 
-function authorityCandidate(tx, payload) {
+function transactionRecoveryAuthorityCandidate(tx, payload) {
   const row = payload?.transaction;
   if (row?.transaction_id !== tx.transactionId || row.session_id !== tx.sessionId ||
       !isCanonicalTransactionEpoch(row.transaction_epoch) ||
@@ -89,7 +89,7 @@ async function refreshRecoveryAuthority(coordinator, tx) {
     tx.decisionReadState = payload?.state ?? TRANSACTION_AUTHORITY_STATE.UNAVAILABLE;
     return false;
   }
-  const candidate = authorityCandidate(tx, payload);
+  const candidate = transactionRecoveryAuthorityCandidate(tx, payload);
   if (!candidate) {
     tx.decisionReadState = payload.transaction?.participant_set_text == null ?
       TRANSACTION_AUTHORITY_STATE.LEGACY : TRANSACTION_AUTHORITY_STATE.INVALID;
@@ -127,4 +127,5 @@ async function redriveAuthoritativeRecovery(coordinator, tx) {
   return {path: commit ? QUERY_OPERATION.COMMIT : QUERY_OPERATION.ROLLBACK, result};
 }
 
-export {TRANSACTION_AUTHORITY_STATE, redriveAuthoritativeRecovery};
+export {TRANSACTION_AUTHORITY_STATE, redriveAuthoritativeRecovery,
+  transactionRecoveryAuthorityCandidate};
