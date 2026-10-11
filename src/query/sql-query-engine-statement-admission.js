@@ -21,6 +21,12 @@ const STATEMENT_ADMISSION = Object.freeze({
 // Failed COMMIT/ROLLBACK results: whether the engine still holds the
 // session's transaction after the attempt.
 const SESSION_TRANSACTION_ACTIVE_FIELD = 'sessionTransactionActive';
+const SESSION_TRANSACTION_STATE_FIELD = 'sessionTransactionState';
+const SESSION_TRANSACTION_STATE = Object.freeze({
+  CREATION_PENDING: 'CREATION_PENDING',
+  ENTERED_ACTIVE: 'ENTERED_ACTIVE',
+  NONE: 'NONE',
+});
 
 // The statements that end a transaction block: they answer for a
 // transaction the engine no longer holds themselves (NO_TRANSACTION).
@@ -56,6 +62,23 @@ function refused(failure) {
 function admitExpectedTransaction(
   transactionCoordinator, sessionId, expectedTransactionId,
 ) {
+  const creationFailure =
+    transactionCoordinator.transactionCreationAdmission?.(sessionId);
+  if (creationFailure) {
+    if (typeof expectedTransactionId === 'string' &&
+        expectedTransactionId.length > 0 &&
+        expectedTransactionId !== creationFailure.transactionId) {
+      return refused({
+        success: false,
+        error: QUERY_ERROR_MSG.EXPECTED_TRANSACTION_NOT_HELD_PREFIX +
+          expectedTransactionId +
+          QUERY_ERROR_MSG.EXPECTED_TRANSACTION_NOT_HELD_SUFFIX,
+        errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
+        transactionId: expectedTransactionId,
+      });
+    }
+    return refused(creationFailure);
+  }
   const expects = typeof expectedTransactionId === 'string' &&
     expectedTransactionId.length > 0;
   const held = expects ?
@@ -92,6 +115,7 @@ function admitParsedStatement(
 ) {
   const form = admitStatementForm(ast);
   if (form.state === STATEMENT_ADMISSION.REFUSED) return form;
+  if (ast?.type === AST_TYPE.BEGIN_TRANSACTION) return ADMITTED;
   if (transactionCoordinator.getTransaction(sessionId)) {
     const tables = [ast?.table, ast?.from?.name,
       ...(ast?.joins || []).map((join) => join.table?.name)];
@@ -142,11 +166,19 @@ function withSessionTransactionState(result, transactionCoordinator,
     ...result,
     [SESSION_TRANSACTION_ACTIVE_FIELD]:
       transactionCoordinator.hasActiveTransaction(sessionId) === true,
+    [SESSION_TRANSACTION_STATE_FIELD]:
+      transactionCoordinator.transactionCreationAdmission?.(sessionId) ?
+        SESSION_TRANSACTION_STATE.CREATION_PENDING :
+        transactionCoordinator.hasActiveTransaction(sessionId) === true ?
+          SESSION_TRANSACTION_STATE.ENTERED_ACTIVE :
+          SESSION_TRANSACTION_STATE.NONE,
   };
 }
 
 export {
   SESSION_TRANSACTION_ACTIVE_FIELD,
+  SESSION_TRANSACTION_STATE,
+  SESSION_TRANSACTION_STATE_FIELD,
   STATEMENT_ADMISSION,
   TRANSACTION_END_TYPES,
   admitExpectedTransaction,
