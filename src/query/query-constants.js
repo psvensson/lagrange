@@ -57,6 +57,8 @@ const QUERY_ERROR_CODE = Object.freeze({
   ROLLBACK_FAILED: 'ROLLBACK_FAILED',
   TRANSACTION_PARTICIPANTS_FROZEN: 'TRANSACTION_PARTICIPANTS_FROZEN',
   TRANSACTION_RECOVERY_INCOMPLETE: 'TRANSACTION_RECOVERY_INCOMPLETE',
+  TRANSACTION_CREATION_PRESSURE: 'TRANSACTION_CREATION_PRESSURE',
+  TRANSACTION_CREATION_UNCERTAIN: 'TRANSACTION_CREATION_UNCERTAIN',
   TRANSACTION_STATE_PERSIST_FAILED: 'TRANSACTION_STATE_PERSIST_FAILED',
   // An engine that cannot persist transaction state refuses an explicit
   // BEGIN and a multi-partition statement before any participant work
@@ -143,6 +145,10 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Transaction participant set is frozen',
   TRANSACTION_RECOVERY_INCOMPLETE:
     'Transaction recovery state is incomplete or incompatible',
+  TRANSACTION_CREATION_PRESSURE:
+    'Distributed transaction creation capacity is temporarily exhausted',
+  TRANSACTION_CREATION_UNCERTAIN:
+    'Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session',
   TRANSACTION_STATE_PERSIST_FAILED:
     'Distributed transaction state persistence failed',
   TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE:

@@ -7,6 +7,7 @@ import {incompleteParticipantSet, readParticipantSet} from
   './distributed/distributed-transaction-participant-set.js';
 import {TRANSACTION_AUTHORITY_STATE as AUTHORITY} from
   './distributed/distributed-transaction-recovery-authority.js';
+import {copyDenseOwnDataRecordArray} from '../utils/strict-own-data.js';
 
 const {TABLES, CONTROL_PLANE_MUTATION_OPERATION, PRESSURE_WORK_CLASS} =
   SQL_QUERY_ENGINE_SHARED;
@@ -15,16 +16,19 @@ const RECOVERY_ROW_FENCE = Object.freeze(['transaction_id', 'session_id',
   'participant_set_text', 'commit_mode', 'frozen_participant_count', 'decision',
   'decision_text', 'decision_digest']);
 
-async function readAuthorityRow(engine, transactionId) {
+async function readAuthorityRow(engine, transactionId, options = {}) {
   const gateway = engine.getControlPlaneSystemTableGateway();
   const result = await gateway?.readAuthoritativeRows?.(TABLES.SQL_TRANSACTIONS,
     `SELECT * FROM ${TABLES.SQL_TRANSACTIONS} WHERE transaction_id = ?`,
-    [transactionId], {workClass: PRESSURE_WORK_CLASS.CRITICAL});
-  if (result?.success !== true || !Array.isArray(result.rows)) {
+    [transactionId], {workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      timeoutBudget: options.timeoutBudget});
+  if (result?.success !== true) {
     return {state: AUTHORITY.UNAVAILABLE};
   }
-  if (result.rows.length === 0) return {state: AUTHORITY.MISSING};
-  return result.rows.length === 1 ? {state: AUTHORITY.AVAILABLE, transaction: result.rows[0]} :
+  const rows = copyDenseOwnDataRecordArray(result.rows);
+  if (rows === null) return {state: AUTHORITY.INVALID};
+  if (rows.length === 0) return {state: AUTHORITY.MISSING};
+  return rows.length === 1 ? {state: AUTHORITY.AVAILABLE, transaction: rows[0]} :
     {state: AUTHORITY.INVALID};
 }
 
@@ -62,24 +66,28 @@ const sqlQueryEngineTransactionSetMethods = {
     }
   },
 
-  async readDistributedTransactionRecoveryState(transactionId) {
-    const before = await readAuthorityRow(this, transactionId);
+  async readDistributedTransactionRecoveryState(transactionId, options = {}) {
+    const before = await readAuthorityRow(this, transactionId, options);
     if (before.state !== AUTHORITY.AVAILABLE) return before;
     const first = before.transaction;
     const gateway = this.getControlPlaneSystemTableGateway();
     const participants = await gateway.readAuthoritativeRows(TABLES.SQL_TRANSACTION_PARTICIPANTS,
       `SELECT * FROM ${TABLES.SQL_TRANSACTION_PARTICIPANTS} WHERE transaction_id = ?`,
-      [transactionId], {workClass: PRESSURE_WORK_CLASS.CRITICAL});
-    if (participants?.success !== true || !Array.isArray(participants.rows)) {
+      [transactionId], {workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        timeoutBudget: options.timeoutBudget});
+    if (participants?.success !== true) {
       return {state: AUTHORITY.UNAVAILABLE};
     }
-    const after = await readAuthorityRow(this, transactionId);
+    const participantRows = copyDenseOwnDataRecordArray(participants.rows);
+    if (participantRows === null) return {state: AUTHORITY.INVALID};
+    const after = await readAuthorityRow(this, transactionId, options);
     if (after.state !== AUTHORITY.AVAILABLE) return after;
     const row = after.transaction;
     if (RECOVERY_ROW_FENCE.some((field) => first[field] !== row[field])) {
       return {state: AUTHORITY.UNAVAILABLE};
     }
-    return {state: AUTHORITY.AVAILABLE, transaction: row, participants: participants.rows};
+    return {state: AUTHORITY.AVAILABLE, transaction: row,
+      participants: participantRows};
   },
 };
 

@@ -27,6 +27,19 @@ import {TRANSACTION_ID_COLLISION_CODE} from
 
 const TRANSACTION_ID_BYTES = 16;
 const TRANSACTION_ID_ENCODING = 'hex';
+const TRANSACTION_ID_TEXT_LENGTH = TRANSACTION_ID_BYTES * 2;
+
+function isCanonicalTransactionId(value) {
+  if (typeof value !== 'string' ||
+      value.length !== TRANSACTION_ID_TEXT_LENGTH) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (!((code >= 48 && code <= 57) || (code >= 97 && code <= 102))) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * Mint one transaction identity: 128 random bits.
@@ -101,6 +114,7 @@ function isTransactionIdCollision(error) {
 }
 
 export {
+  isCanonicalTransactionId,
   isTransactionIdCollision,
   mintTransactionId,
   participantIdOf,

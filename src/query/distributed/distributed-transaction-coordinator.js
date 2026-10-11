@@ -9,16 +9,12 @@ import {
 } from '../../control-plane/timeout-budget.js';
 import {DurableWorkflowCoordinator} from '../../workflow/durable-workflow-coordinator.js';
 import {
-  COMMIT_MODE,
   isCanonicalTransactionEpoch,
-  PARTICIPANT_SET_STATE,
-  TRANSACTION_MODE,
 } from '../../constants/index.js';
 import {
   PARTICIPANT_RETRY_DEFAULT,
   PARTICIPANT_STATUS,
   RECOVERY_SWEEP_DEFAULT_INTERVAL_MS,
-  TRANSACTION_ID_MINT_ATTEMPTS,
   TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
@@ -63,11 +59,28 @@ import {
 } from './distributed-transaction-records.js';
 import {distributedTransactionParticipantSetMethods} from
   './distributed-transaction-participant-set.js';
-import {
-  isTransactionIdCollision,
-} from './distributed-transaction-identity.js';
 import {distributedTransactionStatementMethods} from
   './distributed-transaction-statement.js';
+import {
+  acceptDistributedBegin,
+  canAcceptDistributedBegin,
+  captureTransactionCreationOperation,
+  creationPressureResult,
+  creationUncertainResult,
+  getTransactionCreationDiagnostics,
+  initializeTransactionCreationOwner,
+  isPendingTransactionCreation,
+  reconcileTransactionCreationOwned,
+  registerUniqueTransaction,
+  releaseTransactionCreationOperation,
+  releaseTransactionCreationRecord,
+  retireDistributedBeginConsumer,
+  retireUncertainCreationsForProcessShutdown,
+  transactionCreationAdmission,
+  transactionCreationOperationConsumer,
+} from './distributed-transaction-creation.js';
+import {TRANSACTION_CREATION_STATE} from
+  './distributed-transaction-creation-contract.js';
 import {admitExpectedTransaction, STATEMENT_ADMISSION} from
   '../sql-query-engine-statement-admission.js';
 
@@ -170,26 +183,67 @@ class DistributedTransactionCoordinator {
     this.recoverySweepInFlight = false;
     this.recoverySweepDeferredUntilMs = 0;
     this.recoverySweepDeferredAttempts = 0;
+    initializeTransactionCreationOwner(this, options);
     this.workflowCoordinator =
       options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         // The transaction row is inserted once, before any participant
         // work; every later write of it updates the existing row.
         persistWorkflow: async (workflow) => {
-          await this.persistTransaction({
-            transactionId: workflow.transactionId || workflow.workflowId,
-            sessionId: workflow.sessionId || workflow.ownerKey,
-            status: workflow.status,
-            transactionEpoch: workflow.transactionEpoch,
-            timeoutDeadline: workflow.timeoutDeadline,
-            transactionMode: workflow.transactionMode,
-            participantSetState: workflow.participantSetState,
-            participantSetText: workflow.participantSetText,
-            commitMode: workflow.commitMode,
-            frozenParticipantCount: workflow.frozenParticipantCount,
-            createdAt: workflow.createdAt,
-            updatedAt: workflow.updatedAt,
-          }, {insertOnce: workflow.transactionRowInserted !== true});
+          if (workflow.transactionCreationReservation &&
+              workflow.transactionCreationReservation.tx !== workflow) {
+            workflow.transactionCreationReservation.tx = workflow;
+          }
+          try {
+            await this.persistTransaction({
+              transactionId: workflow.transactionId || workflow.workflowId,
+              sessionId: workflow.sessionId || workflow.ownerKey,
+              status: workflow.status,
+              transactionEpoch: workflow.transactionEpoch,
+              timeoutDeadline: workflow.timeoutDeadline,
+              transactionMode: workflow.transactionMode,
+              participantSetState: workflow.participantSetState,
+              participantSetText: workflow.participantSetText,
+              commitMode: workflow.commitMode,
+              frozenParticipantCount: workflow.frozenParticipantCount,
+              createdAt: workflow.createdAt,
+              updatedAt: workflow.updatedAt,
+              transactionCreationDeliveryKey:
+                workflow.transactionCreationDeliveryKey,
+              transactionCreationInitialRow:
+                workflow.transactionCreationInitialRow,
+              timeoutBudget: workflow.transactionCreationTurnBudget ||
+                workflow.timeoutBudget,
+            }, {insertOnce: workflow.transactionRowInserted !== true});
+            if (workflow.transactionCreationReservation &&
+                (this.transactionCreationShutdown ||
+                 workflow.transactionCreationGeneration !==
+                   this.transactionCreationGeneration ||
+                 this.workflowCoordinator?.getWorkflowById(
+                   workflow.workflowId) !== workflow ||
+                 this.workflowCoordinator?.workflowsByOwnerKey.get(
+                   workflow.ownerKey) !== workflow)) {
+              const stale = new Error(
+                QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN);
+              stale.code = QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN;
+              throw stale;
+            }
+          } catch (error) {
+            if (error?.code ===
+                QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN) {
+              workflow.transactionCreationState =
+                TRANSACTION_CREATION_STATE.INSERT_OUTCOME_UNCERTAIN;
+            } else if (error?.code ===
+                QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE) {
+              workflow.transactionCreationState =
+                TRANSACTION_CREATION_STATE.RECOVERY_PENDING;
+            }
+            if (error?.code !== QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN &&
+                error?.code !== QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE) {
+              releaseTransactionCreationRecord(this, workflow);
+            }
+            throw error;
+          }
           workflow.transactionRowInserted = true;
         },
         persistParticipant: async (participant) => {
@@ -210,6 +264,13 @@ class DistributedTransactionCoordinator {
           }
         },
         now: this.now,
+        registrationPersistenceFailureDisposition: (workflow, error) =>
+          (error?.code === QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN ||
+           error?.code === QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE) &&
+          this.workflowCoordinator?.getWorkflowById(workflow.workflowId) ===
+            workflow ?
+            'RETAIN_UNRESOLVED' :
+            'REMOVE',
       });
     this.transactionsBySession = this.workflowCoordinator.workflowsByOwnerKey;
     // Each session's last ended transaction: a COMMIT that finds none reads
@@ -228,17 +289,41 @@ class DistributedTransactionCoordinator {
    * @return {Promise<Object>} Transaction begin result.
    */
   async begin(sessionId, options = {}) {
-    const expectedTransactionId = options.expectedTransactionId ??
-      this.getTransaction(sessionId)?.transactionId;
-    return this.runTransactionOperation(sessionId,
-      () => this.beginOwned(sessionId, {...options, expectedTransactionId}));
+    const raw = this.transactionsBySession.get(sessionId);
+    let operationToken;
+    try {
+      operationToken = captureTransactionCreationOperation(this, sessionId,
+        options, raw);
+    } catch (_error) {
+      operationToken = null;
+    }
+    if (!operationToken) return creationPressureResult();
+    try {
+      return await this.runTransactionOperation(sessionId,
+        () => this.beginOwned(sessionId, operationToken));
+    } finally {
+      releaseTransactionCreationOperation(this, operationToken);
+    }
   }
 
-  async beginOwned(sessionId, options) {
+  async beginOwned(sessionId, operationToken) {
+    const raw = this.transactionsBySession.get(sessionId);
+    const consumer = transactionCreationOperationConsumer(operationToken);
+    if (!consumer && !raw) return creationPressureResult();
+    if (raw && isPendingTransactionCreation(raw)) {
+      if (operationToken.expectedTransactionId &&
+          operationToken.expectedTransactionId !== raw.transactionId) {
+        const admission = admitExpectedTransaction(this, sessionId,
+          operationToken.expectedTransactionId);
+        return admission.failure;
+      }
+      return reconcileTransactionCreationOwned(this, raw, consumer,
+        operationToken);
+    }
     const admission = admitExpectedTransaction(this, sessionId,
-      options.expectedTransactionId);
+      operationToken.expectedTransactionId);
     if (admission.state === STATEMENT_ADMISSION.REFUSED) return admission.failure;
-    if (this.transactionsBySession.has(sessionId)) {
+    if (raw) {
       return {
         success: false,
         error: QUERY_ERROR_MSG.TRANSACTION_ACTIVE,
@@ -268,100 +353,13 @@ class DistributedTransactionCoordinator {
       configuredBudgetMs: this.transactionBudgetMs,
       operationName: QUERY_OPERATION.TRANSACTION,
       now: this.now,
-      startedAtMs: Number.isFinite(options.timeoutDeadline) ?
-        options.timeoutDeadline - this.transactionBudgetMs : this.now(),
+      startedAtMs: operationToken.originalDeadlineAtMs -
+        this.transactionBudgetMs,
     });
-    const transactionMode =
-      options.transactionMode === TRANSACTION_MODE.AUTOCOMMIT ?
-        TRANSACTION_MODE.AUTOCOMMIT :
-        TRANSACTION_MODE.EXPLICIT;
-    return this.registerUniqueTransaction(sessionId, {
-      transactionEpoch, timeoutBudget, transactionMode,
+    return registerUniqueTransaction(this, sessionId, {
+      consumer, operationToken, transactionEpoch, timeoutBudget,
+      transactionMode: operationToken.transactionMode,
     });
-  }
-
-  async registerUniqueTransaction(sessionId, fields) {
-    const {transactionEpoch, timeoutBudget, transactionMode} = fields;
-    for (let attempt = 1; ; attempt += 1) {
-      const transactionId = this.createTransactionId(sessionId);
-      try {
-        await this.registerTransaction(sessionId, transactionId, {
-          transactionEpoch,
-          timeoutBudget,
-          transactionMode,
-        });
-      } catch (error) {
-        if (error?.code === QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE &&
-            error.advancedTransactionRow &&
-            this.retainAdvancedTransactionReadback !== null) {
-          try {
-            this.retainAdvancedTransactionReadback(
-              error.advancedTransactionRow,
-            );
-          } catch (recoveryError) {
-            this.logger?.warn?.(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE,
-              {transactionId, error: recoveryError?.message});
-          }
-        }
-        // Only a confirmed collision of the minted identity re-mints; any
-        // other persistence failure is a typed BEGIN failure (seam B/S).
-        if (isTransactionIdCollision(error) &&
-            attempt < TRANSACTION_ID_MINT_ATTEMPTS) {
-          continue;
-        }
-        return {
-          success: false,
-          error: error?.message || QUERY_ERROR_MSG.BEGIN_FAILED,
-          errorCode: error?.code || error?.errorCode ||
-            QUERY_ERROR_CODE.TRANSACTION_STATE_PERSIST_FAILED,
-        };
-      }
-      return {
-        success: true,
-        operation: QUERY_OPERATION.BEGIN_TRANSACTION,
-        sessionId,
-        transactionId,
-        transactionEpoch,
-        transactionMode,
-      };
-    }
-  }
-
-  /**
-   * Insert the transaction's row once, before any participant work, and
-   * hold the transaction for its session.
-   * @param {string} sessionId - Session ID.
-   * @param {string} transactionId - The minted identity.
-   * @param {Object} fields - {transactionEpoch, timeoutBudget,
-   *   transactionMode}.
-   * @return {Promise<void>}
-   * @private
-   */
-  async registerTransaction(sessionId, transactionId, fields) {
-    const {transactionEpoch, timeoutBudget, transactionMode} = fields;
-    const now = this.now();
-    const tx = {
-      sessionId,
-      ownerKey: sessionId,
-      transactionId,
-      workflowId: transactionId,
-      transactionEpoch,
-      timeoutBudget,
-      timeoutDeadline: timeoutBudget.deadlineMs,
-      status: TRANSACTION_STATUS.ACTIVE,
-      transactionMode,
-      participantSetState: PARTICIPANT_SET_STATE.OPEN,
-      participantSetText: JSON.stringify([]),
-      commitMode: COMMIT_MODE.NOT_SELECTED,
-      frozenParticipantCount: 0,
-      participantSetFrozenAt: 0,
-      decisionTrace: [],
-      participants: new Map(),
-      writeOperations: [],
-      createdAt: now,
-      updatedAt: now,
-    };
-    await this.workflowCoordinator.registerWorkflow(tx);
   }
 
   /**
@@ -474,6 +472,9 @@ class DistributedTransactionCoordinator {
 
   async commitOwned(sessionId, expectedTransactionId = null) {
     const tx = this.transactionsBySession.get(sessionId);
+    if (isPendingTransactionCreation(tx)) {
+      return creationUncertainResult(tx);
+    }
     if (!tx || tx.transactionId !== expectedTransactionId) {
       return {
         success: false,
@@ -507,6 +508,9 @@ class DistributedTransactionCoordinator {
 
   async rollbackOwned(sessionId, expectedTransactionId) {
     const tx = this.transactionsBySession.get(sessionId);
+    if (isPendingTransactionCreation(tx)) {
+      return creationUncertainResult(tx);
+    }
     if (!tx || tx.transactionId !== expectedTransactionId) {
       return {
         success: false,
@@ -524,7 +528,7 @@ class DistributedTransactionCoordinator {
    */
   getTransaction(sessionId) {
     const tx = this.transactionsBySession.get(sessionId);
-    if (!tx) {
+    if (!tx || isPendingTransactionCreation(tx)) {
       return null;
     }
     return {
@@ -696,6 +700,35 @@ class DistributedTransactionCoordinator {
 
   getOrderedParticipantDetails(tx) {
     return getOrderedParticipantDetails.call(this, tx);
+  }
+
+  acceptDistributedBegin(consumer, acceptanceToken, enterLocalBlock) {
+    return acceptDistributedBegin(
+      this,
+      consumer,
+      acceptanceToken,
+      enterLocalBlock,
+    );
+  }
+
+  canAcceptDistributedBegin(consumer, acceptanceToken) {
+    return canAcceptDistributedBegin(this, consumer, acceptanceToken);
+  }
+
+  retireDistributedBeginConsumer(sessionId, consumer) {
+    return retireDistributedBeginConsumer(this, sessionId, consumer);
+  }
+
+  retireUncertainCreationsForProcessShutdown() {
+    return retireUncertainCreationsForProcessShutdown(this);
+  }
+
+  getTransactionCreationDiagnostics() {
+    return getTransactionCreationDiagnostics(this);
+  }
+
+  transactionCreationAdmission(sessionId) {
+    return transactionCreationAdmission(this, sessionId);
   }
 }
 

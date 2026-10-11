@@ -9,6 +9,8 @@ import {ServicesOwner} from '../control-plane/owners/services-owner.js';
 import {
   RuntimeReplicaStateProjectionOwner,
 } from './runtime-replica-state-projection-owner.js';
+import {captureCreationResourceOptions} from
+  './distributed/distributed-transaction-creation-resources.js';
 import {
   beginAnswerOf,
   committedAnswerOf,
@@ -64,6 +66,8 @@ function createRuntimeReplicaStateProjectionOwner(engine, options) {
 }
 
 function initializeSqlQueryEngineInstance(engine, options = {}) {
+  const transactionCreationResourceOptions =
+    captureCreationResourceOptions(options);
   engine.systemCache = options.systemCache || null;
   engine.messageRouter = options.messageRouter || null;
   engine.cdcIntegrationService = options.cdcIntegrationService || null;
@@ -117,6 +121,10 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
       engine.getBootstrapRoutingOverlayServices(partitionId),
   };
   engine.nowFn = options.nowFn || (() => Date.now());
+  const queryConfig = ConfigurationManager.getInstance();
+  engine.queryTimeoutMs =
+    queryConfig.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
+    QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
   engine.authoritativeControlPlaneView =
     options.authoritativeControlPlaneView || null;
   engine.controlPlaneTimeoutPolicy =
@@ -263,8 +271,20 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
       epochSource: options.transactionEpochSource,
       loadRecoveryStateForSweep: async () =>
         engine.loadDistributedTransactionRecoveryState(),
-      retainAdvancedTransactionReadback: (row) =>
-        engine.retainAdvancedDistributedTransactionReadback(row),
+      retainAdvancedTransactionReadback: (tx, row, timeoutBudget) =>
+        engine.retainAdvancedDistributedTransactionReadback(
+          tx,
+          row,
+          timeoutBudget,
+        ),
+      maxUncertainTransactionCreations:
+        transactionCreationResourceOptions.maxUncertainTransactionCreations,
+      maxUncertainTransactionCreationCanonicalBytes:
+        transactionCreationResourceOptions
+          .maxUncertainTransactionCreationCanonicalBytes,
+      maxUncertainCreationSweepPerTurn:
+        transactionCreationResourceOptions.maxUncertainCreationSweepPerTurn,
+      transactionCreationTurnBudgetMs: engine.queryTimeoutMs,
     });
   engine.managedSplitWorkflow = options.managedSplitWorkflow || null;
 
@@ -333,11 +353,6 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
         sqlQueryEngine: engine,
       }),
     });
-
-  const config = ConfigurationManager.getInstance();
-  engine.queryTimeoutMs =
-    config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
-    QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
 
   engine.runtimeDriverRegistry = options.runtimeDriverRegistry || null;
   engine.serviceRuntimeLifecycle = options.serviceRuntimeLifecycle || null;
