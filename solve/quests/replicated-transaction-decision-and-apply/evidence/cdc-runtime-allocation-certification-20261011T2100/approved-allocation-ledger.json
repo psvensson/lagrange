@@ -1,0 +1,51 @@
+{
+  "schema": "cdc-approved-allocation-ledger/1",
+  "units": "bytes",
+  "Wbase": {
+    "Aactive": 3670016,
+    "Adrop": 524288,
+    "Iout": 6291456,
+    "Iin": 6291456,
+    "total": 16777216,
+    "expected": 16777216,
+    "exactFit": true
+  },
+  "semanticControlTerm": {
+    "ceiling": 8388608,
+    "bootstrap": 1433600,
+    "afterBootstrap": 6955008,
+    "Bsend": 327680,
+    "windowMs": 30000,
+    "minimumRetryMs": 100,
+    "cadenceOnlyTurns": 300,
+    "counterexampleIfEveryCadenceTurnRetainsOneBsend": 99737600,
+    "certified": false,
+    "reason": "deadline/cadence does not define the actual callback/send-credit population"
+  },
+  "supportedCases": {
+    "eightMiB": {
+      "rowBytes": 8388608,
+      "Wbase": 16777216,
+      "S": 18874368,
+      "H": 2097152,
+      "C": 26214400,
+      "K": 16777216,
+      "controls": 8388608,
+      "total": 89128960,
+      "pool": 134217728,
+      "margin": 45088768
+    },
+    "sixteenMiBPlusOne": {
+      "rowBytes": 16777217,
+      "Wbase": 16777216,
+      "S": 35651586,
+      "H": 2097152,
+      "C": 51380227,
+      "K": 16777216,
+      "controls": 8388608,
+      "total": 131072005,
+      "pool": 134217728,
+      "margin": 3145723
+    }
+  }
+}

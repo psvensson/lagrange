@@ -199,8 +199,12 @@ async function routeMessageGroupCommand(service, command, options) {
   let routed = null;
   const outcome = await service.commandRetryHandler.executeWithRetry(
     async (_target, _message, attemptIndex) => {
+      if (options.shouldContinue && !options.shouldContinue()) {
+        throw Object.assign(new Error(MESSAGE_GROUP_CDC_ERROR_MSG.PROPOSE_TIMEOUT),
+          {retryable: false});
+      }
       routed = routeAttempt(service, command, attemptIndex + 1, routing);
-      await routed.settled;
+      routed.answer = await routed.settled;
       return {success: true};
     },
     {
@@ -220,7 +224,7 @@ async function routeMessageGroupCommand(service, command, options) {
   if (outcome.status !== RetryStatus.SUCCESS) {
     throw outcome.lastError;
   }
-  return {attempt: outcome.attempt + 1, mode: routed.mode};
+  return {attempt: outcome.attempt + 1, mode: routed.mode, answer: routed.answer};
 }
 
 export {
