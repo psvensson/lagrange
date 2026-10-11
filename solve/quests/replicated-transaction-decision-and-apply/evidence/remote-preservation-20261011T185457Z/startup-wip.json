@@ -1,0 +1,13 @@
+{
+  "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+  "worktreeHead": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "base": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "snapshot": "6cdcbeef75518cb53953d699319364b32191ebca",
+  "tree": "4d492edf6249f68f4a01ac9912ab5bd541929c62",
+  "preservedCallerState": {
+    "head": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "branch": "refs/heads/integration/rs-raft-startup-20261011",
+    "indexSha256": "ca384aaa12984178960158d793b549a2ef63b75f6d5452f7d21c7487d7e5c25c",
+    "status": "M src/query/application-database-statement-policy.js\n M src/query/application-database.js\n M src/query/distributed/distributed-transaction-coordinator.js\n M src/query/distributed/distributed-transaction-identity.js\n M src/query/distributed/distributed-transaction-recovery-authority.js\n M src/query/distributed/distributed-transaction-recovery-validation.js\n M src/query/distributed/distributed-transaction-recovery.js\n M src/query/pg/postgres-wire-adapter.js\n M src/query/query-constants.js\n M src/query/sql-query-engine-instance-initializer.js\n M src/query/sql-query-engine-lifecycle-and-callback-dispatch.js\n M src/query/sql-query-engine-request-dispatch.js\n M src/query/sql-query-engine-statement-admission.js\n M src/query/sql-query-engine-transaction-persistence-methods.js\n M src/query/sql-query-engine-transaction-recovery-methods.js\n M src/query/sql-query-engine-transaction-set-methods.js\n M src/query/sql-query-engine.js\n M src/query/sql-request.js\n M src/runtime/pgwire-protocol-handler.js\n M src/runtime/pgwire-runtime-module.js\n M src/runtime/pgwire-transaction-outcome.js\n M src/runtime/request-cell-invocation-owner.js\n M src/workflow/durable-workflow-coordinator.js\n M test/query/transaction-review-adversarial.test.js\n M test/shards/impact-contracts.json\n M test/shards/impact-graph-seal.json\n M test/shards/primary-classes.json\n M test/shards/resource-classes.json\n M test/shards/subsystem-classes.json\n?? solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md\n?? solve/quests/replicated-transaction-decision-and-apply/evidence/review-begin-uncertain-design-round7-cdc56.md\n?? src/query/distributed/distributed-begin-consumer.js\n?? src/query/distributed/distributed-transaction-creation-contract.js\n?? src/query/distributed/distributed-transaction-creation-resources.js\n?? src/query/distributed/distributed-transaction-creation.js\n?? src/query/sql-query-engine-lifecycle-methods.js\n?? src/runtime/pgwire-begin-acceptance.js\n?? test/query/transaction-begin-source-adversarial.test.js\n?? test/query/transaction-begin-uncertain-handoff.test.js"
+  }
+}

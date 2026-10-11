@@ -10,6 +10,9 @@ import {
 } from './partition-service-create-admission-migration-constants.js';
 import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
   './partition-participant-transaction-constants.js';
+import {PARTITION_CDC_COMMAND_TYPES} from
+  './partition-cdc-obligation-constants.js';
+import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   MEMORY_DB_PATH: ':memory:',
@@ -141,6 +144,7 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   SYSTEM_TABLE_WRITE: 'SYSTEM_TABLE_WRITE',
   QUERY: 'QUERY',
   TRANSACTION: 'TRANSACTION',
+  COORDINATOR_SETTLEMENT: COORDINATOR_SETTLEMENT_TYPE,
   START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
   START_MERGE_REPLICATION: 'START_MERGE_REPLICATION',
   LEARNER_PROMOTION_PROOF: 'LEARNER_PROMOTION_PROOF',
@@ -168,7 +172,8 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
 
 // The committed command types the application executes as SQL, the
 // transaction markers (session-bound: TRANSACTION_COMMIT records the session's
-// outcome, PREPARE_TRANSACTION and ROLLBACK are recorded in the log only), and
+// outcome, PREPARE_TRANSACTION and ROLLBACK are recorded in the log only), the
+// participant transaction commands, the CDC delivery owner's CDC_DELIVERED, and
 // every type it recognises. Anything else is UNRECOGNISED. Frozen arrays:
 // membership is asked of the admission owner, which decides before consensus
 // what may be proposed (partition-committed-command-admission.js).
@@ -190,6 +195,8 @@ const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
   ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   ...PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
   ...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+  ...PARTITION_CDC_COMMAND_TYPES,
+  COORDINATOR_SETTLEMENT_TYPE,
 ]);
 
 // The reason a group's host failure names when a committed entry carries a

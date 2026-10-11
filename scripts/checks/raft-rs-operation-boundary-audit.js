@@ -13,6 +13,7 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const RUNTIME_OWNER = 'src/raft/raft-rs-runtime-owner.js';
+const BINDING_OWNER = 'src/raft/raft-rs-binding-owner.js';
 const CORE_LOADER = 'src/raft/raft-rs-core.js';
 const LIFECYCLE_OWNER =
   'src/raft/raft-rs-replica-lifecycle-owner.js';
@@ -56,6 +57,7 @@ const AUDIT_SYNTAX = Object.freeze({
 const AUDIT_VIOLATION = Object.freeze({
   DIRECT_BINDING_IMPORT: 'direct-binding-import',
   BINDING_IMPORT_OUTSIDE_OWNER: 'binding-import-outside-owner',
+  BINDING_OWNER_IMPORT_BYPASS: 'binding-owner-import-bypass',
   RUNTIME_OWNER_IMPORT_BYPASS: 'runtime-owner-import-bypass',
   LIFECYCLE_ADMIN_IMPORT_BYPASS: 'lifecycle-admin-import-bypass',
   LIFECYCLE_OWNER_IMPORT_BYPASS: 'lifecycle-owner-import-bypass',
@@ -245,6 +247,7 @@ function auditRaftRsOperationBoundary({root}) {
   const sourceRoot = path.join(root, 'src');
   const coreLoader = path.join(root, CORE_LOADER);
   const runtimeOwner = path.join(root, RUNTIME_OWNER);
+  const bindingOwner = path.join(root, BINDING_OWNER);
   const lifecycleAdmin = path.join(root, LIFECYCLE_ADMIN);
   const lifecycleOwner = path.join(root, LIFECYCLE_OWNER);
   const membershipAdmin = path.join(root, MEMBERSHIP_ADMIN);
@@ -280,7 +283,7 @@ function auditRaftRsOperationBoundary({root}) {
       const specifier = importSource(node, constants);
       if (typeof specifier === 'string' &&
           DIRECT_BINDING_PATTERN.test(specifier) &&
-          fileName !== RUNTIME_OWNER && fileName !== CORE_LOADER) {
+          fileName !== BINDING_OWNER) {
         violations.push(violation(
           fileName, AUDIT_VIOLATION.DIRECT_BINDING_IMPORT,
           specifier));
@@ -295,6 +298,12 @@ function auditRaftRsOperationBoundary({root}) {
         fileName !== PORT_CONSTRUCTOR) {
         violations.push(violation(
           fileName, AUDIT_VIOLATION.RUNTIME_OWNER_IMPORT_BYPASS,
+          String(specifier)));
+      }
+      if (resolvesTo(file, specifier, bindingOwner) &&
+          fileName !== RUNTIME_OWNER) {
+        violations.push(violation(
+          fileName, AUDIT_VIOLATION.BINDING_OWNER_IMPORT_BYPASS,
           String(specifier)));
       }
       if (resolvesTo(file, specifier, lifecycleAdmin) &&
@@ -352,7 +361,7 @@ function auditRaftRsOperationBoundary({root}) {
           stringTrim(value).slice(0, LIFECYCLE_SQL_DETAIL_LIMIT)));
       }
       if (node.type === AUDIT_AST.EXPORT_NAMED_DECLARATION &&
-        fileName !== CORE_LOADER && fileName !== RUNTIME_OWNER) {
+        fileName !== BINDING_OWNER) {
         const names = arrayMap(
           node.specifiers, (entry) => entry.local?.name);
         if (arraySome(names, (name) =>
@@ -371,6 +380,7 @@ function auditRaftRsOperationBoundary({root}) {
 
 export {
   auditRaftRsOperationBoundary,
+  BINDING_OWNER,
   CORE_LOADER,
   LIFECYCLE_ADMIN,
   LIFECYCLE_COORDINATOR,
