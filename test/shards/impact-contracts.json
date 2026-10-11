@@ -3,6 +3,54 @@
   "id": "impact-contracts",
   "description": "Semantic contract edges for the impact proof-cone selector (developer-velocity epic V4a). Production paths declare the contracts they own; tests declare the contracts they exercise. Changing a contract-owning path selects every test claiming that contract. Unknown or undeclared contracts fail closed. This manifest is EXPLICIT and hand-curated; static dependency and coverage relationships are generated and live elsewhere. Every owner/test path must exist in the tree (directory prefix or file); dead edges are a contract defect.",
   "contracts": {
+    "distributed-transaction-coordinator-participant-protocol": {
+      "description": "The query coordinator and partition participant share one TX1 revision-10 identity, manifest, prepare evidence, immutable decision and typed-answer protocol. Every coordinator-managed transaction prepares before one decision; a recorded COMMIT only moves forward, and recovery re-drives the exact recorded decision.",
+      "owners": [
+        "src/query/distributed/distributed-transaction-",
+        "src/query/sql-query-engine-participant-wire.js",
+        "src/query/sql-query-engine-transaction-persistence-methods.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/query/sql-query-engine-write-execution.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-participant-transaction-",
+        "src/query/sql-query-engine-select-execution.js",
+        "src/query/query-executor-base.js",
+        "src/query/query-executor-join-execution.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/cdc/cdc-event-envelope.js",
+        "src/cdc/cdc-source-scope-evidence.js",
+        "src/partition/cdc-event-buffer.js",
+        "src/partition/partition-cdc-delivery.js",
+        "src/partition/partition-cdc-generator.js",
+        "src/partition/partition-cdc-obligation-",
+        "src/partition/partition-committed-command-admission.js",
+        "src/partition/partition-committed-statement-outcome",
+        "src/partition/partition-coordinator-settlement",
+        "src/partition/partition-coordinator-table-columns.js",
+        "src/partition/partition-service-cdc-stream-base.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-service-raft-write-commit.js",
+        "src/partition/partition-service-table-bootstrap.js",
+        "src/partition/partition-service-transaction-base.js",
+        "src/partition/partition-service-write-metrics-base.js",
+        "src/partition/partition-write-kernel.js"
+      ],
+      "tests": [
+        "test/query/partition-transaction-seam-falsifiers.test.js",
+        "test/query/transaction-coordinator-participant-protocol.test.js",
+        "test/query/transaction-evidence-binding-production.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/query/transaction-review-adversarial.test.js",
+        "test/query/transaction-release-settlement.test.js",
+        "test/partition/participant-decision-canonical-record.test.js",
+        "test/partition/partition-cdc-obligation.test.js",
+        "test/partition/partition-service-shutdown-timers.test.js",
+        "test/partition/partition-coordinator-settlement.test.js",
+        "test/partition/partition-transaction-replicated-apply-v3.test.js",
+        "test/query/transaction-coordinator-settlement.test.js",
+        "test/query/transaction-schema-enforcement.test.js"
+      ]
+    },
     "wit-world-interface": {
       "description": "The WIT world/component interface shape; every WASM service consumer depends on it.",
       "owners": [
@@ -352,7 +400,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -363,7 +411,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -374,7 +422,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -990,6 +1038,40 @@
     }
   },
   "coupledPairs": {
+    "distributed-transaction-coordinator-participant-protocol": {
+      "description": "Coordinator decisions are bound to the PREPARE evidence participants answer, and participants apply only that bound decision and return exact durable outcomes.",
+      "endpoints": [
+        {
+          "id": "coordinator-decision-and-wire",
+          "owners": [
+            "src/query/distributed/distributed-transaction-",
+            "src/query/sql-query-engine-participant-wire.js",
+            "src/query/sql-query-engine-transaction-persistence-methods.js",
+            "src/query/query-executor-partition-request-builders.js",
+            "src/query/sql-query-engine-write-execution.js",
+            "src/bootstrap/system-table-workflow-schema-definitions.js",
+            "src/query/sql-query-engine-select-execution.js",
+            "src/query/query-executor-base.js",
+            "src/query/query-executor-join-execution.js"
+          ]
+        },
+        {
+          "id": "participant-request-and-apply",
+          "owners": [
+            "src/partition/partition-participant-transaction-"
+          ]
+        }
+      ],
+      "contract": "distributed-transaction-coordinator-participant-protocol",
+      "witnessTests": [
+        "test/query/partition-transaction-seam-falsifiers.test.js",
+        "test/query/transaction-coordinator-participant-protocol.test.js",
+        "test/query/transaction-evidence-binding-production.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/query/transaction-review-adversarial.test.js",
+        "test/query/transaction-release-settlement.test.js"
+      ]
+    },
     "seed-registration-election-scheduling": {
       "description": "Registration owns the exact direct-write dependency cut and one wait budget; partition scheduling prioritizes that cut and releases all other elections without restating it.",
       "endpoints": [

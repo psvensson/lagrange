@@ -264,6 +264,36 @@ test('shutdown waits for tracked in-flight CDC delivery', async (t) => {
     'tracked CDC deliveries should be cleared after shutdown');
 });
 
+test('tracked rejected CDC delivery is reported and cleanup creates no rejected child promise',
+  async (t) => {
+    const partition = createTestPartition();
+    await partition.initialize();
+    const logged = [];
+    const unhandled = [];
+    const originalError = partition.logger.error;
+    const onUnhandled = (error) => unhandled.push(error);
+    partition.logger.error = (...args) => logged.push(args);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const failure = Object.assign(new Error('tracked CDC rejection witness'),
+        {code: 'CDC_TRACKED_REJECTION'});
+      const rejected = Promise.reject(failure);
+      partition.trackPendingCDCEvent(rejected);
+      await rejected.catch(() => undefined);
+      await new Promise((resolve) => setImmediate(resolve));
+      t.equal(partition.pendingCDCEventDeliveries.size, 0,
+        'the rejected delivery is removed from shutdown tracking');
+      t.equal(logged.length, 1,
+        'the owner reports the exceptional completion');
+      t.same(unhandled, [],
+        'cleanup does not discard a rejecting promise.finally child');
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+      partition.logger.error = originalError;
+      await partition.shutdown();
+    }
+  });
+
 test('cleanup partition service shutdown timer tests', async (t) => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
