@@ -88,12 +88,14 @@ function coreOk(reason, fields = {}) {
 // command the port encoded, decoded by the same codec, and the entry's
 // position and deferred-effect bag the runtime hands the application.
 function committedEntryApplication(applyCommittedEntry) {
-  return (bytes, {index, term, effects}) => applyCommittedEntry(Object.freeze({
+  return (bytes, {index, term, effects, committedConfiguration}) =>
+    applyCommittedEntry(Object.freeze({
     command: decodeCommittedProposal(bytes),
     index: Number(index),
     term: Number(term),
+    committedConfiguration,
     effects,
-  }));
+    }));
 }
 
 function tickIntervalOf(timing) {

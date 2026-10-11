@@ -19,9 +19,27 @@ const PARTICIPANT_TRANSACTION_COMMAND = Object.freeze({
   PREPARE: 'PARTICIPANT_PREPARE',
   DECISION: 'PARTICIPANT_DECISION',
   GENERATION_ORIGIN: 'PARTICIPANT_GENERATION_ORIGIN',
+  ADMISSION_PAUSE: 'PAUSE_PARTICIPANT_ADMISSION',
+  RELEASE_RESERVE: 'RESERVE_PARTICIPANT_RELEASE',
+  RELEASE_FINALIZE: 'FINALIZE_PARTICIPANT_RELEASE',
+  RELEASE_DISPATCH: 'DISPATCH_PARTICIPANT_RELEASE',
+  RELEASE_RETIRE: 'RETIRE_PARTICIPANT_RELEASE',
+  ADMISSION_RESUME: 'RESUME_PARTICIPANT_ADMISSION',
+  RELEASE_CONFIRM: 'CONFIRM_PARTICIPANT_RELEASE',
 });
 const PARTICIPANT_TRANSACTION_COMMAND_TYPES = Object.freeze(
-  Object.values(PARTICIPANT_TRANSACTION_COMMAND));
+  [PARTICIPANT_TRANSACTION_COMMAND.PREPARE,
+    PARTICIPANT_TRANSACTION_COMMAND.DECISION,
+    PARTICIPANT_TRANSACTION_COMMAND.GENERATION_ORIGIN]);
+const PARTICIPANT_RELEASE_COMMAND_TYPES = Object.freeze([
+  PARTICIPANT_TRANSACTION_COMMAND.ADMISSION_PAUSE,
+  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_RESERVE,
+  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_FINALIZE,
+  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_DISPATCH,
+  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_RETIRE,
+  PARTICIPANT_TRANSACTION_COMMAND.ADMISSION_RESUME,
+  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_CONFIRM,
+]);
 
 // What a decision decides (design 2.4).
 const PARTICIPANT_TRANSACTION_DECISION = Object.freeze({
@@ -220,14 +238,26 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
         singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
         generation INTEGER NOT NULL,
         origin_index INTEGER,
-        origin_term INTEGER
+        origin_term INTEGER,
+        participant_pause_generation INTEGER NOT NULL DEFAULT 0,
+        participant_pause_entry_id TEXT,
+        participant_release_control_revision INTEGER NOT NULL DEFAULT 0,
+        participant_release_control_text TEXT,
+        participant_release_authorization_text TEXT,
+        participant_release_authorization_index INTEGER,
+        participant_release_authorization_term INTEGER
       )
     `,
   INSERT_INITIAL_GENERATION:
     'INSERT OR IGNORE INTO _partition_write_generation ' +
     '(singleton, generation) VALUES (1, 0)',
   SELECT_GENERATION:
-    'SELECT generation, origin_index, origin_term ' +
+    'SELECT generation, origin_index, origin_term, ' +
+    'participant_pause_generation, participant_pause_entry_id, ' +
+    'participant_release_control_revision, participant_release_control_text, ' +
+    'participant_release_authorization_text, ' +
+    'participant_release_authorization_index, ' +
+    'participant_release_authorization_term ' +
     'FROM _partition_write_generation WHERE singleton = 1',
   // The origin is recorded once: a later origin command changes nothing.
   RECORD_ORIGIN:
@@ -364,6 +394,35 @@ const PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS = Object.freeze({
     'ALTER TABLE _partition_write_generation ADD COLUMN origin_term INTEGER',
 });
 
+// Release state extends the existing singleton generation owner. Older
+// application images gain the fields at open; no second release ledger is
+// created. Control state is canonical JSON for the one transition slot, while
+// the authorization fields are the dependent partition's last committed
+// target authorization.
+const PARTICIPANT_TRANSACTION_RELEASE_COLUMNS = Object.freeze({
+  participant_pause_generation:
+    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
+    'participant_pause_generation INTEGER NOT NULL DEFAULT 0',
+  participant_pause_entry_id:
+    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
+    'participant_pause_entry_id TEXT',
+  participant_release_control_revision:
+    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
+    'participant_release_control_revision INTEGER NOT NULL DEFAULT 0',
+  participant_release_control_text:
+    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
+    'participant_release_control_text TEXT',
+  participant_release_authorization_text:
+    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
+    'participant_release_authorization_text TEXT',
+  participant_release_authorization_index:
+    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
+    'participant_release_authorization_index INTEGER',
+  participant_release_authorization_term:
+    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
+    'participant_release_authorization_term INTEGER',
+});
+
 // The coordinator's durable record columns on the two transaction system
 // tables (TX1 seams C and E, the coordinator seam's participant obligations,
 // 0.0.15): the insert-once decision record on `sql_transactions` and the
@@ -388,12 +447,14 @@ const PARTICIPANT_COORDINATOR_TABLE_COLUMNS = Object.freeze({
 export {
   PARTICIPANT_COORDINATOR_TABLE_COLUMNS,
   PARTICIPANT_TRANSACTION_ADMISSION_CODE,
+  PARTICIPANT_RELEASE_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_BYTES,
   PARTICIPANT_TRANSACTION_COMMAND,
   PARTICIPANT_TRANSACTION_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE,
   PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS,
+  PARTICIPANT_TRANSACTION_RELEASE_COLUMNS,
   PARTICIPANT_TRANSACTION_LOG_MSG,
   PARTICIPANT_TRANSACTION_MESSAGE,
   PARTICIPANT_TRANSACTION_REFUSAL_CAUSE,

@@ -920,12 +920,37 @@ function resolveEntryConfStateOrFailure(group, expectedGeneration, entry) {
 function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
   nextMembershipGeneration, admitted}) {
   try {
+    const confState = resolvedConfState.value;
+    const memberIds = [...new Set([
+      ...(confState.voters || []), ...(confState.votersOutgoing || []),
+      ...(confState.learners || []), ...(confState.learnersNext || []),
+    ].map(String))];
+    const identities = {};
+    for (const peerId of memberIds) {
+      const resolved = peerId === String(group.peerId) ?
+        {status: RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED,
+          replicaIdentity: group.replicaIdentity} :
+        group.resolvePeerIdentity(peerId);
+      identities[peerId] = resolved.status ===
+        RAFT_RS_PEER_IDENTITY_RESOLUTION.RESERVED ?
+        resolved.replicaIdentity : null;
+    }
+    const committedConfiguration = deepFreeze({
+      voters: [...(confState.voters || [])].map(String).sort(),
+      votersOutgoing: [...(confState.votersOutgoing || [])].map(String).sort(),
+      learners: [...(confState.learners || [])].map(String).sort(),
+      learnersNext: [...(confState.learnersNext || [])].map(String).sort(),
+      configurationKey: raftRsConfStateKey(confState),
+      membershipGenerationIndex: Number(nextMembershipGeneration),
+      identities,
+    });
     applyCommittedEntryTransaction({
       store: group.store,
       groupId: group.groupId,
       entry,
       confState: resolvedConfState.value,
       membershipGenerationIndex: String(nextMembershipGeneration),
+      committedConfiguration,
       applyCommittedEntry: group.applyCommittedEntry,
       admitted,
       committedMembershipContext: resolvedConfState.membershipContext || null,
@@ -1187,6 +1212,7 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   // may run ahead of it), never the core's status.applied.
   return {ok: true, value: {status: status.value, confState: conf.value,
     ...observedParticipation(group),
+    lastIndex: group.persistedLastIndex,
     configurationKey: raftRsConfStateKey(conf.value),
     membershipGenerationIndex: group.membershipGenerationKnown ?
       Number(group.membershipGenerationIndex) : null,

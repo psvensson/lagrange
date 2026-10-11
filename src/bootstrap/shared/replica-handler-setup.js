@@ -181,6 +181,7 @@ class ReplicaHandlerSetup {
       replicaStateMachine: existingReplicaStateMachine,
       timeSource,
       ownerIncarnation,
+      deferInitialization = false,
     } = options;
 
     // Validate required dependencies
@@ -261,10 +262,12 @@ class ReplicaHandlerSetup {
       dataDir,
       executorOutcomeEmitter,
       ownerIncarnation,
+      timeSource,
     });
 
-    // Initialize the handler
-    replicaHandler.initialize();
+    if (!deferInitialization) {
+      replicaHandler.initialize();
+    }
 
     // Register with message router for receiving replica operation messages
     replicaHandler.registerWithRouter(messageRouter, {

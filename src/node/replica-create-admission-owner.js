@@ -676,6 +676,25 @@ class ReplicaCreateAdmissionOwner {
     );
   }
 
+  async authorizeParticipantRelease(evidence, physicalClaim) {
+    if (evidence?.admissionState !== CREATE_ADMISSION_STATE.MATERIALIZED ||
+        !await this.revalidatePhysicalWorker(physicalClaim, evidence)) {
+      return null;
+    }
+    const row = await this.readOperation(evidence.operationId);
+    await this.requireCurrentBootIncarnation();
+    if (!rowMatchesAdmission(row, requestFromAdmissionRow(row)) ||
+        !rowMatchesAdmissionIdentity(row, evidence) ||
+        row.create_admission_state !== CREATE_ADMISSION_STATE.MATERIALIZED ||
+        nullableSafeInteger(row.create_admission_owner_incarnation) !==
+          this.ownerIncarnation ||
+        row.completed_at !== null && row.completed_at !== undefined ||
+        !await this.revalidatePhysicalWorker(physicalClaim, evidence)) {
+      return null;
+    }
+    return evidence;
+  }
+
   async markProgress(evidence, nextState) {
     if (nextState !== CREATE_ADMISSION_STATE.ACTIVE &&
         nextState !== CREATE_ADMISSION_STATE.FAILED) return null;

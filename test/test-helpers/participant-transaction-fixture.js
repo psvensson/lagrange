@@ -33,6 +33,13 @@ import {readParticipantReleaseFacts} from
   '../../src/partition/partition-participant-release-facts.js';
 import {releaseIdentityOf} from
   '../../src/partition/partition-participant-release-contract.js';
+import {buildParticipantAdmissionPauseCommand,
+  buildParticipantAdmissionResumeCommand,
+  buildParticipantReleaseFinalizeCommand,
+  targetEntryOf} from
+  '../../src/partition/partition-participant-release-command.js';
+import {readParticipantReleaseState} from
+  '../../src/partition/partition-participant-transaction-store.js';
 import {resumeParticipantCutoverAdmission} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
@@ -424,22 +431,66 @@ async function resumeFixtureParticipantAdmission(leader) {
   const configurationKey = raftRsConfStateKey(confState);
   const port = leader.controllablePort;
   port.configurationKey = configurationKey;
-  port.membershipGenerationIndex = port.committedIndex;
+  const membershipGenerationIndex = port.committedIndex;
+  port.membershipGenerationIndex = membershipGenerationIndex;
   port.committedMembershipHandler = () => deepFreeze({
     kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
     ...confState, identities: {[peerId]: leader.replicaId},
     appliedIndex: port.committedIndex, commitIndex: port.committedIndex,
-    configurationKey, membershipGenerationIndex: port.committedIndex,
+    configurationKey, membershipGenerationIndex,
     term: port.term, leaderId: leader.replicaId, gateOpen: true,
   });
   const handler = {nodeId: leader.nodeId, ownerIncarnation: 1,
     localServices: new Map([[leader.replicaId, leader]])};
-  const facts = await readParticipantReleaseFacts(handler, leader);
+  let facts = await readParticipantReleaseFacts(handler, leader);
   const release = releaseIdentityOf({partitionId: leader.partitionId,
     targetBuildDigest: facts.buildDigest, configurationKey,
-    membershipGenerationIndex: port.committedIndex});
+    membershipGenerationIndex});
+  const stamp = () => ({timestamp: leader.hlcClock.now().toString(),
+    proposedBy: leader.replicaId, proposedAt: leader.timeSource.now()});
+  const pause = buildParticipantAdmissionPauseCommand(leader.partitionId,
+    'fixture-participant-release-pause', stamp());
+  if (pause === null || applyCommitted(leader, pause) !== null) {
+    throw new Error('fixture participant release pause refused');
+  }
+  facts = await readParticipantReleaseFacts(handler, leader);
+  const authorizationId = 'fixture-participant-release-authorization';
+  const finalized = buildParticipantReleaseFinalizeCommand({
+    controlPartitionId: leader.partitionId,
+    dependentRelease: release,
+    controlRelease: release,
+    controlCensus: [facts],
+    dependentCensus: [facts],
+    authorizationId,
+    expectedControlRevision: 0,
+    deadlineAtMs: leader.timeSource.now() + 30000,
+  }, stamp());
+  const finalizationError = finalized === null ? 'invalid-command' :
+    applyCommitted(leader, finalized);
+  if (finalizationError !== null) {
+    throw new Error('fixture participant release finalization refused: ' +
+      finalizationError);
+  }
+  const target = targetEntryOf(facts);
+  const releaseState = readParticipantReleaseState(leader.db);
+  const resumed = buildParticipantAdmissionResumeCommand({
+    partitionId: leader.partitionId,
+    dependentRelease: release,
+    controlPartitionId: leader.partitionId,
+    controlAuthorizationId: authorizationId,
+    controlAuthorizationRevision: releaseState.controlRevision,
+    expectedPauseGeneration: releaseState.pauseGeneration,
+    target, census: [facts],
+  }, stamp());
+  if (resumed === null || applyCommitted(leader, resumed) !== null) {
+    throw new Error('fixture participant release resume refused');
+  }
+  facts = await readParticipantReleaseFacts(handler, leader);
   const outcome = await resumeParticipantCutoverAdmission(handler, leader,
-    {release, census: [facts]});
+    {release, census: [facts], attempt: {term: facts.membership.term,
+      leaderReplicaId: facts.leaderReplicaId},
+    controlAuthorization: {controlPartitionId: leader.partitionId,
+      authorizationId, authorizationRevision: releaseState.controlRevision}});
   if (outcome !== 'resumed') {
     throw new Error(`fixture participant release refused: ${outcome}`);
   }
@@ -771,6 +822,7 @@ export {
   queryMessage,
   removeAppliedStateFailure,
   removeStorageFault,
+  resumeFixtureParticipantAdmission,
   rowCount,
   send,
   settleTicks,

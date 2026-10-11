@@ -6,7 +6,8 @@ const PARTICIPANT_RELEASE_RESULT_FIELD = 'releaseResult';
 const PARTICIPANT_RELEASE_VERSION = 1;
 const PARTICIPANT_RELEASE_ACTION = Object.freeze({
   RELEASE: 'release', INSPECT: 'inspect', PAUSE: 'pause', DRAIN: 'drain',
-  REOPEN: 'reopen', ENABLE: 'enable', RESUME: 'resume',
+  REOPEN: 'reopen', ENABLE: 'enable', AUTHORIZE: 'authorize',
+  RESUME: 'resume', CONFIRM: 'confirm',
 });
 const PARTICIPANT_CUTOVER_PHASE = Object.freeze({
   INSPECT: 'inspect', PAUSE: 'pause', DRAIN: 'drain', REOPEN: 'reopen',
@@ -16,6 +17,7 @@ const PARTICIPANT_CUTOVER_PHASE = Object.freeze({
 const PARTICIPANT_CUTOVER_OUTCOME = Object.freeze({
   CUT_OVER: 'cut_over', OBSERVED: 'observed', PAUSED: 'paused',
   DRAINED: 'drained', REOPENED: 'reopened', RESUMED: 'resumed',
+  AUTHORIZED: 'authorized', CONFIRMED: 'confirmed',
   NOT_LEADER: 'not_leader', UNAVAILABLE: 'release_fact_unavailable',
   INVALID: 'release_request_invalid', STALE: 'release_generation_changed',
   BUILD_MISMATCH: 'release_build_mismatch', DRAIN_PENDING: 'release_drain_pending',
