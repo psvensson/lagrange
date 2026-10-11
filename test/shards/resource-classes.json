@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2336,
+    "ordinary": 2337,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2353,
-  "digest": "fnv1a32-6b6148bc",
+  "censusSize": 2354,
+  "digest": "fnv1a32-f8023bc4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1497,6 +1497,7 @@
     "test/query/strategy-selector.test.js": "ordinary",
     "test/query/streaming-aggregation.property.test.js": "ordinary",
     "test/query/table-creation-service.test.js": "ordinary",
+    "test/query/transaction-begin-uncertain-handoff.test.js": "ordinary",
     "test/query/transaction-coordinator-participant-protocol.test.js": "ordinary",
     "test/query/transaction-coordinator-settlement.test.js": "ordinary",
     "test/query/transaction-evidence-binding-production.test.js": "ordinary",

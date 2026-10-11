@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 269,
-    "query-sql": 179,
+    "query-sql": 180,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 146,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2353,
-  "digest": "fnv1a32-0dd7960d",
+  "censusSize": 2354,
+  "digest": "fnv1a32-545d9994",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8ae5250c",
+  "observationDigest": "fnv1a32-cd27e646",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1517,6 +1517,7 @@
     "test/query/strategy-selector.test.js": "query-sql",
     "test/query/streaming-aggregation.property.test.js": "query-sql",
     "test/query/table-creation-service.test.js": "query-sql",
+    "test/query/transaction-begin-uncertain-handoff.test.js": "query-sql",
     "test/query/transaction-coordinator-participant-protocol.test.js": "query-sql",
     "test/query/transaction-coordinator-settlement.test.js": "query-sql",
     "test/query/transaction-evidence-binding-production.test.js": "query-sql",
@@ -9783,6 +9784,17 @@
       "files": [
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
+      ]
+    },
+    "test/query/transaction-begin-uncertain-handoff.test.js": {
+      "files": [
+        "src/query/application-database.js",
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/pg/postgres-wire-adapter.js",
+        "src/runtime/pgwire-protocol-constants.js",
+        "src/runtime/pgwire-protocol-handler.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/runtime/runtime-startup-wiring.js"
       ]
     },
     "test/query/transaction-coordinator-participant-protocol.test.js": {

@@ -29,7 +29,17 @@ import {TRANSACTION_ID_COLLISION_CODE} from
   './distributed/distributed-transaction-coordinator-constants.js';
 import {PARTICIPANT_SET_STATE} from '../constants/index.js';
 import {sqlQueryEngineTransactionSetMethods} from './sql-query-engine-transaction-set-methods.js';
-import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+import {copyDenseOwnDataRecordArray} from '../utils/strict-own-data.js';
+import {
+  INITIAL_ROW_FIELDS,
+  TRANSACTION_CREATION_READ_STATE,
+  hasCanonicalImmutableCreationFields,
+  isCanonicalInitialRow,
+  sameImmutableCreation,
+} from './distributed/distributed-transaction-creation-contract.js';
+import {validatePersistedTransactionRow} from
+  './distributed/distributed-transaction-recovery-validation.js';
+import {getRemainingBudgetMs} from '../control-plane/timeout-budget.js';
 
 const {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -39,7 +49,6 @@ const {
   TABLES,
 } = SQL_QUERY_ENGINE_SHARED;
 
-const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
 const SQL_TRANSACTION_COALESCING_PREFIX = 'sql-transaction:';
 const SQL_TRANSACTION_PARTICIPANT_COALESCING_PREFIX =
@@ -51,27 +60,6 @@ const SQL_TRANSACTION_ROW_READ_SQL = `SELECT * FROM ${TABLES.SQL_TRANSACTIONS} `
 // participant-set, commit-mode, progress, decision and updated_at may all
 // advance before a lost INSERT response is resolved by its authoritative
 // readback, so they are deliberately excluded from this identity predicate.
-const INSERTED_ROW_IMMUTABLE_FIELDS = Object.freeze([
-  'transaction_id',
-  'session_id',
-  'transaction_epoch',
-  'timeout_deadline',
-  'transaction_mode',
-  'created_at',
-]);
-const INSERTED_ROW_INITIAL_FIELDS = Object.freeze([
-  ...INSERTED_ROW_IMMUTABLE_FIELDS,
-  'status',
-  'participant_set_state',
-  'participant_set_text',
-  'commit_mode',
-  'frozen_participant_count',
-  'decision',
-  'decision_text',
-  'decision_digest',
-  'updated_at',
-]);
-
 function trimmedString(value) {
   return String(value || '').trim();
 }
@@ -88,6 +76,15 @@ function persistenceUnavailableError() {
     QUERY_ERROR_CODE.TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE,
     QUERY_ERROR_MSG.TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE,
   );
+}
+
+function creationUncertainError(message, readState) {
+  const error = typedPersistenceError(
+    QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN,
+    message || QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN,
+  );
+  error.creationReadState = readState;
+  return error;
 }
 
 function isPrimaryKeyCollision(result) {
@@ -109,6 +106,42 @@ function sqlTransactionRowFieldsOf(record) {
     frozen_participant_count: record.frozenParticipantCount,
     updated_at: record.updatedAt,
   };
+}
+
+function rowsMatchExactly(left, right, fields) {
+  return fields.every((field) => Object.is(left[field], right[field]));
+}
+
+function advancedCreationRecoveryError(stored) {
+  const recoveryHold = typedPersistenceError(
+    QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
+    QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE,
+  );
+  recoveryHold.advancedTransactionRow = Object.freeze({...stored});
+  return recoveryHold;
+}
+
+function canonicalCreationReadback(row, transactionId) {
+  return row !== null &&
+    INITIAL_ROW_FIELDS.every((field) => Object.hasOwn(row, field)) &&
+    hasCanonicalImmutableCreationFields(row, transactionId) &&
+    validatePersistedTransactionRow(row, transactionId) !== null;
+}
+
+function resolveAvailableCreationReadback(result, stored, initialRow) {
+  if (sameImmutableCreation(stored, initialRow) &&
+      rowsMatchExactly(stored, initialRow, INITIAL_ROW_FIELDS)) return;
+  if (sameImmutableCreation(stored, initialRow)) {
+    throw advancedCreationRecoveryError(stored);
+  }
+  if (isPrimaryKeyCollision(result)) {
+    throw typedPersistenceError(TRANSACTION_ID_COLLISION_CODE,
+      result?.error || QUERY_ERROR_MSG.TRANSACTION_STATE_PERSIST_FAILED);
+  }
+  throw creationUncertainError(
+    result?.error,
+    TRANSACTION_CREATION_READ_STATE.AVAILABLE,
+  );
 }
 
 const sqlQueryEngineTransactionPersistenceMethods = {
@@ -175,7 +208,7 @@ const sqlQueryEngineTransactionPersistenceMethods = {
    * @private
    */
   async insertDistributedTransactionRowOnce(transactionId, record) {
-    const row = {
+    const builtRow = {
       transaction_id: transactionId,
       ...sqlTransactionRowFieldsOf(record),
       decision: null,
@@ -183,52 +216,98 @@ const sqlQueryEngineTransactionPersistenceMethods = {
       decision_digest: null,
       created_at: record.createdAt,
     };
+    const row = record.transactionCreationInitialRow || builtRow;
+    if (!isCanonicalInitialRow(row) ||
+        !rowsMatchExactly(row, builtRow, INITIAL_ROW_FIELDS)) {
+      throw creationUncertainError(
+        QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN,
+        TRANSACTION_CREATION_READ_STATE.INVALID,
+      );
+    }
+    if (getRemainingBudgetMs(record.timeoutBudget, {now: this.nowFn}) <= 0) {
+      throw creationUncertainError(
+        QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN,
+        TRANSACTION_CREATION_READ_STATE.UNAVAILABLE,
+      );
+    }
     const result = await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
       tableName: TABLES.SQL_TRANSACTIONS,
       row,
     }, this.buildDistributedTransactionMutationOptions(
       TABLES.SQL_TRANSACTIONS,
-      {workClass: PRESSURE_WORK_CLASS.CRITICAL},
+      {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        idempotencyKey: record.transactionCreationDeliveryKey,
+        timeoutBudget: record.timeoutBudget,
+      },
     ));
-    if (result?.success === true || isPrimaryKeyCollision(result)) {
-      this.assertDistributedTransactionMutationSucceeded(
-        result,
-        TABLES.SQL_TRANSACTIONS,
-      );
+    if (result?.success === true &&
+        resolveMutationCompletionState(result) ===
+          CONTROL_PLANE_MUTATION_OUTCOME.APPLIED) {
       return;
     }
-    const stored = copyStrictOwnDataRecord(
-      await this.readDistributedTransactionRow(transactionId),
+    if (getRemainingBudgetMs(record.timeoutBudget, {now: this.nowFn}) <= 0) {
+      throw creationUncertainError(result?.error,
+        TRANSACTION_CREATION_READ_STATE.UNAVAILABLE);
+    }
+    const readback = await this.readDistributedTransactionCreationRow(
+      transactionId,
+      {timeoutBudget: record.timeoutBudget},
     );
-    if (stored === null) {
-      this.assertDistributedTransactionMutationSucceeded(
-        result,
-        TABLES.SQL_TRANSACTIONS,
-      );
+    if (readback.state === TRANSACTION_CREATION_READ_STATE.AVAILABLE) {
+      // A same-creation row may already have advanced under another recovery
+      // worker. Only the complete immutable mismatch plus the gateway's
+      // specific primary-key disposition authorizes reminting.
+      resolveAvailableCreationReadback(result, readback.row, row);
       return;
     }
-    const sameCreation = INSERTED_ROW_IMMUTABLE_FIELDS.every((field) =>
-      Object.hasOwn(stored, field) && Object.is(stored[field], row[field]));
-    if (!sameCreation) {
-      throw typedPersistenceError(TRANSACTION_ID_COLLISION_CODE,
-        result?.error || QUERY_ERROR_MSG.TRANSACTION_STATE_PERSIST_FAILED);
+    throw creationUncertainError(result?.error, readback.state);
+  },
+
+  /**
+   * Read and capture the exact-key creation row without collapsing absence,
+   * unavailability and malformed data into one value.
+   * @param {string} transactionId
+   * @return {Promise<{state: string, row?: Object}>}
+   * @private
+   */
+  async readDistributedTransactionCreationRow(transactionId, options = {}) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (typeof gateway?.readAuthoritativeRows !== LOCAL_STR_FUNCTION) {
+      return {state: TRANSACTION_CREATION_READ_STATE.UNAVAILABLE};
     }
-    const stillInitial = INSERTED_ROW_INITIAL_FIELDS.every((field) =>
-      Object.hasOwn(stored, field) && Object.is(stored[field], row[field]));
-    if (!stillInitial) {
-      // The insert belongs to this exact creation, but another recovery
-      // worker has already advanced its durable authority. Do not install the
-      // stale ACTIVE candidate and do not classify this as an ID collision
-      // (which would mint a replacement). The normal recovery owner will
-      // reread and resume the advanced row.
-      const recoveryHold = typedPersistenceError(
-        QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
-        QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE,
+    let read;
+    try {
+      read = await gateway.readAuthoritativeRows(
+        TABLES.SQL_TRANSACTIONS,
+        SQL_TRANSACTION_ROW_READ_SQL,
+        [trimmedString(transactionId)],
+        {workClass: PRESSURE_WORK_CLASS.CRITICAL,
+          timeoutBudget: options.timeoutBudget},
       );
-      recoveryHold.advancedTransactionRow = Object.freeze({...stored});
-      throw recoveryHold;
+    } catch (_error) {
+      return {state: TRANSACTION_CREATION_READ_STATE.UNAVAILABLE};
     }
+    if (read?.success !== true) {
+      return {state: TRANSACTION_CREATION_READ_STATE.UNAVAILABLE};
+    }
+    const rows = copyDenseOwnDataRecordArray(read.rows);
+    if (rows === null) {
+      return {state: TRANSACTION_CREATION_READ_STATE.INVALID};
+    }
+    if (rows.length === 0) {
+      return {state: TRANSACTION_CREATION_READ_STATE.MISSING};
+    }
+    if (rows.length !== 1) {
+      return {state: TRANSACTION_CREATION_READ_STATE.INVALID};
+    }
+    const [row] = rows;
+    if (!canonicalCreationReadback(row, transactionId)) {
+      return {state: TRANSACTION_CREATION_READ_STATE.INVALID};
+    }
+    return {state: TRANSACTION_CREATION_READ_STATE.AVAILABLE,
+      row: Object.freeze(row)};
   },
 
   /**
@@ -240,15 +319,18 @@ const sqlQueryEngineTransactionPersistenceMethods = {
    * @return {void}
    * @private
    */
-  retainAdvancedDistributedTransactionReadback(row) {
-    this.transactionCoordinator.recoverFromSystemTables({
-      transactions: [row],
-      participants: [],
-      writeOperations: [],
-    });
+  async retainAdvancedDistributedTransactionReadback(tx, row, timeoutBudget) {
+    const payload = await this.readDistributedTransactionRecoveryState(
+      row.transaction_id,
+      {timeoutBudget},
+    );
+    const accepted = this.transactionCoordinator
+      .acceptAdvancedTransactionCreation(tx, row, payload);
+    if (!accepted) return false;
     if (this.distributedTransactionRecoveryActivated) {
       void this.resumeRecoveredDistributedTransactions();
     }
+    return true;
   },
 
   /**

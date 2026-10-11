@@ -596,6 +596,8 @@ class PgWireProtocolHandler {
 
     await this._executeAndSend(admission.statement, []);
 
+    if (this._phase === HANDLER_PHASE.CLOSED ||
+        !this._session || this._session.isClosed()) return;
     this._socket.write(
       buildReadyForQuery(this._session.getTransactionState()),
     );
@@ -618,6 +620,7 @@ class PgWireProtocolHandler {
    */
   async _executeAndSend(query, params) {
     const stateBefore = this._session.getTransactionState();
+    let beginSuccessFrameWritten = false;
     try {
       const result = await this._adapter.execute(
         this._session.sessionId, query, params, this._executionOptions(),
@@ -659,12 +662,41 @@ class PgWireProtocolHandler {
 
       const tag = deriveCommandTag(result);
       const statementType = readExecutedStatementType(result);
+      const distributedBegin = statementType === AST_TYPE.BEGIN_TRANSACTION &&
+        typeof this._adapter.acceptDistributedBegin === 'function';
+      if (distributedBegin &&
+          (typeof this._adapter.canAcceptDistributedBegin !== 'function' ||
+           this._adapter.canAcceptDistributedBegin(
+             this._session.sessionId, result) !== true)) {
+        throw new Error(PG_HANDLER_ERROR.QUERY_EXECUTION_FAILED);
+      }
       const notice = takeTransactionEndNotice(this._session, statementType);
       if (notice) this._socket.write(notice);
+      beginSuccessFrameWritten = distributedBegin;
       this._socket.write(buildCommandComplete(tag));
-
-      this._applyTransactionOutcome(statementType, result);
+      if (distributedBegin) {
+        try {
+          const accepted = this._adapter.acceptDistributedBegin(
+            this._session.sessionId,
+            result,
+            (transactionId) => this._session.enterTransaction(transactionId),
+          );
+          if (accepted !== true) throw new Error(
+            PG_HANDLER_ERROR.QUERY_EXECUTION_FAILED);
+        } catch (_error) {
+          this._socket.destroy();
+          this.destroy();
+          return;
+        }
+      } else {
+        this._applyTransactionOutcome(statementType, result);
+      }
     } catch (err) {
+      if (beginSuccessFrameWritten) {
+        this._socket.destroy();
+        this.destroy();
+        return;
+      }
       this._answerFailure(err, stateBefore);
     }
   }

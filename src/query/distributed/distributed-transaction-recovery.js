@@ -3,13 +3,17 @@ import {
   isCanonicalTransactionEpoch,
 } from '../../constants/index.js';
 import {
+  QUERY_ERROR_MSG,
   QUERY_OPERATION,
 } from '../query-constants.js';
 import {
   buildTransactionRecoveryIncompleteError,
   buildRecoveredTransactionDecisionState,
+  validatePersistedTransactionRow,
 } from './distributed-transaction-recovery-validation.js';
-import {redriveAuthoritativeRecovery} from
+import {redriveAuthoritativeRecovery,
+  TRANSACTION_AUTHORITY_STATE,
+  transactionRecoveryAuthorityCandidate} from
   './distributed-transaction-recovery-authority.js';
 import {PARTICIPANT_TRANSACTION_DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
@@ -27,6 +31,13 @@ import {
   TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {INITIAL_ROW_FIELDS, TRANSACTION_CREATION_STATE} from
+  './distributed-transaction-creation-contract.js';
+import {captureTransactionCreationRecoveryOperation,
+  reconcileTransactionCreationOwned,
+  recordTransactionCreationSweepDiagnostic,
+  releaseTransactionCreationOperation} from
+  './distributed-transaction-creation.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -50,6 +61,26 @@ const RECOVERED_TRANSACTION_DECISION_EVENT = 'RECOVERY_STATE_RESTORED';
 
 function shouldDeferRecoverySweepError(errorLike) {
   return isRetryableControlPlaneError(errorLike);
+}
+
+function rotatingCreationSelection(coordinator, transactions) {
+  const candidates = transactions.filter((tx) =>
+    tx.transactionCreationState &&
+    tx.transactionCreationState !== TRANSACTION_CREATION_STATE.ENTERED_ACTIVE)
+    .sort((left, right) => left.transactionId.localeCompare(right.transactionId));
+  if (candidates.length === 0) return [];
+  let start = candidates.findIndex((tx) =>
+    coordinator.transactionCreationSweepCursor === null ||
+    tx.transactionId > coordinator.transactionCreationSweepCursor);
+  if (start < 0) start = 0;
+  const selected = [];
+  const limit = Math.min(candidates.length,
+    coordinator.maxUncertainCreationSweepPerTurn);
+  for (let offset = 0; offset < limit; offset += 1) {
+    selected.push(candidates[(start + offset) % candidates.length]);
+  }
+  coordinator.transactionCreationSweepCursor = selected.at(-1).transactionId;
+  return selected;
 }
 
 // The PREPARE evidence a recovered participant row retained (design 2.1,
@@ -101,6 +132,43 @@ async function redriveRecoveredTransaction(coordinator, tx) {
 
 const distributedTransactionRecoveryMethods = {
   shouldDeferRecoverySweepError,
+
+  acceptAdvancedTransactionCreation(tx, capturedRow, payload) {
+    if (payload?.state !== TRANSACTION_AUTHORITY_STATE.AVAILABLE ||
+        this.workflowCoordinator.getWorkflowById(tx.workflowId) !== tx ||
+        this.transactionsBySession.get(tx.sessionId) !== tx ||
+        validatePersistedTransactionRow(payload.transaction,
+          tx.transactionId) === null ||
+        INITIAL_ROW_FIELDS.some((field) =>
+          !Object.is(payload.transaction[field], capturedRow[field])) ||
+        transactionRecoveryAuthorityCandidate(tx, payload) === null) {
+      return false;
+    }
+    this.workflowCoordinator.removeWorkflow(tx.workflowId);
+    try {
+      this.recoverFromSystemTables({
+        transactions: [payload.transaction],
+        participants: payload.participants,
+        writeOperations: [],
+      });
+      const restored = this.workflowCoordinator.getWorkflowById(tx.workflowId);
+      if (!restored || restored === tx || restored.recoveryDiscovered !== true) {
+        throw new Error('Advanced transaction recovery handoff was not accepted');
+      }
+      return true;
+    } catch (error) {
+      const replacement = this.workflowCoordinator.getWorkflowById(tx.workflowId);
+      if (replacement && replacement !== tx) {
+        this.workflowCoordinator.removeWorkflow(replacement.workflowId);
+      }
+      this.workflowCoordinator.setWorkflowState(tx);
+      this.logger?.warn?.(RECOVERY_SWEEP_LOG_MSG, {
+        transactionId: tx.transactionId,
+        error: error?.message || String(error),
+      });
+      return false;
+    }
+  },
 
   recover(rows) {
     if (!Array.isArray(rows)) {
@@ -242,17 +310,34 @@ const distributedTransactionRecoveryMethods = {
         }
       }
 
-      const stuckTransactions = Array.from(
+      const allTransactions = Array.from(
         this.workflowCoordinator.workflowsById.values(),
-      ).filter(
-        (tx) =>
-          tx.recoveryDiscovered || (!TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
-            this.isTransactionBudgetExceeded(tx)),
       );
+      const uncertainCreations = rotatingCreationSelection(this,
+        allTransactions);
+      const uncertainIds = new Set(uncertainCreations.map((tx) => tx.workflowId));
+      const stuckTransactions = [...uncertainCreations, ...allTransactions.filter(
+        (tx) =>
+          !uncertainIds.has(tx.workflowId) && (
+            tx.recoveryDiscovered ||
+            (!TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
+              this.isTransactionBudgetExceeded(tx))
+          ),
+      )];
       const results = [];
       let deferred = 0;
 
       for (const tx of stuckTransactions) {
+        const creationOperation = uncertainIds.has(tx.workflowId) ?
+          captureTransactionCreationRecoveryOperation(this, tx) : null;
+        if (uncertainIds.has(tx.workflowId) && !creationOperation) {
+          deferred += 1;
+          results.push({transactionId: tx.transactionId,
+            sessionId: tx.sessionId, sweepPath: QUERY_OPERATION.BEGIN_TRANSACTION,
+            statusAfter: tx.status, success: false, deferred: true,
+            error: QUERY_ERROR_MSG.TRANSACTION_CREATION_PRESSURE});
+          continue;
+        }
         let protocolResult = null;
         let sweepPath = null;
         try {
@@ -261,6 +346,18 @@ const distributedTransactionRecoveryMethods = {
             async () => {
               if (!tx.recoveryDiscovered && TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
                 protocolResult = {success: true};
+                return;
+              }
+              if (tx.transactionCreationState &&
+                  tx.transactionCreationState !==
+                    TRANSACTION_CREATION_STATE.ENTERED_ACTIVE) {
+                sweepPath = QUERY_OPERATION.BEGIN_TRANSACTION;
+                protocolResult = await reconcileTransactionCreationOwned(
+                  this,
+                  tx,
+                  tx.transactionCreationConsumer || null,
+                  creationOperation,
+                );
                 return;
               }
               const redriven = await redriveRecoveredTransaction(this, tx);
@@ -292,6 +389,10 @@ const distributedTransactionRecoveryMethods = {
             continue;
           }
           throw error;
+        } finally {
+          if (creationOperation) {
+            releaseTransactionCreationOperation(this, creationOperation);
+          }
         }
 
         if (
@@ -329,6 +430,11 @@ const distributedTransactionRecoveryMethods = {
       if (deferred === 0) {
         this.clearRecoverySweepDeferState();
       }
+      recordTransactionCreationSweepDiagnostic(this, {
+        selectedCount: uncertainCreations.length,
+        stopReason: deferred > 0 ? 'deferred' : failed > 0 ? 'failed' :
+          'turn_complete',
+      });
       return {
         swept: stuckTransactions.length,
         resolved,

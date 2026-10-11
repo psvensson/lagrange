@@ -51,6 +51,40 @@
         "test/query/transaction-schema-enforcement.test.js"
       ]
     },
+    "distributed-transaction-begin-handoff": {
+      "description": "BEGIN insertion uncertainty retains one bounded creation identity through authoritative readback, recovery, and exact pgwire or application acceptance before exposing an active transaction.",
+      "owners": [
+        "src/query/distributed/distributed-begin-consumer.js",
+        "src/query/distributed/distributed-transaction-creation-contract.js",
+        "src/query/distributed/distributed-transaction-creation.js",
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/distributed/distributed-transaction-recovery.js",
+        "src/query/sql-query-engine-transaction-persistence-methods.js",
+        "src/query/sql-query-engine-transaction-recovery-methods.js",
+        "src/query/sql-query-engine-statement-admission.js",
+        "src/query/sql-query-engine-request-dispatch.js",
+        "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
+        "src/query/sql-query-engine-lifecycle-methods.js",
+        "src/query/sql-query-engine-instance-initializer.js",
+        "src/query/sql-query-engine.js",
+        "src/query/sql-request.js",
+        "src/query/application-database.js",
+        "src/query/pg/postgres-wire-adapter.js",
+        "src/runtime/pgwire-protocol-handler.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/runtime/pgwire-transaction-outcome.js",
+        "src/runtime/request-cell-invocation-owner.js",
+        "src/workflow/durable-workflow-coordinator.js"
+      ],
+      "tests": [
+        "test/query/transaction-begin-uncertain-handoff.test.js",
+        "test/query/transaction-review-adversarial.test.js",
+        "test/query/application-database.test.js",
+        "test/runtime/pgwire-protocol-handler.test.js",
+        "test/runtime/pgwire-runtime-module.test.js",
+        "test/runtime/service-lifecycle-pgwire-executor-handoff.test.js"
+      ]
+    },
     "wit-world-interface": {
       "description": "The WIT world/component interface shape; every WASM service consumer depends on it.",
       "owners": [
@@ -1038,6 +1072,45 @@
     }
   },
   "coupledPairs": {
+    "distributed-transaction-begin-handoff": {
+      "description": "The transaction creation owner and persistence classifier retain one identity while pgwire and application consumers accept its result exactly once.",
+      "endpoints": [
+        {
+          "id": "creation-and-persistence-owner",
+          "owners": [
+            "src/query/distributed/distributed-transaction-creation-contract.js",
+            "src/query/distributed/distributed-transaction-creation.js",
+            "src/query/distributed/distributed-transaction-coordinator.js",
+            "src/query/distributed/distributed-transaction-recovery.js",
+            "src/query/sql-query-engine-transaction-persistence-methods.js",
+            "src/query/sql-query-engine-lifecycle-methods.js",
+            "src/workflow/durable-workflow-coordinator.js"
+          ]
+        },
+        {
+          "id": "consumer-acceptance-boundary",
+          "owners": [
+            "src/query/distributed/distributed-begin-consumer.js",
+            "src/query/sql-request.js",
+            "src/query/application-database.js",
+            "src/query/pg/postgres-wire-adapter.js",
+            "src/runtime/pgwire-protocol-handler.js",
+            "src/runtime/pgwire-runtime-module.js",
+            "src/runtime/pgwire-transaction-outcome.js",
+            "src/runtime/request-cell-invocation-owner.js"
+          ]
+        }
+      ],
+      "contract": "distributed-transaction-begin-handoff",
+      "witnessTests": [
+        "test/query/transaction-begin-uncertain-handoff.test.js",
+        "test/query/transaction-review-adversarial.test.js",
+        "test/query/application-database.test.js",
+        "test/runtime/pgwire-protocol-handler.test.js",
+        "test/runtime/pgwire-runtime-module.test.js",
+        "test/runtime/service-lifecycle-pgwire-executor-handoff.test.js"
+      ]
+    },
     "distributed-transaction-coordinator-participant-protocol": {
       "description": "Coordinator decisions are bound to the PREPARE evidence participants answer, and participants apply only that bound decision and return exact durable outcomes.",
       "endpoints": [

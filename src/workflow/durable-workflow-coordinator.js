@@ -38,6 +38,11 @@ class DurableWorkflowCoordinator {
     this.persistWorkflowTransition = options.persistWorkflowTransition || null;
     this.persistParticipant = options.persistParticipant || (async () => {});
     this.isTerminalWorkflow = options.isTerminalWorkflow || (() => false);
+    this.registrationPersistenceFailureDisposition =
+      typeof options.registrationPersistenceFailureDisposition ===
+        LOCAL_STR_FUNCTION ?
+        options.registrationPersistenceFailureDisposition :
+        null;
     this.onAckRejection = options.onAckRejection || null;
     // Optional explicit participant transition graph validator:
     // (participantKey, fromStatus, toStatus) => boolean. When wired, an
@@ -64,7 +69,11 @@ class DurableWorkflowCoordinator {
     try {
       await this.persistWorkflow(workflow);
     } catch (error) {
-      if (this.workflowsById.get(workflow.workflowId) === workflow) {
+      const retain = this.registrationPersistenceFailureDisposition?.(
+        workflow,
+        error,
+      ) === 'RETAIN_UNRESOLVED';
+      if (!retain && this.workflowsById.get(workflow.workflowId) === workflow) {
         this.removeWorkflow(workflow.workflowId);
       }
       throw error;
