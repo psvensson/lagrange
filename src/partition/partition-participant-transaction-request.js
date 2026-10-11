@@ -232,13 +232,13 @@ function beginRefusalOf(service, payload) {
   if (leadership !== null) {
     return answerOf(service, payload, leadership);
   }
-  if (participantCutoverPauseOf(service) !== null) {
-    return refusalOf(service, payload, CODE.CUTOVER_PAUSED, {deferRetry: true});
-  }
   const origin = readPartitionWriteOrigin(service.db);
   if (origin === null) {
     return refusalOf(service, payload, CODE.GENERATION_ORIGIN_PENDING,
       participantOutcomeOf(null));
+  }
+  if (participantCutoverPauseOf(service) !== null) {
+    return refusalOf(service, payload, CODE.CUTOVER_PAUSED, {deferRetry: true});
   }
   if (participantDeterminismSelfCheckOf(service)?.passed !== true) {
     return refusalOf(service, payload, CODE.DETERMINISM_SELF_CHECK_FAILED);

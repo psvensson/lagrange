@@ -429,6 +429,8 @@ async function startSeedNode(options) {
     readinessState,
     bootIncarnation,
     startupServicesAdmission,
+    membershipOwnerOutcome: options.membershipOwnerOutcome,
+    dataDirectoryProcessOwner: options.dataDirectoryProcessOwner,
   });
   options.cleanupLedger.defer(() => bootstrapService.shutdown());
 
@@ -452,6 +454,9 @@ async function startSeedNode(options) {
     requestCellEnv: env,
     rolloutControls,
   });
+  bootstrapService.seedRuntimeBridgeOwner.attachBootstrapTopologySnapshotOwner(
+    bootstrapAPI.bootstrapTopologySnapshotOwner,
+  );
 
   options.cleanupLedger.defer(() => bootstrapAPI.shutdown());
   await awaitStartupAcquisition(bootstrapAPI.initialize(), options.signal);
@@ -716,10 +721,11 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   });
 
   const dataDirectoryManager = DataDirectoryManager.getInstance();
-  dataDirectoryManager.initialize();
+  dataDirectoryManager.configure();
   const dataDirectoryProcessOwner = acquireDataDirectoryProcessOwner(
     dataDirectoryManager.getDataDir());
   cleanupLedger.defer(() => dataDirectoryProcessOwner.release());
+  dataDirectoryManager.initialize({processOwner: dataDirectoryProcessOwner});
 
   const hlcClock = new HLCClockService(config.get(CONFIG_KEY.NODE_ID), {
     maxDrift: config.get(CONFIG_KEY.HLC_MAX_DRIFT_MS),
@@ -766,6 +772,8 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   } else {
     runtime = await startSeedNode({cleanupLedger, config, mainLogger,
       dataDirectoryManager, rolloutControls, env: environment,
+      membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
+      dataDirectoryProcessOwner,
       signal: options.signal});
   }
   return bindDataDirectoryProcessOwner(runtime, dataDirectoryProcessOwner);
