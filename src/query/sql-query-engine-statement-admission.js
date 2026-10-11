@@ -8,6 +8,8 @@
 
 import {AST_TYPE} from './parser-constants.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
+import {coordinatorTableParticipantRefusal} from
+  './distributed/distributed-transaction-participant-admission.js';
 
 // Whether the engine executes a statement it was sent.
 const STATEMENT_ADMISSION = Object.freeze({
@@ -90,6 +92,12 @@ function admitParsedStatement(
 ) {
   const form = admitStatementForm(ast);
   if (form.state === STATEMENT_ADMISSION.REFUSED) return form;
+  if (transactionCoordinator.getTransaction(sessionId)) {
+    const tables = [ast?.table, ast?.from?.name,
+      ...(ast?.joins || []).map((join) => join.table?.name)];
+    const failure = tables.map(coordinatorTableParticipantRefusal).find(Boolean);
+    if (failure) return refused(failure);
+  }
   return TRANSACTION_END_TYPES.has(ast?.type) ?
     ADMITTED :
     admitExpectedTransaction(transactionCoordinator, sessionId,

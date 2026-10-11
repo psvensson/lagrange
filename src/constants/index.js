@@ -57,6 +57,7 @@ export {
 export {WORKFLOW_STEP} from './workflow.js';
 export {
   COMMIT_MODE,
+  isCanonicalTransactionEpoch,
   PARTICIPANT_COMMIT_OUTCOME,
   PARTICIPANT_SET_STATE,
   TRANSACTION_MODE,

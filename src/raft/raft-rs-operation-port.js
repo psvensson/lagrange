@@ -20,8 +20,11 @@ import {bootstrapOfRequest} from './raft-rs-bootstrap-membership.js';
 import {committedMembershipRefusal, normalizeCommittedLearnerRead,
   unavailableLearnerAction} from
   './raft-rs-committed-membership-read.js';
-import {encodeCommittedLearnerAdmission} from './raft-rs-committed-membership-context.js';
+import {INVALID_COMMITTED_PROMOTION_ADMISSION, decodeCommittedPromotionAdmission,
+  encodeCommittedLearnerAdmission, encodeCommittedPromotionAdmission} from
+  './raft-rs-committed-membership-context.js';
 import {RAFT_RS_CONF_CHANGE_TYPE} from './raft-rs-ready-loop-constants.js';
+import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   './raft-operation-port-request.js';
 import {RaftRsPeerIdentityRegistry} from './raft-rs-peer-identity.js';
@@ -66,6 +69,27 @@ const EVENTS = new Set([
   RAFT_EVENT.GATE_OPENED,
   RAFT_EVENT.CONF_CHANGE_APPLIED,
 ]);
+const sortedPeerIds = (ids) => [...(ids || [])].map(String).sort((left, right) =>
+  left.length - right.length || left.localeCompare(right));
+function promotionAfter(confState, membershipGenerationIndex) {
+  const voters = sortedPeerIds(confState.voters);
+  const votersOutgoing = sortedPeerIds(confState.votersOutgoing);
+  const learners = sortedPeerIds(confState.learners);
+  const learnersNext = sortedPeerIds(confState.learnersNext);
+  return {voters, votersOutgoing, learners, learnersNext,
+    configurationKey: raftRsConfStateKey({voters, votersOutgoing, learners,
+      learnersNext, autoLeave: confState.autoLeave === true}),
+    membershipGenerationIndex};
+}
+
+function retainedFoldedPromotionMatches(encoded, groupId, position, context,
+  learnerAdmission) {
+  const fact = decodeCommittedPromotionAdmission(encoded);
+  return fact !== INVALID_COMMITTED_PROMOTION_ADMISSION && fact.groupId === groupId &&
+    fact.index === String(position.index) && fact.term === String(position.term) &&
+    fact.learnerAdmission === learnerAdmission &&
+    Object.keys(context).every((key) => fact.context[key] === context[key]);
+}
 const EVENT_ALIAS = Object.freeze({
   'term-change': RAFT_EVENT.TERM_CHANGE,
   'leader-change': RAFT_EVENT.LEADER_CHANGE,
@@ -226,15 +250,38 @@ function createRaftRsOperationPort(request) {
       registry.resolveReplicaIdentity(raftPeerId),
     applyCommittedEntry: committedEntryApplication(required(
       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
-    applyCommittedMembershipContext: (context, position) => {
+    applyCommittedMembershipContext: (context, position, application) => {
       registry.reserveCommittedReplica(context.replicaIdentity, context.peerId);
       if (context.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
         registry.recordCommittedLearnerAdmission(context.replicaIdentity,
           encodeCommittedLearnerAdmission({groupId, ...position, context}));
+      } else if (context.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE) {
+        const learnerAdmission = registry.committedLearnerAdmission(context.replicaIdentity);
+        if (application === null) {
+          // A v3 replica image already carries the authentic fact for a
+          // managed PROMOTE folded into its installed prefix. Replaying the
+          // prefix validates those retained bytes; it cannot fabricate them
+          // from current voter membership or silently lose them.
+          if (!retainedFoldedPromotionMatches(
+            registry.committedPromotionAdmission(context.replicaIdentity),
+            groupId, position, context, learnerAdmission)) {
+            throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.PROMOTION_ADMISSION_CONFLICT);
+          }
+          return;
+        }
+        registry.recordCommittedPromotionAdmission(context.replicaIdentity,
+          encodeCommittedPromotionAdmission({version: 1, groupId, ...position, context,
+            learnerAdmission,
+            before: {configurationKey: raftRsConfStateKey(application.beforeConfState),
+              membershipGenerationIndex: application.beforeMembershipGenerationIndex},
+            after: promotionAfter(application.afterConfState,
+              application.afterMembershipGenerationIndex)}));
       }
     },
-    readCommittedLearnerAdmission: (replicaIdentity) =>
-      registry.committedLearnerAdmission(replicaIdentity),
+    readLearnerOriginEvidence: (replicaIdentity) =>
+      registry.learnerOriginEvidence(replicaIdentity),
+    readPromotionAdmission: (replicaIdentity) =>
+      registry.committedPromotionAdmission(replicaIdentity),
     applyTransactionRolledBack:
       request[RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
     // Each committed entry's whole SQLite commit+apply transaction is the

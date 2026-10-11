@@ -1,0 +1,23 @@
+{
+  "worktree": "/mnt/data/peter/projects/.worktrees/tx1-query-20261011",
+  "worktreeHead": "be99622d6b21162e9cc459104d7f1b5d8cd3830d",
+  "base": "be99622d6b21162e9cc459104d7f1b5d8cd3830d",
+  "snapshot": "30a20697716a67cfd7c0d496dc261b32a991172f",
+  "tree": "bc68e6ba8bd2bd0d37e3f1c49f0a1a31a34fb02a",
+  "callerBefore": {
+    "head": "be99622d6b21162e9cc459104d7f1b5d8cd3830d",
+    "branch": "refs/heads/tx1/query-seam-20261011",
+    "indexSha256": "6e2ad9543303a009701dca0b7e91c190fc42117d06ec3812a9fe1f4c48303a82",
+    "statusSha256": "ff66509340720d9c6940a357ad5c0feed165ea4527f55ab6c0d689521b8a4b9c",
+    "dirtyContentSha256": "23dd6031bfad3285efe195b540e7d54e43123dbde9a461506931b583ee5a2efc",
+    "dirtyPathCount": 79
+  },
+  "callerAfter": {
+    "head": "be99622d6b21162e9cc459104d7f1b5d8cd3830d",
+    "branch": "refs/heads/tx1/query-seam-20261011",
+    "indexSha256": "6e2ad9543303a009701dca0b7e91c190fc42117d06ec3812a9fe1f4c48303a82",
+    "statusSha256": "ff66509340720d9c6940a357ad5c0feed165ea4527f55ab6c0d689521b8a4b9c",
+    "dirtyContentSha256": "23dd6031bfad3285efe195b540e7d54e43123dbde9a461506931b583ee5a2efc",
+    "dirtyPathCount": 79
+  }
+}

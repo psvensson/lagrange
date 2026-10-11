@@ -1,13 +1,18 @@
 import {
-  COMMIT_MODE,
   PARTICIPANT_SET_STATE,
-  TRANSACTION_MODE,
+  isCanonicalTransactionEpoch,
 } from '../../constants/index.js';
 import {
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
   QUERY_OPERATION,
 } from '../query-constants.js';
+import {
+  buildTransactionRecoveryIncompleteError,
+  buildRecoveredTransactionDecisionState,
+} from './distributed-transaction-recovery-validation.js';
+import {redriveAuthoritativeRecovery} from
+  './distributed-transaction-recovery-authority.js';
+import {PARTICIPANT_TRANSACTION_DECISION} from
+  '../../partition/partition-participant-transaction-constants.js';
 import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
@@ -15,7 +20,6 @@ import {
 import {
   PARTICIPANT_STATUS,
   RECOVERY_COMMIT_TRANSACTION_STATUS,
-  RECOVERY_ROLLBACK_TRANSACTION_STATUS,
   RECOVERY_SWEEP_DEFER_BASE_MS,
   RECOVERY_SWEEP_DEFER_MAX_MS,
   RECOVERY_SWEEP_LOG_MSG,
@@ -28,194 +32,15 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_TRANSACTION_EPOCH = 'transaction_epoch';
 const LOCAL_STR_TRANSACTIONEPOCH = 'transactionEpoch';
-const LOCAL_STR_TRANSACTION_MODE = 'transaction_mode';
-const LOCAL_STR_TRANSACTIONMODE = 'transactionMode';
-const LOCAL_STR_PARTICIPANT_SET_STATE = 'participant_set_state';
-const LOCAL_STR_PARTICIPANTSETSTATE = 'participantSetState';
-const LOCAL_STR_COMMIT_MODE = 'commit_mode';
-const LOCAL_STR_COMMITMODE = 'commitMode';
-const LOCAL_STR_FROZEN_PARTICIPANT_COUNT = 'frozen_participant_count';
-const LOCAL_STR_FROZENPARTICIPANTCOUNT = 'frozenParticipantCount';
+const LOCAL_STR_PREPARED_DIGEST = 'prepared_digest';
+const LOCAL_STR_PREPAREDDIGEST = 'preparedDigest';
+const LOCAL_STR_PREPARE_INDEX = 'prepare_index';
+const LOCAL_STR_PREPAREINDEX = 'prepareIndex';
+const LOCAL_STR_PREPARE_TERM = 'prepare_term';
+const LOCAL_STR_PREPARETERM = 'prepareTerm';
 const LOCAL_STR_TIMEOUT_DEADLINE = 'timeout_deadline';
 const LOCAL_STR_TIMEOUTDEADLINE = 'timeoutDeadline';
 const RECOVERED_TRANSACTION_DECISION_EVENT = 'RECOVERY_STATE_RESTORED';
-
-function readTransactionDecisionField(row, snakeKey, camelKey) {
-  return Object.prototype.hasOwnProperty.call(row, snakeKey) ?
-    row[snakeKey] :
-    row[camelKey];
-}
-
-function readTransactionDecisionFieldWithActiveLegacyDefault(
-  row,
-  snakeKey,
-  camelKey,
-  status,
-  legacyDefault,
-) {
-  const value = readTransactionDecisionField(row, snakeKey, camelKey);
-  return value === undefined && status === TRANSACTION_STATUS.ACTIVE ?
-    legacyDefault :
-    value;
-}
-
-function buildRecoveredTransactionDecisionState(row, status) {
-  return {
-    transactionMode: readTransactionDecisionFieldWithActiveLegacyDefault(
-      row,
-      LOCAL_STR_TRANSACTION_MODE,
-      LOCAL_STR_TRANSACTIONMODE,
-      status,
-      TRANSACTION_MODE.EXPLICIT,
-    ),
-    participantSetState:
-      readTransactionDecisionFieldWithActiveLegacyDefault(
-        row,
-        LOCAL_STR_PARTICIPANT_SET_STATE,
-        LOCAL_STR_PARTICIPANTSETSTATE,
-        status,
-        PARTICIPANT_SET_STATE.OPEN,
-      ),
-    commitMode: readTransactionDecisionFieldWithActiveLegacyDefault(
-      row,
-      LOCAL_STR_COMMIT_MODE,
-      LOCAL_STR_COMMITMODE,
-      status,
-      COMMIT_MODE.NOT_SELECTED,
-    ),
-    frozenParticipantCount: Number(
-      readTransactionDecisionFieldWithActiveLegacyDefault(
-        row,
-        LOCAL_STR_FROZEN_PARTICIPANT_COUNT,
-        LOCAL_STR_FROZENPARTICIPANTCOUNT,
-        status,
-        0,
-      )),
-  };
-}
-
-function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
-  const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
-  error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
-  const evidenceFields = {
-    decisionDimension,
-    transactionId: row?.transaction_id ?? row?.transactionId,
-    sessionId: row?.session_id ?? row?.sessionId,
-  };
-  for (const [fieldName, value] of Object.entries(evidenceFields)) {
-    if (typeof value === 'string' && value.length > 0) {
-      error[fieldName] = value;
-    }
-  }
-  return error;
-}
-
-function validateRecoveredTransactionDecision(tx, row = null) {
-  const transactionModeValid =
-    Object.values(TRANSACTION_MODE).includes(tx.transactionMode);
-  const participantSetStateValid =
-    Object.values(PARTICIPANT_SET_STATE).includes(tx.participantSetState);
-  const commitModeValid = Object.values(COMMIT_MODE).includes(tx.commitMode);
-  const frozenCountValid = Number.isInteger(tx.frozenParticipantCount) &&
-    tx.frozenParticipantCount >= 0;
-  const openStateValid =
-    tx.participantSetState === PARTICIPANT_SET_STATE.OPEN &&
-    tx.commitMode === COMMIT_MODE.NOT_SELECTED &&
-    tx.frozenParticipantCount === 0 &&
-    [
-      TRANSACTION_STATUS.ACTIVE,
-      TRANSACTION_STATUS.ROLLING_BACK,
-      TRANSACTION_STATUS.FAILED,
-    ].includes(tx.status);
-  const frozenStateValid =
-    tx.participantSetState === PARTICIPANT_SET_STATE.FROZEN &&
-    tx.commitMode !== COMMIT_MODE.NOT_SELECTED &&
-    tx.frozenParticipantCount === tx.participants.size;
-  const onePhaseStatusValid =
-    tx.commitMode !== COMMIT_MODE.ONE_PHASE_COMMIT ||
-    ![
-      TRANSACTION_STATUS.PREPARING,
-      TRANSACTION_STATUS.PREPARED,
-    ].includes(tx.status);
-  const onePhaseCountValid =
-    tx.commitMode !== COMMIT_MODE.ONE_PHASE_COMMIT ||
-    tx.frozenParticipantCount === 1;
-  if (
-    transactionModeValid &&
-    participantSetStateValid &&
-    commitModeValid &&
-    frozenCountValid &&
-    (openStateValid || frozenStateValid) &&
-    onePhaseStatusValid &&
-    onePhaseCountValid
-  ) {
-    return;
-  }
-  const failedDecisionDimension = !transactionModeValid ?
-    LOCAL_STR_TRANSACTION_MODE :
-    !participantSetStateValid ?
-      LOCAL_STR_PARTICIPANT_SET_STATE :
-      !commitModeValid || !onePhaseStatusValid || !onePhaseCountValid ?
-        LOCAL_STR_COMMIT_MODE :
-        LOCAL_STR_FROZEN_PARTICIPANT_COUNT;
-  throw buildTransactionRecoveryIncompleteError({
-    decisionDimension: failedDecisionDimension,
-    row,
-  });
-}
-
-function buildRecoveredParticipantKeysByTransaction(participantRows) {
-  const participantKeysByTransaction = new Map();
-  for (const row of participantRows) {
-    const transactionId = row.transaction_id || row.transactionId;
-    const partitionId = row.partition_id || row.partitionId;
-    if (!transactionId || !partitionId) {
-      continue;
-    }
-    const keys = participantKeysByTransaction.get(transactionId) || new Set();
-    keys.add(partitionId);
-    participantKeysByTransaction.set(transactionId, keys);
-  }
-  return participantKeysByTransaction;
-}
-
-function validateRecoveryRowsBeforeMutation(
-  coordinator,
-  transactionRows,
-  participantRows,
-) {
-  const participantKeysByTransaction =
-    buildRecoveredParticipantKeysByTransaction(participantRows);
-  for (const row of transactionRows) {
-    const status = row.status || TRANSACTION_STATUS.FAILED;
-    if (TERMINAL_TRANSACTION_STATUS.has(status)) {
-      continue;
-    }
-    const sessionId = row.session_id || row.sessionId;
-    const transactionId = row.transaction_id || row.transactionId;
-    if (!sessionId || !transactionId) {
-      throw buildTransactionRecoveryIncompleteError({
-        decisionDimension: null,
-        row,
-      });
-    }
-    if (coordinator.transactionsBySession.has(sessionId)) {
-      continue;
-    }
-    const participantKeys =
-      participantKeysByTransaction.get(transactionId) || new Set();
-    validateRecoveredTransactionDecision(
-      {
-        ...buildRecoveredTransactionDecisionState(row, status),
-        status,
-        participants: new Map(
-          Array.from(participantKeys, (partitionId) => [partitionId, true]),
-        ),
-      },
-      row,
-    );
-  }
-}
 
 /**
  * @param {*} errorLike
@@ -227,7 +52,56 @@ function shouldDeferRecoverySweepError(errorLike) {
   return isRetryableControlPlaneError(errorLike);
 }
 
+// The PREPARE evidence a recovered participant row retained (design 2.1,
+// seam E): its prepared digest, index and term. A row without a digest is
+// asked again under the same identity before any COMMIT decision.
+function recoveredPrepareEvidenceOf(coordinator, row) {
+  const preparedDigest = row[LOCAL_STR_PREPARED_DIGEST] ??
+    row[LOCAL_STR_PREPAREDDIGEST] ?? null;
+  const retained = typeof preparedDigest === 'string' &&
+    preparedDigest.length > 0;
+  return {
+    preparedDigest: retained ? preparedDigest : null,
+    prepareIndex: coordinator.resolveFiniteNumberField(
+      row, LOCAL_STR_PREPARE_INDEX, LOCAL_STR_PREPAREINDEX),
+    prepareTerm: coordinator.resolveFiniteNumberField(
+      row, LOCAL_STR_PREPARE_TERM, LOCAL_STR_PREPARETERM),
+    prepareEvidenceRetained: retained,
+  };
+}
+
+// Recovery's re-drive of one transaction by its recorded decision, or by
+// its status when none is recorded yet: a recorded decision is completed
+// whatever the status (a FAILED row included); PREPARED or COMMITTING
+// continues the commit protocol (prepare-first evidence, then the
+// insert-once decision, which may be a ROLLBACK the evidence requires);
+// every other undecided status rolls back.
+async function redriveRecoveredTransaction(coordinator, tx) {
+  if (tx.recoveryDiscovered) return redriveAuthoritativeRecovery(coordinator, tx);
+  if (!tx.decision && !RECOVERY_COMMIT_TRANSACTION_STATUS.has(tx.status)) {
+    return {path: QUERY_OPERATION.ROLLBACK,
+      result: await coordinator.runRollbackProtocol(tx)};
+  }
+  if (!tx.decision) {
+    const result = await coordinator.runCommitProtocol(tx, {
+      allowTimedOutCommitStatuses: true,
+    });
+    if (tx.decision?.decision !== PARTICIPANT_TRANSACTION_DECISION.ROLLBACK) {
+      return {path: QUERY_OPERATION.COMMIT, result};
+    }
+    return {path: QUERY_OPERATION.ROLLBACK, result: {...result,
+      success: (result.rollbackFailedParticipants || []).length === 0}};
+  }
+  return tx.decision.decision === PARTICIPANT_TRANSACTION_DECISION.COMMIT ?
+    {path: QUERY_OPERATION.COMMIT,
+      result: await coordinator.completeCommitDecision(tx)} :
+    {path: QUERY_OPERATION.ROLLBACK,
+      result: await coordinator.completeRollbackDecision(tx)};
+}
+
 const distributedTransactionRecoveryMethods = {
+  shouldDeferRecoverySweepError,
+
   recover(rows) {
     if (!Array.isArray(rows)) {
       return;
@@ -282,53 +156,15 @@ const distributedTransactionRecoveryMethods = {
       let replayPath = null;
       let skipped = false;
 
-      await this.workflowCoordinator.runExclusive(tx.ownerKey, async () => {
-        if (TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
+      await this.runTransactionOperation(tx.sessionId, async () => {
+        if (!tx.recoveryDiscovered && TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
           skipped = true;
-          protocolResult = {
-            success: true,
-            operation: null,
-            transactionId: tx.transactionId,
-            participants: this.getOrderedParticipantIds(tx),
-            failedParticipants: [],
-          };
+          protocolResult = {success: true};
           return;
         }
-        if (tx.status === TRANSACTION_STATUS.FAILED) {
-          skipped = true;
-          protocolResult = {
-            success: false,
-            operation: null,
-            transactionId: tx.transactionId,
-            participants: this.getOrderedParticipantIds(tx),
-            failedParticipants: [],
-            errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-            error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-          };
-          return;
-        }
-        if (RECOVERY_ROLLBACK_TRANSACTION_STATUS.has(tx.status)) {
-          replayPath = QUERY_OPERATION.ROLLBACK;
-          protocolResult = await this.runRollbackProtocol(tx);
-          return;
-        }
-        if (RECOVERY_COMMIT_TRANSACTION_STATUS.has(tx.status)) {
-          replayPath = QUERY_OPERATION.COMMIT;
-          protocolResult = await this.runCommitProtocol(tx, {
-            allowTimedOutCommitStatuses: true,
-          });
-          return;
-        }
-        await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
-        protocolResult = {
-          success: false,
-          operation: QUERY_OPERATION.ROLLBACK,
-          transactionId: tx.transactionId,
-          participants: this.getOrderedParticipantIds(tx),
-          failedParticipants: [],
-          errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-          error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        };
+        const redriven = await redriveRecoveredTransaction(this, tx);
+        replayPath = redriven.path;
+        protocolResult = redriven.result;
       });
 
       results.push({
@@ -340,9 +176,12 @@ const distributedTransactionRecoveryMethods = {
         skipped,
         success: protocolResult?.success === true,
         error: protocolResult?.error || null,
+        decisionReadState: protocolResult?.decisionReadState ?? null,
         failedParticipants: protocolResult?.failedParticipants || [],
       });
-      this.recoveredTransactionIds.delete(workflowId);
+      if (protocolResult?.success === true || skipped) {
+        this.recoveredTransactionIds.delete(workflowId);
+      }
     }
 
     const resumed = results.filter(
@@ -391,10 +230,12 @@ const distributedTransactionRecoveryMethods = {
         try {
           payload = await this.loadRecoveryStateForSweep();
         } catch (error) {
-          if (this.shouldDeferRecoverySweepError(error)) {
-            return this.buildDeferredRecoverySweepResult(error);
-          }
-          throw error;
+          // Discovery is a hint source. A failed cache census cannot suppress
+          // the authoritative retries of IDs already retained by this owner.
+          this.logger?.warn?.(RECOVERY_SWEEP_LOG_MSG, {
+            error: error?.message || String(error),
+            retainedTransactions: this.recoveredTransactionIds.size,
+          });
         }
         if (payload && typeof payload === LOCAL_STR_OBJECT) {
           this.recoverFromSystemTables(payload);
@@ -402,12 +243,11 @@ const distributedTransactionRecoveryMethods = {
       }
 
       const stuckTransactions = Array.from(
-        this.transactionsBySession.values(),
+        this.workflowCoordinator.workflowsById.values(),
       ).filter(
         (tx) =>
-          !TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
-          tx.status !== TRANSACTION_STATUS.FAILED &&
-          this.isTransactionBudgetExceeded(tx),
+          tx.recoveryDiscovered || (!TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
+            this.isTransactionBudgetExceeded(tx)),
       );
       const results = [];
       let deferred = 0;
@@ -416,18 +256,16 @@ const distributedTransactionRecoveryMethods = {
         let protocolResult = null;
         let sweepPath = null;
         try {
-          await this.workflowCoordinator.runExclusive(
-            tx.ownerKey,
+          await this.runTransactionOperation(
+            tx.sessionId,
             async () => {
-              if (RECOVERY_COMMIT_TRANSACTION_STATUS.has(tx.status)) {
-                sweepPath = QUERY_OPERATION.COMMIT;
-                protocolResult = await this.runCommitProtocol(tx, {
-                  allowTimedOutCommitStatuses: true,
-                });
+              if (!tx.recoveryDiscovered && TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
+                protocolResult = {success: true};
                 return;
               }
-              sweepPath = QUERY_OPERATION.ROLLBACK;
-              protocolResult = await this.runRollbackProtocol(tx);
+              const redriven = await redriveRecoveredTransaction(this, tx);
+              sweepPath = redriven.path;
+              protocolResult = redriven.result;
             },
           );
         } catch (error) {
@@ -617,6 +455,9 @@ const distributedTransactionRecoveryMethods = {
    * @param {Object[]} [payload.participants] - sql_transaction_participants
    *   rows.
    * @param {Object[]} [payload.writeOperations] - sql_write_operations rows.
+   * @param {Object[]} [payload.decisions] - recorded decision rows
+   *   ({transaction_id, decision, decision_text, decision_digest}); a
+   *   sql_transactions row carries its own in the same columns.
    */
 
   recoverFromSystemTables(payload = {}) {
@@ -629,16 +470,25 @@ const distributedTransactionRecoveryMethods = {
     const writeOperationRows = Array.isArray(payload.writeOperations) ?
       payload.writeOperations :
       [];
-
-    validateRecoveryRowsBeforeMutation(
-      this,
-      transactionRows,
-      participantRows,
-    );
+    const knownIds = new Set(this.workflowCoordinator.workflowsById.keys());
+    for (const row of transactionRows) {
+      if (!(row.transaction_id || row.transactionId) || !(row.session_id || row.sessionId)) {
+        throw buildTransactionRecoveryIncompleteError({decisionDimension: null, row});
+      }
+      const transactionEpoch = row[LOCAL_STR_TRANSACTION_EPOCH] ??
+        row[LOCAL_STR_TRANSACTIONEPOCH];
+      if (!isCanonicalTransactionEpoch(transactionEpoch)) {
+        throw buildTransactionRecoveryIncompleteError({
+          decisionDimension: LOCAL_STR_TRANSACTION_EPOCH,
+          row,
+        });
+      }
+    }
 
     const recoveryOutcome = this.workflowCoordinator.recover({
       workflows: transactionRows,
-      participants: participantRows,
+      participants: participantRows.filter((row) =>
+        !knownIds.has(row.transaction_id || row.transactionId)),
       loadWorkflow: (row) => {
         const sessionId = row.session_id || row.sessionId;
         const transactionId = row.transaction_id || row.transactionId;
@@ -688,6 +538,10 @@ const distributedTransactionRecoveryMethods = {
             timestamp: updatedAt,
           })],
           writeOperations: [],
+          decision: null,
+          participantSetText: row.participant_set_text ?? row.participantSetText ?? null,
+          recoveryDiscovered: true,
+          transactionRowInserted: true,
           createdAt: row.created_at || row.createdAt || this.now(),
           updatedAt,
         };
@@ -709,11 +563,12 @@ const distributedTransactionRecoveryMethods = {
           partitionId,
           status: row.status || PARTICIPANT_STATUS.FAILED,
           lastError: row.last_error || row.lastError || null,
+          ...recoveredPrepareEvidenceOf(this, row),
           createdAt: row.created_at || row.createdAt || this.now(),
           updatedAt: row.updated_at || row.updatedAt || this.now(),
         };
       },
-      isTerminalWorkflow: (workflow) =>
+      isTerminalWorkflow: (workflow) => !workflow.recoveryDiscovered &&
         TERMINAL_TRANSACTION_STATUS.has(workflow.status),
     });
 
@@ -724,12 +579,6 @@ const distributedTransactionRecoveryMethods = {
     // in-memory entries.
     const restoredWorkflowIds =
       recoveryOutcome?.restoredWorkflowIds || new Set();
-    for (const workflowId of restoredWorkflowIds) {
-      const tx = this.workflowCoordinator.getWorkflowById(workflowId);
-      if (tx) {
-        validateRecoveredTransactionDecision(tx, tx);
-      }
-    }
     for (const row of transactionRows) {
       const transactionId = row.transaction_id || row.transactionId;
       if (!transactionId || !restoredWorkflowIds.has(transactionId)) {
@@ -769,29 +618,4 @@ const distributedTransactionRecoveryMethods = {
   },
 };
 
-const {
-  recover,
-  resumeRecoveredTransactions,
-  runRecoverySweep,
-  startRecoverySweep,
-  stopRecoverySweep,
-  isRecoverySweepDeferred,
-  deferRecoverySweep,
-  clearRecoverySweepDeferState,
-  buildDeferredRecoverySweepResult,
-  recoverFromSystemTables,
-} = distributedTransactionRecoveryMethods;
-
-export {
-  recover,
-  resumeRecoveredTransactions,
-  runRecoverySweep,
-  startRecoverySweep,
-  stopRecoverySweep,
-  isRecoverySweepDeferred,
-  shouldDeferRecoverySweepError,
-  deferRecoverySweep,
-  clearRecoverySweepDeferState,
-  buildDeferredRecoverySweepResult,
-  recoverFromSystemTables,
-};
+export {distributedTransactionRecoveryMethods};
