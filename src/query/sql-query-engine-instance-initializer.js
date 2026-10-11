@@ -117,6 +117,10 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
       engine.getBootstrapRoutingOverlayServices(partitionId),
   };
   engine.nowFn = options.nowFn || (() => Date.now());
+  const queryConfig = ConfigurationManager.getInstance();
+  engine.queryTimeoutMs =
+    queryConfig.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
+    QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
   engine.authoritativeControlPlaneView =
     options.authoritativeControlPlaneView || null;
   engine.controlPlaneTimeoutPolicy =
@@ -263,8 +267,19 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
       epochSource: options.transactionEpochSource,
       loadRecoveryStateForSweep: async () =>
         engine.loadDistributedTransactionRecoveryState(),
-      retainAdvancedTransactionReadback: (row) =>
-        engine.retainAdvancedDistributedTransactionReadback(row),
+      retainAdvancedTransactionReadback: (tx, row, timeoutBudget) =>
+        engine.retainAdvancedDistributedTransactionReadback(
+          tx,
+          row,
+          timeoutBudget,
+        ),
+      maxUncertainTransactionCreations:
+        options.maxUncertainTransactionCreations,
+      maxUncertainTransactionCreationCanonicalBytes:
+        options.maxUncertainTransactionCreationCanonicalBytes,
+      maxUncertainCreationSweepPerTurn:
+        options.maxUncertainCreationSweepPerTurn,
+      transactionCreationTurnBudgetMs: engine.queryTimeoutMs,
     });
   engine.managedSplitWorkflow = options.managedSplitWorkflow || null;
 
@@ -333,11 +348,6 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
         sqlQueryEngine: engine,
       }),
     });
-
-  const config = ConfigurationManager.getInstance();
-  engine.queryTimeoutMs =
-    config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
-    QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
 
   engine.runtimeDriverRegistry = options.runtimeDriverRegistry || null;
   engine.serviceRuntimeLifecycle = options.serviceRuntimeLifecycle || null;
