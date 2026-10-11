@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-11T23:25:48.306559+00:00",
+  "scope": "APPROVE bounded terminal transfer source/test slice758b; transport/native/startup acceptance open",
+  "reportSha256": "a3769209f3a635e3e77e8858beedc77e88470f9db8b708ee671609c6abd4f98a",
+  "manifestSha256": "7e12a83d91d71ef418c62346b0c7f43fd970640bd893b9edeabc31472b401872",
+  "archiveName": "cdc-transfer-owner-source-round3-independent-a3769209.tar.gz",
+  "archiveSha256": "618b922cde4aa526806a426abb54de96f678f0198afcb836da94c49cafae3abd",
+  "diagnosticFileCount": 28,
+  "archiveDisposition": "Awaiting canonical solve evidence upload; local archive outside solve tree"
+}

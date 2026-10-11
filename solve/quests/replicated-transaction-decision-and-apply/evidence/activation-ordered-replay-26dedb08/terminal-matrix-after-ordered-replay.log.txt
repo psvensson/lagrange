@@ -1,0 +1,28 @@
+(node:1210741) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 transition listeners added to [BootstrapReadinessState]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+CENSUS START {"count":135,"mismatches":[],"application":[]}
+CREATE1 1 {"success":true,"operation":"CREATE_TABLE","tableId":"tbl-a163f5267e80b762f8c3ab83ff371d35","tableName":"matrix_first","partitionKey":"id","partitionId":"tbl-a163f5267e80b762f8c3ab83ff371d35-p1","columns":2,"completionState":"active","completionReason":null,"contractState":"ready","nextAction":"proceed","visibilityState":"visible","visibilityPending":false,"provisioningSummary":{"requestedReplicaCount":1,"resolvedReplicaCount":1,"minimumRoutableReplicaCount":1,"routableReplicaCount":1,"fullReplicaCountConverged":true,"contractState":"ready","nextAction":"proceed","reasonCodes":[],"retryAfterMs":0},"jobId":"schema-job-a163f5267e80b762f8c3ab83ff371d35","reasonCodes":["schema_provisioning_complete"],"retryAfterMs":0,"statementType":"CREATE_TABLE"}
+CENSUS AFTER_CREATE1 {"count":136,"mismatches":[],"application":["tbl-a163f5267e80b762f8c3ab83ff371d35-p1"]}
+ROLLBACK 1 {"tx":"ed57572df34e072642ccad91f2ee211d","begin":true,"insert":true,"rollback":true}
+ROLLBACK 2 {"tx":"172305aba28adb5c2bb06aa98db97327","begin":true,"insert":true,"rollback":true}
+ROLLBACK 3 {"tx":"751080e9eeb57cf8f011d913349d8053","begin":true,"insert":true,"rollback":true}
+LogsTableService initialized
+metrics.logging.logs_table_connect.start {
+  bufferedEntries: 0,
+  flushMode: 'background',
+  chunkSize: 20,
+  yieldMs: 5
+}
+Connected to LoggingService, flushed 0 buffered entries
+ROLLBACK 4 {"tx":"842df3d33babc759e23f5889a4ece6f7","begin":true,"insert":true,"rollback":true}
+ROLLBACK 5 {"tx":"e4426a3880c3771ece568d1c272e6c2b","begin":true,"insert":true,"rollback":true}
+ROLLBACK 6 {"tx":"87456e87eddf31a8c28ec937742dc19d","begin":true,"insert":true,"rollback":true}
+ROLLBACK 7 {"tx":"de1c5914e27c5713420cdfe90585d6f9","begin":true,"insert":true,"rollback":true}
+ROLLBACK 8 {"tx":"ba9d385091f65c2723049d1de696d789","begin":true,"insert":true,"rollback":true}
+ROLLBACK 9 {"tx":"95668d5c970a9181dfc358602755a5c9","begin":true,"insert":true,"rollback":true}
+ROLLBACK 10 {"tx":"00bb85602a0d1ce37493aaef5f566eb4","begin":true,"insert":true,"rollback":true}
+COMMIT {"success":true}
+CREATE2 1 {"success":true,"operation":"CREATE_TABLE","tableId":"tbl-09dfe844c22cee3e4de0d4603564a9ed","tableName":"matrix_second","partitionKey":"id","partitionId":"tbl-09dfe844c22cee3e4de0d4603564a9ed-p1","columns":1,"completionState":"active","completionReason":null,"contractState":"ready","nextAction":"proceed","visibilityState":"visible","visibilityPending":false,"provisioningSummary":{"requestedReplicaCount":1,"resolvedReplicaCount":1,"minimumRoutableReplicaCount":1,"routableReplicaCount":1,"fullReplicaCountConverged":true,"contractState":"ready","nextAction":"proceed","reasonCodes":[],"retryAfterMs":0},"jobId":"schema-job-09dfe844c22cee3e4de0d4603564a9ed","reasonCodes":["schema_provisioning_complete"],"retryAfterMs":0,"statementType":"CREATE_TABLE"}
+CENSUS AFTER_CREATE2 {"count":137,"mismatches":[],"application":["tbl-a163f5267e80b762f8c3ab83ff371d35-p1","tbl-09dfe844c22cee3e4de0d4603564a9ed-p1"]}
+LogsTableService shutdown
+ROOT /tmp/lagrange-terminal-matrix-vgBsCD

@@ -246,41 +246,52 @@ Distributed transactions are implemented with
 `PartitionService` as the participant owner.
 
 Implementation summary:
-1. `BEGIN` assigns a monotonic `transactionEpoch` and a timeout budget
-   deadline. The transaction kind is `EXPLICIT`; SQL-created statement
-   transactions are `AUTOCOMMIT`.
-2. Participant enlistment delivers `BEGIN` through `MessageRouter` with
-   the assigned epoch.
+1. `BEGIN` mints a random transaction ID, assigns a monotonic
+   `transactionEpoch` and timeout deadline, and inserts one
+   `sql_transactions` row before participant work. The row starts with the
+   exact empty participant manifest. The transaction kind is `EXPLICIT`;
+   SQL-created statement transactions are `AUTOCOMMIT`.
+2. Before a participant receives `BEGIN`, `QUERY`, or a write, the coordinator
+   appends its `[participantId, partitionId]` pair to that manifest with an
+   exact OPEN-row compare-and-swap. The durable manifest is the complete
+   admitted participant set; participant progress rows are recovery hints.
 3. SQL direct-autocommits an independent one-participant statement. A final
    post-mirror multi-participant statement is promoted to an owner-generated
    `AUTOCOMMIT` transaction. Active explicit transactions always enlist.
-4. `COMMIT` waits for the session FIFO lane, freezes the final participant
-   set, persists its exact count, and then selects the immutable commit mode.
-   One participant uses 1PC only when the participant exposes a durable typed
-   commit outcome; otherwise it safely falls back to 2PC. A rejected durable
-   transaction or participant mutation fails closed before protocol fanout.
-5. 2PC runs phase 1 prepare. Each participant executes
-   `prepareTransaction()`, validates write conflicts, and appends
-   `PREPARE_TRANSACTION` in its Raft log before prepare success.
-6. On all-prepare success, coordinator persists `COMMITTING` before any
-   participant commit message, then drives commit fanout with bounded
-   retry/backoff.
-7. On prepare failure or explicit rollback, coordinator persists
-   `ROLLING_BACK` before rollback fanout and drives all participants to
-   `ROLLED_BACK`.
-8. Recovery validates staged rows before installing coordinator state, then
-   validates the persisted transaction mode, participant-set state, commit
-   mode, and frozen participant count before any callback. 1PC replay
-   resolves `COMMITTED`, `NOT_COMMITTED`, or `UNKNOWN` from the participant's
-   SQLite-atomic outcome record keyed by session and exact transaction epoch;
-   `UNKNOWN` remains in `COMMITTING`. A periodic recovery sweep resolves
-   timed-out non-terminal transactions.
+4. `COMMIT` waits for the session FIFO lane and freezes the final manifest by
+   exact compare-and-swap. Every nonempty transaction uses two-phase commit,
+   including one participant. A rejected durable transaction or participant
+   mutation fails closed before protocol fanout.
+5. Phase 1 sends `PARTICIPANT_PREPARE`. A participant validates conflicts,
+   commits the prepared receipt through Raft, and returns its prepared digest,
+   index, and term. The coordinator retains that evidence before deciding.
+6. The coordinator records one immutable COMMIT or ROLLBACK decision, bound to
+   the exact participant manifest and prepared digests, before any decision
+   fanout. `COMMITTING` and other progress labels are projections of that
+   record and never decision authority.
+7. Phase 2 sends `PARTICIPANT_DECISION` with the complete canonical decision
+   bytes. A participant applies COMMIT only against its matching prepared
+   digest. A bound ROLLBACK also creates a durable tombstone for a participant
+   whose PREPARE never committed.
+8. Recovery rereads the authoritative transaction row before each stage,
+   restores missing participant hints from the manifest, and always follows an
+   exact recorded decision. An undecided OPEN row waits for its persisted
+   deadline before freeze and rollback. An undecided FROZEN row can choose
+   COMMIT only with complete retained positive prepare evidence; otherwise it
+   records ROLLBACK. A missing, NULL, or corrupt manifest remains held.
+9. Session reads synchronously replay the transaction's deterministic staged
+   operations inside a rolled-back SQLite transaction over current committed
+   state. They therefore see current committed state plus their own writes.
+   `BEGIN` captures the partition write generation; PREPARE refuses `conflict`
+   if a committed application write advanced that generation, and every
+   replica rechecks the generation at apply. This is partition-granular
+   first-committer-wins rather than epoch visibility or row MVCC.
 
-The W10 schema cutover is full-restart/minimum-version only. Drain every
-pre-W10 nonterminal transaction before upgrade. Mixed-version apply is not
-supported, and legacy `PREPARING`, `PREPARED`, or `COMMITTING` rows with
-`NOT_SELECTED` fail closed rather than inferring a mode.
-
-9. Snapshot model: participants enforce epoch-based snapshot isolation
-   (`commit_epoch < transaction_epoch` visibility), read-your-own-writes,
-   and first-committer-wins write-conflict detection via write sets.
+The transaction-schema cutover has a bounded full-restart compatibility
+envelope. Drain and account for retained legacy work before upgrade. A current
+complete canonical row is recovered through actual participant settlement; an
+exact empty predecessor schema can receive the fixed nullable additions.
+Nonempty predecessor rows and NULL or corrupt manifests are preserved and
+refuse activation with actionable transaction IDs and a schema digest. A
+terminal status by itself never proves disposition, and mixed-version apply is
+not a supported upgrade contract.

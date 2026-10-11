@@ -1,0 +1,12 @@
+# test-files planned=5
+classified lane ordinary: 4 file(s), jobs=4
+thermal: ok cpu 56C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/cdc/cdc-coverage-reconcile-owner.test.js (77 assertions, 637ms)
+ok test/cdc/cdc-coverage-lifecycle-owner.test.js (114 assertions, 666ms)
+ok test/partition/partition-cdc-source-coverage.test.js (144 assertions, 911ms)
+ok test/cdc/cdc-authoritative-coverage-reconciliation.test.js (95 assertions, 1065ms)
+# test-files total=4 pass=4 fail=0 assertions=430
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 48C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/integration/cdc-coverage-rejoin-formation.integration.test.js (8 assertions, 1468ms)
+# test-files total=1 pass=1 fail=0 assertions=8

@@ -1,0 +1,28 @@
+{
+  "source": "2de419483c9b4ce9e3fabc87bb54d93e4afb8817",
+  "base": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+  "previousTarget": "a49fd8d1e686d9cd9dc9196478102a0e417df822",
+  "currentTarget": "96f0bdc34bd4702e4e365ff329c77aa997648ff0",
+  "previousCensusSha256": "61c6ef1dce85d83398b6440ffb74ea16561bbfc0f9d963908e8db0c7a25b109d",
+  "pathsChecked": 48,
+  "changedTargetPaths": [
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "prior": "0db31ccfb54dd62614fbb02f02c71185709013a10d572e2361a0d9886c4d073c",
+      "current": "7fefc06b990c2c493e625c343af633d8cb08e0b9453a43d198f8eaea1806fb8e"
+    },
+    {
+      "path": "test/shards/subsystem-classes.json",
+      "prior": "1d3d387b61bdf8d94b960a3faf28ec13908846a4787da1c92788f3a218bc7a6c",
+      "current": "a645d4bef7be8c6e67a94b5255aa2879a726e90d9e7747da3dd42a20699b269b"
+    }
+  ],
+  "scope": "Read-only exact immutable blob comparison. All production/test source blobs in the prior 48-path census are unchanged in currentTarget; two generated metadata blobs changed and must be regenerated on eventual composition. Classification counts are from previousTarget only. Neither source nor integration approval.",
+  "previousClassificationCounts": {
+    "already-identical": 9,
+    "source-only-delta": 31,
+    "independent-add-conflict": 1,
+    "overlap-clean-text-merge": 1,
+    "overlap-conflict": 6
+  }
+}

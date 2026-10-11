@@ -1,0 +1,71 @@
+RESULTS_START
+Protocol session mapped to tenant/policy { sessionId: 'queued-sweep', tenantId: 'default' }
+Executing SqlRequest via SqlCore {
+  sessionId: 'queued-sweep',
+  tenantId: 'default',
+  executionMode: 'sql_statement'
+}
+SqlCore.executeRequest dispatching {
+  executionMode: 'sql_statement',
+  statement: 'BEGIN',
+  sessionId: 'queued-sweep'
+}
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'queued-sweep' }
+BEGIN TRANSACTION { sessionId: 'queued-sweep' }
+SqlCore.executeRequest complete { executionMode: 'sql_statement', success: true }
+metrics.query.dispatch {
+  executionMode: 'sql_statement',
+  totalDurationMs: 4,
+  success: true,
+  sessionId: 'queued-sweep'
+}
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+{
+  "writes": 2,
+  "sweep": {
+    "swept": 1,
+    "resolved": 1,
+    "failed": 0,
+    "deferred": 0,
+    "deferredUntilMs": 0,
+    "skipped": false,
+    "results": [
+      {
+        "transactionId": "8b8c2b0ad8a73ea4aa7a224e13a3f94d",
+        "sessionId": "queued-sweep",
+        "sweepPath": "BEGIN_TRANSACTION",
+        "statusAfter": "ACTIVE",
+        "success": true,
+        "error": null
+      }
+    ]
+  },
+  "messageTypes": [
+    "E",
+    "Z"
+  ],
+  "frames": [
+    "E\u0000\u0000\u00006SERROR\u0000CXX000\u0000MPostgreSQL query execution failed\u0000\u0000",
+    "Z\u0000\u0000\u0000\u0005I"
+  ],
+  "txState": "UNCERTAIN_ANSWERED",
+  "diagnostics": {
+    "attachmentCount": 0,
+    "operationCount": 0,
+    "recordBytes": 909,
+    "recordCount": 1,
+    "roles": {
+      "UNCERTAIN_ANSWERED": 1
+    },
+    "sweep": {
+      "deferredAttempts": 0,
+      "deferredUntilMs": 0,
+      "oldestDeadlineAtMs": 1791748500775,
+      "reservedBytes": 909,
+      "retainedCount": 1,
+      "selectedCount": 1,
+      "stopReason": "turn_complete"
+    },
+    "totalBytes": 909
+  }
+}

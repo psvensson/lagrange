@@ -1,0 +1,13 @@
+{
+  "owner": "solve evidence add; upload redownload and rehash completed",
+  "entry": {
+    "ts": "2026-10-11T23:26:19.682Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "Independent CDC terminal-owner source review round3 all63 reporta3769209 and28diagnostics; APPROVE bounded source/test at758b32e. 51 schedules+prior10/9+495 assertions; transport/native/startup gates remain open.",
+    "evidence": "sha256:618b922cde4aa526806a426abb54de96f678f0198afcb836da94c49cafae3abd",
+    "asset": "replicated-transaction-decision-and-apply--cdc-transfer-owner-source-round3-independent-a3769209.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/replicated-transaction-decision-and-apply--cdc-transfer-owner-source-round3-independent-a3769209.tar.gz",
+    "bytes": 39675
+  }
+}

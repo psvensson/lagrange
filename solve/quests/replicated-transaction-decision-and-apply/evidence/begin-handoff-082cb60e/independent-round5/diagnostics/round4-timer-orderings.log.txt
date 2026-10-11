@@ -1,0 +1,160 @@
+RESULTS_START
+{
+  "root": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+  "results": [
+    {
+      "name": "timer-expiry-then-uncertain-retry-first",
+      "order": "retry-first",
+      "sweep": null,
+      "first": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "7fbc5d17943c64df51012b69854dc793",
+        "timeoutDeadline": 1791752143827,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "afterTimer": {
+        "consumerRetained": true,
+        "state": "INSERTING",
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 1,
+          "recordBytes": 1849,
+          "recordCount": 1,
+          "roles": {
+            "INSERTING": 1
+          },
+          "totalBytes": 2024
+        }
+      },
+      "afterCompletion": {
+        "consumerRetained": true,
+        "state": "UNCERTAIN_ANSWERED",
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 1849,
+          "recordCount": 1,
+          "roles": {
+            "UNCERTAIN_ANSWERED": 1
+          },
+          "totalBytes": 1849
+        }
+      },
+      "retry": {
+        "success": true,
+        "operation": "BEGIN_TRANSACTION",
+        "sessionId": "timer-late-retry-first",
+        "transactionId": "7fbc5d17943c64df51012b69854dc793",
+        "transactionEpoch": 1791752043828,
+        "transactionMode": "EXPLICIT"
+      },
+      "accepted": true,
+      "writes": 2,
+      "final": {
+        "state": "ENTERED_ACTIVE",
+        "consumerRetained": false,
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 0,
+          "recordCount": 0,
+          "roles": {},
+          "totalBytes": 0
+        }
+      }
+    },
+    {
+      "name": "timer-expiry-then-uncertain-sweep-first",
+      "order": "sweep-first",
+      "sweep": {
+        "swept": 1,
+        "resolved": 1,
+        "failed": 0,
+        "deferred": 0,
+        "deferredUntilMs": 0,
+        "skipped": false,
+        "results": [
+          {
+            "transactionId": "2cdd38fe76c50b931137c9764a90861d",
+            "sessionId": "timer-late-sweep-first",
+            "sweepPath": "BEGIN_TRANSACTION",
+            "statusAfter": "ACTIVE",
+            "success": true,
+            "error": null
+          }
+        ]
+      },
+      "first": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "2cdd38fe76c50b931137c9764a90861d",
+        "timeoutDeadline": 1791752143846,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "afterTimer": {
+        "consumerRetained": true,
+        "state": "INSERTING",
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 1,
+          "recordBytes": 1849,
+          "recordCount": 1,
+          "roles": {
+            "INSERTING": 1
+          },
+          "totalBytes": 2024
+        }
+      },
+      "afterCompletion": {
+        "consumerRetained": true,
+        "state": "UNCERTAIN_ANSWERED",
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 1849,
+          "recordCount": 1,
+          "roles": {
+            "UNCERTAIN_ANSWERED": 1
+          },
+          "totalBytes": 1849
+        }
+      },
+      "retry": {
+        "success": true,
+        "operation": "BEGIN_TRANSACTION",
+        "sessionId": "timer-late-sweep-first",
+        "transactionId": "2cdd38fe76c50b931137c9764a90861d",
+        "transactionEpoch": 1791752043847,
+        "transactionMode": "EXPLICIT"
+      },
+      "accepted": true,
+      "writes": 2,
+      "final": {
+        "state": "ENTERED_ACTIVE",
+        "consumerRetained": false,
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 0,
+          "recordCount": 0,
+          "roles": {},
+          "sweep": {
+            "deferredAttempts": 0,
+            "deferredUntilMs": 0,
+            "oldestDeadlineAtMs": 1791752143846,
+            "reservedBytes": 1849,
+            "retainedCount": 1,
+            "selectedCount": 1,
+            "stopReason": "turn_complete"
+          },
+          "totalBytes": 0
+        }
+      }
+    }
+  ]
+}
