@@ -16,6 +16,11 @@ import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {deepFreeze} from '../../src/raft/raft-operation-port.js';
+import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
+import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
+import {COMMITTED_MEMBERSHIP_ANSWER_KIND} from
+  '../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../../src/raft/raft-operation-port-request.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
@@ -24,6 +29,12 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
+import {readParticipantReleaseFacts} from
+  '../../src/partition/partition-participant-release-facts.js';
+import {releaseIdentityOf} from
+  '../../src/partition/partition-participant-release-contract.js';
+import {resumeParticipantCutoverAdmission} from
+  '../../src/partition/partition-participant-transaction-pause.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {COMMIT_MODE, PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
@@ -354,14 +365,20 @@ function committedQueryOf(entryId, sql) {
 // A fixture replica: the fixture table unless `extra.tableName` names
 // another (a production system table, with `extra.schema`).
 function createReplica(replicaId, extra = {}) {
+  const replicaIds = extra.replicaIds ?? [...REPLICAS];
   return createControllablePartitionService({
     partitionId: PARTITION_ID,
     tableId: extra.tableName ?? TABLE,
     tableName: extra.tableName ?? TABLE,
     replicaId,
-    replicaIds: [...REPLICAS],
+    replicaIds,
     nodeId: 'test-node',
-    peerAddresses: REPLICAS.map((id) => `test-node/partition/${id}`),
+    peerAddresses: replicaIds.map((id) => `test-node/partition/${id}`),
+    // A readable empty topology owner for these isolated participant groups.
+    // Unavailable/active topology is supplied explicitly by its witnesses.
+    systemTableCache: extra.systemTableCache ?? {
+      getAll: () => [], get: () => null, filter: () => [],
+    },
     schema: extra.schema ?? {columns: [
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'value', type: 'TEXT'},
@@ -395,7 +412,37 @@ async function startLeader(extra) {
   leader.controllablePort.setProposeHandler(async (entry) => {
     proposed.push({...entry});
   });
+  if (extra?.generationOrigin !== false && extra?.releaseAdmission !== false) {
+    await resumeFixtureParticipantAdmission(leader);
+  }
   return {leader, proposed};
+}
+
+async function resumeFixtureParticipantAdmission(leader) {
+  const peerId = deriveRaftRsPeerId(leader.replicaId);
+  const confState = {voters: [peerId], votersOutgoing: [], learners: [], learnersNext: []};
+  const configurationKey = raftRsConfStateKey(confState);
+  const port = leader.controllablePort;
+  port.configurationKey = configurationKey;
+  port.membershipGenerationIndex = port.committedIndex;
+  port.committedMembershipHandler = () => deepFreeze({
+    kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
+    ...confState, identities: {[peerId]: leader.replicaId},
+    appliedIndex: port.committedIndex, commitIndex: port.committedIndex,
+    configurationKey, membershipGenerationIndex: port.committedIndex,
+    term: port.term, leaderId: leader.replicaId, gateOpen: true,
+  });
+  const handler = {nodeId: leader.nodeId, ownerIncarnation: 1,
+    localServices: new Map([[leader.replicaId, leader]])};
+  const facts = await readParticipantReleaseFacts(handler, leader);
+  const release = releaseIdentityOf({partitionId: leader.partitionId,
+    targetBuildDigest: facts.buildDigest, configurationKey,
+    membershipGenerationIndex: port.committedIndex});
+  const outcome = await resumeParticipantCutoverAdmission(handler, leader,
+    {release, census: [facts]});
+  if (outcome !== 'resumed') {
+    throw new Error(`fixture participant release refused: ${outcome}`);
+  }
 }
 async function shutdownAll(...replicas) {
   for (const replica of replicas) {

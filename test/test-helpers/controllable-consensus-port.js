@@ -102,6 +102,14 @@ export class ControllableConsensusPort {
     this.steps = [];
     this.schedulingCalls = [];
     this.committedIndex = 0;
+    // The leader's view of each follower's matched index, by address (the
+    // production status's followerProgress); a suite sets it by hand.
+    this.followerProgress = {};
+    this.configurationKey = options.configurationKey || 'fixture-configuration';
+    this.membershipGenerationIndex = options.membershipGenerationIndex || 1;
+    this.runtimeGeneration = options.runtimeGeneration || 1;
+    this.lifecycleIncarnation = options.lifecycleIncarnation || 1;
+    this.confChangePending = false;
   }
 
   /**
@@ -227,11 +235,21 @@ export class ControllableConsensusPort {
         outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
         term: this.term,
         commitIndex: this.committedIndex,
+        // The double applies every command it commits, so its applied and
+        // last indices are its committed index.
+        appliedIndex: this.committedIndex,
+        lastIndex: this.committedIndex,
+        followerProgress: {...this.followerProgress},
         role: this.role,
         leaderId: this.leaderId,
         leaderAddress: this.leaderAddress,
         peerCount: this.peers.length,
         peers: this.peers.map((peer) => deepFreeze({...peer})),
+        configurationKey: this.configurationKey,
+        membershipGenerationIndex: this.membershipGenerationIndex,
+        runtimeGeneration: this.runtimeGeneration,
+        lifecycleIncarnation: this.lifecycleIncarnation,
+        confChangePending: this.confChangePending,
       }),
       // The fake holds no committed configuration; a test that needs one
       // answers through committedMembershipHandler.
