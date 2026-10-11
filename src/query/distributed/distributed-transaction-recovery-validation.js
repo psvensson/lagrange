@@ -25,6 +25,10 @@ import {
 } from './distributed-transaction-coordinator-constants.js';
 
 import {participantIdOf} from './distributed-transaction-identity.js';
+import {readParticipantSet} from './distributed-transaction-participant-manifest.js';
+import {decisionRecordOfRow, RECORDED_DECISION_STATE} from
+  './distributed-transaction-decision-record.js';
+import {isCanonicalTransactionEpoch} from '../../constants/transactions.js';
 
 const TRANSACTION_RECOVERY_DIMENSION = Object.freeze({
   DECISION_RECORD: 'decision_record',
@@ -169,6 +173,68 @@ function validateRecoveredTransactionDecision(tx, row = null) {
   });
 }
 
+function canonicalNonnegativeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+
+function hasCanonicalPersistedTransactionIdentity(row, transactionId) {
+  return row.transaction_id === transactionId &&
+    typeof row.session_id === 'string' && row.session_id.length > 0 &&
+    isCanonicalTransactionEpoch(row.transaction_epoch) &&
+    canonicalNonnegativeInteger(row.timeout_deadline) &&
+    Object.values(TRANSACTION_MODE).includes(row.transaction_mode) &&
+    canonicalNonnegativeInteger(row.created_at) &&
+    canonicalNonnegativeInteger(row.updated_at) &&
+    row.timeout_deadline >= row.created_at && row.updated_at >= row.created_at;
+}
+
+function hasCanonicalPersistedTransactionDomains(row) {
+  return Object.values(TRANSACTION_STATUS).includes(row.status) &&
+    Object.values(PARTICIPANT_SET_STATE).includes(row.participant_set_state) &&
+    Object.values(COMMIT_MODE).includes(row.commit_mode) &&
+    canonicalNonnegativeInteger(row.frozen_participant_count);
+}
+
+function isCanonicalOpenPersistedTransaction(row, decision) {
+  if (row.participant_set_state !== PARTICIPANT_SET_STATE.OPEN) return true;
+  return row.commit_mode === COMMIT_MODE.NOT_SELECTED &&
+    row.frozen_participant_count === 0 &&
+    decision.state === RECORDED_DECISION_STATE.ABSENT &&
+    [TRANSACTION_STATUS.ACTIVE, TRANSACTION_STATUS.ROLLING_BACK,
+      TRANSACTION_STATUS.ROLLED_BACK, TRANSACTION_STATUS.FAILED]
+      .includes(row.status);
+}
+
+function isCanonicalFrozenPersistedTransaction(row, participantPairs) {
+  if (row.participant_set_state === PARTICIPANT_SET_STATE.OPEN) return true;
+  return row.commit_mode !== COMMIT_MODE.NOT_SELECTED &&
+    row.frozen_participant_count === participantPairs.length;
+}
+
+function recordedDecisionMatchesParticipants(row, decision, participantPairs) {
+  if (decision.state !== RECORDED_DECISION_STATE.RECORDED) return true;
+  return row.participant_set_state !== PARTICIPANT_SET_STATE.OPEN &&
+    decision.participants.length === participantPairs.length &&
+    decision.participants.every(([participantId], index) =>
+      participantId === participantPairs[index][0]);
+}
+
+function validatePersistedTransactionRow(row, transactionId) {
+  if (!hasCanonicalPersistedTransactionIdentity(row, transactionId) ||
+      !hasCanonicalPersistedTransactionDomains(row)) return null;
+  const participantPairs = readParticipantSet(transactionId,
+    row.participant_set_text);
+  if (participantPairs === null) return null;
+  const decision = decisionRecordOfRow(row, transactionId);
+  if (decision.state === RECORDED_DECISION_STATE.INVALID) return null;
+  if (!isCanonicalOpenPersistedTransaction(row, decision) ||
+      !isCanonicalFrozenPersistedTransaction(row, participantPairs) ||
+      !recordedDecisionMatchesParticipants(row, decision, participantPairs)) {
+    return null;
+  }
+  return Object.freeze({decision, participantPairs});
+}
+
 function buildRecoveredParticipantKeysByTransaction(participantRows) {
   const participantKeysByTransaction = new Map();
   for (const row of participantRows) {
@@ -231,5 +297,6 @@ export {
   buildTransactionRecoveryIncompleteError,
   buildRecoveredTransactionDecisionState,
   validateRecoveredTransactionDecision,
+  validatePersistedTransactionRow,
   validateRecoveryRowsBeforeMutation,
 };
