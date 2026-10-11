@@ -16,12 +16,14 @@ import {randomBytes} from 'node:crypto';
 import Database from 'better-sqlite3';
 
 import {
+  canonicalJsonBytes,
   ensureDirectory,
   exactKeys,
   fsyncDirectory,
   readCanonicalJson,
   sha256Digest,
   writeAtomicDurable,
+  writeExclusiveDurable,
 } from '../runtime/oci-host-agent-durable-files.js';
 
 import {SQLiteLogAdapter} from './sqlite-log-adapter.js';
@@ -542,8 +544,27 @@ async function requestSnapshotInstall(options) {
     ];
     const reason = identityOutcomes.includes(validation.outcome) ?
       REJECTION.IDENTITY_MISMATCH : REJECTION.CHECKPOINT_INVALID;
-    writeMarker(checkpointsRoot, markerValue(
-      STATE.REJECTED, installId, generationIndex, reason));
+    ensureDirectory(installDir(checkpointsRoot));
+    if (fs.existsSync(markerPath(checkpointsRoot)) ||
+        fs.existsSync(stagingPath(checkpointsRoot))) {
+      return installResult(OUTCOME.INSTALL_STATE_CONFLICT, {
+        detail: RAFT_SNAPSHOT_INSTALL_DETAIL.STAGED_CREATE_GENERATION_MISMATCH,
+        validationOutcome: validation.outcome,
+      });
+    }
+    try {
+      writeExclusiveDurable(markerPath(checkpointsRoot), canonicalJsonBytes(
+        markerValue(STATE.REJECTED, installId, generationIndex, reason)));
+      fsyncDirectory(installDir(checkpointsRoot));
+    } catch (error) {
+      if (error?.code === 'EEXIST') {
+        return installResult(OUTCOME.INSTALL_STATE_CONFLICT, {
+          detail: RAFT_SNAPSHOT_INSTALL_DETAIL.STAGED_CREATE_GENERATION_MISMATCH,
+          validationOutcome: validation.outcome,
+        });
+      }
+      throw error;
+    }
     return installResult(OUTCOME.REJECTED, {
       reason,
       validationOutcome: validation.outcome,
@@ -642,6 +663,12 @@ function resolveStagedMarker(checkpointsRoot, replicaDbPath, marker,
       return installResult(OUTCOME.INSTALLED, {
         installId: marker.installId,
         generationIndex: marker.generationIndex,
+      });
+    }
+    if (markerKind(marker) ===
+        RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FRESH_CREATE) {
+      return installResult(OUTCOME.INSTALL_STATE_CONFLICT, {
+        detail: RAFT_SNAPSHOT_INSTALL_DETAIL.STAGED_CREATE_GENERATION_MISMATCH,
       });
     }
     return rejectInstall(checkpointsRoot, marker, REJECTION.STAGING_LOST);

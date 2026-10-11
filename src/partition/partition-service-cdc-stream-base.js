@@ -227,8 +227,15 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       return promise;
     }
     this.pendingCDCEventDeliveries.add(promise);
-    promise.finally(() => {
+    const settled = () => {
       this.pendingCDCEventDeliveries.delete(promise);
+    };
+    promise.then(settled, (error) => {
+      settled();
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_DELIVERY_FAILED, {
+        partitionId: this.partitionId,
+        error: error?.message ?? String(error),
+      });
     });
     return promise;
   }
@@ -417,12 +424,13 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @private
    */
   getCommittedEntryKey(command) {
-    if (!command || !command.sql) {
+    if (!command) {
       return null;
     }
     if (command.entryId) {
       return `entry:${command.entryId}`;
     }
+    if (!command.sql) return null;
     const params = Array.isArray(command.params) ?
       JSON.stringify(command.params) :
       STRING.EMPTY;

@@ -15,6 +15,11 @@ import {TIME_MS} from './time.js';
 const CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE; // ends-on: a cache-change event confirms the key
 const CDC_EVENT_BUFFER_CAPACITY = NUM.THOUSAND;
 const CDC_EVENT_SLIDING_WINDOW_CAPACITY = NUM.TWO_HUNDRED_FIFTY_SIX;
+const CDC_EVENT_IDENTITY = Object.freeze({
+  DURABLE_TAG: 'cdc-durable',
+  INVALID_CODE: 'cdc_event_durable_identity_invalid',
+  INVALID_MESSAGE: 'Durable CDC identity requires an event key and source partition',
+});
 const CDC_PIPELINE_READINESS_POLL_INTERVAL_MS = NUM.HUNDRED;
 const CDC_PIPELINE_READINESS_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY; // ends-on: every CDC pipeline readiness condition holds
 const CLUSTER_READINESS_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY; // ends-on: the rebalancer planning gate observes the cluster ready
@@ -98,6 +103,7 @@ export {
   CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS,
   CDC_CONFIRMATION_ERROR_TYPE,
   CDC_EVENT_BUFFER_CAPACITY,
+  CDC_EVENT_IDENTITY,
   CDC_EVENT_SLIDING_WINDOW_CAPACITY,
   CDC_LIFECYCLE_LOG_MSG,
   CDC_PIPELINE_METRIC,

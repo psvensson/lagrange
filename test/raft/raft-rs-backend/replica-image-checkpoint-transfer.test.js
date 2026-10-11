@@ -139,6 +139,17 @@ async function withRenameFault(options, work) {
   }
 }
 
+function exactArtifactBytes(paths) {
+  return Object.fromEntries(paths.map((file) => [file,
+    fs.existsSync(file) ? sha256Digest(fs.readFileSync(file)) : null]));
+}
+
+async function refuseForeignInstall(options) {
+  return requestSnapshotInstall({...options,
+    expectedIdentity: {...options.expectedIdentity,
+      clusterId: `${options.expectedIdentity.clusterId}-foreign-contender`}});
+}
+
 test('the canonical checkpoint owner seals a group-neutral raft-rs image',
   async (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fresh-mg-rs-image-'));
@@ -343,6 +354,21 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
         'the real atomic rename consumed staging before the crash');
       t.equal(terminalAdmission.row.completed_at, 41,
         'ordinary operation settlement remains independent of install recovery');
+      const installedBytesBeforeContender = exactArtifactBytes([
+        terminalMarker, terminalTarget]);
+      const installedContender = await refuseForeignInstall({
+        replicaDbPath: terminalTarget, checkpointsRoot: terminalRoot,
+        generationIndex: Number(APPLIED_INDEX), expectedIdentity: identity(),
+        expectedReplicaIdentity: TARGET, expectedPeerId: targetPeer,
+        createAdmissionOwner: terminalAdmission.owner,
+        createAdmissionEvidence: terminalEvidence,
+        createPhysicalWorkerClaim: terminalClaim});
+      t.equal(installedContender.outcome,
+        RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT,
+        'an invalid contender cannot replace an authentic post-rename marker');
+      t.same(exactArtifactBytes([terminalMarker, terminalTarget]),
+        installedBytesBeforeContender,
+        'invalid post-rename refusal preserves marker and receiver bytes');
 
       terminalAdmission.setBootIncarnation(8);
       const restartOwner = terminalAdmission.ownerAt(8);
@@ -351,6 +377,30 @@ test('the canonical checkpoint owner seals a group-neutral raft-rs image',
       const restartClaim = await restartOwner.claimPhysicalWorker(
         restartEvidence);
       t.ok(restartClaim, 'the current boot reclaims the exact durable CREATE');
+      const integrityRoot = path.join(root, 'post-rename-integrity');
+      const integrityTarget = path.join(root, 'post-rename-integrity.db');
+      fs.cpSync(terminalRoot, integrityRoot, {recursive: true});
+      fs.copyFileSync(terminalTarget, integrityTarget);
+      const integrityDb = new Database(integrityTarget);
+      integrityDb.prepare(
+        'DELETE FROM raft_rs_peer_identity WHERE replica_identity = ?')
+        .run(TARGET);
+      integrityDb.close();
+      const integrityMarker = path.join(integrityRoot,
+        RAFT_SNAPSHOT_INSTALL_DIRNAME, RAFT_SNAPSHOT_INSTALL_MARKER_FILE);
+      const integrityBytes = exactArtifactBytes([
+        integrityMarker, integrityTarget]);
+      const refusedIntegrity = await recoverPendingSnapshotInstall({
+        replicaDbPath: integrityTarget, checkpointsRoot: integrityRoot,
+        createAdmissionOwner: restartOwner,
+        createAdmissionEvidence: restartEvidence,
+        createPhysicalWorkerClaim: restartClaim});
+      t.equal(refusedIntegrity.outcome,
+        RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT,
+        'post-rename recovery refuses a changed receiver image');
+      t.same(exactArtifactBytes([integrityMarker, integrityTarget]),
+        integrityBytes,
+        'changed receiver image remains retained for diagnosed recovery');
       const authoritativeRead = restartOwner.readOperation.bind(restartOwner);
       restartOwner.readOperation = async () => {
         throw Object.assign(new Error('authority temporarily unavailable'),
