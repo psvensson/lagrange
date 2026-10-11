@@ -1,0 +1,6 @@
+{
+  "correctedSourceSnapshot": "949b8c63f3923f7a20f72a7329fe86948cbf204d",
+  "verifiedFiles": 64,
+  "manifestSha256": "ff876d679700e7a9c7a482d8e11da31fbc49f2acefe215bd61a3b79b60898a7d",
+  "scope": "Exact frozen full-oracle source. Source remains unapproved: completed-open authorization reuse violates pause-before-settlement design; current focused case covers incorrect retained lifecycle state and is not acceptance."
+}

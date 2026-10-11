@@ -1,0 +1,133 @@
+{
+  "utc": "2026-10-11T22:21:16.775881+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/startup-wip": "ff3491d967306f992bda23e394faba422698678c",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/activation-startup-wip": "949b8c63f3923f7a20f72a7329fe86948cbf204d",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/tx1-owner-wip": "c532be18bcb5629eb81735152a35ec5dcfd6b71b",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/freshmg-wip": "c503d36682121d1e409d76fc989d730c6cca5a7d",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/cdc-wip": "17ed539596f11bae22fd69c7fb43e3b637dcd5e2",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/activation-retained-continuation-red": "088bf48b38293dc45d4e63133df34d3d2d5a9c8e"
+  },
+  "coverage": {
+    "original-staged": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "7443703c330c4c1088e7fdb768243baec8a692ef"
+    },
+    "candidate": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "99ca733aefa5366fe0fcae6953ec9404b32c92b6"
+    },
+    "recovery-foundation": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "4923e322f24406e0d161a003f1125993752b95fe"
+    },
+    "startup-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "ff3491d967306f992bda23e394faba422698678c",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/startup-wip",
+      "changedSinceRemote": "ed20e28fd1be84c180c034f9e5f0f9bf13c95fa1",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round10-resource-domain-feasibility.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round10-resource-domain-feasibility.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round9-bd551d60.md"
+      ]
+    },
+    "activation-startup-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "949b8c63f3923f7a20f72a7329fe86948cbf204d",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/activation-startup-wip",
+      "changedSinceRemote": "26dedb0829145c3063dbb2609955307cfdcec842",
+      "changedPaths": [
+        "src/node/replica-handler-participant-cutover.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/query/distributed/distributed-transaction-release-settlement.js",
+        "test/partition/participant-release-protocol.test.js"
+      ]
+    },
+    "tx1-owner-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "c532be18bcb5629eb81735152a35ec5dcfd6b71b",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/tx1-owner-wip",
+      "changedSinceRemote": "4f258b16e3892a4930951eee58c895c3d0d63f40",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/cdc-coverage-response-resource-handoff-amendment-20261011.md",
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-explicit-commit-trace/source-provenance-limitation.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/focused-retained-authorization-settlement.log.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/pgwire-26ded-release-drain-before-after.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/pgwire-release-drain-exit-trace.log.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/red-source-snapshot.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/red-source/source-manifest.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/red-source/tracked.diff",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/red-source/working-files.tar.gz",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/result.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/retained-continuation-green-source-manifest.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round10-resource-domain-feasibility.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round10-resource-domain-feasibility.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round9-bd551d60.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T221437Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T221437Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T221437Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T221437Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T221437Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T221437Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T221437Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T221437Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "freshmg-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "c503d36682121d1e409d76fc989d730c6cca5a7d",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/freshmg-wip",
+      "changedSinceRemote": "4a30d6168971e06ecbf602c743863964b936eca6",
+      "changedPaths": [
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-explicit-commit-trace/driver.mjs.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-explicit-commit-trace/durable-census.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-explicit-commit-trace/retention.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-explicit-commit-trace/source-provenance-limitation.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-explicit-commit-trace/terminal-matrix-explicit-commit-trace.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-ordered-replay-26dedb08-durable-census.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-ordered-replay-26dedb08-oracle/pgwire-after-ordered-settlement-replay.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-ordered-replay-26dedb08-oracle/result.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-ordered-replay-26dedb08/focused-ordered-settlement-replay.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-ordered-replay-26dedb08/terminal-matrix-after-ordered-replay.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-ordered-replay-26dedb08/terminal-matrix-settlement-stage.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-raw-log-publication-supplement.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/focused-retained-authorization-settlement.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/pgwire-26ded-release-drain-before-after.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/pgwire-release-drain-exit-trace.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/red-source-snapshot.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/red-source/source-manifest.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/red-source/tracked.diff",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/red-source/working-files.tar.gz",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/result.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/retained-continuation-green-source-manifest.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/retention.json"
+      ]
+    },
+    "query-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "41a054f9fc20969a375afce5a555152dc197518b"
+    },
+    "cdc-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "17ed539596f11bae22fd69c7fb43e3b637dcd5e2",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T222116Z/cdc-wip",
+      "changedSinceRemote": "663e4153da51cdcbb45844974e0fe13bd6d4ad71",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/cdc-coverage-response-resource-handoff-amendment-20261011.md"
+      ]
+    },
+    "coordinator-fixtures-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "01b32220853dc266e61e0a79e0acf95889b3b863"
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true
+}

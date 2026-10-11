@@ -1,0 +1,242 @@
+[
+  {
+    "path": "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+    "sha256": "3679b87f4aeb84fd8d9397aac9f73f686e5fcb990c1e61e86df35e9731f91fa5",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "solve/quests/replicated-transaction-decision-and-apply/evidence/review-begin-uncertain-design-round7-cdc56.md",
+    "sha256": "c42b12bb01d1167e9b111c7469c458c82f80cc60e013fdcbfb9583313e1f74d6",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/application-database-statement-policy.js",
+    "sha256": "97b9f3379bfe2a56fc86a3a17b164281c46494ce63445c446bff613c26e085f4",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/application-database.js",
+    "sha256": "790815abe79cb1a94d2a6a8f9b6d2e6208a0036af88e4ba89c27e444e667829f",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-begin-consumer.js",
+    "sha256": "d457dd18ecac10dddc25b816eb77f573814bf961530639d0eab399d3f480a443",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-coordinator.js",
+    "sha256": "8d4ca666ef6a7df79a916c7642bb15f686fcd9cfb221c050984f41d067b085cf",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-creation-contract.js",
+    "sha256": "ad2af733350077f01cdee79ce42f2d5ddbeccfe965039bbe454da348fb454057",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-creation-resources.js",
+    "sha256": "7c7a3d67a89b9ed05dc87dae391894156c5372c01518724ef3726451d53de317",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-creation.js",
+    "sha256": "f478fdd3e9782ef015ee8b29c5142ea8048b88218224ee1047273ba6ae93b893",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-decision-protocol.js",
+    "sha256": "07d766b63437b573dd33d35c3326d34101ec0ed54a1e9039a75dea11fc9be38c",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-identity.js",
+    "sha256": "887bfb43f1f05952c05afced477be9e753ce5a1bd12a215a4f7e1fbf87390ca0",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-recovery-authority.js",
+    "sha256": "2cf940e0cb6e5c8a063c46a91ad16f8670bdff713d3ca0d75f4b849803a2f887",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-recovery-validation.js",
+    "sha256": "a0e2b3bec93971a9c07636d39fb1599d2f22b0383133fe08864965780b269095",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-recovery.js",
+    "sha256": "19236cdc5bf750d1d9d119fb69ba7a4f9e216965553584e2e60bc22832bbd272",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/pg/postgres-wire-adapter.js",
+    "sha256": "fccd29bdebd1c2f19b6b624fcc1c386379d9f10103222dde76f613382d8b12b4",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/query-constants.js",
+    "sha256": "004d3e76c89fe13060a44b7066160e90529aa4e0b3c38273e573c095e01af54b",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-query-engine-instance-initializer.js",
+    "sha256": "fec3d5ff06650d65d8b74d6b2d8b795dc8fe5264061029144c35306c54f7d4bc",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
+    "sha256": "9256b2029d91a6f92ad095d7c019900eb275183b4b87afdda09535d9855b268a",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-query-engine-lifecycle-methods.js",
+    "sha256": "edce5939d6f15a096f4e266cc86cebe09513dfde8e88146cb490061707a70bf3",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-query-engine-request-dispatch.js",
+    "sha256": "30bc32c582eac4449ea5cd83259619ba2f805796ccf372ea02a5286a1bea86b4",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-query-engine-statement-admission.js",
+    "sha256": "aa8374f24d442235302f6279f4800b064f958369dcef77156848d2ade1e49986",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-query-engine-transaction-persistence-methods.js",
+    "sha256": "c3f9f382ad856a7eb459efde8058662eadc76761b5b90624a65aec7bae8158a7",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-query-engine-transaction-recovery-methods.js",
+    "sha256": "990102d38cd581fbf2c07b3ed10b0351122fa5af8a62bae722de2b6cc8169aa2",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-query-engine-transaction-set-methods.js",
+    "sha256": "8402e1c94aee6abcbf1c1db4054a16da24d0bf2f26741a4a7424b43fe9729404",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-query-engine.js",
+    "sha256": "ca51677453b1d25b689bf9c1a8dbc14fba9643ecf8e4834ebb9106d7bf5a2500",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/query/sql-request.js",
+    "sha256": "f7f1867da1a979c2838d04b3f83f313ad666e55235c029f9af5254dfd668dac2",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/runtime/pgwire-begin-acceptance.js",
+    "sha256": "cd690eea6fd5409ecba57a48ecbec7b7a1ad9ad4e6bf109c8b97074f7a7d6054",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/runtime/pgwire-protocol-handler.js",
+    "sha256": "18d7ec41cc0cf5dfb5967617b386545a8ef1f596b3503ccc2f8bcdf17d24cb97",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/runtime/pgwire-runtime-module.js",
+    "sha256": "6a41d18d6ae0c087a5584c6a08a6ee1904610836e4f902fbcfbfc8ea87cd5982",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/runtime/pgwire-transaction-outcome.js",
+    "sha256": "47ebd2d9c4bbc4450a2e2e6bb58d3e546552e40d47f8a4fadfbfcde27247779c",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/runtime/request-cell-invocation-owner.js",
+    "sha256": "36df072fd356ebc0812da4476c687701c341d7f7da893b567ef0a04baae5f3da",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "src/workflow/durable-workflow-coordinator.js",
+    "sha256": "a973975b222f1d7d766915e259cfa6811b9fcfd9fca789e94e0ff1e01f9c7bed",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "test/query/transaction-begin-source-adversarial.test.js",
+    "sha256": "232a51019cc14bd19ab8ed154ef86690b4ef7b8414001d46d1a58ddd20b23450",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "test/query/transaction-begin-uncertain-handoff.test.js",
+    "sha256": "f9d2187f0eee3dc178f53211697250ae5ad425bf8e129567679d948057fbb928",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "test/query/transaction-review-adversarial.test.js",
+    "sha256": "bf2a3a97a098cc27ca4f8336c39c47d9edc8c10b4032d2fe80e53f8db17bc34b",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "test/shards/impact-contracts.json",
+    "sha256": "9a647fcc1c27dc28cc69fd2a1c9f18b0e404207b865704fc2e0390a69b938eb9",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "test/shards/impact-graph-seal.json",
+    "sha256": "7fefc06b990c2c493e625c343af633d8cb08e0b9453a43d198f8eaea1806fb8e",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "test/shards/primary-classes.json",
+    "sha256": "5cb22e6d64ce5f3821a804f9a5feb90aefacbfddc6e9111c3523dd371874be76",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "test/shards/resource-classes.json",
+    "sha256": "f50ed0885bfbaace53d9eaa34e1a6b282dda65d0d8a8bda20075c24bd0be02ca",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  },
+  {
+    "path": "test/shards/subsystem-classes.json",
+    "sha256": "a645d4bef7be8c6e67a94b5255aa2879a726e90d9e7747da3dd42a20699b269b",
+    "matchesFrozen": true,
+    "matchesManifest": true
+  }
+]

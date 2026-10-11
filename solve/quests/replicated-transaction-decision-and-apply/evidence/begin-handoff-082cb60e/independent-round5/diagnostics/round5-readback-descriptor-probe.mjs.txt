@@ -1,0 +1,32 @@
+import {pathToFileURL} from 'node:url';
+import inspector from 'node:inspector';
+const root=process.argv[2],imp=p=>import(pathToFileURL(root+'/'+p));
+const {SQLQueryEngine}=await imp('src/query/sql-query-engine.js');
+const silent={debug(){},info(){},warn(){},error(){}};
+const session=new inspector.Session();session.connect();
+const post=(method,params={})=>new Promise((resolve,reject)=>session.post(method,params,(err,value)=>err?reject(err):resolve(value)));
+await post('Debugger.enable');
+const fileUrl=pathToFileURL(root+'/src/query/sql-query-engine-transaction-persistence-methods.js').href;
+await post('Debugger.setBreakpointByUrl',{url:fileUrl,lineNumber:211});
+await post('Debugger.setBreakpointByUrl',{url:pathToFileURL(root+'/src/utils/strict-own-data.js').href,lineNumber:84,condition:"key === 'session_id' && value.transaction_id !== undefined"});
+const pauses=[];let e;
+session.on('Debugger.paused',({params})=>{
+ const frame=params.callFrames.find(f=>f.functionName==='copyStrictOwnDataRecord'||f.functionName==='insertDistributedTransactionRowOnce');
+ if(!frame){session.post('Debugger.resume');return;}
+ const counter=`const count=o=>{let strings=0,numbers=0,booleans=0,references=0;const fields=[];for(const [key,d] of Object.entries(Object.getOwnPropertyDescriptors(o))){if(!('value'in d))throw Error('accessor');const v=d.value;if(typeof v==='string'){strings+=Buffer.byteLength(v);fields.push({key,type:'string',bytes:Buffer.byteLength(v)});}else if(typeof v==='number'){numbers++;fields.push({key,type:'number'});}else if(typeof v==='boolean')booleans++;else if(v&&typeof v==='object')references++;}return {strings,numbers,booleans,references,fields,bytes:strings+8*(numbers+booleans+references)};};`;
+ const body=frame.functionName==='copyStrictOwnDataRecord'?`return {input:count(value),partialCopyBeforeAssignment:count(copy),descriptor:count(descriptor),key,copyHasKey:Object.hasOwn(copy,key),valueBytes:Buffer.byteLength(descriptor.value),allDistinct:value!==copy&&value!==descriptor&&copy!==descriptor};`:`return {projection:count(record)};`;
+ const expression='JSON.stringify((()=>{'+counter+body+'})())';
+ session.post('Debugger.evaluateOnCallFrame',{callFrameId:frame.callFrameId,expression,returnByValue:true},(error,value)=>{
+  const observation=value?.result?.value?JSON.parse(value.result.value):value;
+  const c=e.transactionCoordinator, [attachment]=c.transactionCreationAttachmentsBySession.get('💾'.repeat(5000))??[];
+  const raw=attachment?.boundRecord, tx=c.workflowCoordinator.workflowsByOwnerKey.get('💾'.repeat(5000));
+  function count(o){let strings=0,numbers=0,booleans=0,references=0;const fields=[];for(const [key,d]of Object.entries(Object.getOwnPropertyDescriptors(o))){const v=d.value;if(typeof v==='string'){strings+=Buffer.byteLength(v);fields.push({key,type:'string',bytes:Buffer.byteLength(v)});}else if(typeof v==='number')numbers++;else if(typeof v==='boolean')booleans++;else if(v&&typeof v==='object')references++;}return {strings,numbers,booleans,references,fields,bytes:strings+8*(numbers+booleans+references)};}
+  const base=raw?{raw:count(raw),normalized:count(tx),initial:count(raw.transactionCreationInitialRow),consumer:count(attachment.consumer),turnBudget:count(raw.transactionCreationTurnBudget),originalBudget:count(raw.timeoutBudget),reservation:count(raw.transactionCreationReservation),encodedBytes:raw.transactionCreationInitialRowBytes.length}:null;
+  pauses.push(error?{error:String(error)}:{functionName:frame.functionName,line:frame.location.lineNumber+1,observation,base,diagnostics:c.getTransactionCreationDiagnostics()});session.post('Debugger.resume');
+ });
+});
+let initial,writes=0,reads=0;
+e=new SQLQueryEngine({logger:silent,nowFn:()=>0,autoStartDistributedTransactionRecovery:false,maxUncertainTransactionCreationCanonicalBytes:300000,controlPlaneSystemTableGateway:{supportsMutationSubmission:()=>true,async submitMutation(m){writes++;initial={...m.row};return {success:false,error:'lost reply'};},async readAuthoritativeRows(){reads++;return {success:true,rows:[{...initial}]};}}});
+const first=await e.executeQuery('BEGIN',[],{sessionId:'💾'.repeat(5000)});
+await e.shutdown();await post('Debugger.disable');session.disconnect();
+console.log('ROUND5_COPY_CENSUS '+JSON.stringify({root,writes,reads,first:{success:first.success,errorCode:first.errorCode,transactionId:first.transactionId},pauses}));

@@ -429,6 +429,7 @@ async function startSeedNode(options) {
     readinessState,
     bootIncarnation,
     startupServicesAdmission,
+    membershipOwnerOutcome: options.membershipOwnerOutcome,
   });
   options.cleanupLedger.defer(() => bootstrapService.shutdown());
 
@@ -455,6 +456,9 @@ async function startSeedNode(options) {
 
   options.cleanupLedger.defer(() => bootstrapAPI.shutdown());
   await awaitStartupAcquisition(bootstrapAPI.initialize(), options.signal);
+
+  bootstrapService.seedRuntimeBridgeOwner.attachBootstrapTopologySnapshotOwner(
+    bootstrapAPI.bootstrapTopologySnapshotOwner);
 
   const bootstrapResult = await awaitStartupAcquisition(
     bootstrapService.bootstrap(),
@@ -766,6 +770,7 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   } else {
     runtime = await startSeedNode({cleanupLedger, config, mainLogger,
       dataDirectoryManager, rolloutControls, env: environment,
+      membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
       signal: options.signal});
   }
   return bindDataDirectoryProcessOwner(runtime, dataDirectoryProcessOwner);

@@ -1,0 +1,164 @@
+{
+  "utc": "2026-10-11T18:23:48.719590+00:00",
+  "remote": "origin",
+  "refs": [
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+      "worktreeHead": "c6d71665e98be03de916705f272a9d6340e4a842",
+      "base": "c6d71665e98be03de916705f272a9d6340e4a842",
+      "snapshot": "5a49cbc822f3f246746261e98687cd14887c2b9d",
+      "tree": "c57f99f9ec0790da110a9b583eede882c444cb19",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/startup-wip",
+      "callerStatePreserved": true,
+      "callerIndexSha256": "ca384aaa12984178960158d793b549a2ef63b75f6d5452f7d21c7487d7e5c25c",
+      "status": "WIP; BEGIN source review rejected predecessor, corrections in progress; no readiness approval"
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/lagrange",
+      "worktreeHead": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+      "base": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+      "snapshot": "7443703c330c4c1088e7fdb768243baec8a692ef",
+      "tree": "94710f002878b682bd1766ac72ffae0a2f679a66",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/original-staged",
+      "callerStatePreserved": true,
+      "callerIndexSha256": "3a3d1cb10179d14f124a5ba92b067eb6d36896541c19fb88e8a93a2255b9d7ad",
+      "status": "Preservation only; no additional review or readiness approval"
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011",
+      "worktreeHead": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+      "base": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+      "snapshot": "99ca733aefa5366fe0fcae6953ec9404b32c92b6",
+      "tree": "6e6df905d50eeeead8ac6699a8c4611b439827d5",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/candidate",
+      "callerStatePreserved": true,
+      "callerIndexSha256": "9cabd6d7a8eebd914310bcb5e72d3d65355f74cd75a8f3137966e992968bdd49",
+      "status": "Preservation only; no additional review or readiness approval"
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011",
+      "worktreeHead": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+      "base": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+      "snapshot": "4923e322f24406e0d161a003f1125993752b95fe",
+      "tree": "8aa66b3c87f2f7b3839948a6449eb3a5cf74c70b",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/recovery-foundation",
+      "callerStatePreserved": true,
+      "callerIndexSha256": "d9510137f7cc55787fccfa80011f8a42ed5dfd17298478a3528221bd430e5436",
+      "status": "Preservation only; no additional review or readiness approval"
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/tx1-work-20261010",
+      "worktreeHead": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+      "base": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+      "snapshot": "c4804834c2f194ef86a72ca3f61f2f9fe718ffe4",
+      "tree": "b621e3f0e5efaed9d36047566c683e07fb08ee95",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/tx1-owner-wip",
+      "callerStatePreserved": true,
+      "callerIndexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+      "status": "Preservation only; no additional review or readiness approval"
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/freshmg-integration-20261010",
+      "worktreeHead": "50a003b86e4d2f0017d6772d11446c027339151e",
+      "base": "50a003b86e4d2f0017d6772d11446c027339151e",
+      "snapshot": "c60e5368880ef86cfca771d07755cc1fca2d5526",
+      "tree": "11615dafa13824a697bf7934912ef307deedb4a5",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/freshmg-wip",
+      "callerStatePreserved": true,
+      "callerIndexSha256": "8137a11d3a20b082df7c142a3238fec5aba8c9123100b120305c30503340c399",
+      "status": "Preservation only; no additional review or readiness approval"
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/tx1-query-20261011",
+      "worktreeHead": "be99622d6b21162e9cc459104d7f1b5d8cd3830d",
+      "base": "be99622d6b21162e9cc459104d7f1b5d8cd3830d",
+      "snapshot": "41a054f9fc20969a375afce5a555152dc197518b",
+      "tree": "bc68e6ba8bd2bd0d37e3f1c49f0a1a31a34fb02a",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/query-wip",
+      "callerStatePreserved": true,
+      "callerIndexSha256": "6e2ad9543303a009701dca0b7e91c190fc42117d06ec3812a9fe1f4c48303a82",
+      "status": "Preservation only; no additional review or readiness approval"
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/begin-uncertain-handoff",
+      "snapshot": "2925863c3e72a17854413fa2c850ce4ff76f6aff",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-begin-uncertain-handoff",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/cdc-c17-n1n2-caller",
+      "snapshot": "2de419483c9b4ce9e3fabc87bb54d93e4afb8817",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-cdc-c17-n1n2-caller",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/cdc-c17-nontransport",
+      "snapshot": "d23a0746bf5ee6c9b659d43abe27630d86d38397",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-cdc-c17-nontransport",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/cdc-c17-rejected",
+      "snapshot": "642d750b065c7381b46a609a677974444f11954f",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-cdc-c17-rejected",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/cdc-c17-round2",
+      "snapshot": "3edcdbf04b7d5e063a5be53cd14448f030c4b60a",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-cdc-c17-round2",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/cdc-c17-round3",
+      "snapshot": "0b2bfb2bcf0cbbc1cef69754baba5bd9db5986e2",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-cdc-c17-round3",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/freshmg-component-399",
+      "snapshot": "b16e932497d123c982a13f864503dd9ad668ec75",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-freshmg-component-399",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/freshmg-marker",
+      "snapshot": "a287c9ff560889daae7e13e5b5d8c7c5fe4ca031",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-freshmg-marker",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/recovery-cdc-retry",
+      "snapshot": "c6d71665e98be03de916705f272a9d6340e4a842",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-recovery-cdc-retry",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/recovery-checkpoint-interaction",
+      "snapshot": "a9c9290bae4e4a882e0317d9a79bd856b9ffc268",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-recovery-checkpoint-interaction",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/tx1-binding-matrix",
+      "snapshot": "20b6355f1d866c1f20d97c64b166734fe9bf0065",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-tx1-binding-matrix",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/tx1-binding-round2",
+      "snapshot": "a01eff86f387367226e1b2ae08574a084fa16d56",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-tx1-binding-round2",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    },
+    {
+      "localProofRef": "refs/proofs/rs-raft-20261011/tx1-final13-rejected",
+      "snapshot": "b397f41fc9201821119c6e1db11b1d460b09e33a",
+      "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-tx1-final13-rejected",
+      "status": "Exact historical proof subject; review scope retained in existing Quest evidence. Rejected subjects remain rejected."
+    }
+  ],
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "status": "pushed",
+  "exitCode": 0
+}

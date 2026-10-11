@@ -1,0 +1,339 @@
+{
+  "files": [
+    {
+      "path": "src/bootstrap/bootstrap-service-replica-registration-methods.js",
+      "sha256": "77662de19a72a43863d61b4039e2c8419d54095286df752161517842d236f161",
+      "status": " M"
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-seed-workflow.js",
+      "sha256": "6940b089c5dda98f8771607b7a025d8988e729dfde559fe65b1cd562a98d369a",
+      "status": " M"
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service.js",
+      "sha256": "4759eca3851a1f192642f1a78cbefcde770ebfa5206f8fcbcc17f0cc7cd96ffd",
+      "status": " M"
+    },
+    {
+      "path": "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+      "sha256": "3dce1f96d201782065d3b1795b1b36e1f9ee8a1f4c8d684d0fbe88968966564f",
+      "status": " M"
+    },
+    {
+      "path": "src/bootstrap/phases/seed-registration-phase.js",
+      "sha256": "191d7905569e2bd5a277d3f4a044a819c8b9bb79572d12c78451708b9689776f",
+      "status": " M"
+    },
+    {
+      "path": "src/bootstrap/seed-startup-session-store.js",
+      "sha256": "7cff32913fbe8d8a77980492fce2f06bd8dfab17d6cec7c92483aa34d928ff88",
+      "status": " M"
+    },
+    {
+      "path": "src/bootstrap/shared/replica-handler-setup.js",
+      "sha256": "5c2f6492aa85ca54c4691bf15c771d44689ea0f093bdac00bec2f04c6a0317ff",
+      "status": " M"
+    },
+    {
+      "path": "src/bootstrap/shared/snapshot-catchup-wiring.js",
+      "sha256": "d6c38f79c0afe7b836d23c289b225b658354a613aa7091917b788b3913a80ebc",
+      "status": " M"
+    },
+    {
+      "path": "src/bootstrap/shared/startup-sql-runtime-handoff.js",
+      "sha256": "4bc600247420e5cd9a58921a354e424ac5976dd91fe1aa6e45600235c8a1ab4e",
+      "status": " M"
+    },
+    {
+      "path": "src/bootstrap/startup-workflow-store.js",
+      "sha256": "1f92ee4bcb21c1c952836536f39c48f2007a18174e4955b0e4a843f4865cf3da",
+      "status": " M"
+    },
+    {
+      "path": "src/lagrange-runtime-startup.js",
+      "sha256": "c9506aaa797dcf8c416c093bb09ac23d52ecb0d1fd7e97ad598b249ea10a9909",
+      "status": " M"
+    },
+    {
+      "path": "src/node/replica-create-admission-owner.js",
+      "sha256": "7505603d0c387b28b097f1cb51d44d73ec7a81886fdedb5baab065f7989266f5",
+      "status": " M"
+    },
+    {
+      "path": "src/node/replica-handler-class.js",
+      "sha256": "a6112b611965777e7c92797f85d9e27c77d5f2807b2d8b66e806cb5cca967cad",
+      "status": " M"
+    },
+    {
+      "path": "src/node/replica-handler-create-methods.js",
+      "sha256": "900d61490ded14c37d7ea2c180fbf15c52f711b2ac3b1d4d83b0f489325b678f",
+      "status": " M"
+    },
+    {
+      "path": "src/node/replica-handler-lifecycle-methods.js",
+      "sha256": "8ec7d3a664f8fae3c40b54decd6ebce8a6214ab7b1c8fbfb60ed191ada55e2f3",
+      "status": " M"
+    },
+    {
+      "path": "src/node/replica-handler-membership-relay.js",
+      "sha256": "49b9cd3e55a6e8ceb845e0b1b1665cc1bb97763d5489c344688a5803b04d7f17",
+      "status": " M"
+    },
+    {
+      "path": "src/node/replica-handler-runtime-methods.js",
+      "sha256": "3a1fdd74c2a6046d82fb8c92e0db2b491bf03308c75edf72604a8ab22c0f3391",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-committed-command-admission.js",
+      "sha256": "e29b80f908c21c27a7cc3a6ad48fc5417f24ce69bfa64f83bf1cdba2f2bab24e",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-coordinator-settlement.js",
+      "sha256": "6ca226a8aae8b806185a1cb1aefb76d4b1adad73deb2ac08f88f0d5e6f9ce978",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-participant-release-contract.js",
+      "sha256": "38fbe6ecbe44efaca3b8a5156cc3caf6840c1df564b5ea27ee6f60d9661d04b7",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-apply.js",
+      "sha256": "6a8a45feb44edddbb48c668eafc47d5527b72f4384ec08d8993d5d9911b5230c",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-bytes.js",
+      "sha256": "5b107a1578e1d1bec8733aad68136ed46b95cef7e2f23d5df7f74642f6af9d60",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-constants.js",
+      "sha256": "d6770882d7c4356c85eb1fda0a6a5731ff3ff9fd22364fb6b226db1ae7cf7635",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-cutover-constants.js",
+      "sha256": "970194d3f6a43d99e9f735b39e533c2bcdbeb804a6867412b279ab93cb35c4cb",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-pause.js",
+      "sha256": "15302af631763e6535685b2e337e84fbf2f73da73e5fc754799af6893a5b9e17",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-request.js",
+      "sha256": "66d3e3fef4729cf75821d3e8245ff6cdf6cea46c4adf67f16f96dfb2d9926ae9",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-store.js",
+      "sha256": "d5f34b7780615d7ebc9c8c119789fc63db37bb9d5a1d24de46a9f568173adda9",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-service-constants.js",
+      "sha256": "7882102646145d0990ca777b713419fbde16b3a86743eab251f4ac56ad71e6fb",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-service-entry-apply-base.js",
+      "sha256": "47be29c2e6a5def76496b65895a6b0e546809dc5ba989155bb7c72f8e3184fc3",
+      "status": " M"
+    },
+    {
+      "path": "src/partition/partition-service-raft-init-base.js",
+      "sha256": "db599c4c18d35ce3ae478a36efbff2161bdf3dbf9c6c4c512ff825a3b4b73fa4",
+      "status": " M"
+    },
+    {
+      "path": "src/query/distributed/distributed-transaction-release-settlement.js",
+      "sha256": "72d24dff54230b31e1483f2c8dfc36ad3b551837cc89ddb686e467e26c951d24",
+      "status": " M"
+    },
+    {
+      "path": "src/raft/raft-operation-port-request.js",
+      "sha256": "b4e773b049a65e9db77c969bb79e62c20ca18202c0c00eae8421aa4d90344f94",
+      "status": " M"
+    },
+    {
+      "path": "src/raft/raft-rs-application-transaction-owner.js",
+      "sha256": "1b6e25641d1784dc1c8dc0b4ba097338a25d609680c948654b55509ddbc838a2",
+      "status": " M"
+    },
+    {
+      "path": "src/raft/raft-rs-operation-port.js",
+      "sha256": "cf933b2272fb9b4301fb4393ce0d3ba0e1b90463a69c0b60e889d1e6ca551a3d",
+      "status": " M"
+    },
+    {
+      "path": "src/raft/raft-rs-runtime-owner-constants.js",
+      "sha256": "3d044c502e2c32f4097cad484e42c1d7151a13f5abb3ee3e4aab4c65ee372bfa",
+      "status": " M"
+    },
+    {
+      "path": "src/raft/raft-rs-runtime-owner.js",
+      "sha256": "383657a2e404b1e4c9864d72a3d3340603486f8949cbb6dd7d84f297a0178e0a",
+      "status": " M"
+    },
+    {
+      "path": "src/raft/raft-rs-status-observation.js",
+      "sha256": "ae63020a0e238609324e2f524e39464a3d0dc5b7a6d1e6abc89a5321846b0c56",
+      "status": " M"
+    },
+    {
+      "path": "src/raft/snapshot-catchup-constants.js",
+      "sha256": "2d3361882884f7de867bb09e5c606ee7a15d42b287f65a5bea61fa5ed00771fc",
+      "status": " M"
+    },
+    {
+      "path": "src/raft/snapshot-catchup.js",
+      "sha256": "bfa7d80c75a4f379fc1b2ddf7033a46af9258a8d90d27403badac8cadf964820",
+      "status": " M"
+    },
+    {
+      "path": "src/storage/data-directory-manager.js",
+      "sha256": "2b630c8d04fccd578127f17a8dac4181f93205e265cacbcc6621042b8028d0b5",
+      "status": " M"
+    },
+    {
+      "path": "src/storage/data-directory-process-owner.js",
+      "sha256": "2693d493355298510d42758615cd4b9954a3ef2f580e57c2ef12f100cbd4b0f1",
+      "status": " M"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-service-ready-signal.test.js",
+      "sha256": "8e9f0617daafa13ae887be8b6304ed9a8ca618456f98271cc7ca1e39e8da9094",
+      "status": " M"
+    },
+    {
+      "path": "test/bootstrap/seed-registration-phase.test.js",
+      "sha256": "204dd33be74aa6c3bc3d69610f5278ef0658cd6cb7115e0d12e1151520bae096",
+      "status": " M"
+    },
+    {
+      "path": "test/bootstrap/shared/startup-sql-runtime-handoff.test.js",
+      "sha256": "0474ac36be47dfb5b06d42b2bf40e5f6869890eb20b905b8e92ba7e81fe878e9",
+      "status": " M"
+    },
+    {
+      "path": "test/partition/partition-coordinator-settlement.test.js",
+      "sha256": "73a5f77e8c4ca19cde09c7acc5684c5474f833c094bedbd2908e9c888d234620",
+      "status": " M"
+    },
+    {
+      "path": "test/partition/partition-participant-transaction-apply.test.js",
+      "sha256": "dd8736cb4d0cd4262413d9c83a2bdf86638b982932ad319eedf1eee65b1411ec",
+      "status": " M"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "sha256": "46d624b27ae50c105c9729361d46cd1c61d666c03ea60a8982e7fc9fac25c3a8",
+      "status": " M"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/partition-node-cluster.js",
+      "sha256": "a8655f8ba3d2fb38a79184456342940dc2e55b3714be6b10fee49620031917ce",
+      "status": " M"
+    },
+    {
+      "path": "test/shards/primary-classes.json",
+      "sha256": "c718f37bc80c47af9baaeb00b9c1d41e12c307dd9cd7464d04d3f4a4c1009464",
+      "status": " M"
+    },
+    {
+      "path": "test/shards/resource-classes.json",
+      "sha256": "acd8bc7e20c947596c4fd2a4da9f5f79bcf3a1a1dbcd6479221458da9acda1eb",
+      "status": " M"
+    },
+    {
+      "path": "test/shards/subsystem-classes.json",
+      "sha256": "ac2ca93d47baeb8942d2217477ec363939efb341e26a33867d71e429d83cf5f3",
+      "status": " M"
+    },
+    {
+      "path": "test/test-helpers/controllable-consensus-port.js",
+      "sha256": "f53f3fdfa59e069537d5b309d60f89f22cb8c794f43b334544cb77e12cbd01ce",
+      "status": " M"
+    },
+    {
+      "path": "test/test-helpers/participant-transaction-fixture.js",
+      "sha256": "985156470367e1c4bb1205009a6435f6a12c278c791629fff2c74f6d4ee2f03c",
+      "status": " M"
+    },
+    {
+      "path": "src/node/participant-release-authorization-owner.js",
+      "sha256": "d2845c0d78f30db22488569574d03db038f5a940bee55f3ae0732225e2d34af0",
+      "status": "??"
+    },
+    {
+      "path": "src/node/participant-release-client.js",
+      "sha256": "b63239aad31799de2c83ffed8a7742e6d90556a95daa868833a6b42f7af50776",
+      "status": "??"
+    },
+    {
+      "path": "src/node/participant-release-lifecycle-retirement.js",
+      "sha256": "8d72ec7e335d996b271487f8787ad6d4f35388e9abda01dbf1c0a5bad3ae248a",
+      "status": "??"
+    },
+    {
+      "path": "src/node/replica-handler-participant-cutover.js",
+      "sha256": "1015f7292d92d7159c8e46dfb4ec25855c8928a633262f98c1b4b4b77f9ed2ef",
+      "status": "??"
+    },
+    {
+      "path": "src/node/replica-handler-participant-release.js",
+      "sha256": "f0a17d775412aa4f1ed1540e9baf0a6973b3b952b17078ac5ba31d4ae5f75ad6",
+      "status": "??"
+    },
+    {
+      "path": "src/node/replica-handler-release-recovery.js",
+      "sha256": "4ac695220d1d98a81498394bf42b8c12375c68974dae796b216a9133d6196393",
+      "status": "??"
+    },
+    {
+      "path": "src/partition/partition-participant-release-apply.js",
+      "sha256": "b436f98dd01809fad4b83f49bd00ddd839a1331ee40382a298152f388dc3cf5d",
+      "status": "??"
+    },
+    {
+      "path": "src/partition/partition-participant-release-command.js",
+      "sha256": "f0d4fab0a9e6534d737fc1ab0536e316fa550ec68bce32dd78065b41db3f5e2f",
+      "status": "??"
+    },
+    {
+      "path": "src/partition/partition-participant-release-dispatch-admission.js",
+      "sha256": "adf8a8525d17d59641333a9941284140ee2e0cfe5dbe3b5e8eb463cff2e4854c",
+      "status": "??"
+    },
+    {
+      "path": "src/partition/partition-participant-release-identity.js",
+      "sha256": "ad20fb1a3934d135d5b4474625b251ef9ebac66ee9dec6ce1d7d5f902f08130e",
+      "status": "??"
+    },
+    {
+      "path": "src/partition/partition-participant-release-local-current.js",
+      "sha256": "705285ebda4531975c5f2078aa1ae13ccdbb7e4ba4e9f9d748243cb9ec9e2a60",
+      "status": "??"
+    },
+    {
+      "path": "src/partition/partition-participant-release-request.js",
+      "sha256": "e0341be36060502f815e3f063df069cf182e168a0500998362fdc848ebaa018f",
+      "status": "??"
+    },
+    {
+      "path": "test/partition/participant-release-protocol.test.js",
+      "sha256": "de6307349c777d47c5546c10b26d62c269effa5e9c69da849e8ea759078fcc1c",
+      "status": "??"
+    },
+    {
+      "path": "test/partition/partition-participant-release-admission.test.js",
+      "sha256": "22cfd2d062ac54c887ebc66f9716a51f00e064225a39141eb29adbc355e6fae3",
+      "status": "??"
+    }
+  ]
+}

@@ -1,0 +1,430 @@
+{
+  "capturedManifest": {
+    "path": "test-output/continuation-20261011/startup-activation/retirement-reconstruction/source-manifest.json",
+    "sha256": "7357539a7730f4a672d4a5f81b3b9812172225903839259962960bff3d4a9162"
+  },
+  "capturedProductSource": "14fac7d6ef64881daa7a0d266a272b724dfe640a",
+  "decisiveRepeat": {
+    "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+    "deadlineAtMs": null,
+    "entryId": "retire_participant_release:5f063c5f11a5569d11d43a3b863155b140d7d9358f792fb062b39ec92e041cc1",
+    "expectedControlRevision": 54,
+    "firstIndex": 60,
+    "lastIndex": 278,
+    "occurrences": 219,
+    "retirementId": "6a3a59c5baa8516191cf289939b5eea8757e96985e19ff196772ad254b9f272d",
+    "term": 1,
+    "type": "RETIRE_PARTICIPANT_RELEASE"
+  },
+  "firstRefusal": {
+    "classification": "same-cohort follower catch-up, with no accepted mutation work",
+    "followers": [
+      {
+        "allWorkCountersZero": true,
+        "appliedIndex": 2,
+        "commitIndex": 2,
+        "lastIndex": 3
+      },
+      {
+        "allWorkCountersZero": true,
+        "appliedIndex": 2,
+        "commitIndex": 2,
+        "lastIndex": 3
+      }
+    ],
+    "leader": {
+      "allWorkCountersZero": true,
+      "appliedIndex": 3,
+      "commitIndex": 3,
+      "lastIndex": 3
+    },
+    "reason": "release_drain_pending",
+    "stage": "post_enable_release_census"
+  },
+  "interpretation": [
+    "all replicas converged on one RETIRED control row",
+    "the exact RETIRE command was appended repeatedly under the same identity",
+    "a later same-term lifecycle cannot get a new authorization while pause and authorization identities omit the committed predecessor retirement"
+  ],
+  "kind": "activation-release-cycle-round11-diagnostic",
+  "leaderReleaseCommands": [
+    {
+      "authorizationId": null,
+      "deadlineAtMs": null,
+      "entryId": "pause_participant_admission:aa1866611e963f7150591c6348871d611c58887ed18daa81ee3990556aeafe1e",
+      "expectedControlRevision": null,
+      "firstIndex": 2,
+      "lastIndex": 2,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "PAUSE_PARTICIPANT_ADMISSION"
+    },
+    {
+      "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+      "deadlineAtMs": 1791759141690,
+      "entryId": "reserve_participant_release:9660033eccc5f3de417a95754674c14fd2b30036639c76495a2f3ac1f2e56bb4",
+      "expectedControlRevision": 0,
+      "firstIndex": 4,
+      "lastIndex": 4,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "RESERVE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+      "deadlineAtMs": 1791759141690,
+      "entryId": "finalize_participant_release:eb95a9c6d9b1185487f935b9c812c6d3bf109ca9f0d309b40b64473da16bb078",
+      "expectedControlRevision": 7,
+      "firstIndex": 11,
+      "lastIndex": 11,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "FINALIZE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+      "deadlineAtMs": null,
+      "entryId": "dispatch_participant_release:cbd57c1e3c6831c28ceb420dd33d2cbfdb7c2ab69439a9df05b78b77b6ed75d8",
+      "expectedControlRevision": 8,
+      "firstIndex": 12,
+      "lastIndex": 12,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "DISPATCH_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+      "deadlineAtMs": null,
+      "entryId": "confirm_participant_release:bc82d24e45763bb758ffa014ebde36b9706deeb0893099cdf621b7d5c7368b05",
+      "expectedControlRevision": 12,
+      "firstIndex": 17,
+      "lastIndex": 17,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "CONFIRM_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "075bdebeae36b502ac2e0a467e345d2a28121fbe9716b8aa32b97e4a65db9d40",
+      "deadlineAtMs": 1791759141690,
+      "entryId": "reserve_participant_release:bb7e3baf383d8f13e9c269c45e38febde4d186a3ff44c6316aa2de8ab2516797",
+      "expectedControlRevision": 13,
+      "firstIndex": 18,
+      "lastIndex": 18,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "RESERVE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "075bdebeae36b502ac2e0a467e345d2a28121fbe9716b8aa32b97e4a65db9d40",
+      "deadlineAtMs": 1791759141690,
+      "entryId": "finalize_participant_release:a0add63652c17af5072cf4b79415ca69a5e3e9ce2fdc6e5613a7b4ce463fc403",
+      "expectedControlRevision": 20,
+      "firstIndex": 25,
+      "lastIndex": 25,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "FINALIZE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "075bdebeae36b502ac2e0a467e345d2a28121fbe9716b8aa32b97e4a65db9d40",
+      "deadlineAtMs": null,
+      "entryId": "dispatch_participant_release:68eb629542621240a785336d0440dff7481939cf04c9fc99a1152afa2780d897",
+      "expectedControlRevision": 21,
+      "firstIndex": 26,
+      "lastIndex": 26,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "DISPATCH_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "075bdebeae36b502ac2e0a467e345d2a28121fbe9716b8aa32b97e4a65db9d40",
+      "deadlineAtMs": null,
+      "entryId": "confirm_participant_release:639b6195498f929b8d723fc2db755231badeeba8ff623917694134ef6720ffca",
+      "expectedControlRevision": 25,
+      "firstIndex": 30,
+      "lastIndex": 30,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "CONFIRM_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "075bdebeae36b502ac2e0a467e345d2a28121fbe9716b8aa32b97e4a65db9d40",
+      "deadlineAtMs": null,
+      "entryId": "retire_participant_release:8f92af303e38b2789c8d7c707eef5d5cd32306424f00127afa1056b5197ea82c",
+      "expectedControlRevision": 26,
+      "firstIndex": 31,
+      "lastIndex": 31,
+      "occurrences": 1,
+      "retirementId": "ce7c5ae880624f0098e7815d5c80fcf3e77132012380d2292e4e5fd84fa0c4d5",
+      "term": 1,
+      "type": "RETIRE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+      "deadlineAtMs": 1791759141690,
+      "entryId": "reserve_participant_release:83153314f0b59e36d0cb5fbba4801cc831729529f208f4dee298f75a6b677cda",
+      "expectedControlRevision": 27,
+      "firstIndex": 32,
+      "lastIndex": 32,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "RESERVE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+      "deadlineAtMs": 1791759141690,
+      "entryId": "finalize_participant_release:56841837af2a8fdb63778f5abaa6bc4c18a624f59a22de1a8d3876cc1170bee1",
+      "expectedControlRevision": 34,
+      "firstIndex": 39,
+      "lastIndex": 39,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "FINALIZE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+      "deadlineAtMs": null,
+      "entryId": "dispatch_participant_release:81b62fea5a8362b4068621ee052081d7032b5794908bfd81cb7a69afed5fa3b6",
+      "expectedControlRevision": 35,
+      "firstIndex": 40,
+      "lastIndex": 40,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "DISPATCH_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+      "deadlineAtMs": null,
+      "entryId": "confirm_participant_release:e541aecf6833fe37520aa7839c7b2e33e0130e1748ab3b18c595ffd9be2d7870",
+      "expectedControlRevision": 39,
+      "firstIndex": 45,
+      "lastIndex": 45,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "CONFIRM_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "f1aa601553cec2802a03e0ffa0577465a1e79491d808a67d77f126c39dfb7b04",
+      "deadlineAtMs": 1791759141690,
+      "entryId": "reserve_participant_release:1cfa9f5619d163641587bcc2e6fbe3c6434c9a17ddbdd4d69c22739468db95ed",
+      "expectedControlRevision": 40,
+      "firstIndex": 46,
+      "lastIndex": 46,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "RESERVE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "f1aa601553cec2802a03e0ffa0577465a1e79491d808a67d77f126c39dfb7b04",
+      "deadlineAtMs": 1791759141690,
+      "entryId": "finalize_participant_release:879f8764a188f040f56b3ed0dee5eb376edb12b53e14cf7410c9d7ae72769107",
+      "expectedControlRevision": 47,
+      "firstIndex": 53,
+      "lastIndex": 53,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "FINALIZE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "f1aa601553cec2802a03e0ffa0577465a1e79491d808a67d77f126c39dfb7b04",
+      "deadlineAtMs": null,
+      "entryId": "dispatch_participant_release:7e93639d42e4da17758da8b542fd2f696afddcba368d56423d16de19f9c51661",
+      "expectedControlRevision": 48,
+      "firstIndex": 54,
+      "lastIndex": 54,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "DISPATCH_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "f1aa601553cec2802a03e0ffa0577465a1e79491d808a67d77f126c39dfb7b04",
+      "deadlineAtMs": null,
+      "entryId": "confirm_participant_release:e2313c4a2a0235f88ace741e99fda4fb2ec9f901ba8322e86b6d69144d95a7c5",
+      "expectedControlRevision": 52,
+      "firstIndex": 58,
+      "lastIndex": 58,
+      "occurrences": 1,
+      "retirementId": null,
+      "term": 1,
+      "type": "CONFIRM_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "f1aa601553cec2802a03e0ffa0577465a1e79491d808a67d77f126c39dfb7b04",
+      "deadlineAtMs": null,
+      "entryId": "retire_participant_release:c609553a1749932d98092873942af66243ed346f5bdd90515439b2cac9af511a",
+      "expectedControlRevision": 53,
+      "firstIndex": 59,
+      "lastIndex": 59,
+      "occurrences": 1,
+      "retirementId": "23b33c7c857cdcff4117248b978a27edcc3566bf67864eefe5fb3b5e534652e6",
+      "term": 1,
+      "type": "RETIRE_PARTICIPANT_RELEASE"
+    },
+    {
+      "authorizationId": "b24ae48e1d2841f978cd10f5d375ce5b2e5a42db5dced35e1081a5ac32b49a30",
+      "deadlineAtMs": null,
+      "entryId": "retire_participant_release:5f063c5f11a5569d11d43a3b863155b140d7d9358f792fb062b39ec92e041cc1",
+      "expectedControlRevision": 54,
+      "firstIndex": 60,
+      "lastIndex": 278,
+      "occurrences": 219,
+      "retirementId": "6a3a59c5baa8516191cf289939b5eea8757e96985e19ff196772ad254b9f272d",
+      "term": 1,
+      "type": "RETIRE_PARTICIPANT_RELEASE"
+    }
+  ],
+  "replicas": [
+    {
+      "appliedState": {
+        "admission_index": 0,
+        "applied_index": 278,
+        "auto_leave": 0,
+        "bootstrap_index": 0,
+        "group_id": "sql_transactions-p1",
+        "learners": "[]",
+        "learners_next": "[]",
+        "membership_generation_index": 0,
+        "voters": "[\"6600243378791833037\",\"7691077697885072888\",\"2734552253535212872\"]",
+        "voters_outgoing": "[]"
+      },
+      "control": {
+        "authorizationId": "f1aa601553cec2802a03e0ffa0577465a1e79491d808a67d77f126c39dfb7b04",
+        "authorizationRevision": 48,
+        "confirmationEntryId": "confirm_participant_release:e2313c4a2a0235f88ace741e99fda4fb2ec9f901ba8322e86b6d69144d95a7c5",
+        "deadlineAtMs": 1791759141690,
+        "dispatchEntryId": "dispatch_participant_release:7e93639d42e4da17758da8b542fd2f696afddcba368d56423d16de19f9c51661",
+        "finalizationEntryId": "finalize_participant_release:879f8764a188f040f56b3ed0dee5eb376edb12b53e14cf7410c9d7ae72769107",
+        "reservationEntryId": "reserve_participant_release:1cfa9f5619d163641587bcc2e6fbe3c6434c9a17ddbdd4d69c22739468db95ed",
+        "retirementId": "23b33c7c857cdcff4117248b978a27edcc3566bf67864eefe5fb3b5e534652e6",
+        "retirementIndex": 59,
+        "retirementTerm": 1,
+        "state": "RETIRED"
+      },
+      "controlRevision": 54,
+      "databaseSha256": "34511e1a76caf8b5d787baaff078e571f0b28493d85f9f68f1cb8e10133d603b",
+      "hardState": {
+        "commit_index": 278,
+        "group_id": "sql_transactions-p1",
+        "term": 1,
+        "vote": 2734552253535212872
+      },
+      "lastLogIndex": 278,
+      "pauseEntryId": "pause_participant_admission:aa1866611e963f7150591c6348871d611c58887ed18daa81ee3990556aeafe1e",
+      "pauseGeneration": 1,
+      "raftLogLogicalSha256": "20cbf90ac60d2f9798b0e445b6528f3b49e2f5a89525ce71acc55c9530168b05",
+      "replicaId": "sql_transactions-p1-r1"
+    },
+    {
+      "appliedState": {
+        "admission_index": 0,
+        "applied_index": 278,
+        "auto_leave": 0,
+        "bootstrap_index": 0,
+        "group_id": "sql_transactions-p1",
+        "learners": "[]",
+        "learners_next": "[]",
+        "membership_generation_index": 0,
+        "voters": "[\"6600243378791833037\",\"7691077697885072888\",\"2734552253535212872\"]",
+        "voters_outgoing": "[]"
+      },
+      "control": {
+        "authorizationId": "f1aa601553cec2802a03e0ffa0577465a1e79491d808a67d77f126c39dfb7b04",
+        "authorizationRevision": 48,
+        "confirmationEntryId": "confirm_participant_release:e2313c4a2a0235f88ace741e99fda4fb2ec9f901ba8322e86b6d69144d95a7c5",
+        "deadlineAtMs": 1791759141690,
+        "dispatchEntryId": "dispatch_participant_release:7e93639d42e4da17758da8b542fd2f696afddcba368d56423d16de19f9c51661",
+        "finalizationEntryId": "finalize_participant_release:879f8764a188f040f56b3ed0dee5eb376edb12b53e14cf7410c9d7ae72769107",
+        "reservationEntryId": "reserve_participant_release:1cfa9f5619d163641587bcc2e6fbe3c6434c9a17ddbdd4d69c22739468db95ed",
+        "retirementId": "23b33c7c857cdcff4117248b978a27edcc3566bf67864eefe5fb3b5e534652e6",
+        "retirementIndex": 59,
+        "retirementTerm": 1,
+        "state": "RETIRED"
+      },
+      "controlRevision": 54,
+      "databaseSha256": "1f1b685033e0b99540bbbdfa4b8eef5b811218718414d92890361fc51e1d7c63",
+      "hardState": {
+        "commit_index": 278,
+        "group_id": "sql_transactions-p1",
+        "term": 1,
+        "vote": 2734552253535212872
+      },
+      "lastLogIndex": 278,
+      "pauseEntryId": "pause_participant_admission:aa1866611e963f7150591c6348871d611c58887ed18daa81ee3990556aeafe1e",
+      "pauseGeneration": 1,
+      "raftLogLogicalSha256": "20cbf90ac60d2f9798b0e445b6528f3b49e2f5a89525ce71acc55c9530168b05",
+      "replicaId": "sql_transactions-p1-r2"
+    },
+    {
+      "appliedState": {
+        "admission_index": 0,
+        "applied_index": 278,
+        "auto_leave": 0,
+        "bootstrap_index": 0,
+        "group_id": "sql_transactions-p1",
+        "learners": "[]",
+        "learners_next": "[]",
+        "membership_generation_index": 0,
+        "voters": "[\"6600243378791833037\",\"7691077697885072888\",\"2734552253535212872\"]",
+        "voters_outgoing": "[]"
+      },
+      "control": {
+        "authorizationId": "f1aa601553cec2802a03e0ffa0577465a1e79491d808a67d77f126c39dfb7b04",
+        "authorizationRevision": 48,
+        "confirmationEntryId": "confirm_participant_release:e2313c4a2a0235f88ace741e99fda4fb2ec9f901ba8322e86b6d69144d95a7c5",
+        "deadlineAtMs": 1791759141690,
+        "dispatchEntryId": "dispatch_participant_release:7e93639d42e4da17758da8b542fd2f696afddcba368d56423d16de19f9c51661",
+        "finalizationEntryId": "finalize_participant_release:879f8764a188f040f56b3ed0dee5eb376edb12b53e14cf7410c9d7ae72769107",
+        "reservationEntryId": "reserve_participant_release:1cfa9f5619d163641587bcc2e6fbe3c6434c9a17ddbdd4d69c22739468db95ed",
+        "retirementId": "23b33c7c857cdcff4117248b978a27edcc3566bf67864eefe5fb3b5e534652e6",
+        "retirementIndex": 59,
+        "retirementTerm": 1,
+        "state": "RETIRED"
+      },
+      "controlRevision": 54,
+      "databaseSha256": "977a70a026426e2f750513b3229530ce5124ea45389e05366439667face9f7cf",
+      "hardState": {
+        "commit_index": 278,
+        "group_id": "sql_transactions-p1",
+        "term": 1,
+        "vote": 2734552253535212872
+      },
+      "lastLogIndex": 278,
+      "pauseEntryId": "pause_participant_admission:aa1866611e963f7150591c6348871d611c58887ed18daa81ee3990556aeafe1e",
+      "pauseGeneration": 1,
+      "raftLogLogicalSha256": "20cbf90ac60d2f9798b0e445b6528f3b49e2f5a89525ce71acc55c9530168b05",
+      "replicaId": "sql_transactions-p1-r3"
+    }
+  ],
+  "scope": "diagnostic only; scratch has two instrumentation edits and is not byte-identical to product",
+  "scratch": {
+    "changedPaths": [
+      "src/node/replica-handler-participant-cutover.js",
+      "test/integration/pgwire-command-tag-real-engine.integration.test.js"
+    ],
+    "cohortLogSha256": "a396a62d37cf8c4dd85f250bda0847ee432b12a225afe54b1ae14a8a6ec46c8f",
+    "instrumentationDiffSha256": "32269137b7f674352ff354ff47a2e726c9b6d8a590fec8751937d2579e918736",
+    "logSha256": "3edaec99ca633020500ffc220ebc99c0a709ed286364d8999c87d1b799d61ad1",
+    "path": "/tmp/activation-retirement-diag-1234593",
+    "runtimeRoot": "/tmp/lagrange-pgwire-command-tags-vrkZ7Q"
+  },
+  "unchangedOracle": {
+    "path": "test-output/continuation-20261011/startup-activation/retirement-reconstruction/pgwire-oracle.log",
+    "sha256": "aca296ecce3e3c3116749b902f3dea1746f02a44907ef721955e992268562ab7"
+  }
+}
