@@ -1,0 +1,44 @@
+{
+  "recordedAt": "2026-10-11T16:14:26.709629+00:00",
+  "claim": "Read-only owner trace and independent design findings; no normal restart acceptance",
+  "productionEntry": "src/lagrange-runtime-startup.js:startLagrangeRuntime",
+  "seedOrder": [
+    "INFRASTRUCTURE_READY",
+    "MESSAGE_GROUPS_READY",
+    "PARTITIONS_READY",
+    "REGISTRATION_READY: acquire early SQL/recovery owners; release participant cohorts; registration writes",
+    "CACHE_HYDRATED: cache read/CDC subscribe/readiness/normal wiring",
+    "CONTROL_PLANE_READY: control owner/current NODES publication",
+    "RUNTIME_READY: external admission"
+  ],
+  "snapshotPaths": {
+    "partition": "partition-service-raft-init-base.js resolves pending install before DB open without current CREATE authority; conflict aborts initialization",
+    "freshMessageGroup": "message-group-learner-join.js refuses existing database/marker/staging; requestSnapshotInstall precedes learner open; recoverPendingSnapshotInstall has no production caller",
+    "messageGroupOpen": "message-group-consensus-port.js opens DB directly; no pending-install resolver",
+    "qualification": "A PARTITIONS_READY abort is a general partition path risk, not a demonstrated FreshMG marker schedule. Actual interrupted Fresh CREATE retry and startup phase reachability must be proved separately."
+  },
+  "cdcPaths": {
+    "cacheHydration": "Joining readiness -> CDCIntegrationService.hydrateCdcPropagatedTablesFromAuthority -> coverage reconcile; this is cache coverage, not original-event obligation delivery",
+    "owedDelivery": "PartitionCDCDelivery leader-elected/subscription-handshake triggers driveCdcObligations; drive precondition is DB, current leadership tenure, live owner and subscribers",
+    "acknowledgement": "proposeCdcAcknowledgement -> leadership check -> startPartitionRaftWriteCommit; ordinary pause is checked in startAdmittedPartitionWrite",
+    "ceiling": "Source suggests owed delivery/ACK can progress while application mutations paused; no normal node startup delivery witness yet"
+  },
+  "remaining": [
+    "Separate pre-registration read/recovery progress from writes requiring activation",
+    "Reach current CREATE-authorized install recovery without opening affected replica early",
+    "Preserve authorization and pending obligations on restart",
+    "Consume full current remote population/config/incarnation fences at effect point",
+    "Avoid nested four-slot control/dependent deadlock"
+  ],
+  "independentReview": {
+    "path": "evidence/review-activation-authority-design-round4-marker.md",
+    "sha256": "295ff3d8a18c4a474c87d1fea9789ee78d1ca51960eacb1671974c9a7d9dd30e",
+    "verdict": "REVISE"
+  },
+  "currentProposal": {
+    "sha256": "435332bfcca8bb04deffffd93c74b05d90ddbca90815ebc79613158b8a09ee23",
+    "linkedC3Sha256": "6da7702990e6fb7dbca7b9dcefc8b68f68eef6fecc34cc48c9a8517dc1619cc0",
+    "verdict": "UNVETTED; source held",
+    "rootQuestion": "A partial member vote surviving superseded incarnation before full authorization must not weaken user decision-point freshness."
+  }
+}

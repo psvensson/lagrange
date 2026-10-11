@@ -1,0 +1,34 @@
+{
+  "source": "Installed ws8.21.0 reviewed with package-lock provenance; no product source changes",
+  "files": [
+    {
+      "path": "installed-ws-8.21.0/package.json.txt",
+      "sha256": "584ce6e7516587ba249dc910b0c04e2753f6b3f451fc3a5bc324f7735bdacc71",
+      "originalPath": "installed-ws-8.21.0/package.json"
+    },
+    {
+      "path": "installed-ws-8.21.0/lib/buffer-util.js.txt",
+      "sha256": "8b0a45739132f82e25ea13163780abf547ccfe989267f3eb7abb475beec92da3",
+      "originalPath": "installed-ws-8.21.0/lib/buffer-util.js"
+    },
+    {
+      "path": "installed-ws-8.21.0/lib/receiver.js.txt",
+      "sha256": "4879edbf8e48d04d09783cf9c04b5e25f5a448247bb01279438ded2899747220",
+      "originalPath": "installed-ws-8.21.0/lib/receiver.js"
+    },
+    {
+      "path": "installed-ws-8.21.0/lib/websocket.js.txt",
+      "sha256": "48fdb0f54c1f8ce580d3cfa2908fe7d96fe18f06f9d82306950441cb09b5db26",
+      "originalPath": "installed-ws-8.21.0/lib/websocket.js"
+    },
+    {
+      "path": "installed-ws-8.21.0/lib/websocket-server.js.txt",
+      "sha256": "29029a4d346800c792300df153df2007e9805d9d7b67b0883f9730b64f25b1c8",
+      "originalPath": "installed-ws-8.21.0/lib/websocket-server.js"
+    }
+  ],
+  "license": {
+    "path": "installed-ws-8.21.0/LICENSE.txt",
+    "sha256": "2b29dcfe0d6471f7e8c92c5fb38c9f93edee10330937055440192f1832b1ecef"
+  }
+}

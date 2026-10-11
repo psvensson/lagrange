@@ -1,0 +1,11 @@
+
+> lagrange-server@0.2.6 test:complexity:scoped
+> node scripts/check-complexity.js --scoped src/query/distributed/distributed-transaction-creation.js src/query/distributed/distributed-transaction-creation-resources.js src/query/distributed/distributed-transaction-recovery.js src/query/sql-query-engine-transaction-persistence-methods.js
+
+Scoped complexity ratchet: 5 violation(s) in 4 target(s) (threshold: 12).
+src/query/distributed/distributed-transaction-creation.js:188:1 Function 'buildTransactionCreationResult' has a complexity of 16. Maximum allowed is 12.
+src/query/distributed/distributed-transaction-recovery.js:364:3 Async method 'resumeRecoveredTransactions' has a complexity of 13. Maximum allowed is 12.
+src/query/distributed/distributed-transaction-recovery.js:565:3 Method 'recoverFromSystemTables' has a complexity of 38. Maximum allowed is 12.
+src/query/distributed/distributed-transaction-recovery.js:594:7 Method 'loadWorkflow' has a complexity of 13. Maximum allowed is 12.
+src/query/distributed/distributed-transaction-recovery.js:651:7 Method 'loadParticipant' has a complexity of 14. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.

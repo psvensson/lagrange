@@ -51,6 +51,10 @@ import {
   createMockMessageRouter,
   createMockSystemCache,
 } from './sql-query-engine-test-support.js';
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 
 test('SQLQueryEngine preserves canonical result and deadline budgets for ' +
   'SELECT execution', async (t) => {
@@ -615,9 +619,12 @@ test('SQLQueryEngine - routes INSERT to multiple partitions', async (t) => {
     ],
   );
 
+  // A multi-partition statement is a STATEMENT_AUTOCOMMIT transaction: its
+  // engine persists transaction state (TX1 seam S4b).
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const result = await engine.executeQuery(
@@ -680,7 +687,7 @@ test('SQLQueryEngine - surfaces partial failure for distributed UPDATE', async (
     deliver: async (address, message) => {
       const partitionId = address.split('/')[2];
       if (message.type !== 'QUERY') {
-        return {acknowledged: true, success: true};
+        return answerParticipantTransactionRequest(message);
       }
       if (partitionId === 'p2') {
         return {
@@ -700,6 +707,7 @@ test('SQLQueryEngine - surfaces partial failure for distributed UPDATE', async (
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: failingRouter,
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const result = await engine.executeQuery(
@@ -759,6 +767,7 @@ test('SQLQueryEngine - executes UPDATE on all partitions without key filter', as
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const result = await engine.executeQuery(
@@ -817,9 +826,11 @@ test('SQLQueryEngine - returns error for non-existent table', async (t) => {
 test('SQLQueryEngine - handles transaction statements', async (t) => {
   const cache = createMockSystemCache([], []);
 
+  // An explicit BEGIN persists transaction state first (TX1 seam S4b).
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const beginResult = await engine.executeQuery('BEGIN TRANSACTION');
@@ -1075,10 +1086,17 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
       ],
     );
 
+    // The mirrored write has two participants: a STATEMENT_AUTOCOMMIT
+    // transaction whose engine persists its state and whose participants
+    // answer the transaction protocol (TX1 seam S4b, design 2.2).
     const engine = new SQLQueryEngine({
       systemCache: cache,
+      controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
       messageRouter: {
         async deliver(address, message) {
+          if (message.type === 'TRANSACTION') {
+            return answerParticipantTransactionRequest(message);
+          }
           if (message.type === 'QUERY' &&
               /^\s*(INSERT|UPDATE|DELETE)/i.test(message.sql || '')) {
             deliveredWrites.push({
@@ -1166,9 +1184,17 @@ test('SQLQueryEngine - recovers and replays distributed transactions from system
       return originalGetAll(type);
     };
 
+    // The durable rows behind the cache snapshot: recovery records the
+    // transaction's decision insert-once on its own row before any fanout
+    // (TX1 seam C), so its engine persists transaction state.
+    const gateway = createTransactionPersistenceGateway();
+    transactionRows.forEach((row) => gateway.seed(TABLES.SQL_TRANSACTIONS, row));
+    participantRows.forEach((row) =>
+      gateway.seed(TABLES.SQL_TRANSACTION_PARTICIPANTS, row));
     const engine = new SQLQueryEngine({
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
+      controlPlaneSystemTableGateway: gateway,
     });
 
     const replay = await engine.waitForDistributedTransactionRecoveryReplay();

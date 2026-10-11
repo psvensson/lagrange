@@ -1,0 +1,23 @@
+{
+  "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011",
+  "worktreeHead": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+  "base": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+  "snapshot": "2ab221023f091e4b41ddd2ec2530a9397ad8e944",
+  "tree": "8aa66b3c87f2f7b3839948a6449eb3a5cf74c70b",
+  "callerBefore": {
+    "head": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+    "branch": "refs/heads/checkpoint/rs-raft-recovery-chain-20261011",
+    "indexSha256": "d9510137f7cc55787fccfa80011f8a42ed5dfd17298478a3528221bd430e5436",
+    "statusSha256": "9e5e7479ab830776691fff85f1aee6c3897807e0a92224e45169423848d1a36a",
+    "dirtyContentSha256": "b7c3c2769da183bb8507c4a7d180c66b6d5c205cfaf7a4eba6c2aeb5fcde72cb",
+    "dirtyPathCount": 103
+  },
+  "callerAfter": {
+    "head": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+    "branch": "refs/heads/checkpoint/rs-raft-recovery-chain-20261011",
+    "indexSha256": "d9510137f7cc55787fccfa80011f8a42ed5dfd17298478a3528221bd430e5436",
+    "statusSha256": "9e5e7479ab830776691fff85f1aee6c3897807e0a92224e45169423848d1a36a",
+    "dirtyContentSha256": "b7c3c2769da183bb8507c4a7d180c66b6d5c205cfaf7a4eba6c2aeb5fcde72cb",
+    "dirtyPathCount": 103
+  }
+}
