@@ -191,5 +191,6 @@ function transitionFenceKey(command) {
 export {
   normalizeMembershipTransition,
   refusal as membershipTransitionRefusal,
+  TARGET_STATUS_OBSERVATION_FIELDS,
   transitionFenceKey,
 };

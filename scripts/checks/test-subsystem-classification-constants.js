@@ -186,6 +186,18 @@ export const SUBSYSTEM_OVERRIDES = Object.freeze({
     subsystem: SUBSYSTEM_PLACEMENT_REBALANCE,
     reason: 'proves the operation owner issues an ordered learner successor only over a fenced, registry-vouched noncommitted attempt; real routers, the native group and operation SQL supply the fixture',
   },
+  'test/integration/message-group-learner-promotion.integration.test.js': {
+    subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
+    reason: 'proves a joined learner is promoted to voter only over the exact caught-up proof, the native promotion turn and the recorded voter stamp; routers, the native group and operation SQL supply the fixture',
+  },
+  'test/integration/message-group-learner-promotion-selection-guards.integration.test.js': {
+    subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
+    reason: 'proves every refusal branch and precondition of the promotion selection\'s branch CAS on the joined-learner world (crafted native answers and observations, forged rows, an isolated newer-term leader); the native group and operation SQL supply the fixture',
+  },
+  'test/integration/message-group-learner-promotion-recording-guards.integration.test.js': {
+    subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
+    reason: 'proves every refusal branch and precondition of the voter-stamp receipt and the recorded voter fact predicate on the natively promoted learner (crafted native answers, forged rows, holder interleavings); routers, the native group and operation SQL supply the fixture',
+  },
   'test/integration/message-group-learner-join.integration.test.js': {
     subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
     reason: 'proves a recorded learner joins its group through the CREATE admission and install owners; the partition-shaped install path and transport are fixture, not the asserted responsibility',

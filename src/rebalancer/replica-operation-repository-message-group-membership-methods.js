@@ -5,7 +5,7 @@
  * authority is created here; an ordered successor attempt is issued only by
  * its own module's proof of predecessor noncommitment.
  */
-import {observeMessageGroupLearnerAuthorization} from
+import {observeMessageGroupLearnerAuthorization, observeMessageGroupPromotionAuthorization} from
   './replica-operation-message-group-learner-observation.js';
 import {claimMessageGroupMembershipOwner, settleMessageGroupMembershipNonAdmission} from
   './replica-operation-message-group-membership-owner-claim.js';
@@ -14,6 +14,8 @@ import {selectMessageGroupMembershipBranch, authorizeMessageGroupLearner,
   './replica-operation-message-group-membership-authorization.js';
 import {issueMessageGroupLearnerSuccessor} from
   './replica-operation-message-group-learner-successor.js';
+import {selectMessageGroupPromotion, recordMessageGroupVoterOutcome,
+  recoverMessageGroupVoterOutcome} from './replica-operation-message-group-promotion.js';
 import {MEMBERSHIP_OBLIGATION} from './replica-operation-message-group-membership-permit.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway.js';
@@ -90,8 +92,34 @@ function assignReplicaOperationRepositoryMessageGroupMembershipMethods(
     }
 
     /** Select a durable membership branch; never directly dispatches Raft. */
-    selectMessageGroupMembershipBranch(request) {
-      return selectMessageGroupMembershipBranch(this, request);
+    selectMessageGroupMembershipBranch(request, isInvocationCurrent) {
+      return selectMessageGroupMembershipBranch(this, request, isInvocationCurrent);
+    }
+
+    /** Select the promotion of a recorded learner only over the routed
+     * leader's positive origin evidence and exact caught-up acknowledgement
+     * (6.C slice C2); not a proposal. */
+    selectMessageGroupPromotion(request, readCommittedAction, observeCatchUp,
+      isInvocationCurrent) {
+      return selectMessageGroupPromotion(this, request, readCommittedAction, observeCatchUp,
+        isInvocationCurrent);
+    }
+
+    /** Observe the exact issued promotion for its bound runtime recipient. */
+    observeMessageGroupPromotionAuthorization(request, receiver) {
+      return observeMessageGroupPromotionAuthorization(this, request, receiver);
+    }
+
+    /** Record a promotion's exact outcome as the voter stamp; never dispatch. */
+    recordMessageGroupVoterOutcome(request, readCommittedAction, isInvocationCurrent) {
+      return recordMessageGroupVoterOutcome(this, request, readCommittedAction,
+        isInvocationCurrent);
+    }
+
+    /** Recover a promotion's voter outcome by operation ID from durable inputs. */
+    recoverMessageGroupVoterOutcome(operationId, readCommittedAction, isInvocationCurrent) {
+      return recoverMessageGroupVoterOutcome(this, operationId, readCommittedAction,
+        isInvocationCurrent);
     }
   }
 

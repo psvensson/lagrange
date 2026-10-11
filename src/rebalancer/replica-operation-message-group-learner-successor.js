@@ -1,10 +1,12 @@
-/** Ordered successor of a message-group learner action, subordinate to
- * ReplicaOperationRepository (runbook 6.C, slice C1).
+/** Ordered successor of a message-group membership action, subordinate to
+ * ReplicaOperationRepository (runbook 6.C, slice C1; the promotion attempt
+ * since slice C2, through the same fence).
  *
  * Trigger: a holder's reconcile turn whose recorder read answered NONCOMMITTED.
  * Facts, every one read here: the authoritative operation row with the
- * in-flight learner attempt it owes (open ordinary operation, UNKNOWN
- * obligation, no stamp); the repository's own exact native read of that
+ * in-flight attempt it owes, the learner action (no stamp) or the promotion
+ * (the recorded learner stamp, no voter or removal stamp), on an open ordinary
+ * operation with UNKNOWN obligation; the repository's own exact native read of that
  * attempt through the caller's read capability, classified by the recorder:
  * NOT_RECORDED in one queued observation of a replica that leads a strictly
  * newer term and has applied an entry of that term, so the attempt can never
@@ -27,16 +29,16 @@ import {readAuthoritativeControlPlaneRows} from
   '../control-plane/control-plane-system-table-gateway.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
+import {MEMBERSHIP_PERMIT_STATE as STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, decodeMembershipOwnerClaim,
-  membershipOwnerClaimFence, encodeMembershipPermit} from
-  './replica-operation-message-group-membership-permit.js';
+  membershipOwnerClaimFence, encodeMembershipPermit, membershipActionPhases,
+  membershipActionMatches} from './replica-operation-message-group-membership-permit.js';
 import {observeMembershipOperation, membershipRowIdentityMatches,
   membershipClaimIsLocalAndLive, membershipBootIsCurrent, membershipRowWhere,
   MEMBERSHIP_AUTHORIZATION_READ_OPTIONS as READ} from
   './replica-operation-message-group-membership-owner-claim.js';
-import {learnerActionMatches, observeLearnerActionAbsence, noteUncertainMembershipWrite} from
+import {observeLearnerActionAbsence, noteUncertainMembershipWrite} from
   './replica-operation-message-group-membership-authorization.js';
 
 const NODE_BOOT_SQL = 'SELECT node_id, boot_incarnation FROM nodes WHERE node_id = ?';
@@ -52,25 +54,33 @@ function successorRequest(request) {
   return Object.freeze({operationId: data.operationId,
     destinationNodeId: data.destinationNodeId, destinationReplicaId: data.destinationReplicaId});
 }
-const noMembershipStamp = (row) => row.messageGroupLearnerStamp === null &&
-  row.messageGroupVoterStamp === null && row.messageGroupRemovalStamp === null;
-// The row still owes its learner attempt, on an open ordinary operation: an
-// ordinarily settled operation never gets a successor (its obligation keeps
-// its own settlement owner).
-function owesLearnerAttempt(repository, row) {
-  return row.messageGroupMembershipPhase === PHASE.LEARNER_IN_FLIGHT &&
-    row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN &&
-    noMembershipStamp(row) && !repository.isOperationTerminal(row) && row.completedAt === null;
+// An attempt of a recorded action of this transition (the learner action or
+// the promotion, membershipActionPhases), for its exact target.
+function actionAttemptMatches(permit, identity) {
+  return membershipActionPhases(permit.permitStage) !== null &&
+    membershipActionMatches(permit, identity, permit.permitStage);
 }
-// The in-flight learner attempt the authoritative row owes, decoded, or null.
+// The row still owes this attempt in its in-flight phase (a promotion row keeps
+// the recorded learner stamp, a learner row has none), on an open ordinary
+// operation: an ordinarily settled operation never gets a successor (its
+// obligation keeps its own settlement owner).
+function owesAttempt(repository, row, action) {
+  return row.messageGroupMembershipPhase === action.inFlight &&
+    row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN &&
+    (row.messageGroupLearnerStamp !== null) === action.followsLearnerFact &&
+    row.messageGroupVoterStamp === null && row.messageGroupRemovalStamp === null &&
+    !repository.isOperationTerminal(row) && row.completedAt === null;
+}
+// The in-flight attempt the authoritative row owes, decoded, or null.
 function inFlightAttempt(repository, row, operationId) {
   if (!row) return null;
   const identity = decodeMembershipIdentity(row.messageGroupMembershipIdentity);
   const permit = decodeMembershipPermit(row.messageGroupMembershipPermit);
-  if (!identity || identity.operationId !== operationId || !permit ||
+  const action = membershipActionPhases(permit?.permitStage);
+  if (!identity || identity.operationId !== operationId || !action ||
     !membershipRowIdentityMatches(row, identity, row.messageGroupMembershipIdentity) ||
-    !learnerActionMatches(permit, identity) || permit.permitState !== STATE.IN_FLIGHT ||
-    !owesLearnerAttempt(repository, row)) return null;
+    !actionAttemptMatches(permit, identity) || permit.permitState !== STATE.IN_FLIGHT ||
+    !owesAttempt(repository, row, action)) return null;
   return Object.freeze({operationId, identity, permit,
     encodedIdentity: row.messageGroupMembershipIdentity,
     encodedPermit: row.messageGroupMembershipPermit});
@@ -81,7 +91,8 @@ function successorIssued(row, attempt) {
   const permit = decodeMembershipPermit(row?.messageGroupMembershipPermit);
   return permit !== null &&
     membershipRowIdentityMatches(row, attempt.identity, attempt.encodedIdentity) &&
-    learnerActionMatches(permit, attempt.identity) &&
+    actionAttemptMatches(permit, attempt.identity) &&
+    permit.permitStage === attempt.permit.permitStage &&
     permit.permitSequence === attempt.permit.permitSequence + 1;
 }
 // Never a refresh: the next sequence of the same transition and target, a
@@ -181,9 +192,9 @@ async function issueOver(repository, input, attempt, observation, isCurrent) {
   if (next === null) return result(OUTCOME.INVALID, row);
   return submitSuccessor(repository, row, attempt, next, isCurrent);
 }
-/** Issue the ordered successor of the row's in-flight learner attempt when, and
- * only when, the repository's own exact read proves that attempt can never
- * commit. The caller supplies the operation, the routed destination (node and
+/** Issue the ordered successor of the row's in-flight attempt (the learner
+ * action, or since C2 the promotion) when, and only when, the repository's own
+ * exact read proves that attempt can never commit. The caller supplies the operation, the routed destination (node and
  * replica) and the read capability, never evidence or a permit. */
 async function issueMessageGroupLearnerSuccessor(repository, request, readCommittedLearner,
   isInvocationCurrent) {
@@ -205,3 +216,6 @@ async function issueMessageGroupLearnerSuccessor(repository, request, readCommit
   return issueOver(repository, input, attempt, absence.observation, isCurrent);
 }
 export {issueMessageGroupLearnerSuccessor};
+// The destination's canonical boot read, shared with the promotion selection
+// (replica-operation-message-group-promotion.js, 6.C slice C2).
+export {canonicalBootIncarnation};

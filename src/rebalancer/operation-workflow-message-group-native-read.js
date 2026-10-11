@@ -62,12 +62,13 @@ function selectRecordingRecipient(owner, operationId, route) {
     epoch === owner.getOperationOwnershipFenceEpoch();
   return {selected, isCurrent};
 }
-// One recording turn inside an already-held operation lane.
+// One recording turn inside an already-held operation lane. The record
+// callback also receives the selected recipient (its node and replica).
 function recordingTurn(owner, turn, record) {
   if (!turn.isCurrent()) return Promise.resolve(refusedAnswer());
   return Promise.resolve(record((query) =>
-    readAtRecipient(owner, turn.selected, query, turn.isCurrent), turn.isCurrent))
-    .then((answer) => answer?.outcome ? answer : refusedAnswer());
+    readAtRecipient(owner, turn.selected, query, turn.isCurrent), turn.isCurrent,
+  turn.selected)).then((answer) => answer?.outcome ? answer : refusedAnswer());
 }
 function withRecordingRecipient(owner, operationId, route, record) {
   const turn = selectRecordingRecipient(owner, operationId, route);
@@ -107,6 +108,25 @@ function recoverMessageGroupLearnerInline(owner, operationId, route, laneTurn) {
   return recordingTurn(owner, turn, (read, isCurrent) =>
     owner.repository.recoverMessageGroupLearnerOutcome(operationId, read, isCurrent));
 }
+/** Explicit entry for an issued promotion (6.C slice C2), in the retained
+ * lane: the repository reconstructs the voter-stamp input from the
+ * authoritative row and records the exact outcome read at the selected
+ * recipient. Discovery does not own promotion debt, so no periodic or wake
+ * trigger reaches this; it is the explicit caller's. */
+function recoverMessageGroupVoterFromRecipient(owner, operationId, route) {
+  return withRecordingRecipient(owner, operationId, route, (read, isCurrent) =>
+    owner.repository.recoverMessageGroupVoterOutcome(operationId, read, isCurrent));
+}
+/** Explicit entry for the ordered successor of the row's in-flight attempt
+ * (the promotion since 6.C slice C2), in the retained lane: the repository
+ * repeats the exact read at the selected recipient and issues the successor
+ * only over a fenced, vouched absence there. Issuing is not proposing. */
+function issueMessageGroupSuccessorFromRecipient(owner, operationId, route) {
+  return withRecordingRecipient(owner, operationId, route, (read, isCurrent, selected) =>
+    owner.repository.issueMessageGroupLearnerSuccessor({operationId,
+      destinationNodeId: selected.nodeId, destinationReplicaId: selected.replicaId},
+    read, isCurrent));
+}
 /** The same reconcile turn, after its recorder read answered NONCOMMITTED:
  * the repository issues the ordered successor through its own exact read at
  * the same selected recipient, under the same lane-turn and lifetime checks.
@@ -121,4 +141,5 @@ function issueMessageGroupLearnerSuccessorInline(owner, operationId, route, lane
     read, isCurrent));
 }
 export {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient,
-  recoverMessageGroupLearnerInline, issueMessageGroupLearnerSuccessorInline};
+  recoverMessageGroupLearnerInline, issueMessageGroupLearnerSuccessorInline,
+  recoverMessageGroupVoterFromRecipient, issueMessageGroupSuccessorFromRecipient};

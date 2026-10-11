@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 307,
+    "bootstrap-membership": 310,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2330,
-  "digest": "fnv1a32-22f5d781",
+  "censusSize": 2333,
+  "digest": "fnv1a32-1c16158d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c0fdb8e2",
+  "observationDigest": "fnv1a32-230b2cb4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1030,6 +1030,9 @@
     "test/integration/message-group-learner-discovery.integration.test.js": "transport-messaging",
     "test/integration/message-group-learner-join.integration.test.js": "bootstrap-membership",
     "test/integration/message-group-learner-process-loss.integration.test.js": "storage-raft",
+    "test/integration/message-group-learner-promotion-recording-guards.integration.test.js": "bootstrap-membership",
+    "test/integration/message-group-learner-promotion-selection-guards.integration.test.js": "bootstrap-membership",
+    "test/integration/message-group-learner-promotion.integration.test.js": "bootstrap-membership",
     "test/integration/message-group-learner-recipient.integration.test.js": "transport-messaging",
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": "storage-raft",
     "test/integration/message-group-learner-successor-ordering.integration.test.js": "placement-rebalance",
@@ -7303,6 +7306,74 @@
         "test/test-helpers/learner-process-loss-worker.js"
       ]
     },
+    "test/integration/message-group-learner-promotion-recording-guards.integration.test.js": {
+      "files": [
+        "src/message-group/message-group-consensus-port.js",
+        "src/message-group/message-group-learner-join.js",
+        "src/node/message-group-service-handler.js",
+        "src/node/replica-create-admission-evidence.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-transfer.js",
+        "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
+        "src/rebalancer/replica-create-admission-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit.js",
+        "src/rebalancer/replica-operation-message-group-promotion.js",
+        "test/test-helpers/learner-operation-fixture.js",
+        "test/test-helpers/message-group-learner-promotion-fixture.js"
+      ]
+    },
+    "test/integration/message-group-learner-promotion-selection-guards.integration.test.js": {
+      "files": [
+        "src/message-group/message-group-consensus-port.js",
+        "src/message-group/message-group-learner-join.js",
+        "src/node/message-group-service-handler.js",
+        "src/node/replica-create-admission-evidence.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-transfer.js",
+        "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
+        "src/rebalancer/replica-create-admission-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit.js",
+        "test/test-helpers/learner-operation-fixture.js",
+        "test/test-helpers/message-group-learner-promotion-fixture.js"
+      ]
+    },
+    "test/integration/message-group-learner-promotion.integration.test.js": {
+      "files": [
+        "src/message-group/message-group-consensus-port.js",
+        "src/message-group/message-group-learner-join.js",
+        "src/node/message-group-service-handler.js",
+        "src/node/replica-create-admission-evidence.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-transfer.js",
+        "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
+        "src/rebalancer/replica-create-admission-token.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit.js",
+        "test/test-helpers/learner-operation-fixture.js",
+        "test/test-helpers/message-group-learner-promotion-fixture.js"
+      ]
+    },
     "test/integration/message-group-learner-recipient.integration.test.js": {
       "files": [
         "src/raft/raft-committed-membership-constants.js",
@@ -9543,6 +9614,7 @@
         "src/partition/partition-service-raft-lifecycle-wiring.js",
         "src/partition/partition-service-raft-membership-administration.js",
         "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/raft/learner-catch-up-acknowledgement.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
@@ -9556,6 +9628,7 @@
         "src/rebalancer/operation-workflow-replace-witness.js",
         "src/rebalancer/rebalance-coordinator-operation-creation.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-message-group-promotion.js",
         "src/rebalancer/replica-operation-progress.js",
         "src/rebalancer/replica-operation-repository-row-methods.js",
         "src/wasm-service/wasm-service-consensus-port.js"

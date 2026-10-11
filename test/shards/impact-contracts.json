@@ -352,7 +352,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -363,7 +363,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -374,7 +374,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -848,7 +848,7 @@
       ]
     },
     "message-group-registered-learner-read": {
-      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE permission; a successor attempt only through the ordered-successor contract after a fenced, registry-vouched noncommitment.",
+      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness (the learner action only; since 6.C slice C2 explicit workflow entries also record a promotion's voter stamp and issue its ordered successor, discovery owning no promotion debt). Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE permission; a successor attempt only through the ordered-successor contract after a fenced, registry-vouched noncommitment.",
       "owners": [
         "src/node/message-group-service-handler.js",
         "src/node/message-group-membership-recipient.js",
@@ -904,7 +904,9 @@
         "src/node/replica-create-admission-owner.js",
         "src/node/replica-create-process-owner.js",
         "src/raft/snapshot-install.js",
-        "src/rebalancer/replica-operation-message-group-membership-authorization.js"
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+        "src/raft/learner-catch-up-acknowledgement.js",
+        "src/raft/learner-promotion-progress.js"
       ],
       "tests": [
         "test/integration/message-group-learner-join.integration.test.js",
@@ -914,7 +916,7 @@
       ]
     },
     "message-group-learner-successor-ordering": {
-      "description": "An in-flight message-group learner attempt gets an ordered successor only when the recorder's exact read proves it can never commit: NOT_RECORDED in one queued native observation of a replica that leads a strictly newer term, has applied an entry of it (currentTermApplied) and whose peer-identity registry vouches for the absence by holding no reservation of the target (originRegistryComplete; a NULL-origin reservation never fences). The repository re-proves that with its own read and issues the next permit sequence of the same transition, bound to that observation's term, configuration, lifecycle and runtime fences and the destination node, through one exact operation-row CAS on an open operation that changes only the permit column; the native single-pending and configuration-generation rules order it against any delayed predecessor. UNKNOWN keeps the debt; a committed predecessor is recorded; the old permit is never refreshed; issuance is not a proposal, CREATE or lane release.",
+      "description": "An in-flight message-group learner attempt (and, since 6.C slice C2, a promotion attempt, whose absence is vouched by a fencing leader still holding the target as a learner) gets an ordered successor only when the recorder's exact read proves it can never commit: NOT_RECORDED in one queued native observation of a replica that leads a strictly newer term, has applied an entry of it (currentTermApplied) and whose peer-identity registry vouches for the absence by holding no reservation of the target (originRegistryComplete; a NULL-origin reservation never fences). The repository re-proves that with its own read and issues the next permit sequence of the same transition, bound to that observation's term, configuration, lifecycle and runtime fences and the destination node, through one exact operation-row CAS on an open operation that changes only the permit column; the native single-pending and configuration-generation rules order it against any delayed predecessor. UNKNOWN keeps the debt; a committed predecessor is recorded; the old permit is never refreshed; issuance is not a proposal, CREATE or lane release.",
       "owners": [
         "src/raft/raft-rs-status-observation.js",
         "src/raft/raft-rs-committed-membership-read.js",
@@ -934,7 +936,36 @@
       "tests": [
         "test/integration/message-group-learner-successor-ordering.integration.test.js",
         "test/rebalancer/message-group-membership-branch-authorization.test.js",
-        "test/integration/message-group-learner-discovery.integration.test.js"
+        "test/integration/message-group-learner-discovery.integration.test.js",
+        "test/integration/message-group-learner-promotion.integration.test.js"
+      ]
+    },
+    "message-group-learner-promotion": {
+      "description": "A recorded message-group learner is promoted only over positive evidence: the landed branch selection (the shared recorded-fact predicate, settlement, the exact prior permit, the UNKNOWN obligation of a lane holder with no unresolved attempt, the live holder, boot and the row CAS), the routed leader's queued learner-action read answering COMMITTED with exactly the recorded learner origin, and that leader's exact caught-up acknowledgement under its own applied term (committed answer and status of one leader in one term naming the learner, commit and match exact integers with match >= commit > 0, equal configuration generations; the promotion-progress owner's exact entry, never the raw 0/0-granting predicate). C1's registry-absence vouch is never a promotion prerequisite. The promotion permit is the next sequence bound to that leader's term, configuration, lifecycle and runtime fences; RECORDED is the J1 authorization boundary, not a proposal. The runtime consumer proposes ADD_NODE only through the native turn, which re-proves leadership, configuration, the target's own observation and the leader's exact progress atomically (STALE_LEADERSHIP, STALE_CONFIGURATION, PROMOTION_PROGRESS_BEHIND); the permit is never refreshed. The one recorder records the exact outcome once as the voter stamp (phase, permit, voter stamp only) from the queued action read: the applied configuration naming the target a voter under its transition's learner origin and equal to the learner configuration with exactly the target promoted. A target held as a learner by a fencing newer-term leader is noncommitment for C1's ordered successor; an absent target vouches for nothing. Recording and successor issuance are the workflow owner's explicit entries: discovery does not own promotion debt and no periodic work is added. Debt, lane, ordinary history and later stages stay with their owners.",
+      "owners": [
+        "src/raft/learner-promotion-progress.js",
+        "src/raft/learner-catch-up-acknowledgement.js",
+        "src/raft/raft-rs-group-membership-admission.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-membership-transition-runtime.js",
+        "src/raft/raft-rs-committed-membership-read.js",
+        "src/raft/raft-rs-committed-membership-context.js",
+        "src/rebalancer/replica-operation-message-group-promotion.js",
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit.js",
+        "src/rebalancer/replica-operation-message-group-learner-observation.js",
+        "src/rebalancer/replica-operation-message-group-learner-successor.js",
+        "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
+        "src/rebalancer/operation-workflow-message-group-native-read.js",
+        "src/rebalancer/operation-workflow-owner.js"
+      ],
+      "tests": [
+        "test/integration/message-group-learner-promotion.integration.test.js",
+        "test/integration/message-group-learner-promotion-selection-guards.integration.test.js",
+        "test/integration/message-group-learner-promotion-recording-guards.integration.test.js",
+        "test/message-group/message-group-fresh-learner-promotion.test.js",
+        "test/raft/learner-promotion-progress-proof-contract.test.js",
+        "test/integration/message-group-learner-join.integration.test.js"
       ]
     }
   },
@@ -1741,7 +1772,7 @@
       ]
     },
     "message-group-registered-learner-read": {
-      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE permission; a successor attempt only through the ordered-successor contract after a fenced, registry-vouched noncommitment.",
+      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness (the learner action only; since 6.C slice C2 explicit workflow entries also record a promotion's voter stamp and issue its ordered successor, discovery owning no promotion debt). Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE permission; a successor attempt only through the ordered-successor contract after a fenced, registry-vouched noncommitment.",
       "endpoints": [
         {
           "id": "registered-native-recipient",
@@ -1816,7 +1847,9 @@
             "src/message-group/message-group-learner-join-constants.js",
             "src/message-group/message-group-service-state.js",
             "src/message-group/message-group-consensus-port.js",
-            "src/bootstrap/shared/message-group-service-handler-setup.js"
+            "src/bootstrap/shared/message-group-service-handler-setup.js",
+            "src/raft/learner-catch-up-acknowledgement.js",
+            "src/raft/learner-promotion-progress.js"
           ]
         },
         {
@@ -1840,7 +1873,7 @@
       ]
     },
     "message-group-learner-successor-ordering": {
-      "description": "An in-flight message-group learner attempt gets an ordered successor only when the recorder's exact read proves it can never commit: NOT_RECORDED in one queued native observation of a replica that leads a strictly newer term, has applied an entry of it (currentTermApplied) and whose peer-identity registry vouches for the absence by holding no reservation of the target (originRegistryComplete; a NULL-origin reservation never fences). The repository re-proves that with its own read and issues the next permit sequence of the same transition, bound to that observation's term, configuration, lifecycle and runtime fences and the destination node, through one exact operation-row CAS on an open operation that changes only the permit column; the native single-pending and configuration-generation rules order it against any delayed predecessor. UNKNOWN keeps the debt; a committed predecessor is recorded; the old permit is never refreshed; issuance is not a proposal, CREATE or lane release.",
+      "description": "An in-flight message-group learner attempt (and, since 6.C slice C2, a promotion attempt, whose absence is vouched by a fencing leader still holding the target as a learner) gets an ordered successor only when the recorder's exact read proves it can never commit: NOT_RECORDED in one queued native observation of a replica that leads a strictly newer term, has applied an entry of it (currentTermApplied) and whose peer-identity registry vouches for the absence by holding no reservation of the target (originRegistryComplete; a NULL-origin reservation never fences). The repository re-proves that with its own read and issues the next permit sequence of the same transition, bound to that observation's term, configuration, lifecycle and runtime fences and the destination node, through one exact operation-row CAS on an open operation that changes only the permit column; the native single-pending and configuration-generation rules order it against any delayed predecessor. UNKNOWN keeps the debt; a committed predecessor is recorded; the old permit is never refreshed; issuance is not a proposal, CREATE or lane release.",
       "endpoints": [
         {
           "id": "native-absence-fence-and-conf-change-ordering",
@@ -1871,7 +1904,47 @@
       "witnessTests": [
         "test/integration/message-group-learner-successor-ordering.integration.test.js",
         "test/rebalancer/message-group-membership-branch-authorization.test.js",
-        "test/integration/message-group-learner-discovery.integration.test.js"
+        "test/integration/message-group-learner-discovery.integration.test.js",
+        "test/integration/message-group-learner-promotion.integration.test.js"
+      ]
+    },
+    "message-group-learner-promotion": {
+      "description": "A recorded message-group learner is promoted only over positive evidence: the landed branch selection (the shared recorded-fact predicate, settlement, the exact prior permit, the UNKNOWN obligation of a lane holder with no unresolved attempt, the live holder, boot and the row CAS), the routed leader's queued learner-action read answering COMMITTED with exactly the recorded learner origin, and that leader's exact caught-up acknowledgement under its own applied term (committed answer and status of one leader in one term naming the learner, commit and match exact integers with match >= commit > 0, equal configuration generations; the promotion-progress owner's exact entry, never the raw 0/0-granting predicate). C1's registry-absence vouch is never a promotion prerequisite. The promotion permit is the next sequence bound to that leader's term, configuration, lifecycle and runtime fences; RECORDED is the J1 authorization boundary, not a proposal. The runtime consumer proposes ADD_NODE only through the native turn, which re-proves leadership, configuration, the target's own observation and the leader's exact progress atomically (STALE_LEADERSHIP, STALE_CONFIGURATION, PROMOTION_PROGRESS_BEHIND); the permit is never refreshed. The one recorder records the exact outcome once as the voter stamp (phase, permit, voter stamp only) from the queued action read: the applied configuration naming the target a voter under its transition's learner origin and equal to the learner configuration with exactly the target promoted. A target held as a learner by a fencing newer-term leader is noncommitment for C1's ordered successor; an absent target vouches for nothing. Recording and successor issuance are the workflow owner's explicit entries: discovery does not own promotion debt and no periodic work is added. Debt, lane, ordinary history and later stages stay with their owners.",
+      "endpoints": [
+        {
+          "id": "exact-catch-up-native-promotion-and-action-read",
+          "owners": [
+            "src/raft/learner-promotion-progress.js",
+            "src/raft/learner-catch-up-acknowledgement.js",
+            "src/raft/raft-rs-group-membership-admission.js",
+            "src/raft/raft-rs-membership-transition.js",
+            "src/raft/raft-rs-membership-transition-runtime.js",
+            "src/raft/raft-rs-committed-membership-read.js",
+            "src/raft/raft-rs-committed-membership-context.js"
+          ]
+        },
+        {
+          "id": "durable-promotion-selection-voter-stamp-and-explicit-entries",
+          "owners": [
+            "src/rebalancer/replica-operation-message-group-promotion.js",
+            "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+            "src/rebalancer/replica-operation-message-group-membership-permit.js",
+            "src/rebalancer/replica-operation-message-group-learner-observation.js",
+            "src/rebalancer/replica-operation-message-group-learner-successor.js",
+            "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
+            "src/rebalancer/operation-workflow-message-group-native-read.js",
+            "src/rebalancer/operation-workflow-owner.js"
+          ]
+        }
+      ],
+      "contract": "message-group-learner-promotion",
+      "witnessTests": [
+        "test/integration/message-group-learner-promotion.integration.test.js",
+        "test/integration/message-group-learner-promotion-selection-guards.integration.test.js",
+        "test/integration/message-group-learner-promotion-recording-guards.integration.test.js",
+        "test/message-group/message-group-fresh-learner-promotion.test.js",
+        "test/raft/learner-promotion-progress-proof-contract.test.js",
+        "test/integration/message-group-learner-join.integration.test.js"
       ]
     }
   }

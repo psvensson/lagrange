@@ -1,6 +1,8 @@
 /** Recipient-side operation observation, subordinate to ReplicaOperationRepository.
  * The host supplies sender/recipient bindings; none is taken from a payload.
- * This does not authenticate a transport or authorize physical CREATE.
+ * This does not authenticate a transport or authorize physical CREATE. Each
+ * runtime consumer observes its own stage: the learner action, and since 6.C
+ * slice C2 the promotion (whose row keeps the recorded learner stamp).
  */
 import {readAuthoritativeControlPlaneRows} from
   '../control-plane/control-plane-system-table-gateway.js';
@@ -8,15 +10,14 @@ import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {ReplicaStatus} from './replica-status.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME,
-  RAFT_MEMBERSHIP_AUTHORIZATION_REASON as REASON} from
+  RAFT_MEMBERSHIP_AUTHORIZATION_REASON as REASON, RAFT_MEMBERSHIP_TRANSITION_STAGE as STAGE} from
   '../raft/raft-operation-port-constants.js';
-import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
-  MEMBERSHIP_OBLIGATION, decodeMembershipIdentity, decodeMembershipPermit,
-  decodeMembershipOwnerClaim} from './replica-operation-message-group-membership-permit.js';
+import {MEMBERSHIP_PERMIT_STATE as STATE, MEMBERSHIP_OBLIGATION, decodeMembershipIdentity,
+  decodeMembershipPermit, decodeMembershipOwnerClaim, membershipActionMatches,
+  membershipActionPhases} from './replica-operation-message-group-membership-permit.js';
 import {observeMembershipOperation, membershipRowIdentityMatches,
   MEMBERSHIP_AUTHORIZATION_READ_OPTIONS as READ} from
   './replica-operation-message-group-membership-owner-claim.js';
-import {learnerActionMatches} from './replica-operation-message-group-membership-authorization.js';
 
 const answer = (outcome, reason, fields = {}) => deepFreeze({outcome, reason, ...fields});
 const refuse = (reason) => answer(OUTCOME.REFUSED, reason);
@@ -25,13 +26,13 @@ const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
 const nonempty = (value) => typeof value === 'string' && value.length > 0;
 
 // Decode first, then compare the already-decoded identity and issued action
-// through the recorder's one learner-action predicate: the initial attempt or
-// an ordered successor, still in flight. The row must carry exactly this permit.
-function matchesIssuedLearnerRequest(operationId, identity, permit) {
-  return identity.operationId === operationId && learnerActionMatches(permit, identity) &&
-    permit.permitState === STATE.IN_FLIGHT;
+// through the one action predicate at the consumer's stage: the first attempt
+// or an ordered successor, still in flight. The row must carry exactly this permit.
+function matchesIssuedRequest(operationId, identity, permit, stage) {
+  return identity.operationId === operationId &&
+    membershipActionMatches(permit, identity, stage) && permit.permitState === STATE.IN_FLIGHT;
 }
-function snapshotRequest(request) {
+function snapshotRequest(request, stage) {
   if (!request || typeof request !== 'object') return null;
   const {operationId, identity, permit, executionClaim} = request;
   if (![operationId, identity, permit, executionClaim].every(nonempty)) return null;
@@ -39,7 +40,7 @@ function snapshotRequest(request) {
   const decodedPermit = decodeMembershipPermit(permit);
   const claim = decodeMembershipOwnerClaim(executionClaim);
   if (!decodedIdentity || !decodedPermit || !claim) return null;
-  if (!matchesIssuedLearnerRequest(operationId, decodedIdentity, decodedPermit)) return null;
+  if (!matchesIssuedRequest(operationId, decodedIdentity, decodedPermit, stage)) return null;
   return {operationId, identity, permit, executionClaim, decodedIdentity, decodedPermit, claim};
 }
 function snapshotReceiver(repository, receiver, input) {
@@ -78,14 +79,20 @@ async function boundBootsAreCurrent(repository, receiver) {
     return null;
   }
 }
+// The row carries exactly this issued attempt in its stage's in-flight phase
+// (a promotion row keeps the recorded learner stamp, a learner row has none).
+function rowOwesIssuedAttempt(row, input) {
+  const phases = membershipActionPhases(input.decodedPermit.permitStage);
+  return membershipRowIdentityMatches(row, input.decodedIdentity, input.identity) &&
+    row.messageGroupMembershipOwnerClaim === input.executionClaim &&
+    row.messageGroupMembershipPermit === input.permit &&
+    row.messageGroupMembershipPhase === phases?.inFlight &&
+    row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN &&
+    (row.messageGroupLearnerStamp !== null) === phases.followsLearnerFact &&
+    row.messageGroupVoterStamp === null && row.messageGroupRemovalStamp === null;
+}
 function exactIssuedIntent(repository, row, input) {
-  if (!membershipRowIdentityMatches(row, input.decodedIdentity, input.identity) ||
-    row.messageGroupMembershipOwnerClaim !== input.executionClaim ||
-    row.messageGroupMembershipPermit !== input.permit ||
-    row.messageGroupMembershipPhase !== PHASE.LEARNER_IN_FLIGHT ||
-    row.messageGroupMembershipObligationState !== MEMBERSHIP_OBLIGATION.UNKNOWN ||
-    row.messageGroupLearnerStamp !== null || row.messageGroupVoterStamp !== null ||
-    row.messageGroupRemovalStamp !== null) return false;
+  if (!rowOwesIssuedAttempt(row, input)) return false;
   // Failure after issue retains this exact obligation; success or inconsistent
   // terminal projections are not permission to introduce another learner.
   return repository.isOperationTerminal(row) ?
@@ -101,8 +108,8 @@ function nativeTransition(input) {
     runtimeGeneration: permit.runtimeGeneration, leaderTerm: permit.leaderTerm,
     leaderConfigurationStamp: permit.leaderConfigurationStamp};
 }
-async function observeMessageGroupLearnerAuthorization(repository, request, recipient) {
-  const input = snapshotRequest(request);
+async function observeIssuedMembershipAction(repository, request, recipient, stage) {
+  const input = snapshotRequest(request, stage);
   if (!input) return refuse(REASON.INVALID);
   const receiver = snapshotReceiver(repository, recipient, input);
   if (!receiver) return refuse(REASON.WRONG_RECIPIENT);
@@ -122,4 +129,13 @@ async function observeMessageGroupLearnerAuthorization(repository, request, reci
     input.decodedIdentity, receiver)) return refuse(REASON.STALE_OWNER);
   return answer(OUTCOME.OBSERVED, null, {transition: nativeTransition(input)});
 }
-export {observeMessageGroupLearnerAuthorization};
+/** The issued learner action, observed for its bound runtime recipient. */
+function observeMessageGroupLearnerAuthorization(repository, request, recipient) {
+  return observeIssuedMembershipAction(repository, request, recipient, STAGE.ADD_LEARNER);
+}
+/** The issued promotion (6.C slice C2), observed for its bound runtime
+ * recipient at the destination leader; the native turn decides the rest. */
+function observeMessageGroupPromotionAuthorization(repository, request, recipient) {
+  return observeIssuedMembershipAction(repository, request, recipient, STAGE.PROMOTE);
+}
+export {observeMessageGroupLearnerAuthorization, observeMessageGroupPromotionAuthorization};
