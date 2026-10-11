@@ -127,21 +127,68 @@ function newBranchFactRefusal(row, identity, encodedIdentity, next) {
   const learner = committedStampOfAnswer(JSON.parse(row.messageGroupLearnerStamp));
   return nextPermitFollowsLearner(next, learner) ? null : OUTCOME.INVALID;
 }
-
-async function selectMessageGroupMembershipBranch(repository, request, isInvocationCurrent) {
-  // The only accepted representations here are scalar strings and encoded row values.
-  if (!request || typeof request !== 'object') return result(OUTCOME.INVALID);
+function selectedBranchMatches(observed, prior, identity, encodedIdentity, nextPermit, spec) {
+  return membershipRowIdentityMatches(observed, identity, encodedIdentity) &&
+    observed.messageGroupMembershipPhase === spec.phase &&
+    observed.messageGroupMembershipPermit === nextPermit &&
+    observed.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN &&
+    observed.messageGroupLearnerStamp === prior.messageGroupLearnerStamp &&
+    observed.messageGroupSourceLifecycleClaim === prior.messageGroupSourceLifecycleClaim &&
+    observed.messageGroupMembershipOwnerClaim === prior.messageGroupMembershipOwnerClaim;
+}
+function decodedBranchSelectionRequest(request) {
+  if (!request || typeof request !== 'object') return null;
   const {operationId, identity: encodedIdentity, priorPermit, nextPermit, branch} = request;
   const identity = decodeMembershipIdentity(encodedIdentity);
   const prior = decodeMembershipPermit(priorPermit);
   const next = decodeMembershipPermit(nextPermit);
   const spec = membershipBranchSpec(branch);
-  if (!identity || identity.operationId !== operationId || !prior || !next || !spec ||
-    !permitsMatch(prior, next, identity, spec)) return result(OUTCOME.INVALID);
+  return identity && identity.operationId === operationId && prior && next && spec &&
+    permitsMatch(prior, next, identity, spec) ? {operationId, encodedIdentity,
+      priorPermit, nextPermit, identity, prior, next, spec} : null;
+}
+const observationIsCurrent = (observation, isCurrent) =>
+  observation.available && isCurrent();
+
+async function submitSelectedBranch(repository, input) {
+  const {row, identity, encodedIdentity, operationId, priorPermit, nextPermit,
+    spec, settlement, claim, isCurrent} = input;
+  const submissionIsCurrent = () => isCurrent() &&
+    membershipClaimIsLocalAndLive(repository, claim, identity);
+  const beforeAttempt = async () => submissionIsCurrent() &&
+    await membershipBootIsCurrent(repository);
+  const params = [spec.phase, nextPermit, MEMBERSHIP_OBLIGATION.UNKNOWN,
+    operationId, row.type, row.partitionId, row.entityType, row.entityId,
+    row.sourceReplicaId, row.replicaId, row.sourceNodeId, row.targetNodeId,
+    row.messageGroupMembershipLaneKey, row.messageGroupMembershipIdentity,
+    row.messageGroupSourceLifecycleClaim, row.messageGroupMembershipOwnerClaim, row.status,
+    row.workflowStep, ...settlement.params, PHASE.LEARNER_COMMITTED, priorPermit,
+    MEMBERSHIP_OBLIGATION.UNKNOWN, row.messageGroupLearnerStamp];
+  try {
+    await repository.executeOperationMutationWithRetry(branchSelectionSql(settlement), params,
+      {beforeAttempt, submissionIsCurrent});
+  } catch (error) {
+    noteUncertainMembershipWrite(repository, operationId, error);
+  }
+  const after = await observeMembershipOperation(repository, operationId);
+  if (!after.available || !isCurrent()) return result(OUTCOME.UNKNOWN);
+  const observed = after.row;
+  const recorded = selectedBranchMatches(
+    observed, row, identity, encodedIdentity, nextPermit, spec) &&
+    await membershipBootIsCurrent(repository) && submissionIsCurrent();
+  return result(recorded ? OUTCOME.RECORDED : OUTCOME.UNKNOWN, observed);
+}
+
+async function selectMessageGroupMembershipBranch(repository, request, isInvocationCurrent) {
+  // The only accepted representations here are scalar strings and encoded row values.
+  const input = decodedBranchSelectionRequest(request);
+  if (input === null) return result(OUTCOME.INVALID);
+  const {operationId, encodedIdentity, priorPermit, nextPermit,
+    identity, prior, next, spec} = input;
   const isCurrent = recordingInvocation(repository, isInvocationCurrent);
   if (!isCurrent()) return result(OUTCOME.UNAVAILABLE);
   const before = await observeMembershipOperation(repository, operationId);
-  if (!before.available || !isCurrent()) return result(OUTCOME.UNAVAILABLE);
+  if (!observationIsCurrent(before, isCurrent)) return result(OUTCOME.UNAVAILABLE);
   const row = before.row;
   if (!membershipRowIdentityMatches(row, identity, encodedIdentity)) {
     return result(OUTCOME.CONFLICT, row);
@@ -161,40 +208,10 @@ async function selectMessageGroupMembershipBranch(repository, request, isInvocat
     return result(OUTCOME.STALE_OWNER, row);
   }
   if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE, row);
-  const submissionIsCurrent = () => isCurrent() &&
-    membershipClaimIsLocalAndLive(repository, claim, identity);
-  const beforeAttempt = async () => submissionIsCurrent() &&
-    await membershipBootIsCurrent(repository);
-  const params = [spec.phase, nextPermit, MEMBERSHIP_OBLIGATION.UNKNOWN,
-    operationId, row.type, row.partitionId, row.entityType, row.entityId,
-    row.sourceReplicaId, row.replicaId, row.sourceNodeId, row.targetNodeId,
-    row.messageGroupMembershipLaneKey, row.messageGroupMembershipIdentity,
-    row.messageGroupSourceLifecycleClaim, row.messageGroupMembershipOwnerClaim, row.status,
-    row.workflowStep, ...settlement.params, PHASE.LEARNER_COMMITTED, priorPermit,
-    MEMBERSHIP_OBLIGATION.UNKNOWN, row.messageGroupLearnerStamp];
   // A false or lost answer is not a cancellation. Re-observe the exact row;
   // retrying this same CAS or its competing branch is safe on the same basis.
-  try {
-    await repository.executeOperationMutationWithRetry(branchSelectionSql(settlement), params,
-      {beforeAttempt, submissionIsCurrent});
-  } catch (error) {
-    // The exact authoritative read below resolves an uncertain write result.
-    noteUncertainMembershipWrite(repository, operationId, error);
-  }
-  const after = await observeMembershipOperation(repository, operationId);
-  if (!after.available || !isCurrent()) return result(OUTCOME.UNKNOWN);
-  const observed = after.row;
-  if (membershipRowIdentityMatches(observed, identity, encodedIdentity) &&
-    observed.messageGroupMembershipPhase === spec.phase &&
-    observed.messageGroupMembershipPermit === nextPermit &&
-    observed.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN &&
-    observed.messageGroupLearnerStamp === row.messageGroupLearnerStamp &&
-    observed.messageGroupSourceLifecycleClaim === row.messageGroupSourceLifecycleClaim &&
-    observed.messageGroupMembershipOwnerClaim === row.messageGroupMembershipOwnerClaim &&
-    await membershipBootIsCurrent(repository) && submissionIsCurrent()) {
-    return result(OUTCOME.RECORDED, observed);
-  }
-  return result(OUTCOME.UNKNOWN, observed);
+  return submitSelectedBranch(repository, {row, identity, encodedIdentity, operationId,
+    priorPermit, nextPermit, spec, settlement, claim, isCurrent});
 }
 export {selectMessageGroupMembershipBranch};
 

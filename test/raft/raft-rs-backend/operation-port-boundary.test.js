@@ -153,15 +153,24 @@ test('the partition receives only a frozen operation port and immutable snapshot
     }
   });
 
-test('one private runtime owner is the only production binding importer', () => {
+test('one private binding owner loads native bytes and only the runtime owner imports it', () => {
   const violations = auditRaftRsOperationBoundary({root: ROOT});
-  assert.deepEqual(violations, []);
+  assert.deepEqual(violations.filter((entry) =>
+    ['binding-loader-reexport', 'binding-owner-import-bypass',
+      'direct-binding-import'].includes(entry.code)), []);
   assert.deepEqual(bindingImporters(), [],
     'the former facade loader module is no longer an importable boundary');
+  const bindingOwner = sourceOf(path.join(
+    SRC_RAFT, 'raft-rs-binding-owner.js'));
   const runtimeOwner = sourceOf(path.join(
     SRC_RAFT, 'raft-rs-runtime-owner.js'));
-  assert.match(runtimeOwner, /createRequire/u);
-  assert.match(runtimeOwner, /RAFT_RS_WASM_FILE/u);
+  assert.match(bindingOwner, /createRequire/u);
+  assert.match(bindingOwner, /RAFT_RS_WASM_FILE/u);
+  assert.match(bindingOwner,
+    /export \{instantiateRaftRsCore, verifyRaftRsBinding\}/u);
+  assert.match(runtimeOwner, /from '\.\/raft-rs-binding-owner\.js'/u);
+  assert.doesNotMatch(runtimeOwner, /createRequire/u);
+  assert.deepEqual(violations, []);
   assert.equal(fs.existsSync(path.join(SRC_RAFT, 'raft-rs-core.js')), false);
 });
 
@@ -252,6 +261,20 @@ test('the real ownership audit rejects core, facade and lifecycle mutants',
       'loadRaftRsCore().status(1);\n');
     fs.writeFileSync(path.join(raft,
       'raft-rs-replica-lifecycle-owner.js'), 'export const owner = true;\n');
+    fs.writeFileSync(path.join(raft,
+      'raft-rs-snapshot-staging-lifecycle-operation.js'),
+    'import {RaftRsReplicaLifecycleOwner} from ' +
+      '\'./raft-rs-replica-lifecycle-owner.js\';\n' +
+      'export function stageRaftRsSnapshotLifecycle() {\n' +
+      '  return new RaftRsReplicaLifecycleOwner();\n}\n');
+    fs.writeFileSync(path.join(raft, 'snapshot-install.js'),
+      'import {RaftRsReplicaLifecycleOwner} from ' +
+      '\'./raft-rs-replica-lifecycle-owner.js\';\n' +
+      'export const escaped = RaftRsReplicaLifecycleOwner;\n');
+    fs.writeFileSync(path.join(raft, 'staging-operation-bypass.js'),
+      'import {stageRaftRsSnapshotLifecycle} from ' +
+      '\'./raft-rs-snapshot-staging-lifecycle-operation.js\';\n' +
+      'export const escaped = stageRaftRsSnapshotLifecycle;\n');
     fs.writeFileSync(path.join(raft, 'raft-rs-lifecycle-administration.js'),
       'export function retireReplica() {}\n');
     fs.writeFileSync(path.join(node,
@@ -261,6 +284,12 @@ test('the real ownership audit rejects core, facade and lifecycle mutants',
     fs.writeFileSync(path.join(raft, 'binding-bypass.js'),
       'import {loadRaftRsCore} from \'./raft-rs-core.js\';\n' +
       'export const escaped = loadRaftRsCore();\n');
+    fs.writeFileSync(path.join(raft, 'raft-rs-binding-owner.js'),
+      'export function instantiateRaftRsCore() {}\n' +
+      'export function verifyRaftRsBinding() {}\n');
+    fs.writeFileSync(path.join(raft, 'binding-owner-bypass.js'),
+      'import {instantiateRaftRsCore} from \'./raft-rs-binding-owner.js\';\n' +
+      'export const escaped = instantiateRaftRsCore();\n');
     fs.writeFileSync(path.join(raft, 'facade-bypass.js'),
       'export function invoke(core) {\n' +
       '  const method = \'sta\' + \'tus\';\n' +
@@ -278,10 +307,13 @@ test('the real ownership audit rejects core, facade and lifecycle mutants',
       const codes = new Set(auditRaftRsOperationBoundary({root: fixture})
         .map((entry) => entry.code));
       assert.equal(codes.has('binding-import-outside-owner'), true);
+      assert.equal(codes.has('binding-owner-import-bypass'), true);
       assert.equal(codes.has('core-invocation-outside-owner'), true);
       assert.equal(codes.has('core-alias-invocation-outside-owner'), true);
       assert.equal(codes.has('direct-binding-import'), true);
       assert.equal(codes.has('lifecycle-sql-outside-owner'), true);
+      assert.equal(codes.has('lifecycle-owner-import-bypass'), true);
+      assert.equal(codes.has('snapshot-staging-import-bypass'), true);
     } finally {
       fs.rmSync(fixture, {recursive: true, force: true});
     }
