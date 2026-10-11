@@ -1,4 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {CDC_COVERAGE_QUERY_FIELD} from '../cdc/cdc-coverage-protocol.js';
 
 const {
   MIGRATION_PARTITION_OPERATION,
@@ -65,6 +66,32 @@ function stampMigrationIdentityFields(request, executionOptions) {
   }
 }
 
+const CDC_COVERAGE_STRING_FIELDS = Object.freeze([
+  CDC_COVERAGE_QUERY_FIELD.EXPECTED_SCOPE_ID,
+  CDC_COVERAGE_QUERY_FIELD.MODE,
+  CDC_COVERAGE_QUERY_FIELD.RECONCILE_GENERATION_ID,
+  CDC_COVERAGE_QUERY_FIELD.REQUEST_ID,
+  CDC_COVERAGE_QUERY_FIELD.TARGET_LIFECYCLE_ID,
+  CDC_COVERAGE_QUERY_FIELD.TARGET_NODE_ID,
+  CDC_COVERAGE_QUERY_FIELD.TRANSFER_ID,
+]);
+
+function stampCdcCoverageFields(request, executionOptions) {
+  if (executionOptions[CDC_COVERAGE_QUERY_FIELD.COMPLETE] !== true) return;
+  request[CDC_COVERAGE_QUERY_FIELD.COMPLETE] = true;
+  for (const field of CDC_COVERAGE_STRING_FIELDS) {
+    stampOptionalStringField(request, field, executionOptions[field]);
+  }
+  const pageStart = executionOptions[CDC_COVERAGE_QUERY_FIELD.PAGE_START];
+  if (typeof pageStart === 'string') {
+    request[CDC_COVERAGE_QUERY_FIELD.PAGE_START] = pageStart;
+  }
+  copySafeResultLimit(request, CDC_COVERAGE_QUERY_FIELD.CHUNK_ORDINAL,
+    executionOptions[CDC_COVERAGE_QUERY_FIELD.CHUNK_ORDINAL]);
+  copySafeResultLimit(request, CDC_COVERAGE_QUERY_FIELD.DEADLINE_MS,
+    executionOptions[CDC_COVERAGE_QUERY_FIELD.DEADLINE_MS]);
+}
+
 function createDefaultPartitionRequestBuilder({
   executionOptions,
   params,
@@ -99,6 +126,7 @@ function createDefaultPartitionRequestBuilder({
         executionOptions.expectedPartitionVersion;
     }
     copyQueryResultLimits(request, executionOptions);
+    stampCdcCoverageFields(request, executionOptions);
     return request;
   };
 }
@@ -139,6 +167,30 @@ function resolvePartitionExecutionBuilders({
         acceptingNodeId: response.acceptingNodeId,
         acknowledgedAtMs: response.acknowledgedAtMs,
         readAuthorityWitness: response.readAuthorityWitness,
+        ...(response.state === undefined ? {} : {
+          state: response.state,
+          sourceScope: response.sourceScope,
+          sourcePrefix: response.sourcePrefix,
+          sourceLifecycle: response.sourceLifecycle,
+          logicalCoverage: response.logicalCoverage,
+          observationDigest: response.observationDigest,
+          nextPageStart: response.nextPageStart,
+          transferId: response.transferId,
+          requestId: response.requestId,
+          targetNodeId: response.targetNodeId,
+          targetLifecycleId: response.targetLifecycleId,
+          reconcileGenerationId: response.reconcileGenerationId,
+          deadlineMs: response.deadlineMs,
+          totalBytes: response.totalBytes,
+          chunkBytes: response.chunkBytes,
+          chunkCount: response.chunkCount,
+          chunkOrdinal: response.chunkOrdinal,
+          chunkDigest: response.chunkDigest,
+          dataBase64: response.dataBase64,
+          payloadDigest: response.payloadDigest,
+          rowKey: response.rowKey,
+          domain: response.domain,
+        }),
       });
   return Object.freeze({
     buildRequest,
