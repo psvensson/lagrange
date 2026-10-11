@@ -44,7 +44,9 @@ import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {committedStampOfAnswer} from '../raft/raft-committed-membership-stamp.js';
 import {RAFT_MEMBERSHIP_TRANSITION_STAGE as STAGE} from
   '../raft/raft-operation-port-constants.js';
-import {decodeCommittedLearnerAdmission, encodeCommittedLearnerAdmission} from
+import {INVALID_COMMITTED_PROMOTION_ADMISSION, decodeCommittedLearnerAdmission,
+  decodeCommittedPromotionAdmission, encodeCommittedLearnerAdmission,
+  encodeCommittedPromotionAdmission} from
   '../raft/raft-rs-committed-membership-context.js';
 import {COMMITTED_LEARNER_ACTION_KIND as ACTION_KIND,
   COMMITTED_LEARNER_ACTION_REASON as ACTION_REASON} from
@@ -86,8 +88,9 @@ function recordedStamp(encoded) {
     return null;
   }
 }
-function sameMembers(left, right) {
-  return left.length === right.length && right.every((peer) => left.includes(peer));
+function recordedPromotionFact(encoded) {
+  const fact = decodeCommittedPromotionAdmission(encoded);
+  return fact === INVALID_COMMITTED_PROMOTION_ADMISSION ? null : fact;
 }
 // The row's recorded learner stamp as this transition's learner configuration
 // (the exact learner target and the source a voter; a validated committed
@@ -100,6 +103,30 @@ function learnerConfigurationOf(row, identity) {
   return learner !== null && namesExactLearner(learner, identity) &&
     learner.voters.includes(deriveRaftRsPeerId(identity.sourceReplicaId)) ? learner : null;
 }
+function promotionFactActionMatches(fact, identity, permit) {
+  const action = fact.context;
+  return fact.groupId === identity.groupId && action.operationId === identity.operationId &&
+    action.transitionIdentity === permit.transitionIdentity &&
+    action.permitSequence === permit.permitSequence && action.stage === STAGE.PROMOTE &&
+    action.replicaIdentity === identity.targetReplicaId && action.peerId === identity.targetPeerId;
+}
+function promotionFactFenceMatches(fact, permit) {
+  return fact.before.configurationKey === permit.leaderConfigurationStamp.configurationKey &&
+    Number(fact.before.membershipGenerationIndex) ===
+      permit.leaderConfigurationStamp.membershipGenerationIndex &&
+    Number(fact.term) === permit.leaderTerm && Number(fact.index) >
+      permit.leaderConfigurationStamp.membershipGenerationIndex;
+}
+function promotionFactMembersMatch(fact, identity) {
+  const source = deriveRaftRsPeerId(identity.sourceReplicaId);
+  return fact.after.voters.includes(source) && fact.after.voters.includes(identity.targetPeerId) &&
+    !fact.after.learners.includes(identity.targetPeerId);
+}
+function learnerContainsPromotionOrigin(learner, origin) {
+  return learner.appliedIndex >= Number(origin.index) &&
+    learner.membershipGenerationIndex >= Number(origin.index) &&
+    learner.term >= Number(origin.term);
+}
 // The voter configuration is the recorded learner configuration with exactly
 // the target promoted (the voters are the learner configuration's plus the
 // target, the learners its learners minus the target: the target and the
@@ -107,12 +134,13 @@ function learnerConfigurationOf(row, identity) {
 // configuration held them so and the stamp validator binds identities), and
 // the configuration changed after the promotion was anchored, in a term at or
 // past the attempt's.
-function voterStampFollows(stamp, learner, identity, permit) {
-  const target = identity.targetPeerId;
-  return sameMembers(stamp.voters, [...learner.voters, target]) &&
-    sameMembers(stamp.learners, learner.learners.filter((peer) => peer !== target)) &&
-    stamp.membershipGenerationIndex > permit.leaderConfigurationStamp.membershipGenerationIndex &&
-    stamp.term >= permit.leaderTerm;
+function promotionFactFollows(fact, learner, identity, permit) {
+  const origin = decodeCommittedLearnerAdmission(fact.learnerAdmission);
+  return origin !== null && learnerOriginPrecedes(origin,
+    {groupId: identity.groupId, action: fact.context}) &&
+    promotionFactActionMatches(fact, identity, permit) &&
+    promotionFactFenceMatches(fact, permit) && promotionFactMembersMatch(fact, identity) &&
+    learnerContainsPromotionOrigin(learner, origin);
 }
 // The row's promotion permit of this transition, canonically encoded, on a
 // VOTER_COMMITTED row with no removal stamp, or null. That it is COMMITTED is
@@ -128,16 +156,16 @@ function recordedVoterPermit(row, identity, encodedIdentity) {
 /** The one validity predicate of a recorded voter fact, shared by the voter
  * recorder's exact replay and readback and by the later stages that consume
  * the fact: a committed promotion permit of this transition and a canonical
- * voter stamp that is the recorded learner configuration with exactly the
- * target promoted, at the permit's proposal index. Pure: no claim, lease,
+ * canonical apply-owned promotion fact matching the exact permit, at the
+ * permit's proposal index. Pure: no claim, lease,
  * boot or clock read. */
 function recordedVoterFactIsValid(row, identity, encodedIdentity) {
   const permit = recordedVoterPermit(row, identity, encodedIdentity);
   const learner = permit === null ? null : learnerConfigurationOf(row, identity);
-  const voter = learner === null ? null : recordedStamp(row.messageGroupVoterStamp);
-  return voter !== null && row.messageGroupVoterStamp === JSON.stringify(voter) &&
-    voter.membershipGenerationIndex === permit.proposalIndex &&
-    voterStampFollows(voter, learner, identity, permit);
+  const fact = learner === null ? null : recordedPromotionFact(row.messageGroupVoterStamp);
+  return fact !== null && row.messageGroupVoterStamp ===
+      encodeCommittedPromotionAdmission(fact) && Number(fact.index) === permit.proposalIndex &&
+    promotionFactFollows(fact, learner, identity, permit);
 }
 
 // --- Selection -------------------------------------------------------------
@@ -373,15 +401,18 @@ function voterOutcomeEvidence(observed, input, query, row) {
   const origin = decodedLearnerOrigin(observed.receipt);
   if (origin === null || !learnerOriginPrecedes(origin, query)) return {refusal: OUTCOME.CONFLICT};
   if (learnerWitnessUnavailable(observed.membership)) return {refusal: OUTCOME.UNAVAILABLE};
-  const stamp = committedStampOfAnswer(observed.membership);
+  const fact = recordedPromotionFact(JSON.stringify(observed.promotionFact));
+  const current = committedStampOfAnswer(observed.membership);
   const learner = learnerConfigurationOf(row, input.identity);
-  if (stamp === null || learner === null ||
-    stamp.appliedIndex !== observed.observedAppliedIndex ||
-    !voterStampFollows(stamp, learner, input.identity, input.permit)) {
+  if (fact === null || current === null || learner === null ||
+      current.appliedIndex !== observed.observedAppliedIndex ||
+      Number(fact.index) > observed.observedAppliedIndex || fact.learnerAdmission !==
+      encodeCommittedLearnerAdmission(observed.receipt) ||
+      !promotionFactFollows(fact, learner, input.identity, input.permit)) {
     return {refusal: OUTCOME.CONFLICT};
   }
-  return {committedPermit: committedVoterPermit(input, stamp.membershipGenerationIndex),
-    stamp: JSON.stringify(stamp)};
+  const stamp = encodeCommittedPromotionAdmission(fact);
+  return {committedPermit: committedVoterPermit(input, Number(fact.index)), stamp};
 }
 const VOTER_RECORDING = Object.freeze({
   basisRefusal: voterBasisRefusal,

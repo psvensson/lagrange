@@ -160,6 +160,24 @@
         "transactions"
       ],
       "why": "the opposite endpoint lives in src/workflow, a different subsystem, so this fixture proves cross-subsystem coupling rather than same-subsystem coupling"
+    },
+    {
+      "id": "raft-rs-snapshot-staging-lifecycle-operation",
+      "provenance": "impact-contracts.json coupledPairs 'raft-rs-snapshot-staging-lifecycle'; the approved lifecycle-boundary repair requires the narrow staging seam, private import audit, receiver image restart, and concrete host-wide process-owner witness together",
+      "changed": [
+        "src/raft/raft-rs-snapshot-staging-lifecycle-operation.js"
+      ],
+      "mustIncludeSubsystems": [
+        "storage-raft",
+        "bootstrap-membership"
+      ],
+      "mustIncludeTests": [
+        "test/raft/raft-rs-backend/snapshot-staging-lifecycle-operation.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+        "test/node/replica-lifecycle-durable-generation.test.js"
+      ],
+      "why": "staging lifecycle creation is valid only when its private capability boundary, atomic receiver record, real image transfer, and existing data-directory process exclusion are selected as one proof obligation"
     }
   ]
 }

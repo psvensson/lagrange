@@ -29,6 +29,7 @@ import {readAuthoritativeControlPlaneRows} from
   '../control-plane/control-plane-system-table-gateway.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../raft/raft-operation-port-constants.js';
 import {MEMBERSHIP_PERMIT_STATE as STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, decodeMembershipOwnerClaim,
@@ -38,7 +39,8 @@ import {observeMembershipOperation, membershipRowIdentityMatches,
   membershipClaimIsLocalAndLive, membershipBootIsCurrent, membershipRowWhere,
   MEMBERSHIP_AUTHORIZATION_READ_OPTIONS as READ} from
   './replica-operation-message-group-membership-owner-claim.js';
-import {observeLearnerActionAbsence, noteUncertainMembershipWrite} from
+import {observeLearnerActionAbsence, noteUncertainMembershipWrite,
+  recordingSettlementAllowed} from
   './replica-operation-message-group-membership-authorization.js';
 
 const NODE_BOOT_SQL = 'SELECT node_id, boot_incarnation FROM nodes WHERE node_id = ?';
@@ -64,12 +66,16 @@ function actionAttemptMatches(permit, identity) {
 // the recorded learner stamp, a learner row has none), on an open ordinary
 // operation: an ordinarily settled operation never gets a successor (its
 // obligation keeps its own settlement owner).
-function owesAttempt(repository, row, action) {
+function owesAttempt(repository, row, action, permit) {
+  const settlementAllowsSuccessor = !repository.isOperationTerminal(row) ?
+    row.completedAt === null :
+    permit.permitStage === RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE &&
+      recordingSettlementAllowed(repository, row);
   return row.messageGroupMembershipPhase === action.inFlight &&
     row.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN &&
     (row.messageGroupLearnerStamp !== null) === action.followsLearnerFact &&
     row.messageGroupVoterStamp === null && row.messageGroupRemovalStamp === null &&
-    !repository.isOperationTerminal(row) && row.completedAt === null;
+    settlementAllowsSuccessor;
 }
 // The in-flight attempt the authoritative row owes, decoded, or null.
 function inFlightAttempt(repository, row, operationId) {
@@ -80,7 +86,7 @@ function inFlightAttempt(repository, row, operationId) {
   if (!identity || identity.operationId !== operationId || !action ||
     !membershipRowIdentityMatches(row, identity, row.messageGroupMembershipIdentity) ||
     !actionAttemptMatches(permit, identity) || permit.permitState !== STATE.IN_FLIGHT ||
-    !owesAttempt(repository, row, action)) return null;
+    !owesAttempt(repository, row, action, permit)) return null;
   return Object.freeze({operationId, identity, permit,
     encodedIdentity: row.messageGroupMembershipIdentity,
     encodedPermit: row.messageGroupMembershipPermit});
