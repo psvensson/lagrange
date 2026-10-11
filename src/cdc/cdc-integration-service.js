@@ -12,6 +12,10 @@ import {applyCDCIntegrationServiceMutationOperations} from
   './cdc-integration-service-mutation-operations.js';
 import {applyCDCIntegrationServiceCdcEventDelegates} from
   './cdc-integration-service-cdc-event-delegates.js';
+import {registerCdcCoverageLifecycle} from
+  './cdc-coverage-lifecycle-owner.js';
+import {wakeAllCdcCoverageReconciles} from
+  './cdc-coverage-reconcile-owner.js';
 
 const {
   AUTHORITATIVE_FALLBACK_REPAIR_BUDGET_MS,
@@ -58,6 +62,10 @@ class CDCIntegrationService extends EventEmitter {
       'function' ?
         options.systemTableCache :
         null);
+    this.cdcCoverageTransferCapacityBytes =
+      options.cdcCoverageTransferCapacityBytes;
+    this.cdcCoverageTransferMaxSessions =
+      options.cdcCoverageTransferMaxSessions;
 
     // Bootstrap mode for seed node direct writes
     this.bootstrapMode = false;
@@ -131,6 +139,11 @@ class CDCIntegrationService extends EventEmitter {
     this.isShuttingDown = false;
     // The write-side waits markShuttingDown releases.
     this.shutdownReleases = new Set();
+    // Coverage callbacks are admitted only while this exact service object and
+    // its exact cache targets retain this private lifecycle registration.
+    registerCdcCoverageLifecycle(this);
+    this.cdcCoverageCacheWake = () => wakeAllCdcCoverageReconciles(this);
+    this.systemTableCache?.onCacheChange?.(this.cdcCoverageCacheWake);
   }
 }
 
