@@ -932,6 +932,12 @@ test('SQLQueryEngine - executeManagedSplit dispatches both child metadata writes
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow(tableName, row, options = {}) {
+        // Only partition rows are child metadata writes: the split's
+        // transaction row is now inserted once at BEGIN (TX1 seam B/S),
+        // where it was upserted before.
+        if (tableName !== TABLES.PARTITIONS) {
+          return {success: true};
+        }
         childInsertCalls.push({
           tableName,
           partitionId: row.partition_id,

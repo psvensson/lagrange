@@ -1,0 +1,15 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/query/transaction-begin-uncertain-handoff.test.js test/query/transaction-begin-source-adversarial.test.js test/query/transaction-review-adversarial.test.js test/query/application-database.test.js test/runtime/pgwire-protocol-handler.test.js test/runtime/pgwire-runtime-module.test.js test/runtime/service-lifecycle-pgwire-executor-handoff.test.js
+
+# test-files planned=7
+classified lane ordinary: 7 file(s), jobs=4
+thermal: ok cpu 53C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/runtime/pgwire-protocol-handler.test.js (79 assertions, 423ms)
+ok test/query/transaction-review-adversarial.test.js (14 assertions, 635ms)
+ok test/runtime/service-lifecycle-pgwire-executor-handoff.test.js (3 assertions, 646ms)
+ok test/runtime/pgwire-runtime-module.test.js (43 assertions, 251ms)
+ok test/query/transaction-begin-uncertain-handoff.test.js (99 assertions, 1090ms)
+ok test/query/application-database.test.js (189 assertions, 618ms)
+ok test/query/transaction-begin-source-adversarial.test.js (128 assertions, 660ms)
+# test-files total=7 pass=7 fail=0 assertions=555

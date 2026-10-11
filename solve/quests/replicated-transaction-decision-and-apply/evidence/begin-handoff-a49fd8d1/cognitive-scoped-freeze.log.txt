@@ -1,0 +1,5 @@
+
+> lagrange-server@0.2.6 test:complexity:cognitive:scoped:strict
+> node scripts/check-cognitive-complexity.js --scoped --strict src/query/distributed/distributed-begin-consumer.js src/query/distributed/distributed-transaction-creation-contract.js src/query/distributed/distributed-transaction-creation-resources.js src/query/distributed/distributed-transaction-creation.js src/query/distributed/distributed-transaction-identity.js src/query/sql-query-engine-lifecycle-methods.js src/runtime/pgwire-begin-acceptance.js test/query/transaction-begin-source-adversarial.test.js test/query/transaction-begin-uncertain-handoff.test.js test/query/transaction-review-adversarial.test.js
+
+No cognitive complexity violations (threshold: 20).

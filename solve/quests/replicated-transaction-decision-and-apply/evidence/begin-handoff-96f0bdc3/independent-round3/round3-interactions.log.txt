@@ -1,0 +1,346 @@
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'known-advanced-applied' }
+BEGIN TRANSACTION { sessionId: 'known-advanced-applied' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'known-advanced-applied' }
+BEGIN TRANSACTION { sessionId: 'known-advanced-applied' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+RESULTS_START
+{
+  "root": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+  "results": [
+    {
+      "name": "known-advanced-then-insert-applied-replay",
+      "first": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "26c8d8beb6ede6a4b857d8e367715dbe",
+        "deferRetry": true,
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "before": {
+        "state": "RECOVERY_PENDING",
+        "status": "ACTIVE",
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 979,
+          "recordCount": 1,
+          "roles": {
+            "RECOVERY_PENDING": 1
+          },
+          "totalBytes": 979
+        },
+        "durable": {
+          "transaction_id": "26c8d8beb6ede6a4b857d8e367715dbe",
+          "session_id": "known-advanced-applied",
+          "status": "COMMITTING",
+          "transaction_epoch": 1791748440501,
+          "timeout_deadline": 1791748500502,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"26c8d8beb6ede6a4b857d8e367715dbe:p-known\",\"p-known\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "updated_at": 1791748440503,
+          "decision": "COMMIT",
+          "decision_text": "{\"transactionId\":\"26c8d8beb6ede6a4b857d8e367715dbe\",\"decision\":\"COMMIT\",\"participants\":[[\"26c8d8beb6ede6a4b857d8e367715dbe:p-known\",\"digest-known\"]]}",
+          "decision_digest": "f61ef2b0378d5e10dd9de154e2bf8f7a3ebf8e642073a73610587f6ff44f1988",
+          "created_at": 1791748440503
+        },
+        "reads": 2,
+        "writes": 1
+      },
+      "retry": {
+        "success": true,
+        "operation": "BEGIN_TRANSACTION",
+        "sessionId": "known-advanced-applied",
+        "transactionId": "26c8d8beb6ede6a4b857d8e367715dbe",
+        "transactionEpoch": 1791748440501,
+        "transactionMode": "EXPLICIT",
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "accepted": true,
+      "after": {
+        "state": "ENTERED_ACTIVE",
+        "status": "ACTIVE",
+        "active": {
+          "sessionId": "known-advanced-applied",
+          "transactionId": "26c8d8beb6ede6a4b857d8e367715dbe",
+          "status": "ACTIVE",
+          "transactionEpoch": 1791748440501,
+          "timeoutDeadline": 1791748500502,
+          "transactionMode": "EXPLICIT",
+          "participantSetState": "OPEN",
+          "commitMode": "NOT_SELECTED",
+          "frozenParticipantCount": 0,
+          "participantSetFrozenAt": 0,
+          "decisionTrace": [],
+          "participants": [],
+          "participantDetails": [],
+          "writeOperations": [],
+          "createdAt": 1791748440503,
+          "updatedAt": 1791748440503
+        },
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 0,
+          "recordCount": 0,
+          "roles": {},
+          "totalBytes": 0
+        },
+        "durable": {
+          "transaction_id": "26c8d8beb6ede6a4b857d8e367715dbe",
+          "session_id": "known-advanced-applied",
+          "status": "COMMITTING",
+          "transaction_epoch": 1791748440501,
+          "timeout_deadline": 1791748500502,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"26c8d8beb6ede6a4b857d8e367715dbe:p-known\",\"p-known\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "updated_at": 1791748440503,
+          "decision": "COMMIT",
+          "decision_text": "{\"transactionId\":\"26c8d8beb6ede6a4b857d8e367715dbe\",\"decision\":\"COMMIT\",\"participants\":[[\"26c8d8beb6ede6a4b857d8e367715dbe:p-known\",\"digest-known\"]]}",
+          "decision_digest": "f61ef2b0378d5e10dd9de154e2bf8f7a3ebf8e642073a73610587f6ff44f1988",
+          "created_at": 1791748440503
+        },
+        "reads": 2,
+        "writes": 2
+      },
+      "writeTrace": [
+        {
+          "mutation": {
+            "operation": "insert",
+            "tableName": "sql_transactions",
+            "row": {
+              "transaction_id": "26c8d8beb6ede6a4b857d8e367715dbe",
+              "session_id": "known-advanced-applied",
+              "status": "ACTIVE",
+              "transaction_epoch": 1791748440501,
+              "timeout_deadline": 1791748500502,
+              "transaction_mode": "EXPLICIT",
+              "participant_set_state": "OPEN",
+              "participant_set_text": "[]",
+              "commit_mode": "NOT_SELECTED",
+              "frozen_participant_count": 0,
+              "updated_at": 1791748440503,
+              "decision": null,
+              "decision_text": null,
+              "decision_digest": null,
+              "created_at": 1791748440503
+            }
+          },
+          "idempotencyKey": "7c5d6ec082698c3cf01500773a3fbddc1cd4fa9ccd75fbd2919a3c5e3616f8b4",
+          "answer": {
+            "success": false,
+            "error": "Message timeout"
+          }
+        },
+        {
+          "mutation": {
+            "operation": "insert",
+            "tableName": "sql_transactions",
+            "row": {
+              "transaction_id": "26c8d8beb6ede6a4b857d8e367715dbe",
+              "session_id": "known-advanced-applied",
+              "status": "ACTIVE",
+              "transaction_epoch": 1791748440501,
+              "timeout_deadline": 1791748500502,
+              "transaction_mode": "EXPLICIT",
+              "participant_set_state": "OPEN",
+              "participant_set_text": "[]",
+              "commit_mode": "NOT_SELECTED",
+              "frozen_participant_count": 0,
+              "updated_at": 1791748440503,
+              "decision": null,
+              "decision_text": null,
+              "decision_digest": null,
+              "created_at": 1791748440503
+            }
+          },
+          "idempotencyKey": "7c5d6ec082698c3cf01500773a3fbddc1cd4fa9ccd75fbd2919a3c5e3616f8b4",
+          "answer": {
+            "success": true,
+            "completionState": "applied"
+          }
+        }
+      ]
+    },
+    {
+      "name": "caller-expiry-live-session-retry-both-orderings",
+      "cases": [
+        {
+          "order": "retry-first",
+          "first": {
+            "success": false,
+            "error": "Transaction recovery state is incomplete or incompatible",
+            "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+            "transactionId": "27d2624945d3c0e1a10cbfe8f2151aca",
+            "deferRetry": true
+          },
+          "before": {
+            "state": "SERVER_RECOVERY_ONLY",
+            "consumerRetained": false,
+            "diagnostics": {
+              "attachmentCount": 0,
+              "operationCount": 0,
+              "recordBytes": 906,
+              "recordCount": 1,
+              "roles": {
+                "SERVER_RECOVERY_ONLY": 1
+              },
+              "totalBytes": 906
+            }
+          },
+          "retry": {
+            "success": false,
+            "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+            "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+            "transactionId": "27d2624945d3c0e1a10cbfe8f2151aca",
+            "timeoutDeadline": 1000,
+            "deferRetry": true,
+            "retryable": true
+          },
+          "accepted": false,
+          "after": {
+            "state": "SERVER_RECOVERY_ONLY",
+            "active": null,
+            "diagnostics": {
+              "attachmentCount": 0,
+              "operationCount": 0,
+              "recordBytes": 906,
+              "recordCount": 1,
+              "roles": {
+                "SERVER_RECOVERY_ONLY": 1
+              },
+              "totalBytes": 906
+            }
+          },
+          "writes": 2
+        },
+        {
+          "order": "sweep-first",
+          "first": {
+            "success": false,
+            "error": "Transaction recovery state is incomplete or incompatible",
+            "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+            "transactionId": "38055a88a7195d8b18090d4a3298dc96",
+            "deferRetry": true
+          },
+          "before": {
+            "state": "SERVER_RECOVERY_ONLY",
+            "consumerRetained": false,
+            "diagnostics": {
+              "attachmentCount": 0,
+              "operationCount": 0,
+              "recordBytes": 906,
+              "recordCount": 1,
+              "roles": {
+                "SERVER_RECOVERY_ONLY": 1
+              },
+              "totalBytes": 906
+            }
+          },
+          "retry": {
+            "success": false,
+            "error": "Transaction already active for this session",
+            "errorCode": "TRANSACTION_ACTIVE"
+          },
+          "accepted": false,
+          "sweep": {
+            "swept": 1,
+            "resolved": 0,
+            "failed": 0,
+            "deferred": 1,
+            "deferredUntilMs": 1020,
+            "skipped": false,
+            "results": [
+              {
+                "transactionId": "38055a88a7195d8b18090d4a3298dc96",
+                "sessionId": "caller-sweep-first",
+                "sweepPath": "BEGIN_TRANSACTION",
+                "statusAfter": "ACTIVE",
+                "success": false,
+                "deferred": true,
+                "error": "Transaction recovery state is incomplete or incompatible"
+              }
+            ]
+          },
+          "after": {
+            "state": "ENTERED_ACTIVE",
+            "active": {
+              "sessionId": "caller-sweep-first",
+              "transactionId": "38055a88a7195d8b18090d4a3298dc96",
+              "status": "ACTIVE",
+              "transactionEpoch": 1,
+              "timeoutDeadline": 1000,
+              "transactionMode": "EXPLICIT",
+              "participantSetState": "OPEN",
+              "commitMode": "NOT_SELECTED",
+              "frozenParticipantCount": 0,
+              "participantSetFrozenAt": 0,
+              "decisionTrace": [],
+              "participants": [],
+              "participantDetails": [],
+              "writeOperations": [],
+              "createdAt": 0,
+              "updatedAt": 0
+            },
+            "diagnostics": {
+              "attachmentCount": 0,
+              "operationCount": 0,
+              "recordBytes": 0,
+              "recordCount": 0,
+              "roles": {},
+              "sweep": {
+                "deferredAttempts": 1,
+                "deferredUntilMs": 1020,
+                "oldestDeadlineAtMs": null,
+                "reservedBytes": 0,
+                "retainedCount": 0,
+                "selectedCount": 1,
+                "stopReason": "deferred"
+              },
+              "totalBytes": 0
+            }
+          },
+          "writes": 2
+        }
+      ]
+    },
+    {
+      "name": "sweep-preserves-live-success-claim",
+      "first": {
+        "success": true,
+        "operation": "BEGIN_TRANSACTION",
+        "sessionId": "claimed-live",
+        "transactionId": "0300a30f32d74ae1c2188a448488b8b7",
+        "transactionEpoch": 1,
+        "transactionMode": "EXPLICIT"
+      },
+      "validBefore": true,
+      "validAfter": false,
+      "sweep": {
+        "swept": 1,
+        "resolved": 1,
+        "failed": 0,
+        "deferred": 0,
+        "deferredUntilMs": 0,
+        "skipped": false,
+        "results": [
+          {
+            "transactionId": "0300a30f32d74ae1c2188a448488b8b7",
+            "sessionId": "claimed-live",
+            "sweepPath": "BEGIN_TRANSACTION",
+            "statusAfter": "ACTIVE",
+            "success": true,
+            "error": null
+          }
+        ]
+      },
+      "state": "UNCERTAIN_ANSWERED"
+    }
+  ]
+}

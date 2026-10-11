@@ -15,6 +15,7 @@
 import {LoggingService} from '../logging/logging-service.js';
 import {
   CDC_EVENT_BUFFER_CAPACITY,
+  CDC_EVENT_IDENTITY,
   CDC_EVENT_SLIDING_WINDOW_CAPACITY,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
@@ -35,6 +36,15 @@ const BUFFER_SUBSYSTEM = 'CDCEventBuffer';
  * @return {string} Identity string for deduplication.
  */
 function buildEventIdentity(cdcEvent) {
+  if (Object.hasOwn(cdcEvent, 'eventKey')) {
+    if (typeof cdcEvent.eventKey !== 'string' || cdcEvent.eventKey.length === 0 ||
+        typeof cdcEvent.sourcePartition !== 'string' || cdcEvent.sourcePartition.length === 0) {
+      throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+        {code: CDC_EVENT_IDENTITY.INVALID_CODE});
+    }
+    return JSON.stringify([CDC_EVENT_IDENTITY.DURABLE_TAG,
+      cdcEvent.sourcePartition, cdcEvent.eventKey]);
+  }
   const pkField = getSystemCachePrimaryKeyFieldOrFallback(
     cdcEvent.tableName,
   );
@@ -50,6 +60,9 @@ function buildEventIdentity(cdcEvent) {
  * @return {string|null} Coalescing identity or null.
  */
 function buildInternalCoalescingIdentity(cdcEvent) {
+  if (Object.hasOwn(cdcEvent, 'eventKey')) {
+    return null;
+  }
   if (!isTableInternalCachePropagationEnabled(cdcEvent?.tableName)) {
     return null;
   }
@@ -141,6 +154,7 @@ class CDCEventBuffer {
     this.events = [];
 
     let replayedCount = 0;
+    const retained = [];
     for (let index = 0; index < eventsToReplay.length; index++) {
       const cdcEvent = eventsToReplay[index];
       const identity = buildEventIdentity(cdcEvent);
@@ -149,16 +163,22 @@ class CDCEventBuffer {
       }
       seen.add(identity);
       try {
-        await subscriber(cdcEvent);
+        // Explicit false means accepted provisionally. Retain it while
+        // allowing later metadata to reach the same bounded replay pass.
+        if (await subscriber(cdcEvent) === false) {
+          retained.push(cdcEvent);
+          continue;
+        }
         replayedCount++;
       } catch (error) {
         // Preserve the failed event and any remaining tail for the next replay.
         // This prevents silent CDC loss when a subscriber fails transiently.
         seen.delete(identity);
-        this.events = eventsToReplay.slice(index).concat(this.events);
+        this.events = retained.concat(eventsToReplay.slice(index), this.events);
         throw error;
       }
     }
+    this.events = retained.concat(this.events);
     return replayedCount;
   }
 
