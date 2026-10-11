@@ -13,6 +13,7 @@ import {
 } from './constants/entrypoint.js';
 import {RAFT_RS_BINDING_STATE} from './raft/raft-rs-core-constants.js';
 import {verifyRaftRsBinding} from './raft/raft-rs-operation-port.js';
+import {runtimeBuildProvenance} from './diagnostics/runtime-build-provenance.js';
 
 async function resolveLocalClusterIncarnationFence(options = {}) {
   const startupDecision = await resolveAutoRejoinStartupDecision({
@@ -39,7 +40,8 @@ async function resolveBootSourceProvenance(env = process.env) {
     expectedSrcFingerprint && bootedSrcFingerprint ?
       expectedSrcFingerprint === bootedSrcFingerprint :
       null;
-  return {expectedSrcFingerprint, bootedSrcFingerprint, srcFingerprintMatches};
+  return {expectedSrcFingerprint, bootedSrcFingerprint, srcFingerprintMatches,
+    runtimeBuild: await runtimeBuildProvenance()};
 }
 
 /**

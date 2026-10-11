@@ -19,6 +19,11 @@ import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
 } from './replica-handler-constants.js';
+import {PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_TYPE} from
+  '../partition/partition-participant-transaction-cutover-constants.js';
+import {receiveParticipantRelease} from './replica-handler-participant-release.js';
+import {runParticipantCutover} from './replica-handler-participant-cutover.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CREATE_ADMISSION_RECOVERY_NOT_STARTED = false;
@@ -127,9 +132,18 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
      * @return {Promise<Object>} Response.
      */
     async handleMessage(envelope) {
-      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
       const {payload, correlationId} = envelope;
       const type = payload?.[ReplicaOperationField.TYPE];
+      // Release reads/pause/recovery stay available during bootstrap. The
+      // reopen action still asks retained-storage admission before closing
+      // anything; this does not authorize create/remove/storage shortcuts.
+      if (type === PARTICIPANT_RELEASE_TYPE) {
+        const response = payload.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
+          await runParticipantCutover(this, payload) :
+          await receiveParticipantRelease(this, payload);
+        return {acknowledged: true, [PARTICIPANT_RELEASE_RESULT_FIELD]: response, correlationId};
+      }
+      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.MESSAGE_RECEIVED, {
         type,
         correlationId,

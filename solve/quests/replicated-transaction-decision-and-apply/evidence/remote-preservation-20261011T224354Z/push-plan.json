@@ -1,0 +1,102 @@
+{
+  "utc": "2026-10-11T22:43:54.341053+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T224354Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T224354Z/activation-startup-wip": "14fac7d6ef64881daa7a0d266a272b724dfe640a",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T224354Z/tx1-owner-wip": "4a8a42edc798067c53d815bb29cbff91f978920c",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T224354Z/freshmg-wip": "1fa42783d85a581e9f8000a259b0911ff534314d"
+  },
+  "coverage": {
+    "original-staged": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "7443703c330c4c1088e7fdb768243baec8a692ef"
+    },
+    "candidate": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "99ca733aefa5366fe0fcae6953ec9404b32c92b6"
+    },
+    "recovery-foundation": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "4923e322f24406e0d161a003f1125993752b95fe"
+    },
+    "startup-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "4cc1641aedd3b9303bb80120894887b31fe3fe25"
+    },
+    "activation-startup-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "14fac7d6ef64881daa7a0d266a272b724dfe640a",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T224354Z/activation-startup-wip",
+      "changedSinceRemote": "949b8c63f3923f7a20f72a7329fe86948cbf204d",
+      "changedPaths": [
+        "src/node/participant-release-lifecycle-retirement.js",
+        "src/node/replica-handler-participant-cutover.js",
+        "src/partition/partition-participant-release-local-current.js",
+        "test/partition/participant-release-protocol.test.js",
+        "test/shards/primary-classes.json",
+        "test/shards/resource-classes.json",
+        "test/shards/subsystem-classes.json"
+      ]
+    },
+    "tx1-owner-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "4a8a42edc798067c53d815bb29cbff91f978920c",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T224354Z/tx1-owner-wip",
+      "changedSinceRemote": "39e28fc810577987d2f26726c0dfcb19ce5c26f0",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retirement-reconstruction/eslint.log.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retirement-reconstruction/focused.log.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retirement-reconstruction/impact.log.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retirement-reconstruction/scope.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retirement-reconstruction/shards.log.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retirement-reconstruction/source-manifest.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/cdc-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-evidence-checkpoint-20261011T224151Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "freshmg-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "1fa42783d85a581e9f8000a259b0911ff534314d",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T224354Z/freshmg-wip",
+      "changedSinceRemote": "c503d36682121d1e409d76fc989d730c6cca5a7d",
+      "changedPaths": [
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-release-ordering-correction/focused.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-release-ordering-correction/scope.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-release-ordering-correction/source-manifest.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/completed-oracle-result.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/corrected-source-provenance.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/pgwire-after-retained-authorization-settlement.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retirement-reconstruction/eslint.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retirement-reconstruction/focused.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retirement-reconstruction/impact.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retirement-reconstruction/scope.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retirement-reconstruction/shards.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retirement-reconstruction/source-manifest.json"
+      ]
+    },
+    "query-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "41a054f9fc20969a375afce5a555152dc197518b"
+    },
+    "cdc-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "c8800cd70d315b27034506d5632c6d554fabbb80"
+    },
+    "coordinator-fixtures-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "01b32220853dc266e61e0a79e0acf95889b3b863"
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true
+}

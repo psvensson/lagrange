@@ -1,0 +1,85 @@
+{
+  "reviewSha256": "98b1ac59e078b20f71a7c3f67e88e653c8ef080c46ae4ec6957fe458f0ba9102",
+  "subjectSnapshot": "c8800cd70d315b27034506d5632c6d554fabbb80",
+  "verdict": "REJECT_SOURCE_SLICE_PO1_PO2_PO3_PO4_DIAGNOSTIC",
+  "verifiedEntries": [
+    {
+      "path": "commands-and-results.md",
+      "sha256": "810f59efb4e0ed1ab69670fb7c9b6b1092231ef8c3651239d1434ace219704ba"
+    },
+    {
+      "path": "counterexamples.json",
+      "sha256": "503be373e2d27ca8f465a03a73ae989d0242f469309c9dc182e7499b71bcb916"
+    },
+    {
+      "path": "counterexamples.txt",
+      "sha256": "4cb23b90c635636f37a188f6344f48cde94cc17bfae96c02a0004eff0f4376fd"
+    },
+    {
+      "path": "descriptor-boundaries.json",
+      "sha256": "92239c1cd6a3073e3a1751758b9b6620d31a76ab7ad3b86c94f8fd44a01c67ee"
+    },
+    {
+      "path": "descriptor-boundaries.mjs",
+      "sha256": "bfed5cfefa48671b81869b51876c777043bd0fbc851a144df55a983c4266bdc5"
+    },
+    {
+      "path": "descriptor-boundaries.txt",
+      "sha256": "92239c1cd6a3073e3a1751758b9b6620d31a76ab7ad3b86c94f8fd44a01c67ee"
+    },
+    {
+      "path": "focused-test.txt",
+      "sha256": "a1a809c8bd51ede10c5ba5e4c0c1d47c8f8ebd5e7bce0034d282eff6ec731700"
+    },
+    {
+      "path": "git-object-checks.json",
+      "sha256": "58ee514cd206140aafba4a6f6ebf5cb3fb9b183e4d747a992628c266ef5ed1cd"
+    },
+    {
+      "path": "native-identity-checks.json",
+      "sha256": "57bbb3397b38427ebe5423719f19984281cbe040cd408980802e4611a152a442"
+    },
+    {
+      "path": "native-inputs.txt",
+      "sha256": "30171683ced864665e9f75e285c7dc4ed0aa7fe175d6490e87caf6e97ef596ba"
+    },
+    {
+      "path": "navigation/src/cdc/cdc-coverage-lifecycle-owner.js",
+      "sha256": "39178fb1199b744b60889dee38ec7667e353065c1ede3012dd3f05d149a1336c"
+    },
+    {
+      "path": "navigation/src/cdc/cdc-coverage-reconcile-owner.js",
+      "sha256": "0d844cff666dfcd3e7aa58246b782cad5ccfdd5f321e7b5af8d795fdc949218a"
+    },
+    {
+      "path": "navigation/src/cdc/cdc-coverage-transfer-owner.js",
+      "sha256": "bde0b33492c7843475e39c26885c25ab00f4afb4bd7569aee7c6b702dcddd0d5"
+    },
+    {
+      "path": "navigation/test/cdc/cdc-coverage-lifecycle-owner.test.js",
+      "sha256": "9912fb688f9f27d5272df713e8627a201bbf954078fcf69157f43435790d54b3"
+    },
+    {
+      "path": "navigation/test/shards/impact-contracts.json",
+      "sha256": "a68b9d32d56527bb3d5a5c50ee7f7cb47132dbe803f4833395083c3e95b9ec56"
+    },
+    {
+      "path": "owner-counterexamples.mjs",
+      "sha256": "cddc57673257908ad8a4ed933d85180837986a577820627b865fe1181a7e126d"
+    },
+    {
+      "path": "signature-check.txt",
+      "sha256": "14175ec056e65c44e69a6b44cd7063644e8a7dbdb91cca1f345d1a463b5248de"
+    },
+    {
+      "path": "source-ledger.json",
+      "sha256": "48516b29f5ae47ea99378db502e9e0be852913e1f49e7487add941ce4fe412ec"
+    },
+    {
+      "path": "verify-native-inputs.py",
+      "sha256": "b3c5c66886e47bfa218fe39deafe878afe11d7f79915953f0e3298fee5bcfec3"
+    }
+  ],
+  "archiveSha256": "017a07946ddb3c15c1d42e4eb7375e42bd8a9fb3dea6b30460ff2b75f01faf53",
+  "scope": "Caller2de and approved design remain closed. Exact64testpass plus independent adverse schedules. Native checks narrow; full transport/artifact gates remain open."
+}
