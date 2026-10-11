@@ -6,6 +6,13 @@ import {
 import {ERRORS} from '../constants/errors.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../partition/partition-write-kernel.js';
+import {registerCdcCoverageLifecycle, retireCdcCoverageLifecycle} from
+  './cdc-coverage-lifecycle-owner.js';
+import {retireCdcCoverageTransferOwner} from
+  './cdc-coverage-transfer-owner.js';
+import {captureCdcCoverageReconcileDebts,
+  rearmCdcCoverageReconcileDebts,
+  wakeAllCdcCoverageReconciles} from './cdc-coverage-reconcile-owner.js';
 
 const {
   CDCEventHandler,
@@ -31,12 +38,24 @@ class CDCIntegrationServiceLifecycleMethods {
    * @param {Object} cache - System table cache (read-only wrapper ok).
    */
   setSystemTableCache(cache) {
+    const nextMutationTarget = !this.cacheMutationTarget &&
+      typeof cache?.applySystemTableChange === 'function' ?
+      cache : this.cacheMutationTarget;
+    if (this.systemTableCache === cache &&
+        this.cacheMutationTarget === nextMutationTarget) return;
+    const retainedCoverageDebts = captureCdcCoverageReconcileDebts(this);
+    retireCdcCoverageLifecycle(this);
+    retireCdcCoverageTransferOwner(this);
+    this.systemTableCache?.offCacheChange?.(this.cdcCoverageCacheWake);
+    this.cdcCoverageRouteWakeCleanup?.();
+    this.cdcCoverageRouteWakeCleanup = null;
     this.systemTableCache = cache;
-    if (
-      !this.cacheMutationTarget &&
-      typeof cache?.applySystemTableChange === 'function'
-    ) {
-      this.cacheMutationTarget = cache;
+    this.cacheMutationTarget = nextMutationTarget;
+    if (this.isShuttingDown !== true) {
+      registerCdcCoverageLifecycle(this);
+      this.systemTableCache?.onCacheChange?.(this.cdcCoverageCacheWake);
+      this.refreshCdcCoverageRouteWake?.();
+      rearmCdcCoverageReconcileDebts(this, retainedCoverageDebts);
     }
   }
 
@@ -45,7 +64,20 @@ class CDCIntegrationServiceLifecycleMethods {
    * @param {Object} cache - Writable SystemTableCache instance.
    */
   setCacheMutationTarget(cache) {
+    if (this.cacheMutationTarget === cache) return;
+    const retainedCoverageDebts = captureCdcCoverageReconcileDebts(this);
+    retireCdcCoverageLifecycle(this);
+    retireCdcCoverageTransferOwner(this);
+    this.systemTableCache?.offCacheChange?.(this.cdcCoverageCacheWake);
+    this.cdcCoverageRouteWakeCleanup?.();
+    this.cdcCoverageRouteWakeCleanup = null;
     this.cacheMutationTarget = cache;
+    if (this.isShuttingDown !== true) {
+      registerCdcCoverageLifecycle(this);
+      this.systemTableCache?.onCacheChange?.(this.cdcCoverageCacheWake);
+      this.refreshCdcCoverageRouteWake?.();
+      rearmCdcCoverageReconcileDebts(this, retainedCoverageDebts);
+    }
   }
 
   /**
@@ -56,10 +88,12 @@ class CDCIntegrationServiceLifecycleMethods {
   setPartitionServicesProvider(provider) {
     if (provider instanceof Map) {
       this.partitionServicesProvider = () => provider;
+      wakeAllCdcCoverageReconciles(this);
       return;
     }
     this.partitionServicesProvider =
       typeof provider === 'function' ? provider : null;
+    wakeAllCdcCoverageReconciles(this);
   }
 
   /**
@@ -140,6 +174,7 @@ class CDCIntegrationServiceLifecycleMethods {
    */
   setSqlQueryEngine(sqlQueryEngine) {
     this.sqlQueryEngine = sqlQueryEngine;
+    wakeAllCdcCoverageReconciles(this);
     this.logger.debug(CDC_LOG_MSG.SQL_ENGINE_SET, {
       nodeId: this.nodeId,
     });
@@ -153,6 +188,12 @@ class CDCIntegrationServiceLifecycleMethods {
    * of at its budget. Idempotent.
    */
   markShuttingDown() {
+    // Fence coverage generations before any release callback can run.
+    retireCdcCoverageLifecycle(this);
+    retireCdcCoverageTransferOwner(this);
+    this.systemTableCache?.offCacheChange?.(this.cdcCoverageCacheWake);
+    this.cdcCoverageRouteWakeCleanup?.();
+    this.cdcCoverageRouteWakeCleanup = null;
     this.isShuttingDown = true;
     const releases = [...this.shutdownReleases];
     this.shutdownReleases.clear();

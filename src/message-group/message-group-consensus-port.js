@@ -30,6 +30,8 @@ import {
   MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME,
   MESSAGE_GROUP_SERVICE_ERROR_MSG,
 } from './constants.js';
+import {readCdcCommitWaitGeneration} from
+  './message-group-cdc-commit-owner.js';
 
 /**
  * The typed startup refusal of a replica its consensus port refused: the
@@ -89,6 +91,7 @@ function resolveConsensusPeerAddress(service, replicaIdentity) {
  * @return {Object} Its RAFT_OPERATION_PORT_REQUEST.
  */
 function messageGroupConsensusRequest(service) {
+  const cdcCommitGeneration = readCdcCommitWaitGeneration(service);
   return {
     [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: service.groupId,
     [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: service.replicaId,
@@ -130,7 +133,7 @@ function messageGroupConsensusRequest(service) {
       resolveConsensusPeerAddress(service, replicaIdentity),
     // Runs inside the transaction that also advances the applied state.
     [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
-      service.applyCommittedEntry(committed),
+      service.applyCommittedEntry(committed, {cdcCommitGeneration}),
   };
 }
 

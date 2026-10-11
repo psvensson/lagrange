@@ -55,6 +55,8 @@ import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
   '../shared/hosted-replica-authorities.js';
 
 import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+import {CDC_SOURCE_SCOPE_AUTHORITY, buildCdcSourceScopeEvidence} from
+  '../../partition/partition-cdc-source-coverage.js';
 
 const LOCAL_STR_STRING = 'string';
 const SEED_PARTITION_LEADERSHIP_WAIT = Object.freeze({
@@ -253,6 +255,16 @@ class SeedPartitionsPhase {
         tableName: options.tableName,
         schema: options.schema,
         keyRange: {start: null, end: null},
+        sourceScopeEvidence: buildCdcSourceScopeEvidence({
+          authority: CDC_SOURCE_SCOPE_AUTHORITY.BOOTSTRAP_GENESIS,
+          partitionDescriptor: {partition_id: options.partitionId,
+            table_id: options.tableName, partition_key_start: null,
+            partition_key_end: null, partition_version: 1, state: 'NORMAL'},
+          tableDescriptor: {table_id: options.tableName,
+            table_name: options.tableName, active_partition_version: 1,
+            pending_partition_version: null, partition_transition_state: null,
+            partition_transition_generation: 0},
+        }),
         replicaId: options.replicaId,
         replicaIds: options.replicaIds,
         // Handler retirement goes through the replica lifecycle owner (N2).
