@@ -1,0 +1,871 @@
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-retry-first' }
+BEGIN TRANSACTION { sessionId: 'advanced-retry-first' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-retry-first' }
+BEGIN TRANSACTION { sessionId: 'advanced-retry-first' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-sweep-first' }
+BEGIN TRANSACTION { sessionId: 'advanced-sweep-first' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-sweep-first' }
+BEGIN TRANSACTION { sessionId: 'advanced-sweep-first' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+RESULTS_START
+[
+  {
+    "order": "retry-first",
+    "first": {
+      "success": false,
+      "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+      "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+      "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+      "timeoutDeadline": 1791752102102,
+      "deferRetry": true,
+      "retryable": true,
+      "statementType": "BEGIN_TRANSACTION"
+    },
+    "before": {
+      "sameRecord": true,
+      "recordCount": 1,
+      "recordBytes": 1829,
+      "roles": {
+        "UNCERTAIN_ANSWERED": 1
+      },
+      "creationState": "UNCERTAIN_ANSWERED",
+      "consumerRetained": true,
+      "participantIds": [],
+      "decision": null,
+      "admission": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "timeoutDeadline": 1791752102102,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "durable": {
+        "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "session_id": "advanced-retry-first",
+        "status": "ACTIVE",
+        "transaction_epoch": 1791752042101,
+        "timeout_deadline": 1791752102102,
+        "transaction_mode": "EXPLICIT",
+        "participant_set_state": "OPEN",
+        "participant_set_text": "[]",
+        "commit_mode": "NOT_SELECTED",
+        "frozen_participant_count": 0,
+        "updated_at": 1791752042103,
+        "decision": null,
+        "decision_text": null,
+        "decision_digest": null,
+        "created_at": 1791752042103
+      }
+    },
+    "beforeRetry": {
+      "sameRecord": true,
+      "recordCount": 1,
+      "recordBytes": 1829,
+      "roles": {
+        "UNCERTAIN_ANSWERED": 1
+      },
+      "creationState": "UNCERTAIN_ANSWERED",
+      "consumerRetained": true,
+      "participantIds": [],
+      "decision": null,
+      "admission": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "timeoutDeadline": 1791752102102,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "durable": {
+        "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "session_id": "advanced-retry-first",
+        "status": "COMMITTING",
+        "transaction_epoch": 1791752042101,
+        "timeout_deadline": 1791752102102,
+        "transaction_mode": "EXPLICIT",
+        "participant_set_state": "FROZEN",
+        "participant_set_text": "[[\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x\",\"partition-x\"]]",
+        "commit_mode": "TWO_PHASE_COMMIT",
+        "frozen_participant_count": 1,
+        "updated_at": 1791752042103,
+        "decision": "COMMIT",
+        "decision_text": "{\"transactionId\":\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f\",\"decision\":\"COMMIT\",\"participants\":[[\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x\",\"digest-x\"]]}",
+        "decision_digest": "c5760b751ec50a65df8c428e86964881aeaa96c18fe47143bce801b4a511b469",
+        "created_at": 1791752042103
+      }
+    },
+    "retry": {
+      "success": false,
+      "error": "Transaction recovery state is incomplete or incompatible",
+      "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+      "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+      "deferRetry": true,
+      "statementType": "BEGIN_TRANSACTION"
+    },
+    "afterRetry": {
+      "sameRecord": true,
+      "recordCount": 1,
+      "recordBytes": 1829,
+      "roles": {
+        "RECOVERY_PENDING": 1
+      },
+      "creationState": "RECOVERY_PENDING",
+      "consumerRetained": true,
+      "participantIds": [
+        "partition-x"
+      ],
+      "decision": {
+        "state": "recorded",
+        "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "decision": "COMMIT",
+        "participants": [
+          [
+            "fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x",
+            "digest-x"
+          ]
+        ],
+        "decisionText": "{\"transactionId\":\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f\",\"decision\":\"COMMIT\",\"participants\":[[\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x\",\"digest-x\"]]}",
+        "decisionDigest": "c5760b751ec50a65df8c428e86964881aeaa96c18fe47143bce801b4a511b469"
+      },
+      "admission": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "timeoutDeadline": 1791752102102,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "durable": {
+        "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "session_id": "advanced-retry-first",
+        "status": "COMMITTING",
+        "transaction_epoch": 1791752042101,
+        "timeout_deadline": 1791752102102,
+        "transaction_mode": "EXPLICIT",
+        "participant_set_state": "FROZEN",
+        "participant_set_text": "[[\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x\",\"partition-x\"]]",
+        "commit_mode": "TWO_PHASE_COMMIT",
+        "frozen_participant_count": 1,
+        "updated_at": 1791752042103,
+        "decision": "COMMIT",
+        "decision_text": "{\"transactionId\":\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f\",\"decision\":\"COMMIT\",\"participants\":[[\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x\",\"digest-x\"]]}",
+        "decision_digest": "c5760b751ec50a65df8c428e86964881aeaa96c18fe47143bce801b4a511b469",
+        "created_at": 1791752042103
+      }
+    },
+    "sweep": null,
+    "replay": {
+      "totalRecovered": 1,
+      "resumed": 1,
+      "failed": 0,
+      "results": [
+        {
+          "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+          "sessionId": "advanced-retry-first",
+          "statusBefore": "PREPARING",
+          "statusAfter": "COMMITTED",
+          "replayPath": "COMMIT",
+          "skipped": false,
+          "success": true,
+          "error": null,
+          "decisionReadState": null,
+          "failedParticipants": []
+        }
+      ]
+    },
+    "afterReplay": {
+      "sameRecord": true,
+      "recordCount": 1,
+      "recordBytes": 1829,
+      "roles": {
+        "RECOVERY_PENDING": 1
+      },
+      "creationState": "RECOVERY_PENDING",
+      "consumerRetained": true,
+      "participantIds": [
+        "partition-x"
+      ],
+      "decision": {
+        "state": "recorded",
+        "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "decision": "COMMIT",
+        "participants": [
+          [
+            "fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x",
+            "digest-x"
+          ]
+        ],
+        "decisionText": "{\"transactionId\":\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f\",\"decision\":\"COMMIT\",\"participants\":[[\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x\",\"digest-x\"]]}",
+        "decisionDigest": "c5760b751ec50a65df8c428e86964881aeaa96c18fe47143bce801b4a511b469"
+      },
+      "admission": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "timeoutDeadline": 1791752102102,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "durable": {
+        "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+        "session_id": "advanced-retry-first",
+        "status": "COMMITTED",
+        "transaction_epoch": 1791752042101,
+        "timeout_deadline": 1791752102102,
+        "transaction_mode": "EXPLICIT",
+        "participant_set_state": "FROZEN",
+        "participant_set_text": "[[\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x\",\"partition-x\"]]",
+        "commit_mode": "TWO_PHASE_COMMIT",
+        "frozen_participant_count": 1,
+        "updated_at": 1791752042107,
+        "decision": "COMMIT",
+        "decision_text": "{\"transactionId\":\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f\",\"decision\":\"COMMIT\",\"participants\":[[\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x\",\"digest-x\"]]}",
+        "decision_digest": "c5760b751ec50a65df8c428e86964881aeaa96c18fe47143bce801b4a511b469",
+        "created_at": 1791752042103
+      }
+    },
+    "commitEmissions": [
+      {
+        "session": "advanced-retry-first",
+        "partition": "partition-x",
+        "identity": {
+          "sessionId": "advanced-retry-first",
+          "transactionId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+          "participantId": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x",
+          "commitMode": "TWO_PHASE_COMMIT",
+          "transactionEpoch": 1791752042101,
+          "decision": "COMMIT",
+          "preparedDigest": "digest-x",
+          "decisionText": "{\"transactionId\":\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f\",\"decision\":\"COMMIT\",\"participants\":[[\"fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x\",\"digest-x\"]]}",
+          "decisionDigest": "c5760b751ec50a65df8c428e86964881aeaa96c18fe47143bce801b4a511b469"
+        }
+      }
+    ],
+    "rollbackEmissions": [],
+    "mutations": [
+      {
+        "mutation": {
+          "operation": "insert",
+          "tableName": "sql_transactions",
+          "row": {
+            "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+            "session_id": "advanced-retry-first",
+            "status": "ACTIVE",
+            "transaction_epoch": 1791752042101,
+            "timeout_deadline": 1791752102102,
+            "transaction_mode": "EXPLICIT",
+            "participant_set_state": "OPEN",
+            "participant_set_text": "[]",
+            "commit_mode": "NOT_SELECTED",
+            "frozen_participant_count": 0,
+            "updated_at": 1791752042103,
+            "decision": null,
+            "decision_text": null,
+            "decision_digest": null,
+            "created_at": 1791752042103
+          }
+        },
+        "deadline": 1791752072102
+      },
+      {
+        "mutation": {
+          "operation": "insert",
+          "tableName": "sql_transactions",
+          "row": {
+            "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+            "session_id": "advanced-retry-first",
+            "status": "ACTIVE",
+            "transaction_epoch": 1791752042101,
+            "timeout_deadline": 1791752102102,
+            "transaction_mode": "EXPLICIT",
+            "participant_set_state": "OPEN",
+            "participant_set_text": "[]",
+            "commit_mode": "NOT_SELECTED",
+            "frozen_participant_count": 0,
+            "updated_at": 1791752042103,
+            "decision": null,
+            "decision_text": null,
+            "decision_digest": null,
+            "created_at": 1791752042103
+          }
+        },
+        "deadline": 1791752072105
+      },
+      {
+        "mutation": {
+          "operation": "update",
+          "tableName": "sql_transactions",
+          "whereClause": {
+            "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+          },
+          "data": {
+            "status": "COMMITTING",
+            "updated_at": 1791752042106
+          }
+        },
+        "deadline": null
+      },
+      {
+        "mutation": {
+          "operation": "upsert",
+          "tableName": "sql_transaction_participants",
+          "row": {
+            "participant_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x",
+            "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+            "partition_id": "partition-x",
+            "status": "COMMITTING",
+            "last_error": null,
+            "prepared_digest": null,
+            "prepare_index": null,
+            "prepare_term": null,
+            "created_at": 1791752042103,
+            "updated_at": 1791752042107
+          }
+        },
+        "deadline": null
+      },
+      {
+        "mutation": {
+          "operation": "upsert",
+          "tableName": "sql_transaction_participants",
+          "row": {
+            "participant_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f:partition-x",
+            "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f",
+            "partition_id": "partition-x",
+            "status": "COMMITTED",
+            "last_error": null,
+            "prepared_digest": null,
+            "prepare_index": null,
+            "prepare_term": null,
+            "created_at": 1791752042103,
+            "updated_at": 1791752042107
+          }
+        },
+        "deadline": null
+      },
+      {
+        "mutation": {
+          "operation": "update",
+          "tableName": "sql_transactions",
+          "whereClause": {
+            "transaction_id": "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+          },
+          "data": {
+            "status": "COMMITTED",
+            "updated_at": 1791752042107
+          }
+        },
+        "deadline": null
+      }
+    ],
+    "reads": [
+      {
+        "table": "sql_transactions",
+        "params": [
+          "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+        ],
+        "deadline": 1791752072102
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+        ],
+        "deadline": 1791752072105
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+        ],
+        "deadline": 1791752072105
+      },
+      {
+        "table": "sql_transaction_participants",
+        "params": [
+          "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+        ],
+        "deadline": 1791752072105
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+        ],
+        "deadline": 1791752072105
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+        ],
+        "deadline": null
+      },
+      {
+        "table": "sql_transaction_participants",
+        "params": [
+          "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+        ],
+        "deadline": null
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "fa9dc74a6f7e9d8ac8dbd1fd8098f14f"
+        ],
+        "deadline": null
+      }
+    ]
+  },
+  {
+    "order": "sweep-first",
+    "first": {
+      "success": false,
+      "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+      "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+      "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+      "timeoutDeadline": 1791752102108,
+      "deferRetry": true,
+      "retryable": true,
+      "statementType": "BEGIN_TRANSACTION"
+    },
+    "before": {
+      "sameRecord": true,
+      "recordCount": 1,
+      "recordBytes": 1829,
+      "roles": {
+        "UNCERTAIN_ANSWERED": 1
+      },
+      "creationState": "UNCERTAIN_ANSWERED",
+      "consumerRetained": true,
+      "participantIds": [],
+      "decision": null,
+      "admission": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "timeoutDeadline": 1791752102108,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "durable": {
+        "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "session_id": "advanced-sweep-first",
+        "status": "ACTIVE",
+        "transaction_epoch": 1791752042108,
+        "timeout_deadline": 1791752102108,
+        "transaction_mode": "EXPLICIT",
+        "participant_set_state": "OPEN",
+        "participant_set_text": "[]",
+        "commit_mode": "NOT_SELECTED",
+        "frozen_participant_count": 0,
+        "updated_at": 1791752042108,
+        "decision": null,
+        "decision_text": null,
+        "decision_digest": null,
+        "created_at": 1791752042108
+      }
+    },
+    "beforeRetry": {
+      "sameRecord": true,
+      "recordCount": 1,
+      "recordBytes": 1829,
+      "roles": {
+        "RECOVERY_PENDING": 1
+      },
+      "creationState": "RECOVERY_PENDING",
+      "consumerRetained": true,
+      "participantIds": [
+        "partition-x"
+      ],
+      "decision": {
+        "state": "recorded",
+        "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "decision": "COMMIT",
+        "participants": [
+          [
+            "8af9dc22396e3567b0f5d51a75a04ebe:partition-x",
+            "digest-x"
+          ]
+        ],
+        "decisionText": "{\"transactionId\":\"8af9dc22396e3567b0f5d51a75a04ebe\",\"decision\":\"COMMIT\",\"participants\":[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"digest-x\"]]}",
+        "decisionDigest": "9c2871e4005bea56e89bea1273b70eda5eb989a3867e24b148d98e8fedfa84ac"
+      },
+      "admission": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "timeoutDeadline": 1791752102108,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "durable": {
+        "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "session_id": "advanced-sweep-first",
+        "status": "COMMITTING",
+        "transaction_epoch": 1791752042108,
+        "timeout_deadline": 1791752102108,
+        "transaction_mode": "EXPLICIT",
+        "participant_set_state": "FROZEN",
+        "participant_set_text": "[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"partition-x\"]]",
+        "commit_mode": "TWO_PHASE_COMMIT",
+        "frozen_participant_count": 1,
+        "updated_at": 1791752042108,
+        "decision": "COMMIT",
+        "decision_text": "{\"transactionId\":\"8af9dc22396e3567b0f5d51a75a04ebe\",\"decision\":\"COMMIT\",\"participants\":[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"digest-x\"]]}",
+        "decision_digest": "9c2871e4005bea56e89bea1273b70eda5eb989a3867e24b148d98e8fedfa84ac",
+        "created_at": 1791752042108
+      }
+    },
+    "retry": {
+      "success": false,
+      "error": "Transaction recovery state is incomplete or incompatible",
+      "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+      "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+      "deferRetry": true,
+      "statementType": "BEGIN_TRANSACTION"
+    },
+    "afterRetry": {
+      "sameRecord": true,
+      "recordCount": 1,
+      "recordBytes": 1829,
+      "roles": {
+        "RECOVERY_PENDING": 1
+      },
+      "creationState": "RECOVERY_PENDING",
+      "consumerRetained": true,
+      "participantIds": [
+        "partition-x"
+      ],
+      "decision": {
+        "state": "recorded",
+        "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "decision": "COMMIT",
+        "participants": [
+          [
+            "8af9dc22396e3567b0f5d51a75a04ebe:partition-x",
+            "digest-x"
+          ]
+        ],
+        "decisionText": "{\"transactionId\":\"8af9dc22396e3567b0f5d51a75a04ebe\",\"decision\":\"COMMIT\",\"participants\":[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"digest-x\"]]}",
+        "decisionDigest": "9c2871e4005bea56e89bea1273b70eda5eb989a3867e24b148d98e8fedfa84ac"
+      },
+      "admission": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "timeoutDeadline": 1791752102108,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "durable": {
+        "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "session_id": "advanced-sweep-first",
+        "status": "COMMITTING",
+        "transaction_epoch": 1791752042108,
+        "timeout_deadline": 1791752102108,
+        "transaction_mode": "EXPLICIT",
+        "participant_set_state": "FROZEN",
+        "participant_set_text": "[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"partition-x\"]]",
+        "commit_mode": "TWO_PHASE_COMMIT",
+        "frozen_participant_count": 1,
+        "updated_at": 1791752042108,
+        "decision": "COMMIT",
+        "decision_text": "{\"transactionId\":\"8af9dc22396e3567b0f5d51a75a04ebe\",\"decision\":\"COMMIT\",\"participants\":[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"digest-x\"]]}",
+        "decision_digest": "9c2871e4005bea56e89bea1273b70eda5eb989a3867e24b148d98e8fedfa84ac",
+        "created_at": 1791752042108
+      }
+    },
+    "sweep": {
+      "swept": 1,
+      "resolved": 0,
+      "failed": 0,
+      "deferred": 1,
+      "deferredUntilMs": 1791752043109,
+      "skipped": false,
+      "results": [
+        {
+          "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+          "sessionId": "advanced-sweep-first",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "PREPARING",
+          "success": false,
+          "deferred": true,
+          "error": "Transaction recovery state is incomplete or incompatible"
+        }
+      ]
+    },
+    "replay": {
+      "totalRecovered": 1,
+      "resumed": 1,
+      "failed": 0,
+      "results": [
+        {
+          "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+          "sessionId": "advanced-sweep-first",
+          "statusBefore": "PREPARING",
+          "statusAfter": "COMMITTED",
+          "replayPath": "COMMIT",
+          "skipped": false,
+          "success": true,
+          "error": null,
+          "decisionReadState": null,
+          "failedParticipants": []
+        }
+      ]
+    },
+    "afterReplay": {
+      "sameRecord": true,
+      "recordCount": 1,
+      "recordBytes": 1829,
+      "roles": {
+        "RECOVERY_PENDING": 1
+      },
+      "creationState": "RECOVERY_PENDING",
+      "consumerRetained": true,
+      "participantIds": [
+        "partition-x"
+      ],
+      "decision": {
+        "state": "recorded",
+        "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "decision": "COMMIT",
+        "participants": [
+          [
+            "8af9dc22396e3567b0f5d51a75a04ebe:partition-x",
+            "digest-x"
+          ]
+        ],
+        "decisionText": "{\"transactionId\":\"8af9dc22396e3567b0f5d51a75a04ebe\",\"decision\":\"COMMIT\",\"participants\":[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"digest-x\"]]}",
+        "decisionDigest": "9c2871e4005bea56e89bea1273b70eda5eb989a3867e24b148d98e8fedfa84ac"
+      },
+      "admission": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "timeoutDeadline": 1791752102108,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "durable": {
+        "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe",
+        "session_id": "advanced-sweep-first",
+        "status": "COMMITTED",
+        "transaction_epoch": 1791752042108,
+        "timeout_deadline": 1791752102108,
+        "transaction_mode": "EXPLICIT",
+        "participant_set_state": "FROZEN",
+        "participant_set_text": "[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"partition-x\"]]",
+        "commit_mode": "TWO_PHASE_COMMIT",
+        "frozen_participant_count": 1,
+        "updated_at": 1791752042110,
+        "decision": "COMMIT",
+        "decision_text": "{\"transactionId\":\"8af9dc22396e3567b0f5d51a75a04ebe\",\"decision\":\"COMMIT\",\"participants\":[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"digest-x\"]]}",
+        "decision_digest": "9c2871e4005bea56e89bea1273b70eda5eb989a3867e24b148d98e8fedfa84ac",
+        "created_at": 1791752042108
+      }
+    },
+    "commitEmissions": [
+      {
+        "session": "advanced-sweep-first",
+        "partition": "partition-x",
+        "identity": {
+          "sessionId": "advanced-sweep-first",
+          "transactionId": "8af9dc22396e3567b0f5d51a75a04ebe",
+          "participantId": "8af9dc22396e3567b0f5d51a75a04ebe:partition-x",
+          "commitMode": "TWO_PHASE_COMMIT",
+          "transactionEpoch": 1791752042108,
+          "decision": "COMMIT",
+          "preparedDigest": "digest-x",
+          "decisionText": "{\"transactionId\":\"8af9dc22396e3567b0f5d51a75a04ebe\",\"decision\":\"COMMIT\",\"participants\":[[\"8af9dc22396e3567b0f5d51a75a04ebe:partition-x\",\"digest-x\"]]}",
+          "decisionDigest": "9c2871e4005bea56e89bea1273b70eda5eb989a3867e24b148d98e8fedfa84ac"
+        }
+      }
+    ],
+    "rollbackEmissions": [],
+    "mutations": [
+      {
+        "mutation": {
+          "operation": "insert",
+          "tableName": "sql_transactions",
+          "row": {
+            "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe",
+            "session_id": "advanced-sweep-first",
+            "status": "ACTIVE",
+            "transaction_epoch": 1791752042108,
+            "timeout_deadline": 1791752102108,
+            "transaction_mode": "EXPLICIT",
+            "participant_set_state": "OPEN",
+            "participant_set_text": "[]",
+            "commit_mode": "NOT_SELECTED",
+            "frozen_participant_count": 0,
+            "updated_at": 1791752042108,
+            "decision": null,
+            "decision_text": null,
+            "decision_digest": null,
+            "created_at": 1791752042108
+          }
+        },
+        "deadline": 1791752072108
+      },
+      {
+        "mutation": {
+          "operation": "insert",
+          "tableName": "sql_transactions",
+          "row": {
+            "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe",
+            "session_id": "advanced-sweep-first",
+            "status": "ACTIVE",
+            "transaction_epoch": 1791752042108,
+            "timeout_deadline": 1791752102108,
+            "transaction_mode": "EXPLICIT",
+            "participant_set_state": "OPEN",
+            "participant_set_text": "[]",
+            "commit_mode": "NOT_SELECTED",
+            "frozen_participant_count": 0,
+            "updated_at": 1791752042108,
+            "decision": null,
+            "decision_text": null,
+            "decision_digest": null,
+            "created_at": 1791752042108
+          }
+        },
+        "deadline": 1791752072108
+      },
+      {
+        "mutation": {
+          "operation": "update",
+          "tableName": "sql_transactions",
+          "whereClause": {
+            "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe"
+          },
+          "data": {
+            "status": "COMMITTING",
+            "updated_at": 1791752042110
+          }
+        },
+        "deadline": null
+      },
+      {
+        "mutation": {
+          "operation": "upsert",
+          "tableName": "sql_transaction_participants",
+          "row": {
+            "participant_id": "8af9dc22396e3567b0f5d51a75a04ebe:partition-x",
+            "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe",
+            "partition_id": "partition-x",
+            "status": "COMMITTING",
+            "last_error": null,
+            "prepared_digest": null,
+            "prepare_index": null,
+            "prepare_term": null,
+            "created_at": 1791752042108,
+            "updated_at": 1791752042110
+          }
+        },
+        "deadline": null
+      },
+      {
+        "mutation": {
+          "operation": "upsert",
+          "tableName": "sql_transaction_participants",
+          "row": {
+            "participant_id": "8af9dc22396e3567b0f5d51a75a04ebe:partition-x",
+            "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe",
+            "partition_id": "partition-x",
+            "status": "COMMITTED",
+            "last_error": null,
+            "prepared_digest": null,
+            "prepare_index": null,
+            "prepare_term": null,
+            "created_at": 1791752042108,
+            "updated_at": 1791752042110
+          }
+        },
+        "deadline": null
+      },
+      {
+        "mutation": {
+          "operation": "update",
+          "tableName": "sql_transactions",
+          "whereClause": {
+            "transaction_id": "8af9dc22396e3567b0f5d51a75a04ebe"
+          },
+          "data": {
+            "status": "COMMITTED",
+            "updated_at": 1791752042110
+          }
+        },
+        "deadline": null
+      }
+    ],
+    "reads": [
+      {
+        "table": "sql_transactions",
+        "params": [
+          "8af9dc22396e3567b0f5d51a75a04ebe"
+        ],
+        "deadline": 1791752072108
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "8af9dc22396e3567b0f5d51a75a04ebe"
+        ],
+        "deadline": 1791752072108
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "8af9dc22396e3567b0f5d51a75a04ebe"
+        ],
+        "deadline": 1791752072108
+      },
+      {
+        "table": "sql_transaction_participants",
+        "params": [
+          "8af9dc22396e3567b0f5d51a75a04ebe"
+        ],
+        "deadline": 1791752072108
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "8af9dc22396e3567b0f5d51a75a04ebe"
+        ],
+        "deadline": 1791752072108
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "8af9dc22396e3567b0f5d51a75a04ebe"
+        ],
+        "deadline": null
+      },
+      {
+        "table": "sql_transaction_participants",
+        "params": [
+          "8af9dc22396e3567b0f5d51a75a04ebe"
+        ],
+        "deadline": null
+      },
+      {
+        "table": "sql_transactions",
+        "params": [
+          "8af9dc22396e3567b0f5d51a75a04ebe"
+        ],
+        "deadline": null
+      }
+    ]
+  }
+]

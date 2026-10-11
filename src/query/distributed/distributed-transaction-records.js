@@ -1,4 +1,8 @@
 import {createHash} from 'node:crypto';
+import {
+  mintTransactionId,
+  participantIdOf,
+} from './distributed-transaction-identity.js';
 
 const LOCAL_STR_SHA1 = 'sha1';
 const LOCAL_STR_HEX = 'hex';
@@ -67,18 +71,17 @@ const distributedTransactionRecordMethods = {
   },
 
   /**
-   * Build transaction ID: unique per coordinator even when one session
-   * begins twice within one clock tick (the coordinator's sequence), since
-   * expected-transaction admission and the ended-transaction record key on
-   * it.
-   * @param {string} sessionId - Session ID.
+   * Mint a transaction identity: 128 random bits, with no node, boot
+   * incarnation, sequence, session or clock component (TX1 design 2.1, seam
+   * B/S). Its uniqueness is the insert-once row's primary key, which BEGIN
+   * writes before any participant work.
+   * @param {string} _sessionId - Session ID (routing context only).
    * @return {string} Transaction ID.
    * @private
    */
 
-  createTransactionId(sessionId) {
-    this.transactionIdSequence += 1;
-    return `tx-${sessionId}-${this.now()}-${this.transactionIdSequence}`;
+  createTransactionId(_sessionId) {
+    return mintTransactionId();
   },
 };
 
@@ -99,7 +102,7 @@ const {
  */
 
 function createParticipantId(transactionId, partitionId) {
-  return `${transactionId}:${partitionId}`;
+  return participantIdOf(transactionId, partitionId);
 }
 
 /**

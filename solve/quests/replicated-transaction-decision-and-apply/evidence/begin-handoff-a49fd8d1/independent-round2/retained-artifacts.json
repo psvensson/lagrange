@@ -1,0 +1,127 @@
+{
+  "source": "a49fd8d1e686d9cd9dc9196478102a0e417df822",
+  "verdict": "REJECT",
+  "reviewSha256": "715e4532bae306ab70619737715173b117556d652e90865737f5c59fc2b1bcf5",
+  "files": [
+    {
+      "original": "advanced-orderings.json",
+      "retained": "advanced-orderings.json",
+      "bytes": 24437,
+      "sha256": "83f608fbb0322af3c094be077b4640e51d2fd2ff476ac7c1d81c60f328541cc0"
+    },
+    {
+      "original": "advanced-orderings.log",
+      "retained": "advanced-orderings.log.txt",
+      "bytes": 25177,
+      "sha256": "0b0a1e1e301254e50afaf8ea8eef9cab94561c3e856a29cb0b14f05e91137310"
+    },
+    {
+      "original": "advanced-orderings.mjs",
+      "retained": "advanced-orderings.mjs.txt",
+      "bytes": 3915,
+      "sha256": "378596bf6f1003f2ce3127fd66c3a67be1fa1723facf57c5240c1d6ca731d49e"
+    },
+    {
+      "original": "canonical-focused.log",
+      "retained": "canonical-focused.log.txt",
+      "bytes": 541,
+      "sha256": "f2bcd5b6261df074e66afd36c7f4b3710beb5eb55aee41b44d9c1241fb691033"
+    },
+    {
+      "original": "diagnostics.sha256",
+      "retained": "diagnostics.sha256",
+      "bytes": 1722,
+      "sha256": "184e11c63be67333e62a00e00a4c7ee894ab8b15a104e5cd9c30c2e99b8303f0"
+    },
+    {
+      "original": "evaluate-witnesses.py",
+      "retained": "evaluate-witnesses.py.txt",
+      "bytes": 3446,
+      "sha256": "4f83c28d15fe9d104bef474d73197895199fa61001d16ece0f690a69f4381784"
+    },
+    {
+      "original": "extract-results.py",
+      "retained": "extract-results.py.txt",
+      "bytes": 557,
+      "sha256": "4f0f631176acfb5ed2e70645496c02bef5d469cc13b2851b3cb74a02ceb890e1"
+    },
+    {
+      "original": "original-adversary-new.json",
+      "retained": "original-adversary-new.json",
+      "bytes": 2633,
+      "sha256": "5c8f6191ade2af3a956492d27de6dfc3af6f914aebcecf8e8032ef35b53b7db8"
+    },
+    {
+      "original": "original-adversary-new.log",
+      "retained": "original-adversary-new.log.txt",
+      "bytes": 4523,
+      "sha256": "d3e51bec123fceb4b589b13781459c7b91e5e01317552e9ca5fb1387fbcea444"
+    },
+    {
+      "original": "original-adversary-new.mjs",
+      "retained": "original-adversary-new.mjs.txt",
+      "bytes": 8970,
+      "sha256": "264101c8f02b3e2619475de8b35c6061cd9b2c9870e6e6caa0f2cca9ce53c5dc"
+    },
+    {
+      "original": "original-adversary-old.json",
+      "retained": "original-adversary-old.json",
+      "bytes": 2993,
+      "sha256": "9e6e678f3fc1975df287b394cde87aebfc21103c47cdfd3d3f4a5281f6a677b4"
+    },
+    {
+      "original": "original-adversary-old.log",
+      "retained": "original-adversary-old.log.txt",
+      "bytes": 4883,
+      "sha256": "d9ec265c3a6f3afe3af1cd24158c4b3b5b3ca78672de6e53716b2531aadae171"
+    },
+    {
+      "original": "original-adversary-old.mjs",
+      "retained": "original-adversary-old.mjs.txt",
+      "bytes": 9246,
+      "sha256": "efbc5c411f4e7f7a8912e23c2b491e9d8f92cb778ad88edf3a87f92d9b5ba92a"
+    },
+    {
+      "original": "packet-log-verification.json",
+      "retained": "packet-log-verification.json",
+      "bytes": 5202,
+      "sha256": "e6c1966aae0cfd2acd53399a964d6c00f024ca091c11a78a46801865a4b54cf5"
+    },
+    {
+      "original": "semantic-probes-final.json",
+      "retained": "semantic-probes-final.json",
+      "bytes": 13850,
+      "sha256": "7c48f7d7e7d1bb711362eebf0792215ec064841141243a2c5f3368f2017adb1e"
+    },
+    {
+      "original": "semantic-probes-final.log",
+      "retained": "semantic-probes-final.log.txt",
+      "bytes": 14620,
+      "sha256": "167748984a36ecd8e9396e5a65dee64db4760ff9a58334204420190b90097861"
+    },
+    {
+      "original": "semantic-probes.json",
+      "retained": "semantic-probes.json",
+      "bytes": 8643,
+      "sha256": "7159945000aefe7ef9ecb2db6d8e5c618b823cc9d83d1fc41200584e898d3543"
+    },
+    {
+      "original": "semantic-probes.mjs",
+      "retained": "semantic-probes.mjs.txt",
+      "bytes": 10930,
+      "sha256": "f57721fb740439695895c002c90513c0d5bad93f2c33d5ae2feb693bab129881"
+    },
+    {
+      "original": "source-verification.json",
+      "retained": "source-verification.json",
+      "bytes": 7155,
+      "sha256": "687660df4feed48b34ff41e8d735277156497c80e3d158c23f043c6df62e534f"
+    },
+    {
+      "original": "witness-assertions.log",
+      "retained": "witness-assertions.log.txt",
+      "bytes": 1533,
+      "sha256": "5753e57822925ed4f8ffef5de6952b54bdc914aa53d0c159dc995f737fe3b5d7"
+    }
+  ]
+}

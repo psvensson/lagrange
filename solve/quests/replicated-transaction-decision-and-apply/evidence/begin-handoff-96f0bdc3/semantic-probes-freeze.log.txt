@@ -1,0 +1,452 @@
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-held' }
+BEGIN TRANSACTION { sessionId: 'advanced-held' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-held' }
+BEGIN TRANSACTION { sessionId: 'advanced-held' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-live' }
+BEGIN TRANSACTION { sessionId: 'advanced-live' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-live' }
+BEGIN TRANSACTION { sessionId: 'advanced-live' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+SEMANTIC_RESULTS_START
+{
+  "root": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+  "results": [
+    {
+      "name": "advanced-unavailable-then-readable",
+      "first": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "0cf08fd480c1aa2827ba8c3a0627afa6",
+        "deferRetry": true,
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "retry": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "0cf08fd480c1aa2827ba8c3a0627afa6",
+        "deferRetry": true,
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "readsBeforeAvailability": 2,
+      "readsAfterAvailability": 4,
+      "writes": 2,
+      "state": "RECOVERY_PENDING",
+      "diagnostics": {
+        "attachmentCount": 0,
+        "operationCount": 0,
+        "recordBytes": 916,
+        "recordCount": 1,
+        "roles": {
+          "RECOVERY_PENDING": 1
+        },
+        "sweep": {
+          "deferredAttempts": 1,
+          "deferredUntilMs": 1791747695155,
+          "oldestDeadlineAtMs": 1791747754152,
+          "reservedBytes": 916,
+          "retainedCount": 1,
+          "selectedCount": 1,
+          "stopReason": "deferred"
+        },
+        "totalBytes": 916
+      },
+      "sweeps": [
+        {
+          "swept": 1,
+          "resolved": 0,
+          "failed": 0,
+          "deferred": 1,
+          "deferredUntilMs": 1791747695155,
+          "skipped": false,
+          "results": [
+            {
+              "transactionId": "0cf08fd480c1aa2827ba8c3a0627afa6",
+              "sessionId": "advanced-held",
+              "sweepPath": "BEGIN_TRANSACTION",
+              "statusAfter": "ACTIVE",
+              "success": false,
+              "deferred": true,
+              "error": "Transaction recovery state is incomplete or incompatible"
+            }
+          ]
+        },
+        {
+          "swept": 0,
+          "resolved": 0,
+          "failed": 0,
+          "deferred": 1,
+          "results": [],
+          "skipped": false,
+          "deferredUntilMs": 1791747695155
+        }
+      ]
+    },
+    {
+      "name": "advanced-live-consumer-and-manifest-handoff",
+      "first": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "bfb257cbcf142f8d3fa414dd1c5c3bd9",
+        "deferRetry": true,
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "before": {
+        "creationState": "RECOVERY_PENDING",
+        "consumerRetained": true,
+        "participantIds": [
+          "partition-x"
+        ],
+        "decision": {
+          "state": "recorded",
+          "transactionId": "bfb257cbcf142f8d3fa414dd1c5c3bd9",
+          "decision": "COMMIT",
+          "participants": [
+            [
+              "bfb257cbcf142f8d3fa414dd1c5c3bd9:partition-x",
+              "digest-x"
+            ]
+          ],
+          "decisionText": "{\"transactionId\":\"bfb257cbcf142f8d3fa414dd1c5c3bd9\",\"decision\":\"COMMIT\",\"participants\":[[\"bfb257cbcf142f8d3fa414dd1c5c3bd9:partition-x\",\"digest-x\"]]}",
+          "decisionDigest": "0f99fe42be03cd498bc0288339dd54fcdd4fdd0f2595137a7522305c7f349a08"
+        },
+        "admission": {
+          "success": false,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+          "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+          "transactionId": "bfb257cbcf142f8d3fa414dd1c5c3bd9",
+          "timeoutDeadline": 1791747754156,
+          "deferRetry": true,
+          "retryable": true
+        },
+        "recordCount": 1
+      },
+      "retry": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "bfb257cbcf142f8d3fa414dd1c5c3bd9",
+        "deferRetry": true,
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "replay": {
+        "totalRecovered": 1,
+        "resumed": 1,
+        "failed": 0,
+        "results": [
+          {
+            "transactionId": "bfb257cbcf142f8d3fa414dd1c5c3bd9",
+            "sessionId": "advanced-live",
+            "statusBefore": "PREPARING",
+            "statusAfter": "COMMITTED",
+            "replayPath": "COMMIT",
+            "skipped": false,
+            "success": true,
+            "error": null,
+            "decisionReadState": null,
+            "failedParticipants": []
+          }
+        ]
+      },
+      "commits": [
+        {
+          "session": "advanced-live",
+          "partition": "partition-x",
+          "identity": {
+            "sessionId": "advanced-live",
+            "transactionId": "bfb257cbcf142f8d3fa414dd1c5c3bd9",
+            "participantId": "bfb257cbcf142f8d3fa414dd1c5c3bd9:partition-x",
+            "commitMode": "TWO_PHASE_COMMIT",
+            "transactionEpoch": 1791747694157,
+            "decision": "COMMIT",
+            "preparedDigest": "digest-x",
+            "decisionText": "{\"transactionId\":\"bfb257cbcf142f8d3fa414dd1c5c3bd9\",\"decision\":\"COMMIT\",\"participants\":[[\"bfb257cbcf142f8d3fa414dd1c5c3bd9:partition-x\",\"digest-x\"]]}",
+            "decisionDigest": "0f99fe42be03cd498bc0288339dd54fcdd4fdd0f2595137a7522305c7f349a08"
+          }
+        }
+      ],
+      "reads": 7,
+      "writes": 5,
+      "after": null
+    },
+    {
+      "name": "exact-envelope-charge",
+      "first": {
+        "success": false,
+        "error": "Distributed transaction creation capacity is temporarily exhausted",
+        "errorCode": "TRANSACTION_CREATION_PRESSURE"
+      },
+      "writes": 0,
+      "configured": 65000,
+      "diagnostics": {
+        "attachmentCount": 0,
+        "operationCount": 0,
+        "recordBytes": 0,
+        "recordCount": 0,
+        "roles": {},
+        "totalBytes": 0
+      }
+    },
+    {
+      "name": "utf8-retained-representation-accounting",
+      "first": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "c1bd7998ea1e73a80323ddc20a565f09",
+        "timeoutDeadline": 1791747754159,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "observed": {
+        "distinctRepresentations": true,
+        "lowerBound": 140598,
+        "charged": 140828
+      },
+      "diagnostics": {
+        "attachmentCount": 0,
+        "operationCount": 0,
+        "recordBytes": 140828,
+        "recordCount": 1,
+        "roles": {
+          "SERVER_RECOVERY_ONLY": 1
+        },
+        "totalBytes": 140828
+      }
+    },
+    {
+      "name": "typed-uncertainty-sweep-backoff",
+      "first": {
+        "swept": 1,
+        "resolved": 0,
+        "failed": 0,
+        "deferred": 1,
+        "deferredUntilMs": 1791747695160,
+        "skipped": false,
+        "results": [
+          {
+            "transactionId": "a2bfe0f83bb0559fe1893a31c18e0c68",
+            "sessionId": "retry-defer",
+            "sweepPath": "BEGIN_TRANSACTION",
+            "statusAfter": "ACTIVE",
+            "success": false,
+            "deferred": true,
+            "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+          }
+        ]
+      },
+      "second": {
+        "swept": 0,
+        "resolved": 0,
+        "failed": 0,
+        "deferred": 1,
+        "results": [],
+        "skipped": false,
+        "deferredUntilMs": 1791747695160
+      },
+      "writes": 2,
+      "diagnostic": {
+        "deferredAttempts": 1,
+        "deferredUntilMs": 1791747695160,
+        "oldestDeadlineAtMs": 1791747754160,
+        "reservedBytes": 902,
+        "retainedCount": 1,
+        "selectedCount": 1,
+        "stopReason": "deferred"
+      }
+    },
+    {
+      "name": "engine-accessor-configuration",
+      "getterCalls": 0,
+      "accepted": false
+    },
+    {
+      "name": "control-deadline-completion-before-timer",
+      "now": 20,
+      "first": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "e5470ec4ef5e6037cccd0a963119d6dd",
+        "deferRetry": true
+      },
+      "canAccept": false,
+      "accepted": false,
+      "active": null
+    },
+    {
+      "name": "real-clock-delayed-timer",
+      "elapsed": 26,
+      "first": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "bdbdb96925891edcd1694926c1689a6a",
+        "deferRetry": true
+      },
+      "accepted": false
+    },
+    {
+      "name": "shutdown-with-inflight-census-and-late-insert",
+      "beforeLate": {
+        "sameObject": false,
+        "exists": false,
+        "state": null,
+        "shutdown": true
+      },
+      "first": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN"
+      },
+      "swept": {
+        "swept": 0,
+        "resolved": 0,
+        "failed": 0,
+        "deferred": 0,
+        "results": [],
+        "skipped": true,
+        "deferredUntilMs": 0
+      },
+      "afterLate": {
+        "sameRestoredObject": true,
+        "state": null
+      },
+      "diagnostics": {
+        "attachmentCount": 0,
+        "operationCount": 0,
+        "recordBytes": 0,
+        "recordCount": 0,
+        "roles": {},
+        "totalBytes": 0
+      }
+    },
+    {
+      "name": "exact-byte-pool-cannot-reenter",
+      "cap": 1047,
+      "first": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "2153276d6e121c05800b0e6123f67054",
+        "timeoutDeadline": 61000,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "retry": {
+        "success": true,
+        "operation": "BEGIN_TRANSACTION",
+        "sessionId": "full-byte-pool",
+        "transactionId": "2153276d6e121c05800b0e6123f67054",
+        "transactionEpoch": 1001,
+        "transactionMode": "EXPLICIT"
+      },
+      "sweep": {
+        "swept": 0,
+        "resolved": 0,
+        "failed": 0,
+        "deferred": 0,
+        "deferredUntilMs": 0,
+        "skipped": false,
+        "results": []
+      },
+      "writes": 2,
+      "diagnostics": {
+        "attachmentCount": 0,
+        "operationCount": 0,
+        "recordBytes": 0,
+        "recordCount": 0,
+        "roles": {},
+        "sweep": {
+          "deferredAttempts": 0,
+          "deferredUntilMs": 0,
+          "oldestDeadlineAtMs": null,
+          "reservedBytes": 0,
+          "retainedCount": 0,
+          "selectedCount": 0,
+          "stopReason": "turn_complete"
+        },
+        "totalBytes": 0
+      }
+    },
+    {
+      "name": "expired-cohort-turn-cap",
+      "swept": 16,
+      "resultCount": 16,
+      "configuredTurnCap": 16,
+      "writesAfterTurn": 33,
+      "diagnostic": {
+        "deferredAttempts": 1,
+        "deferredUntilMs": 1100,
+        "oldestDeadlineAtMs": 10,
+        "reservedBytes": 15187,
+        "retainedCount": 17,
+        "selectedCount": 16,
+        "stopReason": "deferred"
+      }
+    },
+    {
+      "name": "expired-success-claim-never-hands-off",
+      "first": {
+        "success": true,
+        "operation": "BEGIN_TRANSACTION",
+        "sessionId": "expired-claim",
+        "transactionId": "c3bc08c7ae9f0ef0f543608347f4ea67",
+        "transactionEpoch": 1,
+        "transactionMode": "EXPLICIT"
+      },
+      "canAccept": false,
+      "sweep": {
+        "swept": 1,
+        "resolved": 0,
+        "failed": 0,
+        "deferred": 1,
+        "deferredUntilMs": 1100,
+        "skipped": false,
+        "results": [
+          {
+            "transactionId": "c3bc08c7ae9f0ef0f543608347f4ea67",
+            "sessionId": "expired-claim",
+            "sweepPath": "BEGIN_TRANSACTION",
+            "statusAfter": "ACTIVE",
+            "success": false,
+            "deferred": true,
+            "error": "Transaction recovery state is incomplete or incompatible"
+          }
+        ]
+      },
+      "retry": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "c3bc08c7ae9f0ef0f543608347f4ea67",
+        "deferRetry": true
+      },
+      "writes": 3,
+      "handoffs": 2,
+      "state": "RECOVERY_PENDING",
+      "diagnostics": {
+        "attachmentCount": 0,
+        "operationCount": 0,
+        "recordBytes": 869,
+        "recordCount": 1,
+        "roles": {
+          "RECOVERY_PENDING": 1
+        },
+        "sweep": {
+          "deferredAttempts": 1,
+          "deferredUntilMs": 1100,
+          "oldestDeadlineAtMs": 10,
+          "reservedBytes": 869,
+          "retainedCount": 1,
+          "selectedCount": 1,
+          "stopReason": "deferred"
+        },
+        "totalBytes": 869
+      }
+    }
+  ]
+}

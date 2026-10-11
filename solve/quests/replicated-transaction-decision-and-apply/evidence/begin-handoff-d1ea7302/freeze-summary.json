@@ -1,0 +1,41 @@
+{
+  "status": "FROZEN_FOR_AUTHOR_DISTINCT_REVIEW",
+  "baseHead": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "previousRejectedSnapshot": "96f0bdc34bd4702e4e365ff329c77aa997648ff0",
+  "acceptedDesignSha256": "3679b87f4aeb84fd8d9397aac9f73f686e5fcb990c1e61e86df35e9731f91fa5",
+  "round3ReviewSha256": "8f40f0b6559acd31db23790b8b7b753013366442e452085b05d2988d2130c8b8",
+  "sourcePathCount": 40,
+  "round3ToRound4ChangedPathCount": 6,
+  "sourceManifestSha256": "0ebfe26ac040a33e3d4c6766d579adfb77b86a9735561b120b1533209facf808",
+  "round3ToRound4DeltaSha256": "35c8fd8e2ae0b298a2521ffba4d5da7469ba377c41f9f3aceecda29a32ffae2c",
+  "proof": {
+    "cumulative": "7 files, 570 runner assertions, PASS",
+    "round3IndependentMatrix": "30/30 assertions PASS",
+    "canonicalB3Witnesses": "registered in two existing classified test files",
+    "resourceEnvelope": {
+      "completeModeledLowerBoundBytes": 141039,
+      "chargedRecordBytes": 141044
+    },
+    "eslint": "PASS on six changed round paths",
+    "diffCheck": "PASS",
+    "impactContracts": "PASS 64 contracts / 35 coupled pairs",
+    "shards": "PASS 2355 classified tests",
+    "changedCyclomatic": "PASS for creation/resources/persistence; recovery has unchanged inherited violations",
+    "changedCognitive": "PASS for four production paths",
+    "touchedSourceMaxLines": 799
+  },
+  "b3Dispositions": {
+    "B3-1": "complete same-creation advanced observation is monotonic; retry rereads current recovery authority and never replays initial INSERT",
+    "B3-2": "spent caller turn retains exact live consumer entitlement; retry-first and sweep-first consume the same ID under a fresh turn",
+    "B3-3": "consumer-null sweep defers without revoking a live unexpired SUCCESS_CLAIMED token; real pgwire emits CommandComplete and ReadyForQuery T",
+    "B3-4": "record charge covers 25 numeric, 3 boolean, 20 reference persistence fields plus 40 bytes prepaid claim fields and retained strings/buffer"
+  },
+  "knownGates": {
+    "globalCyclomatic": "RED 1780 > 1755, unchanged count from prior packet",
+    "globalFileSize": "RED source 29 > 27; test 21/21",
+    "globalCognitive": "PASS 151/152, baseline can tighten",
+    "normalStartup": "not claimed; activation correction remains separate",
+    "durabilityScope": "component gateway/listener only; no replicated cluster claim",
+    "sourceApproval": "independent source review required"
+  }
+}

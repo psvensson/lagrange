@@ -1,0 +1,2877 @@
+diff --git a/src/query/distributed/distributed-transaction-creation-resources.js b/src/query/distributed/distributed-transaction-creation-resources.js
+deleted file mode 100644
+index a4305aad3..000000000
+--- a/src/query/distributed/distributed-transaction-creation-resources.js
++++ /dev/null
+@@ -1,439 +0,0 @@
+-import {types} from 'node:util';
+-import {
+-  COMMIT_MODE,
+-  PARTICIPANT_SET_STATE,
+-} from '../../constants/index.js';
+-import {TRANSACTION_STATUS} from
+-  './distributed-transaction-coordinator-constants.js';
+-import {TRANSACTION_CREATION_STATE} from
+-  './distributed-transaction-creation-contract.js';
+-import {DISTRIBUTED_BEGIN_CONSUMER_KIND} from './distributed-begin-consumer.js';
+-
+-const DEFAULT_MAX_PENDING_CREATIONS = 100;
+-const DEFAULT_MAX_CREATION_BYTES = 1048576;
+-const DEFAULT_MAX_CREATION_SWEEP = 16;
+-const DELIVERY_KEY_BYTES = 64;
+-const CANONICAL_TRANSACTION_ID_BYTES = 32;
+-const CANONICAL_NUMBER_BYTES = 8;
+-const CANONICAL_REFERENCE_BYTES = 8;
+-const OPERATION_NUMBER_FIELD_COUNT = 7;
+-const OPERATION_REFERENCE_FIELD_COUNT = 3;
+-const RECORD_SCALAR_FIELD_COUNT = 30;
+-const RECORD_REFERENCE_FIELD_COUNT = 23;
+-const isProxy = types.isProxy.bind(types);
+-
+-function checkedAdd(left, right) {
+-  const total = left + right;
+-  if (!Number.isSafeInteger(left) || left < 0 ||
+-      !Number.isSafeInteger(right) || right < 0 ||
+-      !Number.isSafeInteger(total) || total < left) {
+-    throw new RangeError('Distributed transaction creation accounting overflow');
+-  }
+-  return total;
+-}
+-
+-function checkedSubtract(left, right) {
+-  if (!Number.isSafeInteger(left) || !Number.isSafeInteger(right) ||
+-      right < 0 || left < right) {
+-    throw new RangeError('Distributed transaction creation accounting underflow');
+-  }
+-  return left - right;
+-}
+-
+-function checkedMultiply(value, multiplier) {
+-  if (!Number.isSafeInteger(value) || value < 0 ||
+-      !Number.isSafeInteger(multiplier) || multiplier < 0) {
+-    throw new RangeError('Distributed transaction creation accounting overflow');
+-  }
+-  let total = 0;
+-  for (let index = 0; index < multiplier; index += 1) {
+-    total = checkedAdd(total, value);
+-  }
+-  return total;
+-}
+-
+-function stringBytes(value) {
+-  return Buffer.byteLength(value, 'utf8');
+-}
+-
+-function sumStringReferences(entries) {
+-  let total = 0;
+-  for (const [value, copies] of entries) {
+-    total = checkedAdd(total, checkedMultiply(stringBytes(value), copies));
+-  }
+-  return total;
+-}
+-
+-function longestStringValue(values) {
+-  return values.reduce((longest, value) =>
+-    stringBytes(value) > stringBytes(longest) ? value : longest, '');
+-}
+-
+-const MAX_CREATION_STATE = longestStringValue(
+-  Object.values(TRANSACTION_CREATION_STATE));
+-const MAX_CONSUMER_KIND = longestStringValue(
+-  Object.values(DISTRIBUTED_BEGIN_CONSUMER_KIND));
+-
+-function ownDataValue(source, key) {
+-  if (!source || typeof source !== 'object' || isProxy(source)) {
+-    throw new TypeError('Invalid distributed transaction creation options');
+-  }
+-  const descriptor = Object.getOwnPropertyDescriptor(source, key);
+-  if (!descriptor) return undefined;
+-  if (!Object.hasOwn(descriptor, 'value')) {
+-    throw new TypeError('Invalid distributed transaction creation options');
+-  }
+-  return descriptor.value;
+-}
+-
+-function positiveSafeInteger(value, fallback) {
+-  if (value === undefined) return fallback;
+-  if (!Number.isSafeInteger(value) || value <= 0 || Object.is(value, -0)) {
+-    throw new TypeError('Invalid distributed transaction creation resource limit');
+-  }
+-  return value;
+-}
+-
+-function configuredLimit(options, key, fallback) {
+-  return positiveSafeInteger(ownDataValue(options, key), fallback);
+-}
+-
+-function captureCreationResourceOptions(options) {
+-  return Object.freeze({
+-    maxUncertainTransactionCreations:
+-      ownDataValue(options, 'maxUncertainTransactionCreations'),
+-    maxUncertainTransactionCreationCanonicalBytes:
+-      ownDataValue(options, 'maxUncertainTransactionCreationCanonicalBytes'),
+-    maxUncertainCreationSweepPerTurn:
+-      ownDataValue(options, 'maxUncertainCreationSweepPerTurn'),
+-  });
+-}
+-
+-function totalPendingBytes(owner) {
+-  return checkedAdd(owner.pendingTransactionCreationOperationBytes,
+-    owner.pendingTransactionCreationRecordBytes);
+-}
+-
+-function assertResourceInvariants(owner) {
+-  const counters = [
+-    owner.pendingTransactionCreationOperationCount,
+-    owner.pendingTransactionCreationOperationBytes,
+-    owner.pendingTransactionCreationAttachmentCount,
+-    owner.pendingTransactionCreationRecordCount,
+-    owner.pendingTransactionCreationRecordBytes,
+-  ];
+-  if (counters.some((value) => !Number.isSafeInteger(value) || value < 0) ||
+-      owner.pendingTransactionCreationAttachmentCount >
+-        owner.pendingTransactionCreationOperationCount ||
+-      totalPendingBytes(owner) > owner.maxPendingTransactionCreationBytes) {
+-    throw new Error('Distributed transaction creation resource invariant failed');
+-  }
+-}
+-
+-function initializeCreationResources(owner, options) {
+-  owner.maxPendingTransactionCreationRecords = configuredLimit(options,
+-    'maxUncertainTransactionCreations', DEFAULT_MAX_PENDING_CREATIONS);
+-  owner.maxPendingTransactionCreationBytes = configuredLimit(options,
+-    'maxUncertainTransactionCreationCanonicalBytes',
+-    DEFAULT_MAX_CREATION_BYTES);
+-  owner.maxUncertainCreationSweepPerTurn = configuredLimit(options,
+-    'maxUncertainCreationSweepPerTurn', DEFAULT_MAX_CREATION_SWEEP);
+-  owner.transactionCreationTurnBudgetMs = configuredLimit(options,
+-    'transactionCreationTurnBudgetMs', owner.transactionBudgetMs);
+-  owner.pendingTransactionCreationOperationCount = 0;
+-  owner.pendingTransactionCreationOperationBytes = 0;
+-  owner.pendingTransactionCreationAttachmentCount = 0;
+-  owner.pendingTransactionCreationRecordCount = 0;
+-  owner.pendingTransactionCreationRecordBytes = 0;
+-  owner.transactionCreationInvocationSequence = 0;
+-  owner.transactionCreationAttachmentsBySession = new Map();
+-  owner.transactionCreationShutdown = false;
+-  owner.transactionCreationGeneration = 1;
+-  owner.transactionCreationSweepCursor = null;
+-  owner.transactionCreationLastSweepDiagnostic = null;
+-  assertResourceInvariants(owner);
+-}
+-
+-function operationByteCharge(sessionId, transactionMode) {
+-  const scalarBytes = checkedAdd(
+-    checkedMultiply(CANONICAL_NUMBER_BYTES, OPERATION_NUMBER_FIELD_COUNT),
+-    checkedMultiply(CANONICAL_REFERENCE_BYTES, OPERATION_REFERENCE_FIELD_COUNT));
+-  const retainedStrings = sumStringReferences([
+-    [sessionId, 2],
+-    [transactionMode, 1],
+-    [MAX_CONSUMER_KIND, 1],
+-  ]);
+-  return checkedAdd(scalarBytes,
+-    checkedAdd(CANONICAL_TRANSACTION_ID_BYTES, retainedStrings));
+-}
+-
+-function creationOperationHasCapacity(owner, attachCaller, bytes) {
+-  return !owner.transactionCreationShutdown &&
+-    owner.pendingTransactionCreationOperationCount <
+-      owner.maxPendingTransactionCreationRecords &&
+-    (!attachCaller || owner.pendingTransactionCreationAttachmentCount <
+-      owner.maxPendingTransactionCreationRecords) &&
+-    checkedAdd(totalPendingBytes(owner), bytes) <=
+-      owner.maxPendingTransactionCreationBytes;
+-}
+-
+-function createCallerAttachment(consumer, attachCaller) {
+-  if (!attachCaller) return null;
+-  return {
+-    boundRecord: null,
+-    consumer,
+-    ownsRecordConsumer: false,
+-    released: false,
+-    transferred: false,
+-  };
+-}
+-
+-function installCallerAttachment(owner, token, fields) {
+-  const attachment = token.attachment;
+-  if (!attachment) return;
+-  owner.pendingTransactionCreationAttachmentCount = checkedAdd(
+-    owner.pendingTransactionCreationAttachmentCount, 1);
+-  let attachments = owner.transactionCreationAttachmentsBySession.get(
+-    fields.sessionId);
+-  if (!attachments) {
+-    attachments = new Set();
+-    owner.transactionCreationAttachmentsBySession.set(fields.sessionId,
+-      attachments);
+-  }
+-  attachments.add(attachment);
+-  const waitMs = fields.turnDeadlineAtMs - fields.turnStartedAtMs;
+-  attachment.deadlineTimer = setTimeout(() => {
+-    const record = currentAttachmentRecord(attachment);
+-    if (record?.transactionCreationConsumer === attachment.consumer) {
+-      attachment.transferred = true;
+-    }
+-    releaseCreationAttachment(owner, attachment);
+-  }, waitMs);
+-  attachment.deadlineTimer.unref?.();
+-}
+-
+-function reserveCreationOperation(owner, fields) {
+-  const attachCaller = fields.attachCaller !== false;
+-  const bytes = operationByteCharge(fields.sessionId,
+-    fields.transactionMode);
+-  if (!creationOperationHasCapacity(owner, attachCaller, bytes)) return null;
+-  const invocationId = checkedAdd(owner.transactionCreationInvocationSequence, 1);
+-  const attachment = createCallerAttachment(fields.consumer, attachCaller);
+-  const token = {
+-    attachment,
+-    callerAttached: attachCaller,
+-    bytes,
+-    consumerKind: fields.consumer?.kind ?? null,
+-    expectedTransactionId: fields.expectedTransactionId,
+-    generation: owner.transactionCreationGeneration,
+-    invocationId,
+-    operationReleased: false,
+-    originalDeadlineAtMs: fields.originalDeadlineAtMs,
+-    sessionId: fields.sessionId,
+-    turnStartedAtMs: fields.turnStartedAtMs,
+-    transactionMode: fields.transactionMode,
+-    turnDeadlineAtMs: fields.turnDeadlineAtMs,
+-  };
+-  if (attachment) attachment.operation = token;
+-  owner.transactionCreationInvocationSequence = invocationId;
+-  owner.pendingTransactionCreationOperationCount = checkedAdd(
+-    owner.pendingTransactionCreationOperationCount, 1);
+-  owner.pendingTransactionCreationOperationBytes = checkedAdd(
+-    owner.pendingTransactionCreationOperationBytes, bytes);
+-  installCallerAttachment(owner, token, fields);
+-  assertResourceInvariants(owner);
+-  return token;
+-}
+-
+-function currentAttachmentRecord(attachment) {
+-  return attachment.boundRecord?.transactionCreationReservation?.tx ||
+-    attachment.boundRecord;
+-}
+-
+-function releaseAttachmentConsumer(attachment) {
+-  const boundRecord = currentAttachmentRecord(attachment);
+-  if (!attachment.transferred && attachment.ownsRecordConsumer &&
+-      boundRecord?.transactionCreationConsumer === attachment.consumer) {
+-    boundRecord.transactionCreationConsumer = null;
+-    if (boundRecord.transactionCreationState &&
+-        boundRecord.transactionCreationState !==
+-          TRANSACTION_CREATION_STATE.ENTERED_ACTIVE) {
+-      boundRecord.transactionCreationState =
+-        TRANSACTION_CREATION_STATE.SERVER_RECOVERY_ONLY;
+-    }
+-  }
+-}
+-
+-function removeAttachmentFromOwner(owner, token, attachment) {
+-  owner.pendingTransactionCreationAttachmentCount = checkedSubtract(
+-    owner.pendingTransactionCreationAttachmentCount, 1);
+-  const attachments = owner.transactionCreationAttachmentsBySession.get(
+-    token?.sessionId);
+-  attachments?.delete(attachment);
+-  if (attachments?.size === 0) {
+-    owner.transactionCreationAttachmentsBySession.delete(token.sessionId);
+-  }
+-}
+-
+-function releaseCreationAttachment(owner, attachment) {
+-  if (!attachment || attachment.released) return;
+-  attachment.released = true;
+-  const token = attachment.operation;
+-  releaseAttachmentConsumer(attachment);
+-  if (attachment.deadlineTimer) clearTimeout(attachment.deadlineTimer);
+-  attachment.deadlineTimer = null;
+-  attachment.boundRecord = null;
+-  attachment.consumer = null;
+-  attachment.operation = null;
+-  removeAttachmentFromOwner(owner, token, attachment);
+-  assertResourceInvariants(owner);
+-}
+-
+-function bindCreationAttachmentToRecord(owner, token, record) {
+-  const attachment = token?.attachment;
+-  if (!attachment || attachment.released || !record) return false;
+-  if (record.transactionCreationConsumer === null) {
+-    record.transactionCreationConsumer = attachment.consumer;
+-    attachment.ownsRecordConsumer = true;
+-  } else if (record.transactionCreationConsumer !== attachment.consumer) {
+-    return false;
+-  }
+-  attachment.boundRecord = record;
+-  assertResourceInvariants(owner);
+-  return true;
+-}
+-
+-function transferCreationAttachmentToRecord(owner, token, record) {
+-  const attachment = token?.attachment;
+-  const boundRecord = attachment ? currentAttachmentRecord(attachment) : null;
+-  if (!attachment || attachment.released ||
+-      boundRecord !== record ||
+-      record.transactionCreationConsumer !== attachment.consumer) return false;
+-  attachment.transferred = true;
+-  releaseCreationAttachment(owner, attachment);
+-  return true;
+-}
+-
+-function releaseCreationOperation(owner, token) {
+-  if (!token || token.operationReleased) return;
+-  releaseCreationAttachment(owner, token.attachment);
+-  token.operationReleased = true;
+-  owner.pendingTransactionCreationOperationCount = checkedSubtract(
+-    owner.pendingTransactionCreationOperationCount, 1);
+-  owner.pendingTransactionCreationOperationBytes = checkedSubtract(
+-    owner.pendingTransactionCreationOperationBytes, token.bytes);
+-  token.attachment = null;
+-  token.expectedTransactionId = null;
+-  token.sessionId = null;
+-  token.bytes = 0;
+-  assertResourceInvariants(owner);
+-}
+-
+-function detachCreationAttachments(owner, sessionId) {
+-  const attachments = owner.transactionCreationAttachmentsBySession.get(sessionId);
+-  if (!attachments) return;
+-  for (const attachment of [...attachments]) {
+-    releaseCreationAttachment(owner, attachment);
+-  }
+-}
+-
+-function recordEnvelopeByteCharge(measuredRowBytes, transactionId, sessionId,
+-  transactionMode) {
+-  // The envelope covers the largest simultaneously retained representation:
+-  // the encoded row Buffer, its frozen row, the caller's workflow candidate,
+-  // DWC's normalized authoritative record (or update candidate), and the
+-  // prepaid consumer/acceptance disposition. Spreads share JS string values,
+-  // but each retained property reference is charged as a full canonical copy
+-  // so admission never depends on VM interning or object-layout behavior.
+-  // The scalar census covers the persistence representation's 25 numbers,
+-  // three boolean state fields, and the claim token's two numbers. Its 20
+-  // references plus the claim's two references and record token root are
+-  // prepaid together; timeout-budget and reservation roots are included.
+-  const retainedStrings = sumStringReferences([
+-    [transactionId, 6],
+-    [sessionId, 6],
+-    [TRANSACTION_STATUS.ACTIVE, 3],
+-    [transactionMode, 3],
+-    [PARTICIPANT_SET_STATE.OPEN, 3],
+-    ['[]', 3],
+-    [COMMIT_MODE.NOT_SELECTED, 3],
+-    [MAX_CREATION_STATE, 2],
+-    [MAX_CONSUMER_KIND, 1],
+-    ['DIRECT_FIRST_RESULT', 1],
+-  ]);
+-  const scalarBytes = checkedAdd(
+-    checkedMultiply(CANONICAL_NUMBER_BYTES, RECORD_SCALAR_FIELD_COUNT),
+-    checkedMultiply(CANONICAL_REFERENCE_BYTES, RECORD_REFERENCE_FIELD_COUNT));
+-  return checkedAdd(measuredRowBytes, checkedAdd(DELIVERY_KEY_BYTES,
+-    checkedAdd(retainedStrings, scalarBytes)));
+-}
+-
+-function reserveCreationRecordEnvelope(owner, measuredRowBytes, transactionId,
+-  sessionId, transactionMode) {
+-  const bytes = recordEnvelopeByteCharge(measuredRowBytes, transactionId,
+-    sessionId, transactionMode);
+-  const nextBytes = checkedAdd(totalPendingBytes(owner), bytes);
+-  if (owner.transactionCreationShutdown ||
+-      owner.pendingTransactionCreationRecordCount >=
+-        owner.maxPendingTransactionCreationRecords ||
+-      nextBytes > owner.maxPendingTransactionCreationBytes) return null;
+-  const reservation = {bytes, released: false, tx: null};
+-  owner.pendingTransactionCreationRecordCount = checkedAdd(
+-    owner.pendingTransactionCreationRecordCount, 1);
+-  owner.pendingTransactionCreationRecordBytes = checkedAdd(
+-    owner.pendingTransactionCreationRecordBytes, bytes);
+-  assertResourceInvariants(owner);
+-  return reservation;
+-}
+-
+-function bindCreationRecordEnvelope(reservation, tx) {
+-  if (!reservation || reservation.released || reservation.tx !== null) {
+-    throw new Error('Invalid distributed transaction creation reservation');
+-  }
+-  reservation.tx = tx;
+-  tx.transactionCreationReservation = reservation;
+-}
+-
+-function cancelCreationRecordEnvelope(owner, reservation) {
+-  if (!reservation || reservation.released || reservation.tx !== null) return false;
+-  reservation.released = true;
+-  owner.pendingTransactionCreationRecordCount = checkedSubtract(
+-    owner.pendingTransactionCreationRecordCount, 1);
+-  owner.pendingTransactionCreationRecordBytes = checkedSubtract(
+-    owner.pendingTransactionCreationRecordBytes, reservation.bytes);
+-  reservation.bytes = 0;
+-  assertResourceInvariants(owner);
+-  return true;
+-}
+-
+-function releaseCreationRecordEnvelope(owner, tx) {
+-  const reservation = tx?.transactionCreationReservation;
+-  if (!reservation || reservation.released || reservation.tx !== tx) return false;
+-  reservation.released = true;
+-  reservation.tx = null;
+-  owner.pendingTransactionCreationRecordCount = checkedSubtract(
+-    owner.pendingTransactionCreationRecordCount, 1);
+-  owner.pendingTransactionCreationRecordBytes = checkedSubtract(
+-    owner.pendingTransactionCreationRecordBytes, reservation.bytes);
+-  reservation.bytes = 0;
+-  assertResourceInvariants(owner);
+-  return true;
+-}
+-
+-export {
+-  assertResourceInvariants,
+-  bindCreationAttachmentToRecord,
+-  bindCreationRecordEnvelope,
+-  cancelCreationRecordEnvelope,
+-  captureCreationResourceOptions,
+-  detachCreationAttachments,
+-  initializeCreationResources,
+-  ownDataValue,
+-  releaseCreationAttachment,
+-  releaseCreationOperation,
+-  releaseCreationRecordEnvelope,
+-  reserveCreationOperation,
+-  reserveCreationRecordEnvelope,
+-  totalPendingBytes,
+-  transferCreationAttachmentToRecord,
+-};
+diff --git a/src/query/distributed/distributed-transaction-creation.js b/src/query/distributed/distributed-transaction-creation.js
+deleted file mode 100644
+index 598a86c84..000000000
+--- a/src/query/distributed/distributed-transaction-creation.js
++++ /dev/null
+@@ -1,799 +0,0 @@
+-import {
+-  QUERY_ERROR_CODE,
+-  QUERY_ERROR_MSG,
+-  QUERY_OPERATION,
+-} from '../query-constants.js';
+-import {
+-  COMMIT_MODE,
+-  PARTICIPANT_SET_STATE,
+-  TRANSACTION_MODE,
+-} from '../../constants/index.js';
+-import {
+-  TERMINAL_TRANSACTION_STATUS,
+-  TRANSACTION_ID_MINT_ATTEMPTS,
+-  TRANSACTION_STATUS,
+-} from './distributed-transaction-coordinator-constants.js';
+-import {isCanonicalTransactionId, isTransactionIdCollision} from
+-  './distributed-transaction-identity.js';
+-import {
+-  TRANSACTION_CREATION_STATE,
+-  buildInitialTransactionDeliveryKey,
+-  encodeInitialTransactionRow,
+-  measureInitialTransactionRowFields,
+-} from './distributed-transaction-creation-contract.js';
+-import {
+-  DISTRIBUTED_BEGIN_CONSUMER_KIND,
+-  attachDistributedBeginAcceptance,
+-  createDistributedBeginConsumer,
+-  distributedBeginConsumerOf,
+-} from './distributed-begin-consumer.js';
+-import {
+-  assertResourceInvariants,
+-  bindCreationAttachmentToRecord,
+-  bindCreationRecordEnvelope,
+-  cancelCreationRecordEnvelope,
+-  detachCreationAttachments,
+-  initializeCreationResources,
+-  ownDataValue,
+-  releaseCreationOperation,
+-  releaseCreationRecordEnvelope,
+-  reserveCreationOperation,
+-  reserveCreationRecordEnvelope,
+-  totalPendingBytes,
+-  transferCreationAttachmentToRecord,
+-} from './distributed-transaction-creation-resources.js';
+-function pressureResult() {
+-  return {
+-    success: false,
+-    error: QUERY_ERROR_MSG.TRANSACTION_CREATION_PRESSURE,
+-    errorCode: QUERY_ERROR_CODE.TRANSACTION_CREATION_PRESSURE,
+-    deferRetry: true,
+-    retryable: true,
+-  };
+-}
+-function uncertainResult(tx, cause = null) {
+-  const result = {
+-    success: false,
+-    error: QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN,
+-    errorCode: QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN,
+-    transactionId: tx.transactionId,
+-    timeoutDeadline: tx.timeoutDeadline,
+-    deferRetry: true,
+-    retryable: true,
+-  };
+-  if (Number.isSafeInteger(cause?.retryAfterMs) && cause.retryAfterMs > 0) {
+-    result.retryAfterMs = cause.retryAfterMs;
+-  }
+-  return result;
+-}
+-function recoveryPendingResult(tx) {
+-  return {
+-    success: false,
+-    error: QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE,
+-    errorCode: QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
+-    transactionId: tx.transactionId,
+-    deferRetry: true,
+-  };
+-}
+-function isPendingCreation(tx) {
+-  return Boolean(tx?.transactionCreationState) &&
+-    tx.transactionCreationState !== TRANSACTION_CREATION_STATE.ENTERED_ACTIVE;
+-}
+-function hasAdvancedCreationReadback(error, retainAdvancedReadback) {
+-  return error?.code === QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE &&
+-    error.advancedTransactionRow && retainAdvancedReadback !== null;
+-}
+-function failureResult(error) {
+-  return {
+-    success: false,
+-    error: error?.message || QUERY_ERROR_MSG.BEGIN_FAILED,
+-    errorCode: error?.code || error?.errorCode ||
+-      QUERY_ERROR_CODE.TRANSACTION_STATE_PERSIST_FAILED,
+-  };
+-}
+-function initializeTransactionCreationOwner(owner, options = {}) {
+-  initializeCreationResources(owner, options);
+-}
+-function reserveTransactionCreationOperation(owner, fields) {
+-  return reserveCreationOperation(owner, fields);
+-}
+-function releaseTransactionCreationOperation(owner, token) {
+-  releaseCreationOperation(owner, token);
+-}
+-function detachDistributedTransactionCreationWaiters(owner, sessionId) {
+-  detachCreationAttachments(owner, sessionId);
+-}
+-function totalPendingTransactionCreationBytes(owner) {
+-  return totalPendingBytes(owner);
+-}
+-function releaseTransactionCreationRecord(owner, tx) {
+-  const reservation = tx?.transactionCreationReservation;
+-  if (!reservation || reservation.released || reservation.tx !== tx) return;
+-  if (Buffer.isBuffer(tx.transactionCreationInitialRowBytes)) {
+-    tx.transactionCreationInitialRowBytes.fill(0);
+-  }
+-  tx.transactionCreationInitialRowBytes = null;
+-  tx.transactionCreationInitialRow = null;
+-  tx.transactionCreationDeliveryKey = null;
+-  tx.transactionCreationAdvancedObserved = null;
+-  tx.transactionCreationAdvancedHandoff = null;
+-  tx.transactionCreationAcceptanceToken = null;
+-  tx.transactionCreationConsumer = null;
+-  releaseCreationRecordEnvelope(owner, tx);
+-}
+-function releaseTerminalServerTransactionCreation(owner, tx) {
+-  if (!isCurrentCreation(owner, tx) ||
+-      tx.transactionCreationAdvancedHandoff !== true ||
+-      tx.transactionCreationConsumer !== null ||
+-      !TERMINAL_TRANSACTION_STATUS.has(tx.status)) return false;
+-  tx.transactionCreationState = null;
+-  if (owner.transactionsBySession.get(tx.sessionId) === tx) {
+-    owner.transactionsBySession.delete(tx.sessionId);
+-  }
+-  releaseTransactionCreationRecord(owner, tx);
+-  return true;
+-}
+-function creationPressureResult() {
+-  return pressureResult();
+-}
+-function creationUncertainResult(tx) {
+-  return uncertainResult(tx);
+-}
+-function isPendingTransactionCreation(tx) {
+-  return isPendingCreation(tx);
+-}
+-function transactionCreationAdmission(owner, sessionId) {
+-  const tx = owner.transactionsBySession.get(sessionId);
+-  return isPendingCreation(tx) ? uncertainResult(tx) : null;
+-}
+-function isCurrentCreation(owner, tx) {
+-  return !owner.transactionCreationShutdown &&
+-    tx?.transactionCreationGeneration === owner.transactionCreationGeneration &&
+-    owner.workflowCoordinator.getWorkflowById(tx.workflowId) === tx &&
+-    owner.transactionsBySession.get(tx.sessionId) === tx;
+-}
+-function creationDeadlinesAreLive(owner, tx, operationToken) {
+-  const now = owner.now();
+-  return Number.isSafeInteger(now) && now >= 0 && !Object.is(now, -0) &&
+-    Number.isSafeInteger(tx?.timeoutDeadline) &&
+-    !Object.is(tx.timeoutDeadline, -0) && tx.timeoutDeadline > now &&
+-    Number.isSafeInteger(operationToken?.turnDeadlineAtMs) &&
+-    operationToken.turnDeadlineAtMs > now;
+-}
+-function originalCreationDeadlineIsLive(owner, tx) {
+-  const now = owner.now();
+-  return Number.isSafeInteger(now) && now >= 0 && !Object.is(now, -0) &&
+-    Number.isSafeInteger(tx?.timeoutDeadline) &&
+-    !Object.is(tx.timeoutDeadline, -0) && tx.timeoutDeadline > now;
+-}
+-function installCreationTurnBudget(owner, tx, operationToken) {
+-  const now = owner.now();
+-  if (!Number.isSafeInteger(now) || now < 0 || Object.is(now, -0) ||
+-      operationToken?.generation !== owner.transactionCreationGeneration ||
+-      !Number.isSafeInteger(operationToken.turnDeadlineAtMs) ||
+-      operationToken.turnDeadlineAtMs <= now) return false;
+-  const originalLive = now < tx.timeoutDeadline;
+-  const deadlineMs = originalLive ?
+-    Math.min(tx.timeoutDeadline, operationToken.turnDeadlineAtMs) :
+-    operationToken.turnDeadlineAtMs;
+-  if (!Number.isSafeInteger(deadlineMs) || deadlineMs <= now) return false;
+-  tx.transactionCreationTurnBudget = Object.freeze({
+-    configuredBudgetMs: deadlineMs - operationToken.turnStartedAtMs,
+-    deadlineMs,
+-    operationName: QUERY_OPERATION.BEGIN_TRANSACTION,
+-    startedAtMs: operationToken.turnStartedAtMs,
+-  });
+-  return true;
+-}
+-function retainConsumerAfterSpentTurn(owner, tx, consumer, operationToken) {
+-  const detached = consumer === null && operationToken?.callerAttached === true &&
+-    tx.transactionCreationConsumer !== null;
+-  if (!isRetainedAdvancedConsumer(tx, consumer) && !detached) return;
+-  tx.transactionCreationState = tx.transactionCreationAdvancedObserved ?
+-    TRANSACTION_CREATION_STATE.RECOVERY_PENDING :
+-    TRANSACTION_CREATION_STATE.UNCERTAIN_ANSWERED;
+-  transferCreationAttachmentToRecord(owner, operationToken, tx);
+-}
+-function buildTransactionCreationResult(owner, tx, consumer, source,
+-  operationToken) {
+-  if (!isCurrentCreation(owner, tx)) {
+-    return creationRecoveryPendingResult(tx);
+-  }
+-  if (!creationDeadlinesAreLive(owner, tx, operationToken)) {
+-    retainConsumerAfterSpentTurn(owner, tx, consumer, operationToken);
+-    return creationRecoveryPendingResult(tx);
+-  }
+-  if (consumer?.kind === DISTRIBUTED_BEGIN_CONSUMER_KIND.DIRECT) {
+-    tx.transactionCreationState = TRANSACTION_CREATION_STATE.ENTERED_ACTIVE;
+-    releaseTransactionCreationRecord(owner, tx);
+-    return buildTransactionBeginSuccess(tx);
+-  }
+-  if (!consumer) {
+-    tx.transactionCreationState = TRANSACTION_CREATION_STATE.SERVER_RECOVERY_ONLY;
+-    return creationUncertainResult(tx);
+-  }
+-  if (tx.transactionCreationConsumer !== consumer ||
+-        tx.transactionCreationState ===
+-          TRANSACTION_CREATION_STATE.SERVER_RECOVERY_ONLY) {
+-    return creationUncertainResult(tx);
+-  }
+-  const token = Object.freeze({
+-    consumer,
+-    revision: (tx.transactionCreationRevision || 0) + 1,
+-    source,
+-    turnDeadlineAtMs: operationToken.turnDeadlineAtMs,
+-    transactionId: tx.transactionId,
+-    tx,
+-  });
+-  tx.transactionCreationRevision = token.revision;
+-  tx.transactionCreationState = TRANSACTION_CREATION_STATE.SUCCESS_CLAIMED;
+-  tx.transactionCreationConsumer = consumer;
+-  tx.transactionCreationAcceptanceToken = token;
+-  if (!transferCreationAttachmentToRecord(owner, operationToken, tx)) {
+-    tx.transactionCreationAcceptanceToken = null;
+-    tx.transactionCreationConsumer = null;
+-    tx.transactionCreationState = TRANSACTION_CREATION_STATE.SERVER_RECOVERY_ONLY;
+-    return creationUncertainResult(tx);
+-  }
+-  return attachDistributedBeginAcceptance(
+-    buildTransactionBeginSuccess(tx),
+-    token,
+-  );
+-}
+-function buildTransactionBeginSuccess(tx) {
+-  return {
+-    success: true,
+-    operation: QUERY_OPERATION.BEGIN_TRANSACTION,
+-    sessionId: tx.sessionId,
+-    transactionId: tx.transactionId,
+-    transactionEpoch: tx.transactionEpoch,
+-    transactionMode: tx.transactionMode,
+-  };
+-}
+-function canAcceptDistributedBegin(owner, consumer, acceptanceToken) {
+-  const tx = acceptanceToken?.tx;
+-  return Boolean(tx && isCurrentCreation(owner, tx) &&
+-        creationDeadlinesAreLive(owner, tx, acceptanceToken) &&
+-        acceptanceToken === tx.transactionCreationAcceptanceToken &&
+-        consumer === tx.transactionCreationConsumer &&
+-        acceptanceToken.consumer === consumer &&
+-        tx.transactionCreationState === TRANSACTION_CREATION_STATE.SUCCESS_CLAIMED);
+-}
+-
+-function acceptDistributedBegin(owner, consumer, acceptanceToken, enterLocalBlock) {
+-  if (!canAcceptDistributedBegin(owner, consumer, acceptanceToken)) return false;
+-  const tx = acceptanceToken.tx;
+-  try {
+-    if (typeof enterLocalBlock === 'function') enterLocalBlock(tx.transactionId);
+-  } catch (error) {
+-    if (canAcceptDistributedBegin(owner, consumer, acceptanceToken)) {
+-      tx.transactionCreationState = TRANSACTION_CREATION_STATE.SUCCESS_CLAIMED;
+-    }
+-    throw error;
+-  }
+-  if (!canAcceptDistributedBegin(owner, consumer, acceptanceToken)) return false;
+-  tx.transactionCreationState = TRANSACTION_CREATION_STATE.ENTERED_ACTIVE;
+-  releaseTransactionCreationRecord(owner, tx);
+-  return true;
+-}
+-
+-function retireDistributedBeginConsumer(owner, sessionId, consumer) {
+-  const tx = owner.transactionsBySession.get(sessionId);
+-  if (!tx || tx.transactionCreationConsumer !== consumer ||
+-        tx.transactionCreationState ===
+-          TRANSACTION_CREATION_STATE.ENTERED_ACTIVE) return;
+-  detachDistributedTransactionCreationWaiters(owner, sessionId);
+-  tx.transactionCreationState = TRANSACTION_CREATION_STATE.SERVER_RECOVERY_ONLY;
+-  tx.transactionCreationAcceptanceToken = null;
+-  tx.transactionCreationConsumer = null;
+-}
+-
+-function retireUncertainCreationsForProcessShutdown(owner) {
+-  if (!owner.transactionCreationShutdown) {
+-    owner.transactionCreationShutdown = true;
+-    owner.transactionCreationGeneration += 1;
+-  }
+-  for (const tx of owner.workflowCoordinator.workflowsById.values()) {
+-    if (!isPendingCreation(tx)) continue;
+-    owner.workflowCoordinator.removeWorkflow(tx.workflowId);
+-    releaseTransactionCreationRecord(owner, tx);
+-  }
+-  for (const sessionId of [...owner.transactionCreationAttachmentsBySession.keys()]) {
+-    detachDistributedTransactionCreationWaiters(owner, sessionId);
+-  }
+-  assertResourceInvariants(owner);
+-}
+-
+-function getTransactionCreationDiagnostics(owner ) {
+-  const roles = {};
+-  let retainedRoleCount = 0;
+-  for (const tx of owner.workflowCoordinator.workflowsById.values()) {
+-    if (!isPendingCreation(tx)) continue;
+-    retainedRoleCount += 1;
+-    roles[tx.transactionCreationState] =
+-        (roles[tx.transactionCreationState] || 0) + 1;
+-  }
+-  if (!Number.isSafeInteger(retainedRoleCount) || retainedRoleCount < 0 ||
+-      retainedRoleCount > owner.pendingTransactionCreationRecordCount) {
+-    throw new Error('Distributed transaction creation role invariant failed');
+-  }
+-  return Object.freeze({
+-    attachmentCount: owner.pendingTransactionCreationAttachmentCount,
+-    operationCount: owner.pendingTransactionCreationOperationCount,
+-    recordBytes: owner.pendingTransactionCreationRecordBytes,
+-    recordCount: owner.pendingTransactionCreationRecordCount,
+-    roles: Object.freeze({...roles}),
+-    ...(owner.transactionCreationLastSweepDiagnostic ?
+-      {sweep: owner.transactionCreationLastSweepDiagnostic} : {}),
+-    totalBytes: totalPendingTransactionCreationBytes(owner),
+-  });
+-}
+-
+-function recordTransactionCreationSweepDiagnostic(owner, fields) {
+-  assertResourceInvariants(owner);
+-  const deadlines = [];
+-  for (const tx of owner.workflowCoordinator.workflowsById.values()) {
+-    if (isPendingCreation(tx) && Number.isSafeInteger(tx.timeoutDeadline)) {
+-      deadlines.push(tx.timeoutDeadline);
+-    }
+-  }
+-  owner.transactionCreationLastSweepDiagnostic = Object.freeze({
+-    deferredAttempts: owner.recoverySweepDeferredAttempts,
+-    deferredUntilMs: owner.recoverySweepDeferredUntilMs,
+-    oldestDeadlineAtMs: deadlines.length > 0 ? Math.min(...deadlines) : null,
+-    reservedBytes: owner.pendingTransactionCreationRecordBytes,
+-    retainedCount: owner.pendingTransactionCreationRecordCount,
+-    selectedCount: fields.selectedCount,
+-    stopReason: fields.stopReason,
+-  });
+-  return owner.transactionCreationLastSweepDiagnostic;
+-}
+-
+-function directBeginConsumer(sessionId) {
+-  return createDistributedBeginConsumer(
+-    DISTRIBUTED_BEGIN_CONSUMER_KIND.DIRECT,
+-    sessionId,
+-  );
+-}
+-
+-function checkedDeadline(startedAtMs, budgetMs) {
+-  const deadline = startedAtMs + budgetMs;
+-  return Number.isSafeInteger(startedAtMs) && startedAtMs >= 0 &&
+-    !Object.is(startedAtMs, -0) && Number.isSafeInteger(budgetMs) &&
+-    budgetMs > 0 && Number.isSafeInteger(deadline) && deadline >= startedAtMs ?
+-    deadline : null;
+-}
+-
+-function isCanonicalCreationDeadline(value) {
+-  return Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+-}
+-
+-function expectedCreationTransactionId(options, rawTransaction) {
+-  const configured = ownDataValue(options, 'expectedTransactionId');
+-  const value = configured ?? rawTransaction?.transactionId ?? null;
+-  return value === null || isCanonicalTransactionId(value) ? value : undefined;
+-}
+-
+-function requestedCreationMode(options) {
+-  const value = ownDataValue(options, 'transactionMode');
+-  if (value === undefined) return TRANSACTION_MODE.EXPLICIT;
+-  return Object.values(TRANSACTION_MODE).includes(value) ? value : null;
+-}
+-
+-function captureTransactionCreationOperation(owner, sessionId, options,
+-  rawTransaction) {
+-  const startedAtMs = owner.now();
+-  const turnDeadlineAtMs = checkedDeadline(startedAtMs,
+-    owner.transactionCreationTurnBudgetMs);
+-  const configuredDeadline = ownDataValue(options, 'timeoutDeadline');
+-  const originalDeadlineAtMs = configuredDeadline === undefined ?
+-    checkedDeadline(startedAtMs, owner.transactionBudgetMs) :
+-    configuredDeadline;
+-  if (turnDeadlineAtMs === null ||
+-      !isCanonicalCreationDeadline(originalDeadlineAtMs)) return null;
+-  const expectedTransactionId = expectedCreationTransactionId(options,
+-    rawTransaction);
+-  if (expectedTransactionId === undefined) return null;
+-  const transactionMode = requestedCreationMode(options);
+-  if (transactionMode === null) return null;
+-  const consumer = distributedBeginConsumerOf(options) ||
+-    directBeginConsumer(sessionId);
+-  return reserveTransactionCreationOperation(owner, {
+-    consumer,
+-    expectedTransactionId,
+-    originalDeadlineAtMs,
+-    sessionId,
+-    transactionMode,
+-    turnDeadlineAtMs,
+-    turnStartedAtMs: startedAtMs,
+-  });
+-}
+-
+-function transactionCreationOperationConsumer(operationToken) {
+-  return operationToken?.attachment?.consumer ?? null;
+-}
+-
+-function isRetainedAdvancedConsumer(tx, consumer) {
+-  return consumer?.kind !== DISTRIBUTED_BEGIN_CONSUMER_KIND.DIRECT &&
+-    tx.transactionCreationConsumer === consumer;
+-}
+-function captureTransactionCreationRecoveryOperation(owner, tx) {
+-  const startedAtMs = owner.now();
+-  const turnDeadlineAtMs = checkedDeadline(startedAtMs,
+-    owner.transactionCreationTurnBudgetMs);
+-  if (turnDeadlineAtMs === null) return null;
+-  return reserveTransactionCreationOperation(owner, {
+-    attachCaller: false,
+-    consumer: null,
+-    expectedTransactionId: tx.transactionId,
+-    originalDeadlineAtMs: tx.timeoutDeadline,
+-    sessionId: tx.sessionId,
+-    transactionMode: tx.transactionMode,
+-    turnDeadlineAtMs,
+-    turnStartedAtMs: startedAtMs,
+-  });
+-}
+-
+-function creationRecoveryPendingResult(tx) {
+-  return recoveryPendingResult(tx);
+-}
+-
+-async function retainAdvancedCreationReadback(owner, transactionId, row,
+-  operationToken = null) {
+-  const retained = owner.workflowCoordinator.getWorkflowById(transactionId);
+-  if (!retained || !isCurrentCreation(owner, retained)) {
+-    return recoveryPendingResult({transactionId});
+-  }
+-  retained.transactionCreationAdvancedObserved = true;
+-  if (typeof owner.retainAdvancedTransactionReadback !== 'function') {
+-    retained.transactionCreationState = TRANSACTION_CREATION_STATE.RECOVERY_PENDING;
+-    return recoveryPendingResult({transactionId});
+-  }
+-  try {
+-    await owner.retainAdvancedTransactionReadback(
+-      retained,
+-      row,
+-      retained.transactionCreationTurnBudget,
+-    ) === true;
+-  } catch (recoveryError) {
+-    owner.logger?.warn?.(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE, {
+-      transactionId,
+-      error: recoveryError?.message,
+-    });
+-  }
+-  if (!isCurrentCreation(owner, retained)) {
+-    return recoveryPendingResult({transactionId});
+-  }
+-  retained.transactionCreationState = TRANSACTION_CREATION_STATE.RECOVERY_PENDING;
+-  const consumer = transactionCreationOperationConsumer(operationToken);
+-  if (isRetainedAdvancedConsumer(retained, consumer)) {
+-    transferCreationAttachmentToRecord(owner, operationToken, retained);
+-  }
+-  return recoveryPendingResult({transactionId});
+-}
+-
+-function removeRetainedRegistration(owner, retained, transactionId) {
+-  if (!retained || !isCurrentCreation(owner, retained)) return;
+-  owner.workflowCoordinator.removeWorkflow(transactionId);
+-  releaseTransactionCreationRecord(owner, retained);
+-}
+-
+-function retainUncertainRegistration(owner, retained, operationToken, error) {
+-  const consumer = transactionCreationOperationConsumer(operationToken);
+-  const liveConsumer = consumer?.kind ===
+-      DISTRIBUTED_BEGIN_CONSUMER_KIND.DIRECT ? null : consumer;
+-  retained.transactionCreationConsumer = liveConsumer;
+-  retained.transactionCreationState = liveConsumer ?
+-    TRANSACTION_CREATION_STATE.UNCERTAIN_ANSWERED :
+-    TRANSACTION_CREATION_STATE.SERVER_RECOVERY_ONLY;
+-  if (liveConsumer &&
+-      !transferCreationAttachmentToRecord(owner, operationToken, retained)) {
+-    retained.transactionCreationConsumer = null;
+-    retained.transactionCreationState =
+-      TRANSACTION_CREATION_STATE.SERVER_RECOVERY_ONLY;
+-  }
+-  return creationUncertainResult(retained, error);
+-}
+-
+-async function resolveUniqueTransactionRegistrationError(owner, error, context) {
+-  const {attempt, operationToken, transactionId} = context;
+-  const retained = context.tx;
+-  if (hasAdvancedCreationReadback(
+-    error,
+-    owner.retainAdvancedTransactionReadback,
+-  )) {
+-    return {result: await retainAdvancedCreationReadback(owner,
+-      transactionId,
+-      error.advancedTransactionRow,
+-      operationToken,
+-    )};
+-  }
+-  if (isTransactionIdCollision(error) &&
+-        attempt < TRANSACTION_ID_MINT_ATTEMPTS) {
+-    removeRetainedRegistration(owner, retained, transactionId);
+-    return {retry: true};
+-  }
+-  if (error?.code === QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN &&
+-        retained && isCurrentCreation(owner, retained)) {
+-    return {result: retainUncertainRegistration(owner, retained,
+-      operationToken, error)};
+-  }
+-  removeRetainedRegistration(owner, retained, transactionId);
+-  return {result: failureResult(error)};
+-}
+-
+-async function registerUniqueTransaction(owner, sessionId, fields) {
+-  const {operationToken, transactionEpoch, timeoutBudget,
+-    transactionMode} = fields;
+-  for (let attempt = 1; ; attempt += 1) {
+-    const transactionId = owner.createTransactionId(sessionId);
+-    if (!isCanonicalTransactionId(transactionId)) {
+-      return failureResult(new TypeError(
+-        QUERY_ERROR_MSG.BEGIN_FAILED,
+-      ));
+-    }
+-    const registrationContext = {tx: null};
+-    try {
+-      const tx = await registerTransaction(owner, sessionId, transactionId, {
+-        operationToken, transactionEpoch, timeoutBudget,
+-        transactionMode, registrationContext,
+-      });
+-      if (!originalCreationDeadlineIsLive(owner, tx)) {
+-        return await retainAdvancedCreationReadback(owner, transactionId,
+-          tx.transactionCreationInitialRow, operationToken);
+-      }
+-      return buildTransactionCreationResult(owner,
+-        tx, transactionCreationOperationConsumer(operationToken),
+-        'DIRECT_FIRST_RESULT', operationToken,
+-      );
+-    } catch (error) {
+-      const resolution = await resolveUniqueTransactionRegistrationError(owner,
+-        error,
+-        {attempt, operationToken, transactionId, tx: registrationContext.tx},
+-      );
+-      if (resolution.retry === true) continue;
+-      return resolution.result;
+-    }
+-  }
+-}
+-
+-async function registerTransaction(owner, sessionId, transactionId, fields) {
+-  const {operationToken, transactionEpoch, timeoutBudget,
+-    transactionMode, registrationContext} = fields;
+-  const now = owner.now();
+-  const measuredRowBytes = measureInitialTransactionRowFields(transactionId,
+-    sessionId, transactionEpoch, timeoutBudget.deadlineMs, transactionMode,
+-    now);
+-  const reservation = reserveCreationRecordEnvelope(owner, measuredRowBytes,
+-    transactionId, sessionId, transactionMode);
+-  if (!reservation) {
+-    throw Object.assign(new Error(
+-      QUERY_ERROR_MSG.TRANSACTION_CREATION_PRESSURE,
+-    ), {code: QUERY_ERROR_CODE.TRANSACTION_CREATION_PRESSURE});
+-  }
+-  let tx;
+-  try {
+-    const initialRow = {
+-      transaction_id: transactionId,
+-      session_id: sessionId,
+-      status: TRANSACTION_STATUS.ACTIVE,
+-      transaction_epoch: transactionEpoch,
+-      timeout_deadline: timeoutBudget.deadlineMs,
+-      transaction_mode: transactionMode,
+-      participant_set_state: PARTICIPANT_SET_STATE.OPEN,
+-      participant_set_text: '[]',
+-      commit_mode: COMMIT_MODE.NOT_SELECTED,
+-      frozen_participant_count: 0,
+-      updated_at: now,
+-      decision: null,
+-      decision_text: null,
+-      decision_digest: null,
+-      created_at: now,
+-    };
+-    const rowBytes = encodeInitialTransactionRow(initialRow);
+-    const deliveryKey = buildInitialTransactionDeliveryKey(transactionId,
+-      rowBytes);
+-    tx = {
+-      sessionId, ownerKey: sessionId, transactionId, workflowId: transactionId,
+-      transactionEpoch, timeoutBudget,
+-      timeoutDeadline: timeoutBudget.deadlineMs,
+-      status: TRANSACTION_STATUS.ACTIVE,
+-      transactionMode,
+-      participantSetState: PARTICIPANT_SET_STATE.OPEN,
+-      participantSetText: '[]',
+-      commitMode: COMMIT_MODE.NOT_SELECTED,
+-      frozenParticipantCount: 0,
+-      participantSetFrozenAt: 0,
+-      decisionTrace: [],
+-      participants: new Map(),
+-      writeOperations: [],
+-      createdAt: now,
+-      updatedAt: now,
+-      transactionCreationConsumer: null,
+-      transactionCreationGeneration: owner.transactionCreationGeneration,
+-      transactionCreationInitialRow: Object.freeze({...initialRow}),
+-      transactionCreationInitialRowBytes: rowBytes,
+-      transactionCreationDeliveryKey: deliveryKey,
+-      transactionCreationAdvancedObserved: false,
+-      transactionCreationRevision: 0,
+-      transactionCreationState: TRANSACTION_CREATION_STATE.INSERTING,
+-    };
+-    bindCreationRecordEnvelope(reservation, tx);
+-    if (!bindCreationAttachmentToRecord(owner, operationToken, tx)) {
+-      throw Object.assign(new Error(QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN),
+-        {code: QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN});
+-    }
+-    if (!installCreationTurnBudget(owner, tx, operationToken)) {
+-      throw Object.assign(new Error(QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN),
+-        {code: QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN});
+-    }
+-    const registered = await owner.workflowCoordinator.registerWorkflow(tx);
+-    registrationContext.tx = registered;
+-    if (!isCurrentCreation(owner, registered)) {
+-      throw Object.assign(new Error(QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN),
+-        {code: QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN});
+-    }
+-    return registered;
+-  } catch (error) {
+-    const retained = reservation.tx || tx;
+-    registrationContext.tx = retained;
+-    if (!tx) {
+-      cancelCreationRecordEnvelope(owner, reservation);
+-    } else if (owner.workflowCoordinator.getWorkflowById(transactionId) !==
+-        retained) {
+-      releaseTransactionCreationRecord(owner, retained);
+-    }
+-    throw error;
+-  }
+-}
+-
+-function reconcileClaimedCreation(owner, tx, consumer) {
+-  if (tx.transactionCreationState !==
+-      TRANSACTION_CREATION_STATE.SUCCESS_CLAIMED) return null;
+-  if (creationDeadlinesAreLive(owner, tx,
+-    tx.transactionCreationAcceptanceToken)) {
+-    return {handled: true, result: tx.transactionCreationConsumer === consumer ?
+-      attachDistributedBeginAcceptance(buildTransactionBeginSuccess(tx),
+-        tx.transactionCreationAcceptanceToken) : creationUncertainResult(tx)};
+-  }
+-  tx.transactionCreationAcceptanceToken = null;
+-  tx.transactionCreationState = tx.transactionCreationAdvancedHandoff === true ?
+-    TRANSACTION_CREATION_STATE.RECOVERY_PENDING :
+-    TRANSACTION_CREATION_STATE.UNCERTAIN_ANSWERED;
+-  return {handled: false};
+-}
+-
+-async function reconcileAdvancedCreation(owner, tx, consumer, operationToken) {
+-  if (tx.transactionCreationState !== TRANSACTION_CREATION_STATE.RECOVERY_PENDING) {
+-    return null;
+-  }
+-  if (tx.transactionCreationAdvancedHandoff !== true) {
+-    return tx.transactionCreationAdvancedObserved === true ?
+-      retainAdvancedCreationReadback(owner, tx.transactionId, null,
+-        operationToken) : null;
+-  }
+-  const result = creationRecoveryPendingResult(tx);
+-  if (consumer !== null && tx.transactionCreationConsumer === consumer &&
+-      TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
+-    tx.transactionCreationState = null;
+-    tx.transactionCreationConsumer = null;
+-    tx.transactionCreationAcceptanceToken = null;
+-    if (owner.transactionsBySession.get(tx.sessionId) === tx) {
+-      owner.transactionsBySession.delete(tx.sessionId);
+-    }
+-    releaseTransactionCreationRecord(owner, tx);
+-  }
+-  return result;
+-}
+-
+-function reconcileInsertedUncertainCreation(owner, tx, consumer,
+-  operationToken) {
+-  if (tx.transactionCreationState !==
+-        TRANSACTION_CREATION_STATE.UNCERTAIN_ANSWERED ||
+-      tx.transactionRowInserted !== true || consumer === null) return null;
+-  if (!bindCreationAttachmentToRecord(owner, operationToken, tx)) {
+-    return creationUncertainResult(tx);
+-  }
+-  return buildTransactionCreationResult(owner, tx, consumer, 'RETRY_HANDOFF',
+-    operationToken);
+-}
+-
+-async function reconcileTransactionCreationOwned(owner, tx, consumer,
+-  operationToken) {
+-  if (!isCurrentCreation(owner, tx)) return creationUncertainResult(tx);
+-  const claimed = reconcileClaimedCreation(owner, tx, consumer);
+-  if (claimed?.handled === true) return claimed.result;
+-  const advanced = await reconcileAdvancedCreation(owner, tx, consumer,
+-    operationToken);
+-  if (advanced) return advanced;
+-  const inserted = reconcileInsertedUncertainCreation(owner, tx, consumer,
+-    operationToken);
+-  if (inserted) return inserted;
+-  if (consumer === null && tx.transactionCreationConsumer !== null &&
+-      originalCreationDeadlineIsLive(owner, tx)) {
+-    return creationUncertainResult(tx);
+-  }
+-  if (!installCreationTurnBudget(owner, tx, operationToken)) {
+-    return creationUncertainResult(tx);
+-  }
+-  try {
+-    await owner.workflowCoordinator.persistWorkflowState(tx.workflowId);
+-    if (!isCurrentCreation(owner, tx)) return creationUncertainResult(tx);
+-    return await completeReconciledTransactionCreation(owner, tx, consumer,
+-      operationToken);
+-  } catch (error) {
+-    return await resolveTransactionCreationReconcileError(owner, tx, error,
+-      operationToken);
+-  }
+-}
+-
+-async function completeReconciledTransactionCreation(owner, tx, consumer,
+-  operationToken) {
+-  if (!isCurrentCreation(owner, tx)) {
+-    return creationUncertainResult(tx);
+-  }
+-  if (!originalCreationDeadlineIsLive(owner, tx)) {
+-    return retainAdvancedCreationReadback(owner, tx.transactionId,
+-      tx.transactionCreationInitialRow, operationToken);
+-  }
+-  if (consumer !== null) {
+-    if (!bindCreationAttachmentToRecord(owner, operationToken, tx)) {
+-      return creationUncertainResult(tx);
+-    }
+-    return buildTransactionCreationResult(owner, tx, consumer, 'RETRY_HANDOFF',
+-      operationToken);
+-  }
+-  if (operationToken?.callerAttached === true) {
+-    tx.transactionCreationState = TRANSACTION_CREATION_STATE.SERVER_RECOVERY_ONLY;
+-    return creationUncertainResult(tx);
+-  }
+-  if (tx.transactionCreationConsumer !== null) {
+-    tx.transactionCreationState = TRANSACTION_CREATION_STATE.UNCERTAIN_ANSWERED;
+-    return buildTransactionBeginSuccess(tx);
+-  }
+-  tx.transactionCreationState = TRANSACTION_CREATION_STATE.ENTERED_ACTIVE;
+-  tx.recoveryDiscovered = true;
+-  owner.recoveredTransactionIds.add(tx.workflowId);
+-  releaseTransactionCreationRecord(owner, tx);
+-  return creationRecoveryPendingResult(tx);
+-}
+-
+-async function resolveTransactionCreationReconcileError(owner, tx, error,
+-  operationToken) {
+-  if (error?.code === QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE &&
+-        error.advancedTransactionRow &&
+-        owner.retainAdvancedTransactionReadback !== null) {
+-    return retainAdvancedCreationReadback(owner, tx.workflowId,
+-      error.advancedTransactionRow, operationToken);
+-  }
+-  if (isTransactionIdCollision(error)) {
+-    owner.workflowCoordinator.removeWorkflow(tx.workflowId);
+-    releaseTransactionCreationRecord(owner, tx);
+-  }
+-  return error?.code === QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN ?
+-    creationUncertainResult(tx, error) : failureResult(error);
+-}
+-
+-export {
+-  acceptDistributedBegin,
+-  canAcceptDistributedBegin,
+-  captureTransactionCreationOperation,
+-  captureTransactionCreationRecoveryOperation,
+-  creationPressureResult,
+-  creationUncertainResult,
+-  directBeginConsumer,
+-  getTransactionCreationDiagnostics,
+-  initializeTransactionCreationOwner,
+-  isPendingTransactionCreation,
+-  reconcileTransactionCreationOwned,
+-  recordTransactionCreationSweepDiagnostic,
+-  registerUniqueTransaction,
+-  releaseTransactionCreationOperation,
+-  releaseTransactionCreationRecord,
+-  releaseTerminalServerTransactionCreation,
+-  reserveTransactionCreationOperation,
+-  retireDistributedBeginConsumer,
+-  retireUncertainCreationsForProcessShutdown,
+-  transactionCreationAdmission,
+-  transactionCreationOperationConsumer,
+-};
+diff --git a/test/query/transaction-begin-source-adversarial.test.js b/test/query/transaction-begin-source-adversarial.test.js
+deleted file mode 100644
+index f5c4effc5..000000000
+--- a/test/query/transaction-begin-source-adversarial.test.js
++++ /dev/null
+@@ -1,760 +0,0 @@
+-import {EventEmitter} from 'node:events';
+-
+-import {test} from '../../src/test-helpers/tap.js';
+-import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+-import {PostgresWireAdapter} from
+-  '../../src/query/pg/postgres-wire-adapter.js';
+-import {PgWireProtocolHandler} from
+-  '../../src/runtime/pgwire-protocol-handler.js';
+-import {DistributedTransactionCoordinator} from
+-  '../../src/query/distributed/distributed-transaction-coordinator.js';
+-import {
+-  DISTRIBUTED_BEGIN_CONSUMER_KIND,
+-  attachDistributedBeginConsumer,
+-  createDistributedBeginConsumer,
+-  distributedBeginAcceptanceOf,
+-} from '../../src/query/distributed/distributed-begin-consumer.js';
+-import {buildDecisionRecord} from
+-  '../../src/partition/partition-participant-transaction-bytes.js';
+-
+-const silentLogger = Object.freeze({
+-  debug() {},
+-  error() {},
+-  info() {},
+-  warn() {},
+-});
+-
+-function uncertainError() {
+-  return Object.assign(new Error('uncertain'), {
+-    code: 'TRANSACTION_CREATION_UNCERTAIN',
+-  });
+-}
+-
+-function deferred() {
+-  let resolve;
+-  const promise = new Promise((resolvePromise) => {
+-    resolve = resolvePromise;
+-  });
+-  return {promise, resolve};
+-}
+-
+-function attachedOptions(kind, sessionId) {
+-  const consumer = createDistributedBeginConsumer(kind, sessionId);
+-  const options = {};
+-  attachDistributedBeginConsumer(options, consumer);
+-  return {consumer, options};
+-}
+-
+-function retainedCanonicalFieldBytes(value) {
+-  return Object.values(value)
+-    .reduce((total, entry) => total + (typeof entry === 'string' ?
+-      Buffer.byteLength(entry) : (typeof entry === 'number' ||
+-        typeof entry === 'boolean' || (entry && typeof entry === 'object')) ?
+-        8 : 0), 0);
+-}
+-
+-class RecordingSocket extends EventEmitter {
+-  constructor() {
+-    super();
+-    this.destroyed = false;
+-    this.written = [];
+-  }
+-
+-  write(value) {
+-    this.written.push(Buffer.from(value));
+-    return true;
+-  }
+-
+-  destroy() {
+-    this.destroyed = true;
+-  }
+-}
+-
+-function adapterFor(engine) {
+-  return new PostgresWireAdapter({
+-    sqlCore: engine,
+-    authHandler: {
+-      authenticate: async ({database}) => ({
+-        authenticated: true,
+-        context: {tenantId: database, principal: 'adversary', roles: []},
+-      }),
+-      authorizeQuery: () => ({authorized: true}),
+-    },
+-  });
+-}
+-
+-test('malformed and accessor-backed creation readbacks remain retained',
+-  async (t) => {
+-    let attempted;
+-    const invalidEngine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: {
+-        supportsMutationSubmission: () => true,
+-        async submitMutation(mutation) {
+-          attempted ||= {...mutation.row};
+-          return {success: false, error: 'lost answer'};
+-        },
+-        async readAuthoritativeRows() {
+-          return {success: true,
+-            rows: [{...attempted, status: 'NOT_A_STATUS'}]};
+-        },
+-      },
+-    });
+-    const invalid = await invalidEngine.executeQuery('BEGIN', [],
+-      {sessionId: 'invalid-row'});
+-    t.equal(invalid.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-    t.same(invalidEngine.transactionCoordinator
+-      .getTransactionCreationDiagnostics().roles, {SERVER_RECOVERY_ONLY: 1});
+-    await invalidEngine.shutdown();
+-
+-    attempted = null;
+-    let getterCalls = 0;
+-    const accessorEngine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: {
+-        supportsMutationSubmission: () => true,
+-        async submitMutation(mutation) {
+-          attempted ||= {...mutation.row};
+-          return {success: false, error: 'lost answer'};
+-        },
+-        async readAuthoritativeRows() {
+-          const rows = new Array(1);
+-          Object.defineProperty(rows, 0, {
+-            enumerable: true,
+-            get() {
+-              getterCalls += 1;
+-              return {...attempted};
+-            },
+-          });
+-          return {success: true, rows};
+-        },
+-      },
+-    });
+-    const accessor = await accessorEngine.executeQuery('BEGIN', [],
+-      {sessionId: 'accessor-row'});
+-    t.equal(accessor.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-    t.equal(getterCalls, 0);
+-    t.equal(accessorEngine.transactionCoordinator
+-      .getTransactionCreationDiagnostics().recordCount, 1);
+-    await accessorEngine.shutdown();
+-  });
+-
+-test('expired uncertain BEGIN settles debt without granting ACTIVE', async (t) => {
+-  let now = 0;
+-  let writes = 0;
+-  const coordinator = new DistributedTransactionCoordinator({
+-    now: () => now,
+-    transactionBudgetMs: 10,
+-    async persistTransaction() {
+-      writes += 1;
+-      if (writes === 1) throw uncertainError();
+-    },
+-  });
+-  const first = await coordinator.begin('expired');
+-  now = 100;
+-  const retry = await coordinator.begin('expired');
+-  t.equal(first.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-  t.equal(retry.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+-  t.equal(retry.transactionId, first.transactionId);
+-  t.equal(coordinator.getTransaction('expired'), null);
+-  t.equal(writes, 2);
+-  t.equal(coordinator.getTransactionCreationDiagnostics().recordCount, 1);
+-  t.same(coordinator.getTransactionCreationDiagnostics().roles,
+-    {RECOVERY_PENDING: 1});
+-});
+-
+-test('bounded recovery selection rotates beyond the first batch', async (t) => {
+-  let now = 0;
+-  const writes = new Map();
+-  const coordinator = new DistributedTransactionCoordinator({
+-    now: () => now,
+-    maxUncertainTransactionCreations: 32,
+-    maxUncertainCreationSweepPerTurn: 16,
+-    async persistTransaction(record) {
+-      writes.set(record.transactionId,
+-        (writes.get(record.transactionId) || 0) + 1);
+-      throw uncertainError();
+-    },
+-  });
+-  for (let index = 0; index < 17; index += 1) {
+-    await coordinator.begin(`rotate-${index}`);
+-  }
+-  const ids = [...coordinator.workflowCoordinator.workflowsById.keys()].sort();
+-  await coordinator.runRecoverySweep();
+-  now = 2000;
+-  await coordinator.runRecoverySweep();
+-  t.equal(writes.get(ids[0]), 3);
+-  t.equal(writes.get(ids[15]), 2);
+-  t.equal(writes.get(ids[16]), 2);
+-  const diagnostic = coordinator.getTransactionCreationDiagnostics().sweep;
+-  t.equal(diagnostic.selectedCount, 16);
+-  t.equal(diagnostic.retainedCount, 17);
+-  t.equal(diagnostic.stopReason, 'deferred');
+-});
+-
+-test('post-CommandComplete acceptance failure destroys the session',
+-  async (t) => {
+-    const engine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: {
+-        supportsMutationSubmission: () => true,
+-        submitMutation: async () => ({success: true,
+-          completionState: 'applied'}),
+-      },
+-    });
+-    const socket = new RecordingSocket();
+-    const handler = new PgWireProtocolHandler({
+-      adapter: adapterFor(engine),
+-      logger: silentLogger,
+-      socket,
+-    });
+-    await handler._completeAuthentication({
+-      database: 'default',
+-      sessionId: 'post-tag',
+-      tenantId: 'default',
+-      user: 'adversary',
+-    });
+-    socket.written.length = 0;
+-    handler.getSession().enterTransaction = () => {
+-      throw new Error('local-entry-failed');
+-    };
+-    await handler._handleSimpleQuery(Buffer.from('BEGIN\0'));
+-    const tx = engine.transactionCoordinator.workflowCoordinator
+-      .workflowsByOwnerKey.get('post-tag');
+-    t.same(socket.written.map((entry) => String.fromCharCode(entry[0])), ['C']);
+-    t.equal(socket.destroyed, true);
+-    t.equal(handler.getSession().isClosed(), true);
+-    t.equal(tx.transactionCreationState, 'SERVER_RECOVERY_ONLY');
+-    handler.destroy();
+-    await engine.shutdown();
+-  });
+-
+-test('production pgwire adapter cannot bypass distributed BEGIN acceptance',
+-  async (t) => {
+-    const adapter = new PostgresWireAdapter({
+-      sqlCore: {
+-        async executeRequest() {
+-          return {
+-            success: true,
+-            statementType: 'BEGIN_TRANSACTION',
+-            transactionId: '0123456789abcdef0123456789abcdef',
+-          };
+-        },
+-      },
+-      authHandler: {
+-        authenticate: async ({database}) => ({authenticated: true,
+-          context: {tenantId: database, principal: 'tester', roles: []}}),
+-        authorizeQuery: () => ({authorized: true}),
+-      },
+-    });
+-    const socket = new RecordingSocket();
+-    const handler = new PgWireProtocolHandler({
+-      adapter,
+-      logger: silentLogger,
+-      socket,
+-    });
+-    await handler._completeAuthentication({
+-      database: 'default',
+-      sessionId: 'missing-acceptance-owner',
+-      tenantId: 'default',
+-      user: 'tester',
+-    });
+-    socket.written.length = 0;
+-    await handler._handleSimpleQuery(Buffer.from('BEGIN\0'));
+-    t.same(socket.written.map((entry) => String.fromCharCode(entry[0])),
+-      ['E', 'Z']);
+-    t.equal(socket.written.some((entry) => entry[0] === 'C'.charCodeAt(0)),
+-      false);
+-    t.equal(String.fromCharCode(handler.getSession().getTransactionState()),
+-      'I');
+-    t.equal(socket.destroyed, false);
+-    handler.destroy();
+-  });
+-
+-test('shutdown after awaited insert cannot publish ownerless success',
+-  async (t) => {
+-    const entered = deferred();
+-    const release = deferred();
+-    const coordinator = new DistributedTransactionCoordinator({
+-      async persistTransaction() {
+-        entered.resolve();
+-        await release.promise;
+-      },
+-    });
+-    const pending = coordinator.begin('shutdown-direct');
+-    await entered.promise;
+-    coordinator.retireUncertainCreationsForProcessShutdown();
+-    release.resolve();
+-    const result = await pending;
+-    t.equal(result.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-    t.equal(coordinator.getTransaction('shutdown-direct'), null);
+-    t.same(coordinator.getTransactionCreationDiagnostics(), {
+-      attachmentCount: 0,
+-      operationCount: 0,
+-      recordBytes: 0,
+-      recordCount: 0,
+-      roles: {},
+-      totalBytes: 0,
+-    });
+-  });
+-
+-test('strict resource configuration rejects accessors and unsafe domains',
+-  (t) => {
+-    let getterCalls = 0;
+-    const accessor = {};
+-    Object.defineProperty(accessor, 'maxUncertainTransactionCreations', {
+-      get() {
+-        getterCalls += 1;
+-        return 1;
+-      },
+-    });
+-    t.throws(() => new DistributedTransactionCoordinator(accessor));
+-    t.equal(getterCalls, 0);
+-    for (const value of [-0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1,
+-      Number.NaN, Number.POSITIVE_INFINITY]) {
+-      t.throws(() => new DistributedTransactionCoordinator({
+-        maxUncertainTransactionCreations: value,
+-      }));
+-    }
+-    t.end();
+-  });
+-
+-test('BEGIN captures only canonical transaction identity and mode inputs',
+-  async (t) => {
+-    let writes = 0;
+-    const invalid = new DistributedTransactionCoordinator({
+-      async persistTransaction() {
+-        writes += 1;
+-      },
+-    });
+-    for (const transactionMode of ['READ_ONLY', Object('EXPLICIT'), 1]) {
+-      const result = await invalid.begin(`bad-mode-${writes}`, {transactionMode});
+-      t.equal(result.errorCode, 'TRANSACTION_CREATION_PRESSURE');
+-    }
+-    for (const expectedTransactionId of [
+-      'a'.repeat(31),
+-      'A'.repeat(32),
+-      Object('a'.repeat(32)),
+-    ]) {
+-      const result = await invalid.begin(`bad-id-${writes}`,
+-        {expectedTransactionId});
+-      t.equal(result.errorCode, 'TRANSACTION_CREATION_PRESSURE');
+-    }
+-    t.equal(writes, 0);
+-    t.same(invalid.getTransactionCreationDiagnostics(), {
+-      attachmentCount: 0,
+-      operationCount: 0,
+-      recordBytes: 0,
+-      recordCount: 0,
+-      roles: {},
+-      totalBytes: 0,
+-    });
+-
+-    const exactId = '0123456789abcdef0123456789abcdef';
+-    let attempted;
+-    const valid = new DistributedTransactionCoordinator({
+-      async persistTransaction(row) {
+-        attempted = {...row};
+-      },
+-    });
+-    valid.createTransactionId = () => exactId;
+-    const accepted = await valid.begin('valid-mode', {
+-      transactionMode: 'AUTOCOMMIT',
+-    });
+-    t.equal(accepted.success, true);
+-    t.equal(accepted.transactionId, exactId);
+-    t.equal(attempted.transactionId, exactId);
+-    t.equal(attempted.transactionMode, 'AUTOCOMMIT');
+-
+-    const invalidMint = new DistributedTransactionCoordinator({
+-      async persistTransaction() {
+-        writes += 1;
+-      },
+-    });
+-    invalidMint.createTransactionId = () => 'not-canonical';
+-    const refusedMint = await invalidMint.begin('invalid-mint');
+-    t.equal(refusedMint.success, false);
+-    t.equal(writes, 0);
+-  });
+-
+-test('detached waiter drops caller references but retains operation debt',
+-  async (t) => {
+-    const entered = deferred();
+-    const release = deferred();
+-    const {options} = attachedOptions(
+-      DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,
+-      'detached-waiter',
+-    );
+-    const coordinator = new DistributedTransactionCoordinator({
+-      transactionCreationTurnBudgetMs: 10,
+-      async persistTransaction() {
+-        entered.resolve();
+-        await release.promise;
+-      },
+-    });
+-    const pending = coordinator.begin('detached-waiter', options);
+-    await entered.promise;
+-    await new Promise((resolve) => setTimeout(resolve, 20));
+-    const held = coordinator.getTransactionCreationDiagnostics();
+-    t.equal(held.attachmentCount, 0);
+-    t.equal(held.operationCount, 1);
+-    t.equal(held.recordCount, 1);
+-    release.resolve();
+-    const result = await pending;
+-    t.equal(result.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+-    const settled = coordinator.getTransactionCreationDiagnostics();
+-    t.equal(settled.operationCount, 0);
+-    t.same(settled.roles, {UNCERTAIN_ANSWERED: 1});
+-  });
+-
+-test('one role-neutral pool remains bounded across mixed live roles',
+-  async (t) => {
+-    let writes = 0;
+-    const coordinator = new DistributedTransactionCoordinator({
+-      maxUncertainTransactionCreations: 2,
+-      async persistTransaction() {
+-        writes += 1;
+-      },
+-    });
+-    const first = attachedOptions(DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,
+-      'mixed-one');
+-    const second = attachedOptions(DISTRIBUTED_BEGIN_CONSUMER_KIND.APPLICATION,
+-      'mixed-two');
+-    const firstResult = await coordinator.begin('mixed-one', first.options);
+-    const secondResult = await coordinator.begin('mixed-two', second.options);
+-    const full = coordinator.getTransactionCreationDiagnostics();
+-    t.equal(full.recordCount, 2);
+-    t.same(full.roles, {SUCCESS_CLAIMED: 2});
+-    const refused = await coordinator.begin('mixed-three');
+-    t.equal(refused.errorCode, 'TRANSACTION_CREATION_PRESSURE');
+-    t.equal(writes, 2);
+-
+-    coordinator.retireDistributedBeginConsumer('mixed-one', first.consumer);
+-    const retired = coordinator.getTransactionCreationDiagnostics();
+-    t.equal(retired.recordCount, 2);
+-    t.same(retired.roles, {SERVER_RECOVERY_ONLY: 1, SUCCESS_CLAIMED: 1});
+-    t.equal(coordinator.acceptDistributedBegin(second.consumer,
+-      distributedBeginAcceptanceOf(secondResult)), true);
+-    t.equal(coordinator.getTransactionCreationDiagnostics().recordCount, 1);
+-    const third = await coordinator.begin('mixed-three');
+-    t.equal(third.success, true);
+-    t.equal(coordinator.getTransactionCreationDiagnostics().recordCount, 1);
+-    t.equal(firstResult.success, true);
+-  });
+-
+-test('advanced creation recovery keeps the exact live disposition through replay',
+-  async (t) => {
+-    let attempted;
+-    let durable;
+-    const gateway = {
+-      supportsMutationSubmission: () => true,
+-      async submitMutation(mutation) {
+-        if (mutation.operation === 'insert') {
+-          attempted = {...mutation.row};
+-          const decision = buildDecisionRecord(attempted.transaction_id,
+-            'ROLLBACK', []);
+-          durable = {...attempted, status: 'ROLLING_BACK',
+-            participant_set_state: 'FROZEN', commit_mode: 'TWO_PHASE_COMMIT',
+-            decision: decision.decision, decision_text: decision.decisionText,
+-            decision_digest: decision.decisionDigest};
+-          return {success: false, error: 'lost answer'};
+-        }
+-        if (mutation.tableName === 'sql_transactions') {
+-          durable = {...durable, ...mutation.data};
+-        }
+-        return {success: true, completionState: 'applied'};
+-      },
+-      async readAuthoritativeRows(tableName) {
+-        return {success: true, rows: tableName === 'sql_transactions' ?
+-          [{...durable}] : []};
+-      },
+-    };
+-    const engine = new SQLQueryEngine({autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: gateway});
+-    const {consumer, options} = attachedOptions(
+-      DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE, 'advanced-live-disposition');
+-    options.sessionId = 'advanced-live-disposition';
+-    const first = await engine.executeQuery('BEGIN', [], options);
+-    const coordinator = engine.transactionCoordinator;
+-    const original = coordinator.transactionsBySession.get(
+-      'advanced-live-disposition');
+-    t.equal(first.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+-    t.equal(original.transactionId, attempted.transaction_id);
+-    t.equal(original.transactionCreationConsumer, consumer);
+-    t.equal(original.transactionCreationState, 'RECOVERY_PENDING');
+-    const replay = await coordinator.resumeRecoveredTransactions();
+-    t.equal(replay.resumed, 1);
+-    t.equal(coordinator.transactionsBySession.get(
+-      'advanced-live-disposition'), original);
+-    const retry = await engine.executeQuery('BEGIN', [], options);
+-    t.equal(retry.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+-    t.equal(retry.transactionId, original.transactionId);
+-    t.equal(coordinator.transactionsBySession.has(
+-      'advanced-live-disposition'), false);
+-    t.equal(coordinator.getTransactionCreationDiagnostics().recordCount, 0);
+-    await engine.shutdown();
+-  });
+-
+-test('advanced creation rereads after transient recovery pages return',
+-  async (t) => {
+-    let attempted;
+-    let available = false;
+-    let reads = 0;
+-    let writes = 0;
+-    const gateway = {
+-      supportsMutationSubmission: () => true,
+-      async submitMutation(mutation) {
+-        writes += 1;
+-        attempted ||= {...mutation.row, status: 'ROLLING_BACK'};
+-        return {success: false, error: 'lost answer'};
+-      },
+-      async readAuthoritativeRows(tableName) {
+-        reads += 1;
+-        if (reads === 1) return {success: true, rows: [{...attempted}]};
+-        if (!available) {
+-          return {success: false,
+-            error: 'authoritative_row_source_unavailable'};
+-        }
+-        return {success: true, rows: tableName === 'sql_transactions' ?
+-          [{...attempted}] : []};
+-      },
+-    };
+-    const engine = new SQLQueryEngine({autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: gateway});
+-    const {options} = attachedOptions(DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,
+-      'advanced-reread');
+-    options.sessionId = 'advanced-reread';
+-    const first = await engine.executeQuery('BEGIN', [], options);
+-    const before = reads;
+-    available = true;
+-    const retry = await engine.executeQuery('BEGIN', [], options);
+-    const retained = engine.transactionCoordinator.transactionsBySession.get(
+-      'advanced-reread');
+-    const writesBeforeSweep = writes;
+-    const sweep = await engine.transactionCoordinator.runRecoverySweep();
+-    t.equal(first.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+-    t.equal(retry.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+-    t.equal(writesBeforeSweep, 1,
+-      'known advanced authority never replays initial INSERT');
+-    t.ok(reads > before);
+-    t.equal(retained.transactionCreationAdvancedHandoff, true);
+-    t.equal(sweep.swept, 1);
+-    t.equal(engine.transactionCoordinator.transactionsBySession.get(
+-      'advanced-reread').recoveryDiscovered, true);
+-    await engine.shutdown();
+-  });
+-
+-test('terminal server-only advanced recovery releases its exact record charge',
+-  async (t) => {
+-    let attempted;
+-    const gateway = {
+-      supportsMutationSubmission: () => true,
+-      async submitMutation(mutation) {
+-        if (!attempted) {
+-          const decision = buildDecisionRecord(mutation.row.transaction_id,
+-            'ROLLBACK', []);
+-          attempted = {...mutation.row, status: 'ROLLING_BACK',
+-            participant_set_state: 'FROZEN', commit_mode: 'TWO_PHASE_COMMIT',
+-            decision: decision.decision, decision_text: decision.decisionText,
+-            decision_digest: decision.decisionDigest};
+-          return {success: false, error: 'lost answer'};
+-        }
+-        if (mutation.tableName === 'sql_transactions') {
+-          attempted = {...attempted, ...mutation.data};
+-        }
+-        return {success: true, completionState: 'applied'};
+-      },
+-      async readAuthoritativeRows(tableName) {
+-        return {success: true, rows: tableName === 'sql_transactions' ?
+-          [{...attempted}] : []};
+-      },
+-      async updateSystemTableRow(tableName, key, data) {
+-        if (tableName === 'sql_transactions') attempted = {...attempted, ...data};
+-        return {success: true};
+-      },
+-    };
+-    const engine = new SQLQueryEngine({autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: gateway});
+-    const coordinator = engine.transactionCoordinator;
+-    const first = await coordinator.begin('advanced-server-only');
+-    const before = coordinator.getTransactionCreationDiagnostics();
+-    const sweep = await coordinator.runRecoverySweep();
+-    const after = coordinator.getTransactionCreationDiagnostics();
+-    t.equal(first.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+-    t.equal(before.recordCount, 1);
+-    t.equal(sweep.resolved, 1);
+-    t.equal(after.recordCount, 0);
+-    t.equal(after.recordBytes, 0);
+-    t.equal(coordinator.transactionsBySession.has('advanced-server-only'), false);
+-    await engine.shutdown();
+-  });
+-
+-test('creation accounting refuses undercharged long identities before delivery',
+-  async (t) => {
+-    const sessionId = 's'.repeat(20000);
+-    let writes = 0;
+-    const coordinator = new DistributedTransactionCoordinator({
+-      maxUncertainTransactionCreationCanonicalBytes: 65000,
+-      async persistTransaction() {
+-        writes += 1;
+-      },
+-    });
+-    const result = await coordinator.begin(sessionId);
+-    t.equal(result.errorCode, 'TRANSACTION_CREATION_PRESSURE');
+-    t.equal(writes, 0);
+-    t.same(coordinator.getTransactionCreationDiagnostics(), {
+-      attachmentCount: 0, operationCount: 0, recordBytes: 0, recordCount: 0,
+-      roles: {}, totalBytes: 0});
+-  });
+-
+-test('creation envelope covers retained aliases and UTF-8 row storage',
+-  async (t) => {
+-    const sessionId = '💾'.repeat(5000);
+-    let retainedDuringPersistence = null;
+-    const coordinator = new DistributedTransactionCoordinator({
+-      maxUncertainTransactionCreationCanonicalBytes: 200000,
+-      async persistTransaction() {
+-        const [attachment] = coordinator.transactionCreationAttachmentsBySession
+-          .get(sessionId);
+-        const rawCandidate = attachment.boundRecord;
+-        const authoritativeRecord = rawCandidate.transactionCreationReservation.tx;
+-        retainedDuringPersistence = {
+-          authoritativeRecord,
+-          rawCandidate,
+-          observedBytes:
+-            rawCandidate.transactionCreationInitialRowBytes.length +
+-            retainedCanonicalFieldBytes(rawCandidate.transactionCreationInitialRow) +
+-            retainedCanonicalFieldBytes(rawCandidate) +
+-            retainedCanonicalFieldBytes(authoritativeRecord) +
+-            retainedCanonicalFieldBytes(attachment.consumer) +
+-            retainedCanonicalFieldBytes(rawCandidate.transactionCreationTurnBudget) +
+-            retainedCanonicalFieldBytes(rawCandidate.transactionCreationReservation),
+-        };
+-        throw uncertainError();
+-      },
+-    });
+-    const result = await coordinator.begin(sessionId);
+-    const tx = coordinator.transactionsBySession.get(sessionId);
+-    const diagnostics = coordinator.getTransactionCreationDiagnostics();
+-    t.equal(result.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-    t.not(retainedDuringPersistence.rawCandidate,
+-      retainedDuringPersistence.authoritativeRecord);
+-    t.ok(diagnostics.recordBytes >= retainedDuringPersistence.observedBytes + 40,
+-      'record charge covers the raw candidate, normalized authoritative copy, ' +
+-      'frozen row, encoded buffer, consumer aliases, and prepaid claim fields');
+-    t.ok(diagnostics.recordBytes > tx.transactionCreationInitialRowBytes.length);
+-    coordinator.retireUncertainCreationsForProcessShutdown();
+-  });
+-
+-test('an admitted creation reserves enough operation envelope to reenter',
+-  async (t) => {
+-    const entered = deferred();
+-    const release = deferred();
+-    const measure = new DistributedTransactionCoordinator({
+-      async persistTransaction() {
+-        entered.resolve();
+-        await release.promise;
+-        throw uncertainError();
+-      },
+-    });
+-    const measuring = measure.begin('exact-reentry');
+-    await entered.promise;
+-    const cap = measure.getTransactionCreationDiagnostics().totalBytes;
+-    release.resolve();
+-    await measuring;
+-    measure.retireUncertainCreationsForProcessShutdown();
+-
+-    let available = false;
+-    const coordinator = new DistributedTransactionCoordinator({
+-      maxUncertainTransactionCreationCanonicalBytes: cap,
+-      async persistTransaction() {
+-        if (!available) throw uncertainError();
+-      },
+-    });
+-    const first = await coordinator.begin('exact-reentry');
+-    available = true;
+-    const retry = await coordinator.begin('exact-reentry');
+-    t.equal(first.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-    t.equal(retry.success, true);
+-    t.equal(retry.transactionId, first.transactionId);
+-  });
+-
+-test('BEGIN publication and acceptance synchronously enforce its control turn',
+-  async (t) => {
+-    for (const sweepFirst of [false, true]) {
+-      let now = 0;
+-      const sessionId = sweepFirst ? 'spent-sweep-first' : 'spent-retry-first';
+-      const coordinator = new DistributedTransactionCoordinator({
+-        now: () => now, transactionBudgetMs: 1000,
+-        transactionCreationTurnBudgetMs: 10,
+-        async persistTransaction() {
+-          now = 20;
+-        },
+-      });
+-      const {consumer, options} = attachedOptions(
+-        DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE, sessionId);
+-      const result = await coordinator.begin(sessionId, options);
+-      if (sweepFirst) {
+-        const sweep = await coordinator.runRecoverySweep();
+-        t.equal(sweep.deferred, 1);
+-      }
+-      const retry = await coordinator.begin(sessionId, options);
+-      t.equal(result.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+-      t.equal(coordinator.canAcceptDistributedBegin(consumer,
+-        distributedBeginAcceptanceOf(result)), false);
+-      t.equal(retry.transactionId, result.transactionId);
+-      t.equal(coordinator.acceptDistributedBegin(consumer,
+-        distributedBeginAcceptanceOf(retry)), true);
+-    }
+-  });
+-
+-test('SQL engine rejects creation limit accessors at the producer boundary',
+-  async (t) => {
+-    let getterCalls = 0;
+-    const options = {autoStartDistributedTransactionRecovery: false};
+-    Object.defineProperty(options, 'maxUncertainTransactionCreations', {
+-      get() {
+-        getterCalls += 1;
+-        return 1;
+-      },
+-    });
+-    t.throws(() => new SQLQueryEngine(options));
+-    t.equal(getterCalls, 0);
+-  });
+-
+-test('shutdown fences an in-flight census and its older INSERT completion',
+-  async (t) => {
+-    const insertEntered = deferred();
+-    const insertRelease = deferred();
+-    const censusEntered = deferred();
+-    const censusRelease = deferred();
+-    let attempted;
+-    const coordinator = new DistributedTransactionCoordinator({
+-      async persistTransaction(record) {
+-        attempted = {...record.transactionCreationInitialRow};
+-        insertEntered.resolve();
+-        await insertRelease.promise;
+-      },
+-      async loadRecoveryStateForSweep() {
+-        censusEntered.resolve();
+-        return censusRelease.promise;
+-      },
+-    });
+-    const pending = coordinator.begin('shutdown-census');
+-    await insertEntered.promise;
+-    const sweep = coordinator.runRecoverySweep();
+-    await censusEntered.promise;
+-    coordinator.retireUncertainCreationsForProcessShutdown();
+-    censusRelease.resolve({transactions: [attempted], participants: [],
+-      writeOperations: []});
+-    const sweepResult = await sweep;
+-    insertRelease.resolve();
+-    const result = await pending;
+-    t.equal(sweepResult.skipped, true);
+-    t.equal(result.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-    t.equal(coordinator.transactionsBySession.has('shutdown-census'), false);
+-    t.equal(coordinator.workflowCoordinator.workflowsById.size, 0);
+-    t.same(coordinator.getTransactionCreationDiagnostics(), {
+-      attachmentCount: 0, operationCount: 0, recordBytes: 0, recordCount: 0,
+-      roles: {}, totalBytes: 0});
+-  });
+diff --git a/test/query/transaction-begin-uncertain-handoff.test.js b/test/query/transaction-begin-uncertain-handoff.test.js
+deleted file mode 100644
+index a49f9ae2b..000000000
+--- a/test/query/transaction-begin-uncertain-handoff.test.js
++++ /dev/null
+@@ -1,855 +0,0 @@
+-import {createHash} from 'node:crypto';
+-import {EventEmitter} from 'node:events';
+-import pg from 'pg';
+-import {test} from '../../src/test-helpers/tap.js';
+-import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+-import {PostgresWireAdapter} from
+-  '../../src/query/pg/postgres-wire-adapter.js';
+-import {PgWireProtocolHandler} from
+-  '../../src/runtime/pgwire-protocol-handler.js';
+-import {PostgresWireRuntimeModule} from
+-  '../../src/runtime/pgwire-runtime-module.js';
+-import {PG_TRANSACTION_STATE} from
+-  '../../src/runtime/pgwire-protocol-constants.js';
+-import {createBoundApplicationDatabaseRuntime} from
+-  '../../src/query/application-database.js';
+-import {DistributedTransactionCoordinator} from
+-  '../../src/query/distributed/distributed-transaction-coordinator.js';
+-import {
+-  DISTRIBUTED_BEGIN_CONSUMER_KIND,
+-  attachDistributedBeginConsumer,
+-  createDistributedBeginConsumer,
+-  distributedBeginAcceptanceOf,
+-  distributedBeginConsumerOf,
+-} from '../../src/query/distributed/distributed-begin-consumer.js';
+-import {
+-  buildInitialTransactionDeliveryKey,
+-  encodeInitialTransactionRow,
+-  measureInitialTransactionRowFields,
+-} from '../../src/query/distributed/distributed-transaction-creation-contract.js';
+-import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
+-import {META_SERVICE_RUNTIME_REF} from '../../src/constants/wasm-meta.js';
+-import {RUNTIME_KIND} from '../../src/constants/runtime.js';
+-import {createRuntimeStartupWiring} from
+-  '../../src/runtime/runtime-startup-wiring.js';
+-
+-const LOOPBACK_HOST = '127.0.0.1';
+-const COMPONENT_DATABASE = 'begin_component';
+-const COMPONENT_USER = 'begin_component';
+-const silentLogger = Object.freeze({
+-  debug() {},
+-  error() {},
+-  info() {},
+-  warn() {},
+-});
+-
+-function uncertainError() {
+-  return Object.assign(new Error('lost insert answer'), {
+-    code: 'TRANSACTION_CREATION_UNCERTAIN',
+-  });
+-}
+-
+-function deferred() {
+-  let resolve;
+-  let reject;
+-  const promise = new Promise((resolvePromise, rejectPromise) => {
+-    resolve = resolvePromise;
+-    reject = rejectPromise;
+-  });
+-  return {promise, reject, resolve};
+-}
+-
+-class RecordingSocket extends EventEmitter {
+-  constructor() {
+-    super();
+-    this.written = [];
+-  }
+-  write(bytes) {
+-    this.written.push(Buffer.from(bytes));
+-    return true;
+-  }
+-  end() {}
+-  destroy() {}
+-}
+-
+-function componentSqlRequestExecutor(engine) {
+-  const executeRequest = (request) => engine.executeRequest(request);
+-  executeRequest.canAcceptDistributedBeginForConsumer = (...args) =>
+-    engine.canAcceptDistributedBeginForConsumer(...args);
+-  executeRequest.acceptDistributedBeginForConsumer = (...args) =>
+-    engine.acceptDistributedBeginForConsumer(...args);
+-  executeRequest.retireDistributedBeginConsumer = (...args) =>
+-    engine.retireDistributedBeginConsumer(...args);
+-  return executeRequest;
+-}
+-
+-async function startComponentPgwire(engine) {
+-  const runtime = new PostgresWireRuntimeModule({logger: silentLogger});
+-  const definition = {
+-    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
+-    runtimeConfig: JSON.stringify({
+-      authMode: 'trust',
+-      host: LOOPBACK_HOST,
+-      tlsMode: 'disable',
+-    }),
+-  };
+-  const prepared = await runtime.prepare(definition);
+-  if (prepared.status !== 'ready') throw new Error(prepared.error);
+-  const context = {
+-    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
+-    host: LOOPBACK_HOST,
+-    port: 0,
+-    sqlRequestExecutor: componentSqlRequestExecutor(engine),
+-  };
+-  const started = await runtime.start(context);
+-  if (started.status !== 'running') throw new Error(started.error);
+-  return {
+-    close: () => runtime.stop(context),
+-    port: started.endpointIntent.port,
+-  };
+-}
+-
+-function componentPgClient(port) {
+-  return new pg.Client({
+-    database: COMPONENT_DATABASE,
+-    host: LOOPBACK_HOST,
+-    port,
+-    ssl: false,
+-    user: COMPONENT_USER,
+-  });
+-}
+-
+-function pgwireServiceDefinition() {
+-  return {
+-    runtimeConfig: JSON.stringify({
+-      authMode: 'trust',
+-      host: LOOPBACK_HOST,
+-      tlsMode: 'disable',
+-    }),
+-    runtimeKind: RUNTIME_KIND.NATIVE_JS,
+-    runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
+-    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
+-  };
+-}
+-
+-function captureReadyStates(client) {
+-  const states = [];
+-  client.connection.on('message', (message) => {
+-    if (message.name === 'readyForQuery') states.push(message.status);
+-  });
+-  return states;
+-}
+-
+-function nextReadyState(client) {
+-  return new Promise((resolve) => {
+-    client.connection.once('readyForQuery', (message) => {
+-      resolve(message.status);
+-    });
+-  });
+-}
+-
+-async function waitForCreationState(coordinator, transactionId, state) {
+-  for (let turn = 0; turn < 100; turn += 1) {
+-    const tx = coordinator.workflowCoordinator.getWorkflowById(transactionId);
+-    if (tx?.transactionCreationState === state) return tx;
+-    await new Promise((resolve) => setImmediate(resolve));
+-  }
+-  throw new Error(`Creation ${transactionId} did not reach ${state}`);
+-}
+-
+-async function within(promise, label) {
+-  let timer;
+-  try {
+-    return await Promise.race([
+-      promise,
+-      new Promise((_resolve, reject) => {
+-        timer = setTimeout(() => reject(new Error(label)), 1000);
+-      }),
+-    ]);
+-  } finally {
+-    clearTimeout(timer);
+-  }
+-}
+-
+-test('BEGIN creation encoding retains the approved fixed vector', (t) => {
+-  const row = {
+-    transaction_id: '00000000000000000000000000000000',
+-    session_id: 'session-1',
+-    status: 'ACTIVE',
+-    transaction_epoch: 0,
+-    timeout_deadline: 1700000030000,
+-    transaction_mode: 'EXPLICIT',
+-    participant_set_state: 'OPEN',
+-    participant_set_text: '[]',
+-    commit_mode: 'NOT_SELECTED',
+-    frozen_participant_count: 0,
+-    updated_at: 1700000000000,
+-    decision: null,
+-    decision_text: null,
+-    decision_digest: null,
+-    created_at: 1700000000000,
+-  };
+-  const bytes = encodeInitialTransactionRow(row);
+-  t.equal(measureInitialTransactionRowFields(row.transaction_id,
+-    row.session_id, row.transaction_epoch, row.timeout_deadline,
+-    row.transaction_mode, row.created_at), bytes.length);
+-  t.equal(bytes.length, 183);
+-  t.equal(createHash('sha256').update(bytes).digest('hex'),
+-    '3a203ee75b7404a614e9061d958d3c18eacdbf70ecb6d984f17aec50de67124c');
+-  t.equal(buildInitialTransactionDeliveryKey(row.transaction_id, bytes),
+-    'd9ff43857c5514ccf70b808cfa2468a018321beeb4c805d234d2ede5cc1ac9a7');
+-  t.end();
+-});
+-
+-test('uncertain BEGIN retains one identity and reenters it', async (t) => {
+-  const persistedIds = [];
+-  let uncertain = true;
+-  const coordinator = new DistributedTransactionCoordinator({
+-    persistTransaction: async (record) => {
+-      persistedIds.push(record.transactionId);
+-      if (uncertain) throw uncertainError();
+-    },
+-  });
+-  const first = await coordinator.begin('same-session');
+-  t.equal(first.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-  t.equal(coordinator.getTransaction('same-session'), null);
+-  t.equal(coordinator.hasActiveTransaction('same-session'), true);
+-  t.equal((await coordinator.rollback('same-session')).errorCode,
+-    'TRANSACTION_CREATION_UNCERTAIN');
+-  uncertain = false;
+-  const retry = await coordinator.begin('same-session');
+-  t.equal(retry.success, true);
+-  t.equal(retry.transactionId, first.transactionId);
+-  t.same(persistedIds, [first.transactionId, first.transactionId]);
+-  t.same(coordinator.getTransactionCreationDiagnostics(), {
+-    attachmentCount: 0,
+-    operationCount: 0,
+-    recordBytes: 0,
+-    recordCount: 0,
+-    roles: {},
+-    totalBytes: 0,
+-  });
+-  t.end();
+-});
+-
+-test('one role-neutral slot covers claim acceptance and stale consumers',
+-  async (t) => {
+-    const coordinator = new DistributedTransactionCoordinator({
+-      maxUncertainTransactionCreations: 1,
+-    });
+-    const consumer = createDistributedBeginConsumer(
+-      DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,
+-      'wire',
+-    );
+-    const options = {};
+-    attachDistributedBeginConsumer(options, consumer);
+-    const begun = await coordinator.begin('wire', options);
+-    const acceptance = distributedBeginAcceptanceOf(begun);
+-    t.equal(begun.success, true);
+-    t.equal(coordinator.getTransaction('wire'), null);
+-    t.equal(coordinator.getTransactionCreationDiagnostics().recordCount, 1);
+-    const stale = createDistributedBeginConsumer(
+-      DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,
+-      'wire',
+-    );
+-    t.equal(coordinator.acceptDistributedBegin(stale, acceptance), false);
+-    let enteredId = null;
+-    t.equal(coordinator.acceptDistributedBegin(
+-      consumer,
+-      acceptance,
+-      (transactionId) => {
+-        enteredId = transactionId;
+-      },
+-    ), true);
+-    t.equal(enteredId, begun.transactionId);
+-    t.equal(coordinator.acceptDistributedBegin(consumer, acceptance), false);
+-    t.equal(coordinator.getTransaction('wire').transactionId,
+-      begun.transactionId);
+-    t.equal(coordinator.getTransactionCreationDiagnostics().recordCount, 0);
+-    t.end();
+-  });
+-
+-test('recovery before retry preserves the live consumer handoff', async (t) => {
+-  let writes = 0;
+-  const coordinator = new DistributedTransactionCoordinator({
+-    persistTransaction: async () => {
+-      writes += 1;
+-      if (writes === 1) throw uncertainError();
+-    },
+-  });
+-  const consumer = createDistributedBeginConsumer(
+-    DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,
+-    'recovery-first',
+-  );
+-  const options = {};
+-  attachDistributedBeginConsumer(options, consumer);
+-  const first = await coordinator.begin('recovery-first', options);
+-  t.equal(first.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-  const sweep = await coordinator.runRecoverySweep();
+-  t.equal(sweep.resolved, 0);
+-  t.equal(sweep.deferred, 1);
+-  const retry = await coordinator.begin('recovery-first', options);
+-  t.equal(retry.transactionId, first.transactionId);
+-  t.equal(coordinator.acceptDistributedBegin(
+-    consumer,
+-    distributedBeginAcceptanceOf(retry),
+-  ), true);
+-  t.equal(coordinator.getTransaction('recovery-first').transactionId,
+-    first.transactionId);
+-  t.equal(writes, 2);
+-});
+-
+-test('generic wrong-key readback remains uncertain and retry keeps the ID',
+-  async (t) => {
+-    let attemptedRow = null;
+-    let writes = 0;
+-    let reads = 0;
+-    const gateway = {
+-      supportsMutationSubmission: () => true,
+-      async submitMutation(mutation) {
+-        writes += 1;
+-        attemptedRow ||= {...mutation.row};
+-        return {success: false, error: 'generic timeout'};
+-      },
+-      async readAuthoritativeRows() {
+-        reads += 1;
+-        return reads === 1 ?
+-          {success: true, rows: [{...attemptedRow,
+-            transaction_id: 'ffffffffffffffffffffffffffffffff'}]} :
+-          {success: true, rows: [{...attemptedRow}]};
+-      },
+-    };
+-    const engine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: gateway,
+-    });
+-    t.after(() => engine.shutdown());
+-    const first = await engine.executeQuery('BEGIN', [], {sessionId: 'lost'});
+-    const retry = await engine.executeQuery('BEGIN', [], {sessionId: 'lost'});
+-    t.equal(first.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-    t.equal(retry.success, true);
+-    t.equal(retry.transactionId, first.transactionId);
+-    t.equal(writes, 2);
+-    t.equal(engine.transactionCoordinator.getTransaction('lost').transactionId,
+-      first.transactionId);
+-  });
+-
+-test('producer-specific primary-key conflict alone permits bounded remint',
+-  async (t) => {
+-    let firstRow = null;
+-    let writes = 0;
+-    const gateway = {
+-      supportsMutationSubmission: () => true,
+-      async submitMutation(mutation) {
+-        writes += 1;
+-        if (writes === 1) {
+-          firstRow = {...mutation.row};
+-          return {success: false,
+-            errorCode: 'SQLITE_CONSTRAINT_PRIMARYKEY'};
+-        }
+-        return {success: true, completionState: 'applied'};
+-      },
+-      async readAuthoritativeRows() {
+-        return {success: true, rows: [{...firstRow,
+-          session_id: 'foreign-session'}]};
+-      },
+-    };
+-    const engine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: gateway,
+-    });
+-    t.after(() => engine.shutdown());
+-    const begun = await engine.executeQuery('BEGIN', [], {sessionId: 'collision'});
+-    t.equal(begun.success, true);
+-    t.not(begun.transactionId, firstRow.transaction_id);
+-    t.equal(writes, 2);
+-  });
+-
+-test('incomplete same-key readback retains identity without remint', async (t) => {
+-  let attemptedRow = null;
+-  let writes = 0;
+-  const gateway = {
+-    supportsMutationSubmission: () => true,
+-    async submitMutation(mutation) {
+-      writes += 1;
+-      attemptedRow = {...mutation.row};
+-      return {success: false, error: 'unknown completion'};
+-    },
+-    async readAuthoritativeRows() {
+-      return {success: true, rows: [{
+-        transaction_id: attemptedRow.transaction_id,
+-        session_id: attemptedRow.session_id,
+-      }]};
+-    },
+-  };
+-  const engine = new SQLQueryEngine({
+-    autoStartDistributedTransactionRecovery: false,
+-    controlPlaneSystemTableGateway: gateway,
+-  });
+-  t.after(() => engine.shutdown());
+-  const begun = await engine.executeQuery('BEGIN', [], {sessionId: 'incomplete'});
+-  t.equal(begun.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-  t.equal(begun.transactionId, attemptedRow.transaction_id);
+-  t.equal(writes, 1);
+-  t.equal(engine.transactionCoordinator.getTransactionCreationDiagnostics()
+-    .recordCount, 1);
+-});
+-
+-test('pre-FIFO operation accounting refuses excess BEGIN before mint or persist',
+-  async (t) => {
+-    const entered = deferred();
+-    const release = deferred();
+-    let persistCalls = 0;
+-    const coordinator = new DistributedTransactionCoordinator({
+-      maxUncertainTransactionCreations: 1,
+-      persistTransaction: async () => {
+-        persistCalls += 1;
+-        entered.resolve();
+-        await release.promise;
+-        throw uncertainError();
+-      },
+-    });
+-    const pgConsumer = createDistributedBeginConsumer(
+-      DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,
+-      'held',
+-    );
+-    const pgOptions = {};
+-    attachDistributedBeginConsumer(pgOptions, pgConsumer);
+-    const firstPromise = coordinator.begin('held', pgOptions);
+-    await entered.promise;
+-    const applicationConsumer = createDistributedBeginConsumer(
+-      DISTRIBUTED_BEGIN_CONSUMER_KIND.APPLICATION,
+-      'other',
+-    );
+-    const applicationOptions = {};
+-    attachDistributedBeginConsumer(applicationOptions, applicationConsumer);
+-    const refused = await coordinator.begin('other', applicationOptions);
+-    t.equal(refused.errorCode, 'TRANSACTION_CREATION_PRESSURE');
+-    t.equal(persistCalls, 1);
+-    release.resolve();
+-    const first = await firstPromise;
+-    t.equal(first.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-    t.equal(coordinator.getTransactionCreationDiagnostics().operationCount, 0);
+-    t.equal(coordinator.getTransactionCreationDiagnostics().recordCount, 1);
+-  });
+-
+-test('retained same-session FIFO work keeps one identity and bounded charges',
+-  async (t) => {
+-    const entered = deferred();
+-    const release = deferred();
+-    let writes = 0;
+-    const coordinator = new DistributedTransactionCoordinator({
+-      maxUncertainTransactionCreations: 2,
+-      persistTransaction: async () => {
+-        writes += 1;
+-        if (writes === 1) {
+-          entered.resolve();
+-          await release.promise;
+-          throw uncertainError();
+-        }
+-      },
+-    });
+-    const first = coordinator.begin('queued-session');
+-    await entered.promise;
+-    const queued = coordinator.begin('queued-session');
+-    t.equal(coordinator.getTransactionCreationDiagnostics().operationCount, 2);
+-    release.resolve();
+-    const firstResult = await first;
+-    const queuedResult = await queued;
+-    t.equal(firstResult.errorCode, 'TRANSACTION_CREATION_UNCERTAIN');
+-    t.equal(queuedResult.success, true);
+-    t.equal(queuedResult.transactionId, firstResult.transactionId);
+-    t.equal(writes, 2);
+-    t.equal(coordinator.getTransactionCreationDiagnostics().totalBytes, 0);
+-  });
+-
+-test('PostgresWireAdapter binds acceptance to its exact live session',
+-  async (t) => {
+-    const engine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: {
+-        supportsMutationSubmission: () => true,
+-        submitMutation: async () => ({success: true,
+-          completionState: 'applied'}),
+-      },
+-    });
+-    t.after(() => engine.shutdown());
+-    const adapter = new PostgresWireAdapter({
+-      sqlCore: engine,
+-      authHandler: {
+-        authenticate: async ({database}) => ({authenticated: true,
+-          context: {tenantId: database, principal: 'tester', roles: []}}),
+-        authorizeQuery: () => ({authorized: true}),
+-      },
+-    });
+-    await adapter.authenticate('wire-session', {tenantId: 'default'});
+-    const begun = await adapter.execute('wire-session', 'BEGIN');
+-    let entered = null;
+-    t.equal(adapter.acceptDistributedBegin('wire-session', begun,
+-      (transactionId) => {
+-        entered = transactionId;
+-      }), true);
+-    t.equal(entered, begun.transactionId);
+-    t.equal(engine.transactionCoordinator.getTransaction('wire-session')
+-      .transactionId, begun.transactionId);
+-    adapter.closeSession('wire-session', {transactionOpen: true});
+-  });
+-
+-test('pgwire uncertain BEGIN stays idle and plain retry accepts the same ID',
+-  async (t) => {
+-    let attemptedRow = null;
+-    let reads = 0;
+-    const gateway = {
+-      supportsMutationSubmission: () => true,
+-      async submitMutation(mutation) {
+-        attemptedRow ||= {...mutation.row};
+-        return {success: false, error: 'lost answer'};
+-      },
+-      async readAuthoritativeRows() {
+-        reads += 1;
+-        return reads === 1 ?
+-          {success: false, error: 'temporarily unavailable'} :
+-          {success: true, rows: [{...attemptedRow}]};
+-      },
+-    };
+-    const engine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: gateway,
+-    });
+-    t.after(() => engine.shutdown());
+-    const adapter = new PostgresWireAdapter({
+-      sqlCore: engine,
+-      authHandler: {
+-        authenticate: async ({database}) => ({authenticated: true,
+-          context: {tenantId: database, principal: 'tester', roles: []}}),
+-        authorizeQuery: () => ({authorized: true}),
+-      },
+-    });
+-    const socket = new RecordingSocket();
+-    const handler = new PgWireProtocolHandler({adapter, socket,
+-      logger: {debug() {}, error() {}, info() {}, warn() {}}});
+-    await handler._completeAuthentication({sessionId: 'wire-retry',
+-      tenantId: 'default', user: 'tester', database: 'default'});
+-    socket.written.length = 0;
+-    await handler._handleSimpleQuery(Buffer.from('BEGIN\0'));
+-    const firstId = attemptedRow.transaction_id;
+-    t.equal(handler.getSession().getTransactionState(),
+-      PG_TRANSACTION_STATE.IDLE);
+-    t.equal(engine.transactionCoordinator.getTransaction('wire-retry'), null);
+-    await handler._handleSimpleQuery(Buffer.from('BEGIN\0'));
+-    t.equal(handler.getSession().getTransactionState(),
+-      PG_TRANSACTION_STATE.IN_TRANSACTION);
+-    t.equal(handler.getSession().transactionId, firstId);
+-    t.equal(engine.transactionCoordinator.getTransaction('wire-retry')
+-      .transactionId, firstId);
+-    handler.destroy();
+-  });
+-
+-test('queued recovery preserves the live pgwire BEGIN claim', async (t) => {
+-  const entered = deferred();
+-  const release = deferred();
+-  const engine = new SQLQueryEngine({autoStartDistributedTransactionRecovery: false,
+-    controlPlaneSystemTableGateway: {
+-      supportsMutationSubmission: () => true,
+-      async submitMutation() {
+-        entered.resolve();
+-        await release.promise;
+-        return {success: true, completionState: 'applied'};
+-      },
+-    }});
+-  t.after(() => engine.shutdown());
+-  const adapter = new PostgresWireAdapter({sqlCore: engine, authHandler: {
+-    authenticate: async ({database}) => ({authenticated: true,
+-      context: {tenantId: database, principal: 'tester', roles: []}}),
+-    authorizeQuery: () => ({authorized: true}),
+-  }});
+-  const socket = new RecordingSocket();
+-  const handler = new PgWireProtocolHandler({adapter, socket,
+-    logger: {debug() {}, error() {}, info() {}, warn() {}}});
+-  await handler._completeAuthentication({sessionId: 'queued-claim',
+-    tenantId: 'default', user: 'tester', database: 'default'});
+-  socket.written.length = 0;
+-  const query = handler._handleSimpleQuery(Buffer.from('BEGIN\0'));
+-  await entered.promise;
+-  const sweep = engine.transactionCoordinator.runRecoverySweep();
+-  await new Promise((resolve) => setImmediate(resolve));
+-  release.resolve();
+-  await Promise.all([query, sweep]);
+-  t.same(socket.written.map((entry) => String.fromCharCode(entry[0])), ['C', 'Z']);
+-  t.equal(handler.getSession().getTransactionState(),
+-    PG_TRANSACTION_STATE.IN_TRANSACTION);
+-  t.equal((await sweep).deferred, 1);
+-  t.equal(engine.transactionCoordinator.getTransactionCreationDiagnostics()
+-    .recordCount, 0);
+-  handler.destroy();
+-});
+-
+-test('ordinary pg client retries a lost BEGIN with the same identity',
+-  async (t) => {
+-    let attemptedRow = null;
+-    let reads = 0;
+-    const gateway = {
+-      supportsMutationSubmission: () => true,
+-      async submitMutation(mutation) {
+-        if (!mutation.row) {
+-          Object.assign(attemptedRow, mutation.data || {});
+-          return {success: true, completionState: 'applied'};
+-        }
+-        attemptedRow ||= {...mutation.row};
+-        return {success: false, error: 'lost BEGIN answer'};
+-      },
+-      async readAuthoritativeRows() {
+-        reads += 1;
+-        return reads === 1 ?
+-          {success: false, error: 'temporarily unavailable'} :
+-          {success: true, rows: [{...attemptedRow}]};
+-      },
+-    };
+-    const engine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: gateway,
+-    });
+-    const listener = await startComponentPgwire(engine);
+-    const client = componentPgClient(listener.port);
+-    const readyStates = captureReadyStates(client);
+-    t.after(async () => {
+-      await client.end().catch(() => {});
+-      await listener.close();
+-      await engine.shutdown();
+-    });
+-    await client.connect();
+-    readyStates.length = 0;
+-    const firstReady = nextReadyState(client);
+-    await t.rejects(client.query('BEGIN'));
+-    t.equal(await firstReady, 'I');
+-    const firstId = attemptedRow.transaction_id;
+-    const rollbackReady = nextReadyState(client);
+-    let rollbackError = null;
+-    try {
+-      await client.query('ROLLBACK');
+-    } catch (error) {
+-      rollbackError = error;
+-    }
+-    t.equal(rollbackError?.code, 'XX000');
+-    t.equal(rollbackError?.message,
+-      'Distributed transaction creation outcome is uncertain; ' +
+-      'retry this BEGIN on the same session');
+-    t.equal(await rollbackReady, 'I');
+-    t.equal(engine.transactionCoordinator
+-      .getTransactionCreationDiagnostics().recordCount, 1);
+-    await client.query('BEGIN');
+-    t.equal(readyStates.at(-1), 'T');
+-    t.equal(engine.transactionCoordinator.getTransaction(
+-      attemptedRow.session_id,
+-    ).transactionId, firstId);
+-    await client.query('ROLLBACK');
+-    t.equal(readyStates.at(-1), 'I');
+-  });
+-
+-test('ordinary pg client consumes recovery-first BEGIN handoff', async (t) => {
+-  let attemptedRow = null;
+-  let reads = 0;
+-  const gateway = {
+-    supportsMutationSubmission: () => true,
+-    async submitMutation(mutation) {
+-      if (!mutation.row) {
+-        Object.assign(attemptedRow, mutation.data || {});
+-        return {success: true, completionState: 'applied'};
+-      }
+-      attemptedRow ||= {...mutation.row};
+-      return {success: false, error: 'lost BEGIN answer'};
+-    },
+-    async readAuthoritativeRows() {
+-      reads += 1;
+-      return reads === 1 ?
+-        {success: false, error: 'temporarily unavailable'} :
+-        {success: true, rows: [{...attemptedRow}]};
+-    },
+-  };
+-  const engine = new SQLQueryEngine({
+-    autoStartDistributedTransactionRecovery: false,
+-    controlPlaneSystemTableGateway: gateway,
+-  });
+-  const listener = await startComponentPgwire(engine);
+-  const client = componentPgClient(listener.port);
+-  const readyStates = captureReadyStates(client);
+-  t.after(async () => {
+-    await client.end().catch(() => {});
+-    await listener.close();
+-    await engine.shutdown();
+-  });
+-  await client.connect();
+-  readyStates.length = 0;
+-  const firstReady = nextReadyState(client);
+-  await t.rejects(client.query('BEGIN'));
+-  t.equal(await firstReady, 'I');
+-  const firstId = attemptedRow.transaction_id;
+-  const sweep = await engine.transactionCoordinator.runRecoverySweep();
+-  t.equal(sweep.resolved, 0);
+-  t.equal(sweep.deferred, 1);
+-  await client.query('BEGIN');
+-  t.equal(readyStates.at(-1), 'T');
+-  t.equal(engine.transactionCoordinator.getTransaction(
+-    attemptedRow.session_id,
+-  ).transactionId, firstId);
+-  await client.query('ROLLBACK');
+-  t.equal(readyStates.at(-1), 'I');
+-});
+-
+-test('ordinary pg client disconnect wins over a late BEGIN completion',
+-  async (t) => {
+-    const insertEntered = deferred();
+-    const insertRelease = deferred();
+-    let attemptedRow = null;
+-    const gateway = {
+-      supportsMutationSubmission: () => true,
+-      async submitMutation(mutation) {
+-        if (!mutation.row) return {success: true, completionState: 'applied'};
+-        attemptedRow = {...mutation.row};
+-        insertEntered.resolve();
+-        await insertRelease.promise;
+-        return {success: true, completionState: 'applied'};
+-      },
+-      async readAuthoritativeRows() {
+-        return {success: true, rows: [{...attemptedRow}]};
+-      },
+-    };
+-    const engine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: gateway,
+-    });
+-    const listener = await startComponentPgwire(engine);
+-    const client = componentPgClient(listener.port);
+-    client.on('error', () => {});
+-    t.after(async () => {
+-      await client.end().catch(() => {});
+-      await listener.close();
+-      await engine.shutdown();
+-    });
+-    await client.connect();
+-    const beginPromise = client.query('BEGIN');
+-    await insertEntered.promise;
+-    client.connection.stream.destroy();
+-    await t.rejects(beginPromise);
+-    await waitForCreationState(
+-      engine.transactionCoordinator,
+-      attemptedRow.transaction_id,
+-      'SERVER_RECOVERY_ONLY',
+-    );
+-    insertRelease.resolve();
+-    await new Promise((resolve) => setImmediate(resolve));
+-    const pending = engine.transactionCoordinator.workflowCoordinator
+-      .getWorkflowById(attemptedRow.transaction_id);
+-    t.equal(pending.transactionCreationState, 'SERVER_RECOVERY_ONLY');
+-    const sweep = await engine.transactionCoordinator.runRecoverySweep();
+-    t.equal(sweep.swept, 1);
+-    t.equal(engine.transactionCoordinator.getTransaction(
+-      attemptedRow.session_id,
+-    ).transactionId, attemptedRow.transaction_id);
+-  });
+-
+-test('query executor replacement retires the issuing BEGIN owner',
+-  async (t) => {
+-    const insertEntered = deferred();
+-    const insertRelease = deferred();
+-    let attemptedRow = null;
+-    const firstEngine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: {
+-        supportsMutationSubmission: () => true,
+-        updateSystemTableRow: async () => ({success: true}),
+-        async submitMutation(mutation) {
+-          if (!mutation.row ||
+-              !Object.hasOwn(mutation.row, 'transaction_id')) {
+-            return {success: true, completionState: 'applied'};
+-          }
+-          attemptedRow = {...mutation.row};
+-          insertEntered.resolve();
+-          await insertRelease.promise;
+-          return {success: true, completionState: 'applied'};
+-        },
+-      },
+-    });
+-    const secondEngine = new SQLQueryEngine({
+-      autoStartDistributedTransactionRecovery: false,
+-      controlPlaneSystemTableGateway: {
+-        supportsMutationSubmission: () => true,
+-        updateSystemTableRow: async () => ({success: true}),
+-        submitMutation: async () => ({success: true,
+-          completionState: 'applied'}),
+-      },
+-    });
+-    const lifecycle = createRuntimeStartupWiring().serviceRuntimeLifecycle;
+-    firstEngine._wireQueryExecutorFactory(lifecycle);
+-    const definition = pgwireServiceDefinition();
+-    await within(lifecycle.prepare(definition, {nodeId: 'begin-owner-one'}),
+-      'replacement prepare timed out');
+-    const context = {...definition, host: LOOPBACK_HOST, port: 0};
+-    const started = await within(lifecycle.start(context),
+-      'replacement start timed out');
+-    const client = componentPgClient(started.endpointIntent.port);
+-    client.on('error', () => {});
+-    t.after(async () => {
+-      await client.end().catch(() => {});
+-      await lifecycle.stop(context).catch(() => {});
+-      await firstEngine.shutdown();
+-      await secondEngine.shutdown();
+-    });
+-    await within(client.connect(), 'replacement client connect timed out');
+-    const beginPromise = client.query('BEGIN');
+-    await within(insertEntered.promise, 'replacement BEGIN did not persist');
+-    secondEngine._wireQueryExecutorFactory(lifecycle);
+-    insertRelease.resolve();
+-    await t.rejects(beginPromise);
+-    const retained = await waitForCreationState(
+-      firstEngine.transactionCoordinator,
+-      attemptedRow.transaction_id,
+-      'SERVER_RECOVERY_ONLY',
+-    );
+-    t.equal(retained.transactionId, attemptedRow.transaction_id);
+-    t.equal(firstEngine.transactionCoordinator
+-      .getTransactionCreationDiagnostics().recordCount, 1);
+-    t.equal(secondEngine.transactionCoordinator.getTransaction(
+-      attemptedRow.session_id,
+-    ), null);
+-  });
+-
+-test('ApplicationDatabase accepts BEGIN before invoking its callback',
+-  async (t) => {
+-    const coordinator = new DistributedTransactionCoordinator();
+-    let acceptedBeforeCallback = false;
+-    const core = {
+-      async executeQuery(sql, _params, options) {
+-        if (sql === 'BEGIN') return coordinator.begin(options.sessionId, options);
+-        if (sql === 'COMMIT') {
+-          return coordinator.commit(options.sessionId, {
+-            expectedTransactionId: options.expectedTransactionId,
+-          });
+-        }
+-        if (sql === 'ROLLBACK') {
+-          return coordinator.rollback(options.sessionId, {
+-            expectedTransactionId: options.expectedTransactionId,
+-          });
+-        }
+-        return {success: true, rows: []};
+-      },
+-      acceptDistributedBeginForConsumer(options, result) {
+-        return coordinator.acceptDistributedBegin(
+-          distributedBeginConsumerOf(options),
+-          distributedBeginAcceptanceOf(result),
+-        );
+-      },
+-      retireDistributedBeginConsumer(sessionId, consumer) {
+-        coordinator.retireDistributedBeginConsumer(sessionId, consumer);
+-      },
+-    };
+-    const runtime = createBoundApplicationDatabaseRuntime(core);
+-    const db = runtime.openApplicationDatabase({applicationId: 'begin-owner'});
+-    await db.transaction(async () => {
+-      acceptedBeforeCallback = coordinator.getTransactionCreationDiagnostics()
+-        .recordCount === 0;
+-    });
+-    t.equal(acceptedBeforeCallback, true);
+-    t.equal(coordinator.getTransactionCreationDiagnostics().recordCount, 0);
+-    t.end();
+-  });

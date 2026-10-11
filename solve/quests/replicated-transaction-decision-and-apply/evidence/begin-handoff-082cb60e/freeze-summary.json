@@ -1,0 +1,101 @@
+{
+  "acceptedDesignSha256": "3679b87f4aeb84fd8d9397aac9f73f686e5fcb990c1e61e86df35e9731f91fa5",
+  "baseHead": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "changedSinceRejectedPredecessor": [
+    {
+      "currentSha256": "725deb2bf8bc5da284e86defc70844bc513be1bb1d9ec338aa0f6e3e825d9913",
+      "path": "src/query/distributed/distributed-transaction-creation-resources.js",
+      "priorSha256": "7c7a3d67a89b9ed05dc87dae391894156c5372c01518724ef3726451d53de317"
+    },
+    {
+      "currentSha256": "7e1a2dd76a834063cf46d28259a640effb535524d9203bf67df9b982018d7600",
+      "path": "src/query/distributed/distributed-transaction-creation.js",
+      "priorSha256": "f478fdd3e9782ef015ee8b29c5142ea8048b88218224ee1047273ba6ae93b893"
+    },
+    {
+      "currentSha256": "1dcbe855c7b9c61b40baf65d3596d744cd05aba840d76902491ac0cc9a831333",
+      "path": "test/query/transaction-begin-source-adversarial.test.js",
+      "priorSha256": "232a51019cc14bd19ab8ed154ef86690b4ef7b8414001d46d1a58ddd20b23450"
+    },
+    {
+      "currentSha256": "94f38c9e0741d44f7c9321a765c7c5c197cc54d6825a4a7b22ff48391b945371",
+      "path": "test/query/transaction-begin-uncertain-handoff.test.js",
+      "priorSha256": "f9d2187f0eee3dc178f53211697250ae5ad425bf8e129567679d948057fbb928"
+    }
+  ],
+  "limitations": [
+    "Normal startLagrangeRuntime remains separately blocked by activation work; component pg.Client/listener evidence is not a full startup or cluster proof.",
+    "Green component and diagnostic evidence is author evidence pending independent source review.",
+    "Global cyclomatic and source file-size ratchets remain red and unwaived; none of the four round-five changed paths exceeds its applicable size threshold.",
+    "The two author diagnostic harness corrections are disclosed in expectation-changes.json; the independent-review evidence directory was not modified."
+  ],
+  "proof": {
+    "canonicalComponentRunner": {
+      "assertions": 594,
+      "files": 7,
+      "log": "test-output/continuation-20261011/begin-source-round5-working/cumulative-final.log",
+      "status": "green"
+    },
+    "cumulativeDiagnosticMatrix": {
+      "assertions": 30,
+      "log": "test-output/continuation-20261011/begin-source-round5-working/round4-cumulative-assertions.log",
+      "status": "green"
+    },
+    "eslint": {
+      "log": "test-output/continuation-20261011/begin-source-round5-working/eslint-final.log",
+      "paths": 4,
+      "status": "green"
+    },
+    "globalCognitive": {
+      "baseline": 152,
+      "log": "test-output/continuation-20261011/begin-source-round5-working/cognitive-global.log",
+      "status": "green_tightenable",
+      "violations": 151
+    },
+    "globalCyclomatic": {
+      "baseline": 1755,
+      "log": "test-output/continuation-20261011/begin-source-round5-working/complexity-global.log",
+      "status": "red_unwaived",
+      "violations": 1780
+    },
+    "globalFileSize": {
+      "log": "test-output/continuation-20261011/begin-source-round5-working/file-size.log",
+      "sourceBaseline": 27,
+      "sourceOversized": 29,
+      "status": "red_unwaived",
+      "testBaseline": 21,
+      "testOversized": 21,
+      "touchedProductionMaxLines": 799
+    },
+    "impactContracts": {
+      "contracts": 64,
+      "coupledPairs": 35,
+      "log": "test-output/continuation-20261011/begin-source-round5-working/impact.log",
+      "status": "green"
+    },
+    "round4ExtensionMatrix": {
+      "assertions": 12,
+      "log": "test-output/continuation-20261011/begin-source-round5-working/round4-extension-assertions.log",
+      "status": "green"
+    },
+    "scopedCognitive": {
+      "log": "test-output/continuation-20261011/begin-source-round5-working/cognitive-scoped.log",
+      "status": "green"
+    },
+    "scopedCyclomatic": {
+      "log": "test-output/continuation-20261011/begin-source-round5-working/complexity-scoped.log",
+      "status": "green"
+    },
+    "shards": {
+      "classifiedTests": 2355,
+      "log": "test-output/continuation-20261011/begin-source-round5-working/shards.log",
+      "status": "green"
+    }
+  },
+  "rejectedPredecessor": "d1ea7302fcf51b2c4be21b8d47db6295bef3d555",
+  "round4IndependentReportSha256": "4460dbaf0eb965947aa2136a54ad2406e37a86a35580909f92128501024dc281",
+  "schemaVersion": 1,
+  "scope": "BEGIN uncertain creation handoff component source; no activation, C17, cluster startup, stage, commit, push, or landing claim",
+  "sourceDeltaPath": "test-output/continuation-20261011/begin-source-round5-working/round4-to-round5-source-delta.json",
+  "sourceManifestPath": "test-output/continuation-20261011/begin-source-round5-working/source-manifest.sha256"
+}

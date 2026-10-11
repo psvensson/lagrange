@@ -1,0 +1,232 @@
+{
+  "schema": "rs-raft-activation-red-disposition/1",
+  "sourceSnapshot": "a9c9290bae4e4a882e0317d9a79bd856b9ffc268",
+  "counts": {
+    "durable_cdc_supersession": 1,
+    "origin_does_not_grant_admission": 1,
+    "startup_activation_unresolved": 23
+  },
+  "openCount": 24,
+  "items": [
+    {
+      "title": "B2: a duplicate primary key under a different entry identity is a failed statement, consumed and reported, never an acknowledged replay",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:219:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B2: the same entry identity retried after its acknowledgement is an idempotent replay, in process and across a restart",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:250:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B2: a retry of a FAILED statement under the same entry identity reports the original failure again, in process and after a restart",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:309:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B2: the replicas of a three-replica group hold identical outcome rows for the same entries",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:366:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "F-o: a retry is answered from the durable outcome row, the same answer in process and after a restart, for an applied and a failed statement",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:430:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B5 (unknown-type): refused before it is proposed, answered at once with its typed code, and the partition keeps serving",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:524:3",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B5 (empty-type): refused before it is proposed, answered at once with its typed code, and the partition keeps serving",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:524:3",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B5 (undefined-type): refused before it is proposed, answered at once with its typed code, and the partition keeps serving",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:524:3",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B5 (forward-write-replicate-rows): refused before it is proposed, answered at once with its typed code, and the partition keeps serving",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:524:3",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B5 (prepare-marker): refused before it is proposed, answered at once with its typed code, and the partition keeps serving",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:524:3",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B5 (rollback-marker): refused before it is proposed, answered at once with its typed code, and the partition keeps serving",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:524:3",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B5 (transaction-commit-without-session): refused before it is proposed, answered at once with its typed code, and the partition keeps serving",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:524:3",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "F-ad: a present-but-invalid entryId is refused before consensus; a supplied entryId keys the durable outcome end to end; an absent one is minted",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:586:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "F-ai: a session write is admitted at staging - a present-but-invalid entryId is refused typed before anything is staged, an absent one is minted - so the commit marker carries only string entry ids",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:629:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "B5: a committed entry with an unknown type (proposed straight through the port) fails closed with a typed, named host failure on readStatus and on the restart's initialize(), and its sibling is untouched",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:678:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "F-i: a schema error is a deterministic statement failure: consumed and reported",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:732:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "F-i: an environmental SQLite failure is never consumed as a failed statement: the apply rolls back and the entry is applied once the host recovers",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:753:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "AD: on a three-replica group, the leader's own environmental apply failure after the quorum commit answers the write as an unknown outcome under its entryId, its cause the environmental failure",
+      "sourceLocation": "test/partition/committed-statement-outcome.test.js:832:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "partition write kernel separates commit/apply from replayable side effects",
+      "sourceLocation": "test/partition/partition-write-kernel.test.js:166:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "durable_cdc_supersession",
+      "disposition": "closed in bounded reviewed correction; partition-write-kernel-green.log 97/97"
+    },
+    {
+      "title": "F-ak: a proposed write still pending at its commit deadline is answered OUTCOME_UNKNOWN with its entry, the cause and the deadline",
+      "sourceLocation": "test/partition/partition-write-typed-releases.test.js:187:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "F-ak: a proposed write pending on the leader at shutdown is answered OUTCOME_UNKNOWN with its entry and the cause",
+      "sourceLocation": "test/partition/partition-write-typed-releases.test.js:215:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "F-ak: a write the proposal queue refuses at capacity is BACKPRESSURE with the queue's retryAfterMs and its entry, and never proposed",
+      "sourceLocation": "test/partition/partition-write-typed-releases.test.js:281:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "F-ak: a queued write at shutdown is answered SERVICE_SHUTDOWN with its entry and the cause, and never proposed",
+      "sourceLocation": "test/partition/partition-write-typed-releases.test.js:303:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "F-ak: a proposal the port refuses is answered CONSENSUS_REFUSED with the port's reason and retryability, and routed again by its code",
+      "sourceLocation": "test/partition/partition-write-typed-releases.test.js:323:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/write-owner-regression.log",
+      "sourceLogSha256": "8cbe5dc88c2fbce75a095a2e5b0e2a205aac9fbf56ae9dbeaa3f5791ddee6148",
+      "classification": "startup_activation_unresolved",
+      "disposition": "open; retain downstream behavioral assertion until genuine supported activation exists"
+    },
+    {
+      "title": "TX1 inc3 origin: until the generation origin has applied on the leader a BEGIN carrying a transactionId is refused generation_origin_pending; enabling transactions proposes the origin once, and BEGIN is admitted once it has applied",
+      "sourceLocation": "test/partition/partition-participant-transaction-apply.test.js:491:1",
+      "sourceLog": "/mnt/data/peter/projects/.worktrees/rs-raft-recovery-chain-20261011/test-output/recovery-checkpoint-20261011/f1-f4-owned-interaction/owner-chain-first.log",
+      "sourceLogSha256": "419c64b8db15bd4fdcd8cbe99526cf007a738080f249d6ade8813827f3429587",
+      "classification": "origin_does_not_grant_admission",
+      "disposition": "open explicit contract supersession; origin and authorized resume are independent prerequisites"
+    }
+  ],
+  "supersession": {
+    "source": "test/partition/partition-participant-transaction-apply.test.js:491",
+    "oldAssumption": "origin applied implies ordinary BEGIN admission",
+    "currentContract": "Admission requires both a valid committed origin and complete current activation authorization consumed by the existing owner. Installing an origin alone grants no mutation permission.",
+    "requiredWitness": [
+      "No origin and closed admission refuse without participant progress.",
+      "A committed origin with missing, partial or old-incarnation authority remains closed.",
+      "Complete valid authority reaches the normal resume owner and admits BEGIN.",
+      "The unchanged production pgwire startup test reaches registration and a client through authorized startup."
+    ],
+    "scope": "Only origin-opens-admission expectation is superseded; single origin, monotonic generation, malformed evidence refusal and existing write-path assertions remain required. No fixtures changed in this packet."
+  },
+  "productionComparison": {
+    "predecessor": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+    "candidate": "a9c9290bae4e4a882e0317d9a79bd856b9ffc268",
+    "host": "lenovo-laptop",
+    "unchangedTest": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+    "result": "predecessor414 assertions completed; candidate fails seed registration participant_transaction_cutover_paused; new registration writes require authority",
+    "durationClassification": "242776 ms is observational; no independent performance failure established"
+  }
+}
