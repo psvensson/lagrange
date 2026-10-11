@@ -151,10 +151,13 @@ function createParticipantReleaseRecovery(handler) {
         throw new Error('Fresh replica release authority unavailable');
       }
       let answer = null;
+      let firstQuerySettlementFailure = null;
       do {
         answer = await requestParticipantRelease(handler, {partitionId,
           targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
           deadlineAtMs: deadline, authorization});
+        firstQuerySettlementFailure ??= answer.querySettlementFailure ??
+          answer.controlQuerySettlementFailure ?? null;
         if (answer.outcome === OUTCOME.CUT_OVER) return answer;
         // A newly created one-member group can answer before its first leader
         // election.  There is no redirect yet, but NOT_LEADER is still a
@@ -166,7 +169,7 @@ function createParticipantReleaseRecovery(handler) {
             !await sleep(retryAfterMs, deadline)) break;
       } while (now() <= deadline);
       throw new Error('Fresh replica participant release failed: ' +
-        JSON.stringify({partitionId, answer}));
+        JSON.stringify({partitionId, answer, firstQuerySettlementFailure}));
     },
     async releaseOperator({partitionId, targetBuildDigest, deadlineAtMs}) {
       if (!Number.isSafeInteger(deadlineAtMs) || deadlineAtMs <= now()) {

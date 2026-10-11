@@ -275,12 +275,28 @@ async function settleOne(engine, service, transactionId, now, observeFailure) {
 
 async function settleTransactionReleaseRows({engine, service, census, now = Date.now(),
   observeFailure = null}) {
-  if (!engine || typeof engine.readDistributedTransactionRecoveryState !== 'function' ||
+  const inputInvalid = !engine ||
+      typeof engine.readDistributedTransactionRecoveryState !== 'function' ||
       typeof engine.deliverTransactionOperation !== 'function' ||
       !service || typeof service.handleApplicationMessage !== 'function' ||
       census?.state !== TRANSACTION_RELEASE_CENSUS_STATE.HELD ||
       census.legacyTransactionIds?.length !== 0 ||
-      !Array.isArray(census.recoverableTransactionIds)) return null;
+      !Array.isArray(census.recoverableTransactionIds);
+  if (inputInvalid) {
+    reportFailure(observeFailure, 'settlement_input', null, {
+      enginePresent: engine !== null && engine !== undefined,
+      recoveryReaderPresent:
+        typeof engine?.readDistributedTransactionRecoveryState === 'function',
+      participantDeliveryPresent: typeof engine?.deliverTransactionOperation === 'function',
+      settlementPortPresent: typeof service?.handleApplicationMessage === 'function',
+      censusState: census?.state ?? null,
+      legacyTransactionCount: Array.isArray(census?.legacyTransactionIds) ?
+        census.legacyTransactionIds.length : null,
+      recoverableTransactionCount: Array.isArray(census?.recoverableTransactionIds) ?
+        census.recoverableTransactionIds.length : null,
+    });
+    return null;
+  }
   const transactions = [];
   for (const transactionId of census.recoverableTransactionIds) {
     const result = await settleOne(engine, service, transactionId, now, observeFailure);

@@ -162,6 +162,14 @@ function releaseQueryEngine(handler, service) {
     null : serviceEngine ?? bridgeEngine;
 }
 
+function querySettlementStage(service, attempt, startedAtMs, stage, fields = {}) {
+  const observedAtMs = service.timeSource.now();
+  return Object.freeze({stage, transactionId: null, observedAtMs,
+    elapsedMs: observedAtMs - startedAtMs,
+    originalRemainingMs: attempt.deadlineAtMs - startedAtMs,
+    remainingMs: attempt.deadlineAtMs - observedAtMs, ...fields});
+}
+
 async function settleQueryRelease(handler, service, release, attempt, cohort, census) {
   if (service.tableName !== TABLES.SQL_TRANSACTIONS) {
     return {census, transactions: null, queryDrainProof: null};
@@ -171,29 +179,50 @@ async function settleQueryRelease(handler, service, release, attempt, cohort, ce
   if (local?.queryCensus?.state !== TRANSACTION_RELEASE_CENSUS_STATE.HELD) {
     return {census, transactions: null, queryDrainProof: null};
   }
+  const startedAtMs = service.timeSource.now();
+  const serviceEngine = service.sqlQueryEngine ?? null;
+  const bridgeEngine = handler.cdcIntegrationService?.sqlQueryEngine ?? null;
+  const engine = releaseQueryEngine(handler, service);
+  const engineFacts = Object.freeze({
+    serviceEnginePresent: serviceEngine !== null,
+    bridgeEnginePresent: bridgeEngine !== null,
+    engineAgreement: serviceEngine === null || bridgeEngine === null ||
+      serviceEngine === bridgeEngine,
+  });
   let querySettlementFailure = null;
   const transactions = await settleTransactionReleaseRows({
-    engine: releaseQueryEngine(handler, service),
+    engine,
     service,
     census: local.queryCensus,
-    now: service.timeSource.now(),
+    now: startedAtMs,
     observeFailure: (failure) => {
-      querySettlementFailure ??= failure;
+      querySettlementFailure ??= querySettlementStage(service, attempt, startedAtMs,
+        failure.stage, {...failure, ...engineFacts});
     },
   });
-  if (transactions === null) return {failure: querySettlementFailure};
+  if (transactions === null) return {failure: querySettlementFailure ??
+    querySettlementStage(service, attempt, startedAtMs, 'settlement_unknown', engineFacts)};
   const refreshed = await readCohort(handler, service.partitionId, cohort,
     attempt.deadlineAtMs);
-  if (unavailableCensus(refreshed) !== null) return null;
+  const unavailable = unavailableCensus(refreshed);
+  if (unavailable !== null) return {failure: querySettlementStage(service, attempt,
+    startedAtMs, 'refreshed_census', {...engineFacts,
+      outcome: unavailable.outcome ?? null,
+      missingFact: unavailable.missingFact ?? null,
+      reason: unavailable.reason ?? null,
+      replicaId: unavailable.target?.replicaId ?? unavailable.replicaId ?? null})};
   const current = refreshed.find((facts) =>
     facts.generation.replicaId === service.replicaId);
   const queryDrainProof = transactionReleaseProofOf({release, attempt,
     census: current?.queryCensus, transactions});
-  return queryDrainProof === null ? {failure: Object.freeze({
-    stage: 'release_proof', transactionId: null,
-    reason: 'fresh_census_did_not_bind_settlement',
-  })} :
-    {census: refreshed, transactions, queryDrainProof};
+  return queryDrainProof === null ? {failure: querySettlementStage(service, attempt,
+    startedAtMs, 'release_proof', {...engineFacts,
+      reason: 'fresh_census_did_not_bind_settlement',
+      transactionCount: transactions.length,
+      recoverableTransactionCount:
+        current?.queryCensus?.recoverableTransactionIds?.length ?? null})} :
+    {census: refreshed, transactions, queryDrainProof,
+      settlementStartedAtMs: startedAtMs, settlementEngineFacts: engineFacts};
 }
 
 function controlReleaseAnswerValid(answer, targetBuildDigest) {
@@ -583,7 +612,14 @@ async function runCutoverAttempt(handler, request) {
     attempt, queryDrainProof: queryRelease.queryDrainProof});
   if (defect !== null) {
     return attemptRefusal({...request, release}, defect,
-      defect === OUTCOME.TOPOLOGY_PENDING ? {topology: local.topology} : {});
+      {...(defect === OUTCOME.TOPOLOGY_PENDING ? {topology: local.topology} : {}),
+      querySettlementFailure: querySettlementStage(service, attempt,
+        queryRelease.settlementStartedAtMs ?? service.timeSource.now(),
+        'pre_enable_release_census', {...(queryRelease.settlementEngineFacts ?? {}),
+          reason: defect,
+          transactionCount: queryRelease.transactions?.length ?? null,
+          recoverableTransactionCount:
+            local?.queryCensus?.recoverableTransactionIds?.length ?? null})});
   }
   if (readPartitionWriteOrigin(service.db) === null &&
       !await handler.participantReleaseAuthorizationOwner.validates(
@@ -600,21 +636,41 @@ async function runCutoverAttempt(handler, request) {
   census = await readCohort(handler, service.partitionId, cohort,
     request.deadlineAtMs);
   unavailable = unavailableCensus(census);
-  if (unavailable !== null) return unavailable;
+  if (unavailable !== null) {
+    const startedAtMs = queryRelease.settlementStartedAtMs ?? service.timeSource.now();
+    return Object.freeze({...unavailable,
+      querySettlementFailure: querySettlementStage(service, attempt, startedAtMs,
+        'post_enable_census', {...(queryRelease.settlementEngineFacts ?? {}),
+          outcome: unavailable.outcome ?? null,
+          missingFact: unavailable.missingFact ?? null,
+          reason: unavailable.reason ?? null,
+          replicaId: unavailable.target?.replicaId ?? unavailable.replicaId ?? null})});
+  }
   const finalLocal = census.find((facts) => facts.generation.replicaId === service.replicaId);
   const finalQueryDrainProof = queryRelease.transactions === null ? null :
     transactionReleaseProofOf({release, attempt, census: finalLocal?.queryCensus,
       transactions: queryRelease.transactions});
   if (queryRelease.transactions !== null && finalQueryDrainProof === null) {
     return attemptRefusal({...request, release}, OUTCOME.QUERY_DRAIN_PENDING,
-      queryDrainRefusalFields(finalLocal?.queryCensus ?? null));
+      {...queryDrainRefusalFields(finalLocal?.queryCensus ?? null),
+        querySettlementFailure: querySettlementStage(service, attempt,
+          queryRelease.settlementStartedAtMs ?? service.timeSource.now(),
+          'post_enable_proof', {...(queryRelease.settlementEngineFacts ?? {}),
+            reason: 'final_census_did_not_bind_settlement',
+            transactionCount: queryRelease.transactions.length,
+            recoverableTransactionCount:
+              finalLocal?.queryCensus?.recoverableTransactionIds?.length ?? null})});
   }
   const finalDefect = releaseCensusDefect(release, census, finalLocal,
     {attempt, queryDrainProof: finalQueryDrainProof});
   if (finalDefect !== null) {
     return attemptRefusal({...request, release}, finalDefect,
-      finalDefect === OUTCOME.TOPOLOGY_PENDING ?
-        {topology: finalLocal.topology} : {});
+      {...(finalDefect === OUTCOME.TOPOLOGY_PENDING ?
+        {topology: finalLocal.topology} : {}),
+      querySettlementFailure: querySettlementStage(service, attempt,
+        queryRelease.settlementStartedAtMs ?? service.timeSource.now(),
+        'post_enable_release_census', {...(queryRelease.settlementEngineFacts ?? {}),
+          reason: finalDefect})});
   }
   // The control release already completed through this invocation's original
   // deadline before the dependent was paused. Re-entering that release here
