@@ -88,13 +88,15 @@ class PartitionNodeCluster {
    */
   constructor({partitionId, replicaIds, substrateFor = null,
     sendFor = null, resolveFor = null, applyFor = null,
-    wrapDatabase = null, timingFor = null, tempRoot = os.tmpdir()}) {
+    admitFor = null, wrapDatabase = null, timingFor = null,
+    tempRoot = os.tmpdir()}) {
     this.partitionId = partitionId;
     this.replicaIds = [...replicaIds];
     this.substrateFor = substrateFor;
     this.sendFor = sendFor;
     this.resolveFor = resolveFor;
     this.applyFor = applyFor;
+    this.admitFor = admitFor;
     this.wrapDatabase = wrapDatabase;
     this.timingFor = timingFor;
     this.coreEntries = [];
@@ -185,13 +187,16 @@ class PartitionNodeCluster {
       // driver keeps the decoded command, applied only once its transaction
       // commits.
       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: ({command,
-        index, term, effects}) => {
+        index, term, effects, committedConfiguration}) => {
         if (this.applyFor) {
-          this.applyFor(replicaId, command, {index, term, effects});
+          this.applyFor(replicaId, command,
+            {index, term, effects, committedConfiguration});
         }
         effects.afterCommit.push(() =>
           replicaOf().appliedCommands.push(command));
       },
+      [RAFT_OPERATION_PORT_REQUEST.ADMIT_PROPOSAL_DISPATCH]: (command) =>
+        this.admitFor === null ? null : this.admitFor(replicaId, command),
       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
     };
   }

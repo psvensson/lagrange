@@ -96,6 +96,47 @@ test('ordinary write origin cannot propose fixed settlement and new COMMIT never
     assert.equal(row(leader).decision, null);
   }));
 
+for (const {decision, status} of [
+  {decision: 'COMMIT', status: 'COMMITTED'},
+  {decision: 'ROLLBACK', status: 'ROLLED_BACK'},
+]) {
+  test(`terminal ${decision} completed by the normal owner orders one exact progress replay`, () =>
+    fixture(async (leader, proposed) => {
+      const record = buildDecisionRecord(TX, decision, []);
+      leader.db.prepare('UPDATE sql_transactions SET participant_set_state=\'FROZEN\',' +
+        'commit_mode=\'TWO_PHASE_COMMIT\',decision=?,decision_text=?,decision_digest=?,status=?')
+        .run(record.decision, record.decisionText, record.decisionDigest, status);
+      const progress = {kind: KIND.PROGRESS, ...BASE,
+        decisionDigest: record.decisionDigest, status};
+      const pending = track(send(leader, progress));
+      const command = await awaitProposal(proposed,
+        (value) => value.type === COORDINATOR_SETTLEMENT_TYPE);
+      assert.ok(command, 'semantic replay still enters the ordered command stream');
+      assert.equal(command.entryId, transactionSettlementBytes(progress).entryId);
+      assert.equal(applyCommitted(leader, command), null);
+
+      // Model the first ordered answer being lost: exact re-entry consumes the
+      // retained command result and must not mint another command or decision.
+      const recovered = await send(leader, progress);
+      const first = await pending.promise;
+      assert.equal(first.committed, true);
+      assert.equal(recovered.committed, true);
+      assert.deepEqual(recovered[RESULT], first[RESULT]);
+      assert.equal(recovered[RESULT].outcome, OUTCOME.REPLAYED);
+      assert.equal(entry(leader, command).state, 'settled');
+      assert.equal(proposed.length, 1);
+      assert.equal(row(leader).decision, decision);
+      assert.equal(row(leader).decision_digest, record.decisionDigest);
+
+      const mismatch = await send(leader, {...progress,
+        decisionDigest: 'f'.repeat(64)});
+      assert.equal(mismatch.committed, undefined);
+      assert.equal(mismatch[RESULT].outcome, OUTCOME.REFUSED);
+      assert.equal(mismatch[RESULT].reason, 'decision_binding_conflict');
+      assert.equal(proposed.length, 1, 'mismatched evidence never enters consensus');
+    }));
+}
+
 test('enlist winning between source and apply is a retained conflict, not lineage rewrite', () =>
   fixture(async (leader, proposed) => {
     const pending = track(send(leader, FREEZE));
