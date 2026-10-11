@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2316,
+    "ordinary": 2317,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2333,
-  "digest": "fnv1a32-47349270",
+  "censusSize": 2334,
+  "digest": "fnv1a32-e29bb71a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1572,6 +1572,7 @@
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "ordinary",
     "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js": "ordinary",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "ordinary",
+    "test/raft/raft-rs-backend/snapshot-staging-lifecycle-operation.test.js": "ordinary",
     "test/raft/raft-rs-backend/stampless-opening-refusal.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "ordinary",
     "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": "ordinary",

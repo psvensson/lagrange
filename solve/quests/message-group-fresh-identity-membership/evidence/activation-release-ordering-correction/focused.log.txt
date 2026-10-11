@@ -1,0 +1,94 @@
+TAP version 13
+# Subtest: one release attempt appends one exact durable PAUSE and retries only observe it
+ok 1 - one release attempt appends one exact durable PAUSE and retries only observe it
+  ---
+  duration_ms: 914.80849
+  type: 'test'
+  ...
+# Subtest: real release route pauses initial writes, applies origin, orders retirement before a controlled successor, and recovers that successor from the same durable origin
+ok 2 - real release route pauses initial writes, applies origin, orders retirement before a controlled successor, and recovers that successor from the same durable origin
+  ---
+  duration_ms: 136.462637
+  type: 'test'
+  ...
+# Subtest: no-origin release without fresh storage or operator authority stays closed
+ok 3 - no-origin release without fresh storage or operator authority stays closed
+  ---
+  duration_ms: 29.113192
+  type: 'test'
+  ...
+# Subtest: dependent release stays closed without a reconstructed current control owner fact
+ok 4 - dependent release stays closed without a reconstructed current control owner fact
+  ---
+  duration_ms: 18.195138
+  type: 'test'
+  ...
+# Subtest: dependent release consumes an exact remotely routed current control owner fact
+ok 5 - dependent release consumes an exact remotely routed current control owner fact
+  ---
+  duration_ms: 87.051467
+  type: 'test'
+  ...
+# Subtest: mixed target build is refused and cannot lower admission
+ok 6 - mixed target build is refused and cannot lower admission
+  ---
+  duration_ms: 29.335244
+  type: 'test'
+  ...
+# Subtest: committed finalization before retirement remains historical and retirement fences future consumption
+ok 7 - committed finalization before retirement remains historical and retirement fences future consumption
+  ---
+  duration_ms: 71.659866
+  type: 'test'
+  ...
+# Subtest: committed retirement before finalization makes the exact authorization stale
+ok 8 - committed retirement before finalization makes the exact authorization stale
+  ---
+  duration_ms: 68.268736
+  type: 'test'
+  ...
+# Subtest: committed target retirement after RESUME and before confirmation keeps the exact receipt retired and refuses confirmation
+ok 9 - committed target retirement after RESUME and before confirmation keeps the exact receipt retired and refuses confirmation
+  ---
+  duration_ms: 75.954071
+  type: 'test'
+  ...
+# Subtest: a retired current claim cannot finalize or be reinstated by reconnecting the same incarnation
+ok 10 - a retired current claim cannot finalize or be reinstated by reconnecting the same incarnation
+  ---
+  duration_ms: 73.162274
+  type: 'test'
+  ...
+# Subtest: known local invalidation at the native dispatch boundary holds the exact finalization without applying it
+ok 11 - known local invalidation at the native dispatch boundary holds the exact finalization without applying it
+  ---
+  duration_ms: 71.161652
+  type: 'test'
+  ...
+# Subtest: control cohort origin installs the fixed coordinator schema atomically and its replay repairs a missing enforcer without changing the durable origin
+ok 12 - control cohort origin installs the fixed coordinator schema atomically and its replay repairs a missing enforcer without changing the durable origin
+  ---
+  duration_ms: 60.92273
+  type: 'test'
+  ...
+# Subtest: interrupted retained control authorization settles a newly visible COMMIT under the same identity and deadline
+ok 13 - interrupted retained control authorization settles a newly visible COMMIT under the same identity and deadline
+  ---
+  duration_ms: 47.336536
+  type: 'test'
+  ...
+# Subtest: control cohort preserves unreconstructible legacy rows and reports exact activation debt
+ok 14 - control cohort preserves unreconstructible legacy rows and reports exact activation debt
+  ---
+  duration_ms: 22.858916
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2367.449374

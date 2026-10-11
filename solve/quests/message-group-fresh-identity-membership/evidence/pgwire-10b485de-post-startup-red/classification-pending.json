@@ -1,0 +1,25 @@
+{
+  "utc": "2026-10-11T21:22:54.944262+00:00",
+  "sourceSnapshot": "10b485de2599f9d528a2dc27d2048a39755583e8",
+  "logSha256": "6c8ea39a69cd1907f0d6cace04eb6184b5c36b0a8d776981b4025b6a9b8a82f1",
+  "author": "subagent:/root/freshmg_implementation_56",
+  "scope": "Unchanged production pgwire oracle, startup succeeded then post-startup transaction expiry/recovery failure; predecessor comparison pending",
+  "authorCounts": {
+    "total": 66,
+    "pass": 56,
+    "fail": 10,
+    "durationMs": 302124
+  },
+  "scratchRoot": "/tmp/lagrange-pgwire-command-tags-5mM6Oi",
+  "firstFailure": "awaitEngineDrop: expired transaction remains ACTIVE with remainingBudgetMs0 and ACTIVE participant; expected automatic settlement absent",
+  "subsequentErrors": [
+    "TIMEOUT where NO_TRANSACTION expected",
+    "TRANSACTION_RECOVERY_INCOMPLETE"
+  ],
+  "durableStateAuthorObservation": "ACTIVE at failure; later COMMIT/teardown drives same identity to ROLLED_BACK/ROLLBACK",
+  "limits": [
+    "No claim that predecessor inherits this failure",
+    "Full durable packet and exact command/host fingerprint being retained by author",
+    "This is not component or merge approval"
+  ]
+}
