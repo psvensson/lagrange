@@ -1,0 +1,669 @@
+{
+  "utc": "2026-10-11T21:58:16.502643+00:00",
+  "candidate": "26dedb0829145c3063dbb2609955307cfdcec842",
+  "predecessor": "0871958637a56ff433f17b969bab4fdc36b2b8c1",
+  "scope": "Read-only root verification of completed controlled production matrix databases; independent source review still pending",
+  "runs": [
+    {
+      "runtimeRoot": "/tmp/lagrange-terminal-matrix-IpLoFV",
+      "databaseSha256": "e170e13b7127c23b5586d5195a7ad006b853a5ef0fa5721694339445c8461174",
+      "transactions": [
+        {
+          "transaction_id": "0e4251088a792859f4721950b8595f56",
+          "session_id": "matrix-rb-3",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498582,
+          "timeout_deadline": 1791755567993,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"0e4251088a792859f4721950b8595f56:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"0e4251088a792859f4721950b8595f56\",\"decision\":\"ROLLBACK\",\"participants\":[[\"0e4251088a792859f4721950b8595f56:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "18676791959a19ea334e02a06f435411c356d861564d029a9f0f5f5cd25ce7ea",
+          "created_at": 1791755507993,
+          "updated_at": 1791755511430
+        },
+        {
+          "transaction_id": "39949da3688f7e73aac736da2426ebf3",
+          "session_id": "matrix-rb-7",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498586,
+          "timeout_deadline": 1791755579761,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"39949da3688f7e73aac736da2426ebf3:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"39949da3688f7e73aac736da2426ebf3\",\"decision\":\"ROLLBACK\",\"participants\":[[\"39949da3688f7e73aac736da2426ebf3:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "a92e9a5741f5b1ee0a525a83be356f1ee1ec797e83b88a3d5756dae9da7a91a3",
+          "created_at": 1791755519761,
+          "updated_at": 1791755522607
+        },
+        {
+          "transaction_id": "64a5b4775479fc9a3701738b34357dcb",
+          "session_id": "matrix-rb-6",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498585,
+          "timeout_deadline": 1791755576775,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"64a5b4775479fc9a3701738b34357dcb:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"64a5b4775479fc9a3701738b34357dcb\",\"decision\":\"ROLLBACK\",\"participants\":[[\"64a5b4775479fc9a3701738b34357dcb:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "ddd87d4d4786dcdd607b3ddaf61e538c3e288fd6a8ff03deda7d04fe61d42ba5",
+          "created_at": 1791755516775,
+          "updated_at": 1791755519130
+        },
+        {
+          "transaction_id": "7cba4c08ac0c4bc756fd1da7e45ce473",
+          "session_id": "matrix-rb-5",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498584,
+          "timeout_deadline": 1791755574016,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"7cba4c08ac0c4bc756fd1da7e45ce473:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"7cba4c08ac0c4bc756fd1da7e45ce473\",\"decision\":\"ROLLBACK\",\"participants\":[[\"7cba4c08ac0c4bc756fd1da7e45ce473:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "b7d249b331a6f7c82562e7ec49dd3de55418cf546ccd63bd03402eafdd1d0b58",
+          "created_at": 1791755514016,
+          "updated_at": 1791755516574
+        },
+        {
+          "transaction_id": "86e570d3103a26df384df9bb8049d377",
+          "session_id": "matrix-rb-8",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498587,
+          "timeout_deadline": 1791755582782,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"86e570d3103a26df384df9bb8049d377:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"86e570d3103a26df384df9bb8049d377\",\"decision\":\"ROLLBACK\",\"participants\":[[\"86e570d3103a26df384df9bb8049d377:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "c4e9a677ecdaa38db4a807b6c899c63c6d8903d662ebcda26da2c3270ce28753",
+          "created_at": 1791755522782,
+          "updated_at": 1791755524868
+        },
+        {
+          "transaction_id": "90a01473911e8dc245a3a598ce158cac",
+          "session_id": "matrix-rb-2",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498581,
+          "timeout_deadline": 1791755565676,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"90a01473911e8dc245a3a598ce158cac:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"90a01473911e8dc245a3a598ce158cac\",\"decision\":\"ROLLBACK\",\"participants\":[[\"90a01473911e8dc245a3a598ce158cac:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "e34bec4fa4288bc9af1b3612cbe5bca082b5e7faab707e6ad0ec95be3baff744",
+          "created_at": 1791755505676,
+          "updated_at": 1791755507849
+        },
+        {
+          "transaction_id": "aa40a1ae2f714f803a9c9cc4e7790866",
+          "session_id": "matrix-rb-10",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498589,
+          "timeout_deadline": 1791755587465,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"aa40a1ae2f714f803a9c9cc4e7790866:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"aa40a1ae2f714f803a9c9cc4e7790866\",\"decision\":\"ROLLBACK\",\"participants\":[[\"aa40a1ae2f714f803a9c9cc4e7790866:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "2c3fba3bfe29a70084b5e09c294eef0fc16b23bebbd97586b7d29ff8e8ddc1e6",
+          "created_at": 1791755527465,
+          "updated_at": 1791755529811
+        },
+        {
+          "transaction_id": "aa9792db6f3d3db2dc617a834ce33606",
+          "session_id": "matrix-rb-1",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498580,
+          "timeout_deadline": 1791755563270,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"aa9792db6f3d3db2dc617a834ce33606:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"aa9792db6f3d3db2dc617a834ce33606\",\"decision\":\"ROLLBACK\",\"participants\":[[\"aa9792db6f3d3db2dc617a834ce33606:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "ba43d52f6e007608bdca0927095090fc11810eeb27a56fa4ea044157249c9cfd",
+          "created_at": 1791755503270,
+          "updated_at": 1791755505512
+        },
+        {
+          "transaction_id": "cd015011358d2453af219a4523bcae08",
+          "session_id": "matrix-rb-9",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498588,
+          "timeout_deadline": 1791755585035,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"cd015011358d2453af219a4523bcae08:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"cd015011358d2453af219a4523bcae08\",\"decision\":\"ROLLBACK\",\"participants\":[[\"cd015011358d2453af219a4523bcae08:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "9827315c5472939f6a5387678f0d94d100d27cac6dd72af3dafb9509d5f9bcfe",
+          "created_at": 1791755525035,
+          "updated_at": 1791755527318
+        },
+        {
+          "transaction_id": "efb379612ad97ac29b9ff70e26e8e9cb",
+          "session_id": "matrix-rb-4",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755498583,
+          "timeout_deadline": 1791755571617,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"efb379612ad97ac29b9ff70e26e8e9cb:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"efb379612ad97ac29b9ff70e26e8e9cb\",\"decision\":\"ROLLBACK\",\"participants\":[[\"efb379612ad97ac29b9ff70e26e8e9cb:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "18e39b22d2db2a94ed5bfb1cfbaed42a16674fcc2e033b3ed2b3d925aaedf5bc",
+          "created_at": 1791755511617,
+          "updated_at": 1791755513850
+        }
+      ],
+      "settlementReceipts": [],
+      "generation": {
+        "singleton": 1,
+        "generation": 90,
+        "origin_index": 3,
+        "origin_term": 1,
+        "participant_pause_generation": 2,
+        "participant_pause_entry_id": "pause_participant_admission:edcf03f8b92eba06af4b3c7e63d42fbf5f224e39c2aa1c3798defa50f0a22581",
+        "participant_release_control_revision": 596,
+        "participant_release_control_text": "{\"version\":1,\"state\":\"CONFIRMED\",\"authorizationId\":\"a6ab595157954cc57a261adf049f94a87c0680f90944b98121d2d07c6e8fa920\",\"authorizationRevision\":593,\"controlReleaseText\":\"{\\\"partitionId\\\":\\\"sql_transactions-p1\\\",\\\"protocolVersion\\\":1,\\\"targetBuildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\",\\\"configurationKey\\\":\\\"[[\\\\\\\"2734552253535212872\\\\\\\",\\\\\\\"6600243378791833037\\\\\\\",\\\\\\\"7691077697885072888\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"releaseId\\\":\\\"546fc50bb8be82ed217f5c0dd98bdc9e07a5bbe00bc59bf617a22b0d0d24cf42\\\"}\",\"dependentReleaseText\":\"{\\\"partitionId\\\":\\\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",\\\"protocolVersion\\\":1,\\\"targetBuildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\",\\\"configurationKey\\\":\\\"[[\\\\\\\"7597212478947252804\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"releaseId\\\":\\\"3475d0552458e5597c4b2fb562e12092f1f71814b51d2b0e1583492f2eedb901\\\"}\",\"controlTargetEntriesText\":\"[{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r1\\\",\\\"peerId\\\":\\\"2734552253535212872\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"db0e5040-2639-4d46-891b-dddc0050556d\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":111,\\\"admissionGeneration\\\":124,\\\"buildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\"},{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r2\\\",\\\"peerId\\\":\\\"7691077697885072888\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"d9440cca-64a4-41ff-acbd-c295ff1f6eda\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":122,\\\"admissionGeneration\\\":126,\\\"buildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\"},{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r3\\\",\\\"peerId\\\":\\\"6600243378791833037\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"68295dd2-6ddc-45d9-b618-888f64f2ae67\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":130,\\\"admissionGeneration\\\":127,\\\"buildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\"}]\",\"targetEntriesText\":\"[{\\\"replicaIdentity\\\":\\\"schema-job-a163f5267e80b762f8c3ab83ff371d35:replica:terminal-matrix-node\\\",\\\"peerId\\\":\\\"7597212478947252804\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"4cfee3fc-221a-4f2d-a0d6-38062dcabad2\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":136,\\\"admissionGeneration\\\":136,\\\"buildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\"}]\",\"controlConfigurationText\":\"{\\\"voters\\\":[\\\"2734552253535212872\\\",\\\"6600243378791833037\\\",\\\"7691077697885072888\\\"],\\\"votersOutgoing\\\":[],\\\"learners\\\":[],\\\"learnersNext\\\":[],\\\"configurationKey\\\":\\\"[[\\\\\\\"2734552253535212872\\\\\\\",\\\\\\\"6600243378791833037\\\\\\\",\\\\\\\"7691077697885072888\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"identities\\\":{\\\"2734552253535212872\\\":\\\"sql_transactions-p1-r1\\\",\\\"6600243378791833037\\\":\\\"sql_transactions-p1-r3\\\",\\\"7691077697885072888\\\":\\\"sql_transactions-p1-r2\\\"}}\",\"targetConfigurationText\":\"{\\\"voters\\\":[\\\"7597212478947252804\\\"],\\\"votersOutgoing\\\":[],\\\"learners\\\":[],\\\"learnersNext\\\":[],\\\"configurationKey\\\":\\\"[[\\\\\\\"7597212478947252804\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"identities\\\":{\\\"7597212478947252804\\\":\\\"schema-job-a163f5267e80b762f8c3ab83ff371d35:replica:terminal-matrix-node\\\"}}\",\"deadlineAtMs\":1791755559156,\"reservationEntryId\":\"reserve_participant_release:117c17d7cb911a63611b22abd2c4d8d13f71f2ce498280a3535cfb9d04712eaf\",\"reservationIndex\":590,\"reservationTerm\":1,\"finalizationEntryId\":\"finalize_participant_release:7bc1a2c348fcfefd61a204ccceda4d03046b87e092d1f5a540494977db963324\",\"controlIndex\":597,\"controlTerm\":1,\"retirementId\":null,\"retiredReplicaIdentity\":null,\"memberClaims\":[{\"target\":{\"replicaIdentity\":\"sql_transactions-p1-r1\",\"peerId\":\"2734552253535212872\",\"nodeId\":\"terminal-matrix-node\",\"ownerIncarnation\":1,\"lifecycleIncarnation\":\"db0e5040-2639-4d46-891b-dddc0050556d\",\"runtimeGeneration\":1,\"connectionGeneration\":111,\"admissionGeneration\":124,\"buildDigest\":\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\"},\"claimRevision\":1,\"claimState\":\"CURRENT\",\"claimEntryId\":\"publish_participant_release_claim:4ff30c388520ec04476a3c360515faa78d2e5e2598528c00b321ae3e22bc024e\",\"claimIndex\":591,\"claimTerm\":1},{\"target\":{\"replicaIdentity\":\"sql_transactions-p1-r2\",\"peerId\":\"7691077697885072888\",\"nodeId\":\"terminal-matrix-node\",\"ownerIncarnation\":1,\"lifecycleIncarnation\":\"d9440cca-64a4-41ff-acbd-c295ff1f6eda\",\"runtimeGeneration\":1,\"connectionGeneration\":122,\"admissionGeneration\":126,\"buildDigest\":\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\"},\"claimRevision\":1,\"claimState\":\"CURRENT\",\"claimEntryId\":\"publish_participant_release_claim:ebece32ad8b970954fea11686cc3e990d1704bcb529c4cbef333ab7b83740a8c\",\"claimIndex\":593,\"claimTerm\":1},{\"target\":{\"replicaIdentity\":\"sql_transactions-p1-r3\",\"peerId\":\"6600243378791833037\",\"nodeId\":\"terminal-matrix-node\",\"ownerIncarnation\":1,\"lifecycleIncarnation\":\"68295dd2-6ddc-45d9-b618-888f64f2ae67\",\"runtimeGeneration\":1,\"connectionGeneration\":130,\"admissionGeneration\":127,\"buildDigest\":\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\"},\"claimRevision\":1,\"claimState\":\"CURRENT\",\"claimEntryId\":\"publish_participant_release_claim:f696881d78423946b5952ceb107fb212b9cae8cb5df254c3ddc8ae11c73213b8\",\"claimIndex\":595,\"claimTerm\":1}],\"memberShares\":[{\"replicaIdentity\":\"sql_transactions-p1-r1\",\"claimRevision\":1,\"targetEntryText\":\"{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r1\\\",\\\"peerId\\\":\\\"2734552253535212872\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"db0e5040-2639-4d46-891b-dddc0050556d\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":111,\\\"admissionGeneration\\\":124,\\\"buildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\"}\",\"shareEntryId\":\"record_participant_release_share:7a00a11a9a71267a22db3a33d3227d554a58828667686e74ea463645b257e3a7\",\"shareIndex\":592,\"shareTerm\":1},{\"replicaIdentity\":\"sql_transactions-p1-r2\",\"claimRevision\":1,\"targetEntryText\":\"{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r2\\\",\\\"peerId\\\":\\\"7691077697885072888\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"d9440cca-64a4-41ff-acbd-c295ff1f6eda\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":122,\\\"admissionGeneration\\\":126,\\\"buildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\"}\",\"shareEntryId\":\"record_participant_release_share:8650a965bd01863e89b3db7b6ea036524078aaf698d7ff9b81e0631067272b01\",\"shareIndex\":594,\"shareTerm\":1},{\"replicaIdentity\":\"sql_transactions-p1-r3\",\"claimRevision\":1,\"targetEntryText\":\"{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r3\\\",\\\"peerId\\\":\\\"6600243378791833037\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"68295dd2-6ddc-45d9-b618-888f64f2ae67\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":130,\\\"admissionGeneration\\\":127,\\\"buildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\"}\",\"shareEntryId\":\"record_participant_release_share:2f1351740b9aca76a7339bcff1c1d87f4e8b415ab5dd6c31529eb173f560ef20\",\"shareIndex\":596,\"shareTerm\":1}],\"targetReceipts\":[{\"receipt\":{\"replicaIdentity\":\"schema-job-a163f5267e80b762f8c3ab83ff371d35:replica:terminal-matrix-node\",\"peerId\":\"7597212478947252804\",\"nodeId\":\"terminal-matrix-node\",\"ownerIncarnation\":1,\"lifecycleIncarnation\":\"4cfee3fc-221a-4f2d-a0d6-38062dcabad2\",\"runtimeGeneration\":1,\"connectionGeneration\":136,\"admissionGeneration\":136,\"buildDigest\":\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\",\"resumeEntryId\":\"resume_participant_admission:f7c461c46b950bd2289938700d7df3a5042bf697a36f591e9556e4368f5fe6d8\",\"authorizationIndex\":4,\"authorizationTerm\":1,\"pauseGeneration\":1},\"receiptRevision\":1,\"receiptState\":\"CURRENT\",\"receiptEntryId\":\"record_participant_release_receipt:437eb498c0aa33c96a5ed44e6cf9db309b4bae79b6ec9b0433061178d40dbead\",\"receiptIndex\":599,\"receiptTerm\":1}],\"dispatchEntryId\":\"dispatch_participant_release:42a436d8e5d41007358003239ac1a761c08961bb96112250ba6209758554e149\",\"dispatchIndex\":598,\"dispatchTerm\":1,\"receiptsText\":\"[{\\\"replicaIdentity\\\":\\\"schema-job-a163f5267e80b762f8c3ab83ff371d35:replica:terminal-matrix-node\\\",\\\"peerId\\\":\\\"7597212478947252804\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"4cfee3fc-221a-4f2d-a0d6-38062dcabad2\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":136,\\\"admissionGeneration\\\":136,\\\"buildDigest\\\":\\\"0d9d072a7535db6a7f99862d54320f07ef64283e3c40ddb4e8fab527f2334114\\\",\\\"resumeEntryId\\\":\\\"resume_participant_admission:f7c461c46b950bd2289938700d7df3a5042bf697a36f591e9556e4368f5fe6d8\\\",\\\"authorizationIndex\\\":4,\\\"authorizationTerm\\\":1,\\\"pauseGeneration\\\":1}]\",\"confirmationEntryId\":\"confirm_participant_release:72cf3eb25faebb000d0c9cd9f0ab239d7e92c02757be558d63c2aef2f33d55c6\",\"confirmationIndex\":600,\"confirmationTerm\":1}",
+        "participant_release_authorization_text": null,
+        "participant_release_authorization_index": null,
+        "participant_release_authorization_term": null
+      }
+    },
+    {
+      "runtimeRoot": "/tmp/lagrange-terminal-matrix-vgBsCD",
+      "databaseSha256": "ca983c2522d4442c203c7e4a1ec7fbfe0674032d166e2d105072319fa6aa8b17",
+      "transactions": [
+        {
+          "transaction_id": "00bb85602a0d1ce37493aaef5f566eb4",
+          "session_id": "matrix-rb-10",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709418,
+          "timeout_deadline": 1791755777168,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"00bb85602a0d1ce37493aaef5f566eb4:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"00bb85602a0d1ce37493aaef5f566eb4\",\"decision\":\"ROLLBACK\",\"participants\":[[\"00bb85602a0d1ce37493aaef5f566eb4:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "237db80f09b162707d3a2df6fcdd01fd0e644b29349546cf946a72cb854da597",
+          "created_at": 1791755717168,
+          "updated_at": 1791755717672
+        },
+        {
+          "transaction_id": "172305aba28adb5c2bb06aa98db97327",
+          "session_id": "matrix-rb-2",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709410,
+          "timeout_deadline": 1791755773202,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"172305aba28adb5c2bb06aa98db97327:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"172305aba28adb5c2bb06aa98db97327\",\"decision\":\"ROLLBACK\",\"participants\":[[\"172305aba28adb5c2bb06aa98db97327:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "f1fe3db3c3b23b21915f5713aca2fd4bbb27471c0018d9cdf5bf2f92e0cf5153",
+          "created_at": 1791755713202,
+          "updated_at": 1791755713678
+        },
+        {
+          "transaction_id": "751080e9eeb57cf8f011d913349d8053",
+          "session_id": "matrix-rb-3",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709411,
+          "timeout_deadline": 1791755773716,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"751080e9eeb57cf8f011d913349d8053:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"751080e9eeb57cf8f011d913349d8053\",\"decision\":\"ROLLBACK\",\"participants\":[[\"751080e9eeb57cf8f011d913349d8053:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "5d099d9c4f9ec7a2a401374aa9d1c3ae836da814d98108a4405e903e34cb6328",
+          "created_at": 1791755713716,
+          "updated_at": 1791755714214
+        },
+        {
+          "transaction_id": "842df3d33babc759e23f5889a4ece6f7",
+          "session_id": "matrix-rb-4",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709412,
+          "timeout_deadline": 1791755774247,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"842df3d33babc759e23f5889a4ece6f7:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"842df3d33babc759e23f5889a4ece6f7\",\"decision\":\"ROLLBACK\",\"participants\":[[\"842df3d33babc759e23f5889a4ece6f7:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "79d7a18b36fad79311249030ea83a90f53dbd009b666c8166baa69b4d893560c",
+          "created_at": 1791755714247,
+          "updated_at": 1791755714689
+        },
+        {
+          "transaction_id": "87456e87eddf31a8c28ec937742dc19d",
+          "session_id": "matrix-rb-6",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709414,
+          "timeout_deadline": 1791755775259,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"87456e87eddf31a8c28ec937742dc19d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"87456e87eddf31a8c28ec937742dc19d\",\"decision\":\"ROLLBACK\",\"participants\":[[\"87456e87eddf31a8c28ec937742dc19d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "bee01039a73540be45c10a059fe30905e4ddb8319ec5bfd4f39a44217d59539d",
+          "created_at": 1791755715259,
+          "updated_at": 1791755715708
+        },
+        {
+          "transaction_id": "95668d5c970a9181dfc358602755a5c9",
+          "session_id": "matrix-rb-9",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709417,
+          "timeout_deadline": 1791755776695,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"95668d5c970a9181dfc358602755a5c9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"95668d5c970a9181dfc358602755a5c9\",\"decision\":\"ROLLBACK\",\"participants\":[[\"95668d5c970a9181dfc358602755a5c9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "17e0239fa40cd0237315115b1290ccb88bf1dc3931d383ec23a6bca6c9c9187a",
+          "created_at": 1791755716695,
+          "updated_at": 1791755717136
+        },
+        {
+          "transaction_id": "ba9d385091f65c2723049d1de696d789",
+          "session_id": "matrix-rb-8",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709416,
+          "timeout_deadline": 1791755776224,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"ba9d385091f65c2723049d1de696d789:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"ba9d385091f65c2723049d1de696d789\",\"decision\":\"ROLLBACK\",\"participants\":[[\"ba9d385091f65c2723049d1de696d789:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "c277f1e450e2c93d3bb316e2490d87829504a8480ac09901d250c1f081f2852d",
+          "created_at": 1791755716224,
+          "updated_at": 1791755716663
+        },
+        {
+          "transaction_id": "de1c5914e27c5713420cdfe90585d6f9",
+          "session_id": "matrix-rb-7",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709415,
+          "timeout_deadline": 1791755775739,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"de1c5914e27c5713420cdfe90585d6f9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"de1c5914e27c5713420cdfe90585d6f9\",\"decision\":\"ROLLBACK\",\"participants\":[[\"de1c5914e27c5713420cdfe90585d6f9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "859b1fa16917cec11495cc4289f81fed198fc9628d795fa53c0d5c7fd295d04b",
+          "created_at": 1791755715739,
+          "updated_at": 1791755716188
+        },
+        {
+          "transaction_id": "e4426a3880c3771ece568d1c272e6c2b",
+          "session_id": "matrix-rb-5",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709413,
+          "timeout_deadline": 1791755774730,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"e4426a3880c3771ece568d1c272e6c2b:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"e4426a3880c3771ece568d1c272e6c2b\",\"decision\":\"ROLLBACK\",\"participants\":[[\"e4426a3880c3771ece568d1c272e6c2b:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "85a84a038eb5f7c5d6bd1de4f8d6d1256f64bf6be5093135e555636d7af1aab4",
+          "created_at": 1791755714730,
+          "updated_at": 1791755715223
+        },
+        {
+          "transaction_id": "ed57572df34e072642ccad91f2ee211d",
+          "session_id": "matrix-rb-1",
+          "status": "ROLLED_BACK",
+          "transaction_epoch": 1791755709409,
+          "timeout_deadline": 1791755772512,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"ed57572df34e072642ccad91f2ee211d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",\"tbl-a163f5267e80b762f8c3ab83ff371d35-p1\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "decision": "ROLLBACK",
+          "decision_text": "{\"transactionId\":\"ed57572df34e072642ccad91f2ee211d\",\"decision\":\"ROLLBACK\",\"participants\":[[\"ed57572df34e072642ccad91f2ee211d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+          "decision_digest": "ae8928814385760caa13555c4434ad20501bf6bed4f13e4c0a298c11d3b3247f",
+          "created_at": 1791755712512,
+          "updated_at": 1791755713165
+        }
+      ],
+      "settlementReceipts": [
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:a086f9eeeeed2ec86df070a12787d77dc162dc84f04d388fb2bccaedf9cf5996",
+          "outcome": "applied",
+          "log_index": 701,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"00bb85602a0d1ce37493aaef5f566eb4\",\"decision\":\"ROLLBACK\",\"participants\":[[\"00bb85602a0d1ce37493aaef5f566eb4:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"00bb85602a0d1ce37493aaef5f566eb4\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"00bb85602a0d1ce37493aaef5f566eb4:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"237db80f09b162707d3a2df6fcdd01fd0e644b29349546cf946a72cb854da597\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "00bb85602a0d1ce37493aaef5f566eb4",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "00bb85602a0d1ce37493aaef5f566eb4:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"00bb85602a0d1ce37493aaef5f566eb4\",\"decision\":\"ROLLBACK\",\"participants\":[[\"00bb85602a0d1ce37493aaef5f566eb4:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "237db80f09b162707d3a2df6fcdd01fd0e644b29349546cf946a72cb854da597"
+            }
+          }
+        },
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:431eabdf77035fc8cc6a6732be100232f681ac308f3bf5415c7922a36f5eb2dc",
+          "outcome": "applied",
+          "log_index": 702,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"172305aba28adb5c2bb06aa98db97327\",\"decision\":\"ROLLBACK\",\"participants\":[[\"172305aba28adb5c2bb06aa98db97327:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"172305aba28adb5c2bb06aa98db97327\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"172305aba28adb5c2bb06aa98db97327:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"f1fe3db3c3b23b21915f5713aca2fd4bbb27471c0018d9cdf5bf2f92e0cf5153\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "172305aba28adb5c2bb06aa98db97327",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "172305aba28adb5c2bb06aa98db97327:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"172305aba28adb5c2bb06aa98db97327\",\"decision\":\"ROLLBACK\",\"participants\":[[\"172305aba28adb5c2bb06aa98db97327:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "f1fe3db3c3b23b21915f5713aca2fd4bbb27471c0018d9cdf5bf2f92e0cf5153"
+            }
+          }
+        },
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:8acf2b88e24bd92b011090eab156e2e5025cde2965badcb185e344157b33c54b",
+          "outcome": "applied",
+          "log_index": 703,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"751080e9eeb57cf8f011d913349d8053\",\"decision\":\"ROLLBACK\",\"participants\":[[\"751080e9eeb57cf8f011d913349d8053:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"751080e9eeb57cf8f011d913349d8053\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"751080e9eeb57cf8f011d913349d8053:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"5d099d9c4f9ec7a2a401374aa9d1c3ae836da814d98108a4405e903e34cb6328\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "751080e9eeb57cf8f011d913349d8053",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "751080e9eeb57cf8f011d913349d8053:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"751080e9eeb57cf8f011d913349d8053\",\"decision\":\"ROLLBACK\",\"participants\":[[\"751080e9eeb57cf8f011d913349d8053:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "5d099d9c4f9ec7a2a401374aa9d1c3ae836da814d98108a4405e903e34cb6328"
+            }
+          }
+        },
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:8882af97bb421a2df32282dfa7c568e49945a0639fd4897211fb019926010c28",
+          "outcome": "applied",
+          "log_index": 704,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"842df3d33babc759e23f5889a4ece6f7\",\"decision\":\"ROLLBACK\",\"participants\":[[\"842df3d33babc759e23f5889a4ece6f7:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"842df3d33babc759e23f5889a4ece6f7\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"842df3d33babc759e23f5889a4ece6f7:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"79d7a18b36fad79311249030ea83a90f53dbd009b666c8166baa69b4d893560c\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "842df3d33babc759e23f5889a4ece6f7",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "842df3d33babc759e23f5889a4ece6f7:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"842df3d33babc759e23f5889a4ece6f7\",\"decision\":\"ROLLBACK\",\"participants\":[[\"842df3d33babc759e23f5889a4ece6f7:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "79d7a18b36fad79311249030ea83a90f53dbd009b666c8166baa69b4d893560c"
+            }
+          }
+        },
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:6a9fddaf489a65c3f772e692cd34fcd44ffcd4113bbe2875aa4d5641a3f75169",
+          "outcome": "applied",
+          "log_index": 705,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"87456e87eddf31a8c28ec937742dc19d\",\"decision\":\"ROLLBACK\",\"participants\":[[\"87456e87eddf31a8c28ec937742dc19d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"87456e87eddf31a8c28ec937742dc19d\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"87456e87eddf31a8c28ec937742dc19d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"bee01039a73540be45c10a059fe30905e4ddb8319ec5bfd4f39a44217d59539d\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "87456e87eddf31a8c28ec937742dc19d",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "87456e87eddf31a8c28ec937742dc19d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"87456e87eddf31a8c28ec937742dc19d\",\"decision\":\"ROLLBACK\",\"participants\":[[\"87456e87eddf31a8c28ec937742dc19d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "bee01039a73540be45c10a059fe30905e4ddb8319ec5bfd4f39a44217d59539d"
+            }
+          }
+        },
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:8ce00b9f4eaf90c5680bac5d3b3996b777626b1e19b55e60f3e5ad22452d2839",
+          "outcome": "applied",
+          "log_index": 706,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"95668d5c970a9181dfc358602755a5c9\",\"decision\":\"ROLLBACK\",\"participants\":[[\"95668d5c970a9181dfc358602755a5c9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"95668d5c970a9181dfc358602755a5c9\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"95668d5c970a9181dfc358602755a5c9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"17e0239fa40cd0237315115b1290ccb88bf1dc3931d383ec23a6bca6c9c9187a\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "95668d5c970a9181dfc358602755a5c9",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "95668d5c970a9181dfc358602755a5c9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"95668d5c970a9181dfc358602755a5c9\",\"decision\":\"ROLLBACK\",\"participants\":[[\"95668d5c970a9181dfc358602755a5c9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "17e0239fa40cd0237315115b1290ccb88bf1dc3931d383ec23a6bca6c9c9187a"
+            }
+          }
+        },
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:8cd849ab111deeaf11f3323b2f0a21054081b5da329d0e76801bff6673bb045e",
+          "outcome": "applied",
+          "log_index": 707,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"ba9d385091f65c2723049d1de696d789\",\"decision\":\"ROLLBACK\",\"participants\":[[\"ba9d385091f65c2723049d1de696d789:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"ba9d385091f65c2723049d1de696d789\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"ba9d385091f65c2723049d1de696d789:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"c277f1e450e2c93d3bb316e2490d87829504a8480ac09901d250c1f081f2852d\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "ba9d385091f65c2723049d1de696d789",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "ba9d385091f65c2723049d1de696d789:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"ba9d385091f65c2723049d1de696d789\",\"decision\":\"ROLLBACK\",\"participants\":[[\"ba9d385091f65c2723049d1de696d789:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "c277f1e450e2c93d3bb316e2490d87829504a8480ac09901d250c1f081f2852d"
+            }
+          }
+        },
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:634c65a8bdf1efba000c63b5644cde91c6e7828816be79556a20f08f150ba6ab",
+          "outcome": "applied",
+          "log_index": 708,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"de1c5914e27c5713420cdfe90585d6f9\",\"decision\":\"ROLLBACK\",\"participants\":[[\"de1c5914e27c5713420cdfe90585d6f9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"de1c5914e27c5713420cdfe90585d6f9\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"de1c5914e27c5713420cdfe90585d6f9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"859b1fa16917cec11495cc4289f81fed198fc9628d795fa53c0d5c7fd295d04b\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "de1c5914e27c5713420cdfe90585d6f9",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "de1c5914e27c5713420cdfe90585d6f9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"de1c5914e27c5713420cdfe90585d6f9\",\"decision\":\"ROLLBACK\",\"participants\":[[\"de1c5914e27c5713420cdfe90585d6f9:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "859b1fa16917cec11495cc4289f81fed198fc9628d795fa53c0d5c7fd295d04b"
+            }
+          }
+        },
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:7c3f144a3fb83955e8d79f00ac55919d45fdb6d5f17fef5d1e03c32a734cf183",
+          "outcome": "applied",
+          "log_index": 709,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"e4426a3880c3771ece568d1c272e6c2b\",\"decision\":\"ROLLBACK\",\"participants\":[[\"e4426a3880c3771ece568d1c272e6c2b:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"e4426a3880c3771ece568d1c272e6c2b\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"e4426a3880c3771ece568d1c272e6c2b:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"85a84a038eb5f7c5d6bd1de4f8d6d1256f64bf6be5093135e555636d7af1aab4\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "e4426a3880c3771ece568d1c272e6c2b",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "e4426a3880c3771ece568d1c272e6c2b:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"e4426a3880c3771ece568d1c272e6c2b\",\"decision\":\"ROLLBACK\",\"participants\":[[\"e4426a3880c3771ece568d1c272e6c2b:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "85a84a038eb5f7c5d6bd1de4f8d6d1256f64bf6be5093135e555636d7af1aab4"
+            }
+          }
+        },
+        {
+          "entry_key": "entry:tx-coordinator-settlement:v1:2b6dfec8fe527fac6aa7918e85938b64f216013d7b13362446ec3faa2c5d2502",
+          "outcome": "applied",
+          "log_index": 710,
+          "term": 1,
+          "failure_code": null,
+          "failure_message": null,
+          "changes": null,
+          "last_insert_rowid": null,
+          "owner_result_text": "{\"outcome\":\"replayed\",\"reason\":null,\"recordedDecision\":{\"state\":\"recorded\",\"transactionId\":\"ed57572df34e072642ccad91f2ee211d\",\"decision\":\"ROLLBACK\",\"participants\":[[\"ed57572df34e072642ccad91f2ee211d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]],\"decisionText\":\"{\\\"transactionId\\\":\\\"ed57572df34e072642ccad91f2ee211d\\\",\\\"decision\\\":\\\"ROLLBACK\\\",\\\"participants\\\":[[\\\"ed57572df34e072642ccad91f2ee211d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\\\",null]]}\",\"decisionDigest\":\"ae8928814385760caa13555c4434ad20501bf6bed4f13e4c0a298c11d3b3247f\"}}",
+          "decodedOwnerResult": {
+            "outcome": "replayed",
+            "reason": null,
+            "recordedDecision": {
+              "state": "recorded",
+              "transactionId": "ed57572df34e072642ccad91f2ee211d",
+              "decision": "ROLLBACK",
+              "participants": [
+                [
+                  "ed57572df34e072642ccad91f2ee211d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1",
+                  null
+                ]
+              ],
+              "decisionText": "{\"transactionId\":\"ed57572df34e072642ccad91f2ee211d\",\"decision\":\"ROLLBACK\",\"participants\":[[\"ed57572df34e072642ccad91f2ee211d:tbl-a163f5267e80b762f8c3ab83ff371d35-p1\",null]]}",
+              "decisionDigest": "ae8928814385760caa13555c4434ad20501bf6bed4f13e4c0a298c11d3b3247f"
+            }
+          }
+        }
+      ],
+      "generation": {
+        "singleton": 1,
+        "generation": 90,
+        "origin_index": 3,
+        "origin_term": 1,
+        "participant_pause_generation": 2,
+        "participant_pause_entry_id": "pause_participant_admission:339fec47cb57ad5a228479c8a6d44d139f2a65cfd9defc46db0261c92f6e075f",
+        "participant_release_control_revision": 620,
+        "participant_release_control_text": "{\"version\":1,\"state\":\"CONFIRMED\",\"authorizationId\":\"1377461bc7bb4a2aae8088afea8664d46e6661dc2ffb90e3fb2017c36eebcad1\",\"authorizationRevision\":617,\"controlReleaseText\":\"{\\\"partitionId\\\":\\\"sql_transactions-p1\\\",\\\"protocolVersion\\\":1,\\\"targetBuildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\",\\\"configurationKey\\\":\\\"[[\\\\\\\"2734552253535212872\\\\\\\",\\\\\\\"6600243378791833037\\\\\\\",\\\\\\\"7691077697885072888\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"releaseId\\\":\\\"3441ecedcfe57a67fa5bc76766019574339f0663039baf019574219171d6a433\\\"}\",\"dependentReleaseText\":\"{\\\"partitionId\\\":\\\"tbl-09dfe844c22cee3e4de0d4603564a9ed-p1\\\",\\\"protocolVersion\\\":1,\\\"targetBuildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\",\\\"configurationKey\\\":\\\"[[\\\\\\\"6644280418998899172\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"releaseId\\\":\\\"0473c49f613306718099e3ef5427137154970d1d9e33f2712c43df62841e7ee3\\\"}\",\"controlTargetEntriesText\":\"[{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r1\\\",\\\"peerId\\\":\\\"2734552253535212872\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"3dc35dbb-d4d9-4ef1-927d-d25809917bcf\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":106,\\\"admissionGeneration\\\":138,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"},{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r2\\\",\\\"peerId\\\":\\\"7691077697885072888\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"a77dc707-593c-4006-b71b-b0b1ff67511f\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":122,\\\"admissionGeneration\\\":139,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"},{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r3\\\",\\\"peerId\\\":\\\"6600243378791833037\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"47ba00a8-bbec-4cf1-b9d0-99441ae8bdcc\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":130,\\\"admissionGeneration\\\":140,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"}]\",\"targetEntriesText\":\"[{\\\"replicaIdentity\\\":\\\"schema-job-09dfe844c22cee3e4de0d4603564a9ed:replica:terminal-matrix-node\\\",\\\"peerId\\\":\\\"6644280418998899172\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"e4002f47-915e-43f1-9a07-f85621d8efbf\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":137,\\\"admissionGeneration\\\":137,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"}]\",\"controlConfigurationText\":\"{\\\"voters\\\":[\\\"2734552253535212872\\\",\\\"6600243378791833037\\\",\\\"7691077697885072888\\\"],\\\"votersOutgoing\\\":[],\\\"learners\\\":[],\\\"learnersNext\\\":[],\\\"configurationKey\\\":\\\"[[\\\\\\\"2734552253535212872\\\\\\\",\\\\\\\"6600243378791833037\\\\\\\",\\\\\\\"7691077697885072888\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"identities\\\":{\\\"2734552253535212872\\\":\\\"sql_transactions-p1-r1\\\",\\\"6600243378791833037\\\":\\\"sql_transactions-p1-r3\\\",\\\"7691077697885072888\\\":\\\"sql_transactions-p1-r2\\\"}}\",\"targetConfigurationText\":\"{\\\"voters\\\":[\\\"6644280418998899172\\\"],\\\"votersOutgoing\\\":[],\\\"learners\\\":[],\\\"learnersNext\\\":[],\\\"configurationKey\\\":\\\"[[\\\\\\\"6644280418998899172\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"identities\\\":{\\\"6644280418998899172\\\":\\\"schema-job-09dfe844c22cee3e4de0d4603564a9ed:replica:terminal-matrix-node\\\"}}\",\"deadlineAtMs\":1791755778131,\"reservationEntryId\":\"reserve_participant_release:291a24ffea03e0b29fcd0475114c384c6aad2cf90ec763e4dd898c021d1a30c2\",\"reservationIndex\":725,\"reservationTerm\":1,\"finalizationEntryId\":\"finalize_participant_release:a49410d5a93428dc1cb3195e3daa86a8c16ca287dafc2d013c5970bbd4df4e39\",\"controlIndex\":732,\"controlTerm\":1,\"retirementId\":null,\"retiredReplicaIdentity\":null,\"memberClaims\":[{\"target\":{\"replicaIdentity\":\"sql_transactions-p1-r1\",\"peerId\":\"2734552253535212872\",\"nodeId\":\"terminal-matrix-node\",\"ownerIncarnation\":1,\"lifecycleIncarnation\":\"3dc35dbb-d4d9-4ef1-927d-d25809917bcf\",\"runtimeGeneration\":1,\"connectionGeneration\":106,\"admissionGeneration\":138,\"buildDigest\":\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\"},\"claimRevision\":1,\"claimState\":\"CURRENT\",\"claimEntryId\":\"publish_participant_release_claim:e57cd1bca9b6f4026344004b62d0f3658e3781bab4eace1bd633a650215d944f\",\"claimIndex\":726,\"claimTerm\":1},{\"target\":{\"replicaIdentity\":\"sql_transactions-p1-r2\",\"peerId\":\"7691077697885072888\",\"nodeId\":\"terminal-matrix-node\",\"ownerIncarnation\":1,\"lifecycleIncarnation\":\"a77dc707-593c-4006-b71b-b0b1ff67511f\",\"runtimeGeneration\":1,\"connectionGeneration\":122,\"admissionGeneration\":139,\"buildDigest\":\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\"},\"claimRevision\":1,\"claimState\":\"CURRENT\",\"claimEntryId\":\"publish_participant_release_claim:831e133d9fd2824e9bc5de3b0cb20a6c93c1087569e111de207d4f74ef928c16\",\"claimIndex\":728,\"claimTerm\":1},{\"target\":{\"replicaIdentity\":\"sql_transactions-p1-r3\",\"peerId\":\"6600243378791833037\",\"nodeId\":\"terminal-matrix-node\",\"ownerIncarnation\":1,\"lifecycleIncarnation\":\"47ba00a8-bbec-4cf1-b9d0-99441ae8bdcc\",\"runtimeGeneration\":1,\"connectionGeneration\":130,\"admissionGeneration\":140,\"buildDigest\":\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\"},\"claimRevision\":1,\"claimState\":\"CURRENT\",\"claimEntryId\":\"publish_participant_release_claim:8a2571562779cc3f978e76f7de1a00d9f932792a2f29ed381b4f5ad2cb402ede\",\"claimIndex\":730,\"claimTerm\":1}],\"memberShares\":[{\"replicaIdentity\":\"sql_transactions-p1-r1\",\"claimRevision\":1,\"targetEntryText\":\"{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r1\\\",\\\"peerId\\\":\\\"2734552253535212872\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"3dc35dbb-d4d9-4ef1-927d-d25809917bcf\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":106,\\\"admissionGeneration\\\":138,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"}\",\"shareEntryId\":\"record_participant_release_share:6940aae322b15f2b925b85df1091b3dd7c5d5d171775188407de5d2bbb024cb3\",\"shareIndex\":727,\"shareTerm\":1},{\"replicaIdentity\":\"sql_transactions-p1-r2\",\"claimRevision\":1,\"targetEntryText\":\"{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r2\\\",\\\"peerId\\\":\\\"7691077697885072888\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"a77dc707-593c-4006-b71b-b0b1ff67511f\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":122,\\\"admissionGeneration\\\":139,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"}\",\"shareEntryId\":\"record_participant_release_share:d07ac16bc41a92e0e252178effd13f163c02887117b8728797e8a5e6633652a1\",\"shareIndex\":729,\"shareTerm\":1},{\"replicaIdentity\":\"sql_transactions-p1-r3\",\"claimRevision\":1,\"targetEntryText\":\"{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r3\\\",\\\"peerId\\\":\\\"6600243378791833037\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"47ba00a8-bbec-4cf1-b9d0-99441ae8bdcc\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":130,\\\"admissionGeneration\\\":140,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"}\",\"shareEntryId\":\"record_participant_release_share:6f0edfd827b9734f8ec5d50d69c804dcded15c092b174fc11532205aee6606b4\",\"shareIndex\":731,\"shareTerm\":1}],\"targetReceipts\":[{\"receipt\":{\"replicaIdentity\":\"schema-job-09dfe844c22cee3e4de0d4603564a9ed:replica:terminal-matrix-node\",\"peerId\":\"6644280418998899172\",\"nodeId\":\"terminal-matrix-node\",\"ownerIncarnation\":1,\"lifecycleIncarnation\":\"e4002f47-915e-43f1-9a07-f85621d8efbf\",\"runtimeGeneration\":1,\"connectionGeneration\":137,\"admissionGeneration\":137,\"buildDigest\":\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\",\"resumeEntryId\":\"resume_participant_admission:5633aaad0fed1200d456e17899f527c5622f494da02e8e8f22216c08ac7e8d5f\",\"authorizationIndex\":4,\"authorizationTerm\":1,\"pauseGeneration\":1},\"receiptRevision\":1,\"receiptState\":\"CURRENT\",\"receiptEntryId\":\"record_participant_release_receipt:6f0c71829f8c299d34ef52e366abaabb2509b94db9967a09b7952752aa7125ee\",\"receiptIndex\":734,\"receiptTerm\":1}],\"dispatchEntryId\":\"dispatch_participant_release:e0a7ddcfd1c393af769759e2fb195571f12789b87d14f3c4663c7a3e0eee3fd9\",\"dispatchIndex\":733,\"dispatchTerm\":1,\"receiptsText\":\"[{\\\"replicaIdentity\\\":\\\"schema-job-09dfe844c22cee3e4de0d4603564a9ed:replica:terminal-matrix-node\\\",\\\"peerId\\\":\\\"6644280418998899172\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"e4002f47-915e-43f1-9a07-f85621d8efbf\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":137,\\\"admissionGeneration\\\":137,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\",\\\"resumeEntryId\\\":\\\"resume_participant_admission:5633aaad0fed1200d456e17899f527c5622f494da02e8e8f22216c08ac7e8d5f\\\",\\\"authorizationIndex\\\":4,\\\"authorizationTerm\\\":1,\\\"pauseGeneration\\\":1}]\",\"confirmationEntryId\":\"confirm_participant_release:21bbde7291512b7f5898e0b47c535d5c736b181196695823fade0837c5502173\",\"confirmationIndex\":735,\"confirmationTerm\":1}",
+        "participant_release_authorization_text": "{\"version\":1,\"dependentReleaseText\":\"{\\\"partitionId\\\":\\\"sql_transactions-p1\\\",\\\"protocolVersion\\\":1,\\\"targetBuildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\",\\\"configurationKey\\\":\\\"[[\\\\\\\"2734552253535212872\\\\\\\",\\\\\\\"6600243378791833037\\\\\\\",\\\\\\\"7691077697885072888\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"releaseId\\\":\\\"3441ecedcfe57a67fa5bc76766019574339f0663039baf019574219171d6a433\\\"}\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlAuthorizationId\":\"14547735f29663a356fc52ac4b3ac993d796a9841836a70830c4d8cc7e999d3a\",\"controlAuthorizationRevision\":604,\"targetEntriesText\":\"[{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r1\\\",\\\"peerId\\\":\\\"2734552253535212872\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"3dc35dbb-d4d9-4ef1-927d-d25809917bcf\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":106,\\\"admissionGeneration\\\":138,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"},{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r2\\\",\\\"peerId\\\":\\\"7691077697885072888\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"a77dc707-593c-4006-b71b-b0b1ff67511f\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":122,\\\"admissionGeneration\\\":139,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"},{\\\"replicaIdentity\\\":\\\"sql_transactions-p1-r3\\\",\\\"peerId\\\":\\\"6600243378791833037\\\",\\\"nodeId\\\":\\\"terminal-matrix-node\\\",\\\"ownerIncarnation\\\":1,\\\"lifecycleIncarnation\\\":\\\"47ba00a8-bbec-4cf1-b9d0-99441ae8bdcc\\\",\\\"runtimeGeneration\\\":1,\\\"connectionGeneration\\\":130,\\\"admissionGeneration\\\":140,\\\"buildDigest\\\":\\\"62715969f9243667b407847f6004b3338948d2d07e337c375ad9edf6632c2c04\\\"}]\",\"targetConfigurationText\":\"{\\\"voters\\\":[\\\"2734552253535212872\\\",\\\"6600243378791833037\\\",\\\"7691077697885072888\\\"],\\\"votersOutgoing\\\":[],\\\"learners\\\":[],\\\"learnersNext\\\":[],\\\"configurationKey\\\":\\\"[[\\\\\\\"2734552253535212872\\\\\\\",\\\\\\\"6600243378791833037\\\\\\\",\\\\\\\"7691077697885072888\\\\\\\"],[],[],[],false]\\\",\\\"membershipGenerationIndex\\\":0,\\\"identities\\\":{\\\"2734552253535212872\\\":\\\"sql_transactions-p1-r1\\\",\\\"6600243378791833037\\\":\\\"sql_transactions-p1-r3\\\",\\\"7691077697885072888\\\":\\\"sql_transactions-p1-r2\\\"}}\",\"expectedPauseGeneration\":2,\"resumeEntryId\":\"resume_participant_admission:ea4461c62ceda0854c7254229a801f693d925cd988472ab0814746add329a008\",\"authorizationIndex\":720,\"authorizationTerm\":1}",
+        "participant_release_authorization_index": 720,
+        "participant_release_authorization_term": 1
+      }
+    }
+  ]
+}
