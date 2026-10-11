@@ -109,20 +109,24 @@ function classifyReplaceOwnerPhase(inputs) {
 
 const SESSION_BY_OWNER = new WeakMap();
 
-// The session clock is the clock the durable step entries are stamped with.
-function sessionClockNowMs() {
-  return Date.now();
-}
-
 /**
  * Begin a new owner session: a new owner instance, or the owner's state
- * released at shutdown.
+ * released at shutdown. The stamp routes through the injected time source
+ * when one is constructing with the owner (the coordinator's virtual-clock
+ * seam), else the owner's own clock, else ambient time - never a raw read
+ * under an owner that carries a clock.
  * @param {Object} owner
  * @param {string} restartClass - REPLACE_OWNER_RESTART_CLASS.
+ * @param {Object|null} timeSource - The owner's injected clock, when the
+ *   stamp runs during construction before the owner field is assigned.
  */
-function startReplaceOwnerSession(owner, restartClass) {
+function startReplaceOwnerSession(owner, restartClass, timeSource = null) {
   SESSION_BY_OWNER.set(owner, {
-    startedAtMs: sessionClockNowMs(),
+    startedAtMs: typeof timeSource?.now === 'function' ?
+      timeSource.now() :
+      typeof owner?.resolveTimeoutCheckNowMs === 'function' ?
+        owner.resolveTimeoutCheckNowMs() :
+        Date.now(),
     restartClass,
     rebuiltOperationIds: new Set(),
   });

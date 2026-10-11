@@ -507,6 +507,14 @@ class FormationTurnAttribution {
     executionNodeId = currentExecutionNodeId()) {
     const nowUs = this.readClockUs();
     if (this.depth > ZERO) this.accrueActiveSegment(nowUs);
+    // A nested segment's provenance is its enclosing attributed dispatch: the
+    // ancestor already proved node binding, so a missing per-resource read
+    // (an async resource record retired before this dispatch) inherits it.
+    // Only an unbound TOP-LEVEL segment with a real owner is the scheduling
+    // seam the assert below must refuse.
+    if (executionNodeId === null && this.depth > ZERO) {
+      executionNodeId = this.activeExecutionNodeId;
+    }
     arrayPush(this.ownerStack, this.activeOwner);
     arrayPush(this.executionNodeStackDepths, this.activeExecutionNodeId);
     this.activeOwner = normalizeOwner(owner);
@@ -571,14 +579,14 @@ class FormationTurnAttribution {
     this.leaveSegment();
   }
 
-  run(owner, callback) {
+  run(owner, callback, executionNodeId = currentExecutionNodeId()) {
     if (!this.started) return callback();
     if (this.unboundProvenance !== null) {
       this.activeOwnerEntryStack =
         new Error(`runFormationOwner(${normalizeOwner(owner)})`).stack;
     }
     const dispatchHandoff = this.depth > ZERO;
-    this.enterSegment(owner, false, dispatchHandoff);
+    this.enterSegment(owner, false, dispatchHandoff, executionNodeId);
     try {
       return this.context.run(normalizeOwner(owner), callback);
     } finally {
@@ -741,9 +749,12 @@ function currentFormationExecutionNodeId() {
   return currentExecutionNodeId();
 }
 
-function runFormationOwner(owner, callback) {
+function runFormationOwner(owner, callback, executionNodeId) {
   if (!activeAttribution) return callback();
-  return activeAttribution.run(owner, callback);
+  if (executionNodeId === undefined) {
+    executionNodeId = currentExecutionNodeId();
+  }
+  return activeAttribution.run(owner, callback, executionNodeId);
 }
 
 function releaseFormationOwnerDescendants(owner) {

@@ -218,8 +218,21 @@ function runPersistedTransitionEffect(
 ) {
   if (newState !== REPLICA_STATE_MACHINE_STATE.ACTIVE) return persist();
   return runActivationEffectSection(stateMachine, replicaId, () => {
-    if (typeof context.isEffectHandlerCurrent !== 'function' ||
-        context.isEffectHandlerCurrent() !== true) {
+    const bound = typeof context.isEffectHandlerCurrent !== 'function' ?
+      'no-check' : context.isEffectHandlerCurrent();
+    if (bound !== true) {
+      try {
+        const svc = context?.activationService || null;
+        process.stderr.write('SF2DEBUGSTACK ' + (new Error().stack || '').split('\n').slice(1,8).join(' | ') + '\n');
+        console.error('SF2DEBUG', JSON.stringify({
+          replicaId, bound, hasSvc: !!svc,
+          addr: svc?.unifiedAddress || null,
+          hasTransport: !!svc?.transport,
+          addrRegistered: svc?.transport?.messageHandlers?.has(svc?.unifiedAddress) ?? null,
+          handlersCount: svc?.transport?.messageHandlers?.size ?? null,
+          laneMatch: svc ? (svc.resolveHandlerRetirementLane?.() === undefined ? 'no-lane-fn' : 'lane-fn') : null,
+        }));
+      } catch (e) { console.error('SF2DEBUG-ERR', String(e)); }
       throw activationHandlerNotRegisteredError(replicaId);
     }
   }, persist);
