@@ -19,6 +19,15 @@ into approval by this document.
 The following exact contracts answer those findings and await acceptance:
 - [Exact promotion authorization](exact-promotion-authorization-contract.md).
 - [Exact snapshot transition owners](exact-snapshot-transition-owners.md).
+- [Exact membership owner claim](exact-membership-owner-claim.md): listed here
+  2026-10-11 (round-2 independent review B1.1); written at 9956c4adb and
+  13ba3a030 in answer to review comments 4217392058 and 4217554373; the
+  authority for initial claiming, orphan recovery and successor fencing of
+  the proposed promotion CAS.
+- [Terminal membership resolution](terminal-membership-resolution.md): listed
+  here 2026-10-11 (round-2 independent review B1.1); written at ad0200207 in
+  answer to 4217881185 and 4217881271; it takes precedence over the
+  nonterminal predicate for terminal membership debt.
 
 The PR review request must name its then-current pushed head, checked against
 the remote immediately before requesting review. Historical attempt `at`
@@ -38,9 +47,29 @@ CREATE/cleanup generation remain separate identity dimensions.
 
 The exact promotion contract specifies one conditional operation-row commit
 from the exact committed learner basis to PROMOTE-in-flight phase/permit.
-It names the canonical repository, live owner lease, immutable O/S/T tuple,
+~~It names the canonical repository, live owner lease, immutable O/S/T tuple,
 prior phase/permit/stamp, nonterminal predicate, mutually exclusive abort CAS,
-monotonic direction and unknown-result recovery. The row commit precedes the
+monotonic direction and unknown-result recovery.~~ Superseded 2026-10-11
+(review comment 4217554444 of 5454889039; round-2 independent review B1.1).
+The struck sentence was written at 868ebc020, before 79bcff42e rebound the
+CAS and before ad0200207 added the terminal document; it stays for history
+and is no longer the summary. As rebound, the contract names the canonical
+repository, the immutable O/S/T tuple, the prior phase/permit/stamp, the
+mutually exclusive abort CAS, the monotonic direction and unknown-result
+recovery, and binds the promotion CAS to the exact CURRENT membership holder
+claim (node, boot, monotonic generation, expiry), owned by the executing
+node/boot and live at consideration time, as
+[the holder-claim contract](exact-membership-owner-claim.md) specifies. The
+structural owner's ordinary `lease_expires_at` and the structural
+source/target owner are excluded from that predicate: they are not successor
+membership authority. The nonterminal predicate governs ordinary nonterminal
+rows only; for a terminal row with retained membership debt
+[terminal membership resolution](terminal-membership-resolution.md) takes
+precedence (T0 settles definitive non-admission with a NULL holder; T1 lets
+only the exact claimed terminal debt select the pre-promotion abandonment
+arm; T2 resumes an already issued action). The holder claim, its carrier
+column `message_group_membership_owner_claim` and the proposed repository
+methods are proposed and absent at 82b54ef9. The row commit precedes the
 separate membership-Raft commit. Missing permit code is implementation work,
 not a claim that the integrated product already performs this transaction.
 

@@ -11,17 +11,58 @@ it is the authority for initial claiming, orphan recovery and successor fencing.
 The carrier is the replicated replica_operations row, owned by
 ReplicaOperationRepository. Its membership schema constants and existing
 upgrade loop own the fields. Ordinary operation updates preserve them.
-`message_group_membership_owner_claim` identifies the current membership
+~~`message_group_membership_owner_claim` identifies the current membership
 holder, including node, boot, monotonic generation and expiry. It is distinct
-from the immutable pending action permit. The ordinary `lease_expires_at`
-and structural source/target owner are NOT successor membership authority.
+from the immutable pending action permit.~~ Corrected 2026-10-11 (round-2
+independent review B1.3): `message_group_membership_owner_claim` is PROPOSED
+and ABSENT at 82b54ef9 (0 hits under `src/`); as proposed it would identify
+the current membership holder, including node, boot, monotonic generation and
+expiry, distinct from the immutable pending action permit. The ordinary
+`lease_expires_at` and structural source/target owner are NOT successor
+membership authority.
+
+### Existing carrier at 82b54ef9
+
+Restored 2026-10-11 from the 6522adb4d text of this document and re-verified
+against the 82b54ef9 tree. The actual carrier is the replicated
+`replica_operations` row. Its membership columns (source replica id, lane key,
+phase, obligation state, identity, learner/voter/removal stamps, source
+lifecycle claim) are owned by
+`src/bootstrap/replica-operation-message-group-membership-schema-constants.js`;
+ordinary repository updates preserve them, measured through ordinary terminal
+settlement in run 37751962637. The owner lease is the same row's
+`lease_expires_at`, mapped to `ownerLeaseExpiresAt` by
+`src/rebalancer/replica-operation-repository-row-methods.js:168-173`.
+`resolveOperationOwnerNodeId` (defined in that file at line 241; reached by
+the coordinator through
+`src/rebalancer/rebalance-coordinator-operation-read-methods.js:342`) defines
+who currently owns the operation structurally; new code must call it rather
+than infer ownership from target placement, and under this contract it names
+the structural owner, not the membership holder. No permit column,
+holder-claim column or membership CAS exists in that tree:
+`message_group_membership_permit`, `message_group_membership_owner_claim`,
+`claimMessageGroupMembershipOwner`, `selectMessageGroupMembershipBranch`,
+`settleMessageGroupMembershipNonAdmission` and
+`target_removal_proposal_in_flight` have 0 hits under `src/`, and
+`src/rebalancer`, `src/node` and `src/message-group` contain no `ADD_LEARNER`
+or `PROPOSE_MEMBERSHIP_TRANSITION` caller.
+
+The saved cd366cc0 candidate introduces `message_group_membership_permit`
+(schema constant PERMIT) and
+`ReplicaOperationMessageGroupMembershipPermitOwner.advanceStage` in its
+`replica-operation-message-group-membership-permit-owner.js` (class at line
+146, method at line 257), reached as a subordinate repository operation; its
+recorded stage names include `learner_committed`,
+`promotion_proposal_in_flight` and `voter_committed`. That column/method is
+NOT in the integrated product.
 
 The preserved cd366cc0 permit candidate is rejected design/code input, not
 accepted runtime. The new bounded source increment remains in the existing
 FreshMG Quest. Its subordinate repository methods are
-claimMessageGroupMembershipOwner and selectMessageGroupMembershipBranch;
-no second database, generic coordinator, scheduling queue or log is created.
-A repository method is not automatically a network authorization boundary.
+claimMessageGroupMembershipOwner and selectMessageGroupMembershipBranch
+(proposed; absent at 82b54ef9); no second database, generic coordinator,
+scheduling queue or log is created. A repository method is not automatically
+a network authorization boundary.
 
 ## One branch-selection commit
 
