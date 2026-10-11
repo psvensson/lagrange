@@ -3,8 +3,11 @@
 // decision-and-apply): its three committed commands, the states of its durable
 // row and the causes a row is refused with, its typed answers, the pinned byte
 // form of its digests and entryIds, its two tables and their SQL, and its
-// log. A leaf: the partition constants owner lists these command types among
-// the types it recognises.
+// log, and the coordinator's durable record columns on the two transaction
+// system tables with the DDL that adds each to a table created before it. A
+// leaf but for the system-table name owner: the partition constants owner
+// lists these command types among the types it recognises.
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 
 // The three committed commands. PARTICIPANT_PREPARE carries the staged
 // operations and the conflict evidence; PARTICIPANT_DECISION carries the
@@ -104,6 +107,15 @@ const PARTICIPANT_TRANSACTION_FAILURE_CODE = Object.freeze({
   // Enabling admission on a connection that served a legacy session since
   // its open (0.0.14, the L6 clause): the cutover reopens it first.
   CONNECTION_SERVED_LEGACY: 'participant_transaction_connection_served_legacy',
+  // The cutover sequence paused new mutation admission on this partition
+  // (0.0.15; owner ruling 2026-10-11, pause before drain): a legacy BEGIN or
+  // a participant BEGIN answered while paused is retried, never failed.
+  CUTOVER_PAUSED: 'participant_transaction_cutover_paused',
+  // A split or merge names this partition (a replication handle here, or the
+  // durable transition row): BEGIN and PREPARE wait for it to end (design
+  // 8.1 item 1, a hint under R10, retryable).
+  TOPOLOGY_TRANSITION_ACTIVE: 'participant_transaction_topology_transition_active',
+  TOPOLOGY_UNAVAILABLE: 'participant_transaction_topology_unavailable',
 });
 
 // The phase of a volatile staging session on the leader (design 3.1, 4):
@@ -169,9 +181,12 @@ const PARTICIPANT_TRANSACTION_BYTES = Object.freeze({
 // statement and for a COMMIT decision that applies at least one operation;
 // control rows never move it (design 3.2). Both are application state,
 // carried by any image of the partition's database taken at an applied index
-// (design 8.2). The old `_transaction_outcomes` table stays until the
-// cutover's drain (the L6 window): sessionId-only legacy requests keep
-// reading it.
+// (design 8.2). The old `_transaction_outcomes` table is written only by the
+// legacy path (a legacy COMMIT on the leader, a committed legacy marker) and
+// is retained read-only after a partition's cutover: a sessionId-only legacy
+// outcome read keeps answering from it for the transactions committed before
+// the drain (0.0.15), and no row of it is migrated (its key names no
+// transactionId). Its retirement belongs to a retention owner.
 const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
   CREATE_TABLE: `
       CREATE TABLE IF NOT EXISTS _participant_transactions (
@@ -329,6 +344,15 @@ const PARTICIPANT_TRANSACTION_LOG_MSG = Object.freeze({
     'read the PREPARED rows; staging sessions are still swept',
   WRITE_PARKED: 'Write parked unproposed while a prepared participant ' +
     'transaction reserves the partition',
+  // The replica-side observation of the L6 reopen obligation (0.0.15): the
+  // origin applied on a connection whose stamp says it served a legacy
+  // session since its open. On this build such a session set no connection
+  // state (every legacy statement is admitted first), so this is a
+  // diagnostic for the release owner, never a refusal at apply.
+  ORIGIN_APPLIED_ON_LEGACY_CONNECTION: 'Partition write generation origin ' +
+    'applied on a connection that served a legacy session since its open',
+  ADDED_COORDINATOR_COLUMN: 'Added a coordinator decision-record column to ' +
+    'a transaction system table',
 });
 
 // The origin columns of the generation table, each with the DDL that adds
@@ -340,7 +364,29 @@ const PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS = Object.freeze({
     'ALTER TABLE _partition_write_generation ADD COLUMN origin_term INTEGER',
 });
 
+// The coordinator's durable record columns on the two transaction system
+// tables (TX1 seams C and E, the coordinator seam's participant obligations,
+// 0.0.15): the insert-once decision record on `sql_transactions` and the
+// retained PREPARE evidence on `sql_transaction_participants`. A fresh cluster
+// creates them from the schema definitions
+// (src/bootstrap/system-table-workflow-schema-definitions.js); a table created
+// before them gains each at open, idempotently, by the DDL beside its name
+// (partition-coordinator-table-columns.js).
+const PARTICIPANT_COORDINATOR_TABLE_COLUMNS = Object.freeze({
+  [SYSTEM_TABLE_NAME.SQL_TRANSACTIONS]: Object.freeze({
+    decision: 'ADD COLUMN decision TEXT',
+    decision_text: 'ADD COLUMN decision_text TEXT',
+    decision_digest: 'ADD COLUMN decision_digest TEXT',
+  }),
+  [SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS]: Object.freeze({
+    prepared_digest: 'ADD COLUMN prepared_digest TEXT',
+    prepare_index: 'ADD COLUMN prepare_index INTEGER',
+    prepare_term: 'ADD COLUMN prepare_term INTEGER',
+  }),
+});
+
 export {
+  PARTICIPANT_COORDINATOR_TABLE_COLUMNS,
   PARTICIPANT_TRANSACTION_ADMISSION_CODE,
   PARTICIPANT_TRANSACTION_BYTES,
   PARTICIPANT_TRANSACTION_COMMAND,

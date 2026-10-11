@@ -1,0 +1,261 @@
+{
+  "subjectSha256": "0c44f474493dc001385fe623eb7fb8eeed4d445fb84f075fa498887f2da2a130",
+  "subjectLines": 2179,
+  "predecessorSha256": "997318ab70d6ce4c8409e20e5d7b2f1ea307f364a530ac875775c85c6cad5590",
+  "pre1536PrefixEqual": true,
+  "pre1536PrefixBytes": 100170,
+  "priorReportSha256": "0833f5d03a7373d370a75780f663557c9ad49550e50c9b5957a98c6e9ead0098",
+  "priorNavigationSha256": "1143aa130b672354b6ad39bf6575319d4e70b164033cda1f8a2534cd1c941bca",
+  "navigationRef": "0e9a07604b5e29f0f686db3e567333c7775934df",
+  "application": [
+    {
+      "path": "src/config/listener-port-model.js",
+      "sha256": "d4f3286687849d2f0db92765fcf9b9f55f38434b4aeb909b3c7569edeab7164f",
+      "liveMatches": true
+    },
+    {
+      "path": "docs/listener-port-model.md",
+      "sha256": "892bc7faa0591fc5382b13c7045aa2f51ce54eb27a1c72fad9ced77dc972e046",
+      "liveMatches": true
+    },
+    {
+      "path": "src/config/configuration-manager.js",
+      "sha256": "b0b63f97fe7a41bc53d9a38dfe855919baef0a72e71c741d2bc74eeea9e27a4f",
+      "liveMatches": true
+    },
+    {
+      "path": "src/transport/message-router-stats-shutdown.js",
+      "sha256": "ce95a23938e7adaa958b47738e38d8a8e81dbdee9319492d468833f3cb61642f",
+      "liveMatches": true
+    },
+    {
+      "path": "src/transport/bulk-transfer-channel.js",
+      "sha256": "0fa146ecb3c14b608818ff0e88e936c2606a30a3d16b43224020d5e0d52b5b3e",
+      "liveMatches": true
+    },
+    {
+      "path": "charts/lagrange-node/templates/_helpers.tpl",
+      "sha256": "15859741052293e94db9fa3884918ba0e94245018aca3f2233401124baf97626",
+      "liveMatches": true
+    },
+    {
+      "path": "charts/lagrange-node/templates/service-headless.yaml",
+      "sha256": "6e2cd5962dcaf412082e6c909cdce4486ab167acda5b3ca0e6794360f5fb3bab",
+      "liveMatches": true
+    },
+    {
+      "path": "charts/lagrange-node/templates/statefulset-seed.yaml",
+      "sha256": "b73756bb8440e2b12249e2f5450360031a045d74270d9ab872efd949c43ee341",
+      "liveMatches": true
+    },
+    {
+      "path": "charts/lagrange-node/templates/statefulset-joiner.yaml",
+      "sha256": "010db796ee3df6b5436c29e9721f6dea4ce822ebc9cdf79c1c44ddb8623c3a9f",
+      "liveMatches": true
+    },
+    {
+      "path": "src/transport/README.md",
+      "sha256": "96068e08a6dd8115fbb90554b55cfc9eb9c9d70b0fee2d6e715ff36e5e0defc7",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cdc/cdc-coverage-reconcile-owner.js",
+      "sha256": "0d844cff666dfcd3e7aa58246b782cad5ccfdd5f321e7b5af8d795fdc949218a",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-authoritative-catchup.js",
+      "sha256": "706246104aa7e06ab9f02eec9cba3aa88be899814725deb5362335f5bbc3d577",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cdc/cdc-complete-coverage-reconcile.js",
+      "sha256": "1b45e2bc303e7466484731b541a3502fdf2f9f371ebcf4ccdb00c1d5ae01a983",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cdc/cdc-coverage-transfer-owner.js",
+      "sha256": "55c200b2863f67c70fec0803ad4432ee8b73926d3dd31a6b23aa85cf0da5ac35",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cdc/cdc-coverage-fragment-consumer.js",
+      "sha256": "1344c2266abced396355db5ee8fb91ae4cd1fe5f50f05d33c933d087c43a8652",
+      "liveMatches": true
+    },
+    {
+      "path": "src/partition/partition-cdc-source-coverage.js",
+      "sha256": "f8afe0d617af858ec5e1d4a6b45b65f24bc72211f854fb0a230c413a21a6d6d3",
+      "liveMatches": true
+    },
+    {
+      "path": "src/partition/partition-cdc-coverage-transfer.js",
+      "sha256": "dd8ab004188c65d2a07c146a30d9ccf4714fab0c5d4397af86cbc1fc61a9a625",
+      "liveMatches": true
+    },
+    {
+      "path": "src/partition/partition-service-entry-apply-base.js",
+      "sha256": "b7d3f6a86327296559a4316b52b5f8cea1972f98ff78f568b442898970f39728",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cache/system-table-cache-cdc-source-order.js",
+      "sha256": "d6d919572a59542760d9310a6bcff1c38e85e70ab8e9462d0126785273549408",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cache/system-table-cache-observation-methods.js",
+      "sha256": "5643c24929ed2b8c56072b59f97321c83a2e01a72ec28d299d7d4403bba9cefd",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cache/system-table-cache.js",
+      "sha256": "f11b0103099d41418204ebd892568b42b073c3362f8d62154e2b1749c08f38c0",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cdc/cdc-coverage-domain.js",
+      "sha256": "b90cb34ceefcb95904f5be538fa3d49ba53e8a04e4722b7a532cdd924741b225",
+      "liveMatches": true
+    },
+    {
+      "path": "src/utils/canonical-json-data.js",
+      "sha256": "6108d474b4337e3e840068aa69bf73d934b1f575cf72108ce5b4d41b25483caa",
+      "liveMatches": true
+    },
+    {
+      "path": "src/transport/message-router-inbound-dispatch.js",
+      "sha256": "8aa27914ba8f2798bcadaf204c39341f053c63ae676c050ad55fee982aa28cd1",
+      "liveMatches": true
+    },
+    {
+      "path": "src/transport/message-router-delivery-behaviors.js",
+      "sha256": "bed3e94089a7110f4959f79aa39bbed3620020894f3aecf0923c0f8d8615fa80",
+      "liveMatches": true
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-authoritative-read-flow.js",
+      "sha256": "4cdca520d7b051904262eeb90a7baf39a7534d7dc1ee5a99d5213d96f62c6427",
+      "liveMatches": true
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "a68b9d32d56527bb3d5a5c50ee7f7cb47132dbe803f4833395083c3e95b9ec56",
+      "liveMatches": true
+    },
+    {
+      "path": "src/transport/message-router-pending-response-ledger.js",
+      "sha256": "2a1e87a4a6a8148389717ebfa66aed936658a73d32c8f3427ade566d2a0e6141",
+      "liveMatches": true
+    },
+    {
+      "path": "src/transport/message-router-server-lifecycle.js",
+      "sha256": "719d030d11d364f7d38f64d1be878ce1e2f50a78369b6aa01f9ba30a79cefeb6",
+      "liveMatches": true
+    },
+    {
+      "path": "src/transport/message-router-connection-lifecycle-methods.js",
+      "sha256": "3c8c61ccf4b5b1bc9db57746858590d90f92ec761e794aeeaf580a33df7d6853",
+      "liveMatches": true
+    },
+    {
+      "path": "package.json",
+      "sha256": "0b21e4c76c1c566ecf10f99e71e8307ab178e27efc591082ce33f98c1e3d1e91",
+      "liveMatches": true
+    },
+    {
+      "path": "Dockerfile",
+      "sha256": "bb5cbb06a85ab66942ffd4abcfcb36b7a13785d0c94cb2f71d237161a764e1a4",
+      "liveMatches": true
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "943215be8b45c3a1e20dde418e79e2031415f135a4c06bc57c4779f97f4ce73b",
+      "liveMatches": true
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha256": "54202a54725f89fc73d1b5d840361ad2ac7f4b34f715e468cc05572c6173dc14",
+      "liveMatches": true
+    }
+  ],
+  "dependencies": [
+    {
+      "path": "package.json",
+      "sha256": "584ce6e7516587ba249dc910b0c04e2753f6b3f451fc3a5bc324f7735bdacc71",
+      "matches": true
+    },
+    {
+      "path": "lib/receiver.js",
+      "sha256": "4879edbf8e48d04d09783cf9c04b5e25f5a448247bb01279438ded2899747220",
+      "matches": true
+    },
+    {
+      "path": "lib/websocket.js",
+      "sha256": "48fdb0f54c1f8ce580d3cfa2908fe7d96fe18f06f9d82306950441cb09b5db26",
+      "matches": true
+    },
+    {
+      "path": "lib/websocket-server.js",
+      "sha256": "29029a4d346800c792300df153df2007e9805d9d7b67b0883f9730b64f25b1c8",
+      "matches": true
+    },
+    {
+      "path": "lib/buffer-util.js",
+      "sha256": "8b0a45739132f82e25ea13163780abf547ccfe989267f3eb7abb475beec92da3",
+      "matches": true
+    }
+  ],
+  "researchManifestSha256": "9e7db3759806da245390d3a887f32a0f27fe42f54daf910554e078265fe9b730",
+  "research": [
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/src/stream_base.cc",
+      "retained": "node-stream-base.cc.txt",
+      "sha256": "45233b2cf039ee054224b1bb8cedbf880f601a57ac4bb95cca91eb96c1b3bc65",
+      "bytes": 28256,
+      "verified": true
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/src/stream_wrap.cc",
+      "retained": "node-stream-wrap.cc.txt",
+      "sha256": "c149ccb502e1b38c3a82215416b51211bd23f9bd717420f7617ab74937b02788",
+      "bytes": 13087,
+      "verified": true
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/src/env.cc",
+      "retained": "node-env.cc.txt",
+      "sha256": "92169078cfdad22010ebe7d617358ccbff3698a62d43a3d131b6bbfdf9196f3d",
+      "bytes": 85253,
+      "verified": true
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/src/node_http_parser.cc",
+      "retained": "node-http-parser.cc.txt",
+      "sha256": "3d14287fd0a73d4e1aec41ca9352af8663cb7790a92784a799dbeaef41476bd7",
+      "bytes": 42567,
+      "verified": true
+    },
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/node/v22.23.2/LICENSE",
+      "retained": "node-LICENSE.txt",
+      "sha256": "c738ae413cf561f174e34f6961f8ca458aae2369a73640dda6234c629b98bcc4",
+      "bytes": 145485,
+      "verified": true
+    },
+    {
+      "url": "https://raw.githubusercontent.com/libuv/libuv/v1.51.0/src/unix/stream.c",
+      "retained": "libuv-unix-stream.c.txt",
+      "sha256": "dac76e73caef1d01c7122f5d42f5e2d0a06b6a60bf4d83d26849d03aec805733",
+      "bytes": 41252,
+      "verified": true
+    }
+  ],
+  "runtime": {
+    "node": "v22.23.2",
+    "uv": "1.51.0",
+    "platform": "linux",
+    "arch": "x64",
+    "executableSha256": "3517c2df0b2f8cd7f422b4b8450ef81c6889f08eb03e281d6de9079b15e6a327"
+  }
+}
