@@ -352,7 +352,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -363,7 +363,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -374,7 +374,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -889,6 +889,53 @@
         "test/integration/message-group-learner-recipient.integration.test.js",
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
+      ]
+    },
+    "cdc-source-coverage-reconcile-publication": {
+      "description": "Production startup routes one exact source-owned CDC descriptor and applied-prefix coverage through bounded transfer and lifecycle-bound recipient cache publication.",
+      "owners": [
+        "src/bootstrap/node-joining-ready-signal-readiness.js",
+        "src/cache/system-table-cache.js",
+        "src/cache/system-table-cache-cdc-cover.js",
+        "src/cache/system-table-cache-cdc-source-order.js",
+        "src/cdc/cdc-complete-coverage-reconcile.js",
+        "src/cdc/cdc-coverage-domain.js",
+        "src/cdc/cdc-coverage-fragment-consumer.js",
+        "src/cdc/cdc-coverage-lifecycle-owner.js",
+        "src/cdc/cdc-coverage-protocol.js",
+        "src/cdc/cdc-coverage-reconcile-owner.js",
+        "src/cdc/cdc-coverage-transfer-owner.js",
+        "src/cdc/cdc-integration-service.js",
+        "src/cdc/cdc-integration-service-authoritative-catchup.js",
+        "src/cdc/cdc-integration-service-cdc-event-delegates.js",
+        "src/cdc/cdc-integration-service-lifecycle.js",
+        "src/cdc/cdc-integration-service-mutation-operations.js",
+        "src/cdc/cdc-source-scope-evidence.js",
+        "src/cdc/cdc-source-scope-reconciliation.js",
+        "src/constants/cdc-lifecycle-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/membership-publication-coordinator-reconcile.js",
+        "src/partition/partition-cdc-coverage-transfer.js",
+        "src/partition/partition-cdc-source-coverage.js",
+        "src/partition/partition-service.js",
+        "src/partition/partition-service-assembly.js",
+        "src/partition/partition-service-cdc-coverage-methods.js",
+        "src/partition/partition-service-core-base.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-service-lifecycle-methods.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/query/query-executor.js",
+        "src/transport/message-router.js"
+      ],
+      "tests": [
+        "test/cache/system-table-cache-cdc-source-order.test.js",
+        "test/cdc/cdc-authoritative-catchup-hydration.test.js",
+        "test/cdc/cdc-authoritative-catchup-terminal.test.js",
+        "test/cdc/cdc-authoritative-coverage-reconciliation.test.js",
+        "test/cdc/cdc-coverage-lifecycle-owner.test.js",
+        "test/cdc/cdc-coverage-reconcile-owner.test.js",
+        "test/integration/cdc-coverage-rejoin-formation.integration.test.js",
+        "test/partition/partition-cdc-source-coverage.test.js"
       ]
     }
   },
@@ -1742,6 +1789,64 @@
         "test/integration/message-group-learner-recipient.integration.test.js",
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
+      ]
+    },
+    "cdc-source-coverage-reconcile-publication": {
+      "description": "Production startup arms one lifecycle-owned reconcile generation; an authoritative source scope and same-view applied prefix produce bounded binary coverage cells that install only into the exact cache target.",
+      "endpoints": [
+        {
+          "id": "source-scope-prefix-capture",
+          "owners": [
+            "src/cdc/cdc-coverage-domain.js",
+            "src/cdc/cdc-source-scope-evidence.js",
+            "src/cdc/cdc-source-scope-reconciliation.js",
+            "src/control-plane/control-plane-system-table-gateway.js",
+            "src/partition/partition-cdc-coverage-transfer.js",
+            "src/partition/partition-cdc-source-coverage.js",
+            "src/partition/partition-service.js",
+            "src/partition/partition-service-assembly.js",
+            "src/partition/partition-service-cdc-coverage-methods.js",
+            "src/partition/partition-service-core-base.js",
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/partition/partition-service-lifecycle-methods.js",
+            "src/query/query-executor-partition-request-builders.js"
+          ]
+        },
+        {
+          "id": "startup-reconcile-cache-publication",
+          "owners": [
+            "src/bootstrap/node-joining-ready-signal-readiness.js",
+            "src/cache/system-table-cache.js",
+            "src/cache/system-table-cache-cdc-cover.js",
+            "src/cache/system-table-cache-cdc-source-order.js",
+            "src/cdc/cdc-complete-coverage-reconcile.js",
+            "src/cdc/cdc-coverage-fragment-consumer.js",
+            "src/cdc/cdc-coverage-lifecycle-owner.js",
+            "src/cdc/cdc-coverage-protocol.js",
+            "src/cdc/cdc-coverage-reconcile-owner.js",
+            "src/cdc/cdc-coverage-transfer-owner.js",
+            "src/cdc/cdc-integration-service.js",
+            "src/cdc/cdc-integration-service-authoritative-catchup.js",
+            "src/cdc/cdc-integration-service-cdc-event-delegates.js",
+            "src/cdc/cdc-integration-service-lifecycle.js",
+            "src/cdc/cdc-integration-service-mutation-operations.js",
+            "src/constants/cdc-lifecycle-constants.js",
+            "src/control-plane/membership-publication-coordinator-reconcile.js",
+            "src/query/query-executor.js",
+            "src/transport/message-router.js"
+          ]
+        }
+      ],
+      "contract": "cdc-source-coverage-reconcile-publication",
+      "witnessTests": [
+        "test/cache/system-table-cache-cdc-source-order.test.js",
+        "test/cdc/cdc-authoritative-catchup-hydration.test.js",
+        "test/cdc/cdc-authoritative-catchup-terminal.test.js",
+        "test/cdc/cdc-authoritative-coverage-reconciliation.test.js",
+        "test/cdc/cdc-coverage-lifecycle-owner.test.js",
+        "test/cdc/cdc-coverage-reconcile-owner.test.js",
+        "test/integration/cdc-coverage-rejoin-formation.integration.test.js",
+        "test/partition/partition-cdc-source-coverage.test.js"
       ]
     }
   }

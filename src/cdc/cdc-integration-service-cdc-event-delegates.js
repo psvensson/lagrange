@@ -5,6 +5,8 @@ import {
   handleNodeJoinedCDC,
   deriveWsAddressFromNodeAddress,
 } from './cdc-integration-service-node-join.js';
+import {wakeAllCdcCoverageReconciles} from
+  './cdc-coverage-reconcile-owner.js';
 
 const {
   CDC_ERROR_MSG,
@@ -96,6 +98,7 @@ class CDCIntegrationServiceCdcEventDelegates {
       throw new Error(CDC_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
     }
     this.messageRouter = messageRouter;
+    wakeAllCdcCoverageReconciles(this);
     this.logger.debug(CDC_LOG_MSG.MESSAGE_ROUTER_SET, {
       nodeId: this.nodeId,
     });

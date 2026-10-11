@@ -1,394 +1,71 @@
 /**
- * Authoritative catch-up hydration for CDC-propagated system tables
- * (closure record CL-014).
+ * Production arming owner for complete CDC coverage.
  *
- * Why: remote CDC fan-out is stateless point-in-time delivery — the
- * partition leader's local subscriber fans each event to the message
- * groups that are ACTIVE in the sender's cache AT EVENT TIME, with no
- * buffer, retry, or replay for groups that become targetable later. A
- * joining node therefore has a window between its one-shot bootstrap
- * snapshot and the moment its message group becomes fan-out-targetable in
- * which every row written is silently lost to it. Witnessed: all four
- * joiners frozen at publication epoch 1 for the rest of a run while the
- * owner committed epochs 2-5 inside that window — and the scenario's
- * historical CONVERGED/SLOW/STALLED non-determinism is exactly this race
- * (a run converges iff the last publication write postdates the last
- * joiner's targetability).
- *
- * The systemic shape is pull-on-arm + push-stream-after: once CDC
- * subscriptions are confirmed, re-read every CDC-propagated table from
- * the authoritative owner path and apply the rows through the canonical
- * merge-safe cache repair. This closes the window for ALL propagated
- * tables, not just the one that happened to bite, and reuses the existing
- * authoritative read flow (owner-RPC fallback, pressure deferral) and
- * applyAuthoritativeCacheRepair (canonicalization + stale-merge guards in
- * the cache itself).
+ * Startup invokes this after strict CDC ingress is armed. Each table is
+ * handed to the lifecycle bound reconcile owner; that owner retains debt,
+ * retries under one absolute generation deadline, and keeps one cooldown
+ * backstop after this startup call returns.
  */
 
 import {CDC_PROPAGATED_TABLES} from '../cache/cdc-table-policy.js';
-import {resolveTimeSource} from '../time/time-source.js';
-import {getControlPlaneRetryAfterMs} from
-  '../control-plane/control-plane-error-classification.js';
-import {AUTHORITATIVE_READ_SOURCE} from './cdc-integration-service-shared-constants.js';
-import {CDC_ERROR_CODE, CDC_TERMINAL_STAGE} from './cdc-constants.js';
-import {buildControlPlaneReadAuthority} from
-  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
-import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
-  '../control-plane/control-plane-system-table-gateway-constants.js';
 import {INITIAL_PARTITION_IDS} from
   '../bootstrap/system-table-schemas-constants.js';
-import {isValidLeaderReadAuthorityWitness} from
-  '../control-plane/control-plane-authoritative-read-witness.js';
-import {SYSTEM_TABLE_CACHE_MUTATION_MODE} from
-  '../cache/cache-constants.js';
-import {
-  isUsableSystemCacheKey,
-  resolveSystemCacheRowKey,
-} from '../cache/system-cache-key-descriptor.js';
-import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
-
-const CATCHUP_DEFAULT = Object.freeze({
-  MAX_ATTEMPTS_PER_TABLE: 3,
-  RETRY_FALLBACK_DELAY_MS: 500,
-  UPSERT_OPERATION: 'UPSERT',
-});
-
-const CATCHUP_TABLE_RETRY_WAIT = Object.freeze({
-  wait: 'CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE',
-  awaited: 'authoritative catch-up read of one system table hydrated',
-});
-
-// Every deferred retry of one table's catch-up read is spent: the table is
-// left un-hydrated (the caller's summary lists it failed). Catch-up re-runs
-// per join and per publication, so the report folds per table and partition.
-function reportCatchupTableRetriesSpent(service, spent) {
-  const partitionId = INITIAL_PARTITION_IDS[spent.tableName] ?? null;
-  reportWaitBoundSpent(service.logger, {
-    ...CATCHUP_TABLE_RETRY_WAIT,
-    subject: `${spent.tableName}@${partitionId}`,
-    boundMs: null,
-    elapsedMs: spent.elapsedMs,
-    lastObserved: {
-      attempts: spent.attempts,
-      lastFailure: spent.lastFailure,
-      retryAfterMs: spent.retryAfterMs,
-    },
-    scope: {nodeId: service.nodeId, tableName: spent.tableName, partitionId},
-  });
-}
+import {CDC_ERROR_CODE, CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {reconcileCompleteCdcCoverage} from
+  './cdc-complete-coverage-reconcile.js';
 
 const CATCHUP_LOG_MSG = Object.freeze({
   SUMMARY: 'CDC catch-up hydration completed',
   TABLE_FAILED: 'CDC catch-up hydration table read failed',
 });
-const CATCHUP_FAILURE_MSG = Object.freeze({
-  INVALID_ROW_SET: 'complete authoritative read returned an invalid row set',
-  MALFORMED_ROW_SET: 'authoritative read returned a malformed row set',
-  OBSERVATION_NOT_ADVANCED:
-    'complete authoritative observation did not advance cache truth',
-  UNAVAILABLE: 'authoritative read unavailable',
+const CATCHUP_FAILURE_REASON = Object.freeze({
+  RECONCILE_UNAVAILABLE: 'cdc_coverage_reconcile_unavailable',
 });
 
-function successfulAuthoritativeRows(readResult) {
-  return readResult?.success === true && Array.isArray(readResult.rows) ?
-    readResult.rows :
-    null;
+function terminal(service) {
+  return Boolean(service.refuseIfTerminal?.(CDC_TERMINAL_STAGE.CACHE_REPAIR));
 }
 
-function readIsFromWitnessedLeader(tableName, readResult) {
-  return readResult?.source === AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE &&
-    isValidLeaderReadAuthorityWitness(
-      readResult.readAuthorityWitness,
-      INITIAL_PARTITION_IDS[tableName],
-    );
-}
-
-function completeObservationAdvances(service, tableName, readResult) {
-  if (!readIsFromWitnessedLeader(tableName, readResult)) {
-    return true;
+function requestFor(tableName, options) {
+  const request = {tableName, partitionId: INITIAL_PARTITION_IDS[tableName]};
+  if (Number.isFinite(options.windowMs) && options.windowMs > 0) {
+    request.windowMs = Math.floor(options.windowMs);
   }
-  const cache =
-    typeof service.cacheMutationTarget?.getLastAuthoritativeObservedAtMs ===
-      'function' ?
-      service.cacheMutationTarget :
-      service.systemTableCache;
-  if (typeof cache?.getLastAuthoritativeObservedAtMs !== 'function') {
-    return true;
-  }
-  const currentObservedAtMs =
-    cache.getLastAuthoritativeObservedAtMs(tableName);
-  const incomingObservedAtMs = Math.floor(
-    Number(readResult.readAuthorityWitness.observedAtMs),
-  );
-  return !Number.isFinite(currentObservedAtMs) ||
-    incomingObservedAtMs > currentObservedAtMs;
+  return request;
 }
 
-function completeAuthoritativeRowsAreValid(tableName, rows) {
-  if (!Array.isArray(rows)) {
-    return false;
-  }
-  const keys = new Set();
-  return rows.every((row) => {
-    if (!row || typeof row !== 'object' || Array.isArray(row)) {
-      return false;
-    }
-    const key = resolveSystemCacheRowKey(tableName, row);
-    const keyUsable = isUsableSystemCacheKey(key);
-    const normalizedKey = String(key);
-    if (!keyUsable || keys.has(normalizedKey)) {
-      return false;
-    }
-    keys.add(normalizedKey);
-    return true;
-  });
-}
-
-function authoritativeReadFailure(readResult) {
-  return readResult?.success === true ?
-    CATCHUP_FAILURE_MSG.MALFORMED_ROW_SET :
-    readResult?.error || CATCHUP_FAILURE_MSG.UNAVAILABLE;
-}
-
-/**
- * Re-read every CDC-propagated system table from the authoritative owner
- * path and apply the rows into the local cache.
- *
- * Failure semantics: best-effort per table with bounded retries on
- * pressure-deferred reads; a table that cannot be read is recorded and
- * skipped — the caller must never block readiness on catch-up, because
- * the steady-state stream and the existing repair paths remain available.
- *
- * @param {Object} service - CDCIntegrationService instance (provides
- *   executeAuthoritativeSystemTableRead, applyAuthoritativeCacheRepair,
- *   getPrimaryKeyField, logger, delayUntilShutdown, isShuttingDown).
- * @param {Object} [options]
- * @param {string[]} [options.tables] - Override the table set (tests).
- * @param {number} [options.maxAttemptsPerTable]
- * @return {Promise<{tablesAttempted: number, tablesHydrated: number,
- *   rowsApplied: number, tablesFailed: string[], code?: string}>} `code` is
- *   CDC_ERROR_CODE.SHUT_DOWN when the owner was terminal: the tables not
- *   caught up are in tablesFailed and none was read after terminal.
- */
 async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
   const tables = Array.isArray(options.tables) && options.tables.length > 0 ?
-    options.tables :
-    CDC_PROPAGATED_TABLES;
-  const maxAttemptsPerTable =
-    Number.isFinite(options.maxAttemptsPerTable) &&
-    options.maxAttemptsPerTable > 0 ?
-      Math.floor(options.maxAttemptsPerTable) :
-      CATCHUP_DEFAULT.MAX_ATTEMPTS_PER_TABLE;
-  // The retry delay is the owner's delayUntilShutdown: it arms on the
-  // service's clock and markShuttingDown (the owner's terminal boundary)
-  // releases it at once. Once terminal, the owner's gate refuses every read
-  // stage and every cache repair or sweep this catch-up would issue
-  // (cdc-terminal-gate.js), and the catch-up's own loop starts no further
-  // table or attempt. A table counts hydrated only when its rows were applied
-  // while the owner was live; every table not caught up is reported failed,
-  // and the summary carries the owner's typed SHUT_DOWN code. `now` is NOT a
-  // timer: it stamps
-  // readStartedAtMs, which the sweep compares against row updated_at and
-  // tombstone times the cache stamps on the wall clock, so it stays on that
-  // clock - a virtual stamp here would leave the sweep inert and fence every
-  // tombstoned key.
-  const clock = resolveTimeSource(service);
-  const isTerminal = () =>
-    Boolean(service.refuseIfTerminal?.(CDC_TERMINAL_STAGE.CACHE_REPAIR));
-  // readStartedAtMs is a DATA STAMP compared against row updated_at, tombstone
-  // instants and the authoritative observation boundary. It moves to this
-  // service's clock only because every one of those producers now reads an
-  // owner TimeSource too: the cache watermark, the tombstone store through its
-  // parent cache, and the HLC physical component through this service. Moving
-  // the consumer alone left the sweep inert - the verifier measured rowsSwept
-  // 0 against 1 - which was evidence that the DOMAIN was incomplete, not that
-  // the consumer was wrong. An explicit options.now still wins for callers
-  // passing a projection of their own owner clock.
-  const now = typeof options.now === 'function' ?
-    options.now :
-    () => clock.now();
-  // The catch-up interaction accepts exactly one authority token. Callers that
-  // need leader-pinned owner reads construct that token at their own boundary;
-  // the default remains the join-time local-first/owner-fallback policy.
-  const suppliedReadAuthority =
-    options?.readAuthority && Object.isFrozen(options.readAuthority) === true ?
-      options.readAuthority : null;
-  const readOptions = {
-    readAuthority: suppliedReadAuthority || buildControlPlaneReadAuthority({
-      authoritativeReadMode:
-        CONTROL_PLANE_AUTHORITATIVE_READ_MODE
-          .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
-    }),
-  };
-  const summary = {
-    tablesAttempted: 0,
-    tablesHydrated: 0,
-    rowsApplied: 0,
-    rowsSwept: 0,
-    tablesFailed: [],
-  };
-
+    options.tables : CDC_PROPAGATED_TABLES;
+  const summary = {tablesAttempted: 0, tablesHydrated: 0, rowsApplied: 0,
+    rowsSwept: 0, tablesFailed: []};
   for (const tableName of tables) {
-    // The catch-up's own loop ends at terminal too: it starts no table after
-    // the mark (each table left is reported failed).
-    if (isTerminal()) {
+    if (terminal(service)) {
       summary.tablesFailed.push(tableName);
       continue;
     }
     summary.tablesAttempted += 1;
-    let hydrated = false;
-    let lastFailure = null;
-    let firstReadStartedAtMs = null;
-
-    for (let attempt = 1; attempt <= maxAttemptsPerTable; attempt += 1) {
-      let readResult = null;
-      const mutationSnapshot =
-        typeof service.captureAuthoritativeCacheSweepSnapshot === 'function' ?
-          service.captureAuthoritativeCacheSweepSnapshot(tableName) :
-          null;
-      const readStartedAtMs = now();
-      firstReadStartedAtMs ??= readStartedAtMs;
-      try {
-        readResult = await service.executeAuthoritativeSystemTableRead(
-          tableName,
-          `SELECT * FROM ${tableName}`,
-          [],
-          readOptions,
-        );
-      } catch (error) {
-        lastFailure = error?.message || String(error);
-        break;
-      }
-
-      const observationAdvances = completeObservationAdvances(
-        service,
-        tableName,
-        readResult,
-      );
-      const readFromLeader = readIsFromWitnessedLeader(
-        tableName,
-        readResult,
-      );
-      const completeRowsValid = !readFromLeader ||
-        completeAuthoritativeRowsAreValid(
-          tableName,
-          readResult?.rows,
-        );
-      const rows = observationAdvances && completeRowsValid ?
-        successfulAuthoritativeRows(readResult) :
-        null;
-      if (rows) {
-        const repairOptions = readFromLeader ?
-          {
-            mutationMode:
-              SYSTEM_TABLE_CACHE_MUTATION_MODE
-                .AUTHORITATIVE_OBSERVATION_RECONCILIATION,
-            authoritativeObservedAtMs:
-              readResult.readAuthorityWitness.observedAtMs,
-            authoritativeReadStartedAtMs: readStartedAtMs,
-          } :
-          undefined;
-        const primaryKeyField = service.getPrimaryKeyField(tableName);
-        for (const row of rows) {
-          const key = row?.[primaryKeyField];
-          if (key === undefined || key === null) {
-            continue;
-          }
-          const applied = service.applyAuthoritativeCacheRepair(
-            tableName,
-            CATCHUP_DEFAULT.UPSERT_OPERATION,
-            row,
-            key,
-            repairOptions,
-          );
-          if (applied) {
-            summary.rowsApplied += 1;
-          }
-        }
-        // Anti-entropy backstop: the UPSERT loop above cannot remove a row that a
-        // lost DELETE resurrected. Sweep cache-only rows absent from `rows` — but
-        // ONLY when the read came from the witnessed authoritative LEADER. The
-        // owner-RPC lane can also be served by a lagging owner follower, while a
-        // local-replica read can be stale or empty; neither may authorize removal
-        // of live cache rows. (Race-guarded against writes newer than the read.)
-        if (readFromLeader &&
-            typeof service.applyAuthoritativeCacheSweep === 'function') {
-          summary.rowsSwept += service.applyAuthoritativeCacheSweep(
-            tableName,
-            rows,
-            {
-              readStartedAtMs,
-              mutationSnapshot,
-              authoritativeObservedAtMs:
-                readResult.readAuthorityWitness.observedAtMs,
-            },
-          );
-        }
-        // The apply gate refused these rows if the owner turned terminal
-        // while the read was in flight: the table is not hydrated then.
-        hydrated = !isTerminal();
-        summary.tablesHydrated += hydrated ? 1 : 0;
-        break;
-      }
-
-      const retryAfterMs = getControlPlaneRetryAfterMs(readResult);
-      const deferred =
-        retryAfterMs > 0 ||
-        readResult?.deferRetry === true;
-      lastFailure = !observationAdvances ?
-        CATCHUP_FAILURE_MSG.OBSERVATION_NOT_ADVANCED :
-        completeRowsValid ?
-          authoritativeReadFailure(readResult) :
-          CATCHUP_FAILURE_MSG.INVALID_ROW_SET;
-      if (!deferred || attempt >= maxAttemptsPerTable) {
-        if (deferred) {
-          reportCatchupTableRetriesSpent(service, {
-            tableName,
-            attempts: attempt,
-            lastFailure,
-            retryAfterMs,
-            elapsedMs: now() - firstReadStartedAtMs,
-          });
-        }
-        break;
-      }
-      await service.delayUntilShutdown(
-        retryAfterMs > 0 ?
-          retryAfterMs :
-          CATCHUP_DEFAULT.RETRY_FALLBACK_DELAY_MS,
-      );
-      if (isTerminal()) {
-        break;
-      }
+    const partitionId = INITIAL_PARTITION_IDS[tableName];
+    const outcome = typeof partitionId === 'string' ?
+      await reconcileCompleteCdcCoverage(
+        service, requestFor(tableName, options)) : null;
+    if (outcome?.success === true && outcome.value?.success === true) {
+      summary.tablesHydrated += 1;
+      summary.rowsApplied += Number.isSafeInteger(outcome.value.changes) ?
+        outcome.value.changes : 0;
+      continue;
     }
-
-    if (!hydrated) {
-      const failure = isTerminal() ? CDC_ERROR_CODE.SHUT_DOWN : lastFailure;
-      const deferredEntry = `${tableName}: ${failure}`;
-      summary.tablesFailed.push(tableName);
-      service.logger?.warn?.(CATCHUP_LOG_MSG.TABLE_FAILED, {
-        tableName,
-        error: failure,
-        attempts: maxAttemptsPerTable,
-        detail: deferredEntry,
-      });
-    }
+    summary.tablesFailed.push(tableName);
+    service.logger?.warn?.(CATCHUP_LOG_MSG.TABLE_FAILED, {
+      tableName, partitionId,
+      error: outcome?.reasonCode ?? outcome?.value?.reasonCode ??
+        CATCHUP_FAILURE_REASON.RECONCILE_UNAVAILABLE,
+      generationId: outcome?.generationId ?? null,
+    });
   }
-
-  if (isTerminal()) {
-    summary.code = CDC_ERROR_CODE.SHUT_DOWN;
-  }
-  service.logger?.info?.(CATCHUP_LOG_MSG.SUMMARY, {
-    tablesAttempted: summary.tablesAttempted,
-    tablesHydrated: summary.tablesHydrated,
-    rowsApplied: summary.rowsApplied,
-    rowsSwept: summary.rowsSwept,
-    tablesFailed: summary.tablesFailed,
-  });
-
+  if (terminal(service)) summary.code = CDC_ERROR_CODE.SHUT_DOWN;
+  service.logger?.info?.(CATCHUP_LOG_MSG.SUMMARY, summary);
   return summary;
 }
 
-export {
-  hydrateCdcPropagatedTablesFromAuthority,
-};
+export {hydrateCdcPropagatedTablesFromAuthority};

@@ -6,6 +6,10 @@ import {
 import {ERRORS} from '../constants/errors.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../partition/partition-write-kernel.js';
+import {registerCdcCoverageLifecycle, retireCdcCoverageLifecycle} from
+  './cdc-coverage-lifecycle-owner.js';
+import {retireCdcCoverageTransferOwner} from
+  './cdc-coverage-transfer-owner.js';
 
 const {
   CDCEventHandler,
@@ -31,12 +35,19 @@ class CDCIntegrationServiceLifecycleMethods {
    * @param {Object} cache - System table cache (read-only wrapper ok).
    */
   setSystemTableCache(cache) {
+    const nextMutationTarget = !this.cacheMutationTarget &&
+      typeof cache?.applySystemTableChange === 'function' ?
+      cache : this.cacheMutationTarget;
+    if (this.systemTableCache === cache &&
+        this.cacheMutationTarget === nextMutationTarget) return;
+    retireCdcCoverageLifecycle(this);
+    retireCdcCoverageTransferOwner(this);
+    this.systemTableCache?.offCacheChange?.(this.cdcCoverageCacheWake);
     this.systemTableCache = cache;
-    if (
-      !this.cacheMutationTarget &&
-      typeof cache?.applySystemTableChange === 'function'
-    ) {
-      this.cacheMutationTarget = cache;
+    this.cacheMutationTarget = nextMutationTarget;
+    if (this.isShuttingDown !== true) {
+      registerCdcCoverageLifecycle(this);
+      this.systemTableCache?.onCacheChange?.(this.cdcCoverageCacheWake);
     }
   }
 
@@ -45,7 +56,11 @@ class CDCIntegrationServiceLifecycleMethods {
    * @param {Object} cache - Writable SystemTableCache instance.
    */
   setCacheMutationTarget(cache) {
+    if (this.cacheMutationTarget === cache) return;
+    retireCdcCoverageLifecycle(this);
+    retireCdcCoverageTransferOwner(this);
     this.cacheMutationTarget = cache;
+    if (this.isShuttingDown !== true) registerCdcCoverageLifecycle(this);
   }
 
   /**
@@ -153,6 +168,10 @@ class CDCIntegrationServiceLifecycleMethods {
    * of at its budget. Idempotent.
    */
   markShuttingDown() {
+    // Fence coverage generations before any release callback can run.
+    retireCdcCoverageLifecycle(this);
+    retireCdcCoverageTransferOwner(this);
+    this.systemTableCache?.offCacheChange?.(this.cdcCoverageCacheWake);
     this.isShuttingDown = true;
     const releases = [...this.shutdownReleases];
     this.shutdownReleases.clear();

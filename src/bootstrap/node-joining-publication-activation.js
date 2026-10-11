@@ -1,3 +1,4 @@
+import {copyCdcEvent} from '../cdc/cdc-event-envelope.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
@@ -721,9 +722,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
     );
     return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      tableName: cdcEvent.tableName,
-      operation: cdcEvent.operation,
-      data: cdcEvent.data,
+      ...copyCdcEvent(cdcEvent),
       sourceMessageGroupService: messageGroupService,
     });
   }
