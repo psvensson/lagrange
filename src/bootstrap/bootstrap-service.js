@@ -213,6 +213,12 @@ class BootstrapService extends EventEmitter {
     );
     this.bootstrapReadinessState = options.readinessState || null;
     this.startupServicesAdmission = options.startupServicesAdmission || null;
+    this.membershipOwnerOutcome = options.membershipOwnerOutcome || null;
+    this.dataDirectoryProcessOwner = options.dataDirectoryProcessOwner || null;
+    this.seedStartupAuthorization = null;
+    this.seedStartupInvocation = null;
+    this.seedFirstParticipantReleaseRefusal = null;
+    this.seedParticipantActivationReadCutReady = false;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.onLocalAdminRuntimeReady =
       typeof options.onLocalAdminRuntimeReady === LOCAL_STR_FUNCTION ?
@@ -534,6 +540,7 @@ class BootstrapService extends EventEmitter {
         options.seedStartupSessionStore :
         new SeedStartupSessionStore({
           dataDir: startupWorkflowDataDir,
+          now: () => this.nodeService.getTimeSource().now(),
         });
     this.seedPhaseOwners = createSeedPhaseOwners(this);
     this.partitionReplicaProgressReporter = new ReplicaCreationProgressReporter({

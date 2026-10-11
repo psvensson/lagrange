@@ -400,6 +400,26 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           });
           await this.waitForVoterReadyActivation(replicaId, partitionId);
         }
+        if (createAdmissionEvidence) {
+          const participantReleaseDeadlineAtMs =
+            createAdmissionEvidence.workflowUpdatedAt + this.syncTimeoutMs;
+          if (!Number.isSafeInteger(participantReleaseDeadlineAtMs) ||
+              participantReleaseDeadlineAtMs <=
+                createAdmissionEvidence.workflowUpdatedAt) {
+            throw new Error(
+              `Fresh replica release deadline invalid for ${operationId}`,
+            );
+          }
+          await this.participantReleaseRecovery.releaseFreshCreate(
+            partitionId,
+            {
+              createAdmissionEvidence,
+              createPhysicalWorkerClaim: request.createPhysicalWorkerClaim,
+              identityExisted: existed,
+              deadlineAtMs: participantReleaseDeadlineAtMs,
+            },
+          );
+        }
         // Voter readiness is executor evidence, not permission to complete
         // the operation. Publish it before the SERVICES write so formation
         // cannot depend on a round-trip through the control plane being

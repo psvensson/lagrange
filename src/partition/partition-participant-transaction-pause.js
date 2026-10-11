@@ -9,11 +9,21 @@ import {releaseCensusDefect, sameReplicaGeneration} from './partition-participan
 import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION} from
   './partition-participant-transaction-cutover-constants.js';
+import {parseJson, targetEntryValid} from
+  './partition-participant-release-command.js';
+import {readParticipantReleaseState} from
+  './partition-participant-transaction-store.js';
+import {invalidateParticipantReleaseLocalCurrent} from
+  './partition-participant-release-local-current.js';
 
 const ADMISSIONS = new WeakMap();
 let nextAdmissionGeneration = 0;
 
 function newPause(service) {
+  // Closing admission revokes the process-local projection immediately. The
+  // durable claim/receipt remains with the control owner until its ordered
+  // retirement command applies; reconnecting cannot recreate this projection.
+  invalidateParticipantReleaseLocalCurrent(service);
   nextAdmissionGeneration += 1;
   const admission = Object.freeze({state: ADMISSION.CLOSED,
     raisedAtMs: service.timeSource.now(), generation: nextAdmissionGeneration, releaseId: null});
@@ -48,6 +58,7 @@ function invalidateParticipantReleaseAdmission(service) {
       status?.membershipGenerationIndex !== proof.membershipGenerationIndex ||
       status?.runtimeGeneration !== proof.runtimeGeneration ||
       status?.lifecycleIncarnation !== proof.lifecycleIncarnation) {
+    invalidateParticipantReleaseLocalCurrent(service);
     raiseParticipantCutoverPause(service);
   }
 }
@@ -57,7 +68,25 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
   if (current.state === ADMISSION.OPEN) {
     invalidateParticipantReleaseAdmission(service);
     if (participantReleaseAdmissionOf(service) === current &&
-        current.releaseId === request.release?.releaseId) return OUTCOME.RESUMED;
+        current.releaseId === request.release?.releaseId &&
+        current.authorizationId ===
+          request.controlAuthorization?.authorizationId) return OUTCOME.RESUMED;
+    return OUTCOME.STALE;
+  }
+  const durable = readParticipantReleaseState(service.db);
+  const authorization = parseJson(durable.authorizationText);
+  const target = parseJson(authorization?.targetEntryText);
+  if (authorization === null || !targetEntryValid(target) ||
+      authorization.controlPartitionId !==
+        request.controlAuthorization?.controlPartitionId ||
+      authorization.controlAuthorizationId !==
+        request.controlAuthorization?.authorizationId ||
+      authorization.controlAuthorizationRevision !==
+        request.controlAuthorization?.authorizationRevision ||
+      authorization.dependentReleaseText !== JSON.stringify(request.release) ||
+      authorization.expectedPauseGeneration !== durable.pauseGeneration ||
+      authorization.authorizationIndex !== durable.authorizationIndex ||
+      authorization.authorizationTerm !== durable.authorizationTerm) {
     return OUTCOME.STALE;
   }
   const facts = await readParticipantReleaseFacts(handler, service);
@@ -71,8 +100,23 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
       !sameReplicaGeneration(facts.generation, replicaGenerationOf(handler, service, status)) ||
       status.term !== facts.membership.term || status.leaderId !== facts.leaderReplicaId ||
       status.configurationKey !== request.release.configurationKey) return OUTCOME.STALE;
+  const generation = facts.generation;
+  if (target.replicaIdentity !== service.replicaId ||
+      target.peerId !== String(facts.peers.find((peer) =>
+        peer.replicaIdentity === service.replicaId)?.peerId ??
+        Object.entries(facts.membership.identities).find(([, replicaIdentity]) =>
+          replicaIdentity === service.replicaId)?.[0] ?? '') ||
+      target.nodeId !== generation.nodeId ||
+      target.ownerIncarnation !== generation.ownerIncarnation ||
+      target.lifecycleIncarnation !== generation.lifecycleIncarnation ||
+      target.runtimeGeneration !== generation.runtimeGeneration ||
+      target.connectionGeneration !== generation.connectionGeneration ||
+      target.admissionGeneration !== generation.admissionGeneration ||
+      target.buildDigest !== facts.buildDigest) return OUTCOME.STALE;
   ADMISSIONS.set(service, Object.freeze({...current, state: ADMISSION.OPEN,
-    releaseId: request.release.releaseId, proof: Object.freeze({term: status.term,
+    releaseId: request.release.releaseId,
+    authorizationId: authorization.controlAuthorizationId,
+    proof: Object.freeze({term: status.term,
       leaderId: status.leaderId, configurationKey: status.configurationKey,
       membershipGenerationIndex: status.membershipGenerationIndex,
       runtimeGeneration: status.runtimeGeneration,
