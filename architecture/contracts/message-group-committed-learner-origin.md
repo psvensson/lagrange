@@ -34,12 +34,13 @@ the absence stays UNKNOWN. See the registered read contract.
 
 Second narrow supersession (6.C slice C2, recorded in its design note, section
 8): an absence resolves an issued PROMOTE action as noncommitted on a different
-vouch. A promotion retains no origin, so the registry cannot vouch for it; the
-vouch is the answering replica's applied configuration still holding the target
-as a learner under its own identity (`raft-rs-committed-membership-read.js`,
+vouch. The registry retains a managed promotion's immutable fact when it
+commits. When that fact is absent, the vouch is the answering replica's applied
+configuration still holding the target as a learner under its own identity
+(`raft-rs-committed-membership-read.js`,
 `answerCommittedPromotionAction`), under the same fence: the replica leads a
 term strictly newer than the attempt's leader term and has applied an entry of
-that term. The premise is that a committed promotion makes the target a voter
+that term. The premise is that a committed promotion records its fact and makes the target a voter
 and nothing in the applied history after it makes the target a learner again:
 the only AddLearnerNode of the target is the transition's learner action, which
 the runtime consumer and the native turn refuse once the learner fact is
@@ -60,15 +61,18 @@ remain unchanged. No additional metadata reread, queue or cancellation owner.
 The existing native Ready/application owner already decodes the managed
 ConfChange context and reserves its permanent peer identity inside the same
 SQLite transaction as ConfState and the applied index. A fresh identity is
-never reused. Extend that SAME permanent reservation with one nullable encoded
-learner origin. Only a managed ADD_LEARNER application writes it. It binds:
+never reused. Extend that SAME permanent reservation with a nullable encoded
+learner origin and promotion fact. Only managed native apply writes them. The
+ADD_LEARNER origin binds:
 
 - group id;
 - actual committed-entry index and term, as exact canonical decimal strings;
 - the existing operation id, transition identity, permit sequence, stage,
   target replica identity and derived peer id.
 
-The registry persists bytes; the existing committed-context owner defines and
+The PROMOTE fact additionally binds its version, exact entry position, original
+ADD bytes, before configuration key and generation, and ordinary target-only
+after configuration. The registry persists bytes; the existing committed-context owner defines and
 validates their shape. No independent progress authority or unbounded history
 per operation is added. Reapplying the identical origin is idempotent; a
 conflicting origin cannot overwrite it. A preliminary reservation is NOT an
@@ -82,17 +86,20 @@ recover provenance but MUST NOT reapply their historical ConfState to the core.
 
 Extend the existing semantic committed-membership read with the explicit
 `learner-action` purpose. It accepts group id plus the existing exact managed
-ADD_LEARNER action tuple, snapshots/validates the request, and runs through the
+ADD_LEARNER or PROMOTE action tuple, snapshots/validates the request, and runs through the
 native group's existing execution queue and recovery/lifecycle boundaries.
 
 Narrow supersession (6.C slice C2, recorded in its design note): the same
-purpose also accepts the transition's PROMOTE action tuple. A promotion
-retains no origin; its committed outcome is the replica's applied
-configuration naming the target a voter while its registry holds the target's
-learner origin of the same transition, answered with that origin as the
-receipt and the same-read witness membership. A replica holding the target as
-a learner answers NOT_RECORDED with the vouch set; anything else NOT_RECORDED
-unvouched. Only a managed ADD_LEARNER application still writes an origin. See
+purpose also accepts the transition's PROMOTE action tuple. Native apply
+retains one immutable versioned promotion fact beside the unchanged learner
+origin in the permanent reservation. The fact binds the exact action, entry
+index and term, the before configuration key and generation, and the ordinary
+target-only after configuration at that same generation. The queued read
+returns that historical fact separately from current membership and checks it
+against the local applied, committed, term and membership-generation boundary.
+A current voter without the fact cannot manufacture a committed index. A
+replica holding the target as a learner and no fact answers NOT_RECORDED with
+the vouch set; anything else NOT_RECORDED is unvouched. See
 the [promotion contract](message-group-learner-promotion.md).
 It returns frozen historical COMMITTED, UNRESOLVED, or REFUSED data. A record
 beyond the same local applied/committed membership boundary is never returned
@@ -110,15 +117,17 @@ source removal, or release of the serialized membership obligation.
 The existing raft-rs checkpoint scrub retains permanent peer reservations but
 removes sender-local native logs/state. The origin must therefore travel WITH
 that reservation, be described in the checkpoint, and be compared with actual
-payload bytes on read/install/recovery. Validate its group, target identity,
+payload bytes on read/install/recovery. The same rule covers the promotion
+fact and its byte-identical learner-origin binding. Validate group, target,
 entry term and index against the checkpoint's applied boundary. A descriptor
-must not erase, substitute or manufacture an origin.
+must not erase, substitute or manufacture either fact.
 
-Increment the UNRELEASED `raft_rs_replica_image` payload version from 1 to 2;
-other payload kinds are unchanged. Version-1 images are explicitly unsupported
-by the new origin-bearing contract, not silently treated as containing proof.
+Increment the UNRELEASED `raft_rs_replica_image` payload version from 2 to 3;
+other payload kinds are unchanged. Version-1 and version-2 images are
+explicitly unsupported by the promotion-history contract, not silently treated
+as containing proof.
 Old live reservation rows remain readable after the existing owner adds the
-nullable field, but NULL cannot resolve an issued action, including for the
+nullable fields, but NULL cannot resolve an issued action, including for the
 ordered successor (C1): a reservation whose origin is NULL is UNVOUCHED and
 never fences; only a registry that holds no reservation of the target vouches
 for the absence. No supported upgrade claim is made. Native snapshot catch-up completion is a separate existing gap.

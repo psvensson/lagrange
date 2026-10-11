@@ -5,36 +5,43 @@
 
 const RAFT_RS_PEER_IDENTITY_TABLE = 'raft_rs_peer_identity';
 const RAFT_RS_LEARNER_ADMISSION_COLUMN = 'learner_admission';
+const RAFT_RS_PROMOTION_ADMISSION_COLUMN = 'promotion_admission';
 
 const RAFT_RS_PEER_IDENTITY_SQL = Object.freeze({
   CREATE_TABLE: `
     CREATE TABLE IF NOT EXISTS ${RAFT_RS_PEER_IDENTITY_TABLE} (
       replica_identity TEXT PRIMARY KEY,
       raft_peer_id TEXT NOT NULL UNIQUE,
-      learner_admission TEXT
+      learner_admission TEXT,
+      promotion_admission TEXT
     )
   `,
   SELECT_BY_IDENTITY: `
-    SELECT replica_identity, raft_peer_id, learner_admission
+    SELECT replica_identity, raft_peer_id, learner_admission, promotion_admission
     FROM ${RAFT_RS_PEER_IDENTITY_TABLE}
     WHERE replica_identity = ?
   `,
   SELECT_BY_PEER_ID: `
-    SELECT replica_identity, raft_peer_id, learner_admission
+    SELECT replica_identity, raft_peer_id, learner_admission, promotion_admission
     FROM ${RAFT_RS_PEER_IDENTITY_TABLE}
     WHERE raft_peer_id = ?
   `,
   SELECT_ALL: `
-    SELECT replica_identity, raft_peer_id, learner_admission
+    SELECT replica_identity, raft_peer_id, learner_admission, promotion_admission
     FROM ${RAFT_RS_PEER_IDENTITY_TABLE}
     ORDER BY replica_identity
   `,
   SELECT_COLUMNS: `SELECT name FROM pragma_table_info('${RAFT_RS_PEER_IDENTITY_TABLE}')`,
   ADD_LEARNER_ADMISSION: `ALTER TABLE ${RAFT_RS_PEER_IDENTITY_TABLE}
     ADD COLUMN learner_admission TEXT`,
+  ADD_PROMOTION_ADMISSION: `ALTER TABLE ${RAFT_RS_PEER_IDENTITY_TABLE}
+    ADD COLUMN promotion_admission TEXT`,
   RECORD_LEARNER_ADMISSION: `UPDATE ${RAFT_RS_PEER_IDENTITY_TABLE}
     SET learner_admission = ?
     WHERE replica_identity = ? AND learner_admission IS NULL`,
+  RECORD_PROMOTION_ADMISSION: `UPDATE ${RAFT_RS_PEER_IDENTITY_TABLE}
+    SET promotion_admission = ?
+    WHERE replica_identity = ? AND promotion_admission IS NULL`,
   INSERT_RESERVATION: `
     INSERT INTO ${RAFT_RS_PEER_IDENTITY_TABLE}
       (replica_identity, raft_peer_id)
@@ -66,6 +73,10 @@ const RAFT_RS_LEARNER_ORIGIN_COVERAGE = Object.freeze({
 const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
   LEARNER_ADMISSION_CONFLICT: 'committed learner origin conflicts with permanent identity',
   LEARNER_ADMISSION_TRANSACTION: 'committed learner origin requires the application transaction',
+  PROMOTION_ADMISSION_CONFLICT:
+    'committed promotion fact conflicts with permanent identity',
+  PROMOTION_ADMISSION_TRANSACTION:
+    'committed promotion fact requires the application transaction',
   RESERVATIONS_NOT_ARRAY:
     'raft-rs peer identity reservations must be an array',
   duplicateReservation: (replicaIdentity, peerId) =>
@@ -86,6 +97,7 @@ const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
 
 export {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
+  RAFT_RS_PROMOTION_ADMISSION_COLUMN,
   RAFT_RS_LEARNER_ORIGIN_COVERAGE,
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,

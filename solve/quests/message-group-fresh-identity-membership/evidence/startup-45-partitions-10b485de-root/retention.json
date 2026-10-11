@@ -1,0 +1,14 @@
+{
+  "diagnostic.json": {
+    "sha256": "1e73c878aab79d794a485ce515a9c28ac4c85c2cc1bd0463ab57de3af996377a",
+    "bytes": 224033
+  },
+  "startdiag.mjs.txt": {
+    "sha256": "ce2635bfec3139359c2096b4346907cea1e5e75f75258d301092e9eb91ab52ca",
+    "bytes": 720
+  },
+  "startup.log.txt": {
+    "sha256": "180c6222e8d6cc9fae67131db4bb6bb0a50e15d2eb3cefaeda7c2d1dd0181690",
+    "bytes": 630393
+  }
+}
