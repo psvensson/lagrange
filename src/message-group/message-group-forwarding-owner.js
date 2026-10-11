@@ -45,6 +45,8 @@ import {
   buildMessageGroupLeaderIdentitySnapshot,
   resolveCDCForwardDeliveryProfile,
 } from './message-group-forwarding-owner-constants.js';
+import {cdcSourceEventCapacity} from
+  '../cache/system-table-cache-cdc-source-order.js';
 
 class MessageGroupForwardingOwner {
   constructor(options = {}) {
@@ -401,6 +403,11 @@ class MessageGroupForwardingOwner {
   }
 
   canAcceptCDCEvent(cdcEvent = {}) {
+    const capacity = cdcSourceEventCapacity(
+      this.service.systemTableCache,
+      cdcEvent,
+    );
+    if (capacity.ready !== true) return capacity;
     const decision = this.resolveCdcIngressDecision(cdcEvent);
     this.requestAuthoritativeTopologyRepair(decision, cdcEvent);
     return this.buildIngressReadinessFromDecision(decision);

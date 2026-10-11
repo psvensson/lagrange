@@ -1,3 +1,4 @@
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
 import {resolveCdcPropagationDeliveryProfile} from
   '../cache/cdc-propagation-delivery-profile.js';
 import {
@@ -129,6 +130,7 @@ function normalizeCDCForwardDeliveryEvents(
   const normalizedEvents = payloadEvents
     .filter((event) => event && typeof event === 'object')
     .map((event) => ({
+      ...copyCdcEventMetadata(event),
       tableName:
         typeof event?.tableName === 'string' &&
           event.tableName.length > 0 ?
