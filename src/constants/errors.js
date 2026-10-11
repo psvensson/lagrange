@@ -13,6 +13,14 @@ const ERRORS = Object.freeze({
   WRITE_OUTCOME_UNKNOWN:
     'The proposal was accepted into consensus and its outcome is not known ' +
     'to this replica; a retry with the same entryId is idempotent',
+  // A write that failed on this replica while it was proposed or applied (a
+  // host failure while proposing it, a failure of its own committed apply):
+  // it may be committed. Unlike a released write's text, this text is never
+  // retried (isRetryableWriteError does not name it): a text carries no
+  // entryId, and only the typed answer is re-delivered, under its entryId.
+  WRITE_OUTCOME_UNKNOWN_AFTER_FAILURE:
+    'The write failed on this replica while it was proposed or applied, so ' +
+    'it may be committed; only a retry under its entryId is idempotent',
   // The writes this replica did not propose, by why (the partition write
   // kernel appends what it knows): its service shut down first, its proposal
   // queue is at capacity, the consensus port refused the proposal, or the
@@ -27,6 +35,11 @@ const ERRORS = Object.freeze({
     'The consensus port refused the proposal; the write was not proposed',
   WRITE_COMMIT_DEADLINE_EXCEEDED:
     'The write was not proposed before its commit deadline',
+  // A write that committed while a prepared transaction reserved its
+  // partition: it applied without effect and may be retried.
+  WRITE_RESERVED:
+    'The write met a prepared transaction reserving the partition and was ' +
+    'applied without effect; it may be retried',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   NO_HANDLER_FOR_ADDRESS: 'No handler registered for address',
 });
@@ -48,6 +61,7 @@ const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.WRITE_BACKPRESSURE,
   ERRORS.WRITE_CONSENSUS_REFUSED,
   ERRORS.WRITE_COMMIT_DEADLINE_EXCEEDED,
+  ERRORS.WRITE_RESERVED,
 ]);
 
 /**
@@ -64,10 +78,13 @@ function isReroutableWriteError(message) {
 
 /**
  * Whether an error text is the answer of a partition write that did not fail
- * for good: one a caller may route again, or one whose outcome is not known
- * to the replica that answered (never a failed write, and never routed again
- * by its text). The text of the partition write kernel's
- * isRetryableWriteFailureCode.
+ * for good: one a caller may route again, or a released write whose outcome
+ * is not known to the replica that answered (never a failed write, and never
+ * routed again by its text). The text of the partition write kernel's
+ * isRetryableWriteFailureCode, but for the unknown outcome of a write that
+ * failed while it was proposed or applied
+ * (WRITE_OUTCOME_UNKNOWN_AFTER_FAILURE): only its typed answer is retried,
+ * under its entryId.
  * @param {*} message - The error text.
  * @return {boolean} Whether it names one of those answers.
  */

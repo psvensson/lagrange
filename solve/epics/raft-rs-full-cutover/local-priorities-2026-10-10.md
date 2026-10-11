@@ -15,7 +15,7 @@ Checkpoint update: reviewed `6d24e3b4f0b64212e05ce0b66668d67dc82ba812` on
 committed at `045c9130e` with bounded independent approval recorded. RS1 remains recorded
 as verified. TX1 is sealed, OPEN; revision 6 was rejected and the local owner
 reports revision 7 in progress. **The query seam and six owner choices are now
-agreed in the [TX1 owner decisions](https://github.com/psvensson/lagrange/blob/0c398d50b5354caceef40e812eb1a536b66bd78b/solve/quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md).**
+agreed in the [TX1 owner decisions](../../quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md).**
 Finish that revision and obtain a bounded review of its remaining correctness
 delta before participant implementation. FreshMG physical completion is not
 its entry gate. Preserve the mixed branch and isolate the integration stacks;
@@ -131,7 +131,7 @@ recovery. Focused component green or a permanently parked CREATE cannot close it
 
 ## 3. Next new safety unit: transaction Leg A, then Leg B
 
-Read the [agreed owner decisions and seam](https://github.com/psvensson/lagrange/blob/0c398d50b5354caceef40e812eb1a536b66bd78b/solve/quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md).
+Read the [agreed owner decisions and seam](../../quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md).
 They replace this handoff's earlier list of unresolved design choices. The
 query lane owns coordinator persistence, decisions, wire identity, recovery
 and statement retry; local owns participants/Raft, seed composition and the

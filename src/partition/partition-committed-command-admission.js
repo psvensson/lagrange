@@ -20,6 +20,12 @@
 //   a new write, so it is refused. (An absent entryId is minted by the entry
 //   builder before the command is asked about.)
 // - STATEMENT_MISSING: an SQL command type carries no statement.
+// - a participant transaction command (PARTICIPANT_PREPARE,
+//   PARTICIPANT_DECISION, PARTICIPANT_GENERATION_ORIGIN) enters consensus only
+//   from the transaction owner (PARTICIPANT_TRANSACTION_ADMISSION_CODE.
+//   ORIGIN_REFUSED) and only in the pinned byte form the leader builds -
+//   identity, digests and its deterministic entryId (BYTES_INVALID); a
+//   committed one is applied by partition-participant-transaction-apply.js.
 //
 // It also answers which recognised types exist (the application's own
 // dispatch asks it): the type lists are frozen arrays in the constants owner,
@@ -32,6 +38,13 @@ import {
   PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   PARTITION_SERVICE_ERROR_MSG,
 } from './partition-service-constants.js';
+import {
+  PARTICIPANT_TRANSACTION_ADMISSION_CODE,
+  PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+  PARTICIPANT_TRANSACTION_MESSAGE,
+} from './partition-participant-transaction-constants.js';
+import {isPinnedParticipantCommand} from
+  './partition-participant-transaction-bytes.js';
 
 // Who asks to propose a committed command. A transaction marker enters
 // consensus only from the transaction owner, after its local COMMIT or
@@ -108,6 +121,24 @@ function sqlCommandRefusal(command) {
   return ADMITTED;
 }
 
+function participantCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER) {
+    return refused(PARTICIPANT_TRANSACTION_ADMISSION_CODE.ORIGIN_REFUSED,
+      PARTICIPANT_TRANSACTION_MESSAGE.ORIGIN_REFUSED);
+  }
+  return isPinnedParticipantCommand(command) ? ADMITTED :
+    refused(PARTICIPANT_TRANSACTION_ADMISSION_CODE.BYTES_INVALID,
+      PARTICIPANT_TRANSACTION_MESSAGE.BYTES_INVALID);
+}
+
+function commandRefusalByKind(command, origin) {
+  if (PARTITION_COMMITTED_MARKER_COMMAND_TYPES.includes(command.type)) {
+    return markerRefusal(command, origin);
+  }
+  return PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(command.type) ?
+    participantCommandRefusal(command, origin) : sqlCommandRefusal(command);
+}
+
 // Present and not a non-empty string. An absent entryId (undefined, or null
 // as a wire caller spells "none") is the entry builder's to mint.
 function isInvalidEntryId(entryId) {
@@ -133,8 +164,7 @@ function admitCommittedCommand(command, {origin}) {
       PARTITION_COMMITTED_COMMAND_ADMISSION_MSG.entryIdInvalid(
         command.entryId));
   }
-  return PARTITION_COMMITTED_MARKER_COMMAND_TYPES.includes(type) ?
-    markerRefusal(command, origin) : sqlCommandRefusal(command);
+  return commandRefusalByKind(command, origin);
 }
 
 /**

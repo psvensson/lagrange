@@ -1200,6 +1200,9 @@ test('PartitionService - executeQuery keeps non-transactional writes out of unre
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
     tableId: 'test-table',
+    // The table this test writes is the partition's own: an ordinary write
+    // to any other table is refused by the statement-admission owner.
+    tableName: 'test_data',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',

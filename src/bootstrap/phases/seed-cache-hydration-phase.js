@@ -272,6 +272,9 @@ class SeedCacheHydrationPhase {
         owner: CDC_INTEGRATION_OWNER,
       });
     }
+    // Both branches: the engine's gateway resolves this service, so its
+    // transactions (the migration cutover among them) persist their state.
+    cdcQueryEngine.setCDCIntegrationService(cdcIntegrationService);
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.CDC_NORMAL_MODE,

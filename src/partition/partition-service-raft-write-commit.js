@@ -10,13 +10,18 @@ import {
   PROPOSAL_QUEUE_PROPOSAL_STATE,
   PROPOSAL_QUEUE_RELEASED_CODE,
 } from './proposal-queue-constants.js';
-import {buildPartitionWriteProposalRefusal} from './partition-write-kernel.js';
+import {
+  buildPartitionWriteProposalRefusal,
+  buildRejectedProposedWriteAnswer,
+  isWriteOutcomeUnknown,
+} from './partition-write-kernel.js';
 import {PARTITION_LEADERSHIP_TRANSFER_MESSAGE} from
   './partition-service-leadership-transfer.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
+  PARTITION_SERVICE_LOG_MSG,
   WRITE_PHASE_FIELD_APPLY_WRITE_MS,
   WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
   buildPartitionWriteFailureResult,
@@ -115,19 +120,70 @@ function portWriteDeferral(service, entryId, admission) {
   };
 }
 
-// The answer of a write whose pending answer was rejected: a proposal the
-// port refused is answered with the port's typed outcome; a write the
-// release answered carries the release's typed answer (its proposal state);
-// any other rejection is the write's failure.
+// The cause of an unknown outcome stays with the write kernel's answer (no
+// hop carries it): the leader logs it with the entry here, where it answers,
+// at warn - a failure path, emitted at the default level, so the cause (the
+// environmental code and the host's SQLite text among them) is observable.
+function withLoggedUnknownCause(service, answer) {
+  if (isWriteOutcomeUnknown(answer)) {
+    service.logger.warn(PARTITION_SERVICE_LOG_MSG.WRITE_OUTCOME_UNKNOWN_CAUSE, {
+      partitionId: service.partitionId,
+      entryId: answer.entryId,
+      cause: answer.cause,
+    });
+  }
+  return answer;
+}
+
+// The answer of a write whose pending answer was rejected (the only failures
+// that reach it; the side effects of a committed write never do): a
+// proposal the port refused is answered with the port's typed outcome; a
+// write the release answered carries the release's typed answer (its
+// proposal state); any other rejection - its own committed apply failed
+// environmentally, or its committed command was not recognised - leaves an
+// entry that may be in the log, answered by the write kernel as an unknown
+// outcome.
 function unansweredWriteResult(service, proposal, error, entryId) {
   if (proposal.state === WRITE_PROPOSAL.REFUSED) {
-    return buildPartitionWriteProposalRefusal(proposal.error, error,
-      {partitionId: service.partitionId, entryId});
+    return withLoggedUnknownCause(service, buildPartitionWriteProposalRefusal(
+      proposal.error, error, {partitionId: service.partitionId, entryId}));
   }
   if (error?.code === PROPOSAL_QUEUE_RELEASED_CODE) {
     return {...error.answer, partitionId: service.partitionId};
   }
-  return buildPartitionWriteFailureResult(error, service.partitionId);
+  return withLoggedUnknownCause(service, buildRejectedProposedWriteAnswer(
+    error, {partitionId: service.partitionId, entryId}));
+}
+
+// The side effects of a committed write (its split or merge mirror delta,
+// its size update and split evaluation) run after its commit and are not its
+// answer: a failure of one is logged with the entry for its owner, and the
+// write is answered as the committed write it is (a re-delivery under its
+// entryId is answered from its outcome row).
+async function applyCommittedWriteSideEffects(service, entry,
+  acknowledgedResult) {
+  const sideEffectPlan = buildPartitionWriteSideEffectPlan(
+    entry,
+    acknowledgedResult,
+  );
+  try {
+    await service.applyWriteSideEffectPlan({
+      entry,
+      result: acknowledgedResult,
+      sideEffectPlan: {
+        ...sideEffectPlan,
+        emitCdcEntry: null,
+      },
+      commitPromise: null,
+    });
+  } catch (sideEffectError) {
+    service.logger.warn(
+      PARTITION_SERVICE_LOG_MSG.COMMITTED_WRITE_SIDE_EFFECT_FAILED, {
+        partitionId: service.partitionId,
+        entryId: entry.entryId,
+        error: sideEffectError?.message || String(sideEffectError),
+      });
+  }
 }
 
 async function executePartitionRaftWriteCommit(service, options) {
@@ -155,11 +211,13 @@ async function executePartitionRaftWriteCommit(service, options) {
   }
   commitPromise.catch(() => {});
   const raftCommandDispatchStartMs = service.timeSource.now();
-  // A proposal the port refused is the write's own failure: when the pending
-  // write was released without an answer (a group that failed inside the
-  // proposal announces that it no longer leads, which releases it first),
-  // the answer names the port's outcome; an answer the application gave
-  // stands.
+  // A proposal the port refused is answered by the port's outcome, as the
+  // write kernel types it (a host failure or a core failure while proposing
+  // is an unknown outcome; a core refusal was not proposed): when the
+  // pending write was released without an answer (a group that failed inside
+  // the proposal announces that it no longer leads, which releases it
+  // first), the answer names the port's outcome; an answer the application
+  // gave stands.
   let proposal = PROPOSAL_ACCEPTED;
   try {
     const proposed = await proposeWithinDeferralBudget(service, entry);
@@ -188,42 +246,9 @@ async function executePartitionRaftWriteCommit(service, options) {
     WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
     raftCommandDispatchStartMs,
   );
+  let result;
   try {
-    const result = await commitPromise;
-    // A committed statement that failed is the write's outcome: reported as
-    // the failure it is, with no replay marker and no write side effects.
-    if (result?.success !== true) {
-      service.recordWritePhaseDuration(
-        phaseTimings,
-        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-        applyStartMs,
-      );
-      return result;
-    }
-    const acknowledgedResult = {
-      ...result,
-      acceptingNodeId: service.nodeId,
-      acknowledgedAtMs: service.timeSource.now(),
-    };
-    const sideEffectPlan = buildPartitionWriteSideEffectPlan(
-      entry,
-      acknowledgedResult,
-    );
-    await service.applyWriteSideEffectPlan({
-      entry,
-      result: acknowledgedResult,
-      sideEffectPlan: {
-        ...sideEffectPlan,
-        emitCdcEntry: null,
-      },
-      commitPromise: null,
-    });
-    service.recordWritePhaseDuration(
-      phaseTimings,
-      WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-      applyStartMs,
-    );
-    return acknowledgedResult;
+    result = await commitPromise;
   } catch (error) {
     service.recordWritePhaseDuration(
       phaseTimings,
@@ -232,6 +257,28 @@ async function executePartitionRaftWriteCommit(service, options) {
     );
     return unansweredWriteResult(service, proposal, error, entry.entryId);
   }
+  // A committed statement that failed is the write's outcome: reported as
+  // the failure it is, with no replay marker and no write side effects.
+  if (result?.success !== true) {
+    service.recordWritePhaseDuration(
+      phaseTimings,
+      WRITE_PHASE_FIELD_APPLY_WRITE_MS,
+      applyStartMs,
+    );
+    return result;
+  }
+  const acknowledgedResult = {
+    ...result,
+    acceptingNodeId: service.nodeId,
+    acknowledgedAtMs: service.timeSource.now(),
+  };
+  await applyCommittedWriteSideEffects(service, entry, acknowledgedResult);
+  service.recordWritePhaseDuration(
+    phaseTimings,
+    WRITE_PHASE_FIELD_APPLY_WRITE_MS,
+    applyStartMs,
+  );
+  return acknowledgedResult;
 }
 
 function startPartitionRaftWriteCommit(service, options) {

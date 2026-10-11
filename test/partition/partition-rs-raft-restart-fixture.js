@@ -25,6 +25,12 @@ import {assertRaftOperationSucceeded} from
   '../../src/raft/raft-operation-port.js';
 import {RAFT_RS_SQL} from '../../src/raft/raft-rs-durable-store-constants.js';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
+import {
+  PARTICIPANT_TRANSACTION_COMMAND,
+  PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+} from '../../src/partition/partition-participant-transaction-constants.js';
+import {enableParticipantTransactionAdmission} from
+  '../../src/partition/partition-participant-transaction-request.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 
 
@@ -78,6 +84,23 @@ function readCommittedIndependently(dbPath, groupId) {
   }
 }
 
+// A log that carries participant transaction commands starts with the
+// partition's generation origin (TX1 design 0.0.13: transaction admission is
+// enabled before any transaction): the lone leader proposes it through the
+// production path, as its first data entry.
+async function enableTransactionsWhenCarried(service, commands) {
+  if (!commands.some((command) =>
+    PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(command?.type))) {
+    return;
+  }
+  const enabled = await enableParticipantTransactionAdmission(service);
+  assert.equal(enabled.success, true,
+    `the generation origin applies (${JSON.stringify(enabled)})`);
+}
+
+const isGenerationOrigin = (entry) =>
+  entry.command?.type === PARTICIPANT_TRANSACTION_COMMAND.GENERATION_ORIGIN;
+
 async function leadAlone(service) {
   const status = await service.raft.readStatus();
   if (status.role !== RAFT_ROLE.LEADER) {
@@ -117,14 +140,18 @@ async function restartOverCommittedCommands(options, commands) {
     try {
       await first.initialize();
       await leadAlone(first);
+      await enableTransactionsWhenCarried(first, commands);
       for (const command of commands) {
         assertRaftOperationSucceeded(await first.raft.propose(command));
       }
     } finally {
       await first.shutdown();
     }
-    const before = readCommittedIndependently(
+    const record = readCommittedIndependently(
       partitionOptions.dbPath, partitionOptions.partitionId);
+    // The commands a test committed, without the origin this fixture added.
+    const before = {...record,
+      committed: record.committed.filter((entry) => !isGenerationOrigin(entry))};
     assert.equal(before.committed.length, commands.length,
       'precondition: every proposed command is committed and applied in the ' +
       `rs-raft store (${JSON.stringify(before)})`);

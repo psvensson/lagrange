@@ -299,7 +299,10 @@ async (t) => {
 // One answer's code and text agree, owner by owner: on routing it again
 // (without its entryId), and on the control plane retrying it; a caller
 // carrying the entryId routes again every write that did not fail for good;
-// only an unknown outcome is never routed again by its text.
+// only an unknown outcome is never routed again by its text. The stated
+// exception (AD): the unknown outcome of a write that failed while it was
+// proposed or applied is retried by its code, never by its text - a text
+// carries no entryId.
 function assertRetryAgreement(t, name, answer, owners) {
   const {failureCode: code, error: text} = answer;
   const reroutableByCode = owners.isReroutableWriteFailureCode?.(code);
@@ -308,8 +311,13 @@ function assertRetryAgreement(t, name, answer, owners) {
   t.equal(reroutableByCode, owners.isReroutableWriteError(text),
     `${name}: its code and its text agree on routing it again ` +
     `(${code}: ${text})`);
-  t.equal(retryableByCode, retryableByText, `${name}: its code and its ` +
-    'text agree on the control plane retrying it');
+  if (owners.afterFailure) {
+    t.equal(retryableByCode && !retryableByText, true, `${name}: retried ` +
+      'by its code, never by its text (a text carries no entryId)');
+  } else {
+    t.equal(retryableByCode, retryableByText, `${name}: its code and its ` +
+      'text agree on the control plane retrying it');
+  }
   t.equal(owners.isReroutableWriteFailureCode?.(code, {carriesEntryId: true}),
     retryableByCode, `${name}: a caller carrying its entryId routes again ` +
     'every write that did not fail for good');
@@ -357,7 +365,8 @@ test('partition write kernel types every release and proposal refusal, and ' +
     isReroutableWriteFailureCode,
     isRetryableWriteFailureCode,
   } = partitionWriteKernel;
-  const {isReroutableWriteError, isRetryableWriteError} = errorConstants;
+  const {ERRORS, isReroutableWriteError, isRetryableWriteError} =
+    errorConstants;
   const {PROPOSAL_QUEUE_PROPOSAL_STATE: STATE} = proposalQueueConstants;
   const released = (proposal, release) => buildReleasedPendingWriteAnswer(
     {entryId: TEST_ENTRY_ID, proposal, logIndex: null}, TEST_PARTITION_ID,
@@ -404,7 +413,7 @@ test('partition write kernel types every release and proposal refusal, and ' +
     backpressure: REFUSAL.BACKPRESSURE,
     coreRefused: REFUSAL.CONSENSUS_REFUSED,
     coreFatal: REFUSAL.OUTCOME_UNKNOWN,
-    hostFailure: REFUSAL.CONSENSUS_HOST_FAILURE,
+    hostFailure: REFUSAL.OUTCOME_UNKNOWN,
   }, 'each release and refusal has its own typed code');
   for (const [name, answer] of Object.entries(answers)) {
     t.equal(answer.entryId, TEST_ENTRY_ID, `${name}: it names its entry`);
@@ -418,6 +427,23 @@ test('partition write kernel types every release and proposal refusal, and ' +
   t.same(answers.coreRefused.consensus, {reason: 'CORE_REFUSED-reason',
     phase: 'propose', retryable: false},
   'a core refusal carries the port\'s reason and retryability');
+  // AD: a host failure or a core failure while proposing is an unknown
+  // outcome whose cause keeps what answered it - the host failure's own code
+  // and the port's text - with the port's consensus fields.
+  t.same({cause: answers.hostFailure.cause,
+    consensus: answers.hostFailure.consensus,
+    error: answers.hostFailure.error}, {
+    cause: {failureCode: REFUSAL.CONSENSUS_HOST_FAILURE,
+      error: portRefusal(RAFT_OPERATION_OUTCOME.HOST_FAILURE).message},
+    consensus: {reason: 'HOST_FAILURE-reason', phase: 'propose',
+      retryable: false},
+    error: ERRORS.WRITE_OUTCOME_UNKNOWN_AFTER_FAILURE,
+  }, 'a host failure while proposing keeps its code and text as the cause');
+  t.same({cause: answers.coreFatal.cause, error: answers.coreFatal.error}, {
+    cause: {error: portRefusal(RAFT_OPERATION_OUTCOME.CORE_FATAL).message},
+    error: ERRORS.WRITE_OUTCOME_UNKNOWN,
+  }, 'a core failure keeps the port\'s text as the cause, and the text of ' +
+    'a released write');
   const all = {
     ...answers,
     notLeader: buildPartitionWriteLeadershipRefusal(
@@ -433,6 +459,7 @@ test('partition write kernel types every release and proposal refusal, and ' +
       isReroutableWriteFailureCode, isReroutableWriteError,
       isRetryableWriteFailureCode, isRetryableWriteError,
       unknown: answer.failureCode === REFUSAL.OUTCOME_UNKNOWN,
+      afterFailure: name === 'hostFailure',
     });
   }
   assertCodeRouting(t, REFUSAL, {isReroutableWriteFailureCode,

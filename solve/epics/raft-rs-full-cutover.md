@@ -69,7 +69,7 @@ TX1 is now a declared, OPEN Quest, sealed at
 `df51b799acdb224253fdb3548ebdf8471d692f5b` against the local-visibility and follower-
 application reds. At reviewed head `6d24e3b4f`, revision 6 is rejected and the
 local owner reports revision 7 in progress. The
-[owner decisions](https://github.com/psvensson/lagrange/blob/0c398d50b5354caceef40e812eb1a536b66bd78b/solve/quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md)
+[owner decisions](../quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md)
 now agree the query seam, prepare-first single-participant behavior, conservative
 conflicts, guarded rowid direction, existing seed persistence wiring and local
 CDC ownership. Design acceptance and implementation proof remain outstanding.

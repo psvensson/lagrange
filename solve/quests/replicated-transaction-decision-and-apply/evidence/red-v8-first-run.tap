@@ -1,0 +1,4759 @@
+# TX1 design revision 8 witnesses, first run (red-before evidence), HEAD e984cb8db
+# participant: test/partition/partition-transaction-replicated-apply-v3.test.js sha256 09eceadf4b28bdfb6f9ed1dd25b983e8ac5218792c032f2442fa723e3934b9e7 (exit 1: 37 tests, 37 fail)
+# seam: test/query/partition-transaction-seam-falsifiers.test.js sha256 a56e6cdf1ca0aa36aa128f200e4f1105a6cc5cab8879bebfbeca76013c58321f (exit 1: 14 tests, 14 fail)
+# sibling: test/partition/partition-transaction-replay-cursor-v4.test.js sha256 46d576b6e5cdb95b47c33779a32c4ee0041f419e764383dcc717b4c0b2d80897 (exit 1: 11 tests, 7 fail, 4 controls pass)
+# fixture: test/test-helpers/participant-transaction-fixture.js sha256 ff77e29ffdae27ecc8775d5ddad2334d716af767e4e734d5891321fc99f32b7a
+# port double: test/test-helpers/controllable-consensus-port.js sha256 4cbdc768e034d509c3c7c00bf39ac1a1669a04e6a17febb53b5e3420f2df2d33
+# command: env -u NODE_TEST_CONTEXT node --test --test-reporter=tap <file>; a second run of each file gave identical verdicts
+# ---- participant ----
+TAP version 13
+# Subtest: TX1 v3 W1a: PREPARE is acknowledged only after its committed PARTICIPANT_PREPARE applies, and the bound COMMIT carries no operations
+not ok 1 - TX1 v3 W1a: PREPARE is acknowledged only after its committed PARTICIPANT_PREPARE applies, and the bound COMMIT carries no operations
+  ---
+  duration_ms: 36.036151
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:60:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    PREPARE and COMMIT are committed commands, each acknowledged after it applies
+    + actual - expected
+    
+      {
+        begun: true,
+    +   commitAnswer: null,
+    +   commitSettledBeforeApply: null,
+    -   commitAnswer: {
+    -     outcome: 'COMMITTED',
+    -     state: 'COMMITTED',
+    -     success: true
+    -   },
+    -   commitSettledBeforeApply: false,
+        decisionApply: null,
+    +   decisionCarriesOperations: null,
+    +   prepareAnswer: null,
+    -   decisionCarriesOperations: false,
+    -   prepareAnswer: {
+    -     digestMatches: true,
+    -     prepareIndexMatches: true,
+    -     prepareTerm: 1,
+    -     state: 'PREPARED',
+    -     success: true
+    -   },
+        prepareApply: null,
+    +   prepareProposed: false,
+    +   prepareSettledBeforeApply: true,
+    +   rowsAfterDecision: null,
+    +   rowsVisibleWhilePrepared: null,
+    +   rowsVisibleWhilePreparing: 1,
+    -   prepareProposed: true,
+    -   prepareSettledBeforeApply: false,
+    -   rowsAfterDecision: 1,
+    -   rowsVisibleWhilePrepared: 0,
+    -   rowsVisibleWhilePreparing: 0,
+        staged: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    begun: true
+    staged: true
+    prepareProposed: true
+    prepareSettledBeforeApply: false
+    rowsVisibleWhilePreparing: 0
+    prepareApply: ~
+    prepareAnswer:
+      success: true
+      state: 'PREPARED'
+      digestMatches: true
+      prepareIndexMatches: true
+      prepareTerm: 1
+    rowsVisibleWhilePrepared: 0
+    decisionCarriesOperations: false
+    commitSettledBeforeApply: false
+    decisionApply: ~
+    commitAnswer:
+      success: true
+      outcome: 'COMMITTED'
+      state: 'COMMITTED'
+    rowsAfterDecision: 1
+  actual:
+    begun: true
+    staged: true
+    prepareProposed: false
+    prepareSettledBeforeApply: true
+    rowsVisibleWhilePreparing: 1
+    prepareApply: ~
+    prepareAnswer: ~
+    rowsVisibleWhilePrepared: ~
+    decisionCarriesOperations: ~
+    commitSettledBeforeApply: ~
+    decisionApply: ~
+    commitAnswer: ~
+    rowsAfterDecision: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:93:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: TX1 v3 W1b: a replica that staged nothing reaches PREPARED, then COMMITTED with the operations and the applied index, from the two committed commands
+not ok 2 - TX1 v3 W1b: a replica that staged nothing reaches PREPARED, then COMMITTED with the operations and the applied index, from the two committed commands
+  ---
+  duration_ms: 19.122131
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:106:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the committed commands are the transaction on every replica
+    + actual - expected
+    
+      {
+        afterDecision: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'COMMITTED',
+    -     state: 'COMMITTED'
+        },
+        afterPrepare: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'UNKNOWN',
+    -     state: 'PREPARED'
+        },
+    +   appliedAdvance: 0,
+    +   decisionApply: 'partition_committed_command_unrecognised',
+    +   prepareApply: 'partition_committed_command_unrecognised',
+    +   rowsAfterDecision: 0,
+    -   appliedAdvance: 2,
+    -   decisionApply: null,
+    -   prepareApply: null,
+    -   rowsAfterDecision: 1,
+        rowsAfterPrepare: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareApply: ~
+    afterPrepare:
+      outcome: 'UNKNOWN'
+      state: 'PREPARED'
+    rowsAfterPrepare: 0
+    decisionApply: ~
+    afterDecision:
+      outcome: 'COMMITTED'
+      state: 'COMMITTED'
+    rowsAfterDecision: 1
+    appliedAdvance: 2
+  actual:
+    prepareApply: 'partition_committed_command_unrecognised'
+    afterPrepare:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    rowsAfterPrepare: 0
+    decisionApply: 'partition_committed_command_unrecognised'
+    afterDecision:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    rowsAfterDecision: 0
+    appliedAdvance: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:120:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W2a: a planted failure after the operations inside the decision's application transaction leaves no row, no outcome, no state change and the applied index unchanged
+not ok 3 - TX1 v3 W2a: a planted failure after the operations inside the decision's application transaction leaves no row, no outcome, no state change and the applied index unchanged
+  ---
+  duration_ms: 11.631073
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:129:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    operations, outcomes, the state transition and the applied index are one transaction
+    + actual - expected
+    
+      {
+        afterFailure: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'UNKNOWN',
+    -     state: 'PREPARED'
+        },
+        appliedAdvance: 0,
+    +   decisionApply: 'partition_committed_command_unrecognised',
+    -   decisionApply: 'SQLITE_CONSTRAINT_TRIGGER',
+        operationOutcomes: 0,
+    +   prepareApply: 'partition_committed_command_unrecognised',
+    -   prepareApply: null,
+        rows: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareApply: ~
+    decisionApply: 'SQLITE_CONSTRAINT_TRIGGER'
+    rows: 0
+    operationOutcomes: 0
+    afterFailure:
+      outcome: 'UNKNOWN'
+      state: 'PREPARED'
+    appliedAdvance: 0
+  actual:
+    prepareApply: 'partition_committed_command_unrecognised'
+    decisionApply: 'partition_committed_command_unrecognised'
+    rows: 0
+    operationOutcomes: 0
+    afterFailure:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    appliedAdvance: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:145:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W2b: the operations, the per-operation outcomes, the COMMITTED state and the write generation are all written before the applied-state write of the decision
+not ok 4 - TX1 v3 W2b: the operations, the per-operation outcomes, the COMMITTED state and the write generation are all written before the applied-state write of the decision
+  ---
+  duration_ms: 12.1208
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:153:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a post-commit effect writing rows, outcomes, state or the generation cannot satisfy this
+    + actual - expected
+    
+      {
+    +   decisionApply: 'partition_committed_command_unrecognised',
+    +   prepareApply: 'partition_committed_command_unrecognised',
+    +   seenAtAppliedStateWrite: []
+    -   decisionApply: null,
+    -   prepareApply: null,
+    -   seenAtAppliedStateWrite: [
+    -     {
+    -       generation: 1,
+    -       rows: 1,
+    -       state: 'COMMITTED',
+    -       txop: 1
+    -     }
+    -   ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareApply: ~
+    decisionApply: ~
+    seenAtAppliedStateWrite:
+      0:
+        rows: 1
+        state: 'COMMITTED'
+        txop: 1
+        generation: 1
+  actual:
+    prepareApply: 'partition_committed_command_unrecognised'
+    decisionApply: 'partition_committed_command_unrecognised'
+    seenAtAppliedStateWrite:
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:169:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W2c: an ordinary write increments the write generation inside its own application transaction, before the applied-state write
+not ok 5 - TX1 v3 W2c: an ordinary write increments the write generation inside its own application transaction, before the applied-state write
+  ---
+  duration_ms: 11.79813
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:177:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the generation is application state, written with the data it counts
+    + actual - expected
+    
+      {
+    +   apply: 'SQLITE_ERROR',
+    +   seen: [],
+    -   apply: null,
+    -   seen: [
+    -     {
+    -       generation: 2,
+    -       rows: 1
+    -     }
+    -   ],
+        warmUp: null
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    warmUp: ~
+    apply: ~
+    seen:
+      0:
+        rows: 1
+        generation: 2
+  actual:
+    warmUp: ~
+    apply: 'SQLITE_ERROR'
+    seen:
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:185:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W3a: a PREPARE whose operation fails deterministically is REFUSED identically on every replica, applies nothing, and a later COMMIT cannot apply it
+not ok 6 - TX1 v3 W3a: a PREPARE whose operation fails deterministically is REFUSED identically on every replica, applies nothing, and a later COMMIT cannot apply it
+  ---
+  duration_ms: 12.965565
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:196:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    every replica refuses the same PREPARE the same way and never applies it
+    + actual - expected
+    
+      [
+        {
+          afterDecision: {
+            outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       state: 'REFUSED'
+          },
+          afterPrepare: {
+            outcome: 'NOT_COMMITTED',
+    +       refusalCause: null,
+    +       state: null
+    -       refusalCause: 'statement_failed',
+    -       state: 'REFUSED'
+          },
+    +     appliedAdvance: 0,
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    +     prepareApply: 'partition_committed_command_unrecognised',
+    -     appliedAdvance: 2,
+    -     decisionApply: null,
+    -     prepareApply: null,
+          rows: 0,
+          setupApply: null,
+          values: []
+        },
+        {
+          afterDecision: {
+            outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       state: 'REFUSED'
+          },
+          afterPrepare: {
+            outcome: 'NOT_COMMITTED',
+    +       refusalCause: null,
+    +       state: null
+    -       refusalCause: 'statement_failed',
+    -       state: 'REFUSED'
+          },
+    +     appliedAdvance: 0,
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    +     prepareApply: 'partition_committed_command_unrecognised',
+    -     appliedAdvance: 2,
+    -     decisionApply: null,
+    -     prepareApply: null,
+          rows: 0,
+          setupApply: null,
+          values: []
+        }
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      setupApply: ~
+      prepareApply: ~
+      afterPrepare:
+        outcome: 'NOT_COMMITTED'
+        state: 'REFUSED'
+        refusalCause: 'statement_failed'
+      decisionApply: ~
+      afterDecision:
+        outcome: 'NOT_COMMITTED'
+        state: 'REFUSED'
+      rows: 0
+      values:
+      appliedAdvance: 2
+    1: <Circular>
+  actual:
+    0:
+      setupApply: ~
+      prepareApply: 'partition_committed_command_unrecognised'
+      afterPrepare:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        refusalCause: ~
+      decisionApply: 'partition_committed_command_unrecognised'
+      afterDecision:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      rows: 0
+      values:
+      appliedAdvance: 0
+    1:
+      setupApply: ~
+      prepareApply: 'partition_committed_command_unrecognised'
+      afterPrepare:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        refusalCause: ~
+      decisionApply: 'partition_committed_command_unrecognised'
+      afterDecision:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      rows: 0
+      values:
+      appliedAdvance: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:206:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W3c: a committed PREPARE is applied exactly as carried: the apply side never re-classifies an operation the staging classifier would refuse
+not ok 7 - TX1 v3 W3c: a committed PREPARE is applied exactly as carried: the apply side never re-classifies an operation the staging classifier would refuse
+  ---
+  duration_ms: 12.999906
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:210:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a classifier change between versions cannot make replicas disagree on a committed PREPARE
+    + actual - expected
+    
+      [
+        {
+          afterDecision: {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       state: 'COMMITTED'
+          },
+          afterPrepare: {
+    +       outcome: 'NOT_COMMITTED',
+    -       outcome: 'UNKNOWN',
+            refusalCause: null,
+    +       state: null
+    -       state: 'PREPARED'
+          },
+    +     appliedAdvance: 0,
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    +     prepareApply: 'partition_committed_command_unrecognised',
+    +     rows: 0,
+    -     appliedAdvance: 2,
+    -     decisionApply: null,
+    -     prepareApply: null,
+    -     rows: 1,
+          setupApply: null,
+    +     values: []
+    -     values: [
+    -       '2020-01-01 00:00:00'
+    -     ]
+        },
+        {
+          afterDecision: {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       state: 'COMMITTED'
+          },
+          afterPrepare: {
+    +       outcome: 'NOT_COMMITTED',
+    -       outcome: 'UNKNOWN',
+            refusalCause: null,
+    +       state: null
+    -       state: 'PREPARED'
+          },
+    +     appliedAdvance: 0,
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    +     prepareApply: 'partition_committed_command_unrecognised',
+    +     rows: 0,
+    -     appliedAdvance: 2,
+    -     decisionApply: null,
+    -     prepareApply: null,
+    -     rows: 1,
+          setupApply: null,
+    +     values: []
+    -     values: [
+    -       '2020-01-01 00:00:00'
+    -     ]
+        }
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      setupApply: ~
+      prepareApply: ~
+      afterPrepare:
+        outcome: 'UNKNOWN'
+        state: 'PREPARED'
+        refusalCause: ~
+      decisionApply: ~
+      afterDecision:
+        outcome: 'COMMITTED'
+        state: 'COMMITTED'
+      rows: 1
+      values:
+        0: '2020-01-01 00:00:00'
+      appliedAdvance: 2
+    1: <Circular>
+  actual:
+    0:
+      setupApply: ~
+      prepareApply: 'partition_committed_command_unrecognised'
+      afterPrepare:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        refusalCause: ~
+      decisionApply: 'partition_committed_command_unrecognised'
+      afterDecision:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      rows: 0
+      values:
+      appliedAdvance: 0
+    1:
+      setupApply: ~
+      prepareApply: 'partition_committed_command_unrecognised'
+      afterPrepare:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        refusalCause: ~
+      decisionApply: 'partition_committed_command_unrecognised'
+      afterDecision:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      rows: 0
+      values:
+      appliedAdvance: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:218:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W3b: a single-replica storage failure while the COMMIT decision applies is the host failure: nothing recorded, applied index unchanged, re-applied after recovery
+not ok 8 - TX1 v3 W3b: a single-replica storage failure while the COMMIT decision applies is the host failure: nothing recorded, applied index unchanged, re-applied after recovery
+  ---
+  duration_ms: 13.585036
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:222:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a host failure records nothing and the same decision applies once the host recovers
+    + actual - expected
+    
+      {
+        converged: [
+          {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       state: 'COMMITTED'
+          },
+          {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       state: 'COMMITTED'
+          }
+        ],
+        faultyAfterFailure: {
+          appliedAdvance: 0,
+    +     outcome: 'NOT_COMMITTED',
+    -     outcome: 'UNKNOWN',
+          rows: 0,
+    +     state: null
+    -     state: 'PREPARED'
+        },
+    +   faultyDecision: 'partition_committed_command_unrecognised',
+    +   faultyRedelivered: 'partition_committed_command_unrecognised',
+    +   healthyDecision: 'partition_committed_command_unrecognised',
+    -   faultyDecision: 'partition_committed_statement_environment_failed',
+    -   faultyRedelivered: null,
+    -   healthyDecision: null,
+        prepareApply: [
+    +     'partition_committed_command_unrecognised',
+    +     'partition_committed_command_unrecognised'
+    -     null,
+    -     null
+        ],
+        rows: [
+    +     0,
+    +     0
+    -     1,
+    -     1
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareApply:
+      0: ~
+      1: ~
+    healthyDecision: ~
+    faultyDecision: 'partition_committed_statement_environment_failed'
+    faultyAfterFailure:
+      outcome: 'UNKNOWN'
+      state: 'PREPARED'
+      rows: 0
+      appliedAdvance: 0
+    faultyRedelivered: ~
+    converged:
+      0:
+        outcome: 'COMMITTED'
+        state: 'COMMITTED'
+      1: <Circular>
+    rows:
+      0: 1
+      1: 1
+  actual:
+    prepareApply:
+      0: 'partition_committed_command_unrecognised'
+      1: 'partition_committed_command_unrecognised'
+    healthyDecision: 'partition_committed_command_unrecognised'
+    faultyDecision: 'partition_committed_command_unrecognised'
+    faultyAfterFailure:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+      rows: 0
+      appliedAdvance: 0
+    faultyRedelivered: 'partition_committed_command_unrecognised'
+    converged:
+      0:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      1:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+    rows:
+      0: 0
+      1: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:242:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W4: a committed write after the transaction's base refuses its PREPARE on every replica; once PREPARED, a reserved write cannot make the COMMIT fail
+not ok 9 - TX1 v3 W4: a committed write after the transaction's base refuses its PREPARE on every replica; once PREPARED, a reserved write cannot make the COMMIT fail
+  ---
+  duration_ms: 12.406131
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:253:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    first committer wins at PREPARE apply, and the reservation keeps COMMIT infallible
+    + actual - expected
+    
+      [
+        {
+          committed: {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       state: 'COMMITTED'
+          },
+          conflictOutcome: {
+            outcome: 'NOT_COMMITTED',
+    +       refusalCause: null,
+    +       state: null
+    -       refusalCause: 'conflict',
+    -       state: 'REFUSED'
+          },
+    +     conflictPrepare: 'partition_committed_command_unrecognised',
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    -     conflictPrepare: null,
+    -     decisionApply: null,
+          intervening: null,
+    +     reservedPrepare: 'partition_committed_command_unrecognised',
+    -     reservedPrepare: null,
+          reservedWrite: null,
+          reservedWriteFacts: {
+            appliedAdvance: 1,
+    +       rows: 1,
+    +       statement: 'settled'
+    -       rows: 0,
+    -       statement: 'unsettled'
+          },
+    +     rows: 0
+    -     rows: 1
+        },
+        {
+          committed: {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       state: 'COMMITTED'
+          },
+          conflictOutcome: {
+            outcome: 'NOT_COMMITTED',
+    +       refusalCause: null,
+    +       state: null
+    -       refusalCause: 'conflict',
+    -       state: 'REFUSED'
+          },
+    +     conflictPrepare: 'partition_committed_command_unrecognised',
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    -     conflictPrepare: null,
+    -     decisionApply: null,
+          intervening: null,
+    +     reservedPrepare: 'partition_committed_command_unrecognised',
+    -     reservedPrepare: null,
+          reservedWrite: null,
+          reservedWriteFacts: {
+            appliedAdvance: 1,
+    +       rows: 1,
+    +       statement: 'settled'
+    -       rows: 0,
+    -       statement: 'unsettled'
+          },
+    +     rows: 0
+    -     rows: 1
+        }
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      intervening: ~
+      conflictPrepare: ~
+      conflictOutcome:
+        outcome: 'NOT_COMMITTED'
+        state: 'REFUSED'
+        refusalCause: 'conflict'
+      reservedPrepare: ~
+      reservedWrite: ~
+      reservedWriteFacts:
+        rows: 0
+        statement: 'unsettled'
+        appliedAdvance: 1
+      decisionApply: ~
+      committed:
+        outcome: 'COMMITTED'
+        state: 'COMMITTED'
+      rows: 1
+    1: <Circular>
+  actual:
+    0:
+      intervening: ~
+      conflictPrepare: 'partition_committed_command_unrecognised'
+      conflictOutcome:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        refusalCause: ~
+      reservedPrepare: 'partition_committed_command_unrecognised'
+      reservedWrite: ~
+      reservedWriteFacts:
+        rows: 1
+        statement: 'settled'
+        appliedAdvance: 1
+      decisionApply: 'partition_committed_command_unrecognised'
+      committed:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      rows: 0
+    1:
+      intervening: ~
+      conflictPrepare: 'partition_committed_command_unrecognised'
+      conflictOutcome:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        refusalCause: ~
+      reservedPrepare: 'partition_committed_command_unrecognised'
+      reservedWrite: ~
+      reservedWriteFacts:
+        rows: 1
+        statement: 'settled'
+        appliedAdvance: 1
+      decisionApply: 'partition_committed_command_unrecognised'
+      committed:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      rows: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:280:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W17: a foreign TOMBSTONE, a foreign COMMIT for an absent transaction and two digest_invalid PREPAREs (foreign and same-identity) applied while T1 is PREPARED move no generation and stall nothing; T1's COMMIT then applies on every replica
+not ok 10 - TX1 v3 W17: a foreign TOMBSTONE, a foreign COMMIT for an absent transaction and two digest_invalid PREPAREs (foreign and same-identity) applied while T1 is PREPARED move no generation and stall nothing; T1's COMMIT then applies on every replica
+  ---
+  duration_ms: 12.011368
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:284:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    control rows never move the generation, and a same-identity forgery never collides
+    + actual - expected
+    
+      [
+        {
+          controls: [
+    +       'partition_committed_command_unrecognised',
+    +       'partition_committed_command_unrecognised',
+    +       'partition_committed_command_unrecognised',
+    +       'partition_committed_command_unrecognised'
+    +     ],
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    +     generations: [
+            null,
+            null,
+            null,
+    -       null
+          ],
+    -     decisionApply: null,
+    -     generations: [
+    -       0,
+    -       0,
+    -       1
+    -     ],
+          outcomes: [
+            {
+    +         outcome: 'NOT_COMMITTED',
+    +         state: null
+    -         outcome: 'COMMITTED',
+    -         state: 'COMMITTED'
+            },
+            {
+              outcome: 'NOT_COMMITTED',
+    +         state: null
+    -         state: 'ROLLED_BACK'
+            },
+            {
+    +         outcome: 'NOT_COMMITTED',
+    +         state: null
+    -         outcome: 'UNKNOWN',
+    -         state: 'ABSENT'
+            },
+            {
+              outcome: 'NOT_COMMITTED',
+    +         refusalCause: null,
+    +         state: null
+    -         refusalCause: 'digest_invalid',
+    -         state: 'REFUSED'
+            }
+          ],
+    +     prepareApply: 'partition_committed_command_unrecognised',
+    -     prepareApply: null,
+          reserved: {
+    +       appliedAdvance: 0,
+    +       digestKept: false,
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       appliedAdvance: 4,
+    -       digestKept: true,
+    -       outcome: 'UNKNOWN',
+    -       state: 'PREPARED'
+          },
+          rows: [
+    -       1,
+            0,
+    +       0
+          ]
+        },
+        {
+          controls: [
+    +       'partition_committed_command_unrecognised',
+    +       'partition_committed_command_unrecognised',
+    +       'partition_committed_command_unrecognised',
+    +       'partition_committed_command_unrecognised'
+    +     ],
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    +     generations: [
+            null,
+            null,
+            null,
+    -       null
+          ],
+    -     decisionApply: null,
+    -     generations: [
+    -       0,
+    -       0,
+    -       1
+    -     ],
+          outcomes: [
+            {
+    +         outcome: 'NOT_COMMITTED',
+    +         state: null
+    -         outcome: 'COMMITTED',
+    -         state: 'COMMITTED'
+            },
+            {
+              outcome: 'NOT_COMMITTED',
+    +         state: null
+    -         state: 'ROLLED_BACK'
+            },
+            {
+    +         outcome: 'NOT_COMMITTED',
+    +         state: null
+    -         outcome: 'UNKNOWN',
+    -         state: 'ABSENT'
+            },
+            {
+              outcome: 'NOT_COMMITTED',
+    +         refusalCause: null,
+    +         state: null
+    -         refusalCause: 'digest_invalid',
+    -         state: 'REFUSED'
+            }
+          ],
+    +     prepareApply: 'partition_committed_command_unrecognised',
+    -     prepareApply: null,
+          reserved: {
+    +       appliedAdvance: 0,
+    +       digestKept: false,
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       appliedAdvance: 4,
+    -       digestKept: true,
+    -       outcome: 'UNKNOWN',
+    -       state: 'PREPARED'
+          },
+          rows: [
+    -       1,
+            0,
+    +       0
+          ]
+        }
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      prepareApply: ~
+      controls:
+        0: ~
+        1: ~
+        2: ~
+        3: ~
+      reserved:
+        outcome: 'UNKNOWN'
+        state: 'PREPARED'
+        digestKept: true
+        appliedAdvance: 4
+      decisionApply: ~
+      generations:
+        0: 0
+        1: 0
+        2: 1
+      outcomes:
+        0:
+          outcome: 'COMMITTED'
+          state: 'COMMITTED'
+        1:
+          outcome: 'NOT_COMMITTED'
+          state: 'ROLLED_BACK'
+        2:
+          outcome: 'UNKNOWN'
+          state: 'ABSENT'
+        3:
+          outcome: 'NOT_COMMITTED'
+          state: 'REFUSED'
+          refusalCause: 'digest_invalid'
+      rows:
+        0: 1
+        1: 0
+    1: <Circular>
+  actual:
+    0:
+      prepareApply: 'partition_committed_command_unrecognised'
+      controls:
+        0: 'partition_committed_command_unrecognised'
+        1: 'partition_committed_command_unrecognised'
+        2: 'partition_committed_command_unrecognised'
+        3: 'partition_committed_command_unrecognised'
+      reserved:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        digestKept: false
+        appliedAdvance: 0
+      decisionApply: 'partition_committed_command_unrecognised'
+      generations:
+        0: ~
+        1: ~
+        2: ~
+      outcomes:
+        0:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+        1:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+        2:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+        3:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+          refusalCause: ~
+      rows:
+        0: 0
+        1: 0
+    1:
+      prepareApply: 'partition_committed_command_unrecognised'
+      controls:
+        0: 'partition_committed_command_unrecognised'
+        1: 'partition_committed_command_unrecognised'
+        2: 'partition_committed_command_unrecognised'
+        3: 'partition_committed_command_unrecognised'
+      reserved:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        digestKept: false
+        appliedAdvance: 0
+      decisionApply: 'partition_committed_command_unrecognised'
+      generations:
+        0: ~
+        1: ~
+        2: ~
+      outcomes:
+        0:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+        1:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+        2:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+        3:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+          refusalCause: ~
+      rows:
+        0: 0
+        1: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:317:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W18: a MIGRATION_ALTER_TABLE applied while T1 is PREPARED is reserved_refused (no schema change, outcome or generation); T1's COMMIT applies, then the redelivered ALTER applies
+not ok 11 - TX1 v3 W18: a MIGRATION_ALTER_TABLE applied while T1 is PREPARED is reserved_refused (no schema change, outcome or generation); T1's COMMIT applies, then the redelivered ALTER applies
+  ---
+  duration_ms: 13.116676
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:321:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a schema change is an application-data change: the reservation holds it like a write
+    + actual - expected
+    ... Skipped lines
+    
+      [
+        {
+          after: {
+            columns: [
+              'id',
+    ...
+            ],
+    +       generation: null,
+    -       generation: 2,
+            statement: 'settled'
+          },
+          alterApply: null,
+          committed: {
+    +       outcome: 'NOT_COMMITTED',
+    +       rows: 0,
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       rows: 1,
+    -       state: 'COMMITTED'
+          },
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    +     prepareApply: 'partition_committed_command_unrecognised',
+    -     decisionApply: null,
+    -     prepareApply: null,
+          redelivered: null,
+          whileReserved: {
+            appliedAdvance: 1,
+            columns: [
+              'id',
+              'value',
+    +         'extra'
+            ],
+    +       generation: null,
+    +       statement: 'settled'
+    -       generation: 0,
+    -       statement: 'unsettled'
+          }
+        },
+        {
+          after: {
+            columns: [
+    ...
+            ],
+    +       generation: null,
+    -       generation: 2,
+            statement: 'settled'
+          },
+          alterApply: null,
+          committed: {
+    +       outcome: 'NOT_COMMITTED',
+    +       rows: 0,
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       rows: 1,
+    -       state: 'COMMITTED'
+          },
+    +     decisionApply: 'partition_committed_command_unrecognised',
+    +     prepareApply: 'partition_committed_command_unrecognised',
+    -     decisionApply: null,
+    -     prepareApply: null,
+          redelivered: null,
+          whileReserved: {
+            appliedAdvance: 1,
+            columns: [
+              'id',
+              'value',
+    +         'extra'
+            ],
+    +       generation: null,
+    +       statement: 'settled'
+    -       generation: 0,
+    -       statement: 'unsettled'
+          }
+        }
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      prepareApply: ~
+      alterApply: ~
+      whileReserved:
+        columns:
+          0: 'id'
+          1: 'value'
+        statement: 'unsettled'
+        generation: 0
+        appliedAdvance: 1
+      decisionApply: ~
+      committed:
+        outcome: 'COMMITTED'
+        state: 'COMMITTED'
+        rows: 1
+      redelivered: ~
+      after:
+        columns:
+          0: 'id'
+          1: 'value'
+          2: 'extra'
+        statement: 'settled'
+        generation: 2
+    1: <Circular>
+  actual:
+    0:
+      prepareApply: 'partition_committed_command_unrecognised'
+      alterApply: ~
+      whileReserved:
+        columns:
+          0: 'id'
+          1: 'value'
+          2: 'extra'
+        statement: 'settled'
+        generation: ~
+        appliedAdvance: 1
+      decisionApply: 'partition_committed_command_unrecognised'
+      committed:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        rows: 0
+      redelivered: ~
+      after:
+        columns:
+          0: 'id'
+          1: 'value'
+          2: 'extra'
+        statement: 'settled'
+        generation: ~
+    1:
+      prepareApply: 'partition_committed_command_unrecognised'
+      alterApply: ~
+      whileReserved:
+        columns:
+          0: 'id'
+          1: 'value'
+          2: 'extra'
+        statement: 'settled'
+        generation: ~
+        appliedAdvance: 1
+      decisionApply: 'partition_committed_command_unrecognised'
+      committed:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        rows: 0
+      redelivered: ~
+      after:
+        columns:
+          0: 'id'
+          1: 'value'
+          2: 'extra'
+        statement: 'settled'
+        generation: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:346:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W19: a zero-operation COMMIT decision changes no application data and moves no generation
+not ok 12 - TX1 v3 W19: a zero-operation COMMIT decision changes no application data and moves no generation
+  ---
+  duration_ms: 10.463358
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:350:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    g counts application-data changes, so a decision that applies no operation leaves it
+    + actual - expected
+    
+      [
+        {
+          applies: [
+    +       'partition_committed_command_unrecognised',
+    +       'partition_committed_command_unrecognised'
+    +     ],
+    +     generations: [
+            null,
+            null
+          ],
+    -     generations: [
+    -       1,
+    -       1
+    -     ],
+          outcome: {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       state: 'COMMITTED'
+          },
+          txop: 0,
+          warmUp: null
+        },
+        {
+          applies: [
+    +       'partition_committed_command_unrecognised',
+    +       'partition_committed_command_unrecognised'
+    +     ],
+    +     generations: [
+            null,
+            null
+          ],
+    -     generations: [
+    -       1,
+    -       1
+    -     ],
+          outcome: {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       state: 'COMMITTED'
+          },
+          txop: 0,
+          warmUp: null
+        }
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      warmUp: ~
+      applies:
+        0: ~
+        1: ~
+      outcome:
+        outcome: 'COMMITTED'
+        state: 'COMMITTED'
+      generations:
+        0: 1
+        1: 1
+      txop: 0
+    1: <Circular>
+  actual:
+    0:
+      warmUp: ~
+      applies:
+        0: 'partition_committed_command_unrecognised'
+        1: 'partition_committed_command_unrecognised'
+      outcome:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      generations:
+        0: ~
+        1: ~
+      txop: 0
+    1:
+      warmUp: ~
+      applies:
+        0: 'partition_committed_command_unrecognised'
+        1: 'partition_committed_command_unrecognised'
+      outcome:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      generations:
+        0: ~
+        1: ~
+      txop: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:365:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W13: an intervening write is detected even after the statement-outcome rows are compacted (the write generation never revisits a value)
+not ok 13 - TX1 v3 W13: an intervening write is detected even after the statement-outcome rows are compacted (the write generation never revisits a value)
+  ---
+  duration_ms: 14.87415
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:369:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    compaction of outcome rows cannot hide a committed write (ABA)
+    + actual - expected
+    
+      {
+        answer: {
+    +     refusalCause: null,
+    +     success: true
+    -     refusalCause: 'conflict',
+    -     success: false
+        },
+        intervening: {
+    +     answer: 'pending',
+    +     apply: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+    -     answer: true,
+    -     apply: null
+        },
+        prepareProposed: false
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    intervening:
+      apply: ~
+      answer: true
+    prepareProposed: false
+    answer:
+      success: false
+      refusalCause: 'conflict'
+  actual:
+    intervening:
+      apply: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      answer: 'pending'
+    prepareProposed: false
+    answer:
+      success: true
+      refusalCause: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:379:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W14: the conflict base is read at BEGIN: a committed write after a session read and write refuses the PREPARE request with nothing proposed
+not ok 14 - TX1 v3 W14: the conflict base is read at BEGIN: a committed write after a session read and write refuses the PREPARE request with nothing proposed
+  ---
+  duration_ms: 11.523051
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:388:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    an implementation reading the base at PREPARE fails this
+    + actual - expected
+    
+      {
+        answer: {
+    +     refusalCause: null,
+    +     success: true
+    -     refusalCause: 'conflict',
+    -     success: false
+        },
+        begun: true,
+        intervening: {
+    +     answer: 'pending',
+    +     apply: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+    -     answer: true,
+    -     apply: null
+        },
+        prepareProposed: false,
+        read: true,
+        staged: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    begun: true
+    read: true
+    staged: true
+    intervening:
+      apply: ~
+      answer: true
+    prepareProposed: false
+    answer:
+      success: false
+      refusalCause: 'conflict'
+  actual:
+    begun: true
+    read: true
+    staged: true
+    intervening:
+      apply: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      answer: 'pending'
+    prepareProposed: false
+    answer:
+      success: true
+      refusalCause: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:404:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W15: the proposed PREPARE carries the BEGIN-time base, and its apply refuses it after a write committed between proposal and apply
+not ok 15 - TX1 v3 W15: the proposed PREPARE carries the BEGIN-time base, and its apply refuses it after a write committed between proposal and apply
+  ---
+  duration_ms: 10.260899
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:412:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the apply is the authority over the carried BEGIN-time base
+    + actual - expected
+    
+      {
+    +   answer: null,
+    +   baseIsBeginTime: null,
+    +   intervening: null,
+    -   answer: {
+    -     refusalCause: 'conflict',
+    -     state: 'REFUSED',
+    -     success: false
+    -   },
+    -   baseIsBeginTime: true,
+    -   intervening: {
+    -     answer: true,
+    -     apply: null
+    -   },
+        prepareApply: null,
+    +   prepareProposed: false
+    -   prepareProposed: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareProposed: true
+    baseIsBeginTime: true
+    intervening:
+      apply: ~
+      answer: true
+    prepareApply: ~
+    answer:
+      success: false
+      state: 'REFUSED'
+      refusalCause: 'conflict'
+  actual:
+    prepareProposed: false
+    baseIsBeginTime: ~
+    intervening: ~
+    prepareApply: ~
+    answer: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:431:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W16: contention is measured: under a concurrent writer every PREPARE answer is typed (PREPARED, or refused `conflict`) and the abort rate is reported; uncontended, and after bounded interference has ended, the PREPARE succeeds
+not ok 16 - TX1 v3 W16: contention is measured: under a concurrent writer every PREPARE answer is typed (PREPARED, or refused `conflict`) and the abort rate is reported; uncontended, and after bounded interference has ended, the PREPARE succeeds
+  ---
+  duration_ms: 16.412512
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:458:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the rate is measured, not promised (design 3.6, L5); an always-conflicting rule fails
+    + actual - expected
+    
+      {
+        afterInterference: {
+    +     state: null,
+    -     state: 'PREPARED',
+          success: true
+        },
+    +   answersTyped: false,
+    -   answersTyped: true,
+        uncontended: {
+    +     state: null,
+    -     state: 'PREPARED',
+          success: true
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    answersTyped: true
+    uncontended:
+      success: true
+      state: 'PREPARED'
+    afterInterference: <Circular>
+  actual:
+    answersTyped: false
+    uncontended:
+      success: true
+      state: ~
+    afterInterference:
+      success: true
+      state: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:487:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# TX1 W16 measured abort rate under a concurrent writer: 0/4
+# Subtest: TX1 v3 W20: a transaction command carries the execution envelope; a replica on another build refuses it as a host failure (nothing recorded, applied index unchanged) and applies it once its envelope matches
+not ok 17 - TX1 v3 W20: a transaction command carries the execution envelope; a replica on another build refuses it as a host failure (nothing recorded, applied index unchanged) and applies it once its envelope matches
+  ---
+  duration_ms: 12.231959
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:492:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a replica never applies a transaction command under a build it was not vetted for
+    + actual - expected
+    
+      [
+        {
+          afterForeign: {
+            appliedAdvance: 0,
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'UNKNOWN',
+    -       state: 'ABSENT'
+          },
+          afterMatching: {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'UNKNOWN',
+    -       state: 'PREPARED'
+          },
+    +     foreign: 'partition_committed_command_unrecognised',
+    +     matching: 'partition_committed_command_unrecognised'
+    -     foreign: 'participant_transaction_execution_envelope_mismatch',
+    -     matching: null
+        },
+        {
+          afterForeign: {
+            appliedAdvance: 0,
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'UNKNOWN',
+    -       state: 'ABSENT'
+          },
+          afterMatching: {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'UNKNOWN',
+    -       state: 'PREPARED'
+          },
+    +     foreign: 'partition_committed_command_unrecognised',
+    +     matching: 'partition_committed_command_unrecognised'
+    -     foreign: 'participant_transaction_execution_envelope_mismatch',
+    -     matching: null
+        }
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      foreign: 'participant_transaction_execution_envelope_mismatch'
+      afterForeign:
+        outcome: 'UNKNOWN'
+        state: 'ABSENT'
+        appliedAdvance: 0
+      matching: ~
+      afterMatching:
+        outcome: 'UNKNOWN'
+        state: 'PREPARED'
+    1: <Circular>
+  actual:
+    0:
+      foreign: 'partition_committed_command_unrecognised'
+      afterForeign:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        appliedAdvance: 0
+      matching: 'partition_committed_command_unrecognised'
+      afterMatching:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+    1:
+      foreign: 'partition_committed_command_unrecognised'
+      afterForeign:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+        appliedAdvance: 0
+      matching: 'partition_committed_command_unrecognised'
+      afterMatching:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:509:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W5a: during ACTIVE no SQLite transaction is open, no other reader sees the staged row, the session reads its own write and later commits, a sessionless write applies
+not ok 18 - TX1 v3 W5a: during ACTIVE no SQLite transaction is open, no other reader sees the staged row, the session reads its own write and later commits, a sessionless write applies
+  ---
+  duration_ms: 35.201411
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:514:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    staging never holds the connection; reads replay over current committed state
+    + actual - expected
+    
+      {
+        begun: true,
+    +   inTransactionAfterBegin: true,
+    +   inTransactionAfterWrite: true,
+    -   inTransactionAfterBegin: false,
+    -   inTransactionAfterWrite: false,
+        independentReader: 0,
+        sessionReader: 1,
+    +   sessionSeesLaterCommit: 0,
+    -   sessionSeesLaterCommit: 1,
+        sessionless: {
+    +     answer: 'pending',
+    +     apply: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+    -     answer: true,
+    -     apply: null
+        },
+    +   sessionlessReader: 1,
+    -   sessionlessReader: 0,
+        staged: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    begun: true
+    inTransactionAfterBegin: false
+    staged: true
+    inTransactionAfterWrite: false
+    independentReader: 0
+    sessionlessReader: 0
+    sessionReader: 1
+    sessionless:
+      apply: ~
+      answer: true
+    sessionSeesLaterCommit: 1
+  actual:
+    begun: true
+    inTransactionAfterBegin: true
+    staged: true
+    inTransactionAfterWrite: true
+    independentReader: 0
+    sessionlessReader: 1
+    sessionReader: 1
+    sessionless:
+      apply: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      answer: 'pending'
+    sessionSeesLaterCommit: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:542:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W5b: a request without a transactionId is never absorbed into an open session, even one named the default session
+not ok 19 - TX1 v3 W5b: a request without a transactionId is never absorbed into an open session, even one named the default session
+  ---
+  duration_ms: 9.994991
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:552:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    default-session absorption is gone
+    + actual - expected
+    
+      {
+    +   absorbedIntoSession: true,
+    -   absorbedIntoSession: false,
+        begun: true,
+    +   proposedAsOrdinaryWrite: false
+    -   proposedAsOrdinaryWrite: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    begun: true
+    proposedAsOrdinaryWrite: true
+    absorbedIntoSession: false
+  actual:
+    begun: true
+    proposedAsOrdinaryWrite: false
+    absorbedIntoSession: true
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:566:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W6: staged replies are provisional; the PREPARE carries the client's SQL and params verbatim; final results come from the committed apply
+not ok 20 - TX1 v3 W6: staged replies are provisional; the PREPARE carries the client's SQL and params verbatim; final results come from the committed apply
+  ---
+  duration_ms: 10.336954
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:574:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    transaction operations are evaluated at apply exactly like ordinary replicated writes
+    + actual - expected
+    
+      {
+    +   commitResults: null,
+    +   prepareProposed: false,
+    +   preparedOperations: null,
+    +   stagedProvisional: false
+    -   commitResults: [
+    -     {
+    -       changes: 1,
+    -       fromApply: true
+    -     }
+    -   ],
+    -   prepareProposed: true,
+    -   preparedOperations: [
+    -     {
+    -       params: [
+    -         'row-1',
+    -         'value-1'
+    -       ],
+    -       pinsStagedResult: false,
+    -       sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)'
+    -     }
+    -   ],
+    -   stagedProvisional: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    stagedProvisional: true
+    prepareProposed: true
+    preparedOperations:
+      0:
+        sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)'
+        params:
+          0: 'row-1'
+          1: 'value-1'
+        pinsStagedResult: false
+    commitResults:
+      0:
+        changes: 1
+        fromApply: true
+  actual:
+    stagedProvisional: false
+    prepareProposed: false
+    preparedOperations: ~
+    commitResults: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:603:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W7a: a write arriving while PREPARED is parked unproposed and re-admitted by the decision's apply; a raced reserved entry never settles its entryId
+not ok 21 - TX1 v3 W7a: a write arriving while PREPARED is parked unproposed and re-admitted by the decision's apply; a raced reserved entry never settles its entryId
+  ---
+  duration_ms: 11.106512
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:614:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the decision's apply wakes the parked writer; the reserved disposition never settles
+    + actual - expected
+    
+      {
+        afterRelease: {
+          proposed: 1,
+          rows: 1,
+          success: true
+        },
+    +   prepareApply: 'partition_committed_command_unrecognised',
+    -   prepareApply: null,
+        raced: {
+          appliedAdvance: 1,
+    +     rows: 1,
+    +     statement: 'settled'
+    -     rows: 0,
+    -     statement: 'unsettled'
+        },
+        racedApply: null,
+        racedRedelivered: null,
+        racedRows: 1,
+    +   release: 'partition_committed_command_unrecognised',
+    -   release: null,
+        whileReserved: {
+    +     proposed: 1,
+    -     proposed: 0,
+          settled: false
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareApply: ~
+    whileReserved:
+      proposed: 0
+      settled: false
+    racedApply: ~
+    raced:
+      rows: 0
+      statement: 'unsettled'
+      appliedAdvance: 1
+    release: ~
+    afterRelease:
+      proposed: 1
+      success: true
+      rows: 1
+    racedRedelivered: ~
+    racedRows: 1
+  actual:
+    prepareApply: 'partition_committed_command_unrecognised'
+    whileReserved:
+      proposed: 1
+      settled: false
+    racedApply: ~
+    raced:
+      rows: 1
+      statement: 'settled'
+      appliedAdvance: 1
+    release: 'partition_committed_command_unrecognised'
+    afterRelease:
+      proposed: 1
+      success: true
+      rows: 1
+    racedRedelivered: ~
+    racedRows: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:642:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"level":50,"time":"2026-10-10T16:06:12.356Z","nodeId":"test-node","pid":51426,"subsystem":"partition","event":"wait_bound_spent","wait":"PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS","awaited":"consensus commit of one admitted partition write","boundMs":30000,"elapsedMs":30000,"lastObserved":{"proposal":"proposed","logIndex":null,"role":"leader","pendingCommitCount":1},"scope":{"partitionId":"tx1-v3","entryId":"w7b-parked"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+# Subtest: TX1 v3 W7b: a parked writer still reserved at its own commit deadline is answered COMMIT_DEADLINE_EXCEEDED, and a decision applied afterwards proposes nothing
+not ok 22 - TX1 v3 W7b: a parked writer still reserved at its own commit deadline is answered COMMIT_DEADLINE_EXCEEDED, and a decision applied afterwards proposes nothing
+  ---
+  duration_ms: 12.490622
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:652:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a released waiter is never proposed (proposal-queue markProposal guard)
+    + actual - expected
+    
+      {
+        answer: {
+    +     failureCode: 'partition_write_outcome_unknown',
+    -     failureCode: 'partition_write_commit_deadline_exceeded',
+          success: false
+        },
+    +   prepareApply: 'partition_committed_command_unrecognised',
+    +   proposed: 1,
+    +   release: 'partition_committed_command_unrecognised'
+    -   prepareApply: null,
+    -   proposed: 0,
+    -   release: null
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareApply: ~
+    answer:
+      success: false
+      failureCode: 'partition_write_commit_deadline_exceeded'
+    release: ~
+    proposed: 0
+  actual:
+    prepareApply: 'partition_committed_command_unrecognised'
+    answer:
+      success: false
+      failureCode: 'partition_write_outcome_unknown'
+    release: 'partition_committed_command_unrecognised'
+    proposed: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:670:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W9: an unbound ROLLBACK and a COMMIT with a foreign digest are refused against PREPARED; a bound ROLLBACK after COMMITTED cannot reverse it
+not ok 23 - TX1 v3 W9: an unbound ROLLBACK and a COMMIT with a foreign digest are refused against PREPARED; a bound ROLLBACK after COMMITTED cannot reverse it
+  ---
+  duration_ms: 9.775212
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:679:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    only the bound decision terminalizes, and the first applied terminal stands
+    + actual - expected
+    
+      {
+        afterRefusals: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'UNKNOWN',
+    -     state: 'PREPARED'
+        },
+    +   commitApply: 'partition_committed_command_unrecognised',
+    -   commitApply: null,
+        final: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'COMMITTED',
+    -     state: 'COMMITTED'
+        },
+    +   foreignDigestApply: 'partition_committed_command_unrecognised',
+    -   foreignDigestApply: null,
+        foreignDigestCommit: {
+    +     failureCode: null,
+    -     failureCode: 'participant_transaction_decision_digest_mismatch',
+          success: false
+        },
+    +   prepareApply: 'partition_committed_command_unrecognised',
+    -   prepareApply: null,
+        proposedByRefusals: 0,
+    +   reversalApply: 'partition_committed_command_unrecognised',
+    +   rows: 0,
+    -   reversalApply: null,
+    -   rows: 1,
+        unboundRollback: {
+    +     failureCode: null,
+    +     success: true
+    -     failureCode: 'participant_transaction_decision_binding_required',
+    -     success: false
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareApply: ~
+    unboundRollback:
+      success: false
+      failureCode: 'participant_transaction_decision_binding_required'
+    foreignDigestCommit:
+      success: false
+      failureCode: 'participant_transaction_decision_digest_mismatch'
+    proposedByRefusals: 0
+    foreignDigestApply: ~
+    afterRefusals:
+      outcome: 'UNKNOWN'
+      state: 'PREPARED'
+    commitApply: ~
+    reversalApply: ~
+    final:
+      outcome: 'COMMITTED'
+      state: 'COMMITTED'
+    rows: 1
+  actual:
+    prepareApply: 'partition_committed_command_unrecognised'
+    unboundRollback:
+      success: true
+      failureCode: ~
+    foreignDigestCommit:
+      success: false
+      failureCode: ~
+    proposedByRefusals: 0
+    foreignDigestApply: 'partition_committed_command_unrecognised'
+    afterRefusals:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    commitApply: 'partition_committed_command_unrecognised'
+    reversalApply: 'partition_committed_command_unrecognised'
+    final:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    rows: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:701:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W10b: two transactions of one session are keyed by their transactionIds and never share an outcome
+not ok 24 - TX1 v3 W10b: two transactions of one session are keyed by their transactionIds and never share an outcome
+  ---
+  duration_ms: 8.704623
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:712:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the session is routing context only
+    + actual - expected
+    
+      {
+        applies: [
+    +     'partition_committed_command_unrecognised',
+    +     'partition_committed_command_unrecognised',
+    +     'partition_committed_command_unrecognised',
+    +     'partition_committed_command_unrecognised'
+    -     null,
+    -     null,
+    -     null,
+    -     null
+        ],
+        outcomes: [
+          {
+    +       outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       outcome: 'COMMITTED',
+    -       state: 'COMMITTED'
+          },
+          {
+            outcome: 'NOT_COMMITTED',
+    +       state: null
+    -       state: 'ROLLED_BACK'
+          }
+        ],
+        rows: [
+    -     1,
+          0,
+    +     0
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    applies:
+      0: ~
+      1: ~
+      2: ~
+      3: ~
+    outcomes:
+      0:
+        outcome: 'COMMITTED'
+        state: 'COMMITTED'
+      1:
+        outcome: 'NOT_COMMITTED'
+        state: 'ROLLED_BACK'
+    rows:
+      0: 1
+      1: 0
+  actual:
+    applies:
+      0: 'partition_committed_command_unrecognised'
+      1: 'partition_committed_command_unrecognised'
+      2: 'partition_committed_command_unrecognised'
+      3: 'partition_committed_command_unrecognised'
+    outcomes:
+      0:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+      1:
+        outcome: 'NOT_COMMITTED'
+        state: ~
+    rows:
+      0: 0
+      1: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:726:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W11a: a PREPARE still pending at its commit deadline is answered UNKNOWN, not refused
+not ok 25 - TX1 v3 W11a: a PREPARE still pending at its commit deadline is answered UNKNOWN, not refused
+  ---
+  duration_ms: 9.804296
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:735:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a proposed PREPARE may still commit
+    + actual - expected
+    
+      {
+        answer: {
+    +     failureCode: null,
+    +     outcome: null,
+    +     success: true
+    -     failureCode: 'partition_write_outcome_unknown',
+    -     outcome: 'UNKNOWN',
+    -     success: false
+        },
+        interruption: null,
+    +   prepareProposed: false,
+    +   settledBefore: true
+    -   prepareProposed: true,
+    -   settledBefore: false
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareProposed: true
+    settledBefore: false
+    interruption: ~
+    answer:
+      success: false
+      outcome: 'UNKNOWN'
+      failureCode: 'partition_write_outcome_unknown'
+  actual:
+    prepareProposed: false
+    settledBefore: true
+    interruption: ~
+    answer:
+      success: true
+      outcome: ~
+      failureCode: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:742:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W11b: a PREPARE pending when the leader stops leading is answered UNKNOWN
+not ok 26 - TX1 v3 W11b: a PREPARE pending when the leader stops leading is answered UNKNOWN
+  ---
+  duration_ms: 9.565051
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:746:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    leadership loss releases the PREPARE as UNKNOWN
+    + actual - expected
+    
+      {
+        answer: {
+    +     failureCode: null,
+    +     outcome: null,
+    +     success: true
+    -     failureCode: 'partition_write_outcome_unknown',
+    -     outcome: 'UNKNOWN',
+    -     success: false
+        },
+        interruption: null,
+    +   prepareProposed: false,
+    +   settledBefore: true
+    -   prepareProposed: true,
+    -   settledBefore: false
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareProposed: true
+    settledBefore: false
+    interruption: ~
+    answer:
+      success: false
+      outcome: 'UNKNOWN'
+      failureCode: 'partition_write_outcome_unknown'
+  actual:
+    prepareProposed: false
+    settledBefore: true
+    interruption: ~
+    answer:
+      success: true
+      outcome: ~
+      failureCode: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:752:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W11e: a committed PREPARE whose own apply on the leader fails environmentally is answered UNKNOWN, never as a failure
+not ok 27 - TX1 v3 W11e: a committed PREPARE whose own apply on the leader fails environmentally is answered UNKNOWN, never as a failure
+  ---
+  duration_ms: 8.847046
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:756:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the entry is committed and re-applies after reconstruction
+    + actual - expected
+    
+      {
+        answer: {
+    +     failureCode: null,
+    +     outcome: null,
+    +     success: true
+    -     failureCode: 'partition_write_outcome_unknown',
+    -     outcome: 'UNKNOWN',
+    -     success: false
+        },
+    +   interruption: null,
+    +   prepareProposed: false,
+    +   settledBefore: true
+    -   interruption: 'partition_committed_statement_environment_failed',
+    -   prepareProposed: true,
+    -   settledBefore: false
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareProposed: true
+    settledBefore: false
+    interruption: 'partition_committed_statement_environment_failed'
+    answer:
+      success: false
+      outcome: 'UNKNOWN'
+      failureCode: 'partition_write_outcome_unknown'
+  actual:
+    prepareProposed: false
+    settledBefore: true
+    interruption: ~
+    answer:
+      success: true
+      outcome: ~
+      failureCode: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:764:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W11e-ord: an ordinary write whose own committed apply on the leader fails environmentally is answered UNKNOWN by the write kernel (finding F-ANS)
+not ok 28 - TX1 v3 W11e-ord: an ordinary write whose own committed apply on the leader fails environmentally is answered UNKNOWN by the write kernel (finding F-ANS)
+  ---
+  duration_ms: 9.816755
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:769:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the committed entry re-applies after reconstruction, so its outcome is not a failure
+    + actual - expected
+    
+      {
+        answer: {
+    +     failureCode: null,
+    -     failureCode: 'partition_write_outcome_unknown',
+          success: false
+        },
+        apply: 'partition_committed_statement_environment_failed'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    apply: 'partition_committed_statement_environment_failed'
+    answer:
+      success: false
+      failureCode: 'partition_write_outcome_unknown'
+  actual:
+    apply: 'partition_committed_statement_environment_failed'
+    answer:
+      success: false
+      failureCode: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:780:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W11f: a decision whose proposal hits a host failure is answered UNKNOWN
+not ok 29 - TX1 v3 W11f: a decision whose proposal hits a host failure is answered UNKNOWN
+  ---
+  duration_ms: 9.930751
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:790:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the entry may already be in the log
+    + actual - expected
+    
+      {
+        answer: {
+    +     failureCode: null,
+    +     outcome: null,
+    -     failureCode: 'partition_write_outcome_unknown',
+    -     outcome: 'UNKNOWN',
+          success: false
+        },
+    +   prepareApply: 'partition_committed_command_unrecognised'
+    -   prepareApply: null
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareApply: ~
+    answer:
+      success: false
+      outcome: 'UNKNOWN'
+      failureCode: 'partition_write_outcome_unknown'
+  actual:
+    prepareApply: 'partition_committed_command_unrecognised'
+    answer:
+      success: false
+      outcome: ~
+      failureCode: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:802:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W11f-ord: an ordinary write whose proposal hits a host failure is answered UNKNOWN by the write kernel (finding F-ANS)
+not ok 30 - TX1 v3 W11f-ord: an ordinary write whose proposal hits a host failure is answered UNKNOWN by the write kernel (finding F-ANS)
+  ---
+  duration_ms: 8.943903
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:810:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a host failure while proposing may leave the entry in the log
+    + actual - expected
+    
+      {
+    +   failureCode: 'partition_write_consensus_host_failure',
+    -   failureCode: 'partition_write_outcome_unknown',
+        success: false
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    success: false
+    failureCode: 'partition_write_outcome_unknown'
+  actual:
+    success: false
+    failureCode: 'partition_write_consensus_host_failure'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:820:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W11c: a PREPARE on a non-leader is a typed NOT_LEADER refusal that proposes nothing
+not ok 31 - TX1 v3 W11c: a PREPARE on a non-leader is a typed NOT_LEADER refusal that proposes nothing
+  ---
+  duration_ms: 8.985563
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:828:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    only the leader proposes a PREPARE
+    + actual - expected
+    
+      {
+        answer: {
+    +     failureCode: null,
+    -     failureCode: 'partition_write_not_leader',
+          success: false
+        },
+        proposed: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    answer:
+      success: false
+      failureCode: 'partition_write_not_leader'
+    proposed: 0
+  actual:
+    answer:
+      success: false
+      failureCode: ~
+    proposed: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:837:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"level":50,"time":"2026-10-10T16:06:12.539Z","nodeId":"test-node","pid":51426,"subsystem":"partition","event":"wait_bound_spent","wait":"TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS","awaited":"terminal commit or rollback of a held participant transaction","boundMs":60000,"elapsedMs":60001,"lastObserved":{"phase":"prepared_or_active","outcome":"heal_deferred_leader_or_candidate","role":"leader","expiredPreparedSessionCount":0,"expiredActiveSessionCount":1},"scope":{"partitionId":"tx1-v3"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+# Subtest: TX1 v3 W11d: a session write while its PREPARE is in flight is refused and the PREPARE keeps exactly the operations it sealed
+not ok 32 - TX1 v3 W11d: a session write while its PREPARE is in flight is refused and the PREPARE keeps exactly the operations it sealed
+  ---
+  duration_ms: 10.622199
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:845:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    PREPARING seals the session
+    + actual - expected
+    
+      {
+    +   lateWrite: 'pending',
+    +   ordinaryProposals: 1,
+    +   prepareProposed: false,
+    +   sealedOperations: null
+    -   lateWrite: {
+    -     failureCode: 'participant_transaction_preparing',
+    -     success: false
+    -   },
+    -   ordinaryProposals: 0,
+    -   prepareProposed: true,
+    -   sealedOperations: 1
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareProposed: true
+    lateWrite:
+      success: false
+      failureCode: 'participant_transaction_preparing'
+    sealedOperations: 1
+    ordinaryProposals: 0
+  actual:
+    prepareProposed: false
+    lateWrite: 'pending'
+    sealedOperations: ~
+    ordinaryProposals: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:854:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W12a: a PREPARE applied after a bound ROLLBACK tombstone is refused terminal, writes nothing and reserves nothing
+not ok 33 - TX1 v3 W12a: a PREPARE applied after a bound ROLLBACK tombstone is refused terminal, writes nothing and reserves nothing
+  ---
+  duration_ms: 8.973036
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:866:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the first applied terminal is final
+    + actual - expected
+    
+      {
+        afterLatePrepare: {
+          outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     state: 'ROLLED_BACK'
+        },
+        afterTombstone: {
+          outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     state: 'ROLLED_BACK'
+        },
+    +   latePrepare: 'partition_committed_command_unrecognised',
+    -   latePrepare: null,
+        ordinaryWrite: null,
+        rows: [
+          0,
+          1
+        ],
+    +   tombstone: 'partition_committed_command_unrecognised'
+    -   tombstone: null
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    tombstone: ~
+    afterTombstone:
+      outcome: 'NOT_COMMITTED'
+      state: 'ROLLED_BACK'
+    latePrepare: ~
+    afterLatePrepare: <Circular>
+    ordinaryWrite: ~
+    rows:
+      0: 0
+      1: 1
+  actual:
+    tombstone: 'partition_committed_command_unrecognised'
+    afterTombstone:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    latePrepare: 'partition_committed_command_unrecognised'
+    afterLatePrepare:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    ordinaryWrite: ~
+    rows:
+      0: 0
+      1: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:880:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W12b: an outcome read answers UNKNOWN from absence or PREPARED, on any replica, and a terminal state only from its durable row
+not ok 34 - TX1 v3 W12b: an outcome read answers UNKNOWN from absence or PREPARED, on any replica, and a terminal state only from its durable row
+  ---
+  duration_ms: 10.046188
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:888:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    absence is never NOT_COMMITTED
+    + actual - expected
+    
+      {
+        applies: [
+    +     'partition_committed_command_unrecognised',
+    +     'partition_committed_command_unrecognised',
+    +     'partition_committed_command_unrecognised'
+    -     null,
+    -     null,
+    -     null
+        ],
+        decided: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'COMMITTED',
+    -     state: 'COMMITTED'
+        },
+        nothingApplied: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'UNKNOWN',
+    -     state: 'ABSENT'
+        },
+        preparedOnly: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'UNKNOWN',
+    -     state: 'PREPARED'
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    nothingApplied:
+      outcome: 'UNKNOWN'
+      state: 'ABSENT'
+    applies:
+      0: ~
+      1: ~
+      2: ~
+    decided:
+      outcome: 'COMMITTED'
+      state: 'COMMITTED'
+    preparedOnly:
+      outcome: 'UNKNOWN'
+      state: 'PREPARED'
+  actual:
+    nothingApplied:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    applies:
+      0: 'partition_committed_command_unrecognised'
+      1: 'partition_committed_command_unrecognised'
+      2: 'partition_committed_command_unrecognised'
+    decided:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    preparedOnly:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:901:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W12c: PREPARED survives a restart as a durable row that keeps the reservation and later applies its decision
+not ok 35 - TX1 v3 W12c: PREPARED survives a restart as a durable row that keeps the reservation and later applies its decision
+  ---
+  duration_ms: 49.845273
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:910:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the row owner, not a log scan, is the prepared authority after restart
+    + actual - expected
+    
+      {
+        afterRestart: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'UNKNOWN',
+    -     state: 'PREPARED'
+        },
+    +   decisionApply: 'partition_committed_command_unrecognised',
+    -   decisionApply: null,
+        final: {
+    +     outcome: 'NOT_COMMITTED',
+    +     state: null
+    -     outcome: 'COMMITTED',
+    -     state: 'COMMITTED'
+        },
+    +   prepareApply: 'partition_committed_command_unrecognised',
+    +   reservedRows: 1,
+    -   prepareApply: null,
+    -   reservedRows: 0,
+        reservedWrite: null,
+    +   rows: 0
+    -   rows: 1
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    prepareApply: ~
+    afterRestart:
+      outcome: 'UNKNOWN'
+      state: 'PREPARED'
+    reservedWrite: ~
+    reservedRows: 0
+    decisionApply: ~
+    final:
+      outcome: 'COMMITTED'
+      state: 'COMMITTED'
+    rows: 1
+  actual:
+    prepareApply: 'partition_committed_command_unrecognised'
+    afterRestart:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    reservedWrite: ~
+    reservedRows: 1
+    decisionApply: 'partition_committed_command_unrecognised'
+    final:
+      outcome: 'NOT_COMMITTED'
+      state: ~
+    rows: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:930:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W12d: the hold sweep discards an expired ACTIVE session and keeps an expired PREPARED row (paired invariants, one sweep)
+not ok 36 - TX1 v3 W12d: the hold sweep discards an expired ACTIVE session and keeps an expired PREPARED row (paired invariants, one sweep)
+  ---
+  duration_ms: 18.13674
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:939:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    expiry discards volatile staging and never terminalizes PREPARED
+    + actual - expected
+    
+      {
+        activeAfterSweep: {
+    +     failureCode: null,
+    +     success: true
+    -     failureCode: 'participant_transaction_not_active',
+    -     success: false
+        },
+    +   inTransaction: true,
+    -   inTransaction: false,
+        preparedAfterSweep: {
+          outcome: 'UNKNOWN',
+    +     state: null
+    -     state: 'PREPARED'
+        },
+    +   preparedApply: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+    -   preparedApply: null
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    preparedApply: ~
+    inTransaction: false
+    activeAfterSweep:
+      success: false
+      failureCode: 'participant_transaction_not_active'
+    preparedAfterSweep:
+      outcome: 'UNKNOWN'
+      state: 'PREPARED'
+  actual:
+    preparedApply: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+    inTransaction: true
+    activeAfterSweep:
+      success: true
+      failureCode: ~
+    preparedAfterSweep:
+      outcome: 'UNKNOWN'
+      state: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:953:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W12e: a transaction operation's outcome never occupies an ordinary write's entry key, even when their entryIds collide
+not ok 37 - TX1 v3 W12e: a transaction operation's outcome never occupies an ordinary write's entry key, even when their entryIds collide
+  ---
+  duration_ms: 9.832926
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:962:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    per-operation outcomes are keyed by (participant, ordinal), not by entryId
+    + actual - expected
+    
+      {
+        applies: [
+    +     'partition_committed_command_unrecognised',
+    +     'partition_committed_command_unrecognised'
+    -     null,
+    -     null
+        ],
+        ordinaryApply: null,
+        rows: [
+    +     0,
+          1,
+    -     1
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    applies:
+      0: ~
+      1: ~
+    ordinaryApply: ~
+    rows:
+      0: 1
+      1: 1
+  actual:
+    applies:
+      0: 'partition_committed_command_unrecognised'
+      1: 'partition_committed_command_unrecognised'
+    ordinaryApply: ~
+    rows:
+      0: 0
+      1: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replicated-apply-v3.test.js:973:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..37
+# tests 37
+# suites 0
+# pass 0
+# fail 37
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1079.907862
+# ---- seam ----
+TAP version 13
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+#   awaited: 'distributed transaction commit protocol completion',
+#   boundMs: 60000,
+#   elapsedMs: 120000,
+#   lastObserved: {
+#     stage: 'COMMITTING',
+#     status: 'COMMITTING',
+#     commitMode: 'TWO_PHASE_COMMIT',
+#     remainingBudgetMs: 0,
+#     participantStatuses: { COMMITTED: 1, FAILED: 1 }
+#   },
+#   scope: { transactionId: 'tx-s1-1000-1', sessionId: 's1' },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 0,
+#   lastObserved: {
+#     stage: 'COMMITTING',
+#     maxRetries: 0,
+#     attempts: 1,
+#     lastError: 'commit answer lost',
+#     lastErrorCode: null
+#   },
+#   scope: { transactionId: 'tx-s3-1791648373343-1', partitionId: 'p2' },
+#   repeats: 0
+# }
+# Subtest: TX1 seam W10a: two coordinators on the same node, in the same incarnation, with the same clock, mint distinct 128-bit random transaction identities
+not ok 1 - TX1 seam W10a: two coordinators on the same node, in the same incarnation, with the same clock, mint distinct 128-bit random transaction identities
+  ---
+  duration_ms: 25.198921
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:81:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    no node, incarnation, sequence, session or clock component (seam B)
+    + actual - expected
+    
+      {
+    +   distinct: false,
+    -   distinct: true,
+        random128: [
+    +     false,
+    +     false
+    -     true,
+    -     true
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    distinct: true
+    random128:
+      0: true
+      1: true
+  actual:
+    distinct: false
+    random128:
+      0: false
+      1: false
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:87:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: TX1 seam W10c: BEGIN persists the identity insert-once before any fanout, re-mints only on a primary-key collision, and refuses typed on any other persistence error
+not ok 2 - TX1 seam W10c: BEGIN persists the identity insert-once before any fanout, re-mints only on a primary-key collision, and refuses typed on any other persistence error
+  ---
+  duration_ms: 19.200234
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:93:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    only the sql_transactions primary-key collision class re-mints, and the insert-once row carries no coalescing key a pending UPSERT could replace (sql-query-engine.js:142-144)
+    + actual - expected
+    
+      {
+        collision: {
+    +     attempts: 1,
+    -     attempts: 2,
+          insertOnce: [
+    +       false
+    -       true,
+    -       true
+          ],
+    +     remintedDistinct: false,
+    +     success: false
+    -     remintedDistinct: true,
+    -     success: true
+        },
+        engineRow: {
+    +     coalescingKey: 'sql-transaction:tx-w10c-key-1791648373319-1',
+    +     operation: 'upsert',
+    -     coalescingKey: null,
+    -     operation: 'insert',
+          tableName: 'sql_transactions'
+        },
+        otherError: {
+          attempts: 1,
+          insertOnce: [
+    +       false
+    -       true
+          ],
+          remintedDistinct: false,
+          success: false
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    collision:
+      success: true
+      attempts: 2
+      insertOnce:
+        0: true
+        1: true
+      remintedDistinct: true
+    otherError:
+      success: false
+      attempts: 1
+      insertOnce:
+        0: true
+      remintedDistinct: false
+    engineRow:
+      tableName: 'sql_transactions'
+      operation: 'insert'
+      coalescingKey: ~
+  actual:
+    collision:
+      success: false
+      attempts: 1
+      insertOnce:
+        0: false
+      remintedDistinct: false
+    otherError:
+      success: false
+      attempts: 1
+      insertOnce:
+        0: false
+      remintedDistinct: false
+    engineRow:
+      tableName: 'sql_transactions'
+      operation: 'upsert'
+      coalescingKey: 'sql-transaction:tx-w10c-key-1791648373319-1'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:123:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S1: once a transaction is COMMITTING, an exceeded budget never rolls a participant back, and the caller learns the commit point was reached
+not ok 3 - TX1 seam S1: once a transaction is COMMITTING, an exceeded budget never rolls a participant back, and the caller learns the commit point was reached
+  ---
+  duration_ms: 12.465481
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:133:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the client answer is in doubt (TRANSACTION_OUTCOME_UNKNOWN), never a rollback
+    + actual - expected
+    
+      {
+        commitPointReached: true,
+    +   rollbackCalls: [
+    +     'p1',
+    +     'p2'
+    +   ],
+    +   status: 'ended'
+    -   rollbackCalls: [],
+    -   status: 'COMMITTING'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    rollbackCalls:
+    status: 'COMMITTING'
+    commitPointReached: true
+  actual:
+    rollbackCalls:
+      0: 'p1'
+      1: 'p2'
+    status: 'ended'
+    commitPointReached: true
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:150:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S3: a non-timeout commit failure after COMMITTING keeps the transaction COMMITTING; re-driving it never prepares or rolls back again
+not ok 4 - TX1 seam S3: a non-timeout commit failure after COMMITTING keeps the transaction COMMITTING; re-driving it never prepares or rolls back again
+  ---
+  duration_ms: 16.054274
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:156:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    protocol.js:396-398 sets FAILED, :299-310 re-prepares
+    + actual - expected
+    
+      {
+    +   reprepares: 1,
+    -   reprepares: 0,
+        rollbackCalls: [],
+    +   statusAfterFailure: 'FAILED'
+    -   statusAfterFailure: 'COMMITTING'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    statusAfterFailure: 'COMMITTING'
+    reprepares: 0
+    rollbackCalls:
+  actual:
+    statusAfterFailure: 'FAILED'
+    reprepares: 1
+    rollbackCalls:
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:172:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S4a: recovery completes a transaction left FAILED after its COMMIT decision
+not ok 5 - TX1 seam S4a: recovery completes a transaction left FAILED after its COMMIT decision
+  ---
+  duration_ms: 10.716087
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:177:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    recovery.js:297-306 and :404-410 skip FAILED, stranding PREPARED reservations
+    + actual - expected
+    
+      {
+    +   active: true,
+    +   commitCalls: [],
+    -   active: false,
+    -   commitCalls: [
+    -     'p2'
+    -   ],
+        rollbackCalls: []
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    commitCalls:
+      0: 'p2'
+    rollbackCalls:
+    active: false
+  actual:
+    commitCalls:
+    rollbackCalls:
+    active: true
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:187:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S8: two recovering coordinators driving one transaction record exactly one insert-once decision (seam G)
+not ok 6 - TX1 seam S8: two recovering coordinators driving one transaction record exactly one insert-once decision (seam G)
+  ---
+  duration_ms: 9.624434
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:193:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    concurrent recovery converges on the first inserted decision (finding F-REC)
+    + actual - expected
+    
+      {
+    +   decisions: [],
+    -   decisions: [
+    -     [
+    -       't-s8',
+    -       'COMMIT'
+    -     ]
+    -   ],
+        rollbackCalls: []
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    decisions:
+      0:
+        0: 't-s8'
+        1: 'COMMIT'
+    rollbackCalls:
+  actual:
+    decisions:
+    rollbackCalls:
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:213:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S2: a two-phase NO_TRANSACTION commit miss is resolved by an outcome read, never assumed COMMITTED
+not ok 7 - TX1 seam S2: a two-phase NO_TRANSACTION commit miss is resolved by an outcome read, never assumed COMMITTED
+  ---
+  duration_ms: 10.363295
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:221:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    protocol.js resolveParticipantCommitMiss must read the participant outcome
+    + actual - expected
+    
+      {
+    +   reads: 0,
+    +   resolution: 'COMMITTED'
+    -   reads: 1,
+    -   resolution: 'UNKNOWN'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    resolution: 'UNKNOWN'
+    reads: 1
+  actual:
+    resolution: 'COMMITTED'
+    reads: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:233:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S4b: an engine that cannot persist transaction state refuses an explicit BEGIN and a multi-partition statement, typed, before any fanout, and still runs a single-partition DIRECT_AUTOCOMMIT write
+not ok 8 - TX1 seam S4b: an engine that cannot persist transaction state refuses an explicit BEGIN and a multi-partition statement, typed, before any fanout, and still runs a single-partition DIRECT_AUTOCOMMIT write
+  ---
+  duration_ms: 11.524603
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:238:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    sql-query-engine.js:115-117 skips persistence silently; DIRECT_AUTOCOMMIT stays unaffected
+    + actual - expected
+    
+      {
+        begin: {
+    +     errorCode: null,
+    +     success: true
+    -     errorCode: 'TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE',
+    -     success: false
+        },
+        direct: {
+          errorCode: null,
+          ownership: 'DIRECT_AUTOCOMMIT',
+          success: true
+        },
+        multiPartition: {
+    +     errorCode: null,
+    -     errorCode: 'TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE',
+          ownership: 'STATEMENT_AUTOCOMMIT',
+    +     success: true
+    -     success: false
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    direct:
+      ownership: 'DIRECT_AUTOCOMMIT'
+      success: true
+      errorCode: ~
+    begin:
+      success: false
+      errorCode: 'TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE'
+    multiPartition:
+      ownership: 'STATEMENT_AUTOCOMMIT'
+      success: false
+      errorCode: 'TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE'
+  actual:
+    direct:
+      ownership: 'DIRECT_AUTOCOMMIT'
+      success: true
+      errorCode: ~
+    begin:
+      success: true
+      errorCode: ~
+    multiPartition:
+      ownership: 'STATEMENT_AUTOCOMMIT'
+      success: true
+      errorCode: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:255:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S4c: the schema-migration cutover on the seed-hydration engine is refused typed or persisted, never run with its row unpersisted; with persistence it commits and submits its row; the production phase calls the setter on its engine after both CDC branches
+not ok 9 - TX1 seam S4c: the schema-migration cutover on the seed-hydration engine is refused typed or persisted, never run with its row unpersisted; with persistence it commits and submits its row; the production phase calls the setter on its engine after both CDC branches
+  ---
+  duration_ms: 12.671373
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:286:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    migration-coordinator-stage-methods.js:507/542 runs BEGIN..COMMIT through executeQuery; the seed engine has no persistence (sql-query-engine-transaction-recovery-methods.js:168-174)
+    + actual - expected
+    
+      {
+    +   phaseSafe: false,
+    +   refusedTyped: false,
+    +   silentlyUnpersisted: true,
+    -   phaseSafe: true,
+    -   refusedTyped: true,
+    -   silentlyUnpersisted: false,
+        withPersistence: {
+          begin: true,
+          commit: true,
+          rowSubmitted: true
+        }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    refusedTyped: true
+    silentlyUnpersisted: false
+    withPersistence:
+      begin: true
+      commit: true
+      rowSubmitted: true
+    phaseSafe: true
+  actual:
+    refusedTyped: false
+    silentlyUnpersisted: true
+    withPersistence:
+      begin: true
+      commit: true
+      rowSubmitted: true
+    phaseSafe: false
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:308:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S4d: the production seed-hydration phase gives its SQL engine the CDC service it created or upgraded, so the engine persists transaction state, with the migration owners still wired (both construction branches)
+not ok 10 - TX1 seam S4d: the production seed-hydration phase gives its SQL engine the CDC service it created or upgraded, so the engine persists transaction state, with the migration owners still wired (both construction branches)
+  ---
+  duration_ms: 10.486348
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:349:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    seed-cache-hydration-phase.js:220-254 builds the engine, then the CDC service, and never hands the service to the engine
+    + actual - expected
+    
+      {
+        created: {
+    +     holdsPhaseService: false,
+    -     holdsPhaseService: true,
+          migrationWired: true,
+    +     persists: false
+    -     persists: true
+        },
+        upgraded: {
+    +     holdsPhaseService: false,
+    -     holdsPhaseService: true,
+          migrationWired: true,
+    +     persists: false
+    -     persists: true
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    created:
+      holdsPhaseService: true
+      persists: true
+      migrationWired: true
+    upgraded: <Circular>
+  actual:
+    created:
+      holdsPhaseService: false
+      persists: false
+      migrationWired: true
+    upgraded:
+      holdsPhaseService: false
+      persists: false
+      migrationWired: true
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:357:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam FDET: an ordinary committed write with a nondeterministic function stores the same outcome and value on every replica (refused identically at apply, or frozen to a literal before fanout by the query owner)
+not ok 11 - TX1 seam FDET: an ordinary committed write with a nondeterministic function stores the same outcome and value on every replica (refused identically at apply, or frozen to a literal before fanout by the query owner)
+  ---
+  duration_ms: 16.315428
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:364:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    finding F-DET: today each replica evaluates the function itself
+    + actual - expected
+    
+      {
+        outcome: 'applied',
+        values: [
+    +     'D9C565E8119515F4'
+    -     '3D97C8BDED42F1EB'
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    outcome: 'applied'
+    values:
+      0: '3D97C8BDED42F1EB'
+  actual:
+    outcome: 'applied'
+    values:
+      0: 'D9C565E8119515F4'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:380:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S5: every participant request carries the transaction identity (seam A)
+not ok 12 - TX1 seam S5: every participant request carries the transaction identity (seam A)
+  ---
+  duration_ms: 10.296254
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:384:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    sql-query-engine.js:569-627 sends only sessionId (and an optional epoch)
+    + actual - expected
+    
+      {
+    +   commitMode: null,
+    +   participantId: null,
+    -   commitMode: 'TWO_PHASE_COMMIT',
+    -   participantId: 't-s5:p1',
+        transactionEpoch: 7,
+    +   transactionId: null
+    -   transactionId: 't-s5'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    transactionId: 't-s5'
+    participantId: 't-s5:p1'
+    commitMode: 'TWO_PHASE_COMMIT'
+    transactionEpoch: 7
+  actual:
+    transactionId: ~
+    participantId: ~
+    commitMode: ~
+    transactionEpoch: 7
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:394:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S6: each participant's PREPARE answer (digest, index, term) is retained on its durable row before the COMMIT decision (seam E)
+not ok 13 - TX1 seam S6: each participant's PREPARE answer (digest, index, term) is retained on its durable row before the COMMIT decision (seam E)
+  ---
+  duration_ms: 14.832237
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:400:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the decision text is built from retained answers
+    + actual - expected
+    
+      {
+    +   prepareIndex: null,
+    +   prepareTerm: null,
+    +   preparedDigest: null
+    -   prepareIndex: 5,
+    -   prepareTerm: 2,
+    -   preparedDigest: 'digest-p1'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    preparedDigest: 'digest-p1'
+    prepareIndex: 5
+    prepareTerm: 2
+  actual:
+    preparedDigest: ~
+    prepareIndex: ~
+    prepareTerm: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:415:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 seam S7: a single-participant transaction prepares before its decision (seam F, option A; replaced if the query owner chooses option B)
+not ok 14 - TX1 seam S7: a single-participant transaction prepares before its decision (seam F, option A; replaced if the query owner chooses option B)
+  ---
+  duration_ms: 14.603857
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:420:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    prepare-first single participant
+    + actual - expected
+    
+      [
+    -   'prepare',
+        'commit'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'prepare'
+    1: 'commit'
+  actual:
+    0: 'commit'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/query/partition-transaction-seam-falsifiers.test.js:436:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 0
+# fail 14
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 905.117572
+# ---- sibling ----
+TAP version 13
+# {"level":50,"time":"2026-10-10T16:06:13.815Z","nodeId":"test-node","pid":51468,"subsystem":"partition","partitionId":"users-p1","error":"UNIQUE constraint failed: users.id","sql":"INSERT INTO users (id, value) VALUES (?, ?)","params":["a","value-a"],"nodeId":"test-node","msg":"Failed to apply committed entry"}
+# {"level":50,"time":"2026-10-10T16:06:13.897Z","nodeId":"test-node","pid":51468,"subsystem":"partition","partitionId":"tx1-v3","error":"UNIQUE constraint failed: test_table.id","nodeId":"test-node","msg":"Transaction write failed"}
+# Subtest: TX1 v4 RC1: a source entry whose statement failed deterministically is never mirrored
+not ok 1 - TX1 v4 RC1: a source entry whose statement failed deterministically is never mirrored
+  ---
+  duration_ms: 82.34011
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:128:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    only entries with an APPLIED outcome row are mirrorable (finding F-MIR)
+    + actual - expected
+    
+      {
+        mirrored: [
+    +     'dup-a',
+          'insert-b'
+        ],
+        setupFailure: null
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    setupFailure: ~
+    mirrored:
+      0: 'insert-b'
+  actual:
+    setupFailure: ~
+    mirrored:
+      0: 'dup-a'
+      1: 'insert-b'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:132:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: TX1 v4 RC2: a write refused by the reservation and the transaction commands are never mirrored; a write committed twice under one entryId is mirrored once, at the index whose outcome row records it, whichever occurrence that is
+not ok 2 - TX1 v4 RC2: a write refused by the reservation and the transaction commands are never mirrored; a write committed twice under one entryId is mirrored once, at the index whose outcome row records it, whichever occurrence that is
+  ---
+  duration_ms: 52.560778
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:136:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the cursor binds an APPLIED outcome to its own log index: neither first- nor last-occurrence de-duplication by entryId passes both sequences
+    + actual - expected
+    
+      {
+        appliedFirst: {
+          mirrored: [
+            'replayed-r',
+            'insert-c',
+    +       'replayed-r'
+          ],
+          setupFailure: null
+        },
+        refusedFirst: {
+    +     mirrored: null,
+    +     setupFailure: 'Raft operation HOST_FAILURE: committed-command-unknown'
+    -     mirrored: [
+    -       'insert-c',
+    -       'reserved-r'
+    -     ],
+    -     setupFailure: null
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    refusedFirst:
+      setupFailure: ~
+      mirrored:
+        0: 'insert-c'
+        1: 'reserved-r'
+    appliedFirst:
+      setupFailure: ~
+      mirrored:
+        0: 'replayed-r'
+        1: 'insert-c'
+  actual:
+    refusedFirst:
+      setupFailure: 'Raft operation HOST_FAILURE: committed-command-unknown'
+      mirrored: ~
+    appliedFirst:
+      setupFailure: ~
+      mirrored:
+        0: 'replayed-r'
+        1: 'insert-c'
+        2: 'replayed-r'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:151:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"level":50,"time":"2026-10-10T16:06:13.897Z","nodeId":"test-node","pid":51468,"subsystem":"partition","sql":"INSERT INTO test_table (id, value) SELECT ?, file FROM pragma_database_list","error":"UNIQUE constraint failed: test_table.id","partitionId":"tx1-v3","nodeId":"test-node","msg":"Remote query execution failed"}
+# {"level":50,"time":"2026-10-10T16:06:13.897Z","nodeId":"test-node","pid":51468,"subsystem":"partition","partitionId":"tx1-v3","error":"UNIQUE constraint failed: test_table.id","nodeId":"test-node","msg":"Transaction write failed"}
+# {"level":50,"time":"2026-10-10T16:06:13.897Z","nodeId":"test-node","pid":51468,"subsystem":"partition","sql":"INSERT INTO test_table (id, value) SELECT ?, name FROM pragma_table_info('test_table')","error":"UNIQUE constraint failed: test_table.id","partitionId":"tx1-v3","nodeId":"test-node","msg":"Remote query execution failed"}
+# {"level":50,"time":"2026-10-10T16:06:13.897Z","nodeId":"test-node","pid":51468,"subsystem":"partition","partitionId":"tx1-v3","error":"UNIQUE constraint failed: test_table.id","nodeId":"test-node","msg":"Transaction write failed"}
+# {"level":50,"time":"2026-10-10T16:06:13.897Z","nodeId":"test-node","pid":51468,"subsystem":"partition","sql":"INSERT INTO test_table (id, value) SELECT ?, name FROM sqlite_master","error":"UNIQUE constraint failed: test_table.id","partitionId":"tx1-v3","nodeId":"test-node","msg":"Remote query execution failed"}
+# Subtest: TX1 v3 W6n: the staging classifier refuses by default, each case at its own layer: date/time, random and unknown functions, implicit keys, non-JSON params, and replica-local state read through no function (pragmas, virtual tables, rs-raft, schema and temporary tables, PRAGMA and VALUES heads) never stage
+not ok 3 - TX1 v3 W6n: the staging classifier refuses by default, each case at its own layer: date/time, random and unknown functions, implicit keys, non-JSON params, and replica-local state read through no function (pragmas, virtual tables, rs-raft, schema and temporary tables, PRAGMA and VALUES heads) never stage
+  ---
+  duration_ms: 21.641676
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:173:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    only allow-listed programs over the partition's own table with JSON scalars stage
+    + actual - expected
+    
+      {
+        allowed: true,
+        blob: {
+    +     failureCode: null
+    -     failureCode: 'participant_transaction_session_write_param_unsupported'
+        },
+        refusals: [
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'function'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'implicit_key'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'opcode'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'opcode'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'opcode'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'root_page'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'database'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'statement_kind'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'statement_kind'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'opcode'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'opcode'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'root_page'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'root_page'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'statement_kind'
+          }
+        ],
+    +   reverseUnorderedSelects: 1,
+    +   sealedOperations: null
+    -   reverseUnorderedSelects: 0,
+    -   sealedOperations: 2
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    refusals:
+      0:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      1:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      2:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      3:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      4:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      5:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      6:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      7:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      8:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      9:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      10:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'function'
+      11:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'implicit_key'
+      12:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'opcode'
+      13:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'opcode'
+      14:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'opcode'
+      15:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'root_page'
+      16:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'database'
+      17:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'statement_kind'
+      18:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'statement_kind'
+      19:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'opcode'
+      20:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'opcode'
+      21:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'root_page'
+      22:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'root_page'
+      23:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'statement_kind'
+    blob:
+      failureCode: 'participant_transaction_session_write_param_unsupported'
+    allowed: true
+    reverseUnorderedSelects: 0
+    sealedOperations: 2
+  actual:
+    refusals:
+      0:
+        failureCode: ~
+        refusalLayer: ~
+      1:
+        failureCode: ~
+        refusalLayer: ~
+      2:
+        failureCode: ~
+        refusalLayer: ~
+      3:
+        failureCode: ~
+        refusalLayer: ~
+      4:
+        failureCode: ~
+        refusalLayer: ~
+      5:
+        failureCode: ~
+        refusalLayer: ~
+      6:
+        failureCode: ~
+        refusalLayer: ~
+      7:
+        failureCode: ~
+        refusalLayer: ~
+      8:
+        failureCode: ~
+        refusalLayer: ~
+      9:
+        failureCode: ~
+        refusalLayer: ~
+      10:
+        failureCode: ~
+        refusalLayer: ~
+      11:
+        failureCode: ~
+        refusalLayer: ~
+      12:
+        failureCode: ~
+        refusalLayer: ~
+      13:
+        failureCode: ~
+        refusalLayer: ~
+      14:
+        failureCode: ~
+        refusalLayer: ~
+      15:
+        failureCode: ~
+        refusalLayer: ~
+      16:
+        failureCode: ~
+        refusalLayer: ~
+      17:
+        failureCode: ~
+        refusalLayer: ~
+      18:
+        failureCode: ~
+        refusalLayer: ~
+      19:
+        failureCode: ~
+        refusalLayer: ~
+      20:
+        failureCode: ~
+        refusalLayer: ~
+      21:
+        failureCode: ~
+        refusalLayer: ~
+      22:
+        failureCode: ~
+        refusalLayer: ~
+      23:
+        failureCode: ~
+        refusalLayer: ~
+    blob:
+      failureCode: ~
+    allowed: true
+    reverseUnorderedSelects: 1
+    sealedOperations: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:193:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W6s: the leader's self-check refuses random(), an rs-raft table read, a table-valued pragma, a PRAGMA statement, a temporary-schema read, an implicit-key insert, an aggregate insert and an insert at the rowid ceiling, each at its own layer; a failed self-check refuses every transaction, typed
+not ok 4 - TX1 v3 W6s: the leader's self-check refuses random(), an rs-raft table read, a table-valued pragma, a PRAGMA statement, a temporary-schema read, an implicit-key insert, an aggregate insert and an insert at the rowid ceiling, each at its own layer; a failed self-check refuses every transaction, typed
+  ---
+  duration_ms: 12.93822
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:206:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    each probed layer refuses at its own place on the running binary before anything stages
+    + actual - expected
+    
+      {
+    +   admitAll: null,
+    -   admitAll: false,
+        begin: {
+    +     failureCode: null,
+    +     success: true
+    -     failureCode: 'participant_transaction_determinism_self_check_failed',
+    -     success: false
+        },
+    +   cases: null,
+    +   module: 'absent',
+    +   passed: null
+    -   cases: [
+    -     {
+    -       admitted: false,
+    -       layer: 'function',
+    -       name: 'random'
+    -     },
+    -     {
+    -       admitted: false,
+    -       layer: 'root_page',
+    -       name: 'raft_log_read'
+    -     },
+    -     {
+    -       admitted: false,
+    -       layer: 'opcode',
+    -       name: 'pragma_table_valued'
+    -     },
+    -     {
+    -       admitted: false,
+    -       layer: 'statement_kind',
+    -       name: 'pragma_statement'
+    -     },
+    -     {
+    -       admitted: false,
+    -       layer: 'database',
+    -       name: 'temp_schema_read'
+    -     },
+    -     {
+    -       admitted: false,
+    -       layer: 'implicit_key',
+    -       name: 'implicit_key_insert'
+    -     },
+    -     {
+    -       admitted: false,
+    -       layer: 'row_order',
+    -       name: 'aggregate_insert'
+    -     },
+    -     {
+    -       admitted: false,
+    -       layer: 'rowid_ceiling',
+    -       name: 'ceiling_insert'
+    -     },
+    -     {
+    -       admitted: true,
+    -       layer: null,
+    -       name: 'partition_table_read'
+    -     }
+    -   ],
+    -   module: 'present',
+    -   passed: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    module: 'present'
+    passed: true
+    cases:
+      0:
+        name: 'random'
+        admitted: false
+        layer: 'function'
+      1:
+        name: 'raft_log_read'
+        admitted: false
+        layer: 'root_page'
+      2:
+        name: 'pragma_table_valued'
+        admitted: false
+        layer: 'opcode'
+      3:
+        name: 'pragma_statement'
+        admitted: false
+        layer: 'statement_kind'
+      4:
+        name: 'temp_schema_read'
+        admitted: false
+        layer: 'database'
+      5:
+        name: 'implicit_key_insert'
+        admitted: false
+        layer: 'implicit_key'
+      6:
+        name: 'aggregate_insert'
+        admitted: false
+        layer: 'row_order'
+      7:
+        name: 'ceiling_insert'
+        admitted: false
+        layer: 'rowid_ceiling'
+      8:
+        name: 'partition_table_read'
+        admitted: true
+        layer: ~
+    admitAll: false
+    begin:
+      success: false
+      failureCode: 'participant_transaction_determinism_self_check_failed'
+  actual:
+    module: 'absent'
+    passed: ~
+    cases: ~
+    admitAll: ~
+    begin:
+      success: true
+      failureCode: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:223:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"level":50,"time":"2026-10-10T16:06:13.930Z","nodeId":"test-node","pid":51468,"subsystem":"partition","partitionId":"tx1-v3","sql":"CREATE UNIQUE INDEX tx1_unique ON _participant_transactions(state)","error":"no such table: main._participant_transactions","nodeId":"test-node","msg":"Query execution failed"}
+# {"level":50,"time":"2026-10-10T16:06:13.930Z","nodeId":"test-node","pid":51468,"subsystem":"partition","sql":"CREATE UNIQUE INDEX tx1_unique ON _participant_transactions(state)","error":"no such table: main._participant_transactions","partitionId":"tx1-v3","nodeId":"test-node","msg":"Remote query execution failed"}
+# Subtest: TX1 v3 W6p: one statement-kind owner runs before any prepare on every path: unadmitted heads (PRAGMA, DROP, ATTACH, CREATE TRIGGER, ANALYZE, a leading `;`, comment-terminator tricks, unbound or foreign index DDL) on the query wire and through executeLocalQuery propose and change nothing; own-table index DDL still proposes; a committed PRAGMA or DROP is refused identically at apply
+not ok 5 - TX1 v3 W6p: one statement-kind owner runs before any prepare on every path: unadmitted heads (PRAGMA, DROP, ATTACH, CREATE TRIGGER, ANALYZE, a leading `;`, comment-terminator tricks, unbound or foreign index DDL) on the query wire and through executeLocalQuery propose and change nothing; own-table index DDL still proposes; a committed PRAGMA or DROP is refused identically at apply
+  ---
+  duration_ms: 19.35636
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:239:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    nothing but an admitted head is ever prepared on the shared connection, on any path
+    + actual - expected
+    
+      {
+        applied: [
+          {
+            applies: [
+              null,
+              null
+            ],
+    +       flag: 1,
+    -       flag: 0,
+            outcomes: [
+              {
+    +           failureCode: null,
+    +           outcome: 'applied'
+    -           failureCode: 'partition_write_statement_refused',
+    -           outcome: 'statement_failed'
+              },
+              {
+    +           failureCode: null,
+    +           outcome: 'applied'
+    -           failureCode: 'partition_write_statement_refused',
+    -           outcome: 'statement_failed'
+              }
+            ],
+    +       table: 0
+    -       table: 1
+          },
+          {
+            applies: [
+              null,
+              null
+            ],
+    +       flag: 1,
+    -       flag: 0,
+            outcomes: [
+              {
+    +           failureCode: null,
+    +           outcome: 'applied'
+    -           failureCode: 'partition_write_statement_refused',
+    -           outcome: 'statement_failed'
+              },
+              {
+    +           failureCode: null,
+    +           outcome: 'applied'
+    -           failureCode: 'partition_write_statement_refused',
+    -           outcome: 'statement_failed'
+              }
+            ],
+    +       table: 0
+    -       table: 1
+          }
+        ],
+        index: 'pending',
+        leader: {
+    +     flag: 1,
+    -     flag: 0,
+          proposed: [
+    +       'PRAGMA',
+    +       'DROP',
+    +       'ATTACH',
+            'CREATE',
+    +       'ANALYZE',
+    +       ';PRAGMA',
+    +       '--',
+    +       '--',
+    +       'CREATE',
+    +       'CREATE'
+          ],
+          table: 1
+        },
+        local: {
+    +     failureCode: null,
+    +     refusalLayer: null
+    -     failureCode: 'partition_write_statement_refused',
+    -     refusalLayer: 'statement_kind'
+        },
+        wire: [
+    +     'pending',
+    +     'pending',
+    +     'pending',
+    +     'pending',
+    +     'pending',
+    +     'pending',
+    +     'pending',
+    +     'pending',
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+          },
+    +     'pending'
+    -     {
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+    -     },
+    -     {
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+    -     },
+    -     {
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+    -     },
+    -     {
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+    -     },
+    -     {
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+    -     },
+    -     {
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+    -     },
+    -     {
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+    -     },
+    -     {
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+    -     },
+    -     {
+    -       failureCode: 'partition_write_statement_refused',
+    -       refusalLayer: 'statement_kind'
+    -     }
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    wire:
+      0:
+        failureCode: 'partition_write_statement_refused'
+        refusalLayer: 'statement_kind'
+      1: <Circular>
+      2: <Circular>
+      3: <Circular>
+      4: <Circular>
+      5: <Circular>
+      6: <Circular>
+      7: <Circular>
+      8: <Circular>
+      9: <Circular>
+    local: <Circular>
+    index: 'pending'
+    leader:
+      flag: 0
+      table: 1
+      proposed:
+        0: 'CREATE'
+    applied:
+      0:
+        applies:
+          0: ~
+          1: ~
+        flag: 0
+        table: 1
+        outcomes:
+          0:
+            outcome: 'statement_failed'
+            failureCode: 'partition_write_statement_refused'
+          1: <Circular>
+      1: <Circular>
+  actual:
+    wire:
+      0: 'pending'
+      1: 'pending'
+      2: 'pending'
+      3: 'pending'
+      4: 'pending'
+      5: 'pending'
+      6: 'pending'
+      7: 'pending'
+      8:
+        failureCode: ~
+        refusalLayer: ~
+      9: 'pending'
+    local:
+      failureCode: ~
+      refusalLayer: ~
+    index: 'pending'
+    leader:
+      flag: 1
+      table: 1
+      proposed:
+        0: 'PRAGMA'
+        1: 'DROP'
+        2: 'ATTACH'
+        3: 'CREATE'
+        4: 'ANALYZE'
+        5: ';PRAGMA'
+        6: '--'
+        7: '--'
+        8: 'CREATE'
+        9: 'CREATE'
+    applied:
+      0:
+        applies:
+          0: ~
+          1: ~
+        flag: 1
+        table: 0
+        outcomes:
+          0:
+            outcome: 'applied'
+            failureCode: ~
+          1:
+            outcome: 'applied'
+            failureCode: ~
+      1:
+        applies:
+          0: ~
+          1: ~
+        flag: 1
+        table: 0
+        outcomes:
+          0:
+            outcome: 'applied'
+            failureCode: ~
+          1:
+            outcome: 'applied'
+            failureCode: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:272:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W6r: rowid-alias writes (bare, quoted, oid, _rowid_, qualified, AS-aliased), order-dependent session writes and writes at the rowid ceiling are refused typed on the session and ordinary paths; the backfill's rowid-range update still proposes and applies; an ordinary insert and a PREPARE dry run at the ceiling are refused identically at apply
+not ok 6 - TX1 v3 W6r: rowid-alias writes (bare, quoted, oid, _rowid_, qualified, AS-aliased), order-dependent session writes and writes at the rowid ceiling are refused typed on the session and ordinary paths; the backfill's rowid-range update still proposes and applies; an ordinary insert and a PREPARE dry run at the ceiling are refused identically at apply
+  ---
+  duration_ms: 17.931684
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:281:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    no replicated write can assign a rowid or reach the random-rowid fallback, and the migration backfill keeps working
+    + actual - expected
+    ... Skipped lines
+    
+      {
+        applied: [
+          {
+            apply: null,
+            backfill: [
+    ...
+              outcome: 'NOT_COMMITTED',
+    +         refusalCause: null,
+    +         state: null
+    -         refusalCause: 'rowid_ceiling',
+    -         state: 'REFUSED'
+            },
+            outcome: {
+    +         failureCode: null,
+    +         outcome: 'applied'
+    -         failureCode: 'partition_write_statement_refused',
+    -         outcome: 'statement_failed'
+            },
+    +       prepare: 'partition_committed_command_unrecognised',
+    +       rows: 1
+    -       prepare: null,
+    -       rows: 0
+          },
+          {
+            apply: null,
+            backfill: [
+              null,
+    ...
+              outcome: 'NOT_COMMITTED',
+    +         refusalCause: null,
+    +         state: null
+    -         refusalCause: 'rowid_ceiling',
+    -         state: 'REFUSED'
+            },
+            outcome: {
+    +         failureCode: null,
+    +         outcome: 'applied'
+    -         failureCode: 'partition_write_statement_refused',
+    -         outcome: 'statement_failed'
+            },
+    +       prepare: 'partition_committed_command_unrecognised',
+    +       rows: 1
+    -       prepare: null,
+    -       rows: 0
+          }
+        ],
+        backfill: 'pending',
+    +   ordinaryAlias: 'pending',
+    +   ordinaryAsAlias: 'pending',
+    +   ordinaryCeiling: 'pending',
+    -   ordinaryAlias: {
+    -     failureCode: 'partition_write_statement_refused',
+    -     refusalLayer: 'rowid_alias'
+    -   },
+    -   ordinaryAsAlias: {
+    -     failureCode: 'partition_write_statement_refused',
+    -     refusalLayer: 'rowid_alias'
+    -   },
+    -   ordinaryCeiling: {
+    -     failureCode: 'partition_write_statement_refused',
+    -     refusalLayer: 'rowid_ceiling'
+    -   },
+        proposed: [
+    +     'w6r-alias',
+    +     'w6r-as',
+          'w6r-backfill',
+    +     'w6r-ceiling'
+        ],
+        session: [
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'rowid_alias'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'rowid_alias'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'row_order'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'row_order'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'row_order'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'row_order'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'rowid_alias'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'rowid_alias'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'rowid_alias'
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'rowid_alias'
+          }
+        ],
+        sessionCeiling: {
+    +     failureCode: null,
+    +     refusalLayer: null
+    -     failureCode: 'participant_transaction_session_write_nondeterministic',
+    -     refusalLayer: 'rowid_ceiling'
+        }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    session:
+      0:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'rowid_alias'
+      1:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'rowid_alias'
+      2:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'row_order'
+      3:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'row_order'
+      4:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'row_order'
+      5:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'row_order'
+      6:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'rowid_alias'
+      7:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'rowid_alias'
+      8:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'rowid_alias'
+      9:
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'rowid_alias'
+    ordinaryAlias:
+      failureCode: 'partition_write_statement_refused'
+      refusalLayer: 'rowid_alias'
+    ordinaryAsAlias:
+      failureCode: 'partition_write_statement_refused'
+      refusalLayer: 'rowid_alias'
+    backfill: 'pending'
+    sessionCeiling:
+      failureCode: 'participant_transaction_session_write_nondeterministic'
+      refusalLayer: 'rowid_ceiling'
+    ordinaryCeiling:
+      failureCode: 'partition_write_statement_refused'
+      refusalLayer: 'rowid_ceiling'
+    proposed:
+      0: 'w6r-backfill'
+    applied:
+      0:
+        backfill:
+          0: ~
+          1: 'applied'
+        apply: ~
+        outcome:
+          outcome: 'statement_failed'
+          failureCode: 'partition_write_statement_refused'
+        rows: 0
+        prepare: ~
+        dryRun:
+          outcome: 'NOT_COMMITTED'
+          state: 'REFUSED'
+          refusalCause: 'rowid_ceiling'
+      1: <Circular>
+  actual:
+    session:
+      0:
+        failureCode: ~
+        refusalLayer: ~
+      1:
+        failureCode: ~
+        refusalLayer: ~
+      2:
+        failureCode: ~
+        refusalLayer: ~
+      3:
+        failureCode: ~
+        refusalLayer: ~
+      4:
+        failureCode: ~
+        refusalLayer: ~
+      5:
+        failureCode: ~
+        refusalLayer: ~
+      6:
+        failureCode: ~
+        refusalLayer: ~
+      7:
+        failureCode: ~
+        refusalLayer: ~
+      8:
+        failureCode: ~
+        refusalLayer: ~
+      9:
+        failureCode: ~
+        refusalLayer: ~
+    ordinaryAlias: 'pending'
+    ordinaryAsAlias: 'pending'
+    backfill: 'pending'
+    sessionCeiling:
+      failureCode: ~
+      refusalLayer: ~
+    ordinaryCeiling: 'pending'
+    proposed:
+      0: 'w6r-alias'
+      1: 'w6r-as'
+      2: 'w6r-backfill'
+      3: 'w6r-ceiling'
+    applied:
+      0:
+        backfill:
+          0: ~
+          1: 'applied'
+        apply: ~
+        outcome:
+          outcome: 'applied'
+          failureCode: ~
+        rows: 1
+        prepare: 'partition_committed_command_unrecognised'
+        dryRun:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+          refusalCause: ~
+      1:
+        backfill:
+          0: ~
+          1: 'applied'
+        apply: ~
+        outcome:
+          outcome: 'applied'
+          failureCode: ~
+        rows: 1
+        prepare: 'partition_committed_command_unrecognised'
+        dryRun:
+          outcome: 'NOT_COMMITTED'
+          state: ~
+          refusalCause: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:328:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 v3 W6r-b: random rowid allocation is excluded throughout a statement: an insert that assigns the top key and then allocates, and two automatic insertions after an existing maximum of 2^63-2, are refused identically at apply; in a transaction an INTEGER PRIMARY KEY takes an explicit in-range integer and nothing else
+not ok 7 - TX1 v3 W6r-b: random rowid allocation is excluded throughout a statement: an insert that assigns the top key and then allocates, and two automatic insertions after an existing maximum of 2^63-2, are refused identically at apply; in a transaction an INTEGER PRIMARY KEY takes an explicit in-range integer and nothing else
+  ---
+  duration_ms: 13.535677
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:341:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the post-statement ceiling sees the top row on every replica alike
+    + actual - expected
+    ... Skipped lines
+    
+      {
+        perReplica: [
+          {
+            ipk: {
+              outcome: {
+    +           failureCode: null,
+    +           outcome: 'applied'
+    -           failureCode: 'partition_write_statement_refused',
+    -           outcome: 'statement_failed'
+              },
+    +         rowids: [
+    +           '1461968678065164757',
+    +           '9223372036854775807'
+    +         ]
+    -         rowids: []
+            },
+            text: {
+              outcome: {
+    +           failureCode: null,
+    +           outcome: 'applied'
+    -           failureCode: 'partition_write_statement_refused',
+    -           outcome: 'statement_failed'
+              },
+              rowids: [
+    +           '9223372036854775807',
+    +           '3726798557041289476',
+                '9223372036854775806'
+              ]
+            },
+            topThenAllocate: null,
+            twoAutomatic: null
+    ...
+              outcome: {
+    +           failureCode: null,
+    +           outcome: 'applied'
+    -           failureCode: 'partition_write_statement_refused',
+    -           outcome: 'statement_failed'
+              },
+    +         rowids: [
+    +           '1148980007400772355',
+    +           '9223372036854775807'
+    +         ]
+    -         rowids: []
+            },
+            text: {
+              outcome: {
+    +           failureCode: null,
+    +           outcome: 'applied'
+    -           failureCode: 'partition_write_statement_refused',
+    -           outcome: 'statement_failed'
+              },
+              rowids: [
+    +           '9223372036854775807',
+    +           '3684528105159689146',
+                '9223372036854775806'
+              ]
+            },
+            topThenAllocate: null,
+            twoAutomatic: null
+    ...
+          {
+    +       failureCode: null,
+    +       refusalLayer: null,
+    +       success: true
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'implicit_key',
+    -       success: false
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null,
+    +       success: true
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'implicit_key',
+    -       success: false
+          },
+          {
+    +       failureCode: null,
+    +       refusalLayer: null,
+    +       success: true
+    -       failureCode: 'participant_transaction_session_write_nondeterministic',
+    -       refusalLayer: 'implicit_key',
+    -       success: false
+          }
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    perReplica:
+      0:
+        topThenAllocate: ~
+        ipk:
+          outcome:
+            outcome: 'statement_failed'
+            failureCode: 'partition_write_statement_refused'
+          rowids:
+        twoAutomatic: ~
+        text:
+          outcome: <Circular>
+          rowids:
+            0: '9223372036854775806'
+      1: <Circular>
+    session:
+      0:
+        success: true
+        failureCode: ~
+        refusalLayer: ~
+      1:
+        success: false
+        failureCode: 'participant_transaction_session_write_nondeterministic'
+        refusalLayer: 'implicit_key'
+      2: <Circular>
+      3: <Circular>
+  actual:
+    perReplica:
+      0:
+        topThenAllocate: ~
+        ipk:
+          outcome:
+            outcome: 'applied'
+            failureCode: ~
+          rowids:
+            0: '1461968678065164757'
+            1: '9223372036854775807'
+        twoAutomatic: ~
+        text:
+          outcome:
+            outcome: 'applied'
+            failureCode: ~
+          rowids:
+            0: '9223372036854775807'
+            1: '3726798557041289476'
+            2: '9223372036854775806'
+      1:
+        topThenAllocate: ~
+        ipk:
+          outcome:
+            outcome: 'applied'
+            failureCode: ~
+          rowids:
+            0: '1148980007400772355'
+            1: '9223372036854775807'
+        twoAutomatic: ~
+        text:
+          outcome:
+            outcome: 'applied'
+            failureCode: ~
+          rowids:
+            0: '9223372036854775807'
+            1: '3684528105159689146'
+            2: '9223372036854775806'
+    session:
+      0:
+        success: true
+        failureCode: ~
+        refusalLayer: ~
+      1:
+        success: true
+        failureCode: ~
+        refusalLayer: ~
+      2:
+        success: true
+        failureCode: ~
+        refusalLayer: ~
+      3:
+        success: true
+        failureCode: ~
+        refusalLayer: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/safety-first-takeover-20261010/test/partition/partition-transaction-replay-cursor-v4.test.js:383:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: control: an ordinary committed write applies exactly once and advances the applied index
+ok 8 - control: an ordinary committed write applies exactly once and advances the applied index
+  ---
+  duration_ms: 12.132859
+  type: 'test'
+  ...
+# Subtest: control: a planted applied-state failure leaves an ordinary write unapplied, unrecorded and the applied index unchanged
+ok 9 - control: a planted applied-state failure leaves an ordinary write unapplied, unrecorded and the applied index unchanged
+  ---
+  duration_ms: 10.305634
+  type: 'test'
+  ...
+# Subtest: control: a single-replica storage failure on an ordinary write is the host failure: nothing recorded, applied index unchanged
+ok 10 - control: a single-replica storage failure on an ordinary write is the host failure: nothing recorded, applied index unchanged
+  ---
+  duration_ms: 9.926546
+  type: 'test'
+  ...
+# Subtest: control: an ordinary write carries its SQL verbatim and answers the lastInsertRowid of its own committed apply (the class transaction operations inherit)
+ok 11 - control: an ordinary write carries its SQL verbatim and answers the lastInsertRowid of its own committed apply (the class transaction operations inherit)
+  ---
+  duration_ms: 10.461677
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 4
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 511.450192

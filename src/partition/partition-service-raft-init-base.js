@@ -53,6 +53,8 @@ import {
 } from './partition-consensus-port-opening.js';
 import {createCommittedStatementOutcomeTable} from
   './partition-committed-statement-outcome.js';
+import {createParticipantTransactionTables} from
+  './partition-participant-transaction-store.js';
 import {isHeldByHostFailure} from './partition-write-kernel.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 
@@ -369,6 +371,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       }
       this.createTransactionOutcomeTable();
       createCommittedStatementOutcomeTable(this.db);
+      createParticipantTransactionTables(this.db);
       if (this.schema) {
         this.createTable();
       }

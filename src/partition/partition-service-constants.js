@@ -8,6 +8,8 @@ import {
   PARTITION_SERVICE_CREATE_ADMISSION_COLUMN_SQL,
   PARTITION_SERVICE_CREATE_ADMISSION_LOG_MSG,
 } from './partition-service-create-admission-migration-constants.js';
+import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
+  './partition-participant-transaction-constants.js';
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   MEMORY_DB_PATH: ':memory:',
@@ -187,6 +189,7 @@ const PARTITION_COMMITTED_MARKER_COMMAND_TYPES = Object.freeze([
 const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
   ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   ...PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
+  ...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
 ]);
 
 // The reason a group's host failure names when a committed entry carries a
@@ -206,6 +209,7 @@ const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   STATEMENT_FAILED: 'statement_failed',
   STATEMENT_ENVIRONMENT_FAILED: 'statement_environment_failed',
   UNRECOGNISED: 'unrecognised',
+  RESERVED_REFUSED: 'reserved_refused',
 });
 
 // The typed error codes of the committed-entry application and of partition
@@ -516,6 +520,11 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   MERGE_REPLICATION_WRITE_RETAINED_AFTER_FAILURE:
     'Partition merge mirror FAILED; acknowledged write retained in the ' +
     'undelivered queue instead of being dropped',
+  COMMITTED_WRITE_SIDE_EFFECT_FAILED:
+    'Committed write side effect failed after its commit; the write is ' +
+    'answered as committed',
+  WRITE_OUTCOME_UNKNOWN_CAUSE:
+    'Write answered with an unknown outcome; its cause stays on this replica',
   REDIRECTING_WRITE_TO_LEADER: 'Redirecting write to leader',
   APPLYING_COMMITTED_ENTRY: 'Applying committed entry',
   TRANSACTION_COMMIT_APPLIED: 'Transaction commit entry applied',
@@ -746,6 +755,11 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   ADDRESS_PARTS_MIN: 1,
 });
 
+// The statement-admission owner's log (partition-statement-admission.js).
+const PARTITION_STATEMENT_ADMISSION_LOG_MSG = Object.freeze({
+  STATEMENT_REFUSED: 'Partition statement refused by the statement-admission owner',
+});
+
 export {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
@@ -779,5 +793,6 @@ export {
   PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
+  PARTITION_STATEMENT_ADMISSION_LOG_MSG,
   PARTITION_TRANSACTION_PREPARED_STATE,
 };

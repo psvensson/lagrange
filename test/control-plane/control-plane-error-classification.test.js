@@ -8,8 +8,16 @@ import {
   isRetryableControlPlaneError,
 } from '../../src/control-plane/control-plane-error-classification.js';
 import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
-import {PARTITION_SERVICE_DEFAULT} from
-  '../../src/partition/partition-service-constants.js';
+import {
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
+  PARTITION_SERVICE_DEFAULT,
+} from '../../src/partition/partition-service-constants.js';
+import {runRetryableControlPlaneWrite} from
+  '../../src/bootstrap/shared/retryable-control-plane-write.js';
+import {CDC_INTEGRATION_SERVICE_SHARED} from
+  '../../src/cdc/cdc-integration-service-shared.js';
+import {runControlPlaneWrite} from
+  '../../src/control-plane/control-plane-write-identity.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
@@ -74,14 +82,18 @@ test(PENDING_RESPONSE_TIMEOUT_RETRYABLE_TEST_NAME, async (t) => {
 // it. The answers are the write kernel's own, built by its builders: a
 // release at the partition's commit deadline (proposed: its outcome is not
 // known; queued: never proposed), a queued write released when its replica
-// stopped leading, and a host failure while proposing, which the port's
-// caller decides and the control plane does not retry.
+// stopped leading, and a host failure while proposing or an environmental
+// failure of the write's own committed apply, whose outcome is not known
+// either (AD): the control plane retries their answers, which carry the
+// entryId a re-delivery is made under, but never an Error of their text - a
+// text carries no entryId, and a retry from it re-proposes under a fresh one.
 test('isRetryableControlPlaneError classifies the partition write kernel\'s ' +
   'answers by their owner, as the answer and as an Error of its text',
 async (t) => {
   const {
     PARTITION_WRITE_RELEASE_CAUSE: CAUSE,
     buildPartitionWriteProposalRefusal,
+    buildRejectedProposedWriteAnswer,
     buildReleasedPendingWriteAnswer,
   } = partitionWriteKernel;
   const released = (proposal, release) => buildReleasedPendingWriteAnswer(
@@ -89,13 +101,6 @@ async (t) => {
     release);
   const deadline = {cause: CAUSE?.COMMIT_DEADLINE_EXCEEDED,
     deadlineMs: PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS};
-  const retryable = {
-    deadlineProposed: released(PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED,
-      deadline),
-    deadlineQueued: released(PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED, deadline),
-    notLeaderQueued: released(PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED,
-      {cause: CAUSE?.LEADERSHIP_LOST}),
-  };
   // Input: the port's host failure, raised as the write path raises it.
   let portRefusal = null;
   try {
@@ -105,22 +110,86 @@ async (t) => {
   } catch (error) {
     portRefusal = error;
   }
-  const hostFailure = buildPartitionWriteProposalRefusal(portRefusal, null,
-    {partitionId: TEST_PARTITION_ID, entryId: TEST_ENTRY_ID});
+  const retryable = {
+    deadlineProposed: released(PROPOSAL_QUEUE_PROPOSAL_STATE.PROPOSED,
+      deadline),
+    deadlineQueued: released(PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED, deadline),
+    notLeaderQueued: released(PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED,
+      {cause: CAUSE?.LEADERSHIP_LOST}),
+  };
+  // Input: the environmental failure of the write's own committed apply, as
+  // the application rejects the pending write with it.
+  const environmental = new Error('Committed partition statement failed ' +
+    'in the host environment: database is locked');
+  environmental.code =
+    PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED;
+  const failedWhileProposedOrApplied = {
+    hostFailure: buildPartitionWriteProposalRefusal(portRefusal, null,
+      {partitionId: TEST_PARTITION_ID, entryId: TEST_ENTRY_ID}),
+    environmental: buildRejectedProposedWriteAnswer(environmental,
+      {partitionId: TEST_PARTITION_ID, entryId: TEST_ENTRY_ID}),
+  };
   for (const [name, answer] of Object.entries(retryable)) {
     t.equal(isRetryableControlPlaneError(answer), true,
       `${name}: the answer (${answer.failureCode}) is retryable`);
     t.equal(isRetryableControlPlaneError(new Error(answer.error)), true,
       `${name}: an Error of its text is retryable (${answer.error})`);
   }
-  t.equal(isRetryableControlPlaneError(hostFailure), false,
-    'a host failure while proposing is not retried ' +
-    `(${hostFailure.failureCode})`);
-  t.equal(isRetryableControlPlaneError(new Error(hostFailure.error)), false,
-    `nor an Error of its text (${hostFailure.error})`);
+  for (const [name, answer] of Object.entries(failedWhileProposedOrApplied)) {
+    t.equal(answer.entryId, TEST_ENTRY_ID, `${name}: setup: the answer ` +
+      'carries its entryId');
+    t.equal(isRetryableControlPlaneError(answer), true,
+      `${name}: the answer (${answer.failureCode}) is retryable`);
+    t.equal(isRetryableControlPlaneError(new Error(answer.error)), false,
+      `${name}: an Error of its text is not retried (${answer.error})`);
+  }
   t.equal(isRetryableControlPlaneError(
     new Error('an answer text no owner lists')), false,
   'a text no owner lists is not retried');
+});
+
+// AD: a write whose proposal the host failed may be committed. A caller that
+// holds only its text - the CDC mutation owner surfaces a partition answer
+// as an Error of its text, without its code or entryId - does not retry it:
+// a retry from the text runs under a freshly minted key, so the write could
+// apply twice. One attempt, under one key, and the failure is surfaced.
+test('a text-only Error of a host failure while proposing is not retried: ' +
+  'one attempt under one key', async (t) => {
+  let portRefusal = null;
+  try {
+    assertRaftOperationSucceeded({outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      reason: 'database or disk is full', phase: 'ready-persistence',
+      retryable: true, recoveryRequired: true});
+  } catch (error) {
+    portRefusal = error;
+  }
+  const answer = partitionWriteKernel.buildPartitionWriteProposalRefusal(
+    portRefusal, null,
+    {partitionId: TEST_PARTITION_ID, entryId: TEST_ENTRY_ID});
+  const thrown = CDC_INTEGRATION_SERVICE_SHARED.buildSystemTableMutationError(
+    answer, 'system table update failed');
+  t.same({failureCode: thrown.failureCode ?? null,
+    entryId: thrown.entryId ?? null}, {failureCode: null, entryId: null},
+  'setup: the Error carries the answer\'s text alone');
+  const keys = [];
+  const update = () => runControlPlaneWrite({}, {op: 'update'},
+    async (idempotencyKey) => {
+      keys.push(idempotencyKey);
+      if (keys.length === 1) {
+        throw thrown;
+      }
+      return {success: true};
+    });
+  let surfaced = null;
+  try {
+    await runRetryableControlPlaneWrite(() => update(),
+      {timeoutMs: 2000, baseDelayMs: 1, maxDelayMs: 2});
+  } catch (error) {
+    surfaced = error;
+  }
+  t.same({attempts: keys.length, keys: new Set(keys).size,
+    surfaced: surfaced === thrown}, {attempts: 1, keys: 1, surfaced: true},
+  'one attempt under one key; the failure is surfaced, not re-proposed');
 });
 
 test('isRetryableControlPlaneError detects transaction lane contention', async (t) => {

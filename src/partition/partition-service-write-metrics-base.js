@@ -5,8 +5,17 @@ import {
 } from './partition-service-raft-write-commit.js';
 import {collectBoundedSqliteRows} from
   '../query/query-result-budget.js';
-import {preparePartitionReadStatement} from
-  './partition-read-statement-owner.js';
+import {
+  admitPartitionStatement,
+  classifyPartitionStatementHead,
+  partitionStatementRefusalAnswer,
+  prepareSessionStatement,
+  runAdmittedPartitionStatement,
+} from './partition-statement-admission.js';
+import {
+  PARTITION_STATEMENT_KIND,
+  PARTITION_STATEMENT_PATH,
+} from './partition-statement-admission-constants.js';
 import {
   answerSettledStatement,
   readCommittedStatementOutcome,
@@ -55,27 +64,46 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXECUTING_QUERY, {
       partitionId: this.partitionId,
-      sql: sql.substring(
-        0,
-        PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-      ),
+      sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
     });
     try {
-      const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
-      const stmt = isSelect ?
-        preparePartitionReadStatement(this.db, sql) :
-        this.db.prepare(sql);
-      if (isSelect) {
+      const transaction = this.resolveActiveTransactionState(
+        options.sessionId || null,
+      );
+      const operation = {
+        type: PARTITION_SERVICE_OPERATION.QUERY,
+        sql,
+        params,
+        // As supplied: the admission owner decides whether it is valid.
+        entryId: options.entryId ?? null,
+        operationId: options.operationId || null,
+        idempotencyKey: options.idempotencyKey || null,
+        splitMirrorOrigin: options.splitMirrorOrigin || null,
+      };
+      // A re-delivery of a write whose entry key is settled is answered from
+      // its outcome row by applyWrite (nothing is proposed), before any
+      // admission rule or the ceiling pre-check: state that changed after the
+      // write committed never turns its outcome into a refusal.
+      if (!transaction && this.isSettledRedelivery(operation)) {
+        return this.proposeWrite(operation);
+      }
+      // The statement-admission owner decides what a sessionless statement
+      // may prepare; a session statement keeps the session path's own rule
+      // until the session classifier takes it over.
+      const admission = transaction ?
+        prepareSessionStatement(this.db, sql) :
+        admitPartitionStatement(this, sql, params);
+      if (!admission.admitted) {
+        return partitionStatementRefusalAnswer(this, sql, admission);
+      }
+      if (admission.kind === PARTITION_STATEMENT_KIND.READ) {
         const sqliteStartMs = this.timeSource.now();
-        const rows = collectBoundedSqliteRows(stmt, params, {
+        const rows = collectBoundedSqliteRows(admission.statement, params, {
           cancellationToken: options.cancellationToken || null,
           deadlineMs: options.resultDeadlineMs,
           maxBytes: options.resultMaxBytes,
           maxRows: options.resultMaxRows,
         });
-        const transaction = this.resolveActiveTransactionState(
-          options.sessionId || null,
-        );
         const visibleRows = transaction ?
           this.applySnapshotReadFilter(rows, transaction.state) :
           rows;
@@ -97,19 +125,6 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           partitionId: this.partitionId,
         };
       } else {
-        const transaction = this.resolveActiveTransactionState(
-          options.sessionId || null,
-        );
-        const operation = {
-          type: PARTITION_SERVICE_OPERATION.QUERY,
-          sql,
-          params,
-          // As supplied: the admission owner decides whether it is valid.
-          entryId: options.entryId ?? null,
-          operationId: options.operationId || null,
-          idempotencyKey: options.idempotencyKey || null,
-          splitMirrorOrigin: options.splitMirrorOrigin || null,
-        };
         if (transaction) {
           return this.executeTransactionWrite(
             operation,
@@ -121,14 +136,20 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,
-        sql: sql.substring(
-          0,
-          PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-        ),
+        sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
         error: error.message,
       });
       throw error;
     }
+  }
+  // Whether a request re-delivers a write whose entry key is settled (a
+  // SELECT has no committed outcome, so it is never looked up).
+  isSettledRedelivery(operation) {
+    const entryKey = typeof operation.entryId === 'string' &&
+      operation.entryId.length > 0 ? this.getCommittedEntryKey(operation) : null;
+    return entryKey !== null && classifyPartitionStatementHead(operation.sql).kind !==
+      PARTITION_STATEMENT_KIND.READ && readCommittedStatementOutcome(this,
+      entryKey).state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED;
   }
   /**
    * Execute a SQL query directly on the local SQLite database.
@@ -143,19 +164,20 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXECUTING_QUERY, {
       partitionId: this.partitionId,
-      sql: sql.substring(
-        0,
-        PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-      ),
+      sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
       bootstrap: true,
     });
     try {
-      const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
-      const stmt = isSelect ?
-        preparePartitionReadStatement(this.db, sql) :
-        this.db.prepare(sql);
-      if (isSelect) {
-        const rows = stmt.all(...params);
+      // The same owner as executeQuery: a refused head is never prepared, a
+      // write passes R1-R3, and an allocating write is rolled back and
+      // refused when it leaves the own table at the rowid ceiling.
+      const admission = admitPartitionStatement(this, sql, params,
+        PARTITION_STATEMENT_PATH.LOCAL);
+      if (!admission.admitted) {
+        return partitionStatementRefusalAnswer(this, sql, admission);
+      }
+      if (admission.kind === PARTITION_STATEMENT_KIND.READ) {
+        const rows = admission.statement.all(...params);
         return {
           success: true,
           rows,
@@ -163,21 +185,21 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           partitionId: this.partitionId,
         };
       }
-      const info = stmt.run(...params);
+      const outcome = runAdmittedPartitionStatement(this, admission, params);
+      if (!outcome.admitted) {
+        return partitionStatementRefusalAnswer(this, sql, outcome);
+      }
       this.scheduleSizeUpdate();
       return {
         success: true,
-        changes: info.changes,
-        lastInsertRowid: info.lastInsertRowid,
+        changes: outcome.info.changes,
+        lastInsertRowid: outcome.info.lastInsertRowid,
         partitionId: this.partitionId,
       };
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,
-        sql: sql.substring(
-          0,
-          PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-        ),
+        sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
         error: error.message,
       });
       throw error;

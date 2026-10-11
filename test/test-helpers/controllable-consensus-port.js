@@ -126,6 +126,14 @@ export class ControllableConsensusPort {
 
   createOperationPort(request) {
     this.request = request;
+    // The production runtime opens the group's durable store when it creates
+    // the group (raft-rs-runtime-owner.js createRuntimeDispatcher), so the
+    // rs-raft tables exist before any entry is committed; the double does the
+    // same over the replica's own database.
+    const database = request[RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE];
+    if (database) {
+      new RaftRsDurableStore(database);
+    }
     if (!this.peersGiven) {
       // The production port's initial configuration: every bootstrap peer
       // of the request is a voter, reported with its replica identity and
