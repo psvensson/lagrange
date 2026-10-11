@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2052,
+    "unit": 2054,
     "integration": 92,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2353,
-  "digest": "fnv1a32-36dd47c2",
+  "censusSize": 2355,
+  "digest": "fnv1a32-1bb48848",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1243,6 +1243,7 @@
     "test/partition/message-handler-registry-routing.property.test.js": "unit",
     "test/partition/message-handler-registry.test.js": "unit",
     "test/partition/participant-decision-canonical-record.test.js": "unit",
+    "test/partition/participant-release-protocol.test.js": "unit",
     "test/partition/partition-admission-redrive-wakes.test.js": "unit",
     "test/partition/partition-cdc-generator.test.js": "unit",
     "test/partition/partition-cdc-obligation.test.js": "unit",
@@ -1255,6 +1256,7 @@
     "test/partition/partition-leader-row-publication-integrity.test.js": "unit",
     "test/partition/partition-legacy-consensus-state.test.js": "unit",
     "test/partition/partition-legacy-session-statement-admission.test.js": "unit",
+    "test/partition/partition-participant-release-admission.test.js": "unit",
     "test/partition/partition-participant-transaction-apply.test.js": "unit",
     "test/partition/partition-participant-transaction-staging.test.js": "unit",
     "test/partition/partition-peer-cache-identity-record.test.js": "unit",

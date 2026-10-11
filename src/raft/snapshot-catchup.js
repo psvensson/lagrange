@@ -367,6 +367,14 @@ async function orchestrateSnapshotCatchupInstall(options) {
       {transfer});
   }
   try {
+    await options.beforeServiceReplacement?.(service);
+  } catch (error) {
+    return orchestrationResult(INSTALL_ORCHESTRATION.RETIREMENT_FAILED, {
+      transfer,
+      detail: error.message,
+    });
+  }
+  try {
     await service.shutdown();
   } catch (error) {
     return orchestrationResult(INSTALL_ORCHESTRATION.SHUTDOWN_FAILED, {
