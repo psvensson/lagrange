@@ -1,3 +1,5 @@
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+
 async function handleLatencyCdcPropagationMessage(
   service,
   runtimeDeps,
@@ -73,6 +75,7 @@ async function handleLatencyCdcPropagationMessage(
         MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL
       ) {
         const applyOptions = {
+          ...copyCdcEventMetadata(payload),
           skipSubscriptionCheck: true,
           relayDepth,
         };
@@ -85,8 +88,9 @@ async function handleLatencyCdcPropagationMessage(
         if (replayOnly) {
           applyOptions.replayOnly = true;
         }
-        await service.applyCDCEvent(tableName, operation, data, applyOptions);
+        const answer = await service.applyCDCEvent(tableName, operation, data, applyOptions);
         return buildLatencyCdcPropagationResult({
+          ...answer,
           messageId,
           status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
           acknowledged: true,
@@ -98,13 +102,15 @@ async function handleLatencyCdcPropagationMessage(
     if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
       throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
     }
-    await service.forwardCDCEventToLeader(tableName, operation, data, {
+    const answer = await service.forwardCDCEventToLeader(tableName, operation, data, {
+      ...copyCdcEventMetadata(payload),
       timestamp: eventTimestamp || undefined,
       relayDepth: relayDepth + 1,
       causeId,
       replayOnly,
     });
     return buildLatencyCdcPropagationResult({
+      ...answer,
       messageId,
       status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
       acknowledged: true,
@@ -112,15 +118,16 @@ async function handleLatencyCdcPropagationMessage(
       operation,
     });
   }
-  const applyOptions = {skipSubscriptionCheck: true};
+  const applyOptions = {...copyCdcEventMetadata(payload), skipSubscriptionCheck: true};
   if (eventTimestamp) {
     applyOptions.timestamp = eventTimestamp;
   }
   if (causeId) {
     applyOptions.causeId = causeId;
   }
-  await service.applyCDCEvent(tableName, operation, data, applyOptions);
+  const answer = await service.applyCDCEvent(tableName, operation, data, applyOptions);
   return buildLatencyCdcPropagationResult({
+    ...answer,
     messageId,
     status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
     acknowledged: true,
@@ -197,12 +204,13 @@ async function handleLatencyCdcPropagationBatchMessage(
         ingressDecision.action ===
         MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL
       ) {
-        await service.applyCDCBatch(events, {
+        const answer = await service.applyCDCBatch(events, {
           skipSubscriptionCheck: true,
           replayOnly,
           relayDepth,
         });
         return buildLatencyCdcPropagationResult({
+          ...answer,
           messageId,
           status:
             MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
@@ -214,19 +222,21 @@ async function handleLatencyCdcPropagationBatchMessage(
     if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
       throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
     }
-    await service.forwardCDCBatchToLeader(events, {
+    const answer = await service.forwardCDCBatchToLeader(events, {
       relayDepth: relayDepth + 1,
       replayOnly,
     });
     return buildLatencyCdcPropagationResult({
+      ...answer,
       messageId,
       status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
       acknowledged: true,
       eventCount: events.length,
     });
   }
-  await service.applyCDCBatch(events, {skipSubscriptionCheck: true});
+  const answer = await service.applyCDCBatch(events, {skipSubscriptionCheck: true});
   return {
+    ...answer,
     messageId,
     status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
     acknowledged: true,
@@ -253,6 +263,7 @@ function normalizeCDCBatchEvents(service, runtimeDeps, events, options = {}) {
   return (Array.isArray(events) ? events : [])
     .filter((event) => event?.tableName && event?.operation && event?.data)
     .map((event) => {
+      const metadata = copyCdcEventMetadata(event);
       const timestamp =
         typeof event.timestamp === 'string' &&
         event.timestamp.length > 0 ?
@@ -266,6 +277,7 @@ function normalizeCDCBatchEvents(service, runtimeDeps, events, options = {}) {
         tableName: event.tableName,
         operation: event.operation,
         data: event.data,
+        ...metadata,
         timestamp,
         causeId,
         replayOnly:
@@ -281,7 +293,9 @@ function emitCDCAppliedEvents(service, runtimeDeps, events, logIndex = null) {
       tableName: event.tableName,
       operation: event.operation,
       data: event.data,
+      ...copyCdcEventMetadata(event),
       logIndex,
+      ...(Object.hasOwn(event, 'eventKey') ? {messageGroupLogIndex: logIndex} : {}),
       causeId: normalizeCauseId(event.causeId),
     });
   }

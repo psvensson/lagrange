@@ -356,12 +356,16 @@ function buildLatencyCdcPropagationResult({
   tableName,
   operation,
   eventCount,
+  cdcCommitted,
+  cdcProvisional,
 }) {
   const result = {
     messageId,
     status,
     acknowledged,
   };
+  if (Array.isArray(cdcCommitted)) result.cdcCommitted = cdcCommitted;
+  if (Array.isArray(cdcProvisional)) result.cdcProvisional = cdcProvisional;
   if (typeof success === 'boolean') {
     result.success = success;
   }

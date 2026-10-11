@@ -29,18 +29,19 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
         failure_code TEXT,
         failure_message TEXT,
         changes INTEGER,
-        last_insert_rowid INTEGER
+        last_insert_rowid INTEGER,
+        owner_result_text TEXT
       )
     `,
   SELECT_BY_ENTRY_KEY:
     'SELECT outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid ' +
+    'changes, last_insert_rowid, owner_result_text ' +
     'FROM _partition_statement_outcomes WHERE entry_key = ?',
   INSERT:
     'INSERT INTO _partition_statement_outcomes ' +
     '(entry_key, outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid) ' +
-    'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'changes, last_insert_rowid, owner_result_text) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
   TABLE_COLUMNS: 'PRAGMA table_info(_partition_statement_outcomes)',
 });
 
@@ -54,6 +55,8 @@ const PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS = Object.freeze({
     'ADD COLUMN changes INTEGER',
   last_insert_rowid: 'ALTER TABLE _partition_statement_outcomes ' +
     'ADD COLUMN last_insert_rowid INTEGER',
+  owner_result_text: 'ALTER TABLE _partition_statement_outcomes ' +
+    'ADD COLUMN owner_result_text TEXT',
 });
 
 // What the answer to a settled APPLIED entry key is (R07: a named state, never
