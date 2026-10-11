@@ -1,0 +1,31 @@
+{
+  "utc": "2026-10-11T20:04:31.412189+00:00",
+  "verified": true,
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T200417Z",
+  "remoteRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T200417Z/cdc-design-round8-wip": "52e04b044d6c08d3e17926fde82b07d960d23fc0",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T200417Z/tx1-owner-evidence-wip": "ce4c144f52f85a4ee0bd35d3225203335251b37d",
+    "refs/heads/main": "878eb8ac059dab71deae5feb0fa88e0c5c610c93"
+  },
+  "mainUnchanged": true,
+  "callerStatesUnchanged": {
+    "tx1-owner-evidence-wip": {
+      "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+      "branch": "refs/heads/tx1/work-20261010",
+      "indexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+      "statusSha256": "fd1b84d70acf05406094c54deded3252e1b0dd77b1bf3910ded9d98654eaa723"
+    },
+    "cdc-design-round8-wip": {
+      "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+      "branch": "refs/heads/tx1/cdc-receipt8-20261011",
+      "indexSha256": "1acd788a3d7a443b40191af97ace7c7ed0f8827375cb850b5dded7d12a5bf1e7",
+      "statusSha256": "11c9d7a3c064eeb0130d849660464d7b3456c334c13c552639bc0a4aa2f15324"
+    }
+  },
+  "preservationOnly": true,
+  "subjects": {
+    "beginSource": "96f0bdc34bd4702e4e365ff329c77aa997648ff0",
+    "beginRound3ReviewSha256": "8f40f0b6559acd31db23790b8b7b753013366442e452085b05d2988d2130c8b8",
+    "cdcRound8DesignSha256": "997318ab70d6ce4c8409e20e5d7b2f1ea307f364a530ac875775c85c6cad5590"
+  }
+}

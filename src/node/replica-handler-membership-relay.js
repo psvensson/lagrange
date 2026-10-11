@@ -9,9 +9,10 @@
  * Canonical output: one node-level subscription the REPLACE owner holds; the
  * relay follows every service the handler tracks, including a swapped
  * service (replaceLocalReplicaService) and a removed one.
- * Prohibited: the relay decides nothing and carries no authority. Only the
- * REPLACE owner subscribes (not the readiness planner, the publication
- * coordinator, the planner or the peer-cache reconciliation).
+ * The TX1 release lifecycle also consumes these wakes and service changes;
+ * it re-reads the current owners before acting. Prohibited: the relay decides
+ * nothing and carries no authority. Readiness/publication/planning and peer
+ * cache reconciliation do not consume it as authority.
  */
 import {
   PARTITION_SERVICE_EVENT,
@@ -36,26 +37,40 @@ class TrackedServiceRegistry extends Map {
   constructor() {
     super();
     this.membershipListeners = new Set();
+    this.serviceListeners = new Set();
     this.relayByReplicaId = new Map();
   }
 
   set(replicaId, service) {
+    const previous = this.get(replicaId);
     this.detachRelay(replicaId);
     super.set(replicaId, service);
     this.attachRelay(replicaId, service);
+    this.notifyServiceChange(replicaId, service, previous);
     return this;
   }
 
   delete(replicaId) {
+    const previous = this.get(replicaId);
     this.detachRelay(replicaId);
-    return super.delete(replicaId);
+    const deleted = super.delete(replicaId);
+    if (deleted) this.notifyServiceChange(replicaId, null, previous);
+    return deleted;
   }
 
   clear() {
-    for (const replicaId of [...this.relayByReplicaId.keys()]) {
-      this.detachRelay(replicaId);
+    for (const replicaId of [...this.keys()]) this.delete(replicaId);
+  }
+
+  notifyServiceChange(replicaId, service, previous) {
+    for (const listener of [...this.serviceListeners]) {
+      listener({replicaId, service, previous});
     }
-    super.clear();
+  }
+
+  subscribeServiceChanges(listener) {
+    this.serviceListeners.add(listener);
+    return () => this.serviceListeners.delete(listener);
   }
 
   attachRelay(replicaId, service) {

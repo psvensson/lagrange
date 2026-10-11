@@ -1,0 +1,214 @@
+{
+  "sourceSnapshot": "96f0bdc34bd4702e4e365ff329c77aa997648ff0",
+  "verdict": "REJECT",
+  "independentReviewer": "subagent:/root/review_activation_ruling",
+  "canonicalRunnerAssertions": 241,
+  "diagnosticAssertionsPassed": 24,
+  "diagnosticAssertionsTotal": 30,
+  "findings": [
+    "B3-1",
+    "B3-2",
+    "B3-3",
+    "B3-4"
+  ],
+  "files": [
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/review-begin-uncertain-source-round3-independent.md",
+      "retained": "review-begin-uncertain-source-round3-independent.md",
+      "bytes": 39991,
+      "sha256": "8f40f0b6559acd31db23790b8b7b753013366442e452085b05d2988d2130c8b8"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/advanced-orderings.json",
+      "retained": "advanced-orderings.json",
+      "bytes": 29688,
+      "sha256": "85a771c55b35d141b00c3c8639ec6a8bdafd273ae1ee5babd771fe6991a5b91a"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/advanced-orderings.log",
+      "retained": "advanced-orderings.log.txt",
+      "bytes": 30428,
+      "sha256": "4043973c5fc393560e594784b9cf9213b2df7e528c77c398dc8180671db1a3e5"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/advanced-orderings.mjs",
+      "retained": "advanced-orderings.mjs.txt",
+      "bytes": 3915,
+      "sha256": "378596bf6f1003f2ce3127fd66c3a67be1fa1723facf57c5240c1d6ca731d49e"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/canonical-focused.log",
+      "retained": "canonical-focused.log.txt",
+      "bytes": 669,
+      "sha256": "8ee6a80e5fb4d35b95e4cdfaf53eaee4662cd1b7dcb7893077c8eed85bc3b6f3"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/diagnostics.sha256",
+      "retained": "diagnostics.sha256",
+      "bytes": 2820,
+      "sha256": "2ede38bb6d77864a720e50938b064923d9a13d06ec52872c927e3f233202ad4e"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/evaluate-round3.py",
+      "retained": "evaluate-round3.py.txt",
+      "bytes": 4975,
+      "sha256": "1241e35bdac6965c7d0e4658db400df35fde42a71bba2304f0ddb5aeec8cce00"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/evaluate-witnesses.py",
+      "retained": "evaluate-witnesses.py.txt",
+      "bytes": 3446,
+      "sha256": "4f83c28d15fe9d104bef474d73197895199fa61001d16ece0f690a69f4381784"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/extract-results.py",
+      "retained": "extract-results.py.txt",
+      "bytes": 557,
+      "sha256": "4f0f631176acfb5ed2e70645496c02bef5d469cc13b2851b3cb74a02ceb890e1"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/extract-round3.py",
+      "retained": "extract-round3.py.txt",
+      "bytes": 645,
+      "sha256": "da964e15ea0de65a4bd5a75a5365ecf4bf7d882d0ab82881c988195fa17c9423"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/original-adversary-new.json",
+      "retained": "original-adversary-new.json",
+      "bytes": 2735,
+      "sha256": "eccc77dbc02a3ebdae44cb456f6f69778a213cddb1cd679f731febc896038e11"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/original-adversary-new.log",
+      "retained": "original-adversary-new.log.txt",
+      "bytes": 4625,
+      "sha256": "22f593baa320e488f009fd3f291b8bcf77e939867144af8ec5fff95a544a79e6"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/original-adversary-new.mjs",
+      "retained": "original-adversary-new.mjs.txt",
+      "bytes": 8970,
+      "sha256": "264101c8f02b3e2619475de8b35c6061cd9b2c9870e6e6caa0f2cca9ce53c5dc"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/original-adversary-old.json",
+      "retained": "original-adversary-old.json",
+      "bytes": 2993,
+      "sha256": "9e6e678f3fc1975df287b394cde87aebfc21103c47cdfd3d3f4a5281f6a677b4"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/original-adversary-old.log",
+      "retained": "original-adversary-old.log.txt",
+      "bytes": 4883,
+      "sha256": "d9ec265c3a6f3afe3af1cd24158c4b3b5b3ca78672de6e53716b2531aadae171"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/original-adversary-old.mjs",
+      "retained": "original-adversary-old.mjs.txt",
+      "bytes": 9246,
+      "sha256": "efbc5c411f4e7f7a8912e23c2b491e9d8f92cb778ad88edf3a87f92d9b5ba92a"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/packet-verification.json",
+      "retained": "packet-verification.json",
+      "bytes": 19661,
+      "sha256": "83e82d59b881929d43cf39e84d68c45e889e54f30223a08941a7acd4d442951f"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-assertions.log",
+      "retained": "round3-assertions.log.txt",
+      "bytes": 1662,
+      "sha256": "3a956a709f4bac66dc2eeb8fc665f4c073d70d49e1eb86561fe3f167d2eb7f7d"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-bounded-controls.json",
+      "retained": "round3-bounded-controls.json",
+      "bytes": 16317,
+      "sha256": "10099b738ed0d867ad0935763270bf50eccbc2853b35b2198489afcc5fc8a8ea"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-bounded-controls.mjs",
+      "retained": "round3-bounded-controls.mjs.txt",
+      "bytes": 2455,
+      "sha256": "6dc49137ab80949e2033715687cd7bef42e6695424383543f4b5273c3d9cb5fa"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-interactions.json",
+      "retained": "round3-interactions.json",
+      "bytes": 11808,
+      "sha256": "ddb4b230d4d4689035c34927a10947475513bdf7be646ae68e89f7627d36484d"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-interactions.log",
+      "retained": "round3-interactions.log.txt",
+      "bytes": 12193,
+      "sha256": "2f932557eb8dda4ce2fa430c5e5d22c6487a6447e0cda68bca65ffa9dcc81fc2"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-interactions.mjs",
+      "retained": "round3-interactions.mjs.txt",
+      "bytes": 4814,
+      "sha256": "08faf80f95e588c9b3f380eb6d0440b3b9a9e2448616a50829212325b7465cd7"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-pgwire-sweep.json",
+      "retained": "round3-pgwire-sweep.json",
+      "bytes": 1074,
+      "sha256": "94c597bd5a66c2d2d218d2ae00e01cc977166f98c3146e9f25376eebea237c1d"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-pgwire-sweep.log",
+      "retained": "round3-pgwire-sweep.log.txt",
+      "bytes": 1839,
+      "sha256": "2d02ace8d5709a9db1ec6e7dd681bd36f885b646e7626102755071f3f90baca2"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-pgwire-sweep.mjs",
+      "retained": "round3-pgwire-sweep.mjs.txt",
+      "bytes": 2822,
+      "sha256": "e04e833d2e30527bf907654afe9b3a26135dd2a6e279ed9593b9a6d490d4366e"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-resource-probe.json",
+      "retained": "round3-resource-probe.json",
+      "bytes": 7715,
+      "sha256": "1a34e021bcc21baccd1b9295b392afdf89b0861eae86632888a82e47767b878b"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/round3-resource-probe.mjs",
+      "retained": "round3-resource-probe.mjs.txt",
+      "bytes": 2027,
+      "sha256": "80f4dab2ba74bf19330905944a3d1f5bdb749880abf31b8245d854c55ece0003"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/semantic-probes-unchanged.json",
+      "retained": "semantic-probes-unchanged.json",
+      "bytes": 12872,
+      "sha256": "f998720006d04c0ee6e2bc41f0788d9b3b344c8856dfb8e51f866c2bcd29f7e5"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/semantic-probes-unchanged.log",
+      "retained": "semantic-probes-unchanged.log.txt",
+      "bytes": 13565,
+      "sha256": "31b50a8b953977ccc60fb7013e7171ef8113ffeb782ca4ed76b3848e477cb9df"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/semantic-probes.mjs",
+      "retained": "semantic-probes.mjs.txt",
+      "bytes": 10930,
+      "sha256": "f57721fb740439695895c002c90513c0d5bad93f2c33d5ae2feb693bab129881"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/source-verification-final.json",
+      "retained": "source-verification-final.json",
+      "bytes": 8514,
+      "sha256": "a662897ffc1e21d962971bdb61f0ea6b4600e902e93d72cebb41ed380707656d"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round3-independent/source-verification.json",
+      "retained": "source-verification.json",
+      "bytes": 7354,
+      "sha256": "e67c82c19e4294a45bbedd7798040c3b29909982a5f673a4add268b59ed3a65b"
+    }
+  ]
+}
