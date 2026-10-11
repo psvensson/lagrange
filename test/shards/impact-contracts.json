@@ -950,6 +950,15 @@
         "src/raft/raft-rs-membership-transition-runtime.js",
         "src/raft/raft-rs-committed-membership-read.js",
         "src/raft/raft-rs-committed-membership-context.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
+        "src/raft/snapshot-checkpoint-constants.js",
+        "src/raft/snapshot-checkpoint-format.js",
+        "src/raft/snapshot-checkpoint-store.js",
+        "src/raft/snapshot-install.js",
         "src/rebalancer/replica-operation-message-group-promotion.js",
         "src/rebalancer/replica-operation-message-group-membership-authorization.js",
         "src/rebalancer/replica-operation-message-group-membership-permit.js",
@@ -963,9 +972,35 @@
         "test/integration/message-group-learner-promotion.integration.test.js",
         "test/integration/message-group-learner-promotion-selection-guards.integration.test.js",
         "test/integration/message-group-learner-promotion-recording-guards.integration.test.js",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
         "test/message-group/message-group-fresh-learner-promotion.test.js",
         "test/raft/learner-promotion-progress-proof-contract.test.js",
         "test/integration/message-group-learner-join.integration.test.js"
+      ]
+    },
+    "raft-rs-snapshot-staging-lifecycle": {
+      "description": "A fresh raft-rs replica image is acquired only by the exact CREATE physical worker and fixed install marker; the narrow staging operation verifies the exclusive physical file and atomically initializes one receiver-local ACTIVE lifecycle row, exact install binding, applied ConfState, hard state and snapshot boundary. The lifecycle owner retains the sole row decision, the durable store retains Raft schema and row semantics, the data-directory process owner excludes repository process contenders, and snapshot install revalidates authority at rename and through the complete post-rename witness.",
+      "owners": [
+        "src/raft/snapshot-checkpoint-store.js",
+        "src/raft/snapshot-install.js",
+        "src/message-group/message-group-learner-join.js",
+        "src/node/replica-create-admission-owner.js",
+        "src/node/replica-create-process-owner.js",
+        "src/storage/data-directory-process-owner.js",
+        "src/raft/raft-rs-snapshot-staging-lifecycle-operation.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/partition/partition-service-raft-init-base.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-backend/snapshot-staging-lifecycle-operation.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+        "test/raft/snapshot-install-transition.test.js",
+        "test/raft/snapshot-install-restart-states.test.js",
+        "test/node/replica-lifecycle-durable-generation.test.js"
       ]
     }
   },
@@ -1920,7 +1955,16 @@
             "src/raft/raft-rs-membership-transition.js",
             "src/raft/raft-rs-membership-transition-runtime.js",
             "src/raft/raft-rs-committed-membership-read.js",
-            "src/raft/raft-rs-committed-membership-context.js"
+            "src/raft/raft-rs-committed-membership-context.js",
+            "src/raft/raft-rs-runtime-owner.js",
+            "src/raft/raft-rs-application-transaction-owner.js",
+            "src/raft/raft-rs-operation-port.js",
+            "src/raft/raft-rs-peer-identity.js",
+            "src/raft/raft-rs-peer-identity-constants.js",
+            "src/raft/snapshot-checkpoint-constants.js",
+            "src/raft/snapshot-checkpoint-format.js",
+            "src/raft/snapshot-checkpoint-store.js",
+            "src/raft/snapshot-install.js"
           ]
         },
         {
@@ -1942,9 +1986,46 @@
         "test/integration/message-group-learner-promotion.integration.test.js",
         "test/integration/message-group-learner-promotion-selection-guards.integration.test.js",
         "test/integration/message-group-learner-promotion-recording-guards.integration.test.js",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
         "test/message-group/message-group-fresh-learner-promotion.test.js",
         "test/raft/learner-promotion-progress-proof-contract.test.js",
         "test/integration/message-group-learner-join.integration.test.js"
+      ]
+    },
+    "raft-rs-snapshot-staging-lifecycle": {
+      "description": "A fresh raft-rs replica image is acquired only by the exact CREATE physical worker and fixed install marker; the narrow staging operation verifies the exclusive physical file and atomically initializes one receiver-local ACTIVE lifecycle row, exact install binding, applied ConfState, hard state and snapshot boundary. The lifecycle owner retains the sole row decision, the durable store retains Raft schema and row semantics, the data-directory process owner excludes repository process contenders, and snapshot install revalidates authority at rename and through the complete post-rename witness.",
+      "endpoints": [
+        {
+          "id": "checkpoint-install-create-authority",
+          "owners": [
+            "src/raft/snapshot-checkpoint-store.js",
+            "src/raft/snapshot-install.js",
+            "src/message-group/message-group-learner-join.js",
+            "src/node/replica-create-admission-owner.js",
+            "src/node/replica-create-process-owner.js",
+            "src/storage/data-directory-process-owner.js"
+          ]
+        },
+        {
+          "id": "receiver-lifecycle-and-raft-reconstruction",
+          "owners": [
+            "src/raft/raft-rs-snapshot-staging-lifecycle-operation.js",
+            "src/raft/raft-rs-replica-lifecycle-owner.js",
+            "src/raft/raft-rs-durable-store.js",
+            "src/partition/partition-service-raft-init-base.js"
+          ]
+        }
+      ],
+      "contract": "raft-rs-snapshot-staging-lifecycle",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/snapshot-staging-lifecycle-operation.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+        "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+        "test/raft/snapshot-install-transition.test.js",
+        "test/raft/snapshot-install-restart-states.test.js",
+        "test/node/replica-lifecycle-durable-generation.test.js"
       ]
     }
   }
